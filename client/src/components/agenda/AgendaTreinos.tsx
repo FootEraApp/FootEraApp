@@ -39,12 +39,11 @@ export type TreinoProgramadoExercicioItem = {
   id: string;
   ordem?: number | null;
   repeticoes?: string | null;
-
   exercicioId?: string | null;
   exercicioTemporarioId?: string | null;
-
+  exercicioPersonalizadoId?: string | null; // ✅ ADD
   exercicio?: {
-    tipo: "catalogo" | "temporario";
+    tipo: "catalogo" | "temporario" | "personalizado"; // ✅ ADD
     id: string;
     codigo?: string | null;
     nome: string;
@@ -52,6 +51,7 @@ export type TreinoProgramadoExercicioItem = {
     nivel?: string | null;
     categorias?: string[];
     videoUrl?: string | null;
+    videoPosterUrl?: string | null; // ✅ opcional
   } | null;
 };
 
@@ -189,6 +189,12 @@ export function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
             .join(" ") ??
           atletaObj?.usuario?.nome ??
           null;
+        const aprovado: boolean =
+          t?.submissao?.aprovado === true ||
+          t?.submissaoTreino?.aprovado === true ||
+          t?.aprovado === true ||
+          t?.submissaoAprovada === true ||
+          t?.submissaoAprovado === true;
 
         const atletaFoto =
           atletaObj?.foto ?? atletaObj?.usuario?.foto ?? atletaObj?.fotoUrl ?? null;
@@ -198,7 +204,8 @@ export function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
 
         const atletaUsuarioIdFinal =
           atletaObj?.usuarioId ?? atletaObj?.usuario?.id ?? t?.usuarioId ?? null;
-
+      
+        const statusDerivado = aprovado ? "COMPLETED" : null;
         return {
           id: String(t?.id ?? ""),
           titulo: t?.titulo ?? null,
@@ -216,9 +223,23 @@ export function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
                   nome: treinoProgramadoObj?.nome ?? null,
                 }
               : null,
-          meuStatus: t?.meuStatus ?? t?.statusExecucao ?? t?.execucaoStatus ?? null,
-          status: t?.status ?? null,
-          execucaoStatus: t?.execucaoStatus ?? t?.statusExecucao ?? null,
+          meuStatus:
+            statusDerivado ??
+            t?.meuStatus ??
+            t?.statusExecucao ??
+            t?.execucaoStatus ??
+            null,
+
+          status:
+            statusDerivado ??
+            t?.status ??
+            null,
+
+          execucaoStatus:
+            statusDerivado ??
+            t?.execucaoStatus ??
+            t?.statusExecucao ??
+            null,
           submissaoTreinoId: t?.submissaoTreinoId ?? t?.submissao?.id ?? null,
           submissaoFeita,
           atleta:
@@ -336,35 +357,63 @@ function normalizeProgramadosPayload(payload: any): {
     codigo: t?.codigo ?? null,
     nivel: t?.nivel ?? null,
     descricao: t?.descricao ?? null,
-
     imagemUrl: t?.imagemUrl ?? null,
     duracao: typeof t?.duracao === "number" ? t.duracao : (t?.duracao ? Number(t.duracao) : null),
     pontuacao: typeof t?.pontuacao === "number" ? t.pontuacao : (t?.pontuacao ? Number(t.pontuacao) : null),
     categoria: Array.isArray(t?.categoria) ? t.categoria : [],
     tipoTreino: t?.tipoTreino ?? null,
-
     exercicios: Array.isArray(t?.exercicios)
-      ? t.exercicios.map((e: any) => ({
+  ? t.exercicios
+      .map((e: any) => {
+        const cat = e?.exercicio ?? null;
+        const tmp = e?.exercicioTemporario ?? e?.exercicio_temporario ?? null;
+        const per = e?.exercicioPersonalizado ?? e?.exercicio_personalizado ?? null;
+
+        // ✅ fallback “flat” (quando o item já vem com nome/descricao/video...)
+        const flat =
+          !cat && !tmp && !per && (e?.nome || e?.descricao || e?.videoDemonstrativoUrl || e?.videoUrl)
+            ? e
+            : null;
+
+        const resolved = cat || tmp || per || flat;
+
+        const tipoResolvido: "catalogo" | "temporario" | "personalizado" =
+          cat ? "catalogo"
+          : tmp ? "temporario"
+          : per ? "personalizado"
+          : (e?.exercicioPersonalizadoId ? "personalizado"
+            : e?.exercicioTemporarioId ? "temporario"
+            : "catalogo");
+
+        const videoUrl =
+          resolved?.videoUrl ??
+          resolved?.videoDemonstrativoUrl ??
+          e?.videoDemonstrativoUrl ??
+          null;
+        return {
           id: String(e?.id ?? ""),
           ordem: e?.ordem ?? null,
           repeticoes: e?.repeticoes ?? null,
           exercicioId: e?.exercicioId ?? null,
           exercicioTemporarioId: e?.exercicioTemporarioId ?? null,
-          exercicio: e?.exercicio
+          exercicioPersonalizadoId: e?.exercicioPersonalizadoId ?? null, // ✅ ADD
+          exercicio: resolved
             ? {
-                tipo: e.exercicio.tipo ?? "catalogo",
-                id: String(e.exercicio.id ?? ""),
-                codigo: e.exercicio.codigo ?? null,
-                nome: String(e.exercicio.nome ?? "Exercício"),
-                descricao: e.exercicio.descricao ?? null,
-                nivel: e.exercicio.nivel ?? null,
-                categorias: Array.isArray(e.exercicio.categorias) ? e.exercicio.categorias : [],
-                videoUrl: e.exercicio.videoUrl ?? e.exercicio.videoDemonstrativoUrl ?? null,
+                tipo: tipoResolvido,
+                id: String(resolved?.id ?? ""),
+                codigo: resolved?.codigo ?? null,
+                nome: String(resolved?.nome ?? "Exercício"),
+                descricao: resolved?.descricao ?? null,
+                nivel: resolved?.nivel ?? null,
+                categorias: Array.isArray(resolved?.categorias) ? resolved.categorias : [],
+                videoUrl,
+                videoPosterUrl: resolved?.videoPosterUrl ?? null, // ✅ opcional
               }
             : null,
-        })).filter((x: any) => x?.id)
-      : [],
-
+        };
+      })
+      .filter((x: any) => x?.id)
+  : [],
     autor: t?.autor
       ? { tipo: t.autor.tipo, id: t.autor.id ?? null, nome: t.autor.nome ?? null }
       : undefined,
@@ -421,7 +470,6 @@ export function useAgendaTreinos({
   groupByTreinoPerDay,
   title,
   turmaId, // ✅ ADD
-  
 }: Pick<
   AgendaTreinosProps,
   | "open"
@@ -515,6 +563,19 @@ export function useAgendaTreinos({
     }
   })();
 
+  }, [open, cursorMonth, fetchAgendados]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const id = setInterval(async () => {
+      try {
+        const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
+        setAgendados(list);
+      } catch {}
+    }, 8000); // 8s (pode por 5s se quiser mais agressivo)
+
+    return () => clearInterval(id);
   }, [open, cursorMonth, fetchAgendados]);
 
   const monthLabel = useMemo(() => {
@@ -857,27 +918,43 @@ export default function AgendaTreinos({
             tipoTreino: t?.tipoTreino ?? null,
 
             exercicios: Array.isArray(t?.exercicios)
-              ? t.exercicios.map((e: any) => ({
-                  id: String(e?.id ?? ""),
-                  ordem: e?.ordem ?? null,
-                  repeticoes: e?.repeticoes ?? null,
-                  exercicioId: e?.exercicioId ?? null,
-                  exercicioTemporarioId: e?.exercicioTemporarioId ?? null,
-                  exercicio: e?.exercicio
-                    ? {
-                        tipo: e.exercicio.tipo ?? "catalogo",
-                        id: String(e.exercicio.id ?? ""),
-                        codigo: e.exercicio.codigo ?? null,
-                        nome: String(e.exercicio.nome ?? "Exercício"),
-                        descricao: e.exercicio.descricao ?? null,
-                        nivel: e.exercicio.nivel ?? null,
-                        categorias: Array.isArray(e.exercicio.categorias) ? e.exercicio.categorias : [],
-                        videoUrl: e.exercicio.videoUrl ?? e.exercicio.videoDemonstrativoUrl ?? null,
-                      }
-                    : null,
-                })).filter((x: any) => x?.id)
-              : [],
+            ? t.exercicios
+                .map((e: any) => {
+                  const cat = e?.exercicio ?? null;
+                  const tmp = e?.exercicioTemporario ?? e?.exercicio_temporario ?? null;
+                  const per = e?.exercicioPersonalizado ?? e?.exercicio_personalizado ?? null;
+                  const resolved = cat || tmp || per;
+                  const tipoResolvido: "catalogo" | "temporario" | "personalizado" =
+                    cat ? "catalogo" : tmp ? "temporario" : "personalizado";
+                  const videoUrl =
+                    resolved?.videoUrl ??
+                    resolved?.videoDemonstrativoUrl ??
+                    null;
 
+                  return {
+                    id: String(e?.id ?? ""),
+                    ordem: e?.ordem ?? null,
+                    repeticoes: e?.repeticoes ?? null,
+                    exercicioId: e?.exercicioId ?? null,
+                    exercicioTemporarioId: e?.exercicioTemporarioId ?? null,
+                    exercicioPersonalizadoId: e?.exercicioPersonalizadoId ?? null, // ✅ ADD
+                    exercicio: resolved
+                      ? {
+                          tipo: tipoResolvido,
+                          id: String(resolved?.id ?? ""),
+                          codigo: resolved?.codigo ?? null,
+                          nome: String(resolved?.nome ?? "Exercício"),
+                          descricao: resolved?.descricao ?? null,
+                          nivel: resolved?.nivel ?? null,
+                          categorias: Array.isArray(resolved?.categorias) ? resolved.categorias : [],
+                          videoUrl,
+                          videoPosterUrl: resolved?.videoPosterUrl ?? null, // ✅ opcional
+                        }
+                      : null,
+                  };
+                })
+                .filter((x: any) => x?.id)
+            : [],
             autor: t?.autor
               ? { tipo: t.autor.tipo, id: t.autor.id ?? null, nome: t.autor.nome ?? null }
               : undefined,
@@ -1505,42 +1582,64 @@ export default function AgendaTreinos({
                                     (t.exercicios ?? [])
                                       .slice()
                                       .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
-                                      .map((ex) => (
-                                        <div
-                                          key={ex.id}
-                                          className="rounded-lg border border-zinc-200 bg-white p-2"
-                                        >
-                                          <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                              <div className="text-sm font-bold text-zinc-900 truncate">
-                                                {typeof ex.ordem === "number"
-                                                  ? `${ex.ordem}. `
-                                                  : ""}
-                                                {ex.exercicio?.nome ?? "Exercício"}
-                                                {ex.exercicio?.codigo ? (
-                                                  <span className="text-xs text-zinc-500">
-                                                    {" "}
-                                                    ({ex.exercicio.codigo})
-                                                  </span>
+                                      .map((ex) => {
+                                        const hasVideo = !!(
+                                          ex.exercicio?.videoUrl ||
+                                          (ex as any)?.videoDemonstrativoUrl ||
+                                          (ex as any)?.exercicioPersonalizado?.videoDemonstrativoUrl ||
+                                          (ex as any)?.exercicioTemporario?.videoDemonstrativoUrl
+                                        );
+                                        
+                                        return (
+                                          <div
+                                            key={ex.id}
+                                            className="rounded-lg border border-zinc-200 bg-white p-2"
+                                          >
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="min-w-0">
+                                                <div className="text-sm font-bold text-zinc-900 truncate">
+                                                  {typeof ex.ordem === "number" ? `${ex.ordem}. ` : ""}
+                                                  {ex.exercicio?.nome ??
+                                                  (ex as any)?.exercicioPersonalizado?.nome ??
+                                                  (ex as any)?.exercicioTemporario?.nome ??
+                                                  (ex as any)?.exercicio?.nome ??
+                                                  (ex as any)?.nome ??
+                                                  "Exercício"}{ex.exercicio?.codigo ? (
+                                                    <span className="text-xs text-zinc-500">
+                                                      {" "}
+                                                      ({ex.exercicio.codigo})
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+
+                                                {ex.exercicio?.descricao ? (
+                                                  <div className="text-[11px] text-zinc-500 mt-1 line-clamp-2">
+                                                    {ex.exercicio.descricao}
+                                                  </div>
+                                                ) : null}
+
+                                                {ex.repeticoes ? (
+                                                  <div className="text-xs text-zinc-600 mt-0.5">
+                                                    Repetições:{" "}
+                                                    <span className="font-semibold">{ex.repeticoes}</span>
+                                                  </div>
                                                 ) : null}
                                               </div>
 
-                                              {ex.repeticoes ? (
-                                                <div className="text-xs text-zinc-600 mt-0.5">
-                                                  Repetições:{" "}
-                                                  <span className="font-semibold">{ex.repeticoes}</span>
-                                                </div>
-                                              ) : null}
-                                            </div>
-
-                                            {ex.exercicio?.videoUrl ? (
-                                              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex-none">
-                                                VÍDEO
+                                              <span
+                                                className={[
+                                                  "text-[10px] font-bold px-2 py-1 rounded-full border flex-none",
+                                                  hasVideo
+                                                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                                    : "bg-zinc-50 border-zinc-200 text-zinc-600",
+                                                ].join(" ")}
+                                              >
+                                                {hasVideo ? "VÍDEO" : "SEM VÍDEO"}
                                               </span>
-                                            ) : null}
+                                            </div>
                                           </div>
-                                        </div>
-                                      ))
+                                        );
+                                      })
                                   )}
                                 </div>
                               </div>
