@@ -1,3 +1,4 @@
+// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {CirclePlus } from "lucide-react";
