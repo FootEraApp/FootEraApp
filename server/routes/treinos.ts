@@ -41,7 +41,9 @@ import {
   realizadosCount,
   treinosPublicosProfessoresParceiros,
   listarAlunosTreinoAgendadoTurma,
-  listarExerciciosPersonalizados
+  listarExerciciosPersonalizados,
+  atualizarExercicioPersonalizado,
+  deletarExercicioPersonalizado
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -105,6 +107,8 @@ router.get("/disponiveis", treinosDisponiveis);
 router.get("/publicos-professores-parceiros", treinosPublicosProfessoresParceiros);
 router.get("/atletas-vinculados", atletasVinculados);
 router.post("/restaurar", restaurarTreinos);
+router.patch("/exercicios/personalizados/:id", atualizarExercicioPersonalizado);
+router.delete("/exercicios/personalizados/:id", deletarExercicioPersonalizado);
 router.get("/exercicios/personalizados", listarExerciciosPersonalizados);
 router.get("/exercicios", getExercicios);
 router.get("/pontuacoes", getPontuacoes);
