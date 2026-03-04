@@ -287,17 +287,38 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
 
     const itens = await Promise.all(
       (exercicios as any[]).map(async (e: any, i: number) => {
-        const exercicioId = String(e?.exercicioId ?? e?.id ?? "").trim();
         const ordem = Number(e?.ordem ?? i + 1);
-
-        // repeticoes: o front já manda "3x 12" em muitos casos
-        // mas pra manter compatível com seu código atual:
         const repeticoes = toRepeticoes(e?.series ?? e?.serie, e?.repeticoes);
 
-        // ✅ 1) Exercício do catálogo
-        if (exercicioId) {
-          return { exercicioId, ordem, repeticoes };
+        // ✅ IDs vindos do front (prioridade)
+        const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
+        const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
+        const exercicioIdCatalogo = String(e?.exercicioId ?? "").trim();
+
+        // ✅ fallback que muita tela manda como "id"
+        const idGenerico = String(e?.id ?? "").trim();
+        const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
+
+        // 1) Se veio explícito, usa explícito
+        if (exercicioPersonalizadoId) {
+          return { exercicioPersonalizadoId, ordem, repeticoes };
         }
+        if (exercicioTemporarioId) {
+          return { exercicioTemporarioId, ordem, repeticoes };
+        }
+        if (exercicioIdCatalogo) {
+          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes };
+        }
+
+        // 2) Se veio só "id", decide pelo "tipo"
+        if (idGenerico) {
+          if (tipo === "personalizado") return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes };
+          if (tipo === "temporario") return { exercicioTemporarioId: idGenerico, ordem, repeticoes };
+          // default catálogo
+          return { exercicioId: idGenerico, ordem, repeticoes };
+        }
+
+        // 3) Se não veio id nenhum, aí sim cria/acha personalizado por nome (seu fluxo atual)
 
         // ✅ 2) Exercício personalizado
         const nome = String(e?.nome ?? "").trim();
@@ -581,17 +602,38 @@ export async function updateTreino(req: Request, res: Response) {
 
     const itens = await Promise.all(
       (exercicios as any[]).map(async (e: any, i: number) => {
-        const exercicioId = String(e?.exercicioId ?? e?.id ?? "").trim();
         const ordem = Number(e?.ordem ?? i + 1);
-
-        // repeticoes: o front já manda "3x 12" em muitos casos
-        // mas pra manter compatível com seu código atual:
         const repeticoes = toRepeticoes(e?.series ?? e?.serie, e?.repeticoes);
 
-        // ✅ 1) Exercício do catálogo
-        if (exercicioId) {
-          return { exercicioId, ordem, repeticoes };
+        // ✅ IDs vindos do front (prioridade)
+        const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
+        const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
+        const exercicioIdCatalogo = String(e?.exercicioId ?? "").trim();
+
+        // ✅ fallback que muita tela manda como "id"
+        const idGenerico = String(e?.id ?? "").trim();
+        const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
+
+        // 1) Se veio explícito, usa explícito
+        if (exercicioPersonalizadoId) {
+          return { exercicioPersonalizadoId, ordem, repeticoes };
         }
+        if (exercicioTemporarioId) {
+          return { exercicioTemporarioId, ordem, repeticoes };
+        }
+        if (exercicioIdCatalogo) {
+          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes };
+        }
+
+        // 2) Se veio só "id", decide pelo "tipo"
+        if (idGenerico) {
+          if (tipo === "personalizado") return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes };
+          if (tipo === "temporario") return { exercicioTemporarioId: idGenerico, ordem, repeticoes };
+          // default catálogo
+          return { exercicioId: idGenerico, ordem, repeticoes };
+        }
+
+        // 3) Se não veio id nenhum, aí sim cria/acha personalizado por nome (seu fluxo atual)
 
         // ✅ 2) Exercício personalizado
         const nome = String(e?.nome ?? "").trim();

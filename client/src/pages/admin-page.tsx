@@ -5,7 +5,9 @@ import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
 import ToggleSwitch from "../components/ToggleSwitch";
-
+import axios from "axios";
+import Storage from "../utils/storage.js"
+// <-- ajuste o caminho correto do seu storage.ts do CLIENT
 type Tab =
   | "dashboard"
   | "usuarios"
@@ -587,6 +589,52 @@ async function bloquearOuReativarConta(
     showToast("error", msg);
   } finally {
     setAcaoBusyId(null);
+  }
+}
+
+async function excluirContaPermanente(usuario: any) {
+  const confirmado = window.confirm(
+    `Tem certeza que deseja EXCLUIR PERMANENTEMENTE a conta de "${usuario?.nome}"?\n\n` +
+      `Isso apagará o usuário e dados relacionados do banco e ele nunca mais poderá logar.`
+  );
+
+  if (!confirmado) return;
+
+  const typed = window.prompt('Digite EXCLUIR para confirmar:');
+  if (typed !== "EXCLUIR") {
+    alert("Exclusão cancelada.");
+    return;
+  }
+
+  try {
+    const token = Storage.token; // <- aqui é onde seu TS estava quebrando
+    if (!token) {
+      alert("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    await axios.delete(`${API.BASE_URL}/api/admin/usuarios/${usuario.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    alert("Conta excluída permanentemente.");
+
+    // Atualiza a lista na tela
+    setUsuarios((prev: any[]) => prev.filter((u) => u.id !== usuario.id));
+
+    // Se o modal/detalhe estiver aberto para o mesmo usuário, feche
+    if (userSelecionado?.id === usuario.id) {
+      setUserSelecionado(null);
+      setDetalheAberto(false);
+    }
+  } catch (err: any) {
+    console.error("[Admin] erro hard-delete:", err?.response?.status, err?.response?.data, err?.message);
+    alert(
+      err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Erro ao excluir a conta."
+    );
   }
 }
 
@@ -1844,6 +1892,12 @@ async function confirmarExcluirProfessor() {
                                 </button>
                               );
                             })()}
+                            <button
+                                className="text-red-800 hover:underline ml-3"
+                                onClick={() => excluirContaPermanente(u)}
+                              >
+                                Excluir conta
+                            </button>
 
                             {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
                               <button onClick={() => deletarAdmin(u.id)} className="text-red-600 hover:underline" title="Deletar este administrador">

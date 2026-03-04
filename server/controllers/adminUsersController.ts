@@ -304,3 +304,71 @@ export async function removeUserContent(req: Request, res: Response) {
     await prisma.comentario.deleteMany({ where: { usuarioId: id } });
   res.json({ ok: true });
 }
+
+export async function hardDeleteUsuario(req: Request, res: Response) {
+  const { id } = req.params;
+
+  try {
+    // proteção pra não se auto-apagar por acidente
+    const requesterId = (req as any).user?.id;
+    if (requesterId && requesterId === id) {
+      return res.status(400).json({ message: "Você não pode excluir sua própria conta." });
+    }
+
+    // se não existe, 404
+    const exists = await prisma.usuario.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return res.status(404).json({ message: "Usuário não encontrado." });
+
+    await prisma.$transaction(async (tx) => {
+      // ⚠️ A ideia aqui é: limpar tabelas que referenciam usuario por ids diferentes,
+      // e depois deletar o Usuario. O resto geralmente cai por Cascade/SetNull do schema.
+
+      // solicitações entre usuários (seu schema tem SolicitacaoTreino)
+      await tx.solicitacaoTreino.deleteMany({
+        where: { OR: [{ remetenteId: id }, { destinatarioId: id }] },
+      });
+
+      // amizade (normalmente tem usuarioId + amigoId)
+      if ((tx as any).amigo) {
+        await (tx as any).amigo.deleteMany({
+          where: { OR: [{ usuarioId: id }, { amigoId: id }] },
+        });
+      }
+
+      // notificações (usuarioId e actorId)
+      if ((tx as any).notificacao) {
+        await (tx as any).notificacao.deleteMany({
+          where: { OR: [{ usuarioId: id }, { actorId: id }] },
+        });
+      }
+
+      // conteúdo social
+      if ((tx as any).comentario) await (tx as any).comentario.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).curtida) await (tx as any).curtida.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).compartilhamento) await (tx as any).compartilhamento.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).postagem) await (tx as any).postagem.deleteMany({ where: { usuarioId: id } });
+
+      // relacionamentos/favoritos (se existir no seu schema)
+      if ((tx as any).favoritoUsuario) await (tx as any).favoritoUsuario.deleteMany({ where: { usuarioId: id } });
+
+      // entidades por tipo (todas têm usuarioId no seu schema FootEra)
+      if ((tx as any).atleta) await (tx as any).atleta.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).professor) await (tx as any).professor.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).clube) await (tx as any).clube.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).escolinha) await (tx as any).escolinha.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).olheiro) await (tx as any).olheiro.deleteMany({ where: { usuarioId: id } });
+      if ((tx as any).administrador) await (tx as any).administrador.deleteMany({ where: { usuarioId: id } });
+
+      // por fim: o usuário
+      await tx.usuario.delete({ where: { id } });
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[Admin] hardDeleteUsuario erro:", e);
+    return res.status(500).json({
+      message: "Falha ao excluir permanentemente. Veja o log do servidor para a tabela que bloqueou (FK).",
+      detail: e?.message,
+    });
+  }
+}
