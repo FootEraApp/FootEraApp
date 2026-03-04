@@ -195,6 +195,7 @@ model Professor {
   Clube                       Clube?                   @relation(fields: [clubeId], references: [id])
   clubeId                     String?
   Metodologia                 Metodologia[]
+  OrganizacaoGestor           OrganizacaoGestor[]
 
   @@index([organizacaoId])
 }
@@ -225,6 +226,29 @@ model ProfessorEscolinha {
 
   @@unique([professorId, escolinhaId])
   @@index([escolinhaId])
+}
+
+model OrganizacaoGestor {
+  id String @id @default(uuid())
+
+  tipo    OrganizacaoTipo
+  ownerId String // id do Clube ou da Escolinha (depende do "tipo")
+
+  professorId String
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  papel      String? // ex: "RESPONSAVEL", "GESTOR", "COORDENADOR"
+  permissoes Json? // opcional: granular (ex: { turmas: true, treinos: true })
+
+  ativo Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tipo, ownerId, professorId])
+  @@index([professorId])
+  @@index([tipo, ownerId])
+  @@index([ativo])
 }
 
 model Amigo {
@@ -456,17 +480,17 @@ model ExercicioTemporario {
 }
 
 model ExercicioPersonalizado {
-  id                    String      @id @default(uuid())
-  nome                  String
-  descricao             String?
-  nivel                 Nivel?
-  categorias            Categoria[] @default([])
+  id         String      @id @default(uuid())
+  nome       String
+  descricao  String?
+  nivel      Nivel?
+  categorias Categoria[] @default([])
 
   // 🎥 vídeo
   videoDemonstrativoUrl String?
 
   // 🖼️ NOVO: THUMB GERADA DO VÍDEO
-  videoPosterUrl        String?   // <-- ADICIONAR ESTA LINHA
+  videoPosterUrl String? // <-- ADICIONAR ESTA LINHA
 
   // dono
   criadorUsuarioId String
@@ -2522,4 +2546,9 @@ enum MetodologiaPublicoAlvo {
 enum MetodologiaAssinaturaOrigem {
   LEARNING
   AVULSA
+}
+
+enum OrganizacaoTipo {
+  CLUBE
+  ESCOLINHA
 }
