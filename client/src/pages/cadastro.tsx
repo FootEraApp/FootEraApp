@@ -121,9 +121,6 @@ export default function Cadastro() {
   const [sucesso, setSucesso] = useState("");
   const [etapa, setEtapa] = useState<Etapa>(1);
   const [infoAberto, setInfoAberto] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendMsg, setResendMsg] = useState("");
-
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: undefined, cref: "" });
   const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "" });
@@ -160,7 +157,7 @@ export default function Cadastro() {
   const verificarEmail = useMemo(() => debounce(async (e: string) => {
     if (!e || !EMAIL_RE.test(e)) return setEmailDisp(null);
     try {
-      const r = await fetch(`${API.BASE_URL}/api/auth/cadastro/check/email?email=${encodeURIComponent(e)}`);
+      const r = await fetch(`${API.BASE_URL}/api/cadastro/check/email?email=${encodeURIComponent(e)}`);
       const j = await r.json();
       setEmailDisp(Boolean(j?.disponivel));
     } catch { setEmailDisp(null); }
@@ -169,7 +166,7 @@ export default function Cadastro() {
   const verificarUsername = useMemo(() => debounce(async (u: string) => {
     if (!u || !USER_RE.test(u)) return setUserDisp(null);
     try {
-      const r = await fetch(`${API.BASE_URL}/api/auth/cadastro/check/username?username=${encodeURIComponent(u)}`);
+      const r = await fetch(`${API.BASE_URL}/api/cadastro/check/username?username=${encodeURIComponent(u)}`);
       const j = await r.json();
       setUserDisp(Boolean(j?.disponivel));
     } catch { setUserDisp(null); }
@@ -204,17 +201,17 @@ export default function Cadastro() {
 
   const podeIrParaEtapa2 = () => {
     if (!aceitaTermos) return setErro("Você deve aceitar os termos."), false;
-    if (!nome.trim()) return setErro("Informe seu nome completo."), false;
     if (!emailValido) return setErro("E-mail inválido."), false;
     if (!usernameValido) return setErro("Nome de usuário inválido (3–20, letras/números/._)."), false;
     if (!senhaForte) return setErro("Senha fraca: mínimo 8 caracteres com letra e número."), false;
     if (!confirmarOk) return setErro("As senhas não coincidem."), false;
     if (emailDisp === false) return setErro("E-mail já cadastrado."), false;
     if (userDisp === false) return setErro("Nome de usuário indisponível."), false;
-    if (!CEP_RE.test(cep) || !cidade || !estado) {
-      return setErro("Informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente)."), false;
+    if (cep && (!CEP_RE.test(cep) || !cidade || !estado)) {
+      return setErro("CEP inválido: informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente).");
     }
-
+    // ✅ CEP/Localização deixa de ser obrigatório.
+    // (se o usuário preencher, você pode validar depois, mas não bloqueia mais)
     setErro("");
     return true;
   };
@@ -266,14 +263,16 @@ export default function Cadastro() {
     try {
       const payload: any = {
         tipo: mapTipo[tipoPerfil],
-        nome,
-        email,
-        nomeDeUsuario,
+        email: email.trim(),
+        nomeDeUsuario: nomeDeUsuario.trim(),
         senha,
-        cidade: cidade || undefined,
-        estado: estado || undefined,
-        pais: pais || undefined,
-        bairro: bairro || undefined,
+        // ✅ nome completo opcional
+        ...(nome.trim() ? { nome: nome.trim() } : {}),
+        // ✅ localização opcional
+        ...(cidade.trim() ? { cidade: cidade.trim() } : {}),
+        ...(estado.trim() ? { estado: estado.trim() } : {}),
+        ...(bairro.trim() ? { bairro: bairro.trim() } : {}),
+        ...(pais.trim() ? { pais: pais.trim() } : {}),
         ...(PRECISA_NASCIMENTO(tipoPerfil) ? { dataNascimento } : {}),
       };
 
@@ -319,7 +318,7 @@ export default function Cadastro() {
         };
       }
 
-      const res = await fetch(`${API.BASE_URL}/api/auth/cadastro`, {
+      const res = await fetch(`${API.BASE_URL}/api/cadastro/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -378,7 +377,7 @@ export default function Cadastro() {
   const buscarAlvo = useMemo(() => debounce(async (q: string, tipoAlvo: string) => {
     setResultadosBusca([]); if (!q) return;
     try {
-      const url = `${API.BASE_URL}/api/auth/cadastro/buscar?query=${encodeURIComponent(q)}&tipo=${encodeURIComponent(tipoAlvo || "Todos")}`;
+      const url = `${API.BASE_URL}/api/cadastro/buscar?query=${encodeURIComponent(q)}&tipo=${encodeURIComponent(tipoAlvo || "Todos")}`;
       const r = await fetch(url);
       if (r.ok) {
         const j = await r.json();
@@ -473,9 +472,58 @@ export default function Cadastro() {
                 ))}
               </div>
 
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Nome Completo (opcional)</label>
+                <input className="w-full border rounded px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
+              </div>
+
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Nome de usuário*</label>
+                <input className={`w-full border rounded px-3 py-2 ${nomeDeUsuario && !usernameValido ? "border-red-400" : ""}`} value={nomeDeUsuario} onChange={(e) => setNomeDeUsuario(e.target.value)} />
+                {nomeDeUsuario && (
+                  <p className={`text-xs mt-1 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
+                    {!usernameValido ? "Use 3–20 caracteres (letras, números, . e _)." : userDisp === null ? "Verificando..." : userDisp ? "Disponível" : "Indisponível"}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Email*</label>
+                <input type="email" className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`} value={email} onChange={(e) => setEmail(e.target.value)} />
+                {email && (
+                  <p className={`text-xs mt-1 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
+                    {!emailValido ? "Formato de e-mail inválido." : emailDisp === null ? "Verificando..." : emailDisp ? "Disponível" : "Já cadastrado"}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Senha*</label>
+                  <div className="relative">
+                    <input type={mostrarSenha ? "text" : "password"} autoComplete="new-password" className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`} value={senha} onChange={(e) => setSenha(e.target.value)} />
+                    <button type="button" aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} onClick={() => setMostrarSenha((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                      {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {senha && <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>Mín. 8 caracteres com letra e número.</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Confirmar Senha*</label>
+                  <div className="relative">
+                    <input type={mostrarConfirmar ? "text" : "password"} autoComplete="new-password" className={`w-full border rounded px-3 py-2 pr-10 ${confirmarSenha && !confirmarOk ? "border-red-400" : ""}`} value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
+                    <button type="button" aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"} onClick={() => setMostrarConfirmar((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {confirmarSenha && <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>{confirmarOk ? "OK" : "Senhas não coincidem."}</p>}
+                </div>
+              </div>
+
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1">CEP</label>
+                  <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
                   <input
                     className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
                     placeholder="00000-000"
@@ -498,69 +546,20 @@ export default function Cadastro() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Cidade</label>
+                  <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
                   <input className="w-full border rounded px-3 py-2" value={cidade} onChange={(e) => setCidade(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">UF</label>
+                  <label className="block text-sm font-medium mb-1">UF (opcional)</label>
                   <input className="w-full border rounded px-3 py-2 uppercase" maxLength={2} value={estado} onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0,2))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Bairro</label>
+                  <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
                   <input className="w-full border rounded px-3 py-2" value={bairro} onChange={(e) => setBairro(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">País</label>
+                  <label className="block text-sm font-medium mb-1">País (opcional)</label>
                   <input className="w-full border rounded px-3 py-2" value={pais} onChange={(e) => setPais(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Nome Completo</label>
-                <input className="w-full border rounded px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
-              </div>
-
-              <div className="mt-3">
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <input type="email" className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`} value={email} onChange={(e) => setEmail(e.target.value)} />
-                {email && (
-                  <p className={`text-xs mt-1 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!emailValido ? "Formato de e-mail inválido." : emailDisp === null ? "Verificando..." : emailDisp ? "Disponível" : "Já cadastrado"}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-3">
-                <label className="block text-sm font-medium mb-1">Nome de usuário</label>
-                <input className={`w-full border rounded px-3 py-2 ${nomeDeUsuario && !usernameValido ? "border-red-400" : ""}`} value={nomeDeUsuario} onChange={(e) => setNomeDeUsuario(e.target.value)} />
-                {nomeDeUsuario && (
-                  <p className={`text-xs mt-1 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!usernameValido ? "Use 3–20 caracteres (letras, números, . e _)." : userDisp === null ? "Verificando..." : userDisp ? "Disponível" : "Indisponível"}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Senha</label>
-                  <div className="relative">
-                    <input type={mostrarSenha ? "text" : "password"} autoComplete="new-password" className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`} value={senha} onChange={(e) => setSenha(e.target.value)} />
-                    <button type="button" aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} onClick={() => setMostrarSenha((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
-                      {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {senha && <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>Mín. 8 caracteres com letra e número.</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Confirmar Senha</label>
-                  <div className="relative">
-                    <input type={mostrarConfirmar ? "text" : "password"} autoComplete="new-password" className={`w-full border rounded px-3 py-2 pr-10 ${confirmarSenha && !confirmarOk ? "border-red-400" : ""}`} value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
-                    <button type="button" aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"} onClick={() => setMostrarConfirmar((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
-                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {confirmarSenha && <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>{confirmarOk ? "OK" : "Senhas não coincidem."}</p>}
                 </div>
               </div>
 
@@ -593,7 +592,7 @@ export default function Cadastro() {
 
               {PRECISA_NASCIMENTO(tipoPerfil) && (
                 <div className="mt-3">
-                  <label className="block text-sm font-medium mb-1">Data de nascimento</label>
+                  <label className="block text-sm font-medium mb-1">Data de nascimento*</label>
                   <input
                     type="date"
                     className={`w-full border rounded px-3 py-2 ${erro && !dataNascimento ? "border-red-400" : ""}`}
@@ -685,7 +684,7 @@ export default function Cadastro() {
                   </div>
 
                   <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">Área de Formação</label>
+                    <label className="block text-sm font-medium mb-1">Área de Formação*</label>
                     <input className="w-full border rounded px-3 py-2" value={professor.areaFormacao} onChange={(e) => setProfessor(p => ({ ...p, areaFormacao: e.target.value }))} />
                   </div>
 

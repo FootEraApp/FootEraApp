@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
-import { PosicaoCampo } from "@prisma/client";
+import { Categoria, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
 import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
 import { prisma } from "../prisma.js";
+import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 
 type AtividadeUI = {
   id: string;
@@ -15,6 +16,16 @@ type AtividadeUI = {
 };
 
 const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+
+const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3001";
+const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
+
+function absUrl(path?: string | null) {
+  const s = typeof path === "string" ? path.trim() : "";
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return `${s.startsWith("/uploads") ? API_BASE_URL : FRONTEND_URL}${s}`;
+}
 
 function readPrivacidadeFlags(config: any) {
   const c = (config && typeof config === "object") ? config : {};
@@ -883,7 +894,12 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         email: true,
         foto: true,
         nomeDeUsuario: true,
+        verified: true,
         configuracoesPrivacidade: true,
+        cep: true,
+        cidade: true,
+        estado: true,
+        pais: true,
       },
     });
 
@@ -914,7 +930,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         nome: true,
         sobrenome: true,
         idade: true,
-        cpf: true,
+        email: true,
         telefone1: true,
         telefone2: true,
         nacionalidade: true,
@@ -924,6 +940,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         peso: true,
         seloQualidade: true,
         foto: true,
+        categoria: true,
         escolinhaId: true,
         clubeId: true,
       },
@@ -952,27 +969,13 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       const professores = Array.from(profsMap.values());
       const professorPrincipal = professores[0] ?? null;
 
-      if (!escolaMin && atleta.escolinhaId) {
-        escolaMin = await prisma.escolinha.findUnique({
-          where: { id: atleta.escolinhaId },
-          select: { id: true, nome: true },
-        });
-      }
-
-      if (!clubeMin && atleta.clubeId) {
-        clubeMin = await prisma.clube.findUnique({
-          where: { id: atleta.clubeId },
-          select: { id: true, nome: true },
-        });
-      }
-
       dadosEspecificos = {
         atletaId: atleta.id,
         nome: atleta.nome,
         sobrenome: atleta.sobrenome,
         idade: atleta.idade,
+        email: atleta.email,
         telefone1: atleta.telefone1,
-        telefone2: atleta.telefone2,
         nacionalidade: atleta.nacionalidade,
         naturalidade: atleta.naturalidade,
         posicao: atleta.posicao,
@@ -985,8 +988,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         professor: professorPrincipal?.nome ?? null,
         professores: professores,
         professorIds: professores.map((p) => p.id),
-        escolinhaId: escolaMin?.id ?? null,
-        clubeId: clubeMin?.id ?? null,
+        categoria: atleta.categoria,
       };
 
       tipoPerfil = "Atleta";
@@ -1064,7 +1066,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         descricao: true,
         emailPublico: true,
         telefonePublico: true,
-        siteOuLinkedin: true,
         colaboracaoClube: { select: { id: true, nome: true, logo: true, usuarioId: true } },
       },
     });
@@ -1079,7 +1080,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         descricao: olheiro.descricao,
         emailPublico: olheiro.emailPublico,
         telefonePublico: olheiro.telefonePublico,
-        siteOuLinkedin: olheiro.siteOuLinkedin,
         colaboracaoClube: olheiro.colaboracaoClube
           ? { id: olheiro.colaboracaoClube.id, nome: olheiro.colaboracaoClube.nome, logo: olheiro.colaboracaoClube.logo }
           : null,
@@ -1110,23 +1110,118 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       }
     }
 
-    return res.json({
-      tipo: tipoPerfil,
-      usuario: {
-        id: usuario.id,
-        nome: usuario.nome,
-        nomeDeUsuario: usuario.nomeDeUsuario ?? null,
-        email: (isOwnProfile || isAdmin || priv.mostrarEmail) ? usuario.email : null,
-        foto: withDefaultImg(usuario.foto),
-      },
-      dadosEspecificos,
-      vinculos,
-    });
-  } catch (error) {
-    console.error("Erro ao buscar perfil:", error);
-    return res.status(500).json({ error: "Erro interno do servidor" });
+  const usuarioPayload: any = {
+    id: usuario.id,
+    nome: usuario.nome,
+    nomeDeUsuario: usuario.nomeDeUsuario,
+    email: usuario.email,
+    foto: usuario.foto,
+    verified: (usuario as any).verified ?? false, // ✅ ADD
+  };
+
+  // ✅ se for o dono do perfil (no EditarPerfil sempre é), devolve endereço também
+  if (isOwnProfile) {
+    usuarioPayload.cep = usuario.cep;
+    usuarioPayload.cidade = usuario.cidade;
+    usuarioPayload.estado = usuario.estado;
+    usuarioPayload.pais = usuario.pais;
   }
-};
+
+  const fotoBase =
+  absUrl(usuario.foto) ||
+  (tipoPerfil === "Clube" ? absUrl((clube as any)?.logo) : null) ||
+  (tipoPerfil === "Escolinha" ? absUrl((escolinha as any)?.logo) : null) ||
+  (tipoPerfil === "Professor" ? absUrl((professor as any)?.fotoUrl) : null) ||
+  (tipoPerfil === "Atleta" ? absUrl((atleta as any)?.foto) : null) ||
+  (tipoPerfil === "Olheiro" ? absUrl((olheiro as any)?.fotoUrl) : null) ||
+  null;
+
+  const perfilVerificado = calcularPerfilVerificado({
+    usuario: {
+      verified: (usuario as any).verified,
+      nome: usuario.nome ?? null,
+      nomeDeUsuario: usuario.nomeDeUsuario ?? null,
+      email: usuario.email ?? null,
+      foto: fotoBase,
+    },
+    tipo: String(tipoPerfil ?? "").toLowerCase(),
+
+    atleta: tipoPerfil === "Atleta" ? {
+      posicao: atleta?.posicao ?? null,
+      categoria: atleta?.categoria ?? null,
+      idade: atleta?.idade ?? null,
+      telefone1: atleta?.telefone1 ?? null,
+      nacionalidade: atleta?.nacionalidade ?? null,
+      naturalidade: atleta?.naturalidade ?? null,
+      altura: atleta?.altura ?? null,
+      peso: atleta?.peso ?? null,
+      seloQualidade: atleta?.seloQualidade ?? null,
+    } : null,
+
+    professor: tipoPerfil === "Professor" ? {
+      areaFormacao: (professor as any)?.areaFormacao ?? null,
+      cref: (professor as any)?.cref ?? null,
+      statusCref: (professor as any)?.statusCref ?? null,
+      dataNascimento: (professor as any)?.dataNascimento ?? null,
+      escola: (professor as any)?.escola ?? null,
+      qualificacoes: (professor as any)?.qualificacoes ?? null,
+      certificacoes: (professor as any)?.certificacoes ?? null,
+      fotoUrl: absUrl((professor as any)?.fotoUrl) ?? null,
+    } : null,
+
+    clube: tipoPerfil === "Clube" ? {
+      nome: (clube as any)?.nome ?? null,
+      cnpj: (clube as any)?.cnpj ?? null,
+      email: (clube as any)?.email ?? usuario.email ?? null,
+      telefone1: (clube as any)?.telefone1 ?? null,
+      siteOficial: (clube as any)?.siteOficial ?? null,
+      sede: (clube as any)?.sede ?? null,
+      cidade: (clube as any)?.cidade ?? null,
+      estado: (clube as any)?.estado ?? null,
+      bairro: (clube as any)?.bairro ?? null,
+      pais: (clube as any)?.pais ?? null,
+      cep: (clube as any)?.cep ?? null,
+      logo: absUrl((clube as any)?.logo) ?? null,
+    } : null,
+
+    escolinha: tipoPerfil === "Escolinha" ? {
+      nome: (escolinha as any)?.nome ?? null,
+      cnpj: (escolinha as any)?.cnpj ?? null,
+      email: (escolinha as any)?.email ?? usuario.email ?? null,
+      telefone1: (escolinha as any)?.telefone1 ?? null,
+      siteOficial: (escolinha as any)?.siteOficial ?? null,
+      cidade: (escolinha as any)?.cidade ?? null,
+      estado: (escolinha as any)?.estado ?? null,
+      bairro: (escolinha as any)?.bairro ?? null,
+      pais: (escolinha as any)?.pais ?? null,
+      cep: (escolinha as any)?.cep ?? null,
+      logo: absUrl((escolinha as any)?.logo) ?? null,
+    } : null,
+
+    olheiro: tipoPerfil === "Olheiro" ? {
+      areaAtuacao: (olheiro as any)?.areaAtuacao ?? null,
+      anosExperiencia: Number.isFinite(Number((olheiro as any)?.anosExperiencia))
+        ? Number((olheiro as any)?.anosExperiencia)
+        : null,
+      emailPublico: (olheiro as any)?.emailPublico ?? null,
+      telefonePublico: (olheiro as any)?.telefonePublico ?? null,
+      descricao: (olheiro as any)?.descricao ?? null,
+      fotoUrl: absUrl((olheiro as any)?.fotoUrl) ?? null,
+    } : null,
+  });
+
+  return res.json({
+    tipo: tipoPerfil,
+    usuario: usuarioPayload,
+    dadosEspecificos,
+    vinculos,
+    perfilVerificado
+  });
+    } catch (error) {
+      console.error("Erro ao buscar perfil:", error);
+      return res.status(500).json({ error: "Erro interno do servidor" });
+    }
+  };
 
 export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
@@ -1168,6 +1263,9 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
     }
   }
   try {
+    const cepDigits =
+  usuario?.cep != null ? String(usuario.cep).replace(/\D/g, "") : "";
+
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -1175,6 +1273,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         email: usuario.email,
         nomeDeUsuario: novoUsername ?? undefined, // ✅ garante lowercase
         foto: fotoFinal,
+        cep: cepDigits ? cepDigits : null,
         cidade: usuario.cidade,
         estado: usuario.estado,
         pais: usuario.pais,
@@ -1239,6 +1338,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
           telefone1: tipo.telefone1,
           telefone2: tipo.telefone2,
+          email: usuario.email ?? null,
           nacionalidade: tipo.nacionalidade,
           naturalidade: tipo.naturalidade,
           posicao: tipo.posicao,
@@ -1433,7 +1533,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             anosExperiencia: Number.isFinite(anos) ? (anos as number) : undefined,
             emailPublico: tipo.emailPublico ?? null,
             telefonePublico: tipo.telefonePublico ?? null,
-            siteOuLinkedin: tipo.siteOuLinkedin ?? null,
             fotoUrl: fotoFinal,
           },
         });
@@ -1721,7 +1820,7 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
         statusCref: true,
         clubeId: true,
         escolinhaId: true,
-        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true, verified: true } },
         treinosProgramados: { select: { id: true } },
         relacoesTreinamento: { select: { atletaId: true, clubeId: true, escolinhaId: true } },
       },
@@ -1816,7 +1915,7 @@ export async function getPerfilClube(req: Request, res: Response) {
       select: {
         id: true,
         usuarioId: true,
-        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true, verified: true } },
         nome: true,
         cnpj: true,
         telefone1: true,
@@ -1913,7 +2012,7 @@ export async function getPerfilEscola(req: Request, res: Response) {
       select: {
         id: true,
         usuarioId: true,
-        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true, verified: true } },
         nome: true,
         cnpj: true,
         telefone1: true,
@@ -1989,7 +2088,7 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       select: {
         id: true,
         usuarioId: true,
-        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true, verified: true } },
         fotoUrl: true,
         headline: true,
         descricao: true,
@@ -1997,7 +2096,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         anosExperiencia: true,
         emailPublico: true,
         telefonePublico: true,
-        siteOuLinkedin: true,
         reputacaoScore: true,
         totalIndicacoes: true,
         colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } },
@@ -2031,7 +2129,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         anosExperiencia: olheiro.anosExperiencia ?? 0,
         emailPublico: olheiro.emailPublico ?? null,
         telefonePublico: olheiro.telefonePublico ?? null,
-        siteOuLinkedin: olheiro.siteOuLinkedin ?? null,
         colaboracaoClube: olheiro.colaboracaoClube ? {
           id: olheiro.colaboracaoClube.id,
           usuarioId: olheiro.colaboracaoClube.usuarioId,

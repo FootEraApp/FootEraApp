@@ -791,6 +791,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           { label: "Treinos", value: data.metrics.treinosProgramados ?? 0 },
           { label: "Conquistas", value: conquistasCount },
         ]}
+        isVerified={(data as any)?.perfilVerificado}
+        isPro={(data as any)?.isPro}
       />
 
       <div className="mt-4 px-4">

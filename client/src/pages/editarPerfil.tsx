@@ -80,6 +80,10 @@ const EditarPerfil = () => {
   const [escolinhaSelId, setEscolinhaSelId] = useState<string | null>(null);
   const [professorSelIds, setProfessorSelIds] = useState<string[]>([]);
 
+  function onlyDigits(v: string) {
+    return (v || "").replace(/\D/g, "");
+  }
+
   useEffect(() => {
     if (!usuarioId || !token) {
       console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
@@ -201,6 +205,44 @@ const EditarPerfil = () => {
 
     fetchDados();
   }, [usuarioId, token]);
+
+  useEffect(() => {
+    const cepDigits = onlyDigits(String(dadosUsuario?.cep ?? ""));
+
+    // só busca quando tiver exatamente 8 números
+    if (cepDigits.length !== 8) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data } = await axios.get(`https://viacep.com.br/ws/${cepDigits}/json/`);
+
+        if (cancel) return;
+
+        if (!data || data.erro) {
+          // opcional: você pode avisar, mas eu recomendo só não preencher
+          return;
+        }
+
+        setDadosUsuario((prev: any) => ({
+          ...prev,
+          cep: cepDigits,
+          bairro: prev?.bairro || data.bairro || "",
+          cidade: prev?.cidade || data.localidade || "",
+          estado: prev?.estado || data.uf || "",
+          pais: prev?.pais || "Brasil",
+        }));
+      } catch (e) {
+        // opcional: log
+        console.warn("[EditarPerfil] ViaCEP falhou", e);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [dadosUsuario?.cep]);
 
   useEffect(() => {
     let cancelado = false;
@@ -734,6 +776,58 @@ return (
         />
       </div>
 
+      <div className="mb-6">
+        <label className="block text-sm font-medium">CEP</label>
+        <input
+          name="cep"
+          value={dadosUsuario.cep || ""}
+          onChange={(e) => {
+            const digits = onlyDigits(e.target.value);
+            setDadosUsuario((prev: any) => ({ ...prev, cep: digits }));
+          }}
+          className="w-full border px-3 py-2 rounded"
+          placeholder="Ex: 29102-999"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Você pode deixar em branco.
+        </p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium">País </label>
+          <input
+            name="pais"
+            value={dadosUsuario.pais || ""}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+            placeholder="Brasil"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Estado (UF) </label>
+          <input
+            name="estado"
+            value={dadosUsuario.estado || ""}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+            placeholder="ES"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Cidade </label>
+          <input
+            name="cidade"
+            value={dadosUsuario.cidade || ""}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+            placeholder="Vila Velha"
+          />
+        </div>
+      </div>
+
       {renderCamposEspecificos()}
 
       <button
@@ -821,10 +915,17 @@ return (
             }
 
             try {
+              const cepFinal = (dadosUsuario.cep ?? "").toString().trim();
+
               await axios.put(
                 `${API.BASE_URL}/api/perfil/${usuarioId}`,
                 {
-                  usuario: { ...dadosUsuario, foto: fotoUrl, nomeDeUsuario: usernameFinal || null },
+                  usuario: {
+                    ...dadosUsuario,
+                    foto: fotoUrl,
+                    nomeDeUsuario: usernameFinal || null,
+                    cep: cepFinal === "" ? null : cepFinal, // ✅
+                  },
                   tipo,
                   tipoUsuario: String(tipoUsuarioOriginal)
                     .toLowerCase()

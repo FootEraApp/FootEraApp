@@ -1,18 +1,39 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 
-function calcIsPro(assinatura: { status?: string | null; trialEndsAt?: Date | string | null } | null | undefined) {
+function calcIsPro(
+  assinatura:
+    | { plano?: string | null; status?: string | null; trialEndsAt?: Date | string | null }
+    | null
+    | undefined
+) {
   if (!assinatura) return false;
 
-  const status = String(assinatura.status || "").toUpperCase();
+  const status = String(assinatura.status || "").trim().toUpperCase();
+  const plano = String(assinatura.plano || "").trim().toUpperCase();
 
-  if (status === "BLOQUEADA") return false;
+  if (status === "BLOQUEADA" || status === "CANCELADA" || status === "INATIVA") {
+    return false;
+  }
+
   if (status === "ATIVA") return true;
 
   if (status === "TRIAL") {
     const trialEndsAt = assinatura.trialEndsAt ? new Date(assinatura.trialEndsAt as any) : null;
-    return !!trialEndsAt && new Date() <= trialEndsAt;
+
+    if (trialEndsAt && !Number.isNaN(trialEndsAt.getTime())) {
+      return new Date() <= trialEndsAt;
+    }
+
+    // fallback: se estiver marcado como plano PRO mesmo sem trialEndsAt
+    if (plano.includes("PRO")) return true;
+
+    return true;
   }
+
+  // fallback importante: mantém compatibilidade com casos em que o plano já define PRO
+  if (plano.includes("PRO")) return true;
 
   return false;
 }
@@ -41,14 +62,18 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
         pontosTotal: true,
         clubeId: true,
         escolinhaId: true,
+        foto: true,
         usuario: {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            verified: true,
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: {select: {plano: true, status: true, trialEndsAt: true}},
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
           },
         },
         pontuacao: {
@@ -66,11 +91,34 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
       const independente = !a.clubeId && !a.escolinhaId;
       const isPro = calcIsPro(a.usuario?.assinatura);
 
+      const perfilVerificado = calcularPerfilVerificado({
+        usuario: a.usuario
+          ? {
+              verified: a.usuario.verified,
+              nome: a.usuario.nome,
+              nomeDeUsuario: (a.usuario as any).nomeDeUsuario,
+              email: (a.usuario as any).email,
+              foto: a.foto ?? a.usuario.foto ?? null,
+            }
+          : null,
+        tipo: "atleta",
+        atleta: {
+          posicao: a.posicao ?? null,
+          categoria: a.categoria ?? [],
+          idade: a.idade ?? null,
+          telefone1: (a as any).telefone1 ?? null,
+          nacionalidade: (a as any).nacionalidade ?? null,
+          naturalidade: (a as any).naturalidade ?? null,
+          altura: (a as any).altura ?? null,
+          peso: (a as any).peso ?? null,
+          seloQualidade: (a as any).seloQualidade ?? null,
+        },
+      });
       return {
         id: a.id,
         usuarioId: a.usuarioId,
         usuario: a.usuario,
-        foto: a.usuario?.foto ?? null,
+        foto: a.foto ?? a.usuario?.foto ?? null,
         idade: a.idade ?? null,
         posicao: a.posicao ?? null,
         categoria: a.categoria ?? [],
@@ -81,6 +129,7 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
         categoriaBase: null,
         tipoTreino: a.perfilTipoTreino ?? null,
         isPro,
+        perfilVerificado,
       };
     });
 
@@ -114,14 +163,24 @@ export async function explorar(req: Request, res: Response) {
         pontosTotal: true,
         clubeId: true,
         escolinhaId: true,
+        telefone1: true,
+        nacionalidade: true,
+        naturalidade: true,
+        altura: true,
+        peso: true,
+        seloQualidade: true,
+        foto: true,
         usuario: {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            verified: true,
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: {select: {plano: true, status: true, trialEndsAt: true}},
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
           },
         },
         pontuacao: {
@@ -139,11 +198,35 @@ export async function explorar(req: Request, res: Response) {
       const independente = !a.clubeId && !a.escolinhaId;
       const isPro = calcIsPro(a.usuario?.assinatura);
 
+      const perfilVerificado = calcularPerfilVerificado({
+        usuario: a.usuario
+          ? {
+              verified: a.usuario.verified,
+              nome: a.usuario.nome ?? null,
+              nomeDeUsuario: a.usuario.nomeDeUsuario ?? null,
+              email: a.usuario.email ?? null,
+              foto: a.foto ?? a.usuario.foto ?? null,
+            }
+          : null,
+        tipo: "atleta",
+        atleta: {
+          posicao: a.posicao ?? null,
+          categoria: a.categoria ?? [],
+          idade: a.idade ?? null,
+          telefone1: a.telefone1 ?? null,
+          nacionalidade: a.nacionalidade ?? null,
+          naturalidade: a.naturalidade ?? null,
+          altura: a.altura ?? null,
+          peso: a.peso ?? null,
+          seloQualidade: a.seloQualidade ?? null,
+        },
+      });
+
       return {
         id: a.id,
         usuarioId: a.usuarioId,
         usuario: a.usuario,
-        foto: a.usuario?.foto ?? null,
+        foto: a.foto ?? a.usuario?.foto ?? null,
         idade: a.idade ?? null,
         posicao: a.posicao ?? null,
         categoria: a.categoria ?? [],
@@ -154,6 +237,7 @@ export async function explorar(req: Request, res: Response) {
         categoriaBase: null,
         tipoTreino: a.perfilTipoTreino ?? null,
         isPro,
+        perfilVerificado,
       };
     });
 
@@ -163,10 +247,13 @@ export async function explorar(req: Request, res: Response) {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            verified: true,
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true} },
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
           },
         },
       },
@@ -178,6 +265,32 @@ export async function explorar(req: Request, res: Response) {
     const clubes = clubesRaw.map((c) => ({
       ...c,
       isPro: calcIsPro(c.usuario?.assinatura),
+      perfilVerificado: calcularPerfilVerificado({
+        usuario: c.usuario
+          ? {
+              verified: c.usuario.verified,
+              nome: c.usuario.nome ?? c.nome ?? null,
+              nomeDeUsuario: (c.usuario as any).nomeDeUsuario,
+              email: (c.usuario as any).email ?? c.email ?? null,
+              foto: c.logo ?? c.usuario.foto ?? null,
+            }
+          : null,
+        tipo: "clube",
+        clube: {
+          nome: c.nome ?? null,
+          cnpj: (c as any).cnpj ?? null,
+          email: (c as any).email ?? null,
+          telefone1: (c as any).telefone1 ?? null,
+          siteOficial: (c as any).siteOficial ?? null,
+          sede: (c as any).sede ?? null,
+          cidade: (c as any).cidade ?? null,
+          estado: (c as any).estado ?? null,
+          bairro: (c as any).bairro ?? null,
+          pais: (c as any).pais ?? null,
+          cep: (c as any).cep ?? null,
+          logo: (c as any).logo ?? null,
+        },
+      }),
     }));
 
     const escolasRaw = await prisma.escolinha.findMany({
@@ -186,6 +299,9 @@ export async function explorar(req: Request, res: Response) {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            verified: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -201,15 +317,52 @@ export async function explorar(req: Request, res: Response) {
     const escolas = escolasRaw.map((e) => ({
       ...e,
       isPro: calcIsPro(e.usuario?.assinatura),
+      perfilVerificado: calcularPerfilVerificado({
+        usuario: e.usuario
+          ? {
+              verified: e.usuario.verified,
+              nome: e.usuario.nome ?? e.nome ?? null,
+              nomeDeUsuario: (e.usuario as any).nomeDeUsuario,
+              email: (e.usuario as any).email ?? e.email ?? null,
+              foto: e.logo ?? e.usuario.foto ?? null,
+            }
+          : null,
+        tipo: "escolinha",
+        escolinha: {
+          nome: e.nome ?? null,
+          cnpj: (e as any).cnpj ?? null,
+          email: (e as any).email ?? null,
+          telefone1: (e as any).telefone1 ?? null,
+          siteOficial: (e as any).siteOficial ?? null,
+          cidade: (e as any).cidade ?? null,
+          estado: (e as any).estado ?? null,
+          bairro: (e as any).bairro ?? null,
+          pais: (e as any).pais ?? null,
+          cep: (e as any).cep ?? null,
+          logo: (e as any).logo ?? null,
+        },
+      }),
     }));
 
     const professoresRaw = await prisma.professor.findMany({
       select: {
         id: true,
+        nome: true,
+        areaFormacao: true,
+        cref: true,
+        statusCref: true,
+        dataNascimento: true,
+        escola: true,
+        qualificacoes: true,
+        certificacoes: true,
+        fotoUrl: true,
         usuario: {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            verified: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -225,16 +378,46 @@ export async function explorar(req: Request, res: Response) {
     const professores = professoresRaw.map((p) => ({
       ...p,
       isPro: calcIsPro(p.usuario?.assinatura),
-
+      perfilVerificado: calcularPerfilVerificado({
+        usuario: p.usuario
+          ? {
+              verified: p.usuario.verified,
+              nome: p.usuario.nome ?? p.nome ?? null,
+              nomeDeUsuario: (p.usuario as any).nomeDeUsuario,
+              email: (p.usuario as any).email,
+              foto: p.fotoUrl ?? p.usuario.foto ?? null,
+            }
+          : null,
+        tipo: "professor",
+        professor: {
+          areaFormacao: p.areaFormacao ?? null,
+          cref: p.cref ?? null,
+          statusCref: p.statusCref ?? null,
+          dataNascimento: (p as any).dataNascimento ?? null,
+          escola: p.escola ?? null,
+          qualificacoes: p.qualificacoes ?? null,
+          certificacoes: p.certificacoes ?? null,
+          fotoUrl: p.fotoUrl ?? null,
+        },
+      }),
     }));
 
     const olheirosRaw = await prisma.olheiro.findMany({
       select: {
         id: true,
+        fotoUrl: true,
+        areaAtuacao: true,
+        anosExperiencia: true,
+        emailPublico: true,
+        telefonePublico: true,
+        descricao: true,
         usuario: {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            verified: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -250,7 +433,26 @@ export async function explorar(req: Request, res: Response) {
     const olheiros = olheirosRaw.map((o) => ({
       ...o,
       isPro: calcIsPro(o.usuario?.assinatura),
-
+      perfilVerificado: calcularPerfilVerificado({
+        usuario: o.usuario
+          ? {
+              verified: o.usuario.verified,
+              nome: o.usuario.nome ?? null,
+              nomeDeUsuario: (o.usuario as any).nomeDeUsuario,
+              email: (o.usuario as any).email ?? null,
+              foto: o.fotoUrl ?? o.usuario.foto ?? null,
+            }
+          : null,
+        tipo: "olheiro",
+        olheiro: {
+          areaAtuacao: o.areaAtuacao ?? null,
+          anosExperiencia: o.anosExperiencia ?? null,
+          emailPublico: o.emailPublico ?? null,
+          telefonePublico: o.telefonePublico ?? null,
+          descricao: o.descricao ?? null,
+          fotoUrl: o.fotoUrl ?? o.usuario.foto ?? null,
+        },
+      }),
     }));
 
     const agora = new Date();
@@ -326,7 +528,17 @@ export const buscarExplorar = async (req: Request, res: Response) => {
           clubeId: true,
           escolinhaId: true,
           usuario: {
-            select: { id: true, nome: true, foto: true, cidade: true, estado: true, assinatura: {select: {plano: true, status: true}}},
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              email: true,
+              verified: true,
+              foto: true,
+              cidade: true,
+              estado: true,
+              assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            },
           },
           pontuacao: { select: { pontuacaoTotal: true } },
         },
@@ -349,7 +561,21 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         where: termo
           ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
           : {},
-        include: { usuario: { select: { id: true, nome: true, foto: true } } },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              email: true,
+              verified: true,
+              foto: true,
+              cidade: true,
+              estado: true,
+              assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            },
+          },
+        },
         take: 50,
       }),
 
@@ -357,7 +583,21 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         where: termo
           ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
           : {},
-        include: { usuario: { select: { id: true, nome: true, foto: true } } },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              email: true,
+              verified: true,
+              foto: true,
+              cidade: true,
+              estado: true,
+              assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            },
+          },
+        },
         take: 50,
       }),
     ]);

@@ -841,6 +841,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         perfilId={data.usuario?.id || data.clube.usuarioId}
         perfilTipoProp="clube"
         perfilTipoIdProp={data.clube.id}
+        isVerified={(data as any)?.perfilVerificado}
+        isPro={(data as any)?.isPro}
       />
 
       <div className="mt-4 grid grid-cols-6 gap-2">
