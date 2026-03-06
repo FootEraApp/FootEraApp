@@ -16,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { API } from "../../config.js";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import AgendaTreinos from "../../components/agenda/AgendaTreinos";
 
 type TurmaMin = {
@@ -27,6 +27,11 @@ type TurmaMin = {
   professorNomes?: string[];
   professorNome?: string | null;
   alunosCount?: number;
+
+  // ✅ NOVO (vem do backend)
+  ownerTipo?: "Clube" | "Escolinha" | null;
+  ownerId?: string | null;
+  criadoPorProfessorId?: string | null;
 };
 
 type ProfessorMin = { id: string; nome: string };
@@ -72,18 +77,82 @@ export default function TurmasManager({
     sessionStorage.getItem("token") ??
     "";
 
+  function readAnyKey(key: string): string | null {
+    const v = localStorage.getItem(key) || sessionStorage.getItem(key);
+    return v && v.trim().length ? v : null;
+  }
+
+  function safeJsonParse<T = any>(v: string | null): T | null {
+    if (!v) return null;
+    try { return JSON.parse(v) as T; } catch { return null; }
+  }
+
+  function readUserObj(): any | null {
+    // tenta achar "user" ou "usuario" em ambos storages
+    return (
+      safeJsonParse(localStorage.getItem("user")) ??
+      safeJsonParse(sessionStorage.getItem("user")) ??
+      safeJsonParse(localStorage.getItem("usuario")) ??
+      safeJsonParse(sessionStorage.getItem("usuario")) ??
+      null
+    );
+  }
+
   const token = getToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  const professorAlvoId = String(professorId ?? "").trim();
+
+  const userObj = readUserObj();
+
+  const meuProfessorId =
+    String(
+      (Storage as any)?.professor?.id ||
+        (Storage as any)?.user?.professorId ||
+        (Storage as any)?.usuario?.professorId ||
+        (Storage as any)?.user?.tipoUsuarioId ||
+        (Storage as any)?.usuario?.tipoUsuarioId ||
+        userObj?.professor?.id ||
+        userObj?.professorId ||
+        userObj?.tipoUsuarioId ||
+        userObj?.usuario?.professorId ||
+        userObj?.usuario?.tipoUsuarioId ||
+        readAnyKey("professorId") ||
+        readAnyKey("tipoUsuarioId") ||
+        ""
+    ).trim();
+
+  const tipoUsuarioLogado = String(
+    (Storage as any)?.user?.tipoUsuario ||
+      (Storage as any)?.usuario?.tipoUsuario ||
+      userObj?.tipoUsuario ||
+      userObj?.usuario?.tipoUsuario ||
+      userObj?.user?.tipoUsuario ||
+      userObj?.role ||
+      userObj?.tipo ||
+      readAnyKey("tipoUsuario") ||
+      readAnyKey("usuarioTipoRaw") ||
+      readAnyKey("role") ||
+      readAnyKey("userType") ||
+      ""
+  )
+    .toLowerCase()
+    .trim();
+
+  const estouLogadoComoProfessor = tipoUsuarioLogado === "professor";
 
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [deletandoTurma, setDeletandoTurma] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [leaveAware, setLeaveAware] = useState(false);
+  const [leavingTurma, setLeavingTurma] = useState(false);
   const [confirmDeleteStep, setConfirmDeleteStep] = useState<1 | 2>(1);
   const [turmas, setTurmas] = useState<TurmaMin[]>([]);
   const [profs, setProfs] = useState<ProfessorMin[]>([]);
   const [alunos, setAlunos] = useState<AtletaMin[]>([]);
-  const [filtroProf, setFiltroProf] = useState<string>(professorId || "");
+  const [filtroProf, setFiltroProf] = useState<string>(professorAlvoId || "");
   const [selecionada, setSelecionada] = useState<string>("");
   const [profSelecionados, setProfSelecionados] = useState<string[]>([]);
   const [alunosSelecionados, setAlunosSelecionados] = useState<string[]>([]);
@@ -105,6 +174,45 @@ export default function TurmasManager({
   const [freqData, setFreqData] = useState<any>(null);
   const [freqYear, setFreqYear] = useState(new Date().getFullYear());
 
+  const turmaSelecionada = useMemo(
+    () => turmas.find((t) => String(t.id) === String(selecionada)),
+    [turmas, selecionada]
+  );
+
+  const souDonoDaTurma = useMemo(() => {
+    if (!turmaSelecionada) return false;
+
+    // ✅ Dono = organização (clube/escolinha) quando abriu com owner
+    if (turmaSelecionada.ownerId && owner?.id) {
+      return String(owner.id) === String(turmaSelecionada.ownerId);
+    }
+
+    // ✅ Dono = professor criador quando não tem ownerId
+    if (!turmaSelecionada.ownerId && meuProfessorId) {
+      return String(turmaSelecionada.criadoPorProfessorId || "") === String(meuProfessorId);
+    }
+
+    return false;
+  }, [turmaSelecionada, owner?.id, meuProfessorId]);
+
+  const podeExcluirTurma = souDonoDaTurma; // (ou admin, se você tiver flag)
+
+const podeSairDaTurma = useMemo(() => {
+  if (!meuProfessorId) return false;
+  if (!turmaSelecionada) return false;
+
+  const ids = (turmaSelecionada.professorIds ?? []).map((x) => String(x).trim());
+  const match = ids.includes(String(meuProfessorId).trim());
+
+  // ✅ regra normal
+  if (tipoUsuarioLogado === "professor") return match && !souDonoDaTurma;
+
+  // ✅ fallback: se o tipo veio vazio, mas match é true, libera
+  if (!tipoUsuarioLogado) return match && !souDonoDaTurma;
+
+  return false;
+}, [meuProfessorId, turmaSelecionada, tipoUsuarioLogado, souDonoDaTurma]);
+
   function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
     const m = String(mesZeroBased + 1).padStart(2, "0");
     const d = String(dia).padStart(2, "0");
@@ -116,8 +224,8 @@ export default function TurmasManager({
   }
 
   useEffect(() => {
-    if (open) setFiltroProf(professorId || "");
-  }, [open, professorId]);
+    if (open) setFiltroProf(professorAlvoId || "");
+  }, [open, professorAlvoId]);
 
   useEffect(() => {
     if (!open) return;
@@ -150,17 +258,18 @@ export default function TurmasManager({
           }
 
           if (alvoId && alvoId !== selecionada) {
-            await abrirTurma(alvoId);
+            const turmaAlvo = lista.find((t) => t.id === alvoId);
+            await abrirTurma(alvoId, turmaAlvo);
           }
           return;
         }
 
-        const orgUserId = owner.usuarioId ?? owner.id;
+        const orgId = owner.id;
         const resP = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
           headers,
           params: {
             vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-            id: orgUserId,
+            id: orgId,
             limit: 200,
           },
         });
@@ -190,7 +299,7 @@ export default function TurmasManager({
           headers,
           params: {
             vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-            id: orgUserId,
+            id: orgId,
             order: "nome_asc",
             limit: 1000,
           },
@@ -228,7 +337,8 @@ export default function TurmasManager({
         }
 
         if (alvoId && alvoId !== selecionada) {
-          await abrirTurma(alvoId);
+          const turmaAlvo = lista.find((t) => t.id === alvoId);
+          await abrirTurma(alvoId, turmaAlvo);
         }
       } finally {
         setLoading(false);
@@ -317,8 +427,33 @@ export default function TurmasManager({
         professorNomes,
         professorNome: t.professorNome ?? (professorNomes.length ? professorNomes.join(", ") : null),
         alunosCount: t.alunosCount ?? 0,
+
+        ownerTipo: (t.ownerTipo ?? t.organizacaoTipo ?? null) as any,
+        ownerId: t.ownerId ? String(t.ownerId) : null,
+        criadoPorProfessorId: t.criadoPorProfessorId ? String(t.criadoPorProfessorId) : null,
       };
     });
+
+    // ✅ SE ESTIVER EM MODO "COMO PROFESSOR" (sem owner), monta a lista de profs a partir das turmas
+    if (!o) {
+      const map = new Map<string, string>();
+
+      parsed.forEach((t) => {
+        const ids = (t.professorIds || []).map(String);
+        const nomes = Array.isArray(t.professorNomes) ? t.professorNomes : [];
+
+        ids.forEach((pid, idx) => {
+          const nome =
+            String(nomes[idx] ?? "").trim() ||
+            String(t.professorNome ?? "").trim() ||
+            "Professor";
+
+          if (pid && !map.has(pid)) map.set(pid, nome);
+        });
+      });
+
+      setProfs(Array.from(map.entries()).map(([id, nome]) => ({ id, nome })));
+    }
 
     const profFiltro = (professorFiltro ?? filtroProf)?.trim();
 
@@ -335,12 +470,16 @@ export default function TurmasManager({
     await carregarTurmas(owner, prof);
   };
 
-  const abrirTurma = async (id: string) => {
+  const abrirTurma = async (id: string, turmaFromList?: TurmaMin) => {
     setSelecionada(id);
 
-    const turma = turmas.find((t) => t.id === id);
-    const idsProf = (turma?.professorIds || []).map(String).filter(Boolean);
+    setConfirmLeaveOpen(false);
+    setLeaveAware(false);
 
+    // ✅ usa a turma recebida (garante professorIds preenchido)
+    const turma = turmaFromList ?? turmas.find((t) => t.id === id);
+
+    const idsProf = (turma?.professorIds || []).map(String).filter(Boolean);
     setProfSelecionados(idsProf);
     setDirtyProf(false);
 
@@ -430,6 +569,47 @@ export default function TurmasManager({
       alert(e?.response?.data?.message || e?.message || "Falha ao salvar turma");
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const pedirSairDaTurma = () => {
+    if (!selecionada) return;
+    setLeaveAware(false);
+    setConfirmLeaveOpen(true);
+  };
+
+  const confirmarSairDaTurma = async () => {
+    if (!selecionada) return;
+    if (!meuProfessorId) return alert("Não foi possível identificar seu professorId.");
+
+    try {
+      setLeavingTurma(true);
+
+      // remove você da lista atual de professores da turma
+      const novos = (profSelecionados || []).filter((id) => String(id) !== String(meuProfessorId));
+
+      await axios.put(
+        `${API.BASE_URL}/api/turmas/${selecionada}/vincular-professor`,
+        { professorIds: novos },
+        { headers }
+      );
+
+      alert("Você foi removido da turma. Ela não aparecerá mais para você.");
+
+      // recarrega lista e seleciona outra turma (ou limpa)
+      const lista = await carregarTurmas(undefined, filtroProf);
+      const primeira = lista?.[0]?.id;
+
+      setConfirmLeaveOpen(false);
+      setSelecionada("");
+
+      if (primeira) {
+        await abrirTurma(primeira);
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Falha ao sair da turma.");
+    } finally {
+      setLeavingTurma(false);
     }
   };
 
@@ -651,7 +831,7 @@ export default function TurmasManager({
                     {turmas.map((t) => (
                       <li
                         key={t.id}
-                        onClick={() => abrirTurma(t.id)}
+                        onClick={() => abrirTurma(t.id, t)}
                         className={`flex cursor-pointer items-center justify-between p-3 hover:bg-zinc-50 ${
                           selecionada === t.id ? "bg-zinc-50" : ""
                         }`}
@@ -795,16 +975,31 @@ export default function TurmasManager({
 
                       {abaDireita === "membros" ? (
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={deletarTurmaSelecionada}
-                            disabled={deletandoTurma || salvando || !selecionada}
-                            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50 disabled:opacity-60"
-                            title="Excluir esta turma"
-                          >
-                            {deletandoTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                            Excluir turma
-                          </button>
+                          {podeSairDaTurma ? (
+                            <button
+                              type="button"
+                              onClick={pedirSairDaTurma}
+                              disabled={salvando || leavingTurma}
+                              className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                              title="Sair desta turma (ela não aparecerá mais para você)"
+                            >
+                              {leavingTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                              Sair da turma
+                            </button>
+                          ) : null}
+
+                          {podeExcluirTurma ? (
+                            <button
+                              type="button"
+                              onClick={deletarTurmaSelecionada}
+                              disabled={deletandoTurma || salvando || !selecionada}
+                              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50 disabled:opacity-60"
+                              title="Excluir esta turma"
+                            >
+                              {deletandoTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              Excluir turma
+                            </button>
+                          ) : null}
 
                           <button
                             onClick={salvarMembros}
@@ -1039,14 +1234,14 @@ export default function TurmasManager({
                                   return res.data;
                                 }
 
-                                const orgUserId = owner.usuarioId ?? owner.id;
+                                const orgId = owner.id;
                                 const res = await axios.get(
                                   `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`,
                                   {
                                     headers,
                                     params: {
                                       vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-                                      id: orgUserId,
+                                      id: orgId,
                                       debug: "1",
                                     },
                                   }
@@ -1274,6 +1469,84 @@ export default function TurmasManager({
           </div>
         </div>
       ) : null}
+
+      {confirmLeaveOpen ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-zinc-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-zinc-100 p-4">
+              <div>
+                <div className="text-sm font-extrabold text-zinc-900">Sair da turma</div>
+                <div className="text-xs text-zinc-500">Confirmação</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (leavingTurma) return;
+                  setConfirmLeaveOpen(false);
+                  setLeaveAware(false);
+                }}
+                className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-50"
+                title="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="font-extrabold">Atenção</div>
+                <div className="mt-1 text-xs leading-relaxed">
+                  Você será removido desta turma e ela <b>não aparecerá mais para você</b>.
+                  <br />
+                  Para voltar, somente um responsável terá que te adicionar novamente.
+                </div>
+              </div>
+
+              <label className="mt-4 flex items-center gap-2 text-sm text-zinc-800">
+                <input
+                  type="checkbox"
+                  checked={leaveAware}
+                  onChange={(e) => setLeaveAware(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 accent-emerald-600"
+                />
+                Estou ciente
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-zinc-100 p-4">
+              <button
+                type="button"
+                disabled={leavingTurma}
+                onClick={() => {
+                  setConfirmLeaveOpen(false);
+                  setLeaveAware(false);
+                }}
+                className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={!leaveAware || leavingTurma}
+                onClick={confirmarSairDaTurma}
+                className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-amber-700 disabled:opacity-60 inline-flex items-center gap-2"
+              >
+                {leavingTurma ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saindo...
+                  </>
+                ) : (
+                  "Confirmar saída"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </div>
   );
 }

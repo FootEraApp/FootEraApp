@@ -5,7 +5,7 @@ import {CirclePlus } from "lucide-react";
 import axios from "axios";
 import {
   Users, Search, Filter, ChevronRight, ArrowUpAZ, ArrowDownZA,
-  Shield, Activity, Trophy, Loader2, X, CalendarClock, ListChecks,
+  Shield, Activity, Trophy, Loader2, X, CalendarClock, ListChecks, ShieldCheck,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -15,6 +15,8 @@ import { API, APP } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import AgendaTreinos, { normalizeAgendadosPayload } from "@/components/agenda/AgendaTreinos";
+import { loadGestorContext, clearGestorContext } from "../utils/gestorSession";
+import Avatar from "../components/shared/Avatar";
 
 export type CategoriaBase =
   | "Sub-9"
@@ -229,7 +231,6 @@ async function fetchPontuacaoTotalPorUsuarioId(
   if (!uid) return null;
 
   const cached = pontuacaoCacheRef.current.get(uid);
-  if (typeof cached === "number") return cached;
 
   try {
     const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(uid)}/pontuacao`, {
@@ -334,6 +335,7 @@ const GerenciarAtletas: React.FC = () => {
   const params = new URLSearchParams(qs);
   const tab = params.get("tab");
   const isTurmasTab = tab === "turmas";
+  const isOrganizacoesTab = tab === "organizacoes";
   const isTurmasPage = isProfessoresPage && isTurmasTab;
 
   const token = Storage.token;
@@ -403,11 +405,52 @@ const GerenciarAtletas: React.FC = () => {
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
   const [detalheAtivo, setDetalheAtivo] = useState(false);
 
+  const orgTipoQS = params.get("orgTipo"); // "CLUBE" | "ESCOLINHA" | null
+  const orgIdQS = params.get("orgId");     // string | null
+
+  // ✅ lê sessão (persistência real)
+  const gestorCtx = loadGestorContext();
+
+  // ✅ se não vier QS na URL, mas tiver sessão, usa sessão
+  const orgTipoEfetivo = (orgTipoQS && String(orgTipoQS).trim())
+    ? String(orgTipoQS).trim().toUpperCase()
+    : (gestorCtx.enabled && gestorCtx.org ? String(gestorCtx.org.tipo).toUpperCase() : "");
+
+  const orgIdEfetivo = (orgIdQS && String(orgIdQS).trim())
+    ? String(orgIdQS).trim()
+    : (gestorCtx.enabled && gestorCtx.org ? String(gestorCtx.org.ownerId).trim() : "");
+
+  // ✅ modo gestor efetivo
+  const modoGestor = !!orgIdEfetivo;
+
+  // contexto efetivo (se tiver org na URL, manda como Clube/Escola)
+  const contextoTipo = useMemo<"Escola" | "Clube" | "Professor" | null>(() => {
+    if (!modoGestor) return tipo;
+    if (String(orgTipoEfetivo || "").toUpperCase() === "CLUBE") return "Clube";
+    return "Escola"; // ESCOLINHA
+  }, [modoGestor, orgTipoEfetivo, tipo]);
+
+  const contextoTipoUsuarioId = useMemo<string | null>(() => {
+    if (!modoGestor) return tipoUsuarioIdEntidade;
+    return String(orgIdEfetivo || "").trim() || null;
+  }, [modoGestor, orgIdEfetivo, tipoUsuarioIdEntidade]);
+
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
+  const limparOrg = () => {
+    clearGestorContext(); // limpa sessão gestor
+
+    // limpa estados da tela
+    setFocado(null);
+    setDetalheAtivo(false);
+    setCarreiraOpen(false);
+
+    setLocation(`/perfil/GerenciarProfessores?tab=organizacoes`);
+  };
+
   function getAutorId() {
-    return String(tipoUsuarioIdEntidade || "");
+    return String(contextoTipoUsuarioId || "");
   }
 
   function fecharModalAvaliacao() {
@@ -466,31 +509,32 @@ const GerenciarAtletas: React.FC = () => {
       setLoading(true);
 
       const usuarioId = String(usuarioIdEntidade || "").trim();
-      const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
-      if (!entidadeIdReal) {
-        setError("Não foi possível identificar o ID da entidade (tipoUsuarioId). Faça logout/login ou verifique /api/perfil/me.");
+      
+      const tipoEfetivo = contextoTipo;
+      const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
+
+      if (!tipoEfetivo || !entidadeIdReal) {
+        setError("Não foi possível identificar o contexto (org) para gerenciar atletas.");
         setAtletas([]);
         setLoading(false);
         return;
       }
 
       const params: any = {
-        vinculo: tipoParaVinculo(tipo),
+        vinculo: tipoParaVinculo(tipoEfetivo),
         id: entidadeIdReal,
         tipoUsuarioId: entidadeIdReal,
         order: ordenacao,
         usuarioId: String(usuarioIdEntidade || "").trim(),
       };
 
-      if (entidadeIdReal) params.tipoUsuarioId = entidadeIdReal;
-
-      params.usuarioId = usuarioId;
       if (q.trim()) params.search = q.trim();
       if (categoria) params.categoria = uiToApiCategoria(categoria);
       if (posicaoCodigo) params.posicao = posicaoCodigo;
       if (status) params.status = status;
 
       const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
+
       const lista = (data?.atletas || []) as any[];
       const normalizados: AtletaMin[] = lista.map((a) => {
         const nomeUsuario = a.usuario?.nome ?? null;
@@ -543,42 +587,35 @@ const GerenciarAtletas: React.FC = () => {
   };
 
   const carregarProfessores = async () => {
-    if (!tipo || tipo === "Professor" || !usuarioIdEntidade) return;
+    // ✅ se contexto efetivo for Professor, não carrega lista institucional
+    if (!contextoTipo || contextoTipo === "Professor" || !usuarioIdEntidade) return;
+
     try {
       setProfError(null);
       setProfLoading(true);
 
-      const usuarioId = String(usuarioIdEntidade || "").trim();
-      const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
+      const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
       if (!entidadeIdReal) {
-        setError("Não foi possível identificar o ID da entidade (tipoUsuarioId). Faça logout/login ou verifique /api/perfil/me.");
-        setAtletas([]);
-        setLoading(false);
+        setProfessores([]);
+        setProfError("Não foi possível identificar o ID da organização no contexto.");
         return;
       }
 
       const params: any = {
-        vinculo: tipoParaVinculo(tipo),
+        vinculo: tipoParaVinculo(contextoTipo), // 👈 usa o contexto
         id: entidadeIdReal,
         tipoUsuarioId: entidadeIdReal,
-        order: ordenacao,
-        usuarioId: String(usuarioIdEntidade || "").trim(),
+        search: q.trim() || undefined,
       };
-
-      if (entidadeIdReal) params.tipoUsuarioId = entidadeIdReal;
-
-      params.usuarioId = usuarioId;
-
-      if (q.trim()) params.search = q.trim();
 
       const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, { headers, params });
       const lista = (data?.professores || data || []) as any[];
 
       setProfessores(
         lista.map((p) => ({
-          id: p.id,
-          usuarioId: p.usuarioId,
-          nome: p.nome,
+          id: String(p.id),
+          usuarioId: String(p.usuarioId),
+          nome: p.nome ?? "Professor",
           cref: p.cref ?? null,
           foto: p.fotoUrl ?? p.foto ?? null,
           turmas: p._count?.turmas ?? p.turmasCount ?? 0,
@@ -648,19 +685,19 @@ const GerenciarAtletas: React.FC = () => {
     if (!tipo || !usuarioIdEntidade) return;
 
     carregarAtletas();
-    if (tipo !== "Professor") carregarProfessores();
+    if (contextoTipo && contextoTipo !== "Professor") carregarProfessores();
 
     if (pollingRef.current) clearInterval(pollingRef.current);
 
     pollingRef.current = setInterval(() => {
       carregarAtletas();
-      if (tipo !== "Professor") carregarProfessores();
+      if (contextoTipo && contextoTipo !== "Professor") carregarProfessores();
     }, 30000);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [tipo, usuarioIdEntidade]);
+  }, [tipo, usuarioIdEntidade, contextoTipo, contextoTipoUsuarioId]);
 
   const filtrosRef = useRef<any>(null);
 
@@ -898,6 +935,19 @@ const GerenciarAtletas: React.FC = () => {
     return map;
   }, [agendados, submissoes]);
 
+  const qsGestor = useMemo(() => {
+    if (!modoGestor) return "";
+    const qs = new URLSearchParams();
+    if (orgTipoEfetivo) qs.set("orgTipo", orgTipoEfetivo);
+    if (orgIdEfetivo) qs.set("orgId", orgIdEfetivo);
+    return qs.toString();
+  }, [modoGestor, orgTipoEfetivo, orgIdEfetivo]);
+
+  const withGestorQS = (path: string) => {
+    if (!qsGestor) return path;
+    return path.includes("?") ? `${path}&${qsGestor}` : `${path}?${qsGestor}`;
+  };
+
 async function abrirModalAvaliacao(submissaoTreinoId: string) {
   const id = String(submissaoTreinoId || "").trim();
   if (!id) return;
@@ -953,10 +1003,13 @@ async function abrirModalAvaliacao(submissaoTreinoId: string) {
 async function salvarAvaliacao() {
   if (!submissaoSelecionada) return;
   if (!tipo) return alert("Tipo de perfil inválido.");
-  const autorId = getAutorId();
-  if (!autorId) return alert("Não foi possível identificar o ID da entidade (autorId).");
 
-  const autorTipo = autorTipoFromTela(tipo);
+  const autorId = getAutorId();
+  if (!autorId) return alert("Não foi possível identificar o ID do autor (org).");
+
+  const autorTipo = contextoTipo ? autorTipoFromTela(contextoTipo) : undefined;
+  if (!autorTipo) return alert("Tipo do autor inválido.");
+
   const comentariosMarcadosArr = Object.entries(comentariosMarcados)
     .filter(([, v]) => v)
     .map(([texto]) => String(texto));
@@ -1003,6 +1056,56 @@ async function salvarAvaliacao() {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
+
+{tipo === "Professor" && modoGestor && contextoTipoUsuarioId && gestorCtx?.org && (
+  <div className="mb-4 -mx-3 sm:-mx-4 -mt-4 sm:-mt-6 bg-emerald-700 text-white shadow-sm overflow-visible">
+    <div className="relative px-4 sm:px-6 pt-4 pb-8">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          {/* Avatar maior + vazando pra baixo */}
+          <div className="shrink-0 translate-y-4">
+            <Avatar
+              foto={gestorCtx.org.logo ?? null}
+              alt={gestorCtx.org.nome ?? "Organização"}
+              className="h-16 w-16 ring-4 ring-white/70 border border-white/30 bg-emerald-800/40"
+            />
+          </div>
+
+          <div className="min-w-0 pt-1">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-white/90" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-white/90">
+                Modo gestor
+              </span>
+            </div>
+
+            <div className="truncate text-base sm:text-lg font-semibold leading-tight">
+              {gestorCtx.org.nome ??
+                (String(gestorCtx.org.tipo).toUpperCase() === "CLUBE" ? "Clube" : "Escolinha")}
+            </div>
+
+            <div className="truncate text-[12px] sm:text-sm text-white/90">
+              Você está gerenciando como professor responsável •{" "}
+              {String(gestorCtx.org.tipo).toUpperCase() === "CLUBE" ? "Clube" : "Escolinha"}
+            </div>
+          </div>
+        </div>
+
+        {/* Botão X */}
+        <button
+          type="button"
+          onClick={limparOrg}
+          className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 border border-white/25"
+          title="Sair do modo gestor"
+          aria-label="Sair do modo gestor"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       <div className="mb-3">
         <Link
           href="/perfil"
@@ -1026,9 +1129,11 @@ async function salvarAvaliacao() {
 
             {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+
+                {/* ATLETAS */}
                 <button
                   type="button"
-                  onClick={() => setLocation("/perfil/GerenciarAtletas")}
+                  onClick={() => setLocation(withGestorQS("/perfil/GerenciarAtletas"))}
                   className={`px-3 py-1.5 rounded-lg ${
                     isAtletasPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
                   }`}
@@ -1036,10 +1141,22 @@ async function salvarAvaliacao() {
                   Atletas
                 </button>
 
+                {/* TURMAS */}
+                <button
+                  type="button"
+                  onClick={() => setLocation(withGestorQS("/perfil/GerenciarProfessores?tab=turmas"))}
+                  className={`px-3 py-1.5 rounded-lg ${
+                    isTurmasPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  Turmas
+                </button>
+
+                {/* PROFESSORES */}
                 {tipo !== "Professor" && (
                   <button
                     type="button"
-                    onClick={() => setLocation("/perfil/GerenciarProfessores")}
+                    onClick={() => setLocation(withGestorQS("/perfil/GerenciarProfessores"))}
                     className={`px-3 py-1.5 rounded-lg ${
                       isProfessoresPage && !isTurmasTab
                         ? "bg-emerald-600 text-white"
@@ -1050,15 +1167,19 @@ async function salvarAvaliacao() {
                   </button>
                 )}
 
+                {/* ORGANIZAÇÕES */}
                 <button
                   type="button"
-                  onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
+                  onClick={() => setLocation(withGestorQS("/perfil/GerenciarProfessores?tab=organizacoes"))}
                   className={`px-3 py-1.5 rounded-lg ${
-                    isTurmasPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                    tab === "organizacoes"
+                      ? "bg-emerald-600 text-white"
+                      : "text-zinc-700 hover:bg-zinc-50"
                   }`}
                 >
-                  Turmas
+                  {tipo === "Professor" ? "Organizações" : "Organização"}
                 </button>
+
               </div>
             )}
 
@@ -1515,13 +1636,14 @@ async function salvarAvaliacao() {
         open={turmasOpen}
         onClose={() => setTurmasOpen(false)}
         owner={
-          tipo && tipo !== "Professor" && tipoUsuarioIdEntidade
-            ? { tipo: tipo === "Escola" ? "Escolinha" : "Clube", id: tipoUsuarioIdEntidade }
+          contextoTipo && contextoTipo !== "Professor" && contextoTipoUsuarioId
+            ? { tipo: contextoTipo === "Escola" ? "Escolinha" : "Clube", id: contextoTipoUsuarioId }
             : undefined
         }
         professorId={
-          tipo === "Professor"
-            ? (tipoUsuarioIdEntidade || undefined) 
+          // ✅ professor normal: usa o id do professor
+          contextoTipo === "Professor"
+            ? (tipoUsuarioIdEntidade || undefined)
             : (turmasProfessorId || undefined)
         }
       />
@@ -1605,16 +1727,17 @@ async function salvarAvaliacao() {
                   return { items: Array.from(byId.values()) };
                 }}
                 fetchProgramados={async () => {
-                  const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
-                  const entidadeFallback = String(usuarioIdEntidade || "").trim();
-                  const idParaEnviar = entidadeIdReal || entidadeFallback;
+                  const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
+                  if (!entidadeIdReal || !contextoTipo) {
+                    return { items: [] };
+                  }
 
                   const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
                     headers,
                     params: {
-                      vinculo: tipo ? tipoParaVinculo(tipo) : undefined,
-                      id: idParaEnviar,
-                      tipoUsuarioId: entidadeIdReal || undefined,
+                      vinculo: tipoParaVinculo(contextoTipo), // ✅ contexto
+                      id: entidadeIdReal,                    // ✅ id da org no modo gestor
+                      tipoUsuarioId: entidadeIdReal,
                       debug: "1",
                     },
                   });
@@ -1622,8 +1745,8 @@ async function salvarAvaliacao() {
                   return res.data;
                 }}
                 onAgendar={async ({ selectedDays, treinoProgramadoId, selectedTime }) => {
-                  const autorId = String(tipoUsuarioIdEntidade || "");
-                  const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined;
+                  const autorId = String(contextoTipoUsuarioId || "");
+                  const autorTipo = contextoTipo ? autorTipoFromTela(contextoTipo) : undefined;
 
                   if (!autorId || !autorTipo) throw new Error("Autor inválido");
 

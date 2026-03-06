@@ -62,6 +62,7 @@ import MinhasMetodologias from "./pages/metodologias/minhas.js";
 import MetodologiaUnicaPage from "./pages/metodologias/metodologia-unica.js";
 import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
 import TutorialPage from "./pages/tutorial.js";
+import LandingPage from "./pages/landingPage.js"
 
 export function AppRoutes() {
   return (
@@ -195,7 +196,8 @@ export function AppRoutes() {
       <Route path="/configuracoes"><PaginaConfiguracoesPerfil /></Route>
       <Route path="/notificacoes"><PaginaNotificacoes /></Route>
       <Route path="/mensagens"><PaginaMensagens /></Route>
-      <Route path="/"><HomeRedirect /></Route>
+      {<Route path="/"><HomeRedirect /></Route>}
+      {/*<Route path="/"><LandingPage /></Route> Descomentar quando tiver pronto/e comentar o de cima*/} 
       <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
     </Switch>
   );

@@ -1,3 +1,4 @@
+// server/controlllers/gerenciarController
 import { Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
@@ -322,6 +323,21 @@ export const gerenciarAtletasController = {
           ? ({ clubeId: entidadeId } as Prisma.ProfessorWhereInput)
           : ({ escolinhaId: entidadeId } as Prisma.ProfessorWhereInput);
 
+      // ✅ 1) PRIMEIRO: professores vinculados via RelacaoTreinamento (FONTE DA VERDADE)
+      const relacoes = await prisma.relacaoTreinamento.findMany({
+        where: {
+          ...ownerWhere,
+          ativo: { not: false }, // cobre true e null (se algum dia existir)
+          professorId: { not: null },
+        },
+        select: { professorId: true },
+      });
+
+      const profIdsViaRelacao = relacoes
+        .map((r) => r.professorId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+      // ✅ 2) Depois: professores via turmas do owner (mantém tua lógica)
       const turmasDoOwner = await prisma.turma.findMany({
         where: ownerWhere,
         select: {
@@ -336,20 +352,28 @@ export const gerenciarAtletasController = {
         },
       });
 
-      const profsViaTurmas = turmasDoOwner.flatMap((t) =>
-        t.professores.map((tp) => tp.professor)
-      );
-
+      const profsViaTurmas = turmasDoOwner.flatMap((t) => t.professores.map((tp) => tp.professor));
       const profIdsViaTurmas = Array.from(new Set(profsViaTurmas.map((p) => p.id)));
+
+      // ✅ 3) União final (RelacaoTreinamento + Turmas)
+      const profIds = Array.from(new Set([...profIdsViaRelacao, ...profIdsViaTurmas]));
 
       const professores = await prisma.professor.findMany({
         where: {
           AND: [
             {
-              OR: [{ id: { in: profIdsViaTurmas } }, ownerDirect],
+              OR: [
+                ...(profIds.length ? [{ id: { in: profIds } }] : []),
+                ownerDirect,
+              ],
             },
             ...(search
-              ? [{ nome: { contains: search, mode: Prisma.QueryMode.insensitive } }]
+              ? [{
+                  OR: [
+                    { nome: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                    { cref: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                  ],
+                }]
               : []),
           ],
         },
@@ -360,11 +384,12 @@ export const gerenciarAtletasController = {
       const usuarioIds = professores
         .map((p) => p.usuarioId)
         .filter((id): id is string => typeof id === "string" && id.length > 0);
+
       const usuarios = await prisma.usuario.findMany({
         where: { id: { in: usuarioIds } },
         select: { id: true, nome: true },
       });
-      const usuarioNomeMap = new Map(usuarios.map(u => [u.id, u.nome]));
+      const usuarioNomeMap = new Map(usuarios.map((u) => [u.id, u.nome]));
 
       const grupos = await prisma.turmaProfessor.groupBy({
         by: ["professorId"],
