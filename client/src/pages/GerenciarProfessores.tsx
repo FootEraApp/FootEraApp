@@ -21,8 +21,10 @@ import {
   ShieldCheck,
   Save,
   Trash2,
+  X,
 } from "lucide-react";
 import GerenciarOrganizacao, { type OrgGestorItem } from "./GerenciarOrganizacao.js";
+import { loadGestorContext, setGestorOrg, clearGestorContext } from "../utils/gestorSession";
 
 type TipoEntidade = "Escola" | "Clube" | "Professor" | null;
 
@@ -64,6 +66,61 @@ type GestorItem = {
   professorFoto?: string | null;
 };
 
+function canVerAbaProfessores(org: any | null) {
+  if (!org) return false;
+
+  // 🔥 pega permissoes de vários formatos possíveis
+  const perms =
+    org.permissoes ??
+    org.gestor?.permissoes ??
+    org.vinculo?.permissoes ??
+    org.gestorVinculo?.permissoes ??
+    org.gestao?.permissoes ??
+    org?.gestorAtual?.permissoes ??
+    null;
+
+  // helper: normaliza chave
+  const hasKey = (obj: any, key: string) =>
+    obj && typeof obj === "object" && obj[key] === true;
+
+  // 1) permissoes como objeto: { professores: true } / { PROFESSORES: true } / etc
+  if (perms && typeof perms === "object" && !Array.isArray(perms)) {
+    if (
+      hasKey(perms, "professores") ||
+      hasKey(perms, "PROFESSORES") ||
+      hasKey(perms, "gerenciarProfessores") ||
+      hasKey(perms, "GERENCIAR_PROFESSORES") ||
+      hasKey(perms, "gerenciar_professores")
+    ) {
+      return true;
+    }
+  }
+
+  // 2) permissoes como array de strings: ["PROFESSORES", ...]
+  if (Array.isArray(perms)) {
+    const set = new Set(perms.map((x) => String(x).trim().toLowerCase()));
+    if (
+      set.has("professores") ||
+      set.has("professores_vinculo") ||
+      set.has("gerenciar_professores") ||
+      set.has("gerenciarprofessores") ||
+      set.has("gerenciar-professores") ||
+      set.has("professores:write") ||
+      set.has("professores:readwrite")
+    ) {
+      return true;
+    }
+  }
+
+  // 3) permissoes como string: "PROFESSORES, TURMAS"
+  if (typeof perms === "string") {
+    const s = perms.toLowerCase();
+    if (s.includes("professores")) return true;
+  }
+
+  return false;
+}
+
 function getQueryParam(name: string) {
   try {
     return new URLSearchParams(window.location.search).get(name);
@@ -74,6 +131,11 @@ function getQueryParam(name: string) {
 
 const GerenciarProfessores: React.FC = () => {
   const [location, setLocation] = useLocation();
+
+  const qs = location.includes("?") ? location.split("?")[1] : "";
+  const urlParams = new URLSearchParams(qs);
+  const orgTipoQS = urlParams.get("orgTipo"); // "CLUBE" | "ESCOLINHA" | null
+  const orgIdQS = urlParams.get("orgId");     // string | null
 
   const isAtletasPage =
     location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
@@ -107,7 +169,33 @@ const GerenciarProfessores: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
-  const [orgSelecionada, setOrgSelecionada] = useState<OrgGestorItem | null>(null);
+  const [orgSelecionada, setOrgSelecionada] = useState<OrgGestorItem | null>(() => {
+    const ctx = loadGestorContext();
+    if (!ctx.enabled || !ctx.org) return null;
+
+    return {
+      id: String(ctx.org.id),
+      ownerId: String(ctx.org.ownerId),
+      tipo: String(ctx.org.tipo).toUpperCase() as any,
+      nome: ctx.org.nome ?? null,
+      logo: ctx.org.logo ?? null,
+      papel: ctx.org.papel ?? null,
+      permissoes: ctx.org.permissoes ?? null,
+      ativo: !!ctx.org.ativo,
+      cidade: ctx.org.cidade ?? null,
+      estado: ctx.org.estado ?? null,
+    } as any;
+  });
+
+  type SubAbaTurmas = "minhas" | "organizacao";
+
+  const [subAbaTurmas, setSubAbaTurmas] = useState<SubAbaTurmas>("minhas");
+
+  // quando selecionar org, por padrão vai pra turmas da organização
+  useEffect(() => {
+    if (tipo === "Professor" && orgSelecionada) setSubAbaTurmas("organizacao");
+    if (tipo === "Professor" && !orgSelecionada) setSubAbaTurmas("minhas");
+  }, [tipo, orgSelecionada]);
 
   // ======= listas (prof/turmas) =======
   const [q, setQ] = useState("");
@@ -124,6 +212,55 @@ const GerenciarProfessores: React.FC = () => {
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
   const [turmaSelecionadaId, setTurmaSelecionadaId] = useState<string | undefined>();
+
+  // ======= professor -> orgs gerenciáveis =======
+  const [orgs, setOrgs] = useState<OrgGestorItem[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [orgsError, setOrgsError] = useState<string | null>(null);
+
+  const carregarOrgsGerenciaveis = async () => {
+    if (!token) return;
+
+    // só professor usa isso
+    if (tipo !== "Professor") {
+      setOrgs([]);
+      return;
+    }
+
+    try {
+      setOrgsError(null);
+      setOrgsLoading(true);
+
+      const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar-organizacoes`, { headers });
+
+      const arr = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+
+      setOrgs(
+        arr.map((o) => ({
+          id: String(o.id),
+          tipo: String(o.tipo).toUpperCase() as any,
+          ownerId: String(o.ownerId),
+          papel: o.papel ?? null,
+          permissoes: o.permissoes ?? null,
+          ativo: !!o.ativo,
+          nome: o.nome ?? null,
+          logo: o.logo ?? null,
+          cidade: o.cidade ?? null,
+          estado: o.estado ?? null,
+        }))
+      );
+
+      // se quiser capturar professorId retornado:
+      if (data?.professorId && !professorIdLogado) {
+        setProfessorIdLogado(String(data.professorId));
+      }
+    } catch (e: any) {
+      setOrgs([]);
+      setOrgsError(e?.response?.data?.message || e?.message || "Falha ao carregar organizações.");
+    } finally {
+      setOrgsLoading(false);
+    }
+  };
 
   // contexto efetivo (se logado como professor e selecionou org)
   const contextoTipo: TipoEntidade = useMemo(() => {
@@ -142,10 +279,25 @@ const GerenciarProfessores: React.FC = () => {
     return tipoUsuarioIdEntidade;
   }, [tipo, orgSelecionada, professorIdLogado, tipoUsuarioIdEntidade]);
 
+  const podeVerProfessores = useMemo(() => {
+    // Clube/Escolinha sempre vê
+    if (tipo && tipo !== "Professor") return true;
+
+    // Professor: só se tiver organização selecionada E permissão
+    if (tipo === "Professor" && orgSelecionada) {
+      return canVerAbaProfessores(orgSelecionada);
+    }
+
+    return false;
+  }, [tipo, orgSelecionada]);
+
   // owner para TurmasManager
   type OwnerTurma = { tipo: "Clube" | "Escolinha"; id: string };
   const owner: OwnerTurma | undefined =
-    contextoTipo && contextoTipo !== "Professor" && contextoTipoUsuarioId
+    contextoTipo &&
+    contextoTipo !== "Professor" &&
+    contextoTipoUsuarioId &&
+    !(tipo === "Professor" && subAbaTurmas === "minhas") // 🔥 se estiver em "minhas", não usa owner de org
       ? { tipo: contextoTipo === "Escola" ? "Escolinha" : "Clube", id: contextoTipoUsuarioId }
       : undefined;
 
@@ -207,10 +359,71 @@ const GerenciarProfessores: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (tipo !== "Professor") return;
+
+    const orgId = String(orgIdQS || "").trim();
+    const orgTipo = String(orgTipoQS || "").trim().toUpperCase();
+
+    // ✅ 1) Se URL trouxe org, URL manda (e salva na sessão)
+    if (orgId && (orgTipo === "CLUBE" || orgTipo === "ESCOLINHA")) {
+      const next: OrgGestorItem = {
+        id: orgId,            // vínculo (placeholder ok)
+        ownerId: orgId,       // id real da org
+        tipo: orgTipo as any,
+        nome: null,
+        logo: null,
+        papel: null,
+        permissoes: null,
+        ativo: true,
+        cidade: null,
+        estado: null,
+      };
+
+      setOrgSelecionada(next);
+
+      setGestorOrg({
+        id: String(next.id),
+        tipo: next.tipo as any,
+        ownerId: String(next.ownerId),
+        nome: next.nome ?? null,
+        logo: next.logo ?? null,
+        cidade: next.cidade ?? null,
+        estado: next.estado ?? null,
+        papel: next.papel ?? null,
+        permissoes: next.permissoes ?? null,
+        ativo: !!next.ativo,
+      });
+
+      return;
+    }
+
+    // ✅ 2) Se não tem URL e não tem orgSelecionada, tenta sessão
+    if (!orgSelecionada) {
+      const ctx = loadGestorContext();
+      if (ctx.enabled && ctx.org) {
+        setOrgSelecionada({
+          id: String(ctx.org.id),
+          ownerId: String(ctx.org.ownerId),
+          tipo: String(ctx.org.tipo).toUpperCase() as any,
+          nome: ctx.org.nome ?? null,
+          logo: ctx.org.logo ?? null,
+          papel: ctx.org.papel ?? null,
+          permissoes: ctx.org.permissoes ?? null,
+          ativo: !!ctx.org.ativo,
+          cidade: ctx.org.cidade ?? null,
+          estado: ctx.org.estado ?? null,
+        } as any);
+      }
+    }
+  }, [tipo, orgTipoQS, orgIdQS]); // (não coloca orgSelecionada aqui pra evitar loop)
 
   // ======= carregar professores (para contexto organização) =======
   const carregarProfessores = async () => {
     if (!contextoTipo || contextoTipo === "Professor" || !contextoTipoUsuarioId) return;
+
+    // professor sem permissão -> não carrega
+    if (tipo === "Professor" && orgSelecionada && !podeVerProfessores) return;
 
     try {
       setProfError(null);
@@ -218,12 +431,15 @@ const GerenciarProfessores: React.FC = () => {
 
       // 🔥 Preferencial: usar gerenciar/professores (vínculo real)
       // (igual você já usa no TurmasManager)
-      const vinculo = tipo === "Clube" ? "clube" : "escolinha";
+
+      // ✅ usa o contexto atual (clube/escolinha selecionado)
+      const vinculo = contextoTipo === "Clube" ? "clube" : "escolinha";
 
       const resGerenciar = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
         headers,
         params: {
-          organizacaoId: contextoTipoUsuarioId,
+          vinculo,
+          id: contextoTipoUsuarioId, // pode ser o ID da entidade (clube/escolinha) OU usuarioId
           search: q.trim() || undefined,
         },
       });
@@ -233,13 +449,13 @@ const GerenciarProfessores: React.FC = () => {
       // 🧯 Fallback: /api/professores com parâmetros mais amplos (igual TurmasManager)
       if (!lista.length) {
         const params: any = {
-          organizacaoId: tipoUsuarioIdEntidade,
-          tipoUsuarioId: tipoUsuarioIdEntidade,
+          organizacaoId: contextoTipoUsuarioId,
+          tipoUsuarioId: contextoTipoUsuarioId,
           search: q.trim() || undefined,
         };
 
-        if (tipo === "Clube") params.clubeId = tipoUsuarioIdEntidade;
-        if (tipo === "Escola") params.escolinhaId = tipoUsuarioIdEntidade; // seu tipo "Escola" = Escolinha
+        if (contextoTipo === "Clube") params.clubeId = contextoTipoUsuarioId;
+        if (contextoTipo === "Escola") params.escolinhaId = contextoTipoUsuarioId;
 
         const { data } = await axios.get(`${API.BASE_URL}/api/professores`, { headers, params });
         lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
@@ -270,8 +486,36 @@ const GerenciarProfessores: React.FC = () => {
       setTurmasError(null);
       setTurmasLoading(true);
 
-      if (contextoTipo === "Professor") {
-        const { data } = await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, { headers });
+      // ===== professor =====
+      if (tipo === "Professor") {
+        // SUB-ABA: minhas turmas (sem org)
+        if (subAbaTurmas === "minhas" || !orgSelecionada) {
+          const { data } = await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, { headers });
+
+          const arr: any[] = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+          setTurmas(
+            arr.map((t) => ({
+              id: String(t.id),
+              nome: String(t.nome ?? t.titulo ?? "Turma"),
+              categoria: t.categoria ?? null,
+              professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
+              professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+              professorNome:
+                t.professorNome ??
+                (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+                null,
+              alunosCount: t.alunosCount ?? t._count?.membros ?? t.qtdAlunos ?? null,
+            }))
+          );
+          return;
+        }
+
+        // SUB-ABA: turmas da organização selecionada
+        const ownerTipo = contextoTipo === "Clube" ? "Clube" : "Escolinha";
+        const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
+          headers,
+          params: { ownerTipo, ownerId: contextoTipoUsuarioId },
+        });
 
         const arr: any[] = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
         setTurmas(
@@ -329,6 +573,15 @@ const GerenciarProfessores: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  useEffect(() => {
+    if (!tipo) return;
+
+    // quando professor entra na aba organizações, carrega
+    if (tipo === "Professor" && aba === "organizacoes") {
+      carregarOrgsGerenciaveis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, aba]);
 
   // carrega listas quando muda contexto
   useEffect(() => {
@@ -366,12 +619,22 @@ const GerenciarProfessores: React.FC = () => {
   // regra professor: se não escolheu org, não deixa ficar na aba professores
   useEffect(() => {
     if (tipo !== "Professor") return;
+
+    // sem org -> não pode aba professores
     if (!orgSelecionada && aba === "professores") {
       setAba("organizacoes");
       setLocation("/perfil/GerenciarProfessores?tab=organizacoes");
+      return;
+    }
+
+    // com org mas sem permissão -> não pode aba professores
+    if (orgSelecionada && aba === "professores" && !podeVerProfessores) {
+      setAba("turmas");
+      setLocation("/perfil/GerenciarProfessores?tab=turmas");
+      return;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, orgSelecionada, aba]);
+  }, [tipo, orgSelecionada, aba, podeVerProfessores]);
 
   const tituloTopo = useMemo(() => {
     if (tipo !== "Professor") return `${tipo ?? "Institucional"} · Gerenciar Professores`;
@@ -406,6 +669,20 @@ const GerenciarProfessores: React.FC = () => {
   const selecionarOrg = (o: OrgGestorItem) => {
     setOrgSelecionada(o);
 
+    // ✅ persiste
+    setGestorOrg({
+      id: String(o.id),
+      tipo: o.tipo as any,
+      ownerId: String(o.ownerId),
+      nome: o.nome ?? null,
+      logo: o.logo ?? null,
+      cidade: o.cidade ?? null,
+      estado: o.estado ?? null,
+      papel: o.papel ?? null,
+      permissoes: o.permissoes ?? null,
+      ativo: !!o.ativo,
+    });
+
     const qs = new URLSearchParams();
     qs.set("tab", "professores");
     qs.set("orgTipo", o.tipo);
@@ -414,6 +691,8 @@ const GerenciarProfessores: React.FC = () => {
   };
 
   const limparOrg = () => {
+    clearGestorContext(); // ✅ limpa sessão
+
     setOrgSelecionada(null);
     setProfessores([]);
     setQ("");
@@ -422,6 +701,77 @@ const GerenciarProfessores: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
+
+{/* ✅ MODO GESTOR: header verde (só professor + org selecionada) */}
+{tipo === "Professor" && orgSelecionada && (
+  <div
+    className="
+      mb-4
+      -mx-3 sm:-mx-4
+      -mt-4 sm:-mt-6
+      bg-emerald-700 text-white
+      shadow-sm
+      overflow-visible
+    "
+  >
+    <div className="relative px-4 sm:px-6 pt-4 pb-8">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          {/* Avatar maior + vazando pra baixo */}
+          <div className="shrink-0 translate-y-4">
+            <Avatar
+              foto={orgSelecionada.logo ?? null}
+              alt={orgSelecionada.nome ?? "Organização"}
+              className="
+                h-16 w-16
+                ring-4 ring-white/70
+                border border-white/30
+                bg-emerald-800/40
+              "
+            />
+          </div>
+
+          <div className="min-w-0 pt-1">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-white/90" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-white/90">
+                Modo gestor
+              </span>
+            </div>
+
+            <div className="truncate text-base sm:text-lg font-semibold leading-tight">
+              {orgSelecionada.nome ??
+                (orgSelecionada.tipo === "CLUBE" ? "Clube" : "Escolinha")}
+            </div>
+
+            <div className="truncate text-[12px] sm:text-sm text-white/90">
+              Você está gerenciando como professor responsável •{" "}
+              {orgSelecionada.tipo === "CLUBE" ? "Clube" : "Escolinha"}
+            </div>
+          </div>
+        </div>
+
+        {/* Botão X */}
+        <button
+          type="button"
+          onClick={limparOrg}
+          className="
+            shrink-0
+            inline-flex h-10 w-10 items-center justify-center
+            rounded-xl
+            bg-white/15 hover:bg-white/25
+            border border-white/25
+          "
+          title="Sair do modo gestor"
+          aria-label="Sair do modo gestor"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       <div className="mb-3">
         <Link
           href="/perfil"
@@ -444,11 +794,24 @@ const GerenciarProfessores: React.FC = () => {
             <h1 className="text-xl font-semibold text-zinc-900">{tituloTopo}</h1>
             <p className="text-sm text-zinc-500">{subtituloTopo}</p>
 
-            {tipo && (
-              <div className="mt-2 inline-flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+          {tipo && (
+            <div className="mt-2 flex justify-end">
+              <div className="inline-flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+                {/* 1) Atletas */}
                 <button
                   type="button"
-                  onClick={() => setLocation("/perfil/GerenciarAtletas")}
+                  onClick={() => {
+                    // ✅ mantém modo gestor ao ir pra Atletas
+                    if (tipo === "Professor" && orgSelecionada) {
+                      const qs = new URLSearchParams();
+                      qs.set("orgTipo", orgSelecionada.tipo);     // "CLUBE" | "ESCOLINHA"
+                      qs.set("orgId", orgSelecionada.ownerId);    // id da org
+                      setLocation(`/perfil/GerenciarAtletas?${qs.toString()}`);
+                      return;
+                    }
+
+                    setLocation("/perfil/GerenciarAtletas");
+                  }}
                   className={`px-3 py-1.5 rounded-lg ${
                     isAtletasPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
                   }`}
@@ -456,38 +819,21 @@ const GerenciarProfessores: React.FC = () => {
                   Atletas
                 </button>
 
-                {/* Clube/Escola: aba Organização (responsáveis) */}
-                {tipo !== "Professor" && (
-                  <button
-                    type="button"
-                    onClick={() => goTab("organizacoes")}
-                    className={`px-3 py-1.5 rounded-lg ${
-                      isProfessoresPage && aba === "organizacoes"
-                        ? "bg-emerald-600 text-white"
-                        : "text-zinc-700 hover:bg-zinc-50"
-                    }`}
-                  >
-                    Organização
-                  </button>
-                )}
+                {/* 2) Turmas */}
+                <button
+                  type="button"
+                  onClick={() => goTab("turmas")}
+                  className={`px-3 py-1.5 rounded-lg ${
+                    isProfessoresPage && aba === "turmas"
+                      ? "bg-emerald-600 text-white"
+                      : "text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  Turmas
+                </button>
 
-                {/* Professor: aba Organizações (lista orgs gerenciáveis) */}
-                {tipo === "Professor" && (
-                  <button
-                    type="button"
-                    onClick={() => goTab("organizacoes")}
-                    className={`px-3 py-1.5 rounded-lg ${
-                      isProfessoresPage && aba === "organizacoes"
-                        ? "bg-emerald-600 text-white"
-                        : "text-zinc-700 hover:bg-zinc-50"
-                    }`}
-                  >
-                    Organizações
-                  </button>
-                )}
-
-                {/* Professores: clube/escola sempre; professor somente se escolheu org */}
-                {(tipo !== "Professor" || !!orgSelecionada) && (
+                {/* 3) Professores (clube/escola sempre; professor só com org + permissão) */}
+                {(tipo !== "Professor" || (!!orgSelecionada && podeVerProfessores)) && (
                   <button
                     type="button"
                     onClick={() => goTab("professores")}
@@ -501,37 +847,39 @@ const GerenciarProfessores: React.FC = () => {
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => goTab("turmas")}
-                  className={`px-3 py-1.5 rounded-lg ${
-                    isProfessoresPage && aba === "turmas"
-                      ? "bg-emerald-600 text-white"
-                      : "text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                >
-                  Turmas
-                </button>
+                {/* 4) Organizações / Organização (sempre por último) */}
+                {tipo === "Professor" ? (
+                  <button
+                    type="button"
+                    onClick={() => goTab("organizacoes")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      isProfessoresPage && aba === "organizacoes"
+                        ? "bg-emerald-600 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Organizações
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => goTab("organizacoes")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      isProfessoresPage && aba === "organizacoes"
+                        ? "bg-emerald-600 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Organização
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* badge: professor com org selecionada */}
-            {tipo === "Professor" && orgSelecionada && (
-              <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
-                <ShieldCheck className="h-4 w-4" />
-                Responsável:{" "}
-                <span className="font-semibold">
-                  {orgSelecionada.nome ?? (orgSelecionada.tipo === "CLUBE" ? "Clube" : "Escolinha")}
-                </span>
-                <button
-                  onClick={limparOrg}
-                  className="ml-2 rounded-lg border border-emerald-200 bg-white px-2 py-0.5 text-emerald-800 hover:bg-emerald-100"
-                  title="Trocar organização"
-                >
-                  Trocar
-                </button>
-              </div>
-            )}
+
+
+
           </div>
         </div>
 
@@ -619,6 +967,12 @@ const GerenciarProfessores: React.FC = () => {
         <GerenciarOrganizacao
           tipo={tipo}
           headers={headers}
+
+          // ✅ professor -> lista orgs
+          orgs={orgs}
+          orgsLoading={orgsLoading}
+          orgsError={orgsError}
+
           owner={owner}
           professores={professores}
           profLoading={profLoading}
@@ -727,6 +1081,46 @@ const GerenciarProfessores: React.FC = () => {
       {aba === "turmas" && (
         <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
           <div className="flex items-center justify-between border-b border-zinc-100 p-4">
+
+            {tipo === "Professor" && (
+              <div className="border-b border-zinc-100 px-4 py-3">
+                <div className="inline-flex gap-2 rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setSubAbaTurmas("minhas")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      subAbaTurmas === "minhas"
+                        ? "bg-emerald-600 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Minhas turmas
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!orgSelecionada}
+                    onClick={() => setSubAbaTurmas("organizacao")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      !orgSelecionada
+                        ? "opacity-50 cursor-not-allowed text-zinc-500"
+                        : subAbaTurmas === "organizacao"
+                        ? "bg-emerald-600 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Turmas da organização
+                  </button>
+                </div>
+
+                {!orgSelecionada && (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Para ver “Turmas da organização”, selecione uma organização na aba <b>Organizações</b>.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
               <div className="text-sm font-semibold text-zinc-900">
                 {contextoTipo === "Professor" ? "Minhas turmas (como professor)" : "Turmas do clube/escolinha"}
@@ -738,10 +1132,11 @@ const GerenciarProfessores: React.FC = () => {
               </div>
             </div>
 
-            {owner && (
+            {((tipo === "Professor" && subAbaTurmas === "minhas" && professorIdLogado) || owner) && (
               <button
                 onClick={() => {
                   setProfessorSelecionado(undefined);
+                  setTurmaSelecionadaId(undefined);
                   setTurmasOpen(true);
                 }}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
@@ -842,8 +1237,12 @@ const GerenciarProfessores: React.FC = () => {
           carregarTurmas();
           if (contextoTipo !== "Professor") carregarProfessores();
         }}
-        owner={owner}
-        professorId={contextoTipo === "Professor" ? (professorIdLogado ?? undefined) : professorSelecionado}
+        owner={tipo === "Professor" && subAbaTurmas === "minhas" ? undefined : owner}
+        professorId={
+          tipo === "Professor" && subAbaTurmas === "minhas"
+            ? (professorIdLogado ?? undefined)
+            : (contextoTipo === "Professor" ? (professorIdLogado ?? undefined) : professorSelecionado)
+        }
         initialTurmaId={turmaSelecionadaId}
       />
 

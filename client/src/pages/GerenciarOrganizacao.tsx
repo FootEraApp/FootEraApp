@@ -11,6 +11,7 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import { setGestorOrg } from "../utils/gestorSession.js";
 
 type TipoEntidade = "Escola" | "Clube" | "Professor" | null;
 
@@ -368,7 +369,24 @@ export default function GerenciarOrganizacao({
 
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <button
-                        onClick={() => (selecionarOrg ?? onSelectOrg)?.(o)}
+                        onClick={() => {
+                          // ✅ salva no sessionStorage (permanece ao trocar de aba/rota)
+                          setGestorOrg({
+                            id: String(o.id),
+                            tipo: o.tipo,
+                            ownerId: String(o.ownerId),
+                            nome: o.nome ?? null,
+                            logo: o.logo ?? null,
+                            cidade: o.cidade ?? null,
+                            estado: o.estado ?? null,
+                            papel: o.papel ?? null,
+                            permissoes: o.permissoes ?? null,
+                            ativo: !!o.ativo,
+                          });
+
+                          // ✅ mantém o comportamento atual
+                          (selecionarOrg ?? onSelectOrg)?.(o);
+                        }}
                         className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
                       >
                         <ShieldCheck className="h-4 w-4" />
