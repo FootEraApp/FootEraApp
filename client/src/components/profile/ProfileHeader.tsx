@@ -12,11 +12,12 @@ import {
   Eye,
   UserPlus,
   Share2,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { formatarUrlFoto } from "../../utils/formatarFoto.js";
 import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
 
 interface Usuario {
@@ -43,6 +44,8 @@ interface ProfileHeaderProps {
   perfilTipoProp?: string | null;
   perfilTipoIdProp?: string | null;
   conquistasCount?: number;
+  isVerified?: boolean;
+  isPro?: boolean;
 }
 
 function pickAtletaId(payload: any, perfilId: string): string | null {
@@ -111,13 +114,6 @@ function timeAgoPtBR(dateLike?: string | Date | null): string {
   return `há ${yr} ano${yr > 1 ? "s" : ""}`;
 }
 
-function computeOnline(lastSeenAt?: string | null): boolean {
-  if (!lastSeenAt) return false;
-  const ms = new Date(lastSeenAt).getTime();
-  if (!ms || Number.isNaN(ms)) return false;
-  return Date.now() - ms <= ONLINE_TTL_MS;
-}
-
 export default function ProfileHeader({
   perfilId,
   nome,
@@ -134,6 +130,8 @@ export default function ProfileHeader({
   perfilTipoProp = null,
   perfilTipoIdProp = null,
   conquistasCount = 0,
+  isVerified = false,
+  isPro = false,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -1322,6 +1320,10 @@ const alvoUsuarioIdFavorito = isOwnProfile
     return ago === "agora" ? "🟢 Online" : `⚪ Online ${ago}`;
   })();
 
+  const shouldShowVerified = !!isVerified;
+  const shouldShowProOnAvatar = !shouldShowVerified && !!isPro;
+  const shouldShowProPill = !!isPro;
+
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -1364,7 +1366,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
         </div>
       )}
 
-      <div className="w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
+      <div className="relative w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
         <img
           src={imageSrc}
           alt={`${nome} profile`}
@@ -1376,11 +1378,39 @@ const alvoUsuarioIdFavorito = isOwnProfile
             img.src = FALLBACK_AVATAR;
           }}
         />
+
+        {shouldShowProOnAvatar && (
+          <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
+            PRO
+          </span>
+        )}
+
+        {shouldShowVerified && (
+          <span className="absolute -bottom-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-600 text-white font-extrabold shadow ring-2 ring-white inline-flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            VERIFICADO
+          </span>
+        )}
       </div>
 
-      <h1 className="footera-text-cream text-2xl font-bold">
+      <h1 className="footera-text-cream text-2xl font-bold text-center">
         {nome.toUpperCase()}
       </h1>
+
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+        {shouldShowVerified && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-xs font-bold px-3 py-1 shadow">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Verificado
+          </span>
+        )}
+
+        {shouldShowProPill && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 text-green-900 text-xs font-bold px-3 py-1 shadow">
+            PRO
+          </span>
+        )}
+      </div>
 
       {(idade || posicao || time) && (
         <p className="footera-text-cream text-sm mb-1 text-center">

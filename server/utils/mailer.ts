@@ -13,27 +13,58 @@ function getReplyTo() {
   return process.env.SUPPORT_EMAIL || SUPPORT_FALLBACK;
 }
 
+function isDevLike() {
+  return process.env.NODE_ENV !== "production";
+}
+
+/**
+ * Em DEV, alguns PCs (proxy/antivírus) injetam certificado SSL e o Node acusa:
+ * "self-signed certificate in certificate chain"
+ * => habilitamos rejectUnauthorized=false APENAS em DEV quando SMTP_HOST existe.
+ */
+function devTlsPatch() {
+  const allowInsecure =
+    isDevLike() &&
+    (process.env.SMTP_ALLOW_INSECURE_TLS === "1" ||
+      process.env.SMTP_ALLOW_INSECURE_TLS === "true");
+
+  // Se você NÃO setar a env, ainda dá pra "auto-liberar" só em DEV:
+  // eu recomendo deixar via ENV pra não correr risco sem querer.
+  return allowInsecure
+    ? { rejectUnauthorized: false }
+    : undefined;
+}
+
 export async function createTransport(): Promise<Transporter> {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (SMTP_HOST) {
+    const port = Number(SMTP_PORT ?? 587);
 
     return nodemailer.createTransport({
       host: SMTP_HOST,
-      port: Number(SMTP_PORT ?? 587),
-      secure: false,
+      port,
+      secure: false, // SES normalmente usa 587 STARTTLS
       requireTLS: true,
-      tls: { minVersion: "TLSv1.2" },
-      auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      auth:
+        SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+
+      // ✅ aqui é o ponto
+      tls: {
+        minVersion: "TLSv1.2",
+        ...(devTlsPatch() ?? {}),
+      },
+
       pool: true,
       maxConnections: 2,
       rateDelta: 1000,
       rateLimit: 14,
-      logger: process.env.NODE_ENV !== "production",
-      debug: process.env.NODE_ENV !== "production",
+      logger: isDevLike(),
+      debug: isDevLike(),
     } as any);
   }
 
+  // fallback (Ethereal) - ótimo pra DEV sem SMTP
   const acc = await nodemailer.createTestAccount();
   return nodemailer.createTransport({
     host: acc.smtp.host,
@@ -56,9 +87,7 @@ export async function sendPasswordResetEmail(to: string, link: string) {
   });
 
   const preview = (nodemailer as any).getTestMessageUrl?.(info);
-  if (preview) {
-    console.log("[password-reset] preview email:", preview);
-  }
+  if (preview) console.log("[password-reset] preview email:", preview);
 }
 
 export async function sendEmailVerification(opts: {
@@ -75,8 +104,12 @@ export async function sendEmailVerification(opts: {
   const transporter = await createTransport();
 
   const support = opts.supportEmail ?? process.env.SUPPORT_EMAIL ?? SUPPORT_FALLBACK;
-  const subject = opts.isResponsavel ? "Confirme o e-mail do responsável – FootEra" : "Confirme seu e-mail – FootEra";
+  const subject = opts.isResponsavel
+    ? "Confirme o e-mail do responsável – FootEra"
+    : "Confirme seu e-mail – FootEra";
+
   const aviso = `Se não foi você quem criou a conta, NÃO clique em validar e contate: ${support}`;
+
   const PUBLIC_WEB_BASE = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
   const LOGO_URL = `${PUBLIC_WEB_BASE}/assets/usuarios/footera-logo-fundo-verde.png`;
 

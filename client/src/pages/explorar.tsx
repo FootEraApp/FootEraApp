@@ -15,12 +15,13 @@ import {
   Heart,
   CalendarClock,
   Users,
-  Ticket
+  Ticket,
+  CheckCircle2,
 } from "lucide-react";
 import { API, APP } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
-import { publicImgUrl } from "@/utils/publicUrl.js";
+import { publicImgUrl } from "../utils/publicUrl.js";
 
 const ENABLE_EVENTOS_TAB = false; 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
@@ -38,6 +39,8 @@ type UsuarioBasic = {
   id: string;
   nome: string;
   foto?: string | null;
+  cidade?: string | null;   // ✅
+  estado?: string | null;   // ✅
   assinatura?: { status?: string | null; plano?: string | null } | null;
 };
 
@@ -56,9 +59,20 @@ type AtletaItem = {
   categoriaBase?: string | null;
   idade?: number | null;
   categoria?: string[];
+  perfilVerificado?: boolean;
+  isPro?: boolean;
 };
 
-type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+type ProfessorItem = {
+  id: string;
+  usuario: UsuarioBasic;
+  foto?: string | null;
+  perfilVerificado?: boolean;
+  isPro?: boolean;
+  clubeId?: string | null;
+  escolinhaId?: string | null;
+};
+
 type ClubeItem = {
   id: string;
   usuarioId?: string;
@@ -67,7 +81,10 @@ type ClubeItem = {
   estado?: string | null;
   logo?: string | null;
   usuario?: UsuarioBasic;
+  perfilVerificado?: boolean;
+  isPro?: boolean;
 };
+
 type EscolaItem = {
   id: string;
   usuarioId?: string;
@@ -77,8 +94,19 @@ type EscolaItem = {
   logo?: string | null;
   siteOficial?: string | null;
   usuario?: UsuarioBasic;
+  perfilVerificado?: boolean;
+  isPro?: boolean;
 };
-type OlheiroItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+
+type OlheiroItem = {
+  id: string;
+  usuario: UsuarioBasic;
+  foto?: string | null;
+  perfilVerificado?: boolean;
+  isPro?: boolean;
+  clubeId?: string | null;
+  escolinhaId?: string | null;
+};
 
 type DadosExplorar = {
   atletas: AtletaItem[];
@@ -272,14 +300,23 @@ const normText = (s?: string | null) =>
   stripDiacritics(String(s ?? "").trim().toLowerCase());
 
 function isItemPro(x: any): boolean {
-  if (typeof x?.isPro === "boolean") return x.isPro;
+  if (x?.isPro === true) return true;
 
-  const status = x?.usuario?.assinatura?.status;
-  const plano = x?.usuario?.assinatura?.plano;
+  const status = String(x?.usuario?.assinatura?.status ?? "").toUpperCase();
+  const plano = String(x?.usuario?.assinatura?.plano ?? "").toUpperCase();
 
   if (status === "ATIVA" || status === "TRIAL") return true;
+  if (plano.includes("PRO")) return true;
 
-  return String(plano ?? "").toUpperCase().includes("PRO");
+  return false;
+}
+
+function shouldShowVerified(x: any): boolean {
+  return Boolean(x?.perfilVerificado);
+}
+
+function shouldShowProBadgeOnAvatar(x: any): boolean {
+  return isItemPro(x);
 }
 
 function sortProThenName<T>(arr: T[], getName: (x: T) => string) {
@@ -441,15 +478,13 @@ function Explorar() {
     () =>
       [
         ...(dados.professores || []).map((p) => ({
-          id: p.id,
-          usuario: p.usuario,
-          foto: p.usuario?.foto ?? p.foto,
+          ...p,
+          foto: p.foto ?? p.usuario?.foto,
           role: "Professor" as const,
         })),
         ...(dados.olheiros || []).map((o) => ({
-          id: o.id,
-          usuario: o.usuario,
-          foto: o.usuario?.foto ?? o.foto,
+          ...o,
+          foto: o.foto ?? o.usuario?.foto,
           role: "Olheiro" as const,
         })),
       ].filter((x) => x?.usuario?.id),
@@ -1375,16 +1410,27 @@ function Explorar() {
                               alt={`${nome} profile`}
                               className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
                             />
-                            {isItemPro(a) && (
+                            {shouldShowProBadgeOnAvatar(a) && (
                               <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
                                 PRO
                               </span>
                             )}
+
                           </div>
 
                           <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
                             {nome}
                           </p>
+
+                          <div className="mt-1 flex flex-wrap gap-1 justify-center">
+                            {shouldShowVerified(a) && (
+                              <Pill tone="emerald">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
+                              </Pill>
+                            )}
+
+                    
+                          </div>
 
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {categoria && (
@@ -1492,11 +1538,12 @@ function Explorar() {
                         />
                       </div>
 
-                      {isItemPro(e) && (
+                      {shouldShowProBadgeOnAvatar(e) && (
                         <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
                           PRO
                         </span>
                       )}
+
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1511,6 +1558,16 @@ function Explorar() {
                       <p className="text-xs text-gray-600 truncate">
                         {e.siteOficial || "Site indisponível"}
                       </p>
+
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {shouldShowVerified(e) && (
+                          <Pill tone="emerald">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
+                          </Pill>
+                        )}
+
+                        
+                      </div>
                     </div>
                   </div>
                 );
@@ -1535,7 +1592,7 @@ function Explorar() {
               )}
               <div ref={sentinelRef} className="h-1 w-full" />
               {!hasMoreEscolas && dados.escolas.length > 0 && (
-                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+                <div className="text-xs text-gray-500 mt-2"></div>
               )}
               {dados.escolas.length === 0 && !carregandoDados && (
                 <div className="text-sm text-gray-600 mt-2">Nenhuma escola encontrada</div>
@@ -1563,11 +1620,12 @@ function Explorar() {
                         />
                       </div>
 
-                      {isItemPro(c) && (
+                      {shouldShowProBadgeOnAvatar(c) && (
                         <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
                           PRO
                         </span>
                       )}
+
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1579,6 +1637,15 @@ function Explorar() {
                       </p>
 
                       <p className="text-xs text-gray-600">Clube Profissional</p>
+
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {shouldShowVerified(c) && (
+                          <Pill tone="emerald">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
+                          </Pill>
+                        )}
+                        
+                      </div>
                     </div>
                   </div>
                 );
@@ -1603,7 +1670,7 @@ function Explorar() {
               )}
               <div ref={sentinelRef} className="h-1 w-full" />
               {!hasMoreClubes && dados.clubes.length > 0 && (
-                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+                <div className="text-xs text-gray-500 mt-2"></div>
               )}
               {dados.clubes.length === 0 && !carregandoDados && (
                 <div className="text-sm text-gray-600 mt-2">Nenhum clube encontrado</div>
@@ -1621,7 +1688,7 @@ function Explorar() {
                   const rawFoto = p.foto ?? p.usuario?.foto;
                   const uid = p.usuario.id;
                   const href = p.role === "Olheiro" ? `/perfil-olheiro/${uid}` : `/perfil/${uid}`;
-                  
+
                   return (
                     <Link href={href} key={`${p.role}-${p.id}`}>
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
@@ -1632,16 +1699,42 @@ function Explorar() {
                             alt="Foto do usuário"
                             className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
                           />
-                          {isItemPro(p) && (
+                          {shouldShowProBadgeOnAvatar(p) && (
                             <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
                               PRO
                             </span>
                           )}
+
                         </div>
 
                         <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
                           {p.usuario.nome}
                         </p>
+
+                        <div className="mt-1 flex flex-wrap gap-1 justify-center">
+                          {shouldShowVerified(p) && (
+                            <Pill tone="emerald">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
+                            </Pill>
+                          )}
+
+                          
+                        </div>
+
+                        {(() => {
+                          const cidade = p.usuario?.cidade ?? "";
+                          const estado = p.usuario?.estado ?? "";
+                          const temLocal = !!(cidade || estado);
+                          if (!temLocal) return null;
+
+                          return (
+                            <p className="mt-1 text-sm text-gray-600 flex items-center gap-1">
+                              <MapPin className="h-3.5 w-3.5" />
+                              {cidade}
+                              {estado ? `, ${estado}` : ""}
+                            </p>
+                          );
+                        })()}
 
                         <Pill tone="amber" className="mt-1">
                           {p.role}
