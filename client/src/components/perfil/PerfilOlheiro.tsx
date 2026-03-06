@@ -431,6 +431,8 @@ async function salvarNota(atletaId: string) {
         perfilId={perfilUsuarioId}
         perfilTipoProp="olheiro"
         perfilTipoIdProp={data.olheiro.id}
+        isVerified={(data as any)?.perfilVerificado}
+        isPro={(data as any)?.isPro}
       />
       {clubeColab && (
         <div className="px-4 mt-2">
