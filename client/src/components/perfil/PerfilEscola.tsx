@@ -793,6 +793,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         perfilId={perfilUsuarioId}
         perfilTipoProp="escolinha"
         perfilTipoIdProp={data.escolinha.id}
+        isVerified={(data as any)?.perfilVerificado}
+        isPro={(data as any)?.isPro}
       />
 
       <div className="mt-4 px-3 sm:px-4">
