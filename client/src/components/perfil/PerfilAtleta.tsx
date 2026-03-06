@@ -21,6 +21,8 @@ interface Perfil {
   };
   atleta?: { id: string };
   tipoUsuarioId?: string;
+  perfilVerificado?: boolean;
+  isPro?: boolean;
 }
 
 type Props = {
@@ -182,6 +184,8 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
             perfil?.tipoUsuarioId ??
             undefined
           }
+          isVerified={perfil?.perfilVerificado}
+          isPro={perfil?.isPro}
         />
           {isIndependente && (
             <div className="bg-yellow-100 border border-yellow-300 rounded p-4 my-4 text-sm text-yellow-900">

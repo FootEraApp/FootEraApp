@@ -3862,7 +3862,12 @@ export async function criarTreinoProgramado(
 
         const criadorUsuarioId = String(usuarioIdToken);
         const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
-
+        const descricaoFinal =
+          (typeof e.descricao === "string" && e.descricao.trim())
+            ? e.descricao.trim()
+            : (typeof e.exercicioPersonalizado?.descricao === "string" && e.exercicioPersonalizado.descricao.trim())
+              ? e.exercicioPersonalizado.descricao.trim()
+              : null;
         // ✅ 1) declara pers ANTES e permite null
         let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null =
           await tx.exercicioPersonalizado.findFirst({
@@ -3879,7 +3884,7 @@ export async function criarTreinoProgramado(
             data: {
               criadorUsuarioId,
               nome: nomeTemp,
-              descricao: e.descricao ?? null,
+              descricao: descricaoFinal,
               nivel: nivelEnum,
               categorias: categorias ?? [],
               videoPosterUrl: e.videoPosterUrl ?? null,
@@ -5234,7 +5239,7 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     const datasParsed = datas
       .map((s) => parseDateInput(s))
       .filter((d): d is Date => !!d && !Number.isNaN(d.getTime()));
-      
+
     if (!datasParsed.length) {
       return res.status(400).json({ message: "Nenhuma data válida em 'datas'." });
     }
@@ -5734,4 +5739,68 @@ export async function listarExerciciosPersonalizados(req: any, res: Response) {
   });
 
   return res.json(itens);
+}
+
+export async function atualizarExercicioPersonalizado(req: any, res: Response) {
+  const userId = String(req.user?.id || "").trim();
+  if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+  const id = String(req.params?.id || "").trim();
+  if (!id) return res.status(400).json({ message: "id inválido." });
+
+  const {
+    nome,
+    descricao,
+    nivel,
+    categorias,
+    videoDemonstrativoUrl,
+    videoPosterUrl,
+  } = req.body ?? {};
+
+  // garante ownership
+  const atual = await prisma.exercicioPersonalizado.findFirst({
+    where: { id, criadorUsuarioId: userId },
+  });
+  if (!atual) return res.status(404).json({ message: "Exercício não encontrado." });
+
+  const updated = await prisma.exercicioPersonalizado.update({
+    where: { id },
+    data: {
+      ...(typeof nome === "string" ? { nome: nome.trim() } : {}),
+      ...(typeof descricao === "string" ? { descricao: descricao.trim() } : {}),
+      ...(nivel ? { nivel } : {}),
+      ...(Array.isArray(categorias) ? { categorias } : {}),
+      ...(videoDemonstrativoUrl !== undefined ? { videoDemonstrativoUrl } : {}),
+      ...(videoPosterUrl !== undefined ? { videoPosterUrl } : {}),
+    },
+  });
+
+  return res.json(updated);
+}
+
+export async function deletarExercicioPersonalizado(req: any, res: Response) {
+  const userId = String(req.user?.id || "").trim();
+  if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+  const id = String(req.params?.id || "").trim();
+  if (!id) return res.status(400).json({ message: "id inválido." });
+
+  // garante ownership
+  const atual = await prisma.exercicioPersonalizado.findFirst({
+    where: { id, criadorUsuarioId: userId },
+  });
+  if (!atual) return res.status(404).json({ message: "Exercício não encontrado." });
+
+  // se estiver em uso em algum treino, você pode bloquear aqui (opcional)
+  const emUso = await prisma.treinoProgramadoExercicio.count({
+    where: { exercicioPersonalizadoId: id },
+  });
+  if (emUso > 0) {
+    return res.status(409).json({
+      message: "Este exercício já está em uso em um treino. Remova do treino antes de excluir.",
+    });
+  }
+
+  await prisma.exercicioPersonalizado.delete({ where: { id } });
+  return res.json({ ok: true });
 }

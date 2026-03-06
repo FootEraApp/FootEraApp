@@ -3,11 +3,7 @@ import { useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } f
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft,
-  Volleyball,
-  User,
-  CirclePlus,
   Search as SearchIcon,
-  House,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +19,7 @@ import {
   parseRepeticoesStr,
 } from "../utils/treinos.helpers.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import axios from "axios";
 
 type ExItemUILocal = ExItemUI & {
   videoUrl?: string | null;
@@ -100,40 +97,44 @@ export function montarPayloadSomenteInfoEExercicios(params: {
 
   const exercicios = (exerciciosSelecionados ?? [])
     .map((it: any, idx: number) => {
-      const rawId = it.exercicioId ?? it.idCatalogo ?? it.id ?? "";
-      const exercicioId = String(rawId || "").trim();
-
-      const nomeCustom = String(it.nome || "").trim();
-      const descCustom = String(it.descricao || "").trim();
-
+      // ✅ IMPORTANTE:
+      // - NUNCA use it.id (id local) como exercicioId
+      // - exercicioId só pode vir do catálogo (it.exercicioId ou it.idCatalogo)
+      const exercicioId = String(it.exercicioId ?? it.idCatalogo ?? "").trim();
+      // ✅ se for um personalizado existente, vem com exercicioPersonalizadoId
+      const exercicioPersonalizadoId = String(it.exercicioPersonalizadoId ?? "").trim();
+      const nomeCustom = String(it.nome ?? "").trim();
+      const descCustom = String(it.descricao ?? "").trim();
       const repsFinal =
         formatSerieXReps(it.series ?? null, it.repeticoes) ??
         toRepeticoesStr(it.repeticoes);
-
       const base = {
         ordem: Number.isFinite(Number(it.ordem)) ? Number(it.ordem) : idx + 1,
         repeticoes: repsFinal,
         descansoSeg: it.descansoSeg ?? null,
       };
 
-      // ✅ exercício do catálogo
+      // ✅ catálogo
       if (exercicioId) {
         return { ...base, exercicioId };
       }
 
-      // ✅ exercício personalizado (vai para outra tabela no backend)
+      // ✅ personalizado EXISTENTE (só linka, não recria)
+      if (exercicioPersonalizadoId) {
+        return { ...base, exercicioPersonalizadoId };
+      }
+
+      // ✅ personalizado NOVO (linha adicionada) — TEM que ir NO ROOT (o backend lê assim)
       if (nomeCustom) {
         return {
           ...base,
-          exercicioPersonalizado: {
-            nome: nomeCustom,
-            descricao: descCustom || null,
-            // você não tem nível/categorias por exercício na UI,
-            // então usamos o nível/categorias do treino:
-            nivel,
-            categorias: Array.isArray(categoria) ? categoria : [],
-            videoDemonstrativoUrl: it.videoUrl ?? null,
-          },
+          nome: nomeCustom,
+          descricao: descCustom || null,
+          videoDemonstrativoUrl: it.videoUrl ?? null,
+          videoPosterUrl: it.videoPosterUrl ?? null,
+          // (opcional) se você tiver esses campos na UI
+          nivel: it.nivel ?? nivel,
+          categorias: Array.isArray(it.categorias) ? it.categorias : (Array.isArray(categoria) ? categoria : []),
         };
       }
 
@@ -827,12 +828,6 @@ export default function NovoTreino() {
   const [dicas, setDicas] = useState<string[]>([]);
   const [isParceiro, setIsParceiro] = useState<boolean>(false);
   const [treinoFootera, setTreinoFootera] = useState<boolean>(false);
-
-  // ✅ Só professor parceiro pode publicar como "Footera"
-  const podePublicarFootera = useMemo(() => {
-    return Boolean(isParceiro);
-  }, [isParceiro]);
-
   const [filtroEx, setFiltroEx] = useState("");
   const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
   const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
@@ -841,7 +836,6 @@ export default function NovoTreino() {
   const [datasAgendadasPorTreino, setDatasAgendadasPorTreino] = useState<
     Map<string, Set<string>>
   >(new Map());
-
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
   const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
@@ -853,7 +847,27 @@ export default function NovoTreino() {
 
   const [horaAgendamento, setHoraAgendamento] = useState<string>("18:00");
   const [horaAgendamentoInput, setHoraAgendamentoInput] = useState<string>("18:00");
+  
+  type AbaExercicios = "catalogo" | "personalizados";
+  const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("catalogo");
 
+  type ExercicioPersonalizadoItem = {
+    id: string;
+    nome: string;
+    descricao?: string | null;
+    nivel?: string | null;
+    categorias?: string[];
+    videoDemonstrativoUrl?: string | null;
+    videoPosterUrl?: string | null;
+  };
+
+  const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<ExercicioPersonalizadoItem[]>([]);
+  const [loadingPersonalizados, setLoadingPersonalizados] = useState(false);
+
+  const [filtroPers, setFiltroPers] = useState("");
+  const [filtroPersNivel, setFiltroPersNivel] = useState<string>(""); // "" = todos
+  const [filtroPersVideo, setFiltroPersVideo] = useState<"" | "com" | "sem">("");
+    
   function hhmmNow() {
     const now = new Date();
     const h = String(now.getHours()).padStart(2, "0");
@@ -1028,6 +1042,13 @@ export default function NovoTreino() {
       cancel = true;
     };
   }, [professorLogadoId]);
+
+  useEffect(() => {
+    if (abaExercicios !== "personalizados") return;
+    if (exerciciosPersonalizados.length) return;
+    fetchExerciciosPersonalizados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaExercicios]);
 
   useEffect(() => {
     let cancel = false;
@@ -1221,6 +1242,55 @@ export default function NovoTreino() {
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados),
     [nivel, tipoTreino, duracao, exerciciosSelecionados],
   );
+
+  function treinoTemPersonalizado(id: string) {
+    return exerciciosSelecionados.some((x: any) => String((x as any).exercicioPersonalizadoId || "") === String(id));
+  }
+
+  function addPersonalizadoNoTreino(p: ExercicioPersonalizadoItem) {
+    setExerciciosSelecionados((prev) => {
+      const jaTem = prev.some(
+        (x: any) =>
+          String((x as any).exercicioPersonalizadoId || "") === String(p.id),
+      );
+      if (jaTem) return prev;
+
+      const ordem = prev.length + 1;
+
+      return [
+        ...prev,
+        {
+          // igual catálogo: dados ficam no ROOT do item
+          id: `pers_${String(p.id)}`,
+          idCatalogo: null,
+
+          exercicioPersonalizadoId: String(p.id),
+
+          nome: String(p.nome ?? "").trim(),
+          descricao: p.descricao ?? "",
+          repeticoes: "",
+          series: null,
+          ordem,
+
+          // importantíssimo: isso alimenta o preview “sem vídeo”
+          videoUrl: p.videoDemonstrativoUrl ?? null,
+          videoPosterUrl: p.videoPosterUrl ?? null,
+
+          // opcionais (se seu tipo aceitar / ajuda pra UI)
+          nivel: p.nivel ?? null,
+          categorias: Array.isArray(p.categorias) ? p.categorias : [],
+        } as any,
+      ];
+    });
+  }
+
+  function removePersonalizadoDoTreino(pId: string) {
+    setExerciciosSelecionados((prev) => {
+      const next = prev.filter((x: any) => String((x as any).exercicioPersonalizadoId || "") !== String(pId));
+      // reordena
+      return next.map((x: any, i: number) => ({ ...x, ordem: i + 1 }));
+    });
+  }
 
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return raw.map((t: any) => {
@@ -2467,22 +2537,39 @@ useEffect(() => {
   function isDono(v: string): v is DonoLiteral {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
-  type DonoCapital = "Professor" | "Clube" | "Escolinha";
-  function toDonoCapital(v: DonoLiteral): DonoCapital {
-    if (v === "professor") return "Professor";
-    if (v === "clube") return "Clube";
-    return "Escolinha";
+
+  async function fetchExerciciosPersonalizados() {
+    const token =
+      (Storage as any)?.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    if (!token) return;
+
+    try {
+      setLoadingPersonalizados(true);
+      const resp = await axios.get(`${API.BASE_URL}/api/treinos/exercicios/personalizados`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const arr = Array.isArray(resp.data) ? resp.data : (resp.data?.items ?? []);
+      setExerciciosPersonalizados(
+        (Array.isArray(arr) ? arr : []).map((x: any) => ({
+          id: String(x.id),
+          nome: String(x.nome ?? "Exercício"),
+          descricao: x.descricao ?? null,
+          nivel: x.nivel ?? null,
+          categorias: Array.isArray(x.categorias) ? x.categorias : [],
+          videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? null,
+          videoPosterUrl: x.videoPosterUrl ?? null,
+        }))
+      );
+    } finally {
+      setLoadingPersonalizados(false);
+    }
   }
 
-  function extrairIdAtleta(a: any): string {
-    if (!a) return "";
-    if (typeof a === "string") return a;
-    if (typeof a.id === "string") return a.id;
-    if (typeof a.atletaId === "string") return a.atletaId;
-    return "";
-  }
-
-    async function agendarTreinoEmLote(treinoProgramadoId: string) {
+  async function agendarTreinoEmLote(treinoProgramadoId: string) {
     try {
       const datasValidas = datasAgendamento.filter((d) => d && d.trim());
 
@@ -2727,7 +2814,7 @@ useEffect(() => {
       const exerciciosNormalizados = (exerciciosSelecionados || [])
         .map((e: any, idx: number) => {
           const exercicioId =
-            e.exercicioId ?? e.idCatalogo ?? e.exercicio?.id ?? e.id ?? null;
+            e.exercicioId ?? e.idCatalogo ?? e.exercicio?.id ?? null;
           const nomeTemp = typeof e.nome === "string" ? e.nome.trim() : "";
 
           return {
@@ -2735,7 +2822,8 @@ useEffect(() => {
             exercicioId: exercicioId ? String(exercicioId) : null,
             nome: nomeTemp || e.nome,
             ordem: e.ordem ?? idx + 1,
-            videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? null,
+            descricao: (typeof e.descricao === "string" ? e.descricao : null), // ✅ pega a descrição do EXERCÍCIO
+            videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null, // ✅ mantém vídeo também
             repeticoes:
               e.repeticoes ??
               e.repeticoesStr ??
@@ -2845,11 +2933,12 @@ useEffect(() => {
         // IMPORTANTÍSSIMO: não mandar exercicioId aqui, senão o backend cai no createMany "oficial" e ignora mídia.
         return {
           nome: String(e.nome || "").trim(),
+          descricao: String(e.descricao || "").trim() || null,   // ✅ AGORA VAI PRO BD
+          nivel: e.nivel ?? nivel ?? null,                      // ✅ opcional (mas recomendado)
+          categorias: Array.isArray(e.categorias) ? e.categorias : [], // ✅ opcional
           ordem: Number(e.ordem ?? idx + 1),
           repeticoes: repeticoesFinal,
           observacao: e.observacao ?? null,
-
-          // ✅ AQUI está o que estava faltando:
           exercicioPersonalizadoId: e.exercicioPersonalizadoId ? String(e.exercicioPersonalizadoId) : null,
           videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
           videoPosterUrl: e.videoPosterUrl ?? null,
@@ -3442,52 +3531,52 @@ useEffect(() => {
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
 
-        {/* ✅ Tipo de publicação — só aparece para professor parceiro */}
-        {isParceiro && (
-          <div className="mt-2">
-            <label className="block text-sm text-gray-700 mb-2">
-              Publicação do treino
-            </label>
+            {/* ✅ Tipo de publicação — só aparece para professor parceiro */}
+            {isParceiro && (
+              <div className="mt-2">
+                <label className="block text-sm text-gray-700 mb-2">
+                  Publicação do treino
+                </label>
 
-            <button
-              type="button"
-              onClick={() => setTreinoFootera((v) => !v)}
-              className={[
-                "w-full flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition",
-                treinoFootera
-                  ? "border-green-700 bg-green-50"
-                  : "border-gray-200 bg-white hover:bg-gray-50",
-              ].join(" ")}
-              title="Marque para publicar como Footera (público/parceiro)"
-            >
-              <div className="min-w-0">
-                <div className="font-semibold text-sm">
-                  {treinoFootera ? "✅ Treino Footera (público)" : "Treino normal (privado)"}
-                </div>
-                <div className="text-xs text-gray-600 mt-0.5">
-                  {treinoFootera
-                    ? "Aparece para atletas na aba Professores Footera."
-                    : "Aparece apenas no contexto normal do dono/vínculos."}
-                </div>
-              </div>
-
-              {/* Switch visual */}
-              <span
-                className={[
-                  "relative inline-flex h-7 w-12 items-center rounded-full border transition",
-                  treinoFootera ? "bg-green-700 border-green-700" : "bg-gray-200 border-gray-300",
-                ].join(" ")}
-              >
-                <span
+                <button
+                  type="button"
+                  onClick={() => setTreinoFootera((v) => !v)}
                   className={[
-                    "inline-block h-5 w-5 transform rounded-full bg-white shadow transition",
-                    treinoFootera ? "translate-x-6" : "translate-x-1",
+                    "w-full flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition",
+                    treinoFootera
+                      ? "border-green-700 bg-green-50"
+                      : "border-gray-200 bg-white hover:bg-gray-50",
                   ].join(" ")}
-                />
-              </span>
-            </button>
-          </div>
-        )}
+                  title="Marque para publicar como Footera (público/parceiro)"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm">
+                      {treinoFootera ? "✅ Treino Footera (público)" : "Treino normal (privado)"}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-0.5">
+                      {treinoFootera
+                        ? "Aparece para atletas na aba Professores Footera."
+                        : "Aparece apenas no contexto normal do dono/vínculos."}
+                    </div>
+                  </div>
+
+                  {/* Switch visual */}
+                  <span
+                    className={[
+                      "relative inline-flex h-7 w-12 items-center rounded-full border transition",
+                      treinoFootera ? "bg-green-700 border-green-700" : "bg-gray-200 border-gray-300",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "inline-block h-5 w-5 transform rounded-full bg-white shadow transition",
+                        treinoFootera ? "translate-x-6" : "translate-x-1",
+                      ].join(" ")}
+                    />
+                  </span>
+                </button>
+              </div>
+            )}
 
             <label className="block text-sm text-gray-700 mb-1">
               Título do Treino
@@ -3694,7 +3783,6 @@ useEffect(() => {
                 Você pode escolher uma imagem da galeria. Se não escolher, o treino ficará sem capa.
               </p>
             </div>
-
           </StepCard>
         )}
 
@@ -3721,13 +3809,10 @@ useEffect(() => {
                       )
                     : undefined;
                   const videoSrc = resolveVideoUrl(ex.videoUrl || base?.videoDemonstrativoUrl);
-
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
                   const descFinal = base?.descricao ?? ex.descricao ?? "";
-                  
-                  const ehDoBanco = Boolean(ex.idCatalogo);
-
+                  const ehDoBanco = Boolean(ex.idCatalogo || (ex as any).exercicioPersonalizadoId);
                   return (
                     <div
                       key={i}
@@ -3848,7 +3933,7 @@ useEffect(() => {
 
                           {ehDoBanco ? (
                             <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">
-                              {descFinal || "Sem descrição."}
+                              {descFinal || " "}
                             </p>
                           ) : (
                             <textarea
@@ -3917,188 +4002,337 @@ useEffect(() => {
             </StepCard>
 
             <div className="h-4" />
-
+          
             <StepCard title="Exercícios Disponíveis">
-              <div className="mb-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
+              {/* Abas */}
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAbaExercicios("catalogo")}
+                  className={[
+                    "px-3 py-1.5 rounded-lg text-sm font-bold border",
+                    abaExercicios === "catalogo"
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50",
+                  ].join(" ")}
+                >
+                  Exercícios (BD)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAbaExercicios("personalizados")}
+                  className={[
+                    "px-3 py-1.5 rounded-lg text-sm font-bold border",
+                    abaExercicios === "personalizados"
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50",
+                  ].join(" ")}
+                >
+                  Personalizados
+                </button>
+              </div>
+
+              {/* Conteúdo das abas */}
+              {abaExercicios === "catalogo" ? (
+                <>
+                  {/* Filtros catálogo */}
+                  <div className="mb-3 flex flex-col gap-2">
                     <input
-                      className="border w-full p-2 pl-9 rounded text-sm"
-                      placeholder="Buscar por nome, nível ou descrição..."
+                      className="border rounded px-3 py-2"
+                      placeholder="Buscar no catálogo por nome/descrição/nível..."
                       value={filtroEx}
                       onChange={(e) => setFiltroEx(e.target.value)}
                     />
-                    <SearchIcon className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  </div>
-                  <span className="text-xs text-gray-600 whitespace-nowrap">
-                    {exerciciosFiltrados.length} resultado(s)
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                  <div>
-                    <select
-                      multiple
-                      size={7}
-                      className="border w-full p-2 rounded text-xs sm:text-sm h-32"
-                      value={filtroCategorias}
-                      onChange={(e) => {
-                        const values = Array.from(e.target.selectedOptions).map(
-                          (opt) => opt.value,
-                        );
-                        setFiltroCategorias(values);
-                      }}
-                    >
-                      <option value="Sub9">Sub-9</option>
-                      <option value="Sub11">Sub-11</option>
-                      <option value="Sub13">Sub-13</option>
-                      <option value="Sub15">Sub-15</option>
-                      <option value="Sub17">Sub-17</option>
-                      <option value="Sub20">Sub-20</option>
-                      <option value="Livre">Livre</option>
-                    </select>
-                    <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
-                      Segure <b>Ctrl</b> (ou toque e selecione) para escolher mais de uma categoria.
-                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <select
+                          multiple
+                          size={7}
+                          className="border w-full p-2 rounded text-xs sm:text-sm h-32"
+                          value={filtroCategorias}
+                          onChange={(e) => {
+                            const values = Array.from(e.target.selectedOptions).map(
+                              (opt) => opt.value,
+                            );
+                            setFiltroCategorias(values);
+                          }}
+                        >
+                          <option value="Sub9">Sub-9</option>
+                          <option value="Sub11">Sub-11</option>
+                          <option value="Sub13">Sub-13</option>
+                          <option value="Sub15">Sub-15</option>
+                          <option value="Sub17">Sub-17</option>
+                          <option value="Sub20">Sub-20</option>
+                          <option value="Livre">Livre</option>
+                        </select>
+                        <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                          Segure <b>Ctrl</b> para selecionar várias.
+                        </p>
+                      </div>
+
+                      <div>
+                        <select
+                          multiple
+                          size={4}
+                          className="border w-full p-2 rounded text-xs sm:text-sm h-24"
+                          value={filtroNiveis}
+                          onChange={(e) => {
+                            const values = Array.from(e.target.selectedOptions).map(
+                              (opt) => opt.value,
+                            );
+                            setFiltroNiveis(values);
+                          }}
+                        >
+                          <option value="Base">Base</option>
+                          <option value="Avancado">Avançado</option>
+                          <option value="Performance">Performance</option>
+                        </select>
+                        <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                          Você pode combinar vários níveis.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiltroEx("");
+                          setFiltroCategorias([]);
+                          setFiltroNiveis([]);
+                        }}
+                        className="text-[11px] sm:text-xs text-gray-600 underline"
+                      >
+                        Limpar filtros
+                      </button>
+                    </div>
                   </div>
 
-                  <div>
+                  {/* Lista catálogo */}
+                  <ul
+                    ref={listRef}
+                    onScroll={onScrollListaExercicios}
+                    className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1"
+                  >
+                    {exerciciosVisiveis.map((exercicio) => {
+                      const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
+                      const jaAdicionado = jaEstaNoTreinoPorIdOuNome(
+                        exerciciosSelecionados,
+                        exercicio.id,
+                        exercicio.nome,
+                      );
+
+                      return (
+                        <li key={exercicio.id} className="py-3">
+                          <div className="flex flex-col sm:flex-row gap-3 items-start">
+                            <div className="w-full sm:w-44 shrink-0">
+                              {videoSrc ? (
+                                <VideoThumb
+                                  src={videoSrc}
+                                  onClick={() => setVideoModalSrc(videoSrc)}
+                                />
+                              ) : (
+                                <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                                  sem vídeo
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold truncate">{exercicio.nome}</div>
+                                {exercicio.nivel ? (
+                                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
+                                    {exercicio.nivel}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {exercicio.descricao ? (
+                                <p className="text-sm text-gray-700 mt-1 line-clamp-2">
+                                  {exercicio.descricao}
+                                </p>
+                              ) : null}
+
+                              {(exercicio.tipoTreino ||
+                                exercicio.duracaoMinutos ||
+                                (exercicio.categorias && exercicio.categorias.length > 0)) && (
+                                <div className="flex flex-wrap gap-1 mt-1 text-[11px] text-gray-700">
+                                  {exercicio.tipoTreino && (
+                                    <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200">
+                                      {exercicio.tipoTreino}
+                                    </span>
+                                  )}
+                                  {typeof exercicio.duracaoMinutos === "number" &&
+                                    exercicio.duracaoMinutos > 0 && (
+                                      <span className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200">
+                                        {exercicio.duracaoMinutos} min
+                                      </span>
+                                    )}
+                                  {exercicio.categorias?.map((cat) => (
+                                    <span
+                                      key={cat}
+                                      className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
+                                    >
+                                      {cat}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => !jaAdicionado && adicionarExercicioExistente(exercicio)}
+                              disabled={jaAdicionado}
+                              className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
+                                jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
+                              }`}
+                            >
+                              {jaAdicionado ? "Adicionado" : "Adicionar"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+
+                    {temMaisExercicios && (
+                      <li className="py-3 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setPageEx((p) => p + 1)}
+                          className="text-sm px-3 py-2 rounded border bg-white hover:bg-gray-50"
+                        >
+                          Carregar mais ({exerciciosVisiveis.length}/{exerciciosFiltrados.length})
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                </>
+              ) : (
+                <>
+                  {/* Filtros personalizados */}
+                  <div className="grid gap-2 sm:grid-cols-3 mb-3">
+                    <input
+                      className="border rounded px-3 py-2"
+                      placeholder="Buscar personalizado por nome/descrição..."
+                      value={filtroPers}
+                      onChange={(e) => setFiltroPers(e.target.value)}
+                    />
+
                     <select
-                      multiple
-                      size={4}
-                      className="border w-full p-2 rounded text-xs sm:text-sm h-24"
-                      value={filtroNiveis}
-                      onChange={(e) => {
-                        const values = Array.from(e.target.selectedOptions).map(
-                          (opt) => opt.value,
-                        );
-                        setFiltroNiveis(values);
-                      }}
+                      className="border rounded px-3 py-2"
+                      value={filtroPersNivel}
+                      onChange={(e) => setFiltroPersNivel(e.target.value)}
                     >
+                      <option value="">Todos os níveis</option>
                       <option value="Base">Base</option>
                       <option value="Avancado">Avançado</option>
                       <option value="Performance">Performance</option>
                     </select>
-                    <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
-                      Você pode combinar vários níveis (ex.: Base + Avançado).
-                    </p>
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFiltroEx("");
-                      setFiltroCategorias([]);
-                      setFiltroNiveis([]);
-                    }}
-                    className="text-[11px] sm:text-xs text-gray-600 underline"
-                  >
-                    Limpar filtros
-                  </button>
-                </div>
-              </div>
 
-              <ul
-                ref={listRef}
-                onScroll={onScrollListaExercicios}
-                className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1"
-              >
-                {exerciciosVisiveis.map((exercicio) => {
-                  const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
-                  const jaAdicionado = jaEstaNoTreinoPorIdOuNome(
-                    exerciciosSelecionados,
-                    exercicio.id,
-                    exercicio.nome,
-                  );
-
-                  return (
-                    <li key={exercicio.id} className="py-3">
-                      <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        <div className="w-full sm:w-44 shrink-0">
-                          {videoSrc ? (
-                            <VideoThumb
-                              src={videoSrc}
-                              onClick={() => setVideoModalSrc(videoSrc)}
-                            />
-                          ) : (
-                            <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
-                              sem vídeo
-                            </div>
-                          )}
-
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold truncate">{exercicio.nome}</div>
-                            {exercicio.nivel ? (
-                              <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
-                                {exercicio.nivel}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {exercicio.descricao ? (
-                            <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-                              {exercicio.descricao}
-                            </p>
-                          ) : null}
-
-                          {(exercicio.tipoTreino ||
-                            exercicio.duracaoMinutos ||
-                            (exercicio.categorias && exercicio.categorias.length > 0)) && (
-                            <div className="flex flex-wrap gap-1 mt-1 text-[11px] text-gray-700">
-                              {exercicio.tipoTreino && (
-                                <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200">
-                                  {exercicio.tipoTreino}
-                                </span>
-                              )}
-                              {typeof exercicio.duracaoMinutos === "number" &&
-                                exercicio.duracaoMinutos > 0 && (
-                                  <span className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200">
-                                    {exercicio.duracaoMinutos} min
-                                  </span>
-                                )}
-                              {exercicio.categorias?.map((cat) => (
-                                <span
-                                  key={cat}
-                                  className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
-                                >
-                                  {cat}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => !jaAdicionado && adicionarExercicioExistente(exercicio)}
-                          disabled={jaAdicionado}
-                          className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
-                            jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
-                          }`}
-                        >
-                          {jaAdicionado ? "Adicionado" : "Adicionar"}
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-
-                {temMaisExercicios && (
-                  <li className="py-3 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => setPageEx((p) => p + 1)}
-                      className="text-sm px-3 py-2 rounded border bg-white hover:bg-gray-50"
+                    <select
+                      className="border rounded px-3 py-2"
+                      value={filtroPersVideo}
+                      onChange={(e) => setFiltroPersVideo(e.target.value as any)}
                     >
-                      Carregar mais ({exerciciosVisiveis.length}/{exerciciosFiltrados.length})
-                    </button>
-                  </li>
-                )}
-              </ul>
+                      <option value="">Com/sem vídeo</option>
+                      <option value="com">Somente com vídeo</option>
+                      <option value="sem">Somente sem vídeo</option>
+                    </select>
+                  </div>
 
+                  {/* Lista personalizados */}
+                  {loadingPersonalizados ? (
+                    <div className="text-sm text-gray-600">Carregando personalizados...</div>
+                  ) : (
+                    <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
+                      {exerciciosPersonalizados
+                        .filter((x) => {
+                          const term = filtroPers.trim().toLowerCase();
+                          if (!term) return true;
+                          const hay = `${x.nome ?? ""} ${x.descricao ?? ""}`.toLowerCase();
+                          return hay.includes(term);
+                        })
+                        .filter((x) => {
+                          if (!filtroPersNivel) return true;
+                          return String(x.nivel ?? "") === String(filtroPersNivel);
+                        })
+                        .filter((x) => {
+                          if (!filtroPersVideo) return true;
+                          const hasVideo = !!x.videoDemonstrativoUrl;
+                          return filtroPersVideo === "com" ? hasVideo : !hasVideo;
+                        })
+                        .map((p) => {
+                          const jaAdicionado = treinoTemPersonalizado(p.id);
+                          const videoSrc = p.videoDemonstrativoUrl || null;
+
+                          return (
+                            <li key={p.id} className="py-3">
+                              <div className="flex flex-col sm:flex-row gap-3 items-start">
+                                <div className="w-full sm:w-44 shrink-0">
+                                  {videoSrc ? (
+                                    <VideoThumb
+                                      src={videoSrc}
+                                      onClick={() => setVideoModalSrc(videoSrc)}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                                      sem vídeo
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <div className="font-semibold truncate">{p.nome}</div>
+                                    {p.nivel ? (
+                                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
+                                        {p.nivel}
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  {p.descricao ? (
+                                    <p className="text-sm text-gray-700 mt-1 line-clamp-2">
+                                      {p.descricao}
+                                    </p>
+                                  ) : null}
+
+                                  {Array.isArray(p.categorias) && p.categorias.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1 mt-2 text-[11px] text-gray-700">
+                                      {p.categorias.map((cat) => (
+                                        <span
+                                          key={String(cat)}
+                                          className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
+                                        >
+                                          {String(cat)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => !jaAdicionado && addPersonalizadoNoTreino(p)}
+                                  disabled={jaAdicionado}
+                                  className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
+                                    jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
+                                  }`}
+                                >
+                                  {jaAdicionado ? "Adicionado" : "Adicionar"}
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  )}
+                </>
+              )}
             </StepCard>
           </>
         )}
@@ -4656,7 +4890,8 @@ useEffect(() => {
           </div>
         </div>
       )}
-
+      
+    
       <BottomNav />
       
     </div>
