@@ -89,25 +89,32 @@ export default function CreateAdmin() {
     e.preventDefault();
     setErro(""); setOk("");
 
-    if (!nome.trim()) return setErro("Informe o nome completo.");
     if (!emailValido) return setErro("E-mail inválido.");
     if (!userValido) return setErro("Nome de usuário inválido (3–20, letras/números/._).");
     if (!senhaForte) return setErro("Senha fraca: mínimo 8 caracteres com letra e número.");
     if (!confirmarOk) return setErro("As senhas não coincidem.");
-    if (!nascimento) return setErro("Informe a data de nascimento.");
-    if (!CEP_RE.test(cep) || !cidade || !estado) return setErro("Informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente).");
+    if (cep && (!CEP_RE.test(cep) || !cidade || !estado)) {
+      return setErro("CEP inválido: informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente).");
+    }
 
     const payload: any = {
-      email, senha, nome,
-      nomeDeUsuario: username,
-      dataNascimento: nascimento,
-      endereco: {
-        cep,
-        cidade,
-        estado,
-        bairro,
-        pais
-      }
+      email: email.trim(),
+      senha,
+      nomeDeUsuario: username.trim(),
+      // ✅ se seu backend exige "nome", manda fallback com username
+      nome: (nome || "").trim() || username.trim(),
+      // ✅ só manda dataNascimento se tiver preenchida
+      ...(nascimento ? { dataNascimento: nascimento } : {}),
+      // ✅ só manda endereço se o usuário tiver preenchido algo
+      ...((cep || cidade || estado || bairro || pais) ? {
+        endereco: {
+          ...(cep ? { cep } : {}),
+          ...(cidade ? { cidade } : {}),
+          ...(estado ? { estado } : {}),
+          ...(bairro ? { bairro } : {}),
+          ...(pais ? { pais } : {}),
+        }
+      } : {})
     };
 
     try {
@@ -171,9 +178,62 @@ export default function CreateAdmin() {
           <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Nome Completo (opcional)</label>
+              <input className="w-full border rounded px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Nome de usuário*</label>
+              <input className={`w-full border rounded px-3 py-2 ${username && !userValido ? "border-red-400" : ""}`} value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Email*</label>
+              <input type="email" className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`} value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Senha*</label>
+                <div className="relative">
+                  <input
+                    type={mostrarSenha ? "text" : "password"}
+                    autoComplete="new-password"
+                    className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`}
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setMostrarSenha(v => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                    {mostrarSenha ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+                </div>
+                {senha && <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>Mín. 8 caracteres com letra e número.</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Confirmar Senha*</label>
+                <div className="relative">
+                  <input
+                    type={mostrarConfirmar ? "text" : "password"}
+                    autoComplete="new-password"
+                    className={`w-full border rounded px-3 py-2 pr-10 ${confirmar && !confirmarOk ? "border-red-400" : ""}`}
+                    value={confirmar}
+                    onChange={(e) => setConfirmar(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setMostrarConfirmar(v => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                    {mostrarConfirmar ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+                </div>
+                {confirmar && <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>{confirmarOk ? "OK" : "Senhas não coincidem."}</p>}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium mb-1">CEP</label>
+                <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
                 <input
                   className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
                   placeholder="00000-000"
@@ -196,78 +256,25 @@ export default function CreateAdmin() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Cidade</label>
+                <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
                 <input className="w-full border rounded px-3 py-2" value={cidade} onChange={(e) => setCidade(e.target.value)} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">UF</label>
+                <label className="block text-sm font-medium mb-1">UF (opcional)</label>
                 <input className="w-full border rounded px-3 py-2 uppercase" maxLength={2} value={estado} onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0,2))} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Bairro</label>
+                <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
                 <input className="w-full border rounded px-3 py-2" value={bairro} onChange={(e) => setBairro(e.target.value)} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">País</label>
+                <label className="block text-sm font-medium mb-1">País (opcional)</label>
                 <input className="w-full border rounded px-3 py-2" value={pais} onChange={(e) => setPais(e.target.value)} />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Nome Completo</label>
-              <input className="w-full border rounded px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input type="email" className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`} value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Nome de usuário</label>
-              <input className={`w-full border rounded px-3 py-2 ${username && !userValido ? "border-red-400" : ""}`} value={username} onChange={(e) => setUsername(e.target.value)} />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Senha</label>
-                <div className="relative">
-                  <input
-                    type={mostrarSenha ? "text" : "password"}
-                    autoComplete="new-password"
-                    className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`}
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
-                  />
-                  <button type="button" onClick={() => setMostrarSenha(v => !v)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
-                    {mostrarSenha ? <EyeOff size={18}/> : <Eye size={18}/>}
-                  </button>
-                </div>
-                {senha && <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>Mín. 8 caracteres com letra e número.</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Confirmar Senha</label>
-                <div className="relative">
-                  <input
-                    type={mostrarConfirmar ? "text" : "password"}
-                    autoComplete="new-password"
-                    className={`w-full border rounded px-3 py-2 pr-10 ${confirmar && !confirmarOk ? "border-red-400" : ""}`}
-                    value={confirmar}
-                    onChange={(e) => setConfirmar(e.target.value)}
-                  />
-                  <button type="button" onClick={() => setMostrarConfirmar(v => !v)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
-                    {mostrarConfirmar ? <EyeOff size={18}/> : <Eye size={18}/>}
-                  </button>
-                </div>
-                {confirmar && <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>{confirmarOk ? "OK" : "Senhas não coincidem."}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Data de nascimento</label>
+              <label className="block text-sm font-medium mb-1">Data de nascimento (opcional)</label>
               <input type="date" className="w-full border rounded px-3 py-2" value={nascimento} onChange={(e) => setNascimento(e.target.value)} />
             </div>
 

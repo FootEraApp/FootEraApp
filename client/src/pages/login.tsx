@@ -113,11 +113,20 @@ export default function PaginaLogin() {
   async function handleResend() {
     try {
       setSendingResend(true);
+
+      const value = String(nomeDeUsuario || "").trim();
+
+      const payload =
+        value.includes("@")
+          ? { email: value.toLowerCase() }
+          : { nomeDeUsuario: value.toLowerCase() };
+
       await axios.post(
-        `${API.BASE_URL}/api/auth/cadastro/resend-verification`,
-        { nomeDeUsuario }
+        `${API.BASE_URL}/api/cadastro/resend-verification`,
+        payload
       );
-      alert("Reenviamos o e-mail de verificação.");
+
+      alert("Reenviamos o e-mail de verificação. Verifique sua caixa de entrada e spam.");
     } catch (e: any) {
       alert(e?.response?.data?.message ?? "Não foi possível reenviar agora.");
     } finally {

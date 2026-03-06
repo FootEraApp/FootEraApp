@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmailVerification } from "../utils/mailer.js";
 import { prisma } from "../prisma.js";
+import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 
 const FRONTEND_URL = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
 
@@ -118,40 +119,150 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
     if (!q) return res.json([]);
 
     const normProfessor = (rows: any[]) =>
-      rows.map((p) => ({
+    rows.map((p) => {
+      const usuario = p.usuario || {};
+      const perfilVerificado = calcularPerfilVerificado({
+        usuario: {
+          verified: usuario.verified,
+          nome: p.nome ?? usuario.nome ?? null,
+          nomeDeUsuario: usuario.nomeDeUsuario ?? null,
+          email: usuario.email ?? null,
+          foto: absUrl(p.fotoUrl) ?? absUrl(usuario.foto),
+        },
+        tipo: "professor",
+        professor: {
+          areaFormacao: p.areaFormacao ?? null,
+          cref: p.cref ?? null,
+          statusCref: p.statusCref ?? null,
+          dataNascimento: p.dataNascimento ?? null,
+          escola: p.escola ?? null,
+          qualificacoes: p.qualificacoes ?? null,
+          certificacoes: p.certificacoes ?? null,
+          fotoUrl: absUrl(p.fotoUrl) ?? null,
+        },
+      });
+
+      return {
         id: p.id as string,
         tipo: "Professor" as const,
         nome: p.nome as string,
-        username: p.usuario?.nomeDeUsuario ?? "",
-        fotoUrl: absUrl(p.fotoUrl) ?? absUrl(p.usuario?.foto),
-      }));
+        username: usuario?.nomeDeUsuario ?? "",
+        fotoUrl: absUrl(p.fotoUrl) ?? absUrl(usuario?.foto),
+        perfilVerificado,
+      };
+    });
 
     const normClube = (rows: any[]) =>
-      rows.map((c) => ({
-        id: c.id as string,
-        tipo: "Clube" as const,
-        nome: c.nome as string,
-        username: c.usuario?.nomeDeUsuario ?? "",
-        fotoUrl: absUrl(c.logo) ?? absUrl(c.usuario?.foto),
-      }));
+      rows.map((c) => {
+        const usuario = c.usuario || {};
+
+        const perfilVerificado = calcularPerfilVerificado({
+          usuario: {
+            verified: usuario.verified,
+            nome: c.nome ?? usuario.nome ?? null,
+            nomeDeUsuario: usuario.nomeDeUsuario ?? null,
+            email: c.email ?? usuario.email ?? null,
+            foto: absUrl(c.logo) ?? absUrl(usuario.foto),
+          },
+          tipo: "clube",
+          clube: {
+            nome: c.nome ?? null,
+            cnpj: c.cnpj ?? null,
+            email: c.email ?? usuario.email ?? null,
+            telefone1: c.telefone1 ?? null,
+            siteOficial: c.siteOficial ?? null,
+            sede: c.sede ?? null,
+            cidade: c.cidade ?? null,
+            estado: c.estado ?? null,
+            bairro: c.bairro ?? null,
+            pais: c.pais ?? null,
+            cep: c.cep ?? null,
+            logo: absUrl(c.logo) ?? null,
+          },
+        });
+
+        return {
+          id: c.id as string,
+          tipo: "Clube" as const,
+          nome: c.nome as string,
+          username: usuario?.nomeDeUsuario ?? "",
+          fotoUrl: absUrl(c.logo) ?? absUrl(usuario?.foto),
+          perfilVerificado,
+        };
+      });
 
     const normEscolinha = (rows: any[]) =>
-      rows.map((e) => ({
-        id: e.id as string,
-        tipo: "Escolinha" as const,
-        nome: e.nome as string,
-        username: e.usuario?.nomeDeUsuario ?? "",
-        fotoUrl: absUrl(e.logo) ?? absUrl(e.usuario?.foto),
-      }));
+      rows.map((e) => {
+        const usuario = e.usuario || {};
+
+        const perfilVerificado = calcularPerfilVerificado({
+          usuario: {
+            verified: usuario.verified,
+            nome: e.nome ?? usuario.nome ?? null,
+            nomeDeUsuario: usuario.nomeDeUsuario ?? null,
+            email: e.email ?? usuario.email ?? null,
+            foto: absUrl(e.logo) ?? absUrl(usuario.foto),
+          },
+          tipo: "escolinha",
+          escolinha: {
+            nome: e.nome ?? null,
+            cnpj: e.cnpj ?? null,
+            email: e.email ?? usuario.email ?? null,
+            telefone1: e.telefone1 ?? null,
+            siteOficial: e.siteOficial ?? null,
+            cidade: e.cidade ?? null,
+            estado: e.estado ?? null,
+            bairro: e.bairro ?? null,
+            pais: e.pais ?? null,
+            cep: e.cep ?? null,
+            logo: absUrl(e.logo) ?? null,
+          },
+        });
+
+        return {
+          id: e.id as string,
+          tipo: "Escolinha" as const,
+          nome: e.nome as string,
+          username: usuario?.nomeDeUsuario ?? "",
+          fotoUrl: absUrl(e.logo) ?? absUrl(usuario?.foto),
+          perfilVerificado,
+        };
+      });
 
     const normOlheiro = (rows: any[]) =>
-      rows.map((o) => ({
-        id: o.id as string,
-        tipo: "Olheiro" as const,
-        nome: o.usuario?.nome ?? "",
-        username: o.usuario?.nomeDeUsuario ?? "",
-        fotoUrl: absUrl(o.fotoUrl) ?? absUrl(o.usuario?.foto),
-      }));
+      rows.map((o) => {
+        const usuario = o.usuario || {};
+
+        const perfilVerificado = calcularPerfilVerificado({
+          usuario: {
+            verified: usuario.verified,
+            nome: usuario.nome ?? null,
+            nomeDeUsuario: usuario.nomeDeUsuario ?? null,
+            email: usuario.email ?? null,
+            foto: absUrl(o.fotoUrl) ?? absUrl(usuario.foto),
+          },
+          tipo: "olheiro",
+          olheiro: {
+            areaAtuacao: o.areaAtuacao ?? null,
+            anosExperiencia: Number.isFinite(Number(o.anosExperiencia))
+              ? Number(o.anosExperiencia)
+              : null,
+            emailPublico: o.emailPublico ?? null,
+            telefonePublico: o.telefonePublico ?? null,
+            descricao: o.descricao ?? null,
+            fotoUrl: absUrl(o.fotoUrl) ?? null,
+          },
+        });
+
+        return {
+          id: o.id as string,
+          tipo: "Olheiro" as const,
+          nome: usuario?.nome ?? "",
+          username: usuario?.nomeDeUsuario ?? "",
+          fotoUrl: absUrl(o.fotoUrl) ?? absUrl(o.usuario?.foto),
+          perfilVerificado,
+        };
+      });
 
     const results: any[] = [];
 
@@ -167,7 +278,22 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           id: true,
           nome: true,
           fotoUrl: true,
-          usuario: { select: { nomeDeUsuario: true, foto: true } },
+          areaFormacao: true,
+          cref: true,
+          statusCref: true,
+          dataNascimento: true,
+          escola: true,
+          qualificacoes: true,
+          certificacoes: true,
+          usuario: {
+            select: {
+              verified: true,
+              nome: true,
+              email: true,
+              nomeDeUsuario: true,
+              foto: true,
+            },
+          },
         },
         take: 20,
       });
@@ -182,11 +308,22 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
             { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
           ],
         },
-        select: {
+       select: {
           id: true,
           nome: true,
           logo: true,
-          usuario: { select: { nomeDeUsuario: true, foto: true } },
+          cnpj: true,
+          email: true,
+          telefone1: true,
+          telefone2: true,
+          siteOficial: true,
+          cidade: true,
+          estado: true,
+          sede: true,
+          bairro: true,
+          pais: true,
+          cep: true,
+          usuario: { select: { verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
@@ -205,7 +342,17 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           id: true,
           nome: true,
           logo: true,
-          usuario: { select: { nomeDeUsuario: true, foto: true } },
+          cnpj: true,
+          email: true,
+          telefone1: true,
+          telefone2: true,
+          siteOficial: true,
+          cidade: true,
+          estado: true,
+          bairro: true,
+          pais: true,
+          cep: true,
+          usuario: { select: { verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
@@ -225,7 +372,12 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         select: {
           id: true,
           fotoUrl: true,
-          usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
+          areaAtuacao: true,
+          anosExperiencia: true,
+          descricao: true,
+          emailPublico: true,
+          telefonePublico: true,
+          usuario: { select: { verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
@@ -250,13 +402,15 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
     nomeEscolinha, cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha, siteOficialEscolinha, sedeEscolinha,
     logradouroEscolinha, numeroEscolinha, complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
-    areaAtuacao, anosExperiencia, headline, siteOuLinkedin,
+    areaAtuacao, anosExperiencia,
     telefonePublico, emailPublico, descricao, colaboracaoClubeId,
     dataNascimento, responsavel,
   } = req.body ?? {};
 
-  if (!nome || !email || !senha || !tipo) {
-    return res.status(400).json({ error: "Campos obrigatórios: nome, email, senha, tipo." });
+  if (!email || !senha || !tipo || !nomeDeUsuario) {
+    return res.status(400).json({
+      error: "Campos obrigatórios: nomeDeUsuario, email, senha, tipo.",
+    });
   }
 
   try {
@@ -273,9 +427,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       : null;
 
     const emailNorm = String(email).trim().toLowerCase();
-    const usernameFinal = (nomeDeUsuario ? String(nomeDeUsuario) : String(nome).toLowerCase().replace(/\s+/g, "_"))
-      .trim().toLowerCase();
-
+    const usernameFinal = String(nomeDeUsuario).trim().toLowerCase();
+    // ✅ nome agora é opcional: se não vier, usa o username como nome
+    const nomeFinal = String(nome ?? "").trim() || usernameFinal;
     const [jaEmail, jaUser] = await Promise.all([
       prisma.usuario.findUnique({ where: { email: emailNorm } }),
       prisma.usuario.findUnique({ where: { nomeDeUsuario: usernameFinal } }),
@@ -287,7 +441,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
     const usuario = await prisma.usuario.create({
       data: {
-        nome,
+        nome: nomeFinal,
         email: emailNorm,
         nomeDeUsuario: usernameFinal,
         senhaHash,
@@ -341,7 +495,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       case TipoUsuario.Professor: {
         const professor = await prisma.professor.create({
           data: {
-            nome,
+            nome: nomeFinal,
             codigo: gerarCodigo("PRF"),
             areaFormacao: areaFormacao ?? "Educação Física",
             cref: cref ?? null,
@@ -362,7 +516,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         const clube = await prisma.clube.create({
           data: {
             usuarioId: usuario.id,
-            nome: (nomeClube ?? nome),
+            nome: String(nomeClube ?? nome ?? "").trim() || nomeFinal,
             cnpj: cnpjClube ?? null,
             telefone1: telefone1Clube ?? null,
             telefone2: telefone2Clube ?? null,
@@ -391,7 +545,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         const escolinha = await prisma.escolinha.create({
           data: {
             usuarioId: usuario.id,
-            nome: (nomeEscolinha ?? nome),
+            nome: String(nomeEscolinha ?? nome ?? "").trim() || nomeFinal,
             cnpj: cnpjEscolinha ?? null,
             telefone1: telefone1Escolinha ?? null,
             telefone2: telefone2Escolinha ?? null,
@@ -418,7 +572,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           data: {
             usuarioId: usuario.id,
             fotoUrl: null,
-            headline: headline ?? null,
             descricao: descricao ?? null,
             areaAtuacao: areaAtuacao ?? null,
             anosExperiencia:
@@ -427,7 +580,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
                 : (anosExperiencia ? Number(anosExperiencia) : 0),
             emailPublico: (emailPublico ?? emailNorm) || null,
             telefonePublico: telefonePublico ?? null,
-            siteOuLinkedin: siteOuLinkedin ?? null,
             colaboracaoClubeId: colaboracaoClubeId || null,
           },
           select: { id: true },
