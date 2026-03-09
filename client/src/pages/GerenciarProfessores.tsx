@@ -17,10 +17,7 @@ import {
   ListChecks,
   ChevronRight,
   CirclePlus,
-  Building2,
   ShieldCheck,
-  Save,
-  Trash2,
   X,
 } from "lucide-react";
 import GerenciarOrganizacao, { type OrgGestorItem } from "./GerenciarOrganizacao.js";
@@ -45,25 +42,6 @@ type TurmaItem = {
   professorNomes?: string[];
   professorNome?: string | null;
   alunosCount?: number | null;
-};
-
-// ======= professor -> lista organizações gerenciáveis =======
-
-
-// ======= clube/escolinha -> lista gestores (responsáveis) =======
-type GestorItem = {
-  id: string;
-  professorId: string;
-  ativo: boolean;
-  papel?: string | null;
-  permissoes?: any | null;
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
-
-  // UI (se seu backend mandar)
-  professorNome?: string | null;
-  professorCref?: string | null;
-  professorFoto?: string | null;
 };
 
 function canVerAbaProfessores(org: any | null) {
@@ -137,8 +115,7 @@ const GerenciarProfessores: React.FC = () => {
   const orgTipoQS = urlParams.get("orgTipo"); // "CLUBE" | "ESCOLINHA" | null
   const orgIdQS = urlParams.get("orgId");     // string | null
 
-  const isAtletasPage =
-    location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
+  const isAtletasPage = location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
 
   const isProfessoresPage =
     location.startsWith("/perfil/GerenciarProfessores") ||
@@ -151,7 +128,7 @@ const GerenciarProfessores: React.FC = () => {
   const [tipo, setTipo] = useState<TipoEntidade>(null);
   const [usuarioIdEntidade, setUsuarioIdEntidade] = useState<string | null>(null);
   const [tipoUsuarioIdEntidade, setTipoUsuarioIdEntidade] = useState<string | null>(null);
-
+  const [totalProfessoresMetric, setTotalProfessoresMetric] = useState(0);
   // se for Professor, guardamos id da tabela Professor
   const [professorIdLogado, setProfessorIdLogado] = useState<string | null>(null);
 
@@ -191,12 +168,13 @@ const GerenciarProfessores: React.FC = () => {
 
   const [subAbaTurmas, setSubAbaTurmas] = useState<SubAbaTurmas>("minhas");
 
-  // quando selecionar org, por padrão vai pra turmas da organização
   useEffect(() => {
-    if (tipo === "Professor" && orgSelecionada) setSubAbaTurmas("organizacao");
-    if (tipo === "Professor" && !orgSelecionada) setSubAbaTurmas("minhas");
-  }, [tipo, orgSelecionada]);
+    if (tipo !== "Professor") return;
 
+    if (!orgSelecionada) {
+      setSubAbaTurmas("minhas");
+    }
+  }, [tipo, orgSelecionada]);
   // ======= listas (prof/turmas) =======
   const [q, setQ] = useState("");
   const [professores, setProfessores] = useState<ProfessorMin[]>([]);
@@ -418,12 +396,59 @@ const GerenciarProfessores: React.FC = () => {
     }
   }, [tipo, orgTipoQS, orgIdQS]); // (não coloca orgSelecionada aqui pra evitar loop)
 
+  useEffect(() => {
+    if (tipo !== "Professor") return;
+    if (!orgSelecionada) return;
+    if (!orgs.length) return;
+
+    const found = orgs.find(
+      (o) =>
+        String(o.ownerId) === String(orgSelecionada.ownerId) &&
+        String(o.tipo).toUpperCase() === String(orgSelecionada.tipo).toUpperCase()
+    );
+
+    if (!found) return;
+
+    const mudou =
+      found.nome !== orgSelecionada.nome ||
+      found.logo !== orgSelecionada.logo ||
+      JSON.stringify(found.permissoes ?? null) !== JSON.stringify(orgSelecionada.permissoes ?? null) ||
+      found.papel !== orgSelecionada.papel ||
+      found.cidade !== orgSelecionada.cidade ||
+      found.estado !== orgSelecionada.estado;
+
+    if (!mudou) return;
+
+    setOrgSelecionada(found);
+
+    setGestorOrg({
+      id: String(found.id),
+      tipo: found.tipo as any,
+      ownerId: String(found.ownerId),
+      nome: found.nome ?? null,
+      logo: found.logo ?? null,
+      cidade: found.cidade ?? null,
+      estado: found.estado ?? null,
+      papel: found.papel ?? null,
+      permissoes: found.permissoes ?? null,
+      ativo: !!found.ativo,
+    });
+  }, [tipo, orgSelecionada, orgs]);
+
   // ======= carregar professores (para contexto organização) =======
   const carregarProfessores = async () => {
     if (!contextoTipo || contextoTipo === "Professor" || !contextoTipoUsuarioId) return;
 
-    // professor sem permissão -> não carrega
-    if (tipo === "Professor" && orgSelecionada && !podeVerProfessores) return;
+    // professor sem permissão -> bloqueia só a ABA professores,
+    // mas não bloqueia a carga para métricas / organizações
+    if (
+      tipo === "Professor" &&
+      orgSelecionada &&
+      aba === "professores" &&
+      !podeVerProfessores
+    ) {
+      return;
+    }
 
     try {
       setProfError(null);
@@ -461,18 +486,21 @@ const GerenciarProfessores: React.FC = () => {
         lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
       }
 
-      setProfessores(
-        lista.map((p) => ({
-          id: String(p.id),
-          usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
-          nome: p.nome ?? p.usuario?.nome ?? "Professor",
-          cref: p.cref ?? null,
-          foto: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
-          turmas: p._count?.turmas ?? p.turmasCount ?? 0,
-        }))
-      );
-    } catch (e: any) {
+      const mapped = lista.map((p) => ({
+        id: String(p.id),
+        usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
+        nome: p.nome ?? p.usuario?.nome ?? "Professor",
+        cref: p.cref ?? null,
+        foto: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
+        turmas: p._count?.turmas ?? p.turmasCount ?? 0,
+      }));
+
+      setProfessores(mapped);
+      setTotalProfessoresMetric(mapped.length);
+          
+      } catch (e: any) {
       setProfessores([]);
+      setTotalProfessoresMetric(0);
       setProfError(e?.response?.data?.message || e?.message || "Falha ao carregar professores.");
     } finally {
       setProfLoading(false);
@@ -486,13 +514,15 @@ const GerenciarProfessores: React.FC = () => {
       setTurmasError(null);
       setTurmasLoading(true);
 
-      // ===== professor =====
       if (tipo === "Professor") {
-        // SUB-ABA: minhas turmas (sem org)
+        // 1) MINHAS TURMAS = sempre do professor logado
         if (subAbaTurmas === "minhas" || !orgSelecionada) {
-          const { data } = await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, { headers });
+          const { data } = await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, {
+            headers,
+          });
 
           const arr: any[] = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+
           setTurmas(
             arr.map((t) => ({
               id: String(t.id),
@@ -507,17 +537,23 @@ const GerenciarProfessores: React.FC = () => {
               alunosCount: t.alunosCount ?? t._count?.membros ?? t.qtdAlunos ?? null,
             }))
           );
+
           return;
         }
 
-        // SUB-ABA: turmas da organização selecionada
+        // 2) TURMAS DA ORGANIZAÇÃO = turmas do clube/escolinha em modo gestor
         const ownerTipo = contextoTipo === "Clube" ? "Clube" : "Escolinha";
+
         const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
           headers,
-          params: { ownerTipo, ownerId: contextoTipoUsuarioId },
+          params: {
+            ownerTipo,
+            ownerId: contextoTipoUsuarioId,
+          },
         });
 
         const arr: any[] = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+
         setTurmas(
           arr.map((t) => ({
             id: String(t.id),
@@ -532,6 +568,7 @@ const GerenciarProfessores: React.FC = () => {
             alunosCount: t.alunosCount ?? t._count?.membros ?? t.qtdAlunos ?? null,
           }))
         );
+
         return;
       }
 
@@ -575,15 +612,12 @@ const GerenciarProfessores: React.FC = () => {
 
   useEffect(() => {
     if (!tipo) return;
-
-    // quando professor entra na aba organizações, carrega
-    if (tipo === "Professor" && aba === "organizacoes") {
+    if (tipo === "Professor" && (aba === "organizacoes" || !!orgSelecionada)) {
       carregarOrgsGerenciaveis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, aba]);
+  }, [tipo, aba, orgSelecionada?.ownerId, orgSelecionada?.tipo]);
 
-  // carrega listas quando muda contexto
   useEffect(() => {
     if (!tipo) return;
 
@@ -597,9 +631,8 @@ const GerenciarProfessores: React.FC = () => {
     carregarTurmas();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, usuarioIdEntidade, tipoUsuarioIdEntidade, orgSelecionada, aba]);
-
-  // busca (só no contexto organização)
+  }, [tipo, usuarioIdEntidade, tipoUsuarioIdEntidade, orgSelecionada, aba, subAbaTurmas]);
+  
   useEffect(() => {
     if (!tipo) return;
     if (contextoTipo === "Professor") return;
@@ -610,11 +643,11 @@ const GerenciarProfessores: React.FC = () => {
   }, [q]);
 
   const metricas = useMemo(() => {
-    const totalProfessores = professores.length;
+    const totalProfessores = totalProfessoresMetric;
     const totalTurmas = turmas.length;
     const totalAlunos = turmas.reduce((acc, t) => acc + (t.alunosCount ?? 0), 0);
     return { totalProfessores, totalTurmas, totalAlunos };
-  }, [professores, turmas]);
+  }, [totalProfessoresMetric, turmas]);
 
   // regra professor: se não escolheu org, não deixa ficar na aba professores
   useEffect(() => {
@@ -668,7 +701,7 @@ const GerenciarProfessores: React.FC = () => {
 
   const selecionarOrg = (o: OrgGestorItem) => {
     setOrgSelecionada(o);
-
+    setSubAbaTurmas("organizacao");
     // ✅ persiste
     setGestorOrg({
       id: String(o.id),

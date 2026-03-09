@@ -321,6 +321,7 @@ app.use("/api/upload", authenticateToken, uploadRoutes);
 app.use("/api/vinculo", authenticateToken, vinculoRoutes);
 app.use("/api/vinculos", authenticateToken, vinculoRoutes);
 app.use("/api/observados", authenticateToken, observadosRoutes);
+app.use("/api/gerenciar-organizacoes", gerenciarOrganizacoesRoutes);
 app.use("/api/gerenciar", authenticateToken, gerenciarAtletasRoutes);
 app.use("/api/indicacoes", authenticateToken, indicacoesRouter);
 app.use("/api/relacoes", authenticateToken, relacoesRoutes);
@@ -353,7 +354,6 @@ app.use("/api/permissoes", permissoesRoutes);
 app.use("/api/dashboard", authenticateToken, dashboardOrganizacaoRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
-app.use("/api/gerenciar-organizacoes", gerenciarOrganizacoesRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);

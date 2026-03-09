@@ -389,6 +389,18 @@ function username(u?: any) {
   return h || u?.nome || "Usuário";
 }
 
+function getRepostChain(p: PostagemComUsuario): PostagemComUsuario[] {
+  const chain: PostagemComUsuario[] = [];
+  let cur: any = p;
+
+  while (cur?.repostOf) {
+    chain.push(cur.repostOf as PostagemComUsuario);
+    cur = cur.repostOf;
+  }
+
+  return chain;
+}
+
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
@@ -821,84 +833,94 @@ function PaginaFeed(): JSX.Element {
 
             <div>
               {post.repostOf ? (
-                <>
-                  {(() => {
-                    const clean = (post.conteudo || "")
-                      .replace(/\u200B/g, "") 
-                      .trim();
+                  <>
+                    {(() => {
+                      const clean = cleanText(post.conteudo);
 
-                    return clean ? (
-                      <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
-                        {clean}
-                      </p>
-                    ) : null;
-                  })()}
+                      return clean ? (
+                        <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
+                          {clean}
+                        </p>
+                      ) : null;
+                    })()}
 
-                  {(() => {
-                    const parent = getParentPost(post);
-                    const root = getRootPost(post);
-                    const parentComment = parent ? cleanText(parent.conteudo) : "";
-                    const rootText = cleanText(root.conteudo);
+                    {(() => {
+                      const chain = getRepostChain(post); // [pai, avô, bisavô...]
+                      const root = chain.length ? chain[chain.length - 1] : null;
+                      const intermediarios = chain.slice(0, -1); // todos antes do original
 
-                    return (
-                      <div className="border rounded-xl p-3 bg-gray-50">
-                        {!!parentComment && (
-                          <div className="mb-2 text-sm text-gray-700">
-                            <span className="font-semibold">{username(parent?.usuario)}</span>{" "}
-                            <span className="text-gray-600">comentou:</span>{" "}
-                            <span className="italic">“{parentComment}”</span>
-                          </div>
-                        )}
+                      return (
+                        <div className="border rounded-xl p-3 bg-gray-50 space-y-2">
+                          {intermediarios.map((item, idx) => {
+                            const texto = cleanText(item.conteudo);
+                            if (!texto) return null;
 
-                        <div className="flex items-center gap-2 mb-1">
-                          <Link
-                            href={`/perfil/${root.usuario?.id ?? ""}`}
-                            title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
-                            className="shrink-0"
-                          >
-                            <img
-                              src={avatarSrc(root.usuario?.foto)}
-                              onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
-                              alt={root.usuario?.nome || "avatar original"}
-                              className="w-7 h-7 rounded-full object-cover cursor-pointer"
-                            />
-                          </Link>
+                            return (
+                              <div key={`${item.id}-${idx}`} className="text-sm text-gray-700">
+                                <span className="font-semibold">{username(item.usuario)}</span>{" "}
+                                <span className="text-gray-600">repostou:</span>{" "}
+                                <span className="italic">“{texto}”</span>
+                              </div>
+                            );
+                          })}
 
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate">
-                              {root.usuario?.nome}{" "}
-                              <span className="text-gray-500 font-normal">
-                                ({username(root.usuario)})
-                              </span>
-                            </p>
-                            <p className="text-[11px] text-gray-500">
-                              {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
-                            </p>
-                          </div>
+                          {root && (
+                            <div className="border rounded-xl p-3 bg-white">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Link
+                                  href={`/perfil/${root.usuario?.id ?? ""}`}
+                                  title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
+                                  className="shrink-0"
+                                >
+                                  <img
+                                    src={avatarSrc(root.usuario?.foto)}
+                                    onError={(e) =>
+                                      ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)
+                                    }
+                                    alt={root.usuario?.nome || "avatar original"}
+                                    className="w-7 h-7 rounded-full object-cover cursor-pointer"
+                                  />
+                                </Link>
+
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold truncate">
+                                    {root.usuario?.nome}{" "}
+                                    <span className="text-gray-500 font-normal">
+                                      ({username(root.usuario)})
+                                    </span>
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {!!cleanText(root.conteudo) && (
+                                <p className="text-sm text-gray-800 whitespace-pre-line">
+                                  {cleanText(root.conteudo)}
+                                </p>
+                              )}
+
+                              {publicImgUrl(root.imagemUrl) && (
+                                <img
+                                  src={publicImgUrl(root.imagemUrl) ?? undefined}
+                                  alt="Post original"
+                                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                                />
+                              )}
+
+                              {publicImgUrl(root.videoUrl) && (
+                                <video controls className="w-full mt-2 rounded-lg">
+                                  <source src={publicImgUrl(root.videoUrl) ?? ""} type="video/mp4" />
+                                </video>
+                              )}
+                            </div>
+                          )}
                         </div>
-
-                        {!!rootText && (
-                          <p className="text-sm text-gray-800 whitespace-pre-line">{rootText}</p>
-                        )}
-
-                        {publicImgUrl(root.imagemUrl) && (
-                          <img
-                            src={publicImgUrl(root.imagemUrl) ?? undefined}
-                            alt="Post principal"
-                            className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                          />
-                        )}
-
-                        {publicImgUrl(root.videoUrl) && (
-                          <video controls className="w-full mt-2 rounded-lg">
-                            <source src={publicImgUrl(root.videoUrl) ?? ""} type="video/mp4" />
-                          </video>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </>
-              ) : (
+                      );
+                    })()}
+                  </>
+                ) : (
                 <>
                   {!isAchievement && (
                     <p className="text-gray-800 font-medium whitespace-pre-line">
