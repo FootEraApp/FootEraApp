@@ -435,21 +435,29 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
 
 export async function listarTurmas(req: Request, res: Response) {
   try {
-    const ownerTipoRaw = req.query.ownerTipo ? String(req.query.ownerTipo) : "";
-    const ownerIdRaw   = req.query.ownerId   ? String(req.query.ownerId)   : "";
-    const professorId  = req.query.professorId ? String(req.query.professorId) : undefined;
+    const ownerTipoRaw = req.query.ownerTipo ? String(req.query.ownerTipo).trim() : "";
+    const ownerIdRaw = req.query.ownerId ? String(req.query.ownerId).trim() : "";
+    const professorId = req.query.professorId
+      ? String(req.query.professorId).trim()
+      : undefined;
 
-    if (!ownerTipoRaw && !ownerIdRaw && !professorId) {
+    if ((!ownerTipoRaw || !ownerIdRaw) && !professorId) {
       return res.status(400).json({
         message: "Informe ownerTipo + ownerId OU professorId",
       });
     }
 
     const where: any = {};
+    const ownerTipoNorm = ownerTipoRaw.toLowerCase();
 
     if (ownerTipoRaw && ownerIdRaw) {
-      if (ownerTipoRaw === "Clube")     where.clubeId     = ownerIdRaw;
-      if (ownerTipoRaw === "Escolinha") where.escolinhaId = ownerIdRaw;
+      if (ownerTipoNorm === "clube") where.clubeId = ownerIdRaw;
+      else if (ownerTipoNorm === "escolinha") where.escolinhaId = ownerIdRaw;
+      else {
+        return res.status(400).json({
+          message: "ownerTipo deve ser Clube ou Escolinha",
+        });
+      }
     }
 
     if (professorId) {
@@ -459,31 +467,38 @@ export async function listarTurmas(req: Request, res: Response) {
     const rows = await prisma.turma.findMany({
       where,
       include: {
-        professores: { include: { professor: { select: { id: true, nome: true } } } }, 
+        professores: {
+          include: {
+            professor: {
+              select: { id: true, nome: true },
+            },
+          },
+        },
         _count: { select: { membros: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
     const items = rows.map((t) => {
-    const profsRaw = (t.professores ?? [])
-      .map((tp) => tp?.professor ?? null)
-      .filter((p): p is { id: string; nome: string } => Boolean(p?.id));
+      const profsRaw = (t.professores ?? [])
+        .map((tp) => tp?.professor ?? null)
+        .filter((p): p is { id: string; nome: string } => Boolean(p?.id));
 
-    const profs = uniqById(profsRaw);
+      const profs = uniqById(profsRaw);
 
-    return {
-      id: t.id,
-      nome: t.nome,
-      categoria: t.categoria,
-      professorIds: profs.map((p) => p.id),
-      professorNomes: profs.map((p) => p.nome),
-      professorNome: profs.map((p) => p.nome).join(", ") || null,
-      alunosCount: t._count.membros,
-      ownerTipo: ownerTipoRaw || null,
-      ownerId: ownerIdRaw || null,
-    };
-  });
+      return {
+        id: t.id,
+        nome: t.nome,
+        categoria: t.categoria,
+        professorIds: profs.map((p) => p.id),
+        professorNomes: profs.map((p) => p.nome),
+        professorNome: profs.map((p) => p.nome).join(", ") || null,
+        alunosCount: t._count.membros,
+        ownerTipo: ownerTipoRaw || null,
+        ownerId: ownerIdRaw || null,
+      };
+    });
+
     return res.json(items);
   } catch (e: any) {
     console.error("[listarTurmas] erro:", e);
