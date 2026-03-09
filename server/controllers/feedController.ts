@@ -5,43 +5,59 @@ import { getIO } from "../socket.js";
 import { getDailyUsage } from "../services/usage.js";
 import { prisma } from "../prisma.js";
 
-
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
 
+const postagemIncludeBase = {
+  usuario: {
+    select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
+  },
+  curtidas: { select: { usuarioId: true } },
+  comentarios: {
+    orderBy: { dataCriacao: "asc" as const },
+    include: {
+      usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true } },
+    },
+  },
+};
+
+async function carregarCadeiaRepost(post: any): Promise<any> {
+  if (!post?.repostOfId) return post;
+
+  let atual = post;
+  let depth = 0;
+  const MAX_DEPTH = 20; // evita loop infinito se houver dado inconsistente
+
+  while (atual?.repostOfId && depth < MAX_DEPTH) {
+    const pai = await prisma.postagem.findUnique({
+      where: { id: atual.repostOfId },
+      include: postagemIncludeBase,
+    });
+
+    if (!pai) break;
+
+    atual.repostOf = pai;
+    atual = atual.repostOf;
+    depth++;
+  }
+
+  return post;
+}
+
+async function carregarCadeiasDosPosts(posts: any[]) {
+  return Promise.all(posts.map((post) => carregarCadeiaRepost(post)));
+}
+
 export async function listarFeed(req: Request, res: Response) {
   try {
-    const postagens = await prisma.postagem.findMany({
+    const postagensBase = await prisma.postagem.findMany({
       orderBy: { dataCriacao: "desc" },
       include: {
-        usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
-        curtidas: { select: { usuarioId: true } },
-        comentarios: {
-          orderBy: { dataCriacao: "asc" },
-          include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } },
-        },
-        repostOf: {
-          include: {
-            usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
-            curtidas: { select: { usuarioId: true } },
-            comentarios: {
-              orderBy: { dataCriacao: "asc" },
-              include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } },
-            },
-            repostOf: {
-              include: {
-                usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
-                curtidas: { select: { usuarioId: true } },
-                comentarios: {
-                  orderBy: { dataCriacao: "asc" },
-                  include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } },
-                },
-              },
-            },
-          },
-        },
+        ...postagemIncludeBase,
       },
     });
+
+    const postagens = await carregarCadeiasDosPosts(postagensBase);
 
     res.json(postagens);
   } catch (e) {
@@ -142,52 +158,15 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
       where = { usuarioId: { in: ids } };
     }
 
-    const postagens = await prisma.postagem.findMany({
+    const postagensBase = await prisma.postagem.findMany({
       where,
       orderBy: { dataCriacao: "desc" },
       include: {
-        usuario: {
-          select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
-        },
-        curtidas: { select: { usuarioId: true } },
-        comentarios: {
-          orderBy: { dataCriacao: "asc" },
-          include: {
-            usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
-          },
-        },
-
-        repostOf: {
-          include: {
-            usuario: {
-              select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
-            },
-            curtidas: { select: { usuarioId: true } },
-            comentarios: {
-              orderBy: { dataCriacao: "asc" },
-              include: {
-                usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
-              },
-            },
-
-            repostOf: {
-              include: {
-                usuario: {
-                  select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
-                },
-                curtidas: { select: { usuarioId: true } },
-                comentarios: {
-                  orderBy: { dataCriacao: "asc" },
-                  include: {
-                    usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
+        ...postagemIncludeBase,
       },
     });
+
+    const postagens = await carregarCadeiasDosPosts(postagensBase);
 
     const ads = await getAdsConfigForUser(userId);
 
@@ -208,29 +187,16 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 export async function getPostById(req: Request, res: Response) {
   const { id } = req.params;
   try {
-    const post = await prisma.postagem.findUnique({
+    const postBase = await prisma.postagem.findUnique({
       where: { id },
       include: {
-        usuario: true,
-        comentarios: { include: { usuario: true } },
-        curtidas: true,
-        repostOf: {
-          include: {
-            usuario: true,
-            comentarios: { include: { usuario: true } },
-            curtidas: true,
-            repostOf: {
-              include: {
-                usuario: true,
-                comentarios: { include: { usuario: true } },
-                curtidas: true,
-              },
-            },
-          },
-        },
+        ...postagemIncludeBase,
       },
     });
-    if (!post) return res.status(404).json({ erro: "Post não encontrado" });
+
+    if (!postBase) return res.status(404).json({ erro: "Post não encontrado" });
+
+    const post = await carregarCadeiaRepost(postBase);
     return res.json(post);
   } catch (error) {
     console.error("Erro ao buscar post:", error);
@@ -576,32 +542,18 @@ export async function repostPost(req: Request, res: Response) {
       return res.json({ ok: true, action: "unrepost", id: existente.id });
     }
 
-    const novo = await prisma.postagem.create({
+    const novoBase = await prisma.postagem.create({
       data: {
         usuarioId: userId,
         conteudo: conteudoRepost,
         repostOfId: parentId,
       },
       include: {
-        usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
-        curtidas: true,
-        comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
-        repostOf: {
-          include: {
-            usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
-            curtidas: true,
-            comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
-            repostOf: {
-              include: {
-                usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
-                curtidas: true,
-                comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
-              },
-            },
-          },
-        },
+        ...postagemIncludeBase,
       },
     });
+
+    const novo = await carregarCadeiaRepost(novoBase);
 
     await prisma.postagem.update({
       where: { id: rootId },

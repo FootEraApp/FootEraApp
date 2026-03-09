@@ -561,7 +561,7 @@ export default function TreinosInstrutores({
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
   const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
   const [metodologias, setMetodologias] = useState<MetodologiaCard[]>([]);
-  const [carregandoMetodologias, setCarregandoMetodologias] = useState(false);
+  const [exerciciosConcluidos, setExerciciosConcluidos] = useState<string[]>([]);
   const [buscaMetodologias, setBuscaMetodologias] = useState("");
   const [loadingMetodologias, setLoadingMetodologias] = useState(false);
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
@@ -1067,10 +1067,16 @@ useEffect(() => {
       }
 
       const data = await res.json();
-
-      // seu backend pode retornar { alunos: [...] } ou direto [...]
       const arr = Array.isArray(data?.alunos) ? data.alunos : data;
-      const lista = Array.isArray(arr) ? arr : [];
+      const listaBruta = Array.isArray(arr) ? arr : [];
+      // ✅ mantém apenas quem realmente está na turma
+      const lista = listaBruta.filter((a: any) => {
+        // se o backend informar inTurma, respeita
+        if (typeof a?.inTurma === "boolean") return a.inTurma === true;
+
+        // fallback: se veio usuarioId/atletaId já vinculado, mantém
+        return Boolean(a?.usuarioId || a?.usuario?.id || a?.atletaId || a?.id);
+      });
 
       alunos = lista
         .map((a: any) => {
@@ -1092,11 +1098,17 @@ useEffect(() => {
         })
         .filter(Boolean) as AtletaVinculado[];
 
-      setAlunosDaSessao(alunos);
+      const vistos = new Set<string>();
+      alunos = alunos.filter((a) => {
+        const key = String(a.id);
+        if (vistos.has(key)) return false;
+        vistos.add(key);
+        return true;
+      });
 
+      setAlunosDaSessao(alunos);
       // ✅ padrão: todos marcados como presentes (igual seu código atual fazia)
       setPresentesSelecionados(alunos.map((a) => a.id));
-
       setModalSessaoId(sessaoId);
     } catch (e) {
       console.error("[treinos] erro ao abrir modal de presença:", e);
@@ -3400,9 +3412,11 @@ async function salvarProgressoSessao(sessaoId: string) {
                 <div className="text-sm font-semibold text-gray-800 text-center flex-1">
                   {(() => {
                     const startedAtISO = sessao.startedAt || startedAtRef.current || null;
-                    const emAndamento = sessao.status === "em_andamento";
-
-                    if (!emAndamento) return null; // topo fica “só comando”; se não estiver em andamento, fica vazio
+                    const emAndamento =
+                      sessao.status === "em_andamento" ||
+                      (!!startedAtISO && sessao.status !== "finalizada");
+                   
+                      if (!emAndamento) return null; // topo fica “só comando”; se não estiver em andamento, fica vazio
 
                     const tempoStr = formatElapsed(startedAtISO, clockNow);
 
@@ -3481,10 +3495,13 @@ async function salvarProgressoSessao(sessaoId: string) {
                           <button
                             type="button"
                             onClick={() => {
+                              const exercicioId = String(ex.id || "").trim();
+                              if (!exercicioId) return;
+
                               setExerciciosMarcadosBySessao((prev) => {
-                                const current = new Set(prev[sessao.id] ?? []);
-                                if (current.has(ex.id)) current.delete(ex.id);
-                                else current.add(ex.id);
+                                const current = new Set((prev[sessao.id] ?? []).map(String));
+                                if (current.has(exercicioId)) current.delete(exercicioId);
+                                else current.add(exercicioId);
                                 return { ...prev, [sessao.id]: Array.from(current) };
                               });
                             }}
@@ -3543,34 +3560,36 @@ async function salvarProgressoSessao(sessaoId: string) {
               </div>
 
               {(() => {
-                const emAndamento = sessao.status === "em_andamento";
+                const emAndamento =
+                  sessao.status === "em_andamento" ||
+                  (!!(sessao.startedAt || startedAtRef.current) && sessao.status !== "finalizada");
 
-                // ✅ Só libera "Finalizar treino" quando TODOS os exercícios estiverem marcados
-                const todosExerciciosMarcados =
-                  exercicios.length > 0 && exercicios.every((ex) => marcados.has((ex as any).exercicioId ?? ex.id));
+                const podeFinalizar =
+                  exercicios.length > 0 &&
+                  exercicios.every((e) => {
+                    const id = String(e.id || "").trim();
+                    return id && marcados.has(id);
+                  });
 
                 return (
                   <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    {/* ... seu botão SALVAR continua igual ... */}
-
                     {emAndamento ? (
                       <button
                         type="button"
-                        disabled={!todosExerciciosMarcados}
+                        disabled={!podeFinalizar}
                         title={
-                          !todosExerciciosMarcados
+                          !podeFinalizar
                             ? "Marque todos os exercícios para habilitar o finalizar."
                             : ""
                         }
                         className={`flex-1 px-3 py-2 rounded-full text-white text-sm ${
-                          todosExerciciosMarcados
+                          podeFinalizar
                             ? "bg-red-600 hover:bg-red-700"
                             : "bg-red-300 cursor-not-allowed"
                         }`}
                         onClick={async () => {
-                          if (!todosExerciciosMarcados) return;
+                          if (!podeFinalizar) return;
 
-                          // opcional mas recomendado: salva antes de finalizar
                           await salvarProgressoSessao(sessao.id);
                           await finalizarTreinoSessao(sessao.id);
                         }}

@@ -1321,9 +1321,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
   })();
 
   const shouldShowVerified = !!isVerified;
-  const shouldShowProOnAvatar = !shouldShowVerified && !!isPro;
-  const shouldShowProPill = !!isPro;
-
+  
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -1378,19 +1376,6 @@ const alvoUsuarioIdFavorito = isOwnProfile
             img.src = FALLBACK_AVATAR;
           }}
         />
-
-        {shouldShowProOnAvatar && (
-          <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
-            PRO
-          </span>
-        )}
-
-        {shouldShowVerified && (
-          <span className="absolute -bottom-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-600 text-white font-extrabold shadow ring-2 ring-white inline-flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            VERIFICADO
-          </span>
-        )}
       </div>
 
       <h1 className="footera-text-cream text-2xl font-bold text-center">
@@ -1402,12 +1387,6 @@ const alvoUsuarioIdFavorito = isOwnProfile
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-xs font-bold px-3 py-1 shadow">
             <CheckCircle2 className="h-3.5 w-3.5" />
             Verificado
-          </span>
-        )}
-
-        {shouldShowProPill && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 text-green-900 text-xs font-bold px-3 py-1 shadow">
-            PRO
           </span>
         )}
       </div>

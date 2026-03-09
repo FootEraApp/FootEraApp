@@ -377,6 +377,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const reloadTurmas = useCallback(async () => {
     if (!rawToken || !professorId) return;
+
     setTurmasLoading(true);
 
     const parse = (arr: any[]): Turma[] =>
@@ -396,14 +397,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           nome: String(t.nome ?? t.titulo ?? "Turma"),
           ownerTipo: t.ownerTipo ?? t.tipoOwner ?? null,
           ownerId: t.ownerId ?? t.clubeId ?? t.escolinhaId ?? null,
-
           professorIds,
           professorNomes,
           professorNome:
             t.professorNome ??
             (professorNomes.length ? professorNomes.join(", ") : null) ??
             null,
-
           alunosCount: t.alunosCount ?? t._count?.alunos ?? t.qtdAlunos ?? null,
           categoria: t.categoria ?? null,
         };
@@ -411,25 +410,35 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
     try {
       const params: any = {};
+
       if (owner?.tipo && owner?.id) {
         params.ownerTipo = owner.tipo;
         params.ownerId = owner.id;
+      } else {
+        params.professorId = professorId;
       }
 
-      const r = await axios.get(`${API.BASE_URL}/api/turmas`, { headers, params });
+      const r = await axios.get(`${API.BASE_URL}/api/turmas`, {
+        headers,
+        params,
+      });
+
       const arr = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
       const parsed = parse(arr);
-      const minhas = parsed.filter((t) => (t.professorIds ?? []).includes(String(professorId)));
 
-      setTurmas(minhas);
-    } catch (e) {
-      console.error(e);
+      const minhas = parsed.filter((t) =>
+        (t.professorIds ?? []).includes(String(professorId))
+      );
+
+      setTurmas(owner?.tipo && owner?.id ? minhas : parsed);
+    } catch (e: any) {
+      console.error("[PerfilProfessor.reloadTurmas]", e?.response?.data || e);
       setTurmas([]);
     } finally {
       setTurmasLoading(false);
     }
   }, [rawToken, professorId, headers, owner?.tipo, owner?.id]);
-
+  
   useEffect(() => {
     let cancel = false;
 
@@ -739,35 +748,46 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   }
 
   async function salvarVinculo() {
-    if (!rawToken || !professorId || !orgSelecionada) return;
+    if (!rawToken || !professorId) return;
+
     try {
-      await axios.put(
+      const resp = await axios.put(
         `${API.BASE_URL}/api/professores/${professorId}/vinculos`,
-        { organizacaoId: orgSelecionada },
+        { organizacaoId: orgSelecionada || null },
         { headers }
       );
 
       const org = orgsDisponiveis.find((o) => o.id === orgSelecionada);
-      if (org) {
-        setData((prev) =>
-          prev
-            ? {
-                ...prev,
-                professor: {
-                  ...prev.professor,
-                  escolinhaId: org.tipo === "Escolinha" ? orgSelecionada : null,
-                  clubeId: org.tipo === "Clube" ? orgSelecionada : null,
-                },
-              }
-            : prev
-        );
-      }
-      setTurmas(null);
+
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              professor: {
+                ...prev.professor,
+                escolinhaId:
+                  org?.tipo === "Escolinha"
+                    ? orgSelecionada || null
+                    : orgSelecionada
+                    ? null
+                    : null,
+                clubeId:
+                  org?.tipo === "Clube"
+                    ? orgSelecionada || null
+                    : orgSelecionada
+                    ? null
+                    : null,
+              },
+            }
+          : prev
+      );
+
       await reloadTurmas();
-      alert("Vínculo atualizado!");
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao salvar vínculo.");
+
+      alert(resp.data?.message || "Vínculo atualizado!");
+    } catch (e: any) {
+      console.error("[PerfilProfessor.salvarVinculo]", e?.response?.data || e);
+      alert(e?.response?.data?.message || "Erro ao salvar vínculo.");
     }
   }
 
