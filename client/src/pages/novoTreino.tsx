@@ -811,7 +811,7 @@ export default function NovoTreino() {
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
   const [elencos, setElencos] = useState<Elenco[]>([]);
-  const [elencoSelecionado, setElencoSelecionado] = useState<string>("");
+  const [turmaSelecionada, setTurmaSelecionada] = useState<string>("");
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -1045,11 +1045,10 @@ export default function NovoTreino() {
 
   useEffect(() => {
     if (abaExercicios !== "personalizados") return;
-    if (exerciciosPersonalizados.length) return;
     fetchExerciciosPersonalizados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abaExercicios]);
-
+  
   useEffect(() => {
     let cancel = false;
 
@@ -1685,7 +1684,7 @@ useEffect(() => {
       if (!baseTipoUsuarioId) {
         console.warn("[NovoTreino] sem tipoUsuarioId; não dá para carregar turmas/elencos");
         setElencos([]);
-        setElencoSelecionado("");
+        setTurmaSelecionada("");
         return;
       }
 
@@ -1771,11 +1770,11 @@ useEffect(() => {
       }
 
       setElencos([]);
-      setElencoSelecionado("");
+      setTurmaSelecionada("");
     } catch (e) {
       console.error("[NovoTreino] erro inesperado ao carregar turmas", e);
       setElencos([]);
-      setElencoSelecionado("");
+      setTurmaSelecionada("");
     }
   })();
 }, [orgSelecionada, orgsVinculadas]);
@@ -2302,7 +2301,7 @@ useEffect(() => {
             atletasIds: atletaIds,
           },
         ]);
-        setElencoSelecionado(String(data.id));
+        setTurmaSelecionada(String(data.id));
       }
 
       showToast("Turma criada com sucesso!", "success");
@@ -2314,18 +2313,6 @@ useEffect(() => {
       showToast("Erro inesperado ao criar a turma.", "error");
     }
   }
-
-  const incluirElencoNoTreino = () => {
-    if (!elencoSelecionado) return;
-    const el = elencos.find((e) => e.id === elencoSelecionado);
-    if (!el || !el.atletasIds?.length) return;
-
-    setAtletasSelecionados((prev) => {
-      const set = new Set(prev);
-      el.atletasIds!.forEach((id) => set.add(id));
-      return Array.from(set);
-    });
-  };
 
   useEffect(() => {
       if (!professorLogadoId) return;
@@ -2545,14 +2532,23 @@ useEffect(() => {
       sessionStorage.getItem("token") ||
       "";
 
-    if (!token) return;
+    if (!token) {
+      setExerciciosPersonalizados([]);
+      return;
+    }
 
     try {
       setLoadingPersonalizados(true);
-      const resp = await axios.get(`${API.BASE_URL}/api/treinos/exercicios/personalizados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const resp = await axios.get(
+        `${API.BASE_URL}/api/treinos/exercicios/personalizados`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
       const arr = Array.isArray(resp.data) ? resp.data : (resp.data?.items ?? []);
+
       setExerciciosPersonalizados(
         (Array.isArray(arr) ? arr : []).map((x: any) => ({
           id: String(x.id),
@@ -2564,6 +2560,9 @@ useEffect(() => {
           videoPosterUrl: x.videoPosterUrl ?? null,
         }))
       );
+    } catch (error) {
+      console.error("Erro ao carregar exercícios personalizados:", error);
+      setExerciciosPersonalizados([]);
     } finally {
       setLoadingPersonalizados(false);
     }
@@ -2605,7 +2604,7 @@ useEffect(() => {
       }
 
       const alvoTemAtletas = atletasSelecionados.length > 0;
-      const alvoTemTurma = Boolean(elencoSelecionado);
+      const alvoTemTurma = Boolean(turmaSelecionada);
 
       if (!datasBase.length || (!alvoTemAtletas && !alvoTemTurma)) {
         return 0;
@@ -2644,7 +2643,7 @@ useEffect(() => {
         // se tiver atleta selecionado, manda
         atletaIds: alvoTemAtletas ? atletasSelecionados.map(String).filter(Boolean) : [],
         // ✅ TURMA: manda no campo correto
-        turmaIds: alvoTemTurma ? [String(elencoSelecionado)] : [],
+        turmaIds: alvoTemTurma ? [String(turmaSelecionada)] : [],
         // ✅ opcional: deixa vazio pra não confundir com Elenco
         elencosIds: [],
         incluirObservados: false,
@@ -2880,7 +2879,8 @@ useEffect(() => {
       (payload as any).parceiro = treinoFooteraFinal;
       (payload as any).isFootera = treinoFooteraFinal; 
       (payload as any).atletasIds = atletasSelecionados;
-      (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
+      (payload as any).turmaIds = turmaSelecionada ? [turmaSelecionada] : [];
+      (payload as any).elencosIds = turmaSelecionada ? [turmaSelecionada] : [];
       (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
       (payload as any).codigo = codigo;
       (payload as any).exercicios = exerciciosNormalizados.map((e: any, idx: number) => {
@@ -4349,7 +4349,7 @@ useEffect(() => {
                 onChange={(e) => {
                   setOrgSelecionada(e.target.value);
                   setAtletasSelecionados([]);
-                  setElencoSelecionado("");
+                  setTurmaSelecionada("");
                 }}
               >
                 <option value="">
@@ -4422,7 +4422,7 @@ useEffect(() => {
                 </div>
 
                 <div className="text-xs text-gray-700 bg-gray-50 border rounded-full px-3 py-1">
-                  {elencoSelecionado ? "✅ Turma selecionada" : "Turma: —"}
+                  {turmaSelecionada ? "✅ Turma selecionada" : "Turma: —"}
                   {" • "}
                   {atletasSelecionados.length ? `✅ ${atletasSelecionados.length} atleta(s)` : "Atletas: —"}
                 </div>
@@ -4433,8 +4433,8 @@ useEffect(() => {
                   <label className="block text-sm text-gray-700 mb-1">Turma</label>
                   <select
                     className="border w-full p-2 rounded"
-                    value={elencoSelecionado}
-                    onChange={(e) => setElencoSelecionado(e.target.value)}
+                    value={turmaSelecionada}
+                    onChange={(e) => setTurmaSelecionada(e.target.value)}
                   >
                     <option value="">— Selecionar turma —</option>
                     {elencos.map((el) => (
@@ -4444,7 +4444,7 @@ useEffect(() => {
                     ))}
                   </select>
 
-                  {elencoSelecionado && (
+                  {turmaSelecionada && (
                     <p className="text-[11px] text-gray-600 mt-1">
                       Ao salvar, o treino será agendado para esta turma nos dias selecionados.
                     </p>
@@ -4574,7 +4574,7 @@ useEffect(() => {
                 }
 
                 const temAlvoAgendamento =
-                  atletasSelecionados.length > 0 || Boolean(elencoSelecionado);
+                  atletasSelecionados.length > 0 || Boolean(turmaSelecionada);
 
                 const diaForaDaJanela = (dia: number) => {
                   if (!isFreePlan || !hoje || !limite) return false;
@@ -4745,7 +4745,7 @@ useEffect(() => {
 
               {datasAgendamento.length > 0 &&
                 atletasSelecionados.length === 0 &&
-                !elencoSelecionado && (
+                !turmaSelecionada && (
                   <p className="mt-2 text-xs text-amber-700">
                     Você já escolheu datas, mas ainda não selecionou nem turma nem atletas. O treino só será
                     agendado para quem estiver selecionado acima.
