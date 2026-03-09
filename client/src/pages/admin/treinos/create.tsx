@@ -42,7 +42,10 @@ async function uploadImagem(token: string, file: File): Promise<string> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Falha ao enviar imagem.");
 
-  const url = String(data?.url || data?.midia?.url || data?.path || data?.relativeUrl || "").trim();
+  const url = String(
+    data?.url || data?.midia?.url || data?.path || data?.relativeUrl || ""
+  ).trim();
+
   if (!url) throw new Error("Upload retornou sem URL da imagem.");
 
   return url;
@@ -55,7 +58,27 @@ function normalizeUrl(u?: string | null) {
   return `${API.BASE_URL}${s.startsWith("/") ? "" : "/"}${s}`;
 }
 
-type ProfessorMin = { id: string; nome: string; codigo?: string | null; cref?: string | null };
+type ProfessorMin = {
+  id: string;
+  nome: string;
+  codigo?: string | null;
+  cref?: string | null;
+};
+
+type ClubeMin = {
+  id: string;
+  nome: string;
+  codigo?: string | null;
+};
+
+type EscolinhaMin = {
+  id: string;
+  nome: string;
+  codigo?: string | null;
+};
+
+type TipoCriador = "Professor" | "Clube" | "Escolinha";
+
 type ExercicioMin = {
   id: string;
   nome: string;
@@ -76,14 +99,13 @@ type ExLinha = {
   series?: string;
   reps?: string;
   isCustom?: boolean;
-  // ✅ novos
+
   exercicioPersonalizadoId?: string | null;
   exercicioTemporarioId?: string | null;
   customTitulo?: string;
   customDesc?: string;
   customVideoFile?: File | null;
   customVideoPreviewUrl?: string | null;
-  // ✅ novo (URL real enviada / vinda do banco)
   customVideoUrl?: string | null;
   customVideoPosterUrl?: string | null;
 };
@@ -150,6 +172,16 @@ function formatProfessorLabel(p: ProfessorMin) {
   return `${p.nome}${tail ? " " + tail : ""}`;
 }
 
+function formatClubeLabel(c: ClubeMin) {
+  const codigo = c.codigo ? ` (${c.codigo})` : "";
+  return `${c.nome}${codigo}`;
+}
+
+function formatEscolinhaLabel(e: EscolinhaMin) {
+  const codigo = e.codigo ? ` (${e.codigo})` : "";
+  return `${e.nome}${codigo}`;
+}
+
 function coerceCategorias(ex: ExercicioMin): string[] {
   const raw: any = (ex as any).categorias ?? (ex as any).categoria ?? null;
   if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
@@ -159,9 +191,7 @@ function coerceCategorias(ex: ExercicioMin): string[] {
 
 function getVideoUrlFromEx(ex: ExercicioMin | null | undefined) {
   if (!ex) return "";
-  return (
-    String((ex as any).videoDemonstrativoUrl || ex.videoUrl || "").trim()
-  );
+  return String((ex as any).videoDemonstrativoUrl || ex.videoUrl || "").trim();
 }
 
 function parseSeriesRepsFromRepeticoes(repeticoes: string) {
@@ -176,11 +206,11 @@ function buildRepeticoes(series: string, reps: string) {
   const r = String(reps || "").trim();
   if (!s && !r) return "";
   if (s && r) return `${s}x${r}`;
-  return ""; 
+  return "";
 }
 
 function getThumbUrlFromEx(ex: ExercicioMin | null | undefined) {
-  if (!ex) return ""
+  if (!ex) return "";
   return String((ex as any).thumbUrl || (ex as any).capaUrl || (ex as any).imagemUrl || "").trim();
 }
 
@@ -190,7 +220,7 @@ async function uploadVideo(
 ): Promise<{ url: string; thumbUrl?: string | null }> {
   const fd = new FormData();
   fd.append("file", file);
-  fd.append("tipo", "Video"); // ajuda o backend a classificar
+  fd.append("tipo", "Video");
 
   const res = await fetch(`${API.BASE_URL}/api/upload/video`, {
     method: "POST",
@@ -201,11 +231,11 @@ async function uploadVideo(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Falha ao enviar vídeo.");
 
-  const url =
-    String(data?.url || data?.midia?.url || data?.path || data?.relativeUrl || "").trim();
+  const url = String(
+    data?.url || data?.midia?.url || data?.path || data?.relativeUrl || ""
+  ).trim();
 
-  const thumbUrl =
-    data?.thumbUrl || data?.midia?.thumbUrl || null;
+  const thumbUrl = data?.thumbUrl || data?.midia?.thumbUrl || null;
 
   if (!url) throw new Error("Upload retornou sem URL do vídeo.");
 
@@ -268,7 +298,9 @@ function VideoModal({
       <div className="w-full max-w-5xl rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
           <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-gray-900">{title || "Vídeo do exercício"}</div>
+            <div className="truncate text-sm font-bold text-gray-900">
+              {title || "Vídeo do exercício"}
+            </div>
           </div>
           <button
             type="button"
@@ -303,22 +335,34 @@ function VideoModal({
 export default function CriarOuEditarTreino() {
   const [step, setStep] = useState<1 | 2>(1);
   const [id, setId] = useState<string | null>(null);
+
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [tipoTreino, setTipoTreino] = useState("Técnico");
   const [duracaoMin, setDuracaoMin] = useState<number>(60);
+
+  const [tipoCriador, setTipoCriador] = useState<TipoCriador>("Professor");
+  const [criadorId, setCriadorId] = useState("");
+  const [treinoFootera, setTreinoFootera] = useState(false);
+
   const [professorId, setProfessorId] = useState("");
   const [professoresDisponiveis, setProfessoresDisponiveis] = useState<ProfessorMin[]>([]);
+  const [clubesDisponiveis, setClubesDisponiveis] = useState<ClubeMin[]>([]);
+  const [escolinhasDisponiveis, setEscolinhasDisponiveis] = useState<EscolinhaMin[]>([]);
+
   const [profSearch, setProfSearch] = useState("");
   const [professoresColabIds, setProfessoresColabIds] = useState<string[]>([]);
+
   const [capaFile, setCapaFile] = useState<File | null>(null);
   const [capaPreviewUrl, setCapaPreviewUrl] = useState<string>("");
+
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<ExercicioMin[]>([]);
   const [exSearch, setExSearch] = useState("");
   const [catsSelecionadas, setCatsSelecionadas] = useState<string[]>([]);
   const [niveisSelecionados, setNiveisSelecionados] = useState<string[]>([]);
   const [linhas, setLinhas] = useState<ExLinha[]>([]);
   const [nivelTreino, setNivelTreino] = useState("Base");
+
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoSrc, setVideoSrc] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -371,6 +415,7 @@ export default function CriarOuEditarTreino() {
 
     const loadTreino = async () => {
       if (!treinoId) return;
+
       const res = await fetch(`${API.BASE_URL}/api/treinosprogramados/${treinoId}`, { headers });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Erro ao carregar treino");
@@ -382,6 +427,29 @@ export default function CriarOuEditarTreino() {
       setTipoTreino(data.tipoTreino ? String(data.tipoTreino) : "Técnico");
       setDuracaoMin(typeof data.duracao === "number" ? data.duracao : 60);
       setCatsSelecionadas(Array.isArray(data.categoria) ? data.categoria : []);
+
+      if (data.professorId) {
+        setTipoCriador("Professor");
+        setCriadorId(String(data.professorId));
+      } else if (data.clubeId) {
+        setTipoCriador("Clube");
+        setCriadorId(String(data.clubeId));
+      } else if (data.escolinhaId) {
+        setTipoCriador("Escolinha");
+        setCriadorId(String(data.escolinhaId));
+      }
+
+      setTreinoFootera(Boolean(data.publico ?? data.parceiro ?? data.isFootera ?? false));
+
+      if (Array.isArray(data.professoresColabIds)) {
+        setProfessoresColabIds(data.professoresColabIds.map(String));
+      } else if (Array.isArray(data.professoresRealizadores)) {
+        setProfessoresColabIds(
+          data.professoresRealizadores
+            .map((p: any) => String(p?.id || p?.professorId || ""))
+            .filter(Boolean)
+        );
+      }
 
       const loaded: ExLinha[] =
         (data.exercicios ?? []).map((row: any, i: number) => {
@@ -399,8 +467,12 @@ export default function CriarOuEditarTreino() {
             ...(isCustom
               ? {
                   isCustom: true,
-                  exercicioPersonalizadoId: row.exercicioPersonalizadoId ? String(row.exercicioPersonalizadoId) : null,
-                  exercicioTemporarioId: row.exercicioTemporarioId ? String(row.exercicioTemporarioId) : null,
+                  exercicioPersonalizadoId: row.exercicioPersonalizadoId
+                    ? String(row.exercicioPersonalizadoId)
+                    : null,
+                  exercicioTemporarioId: row.exercicioTemporarioId
+                    ? String(row.exercicioTemporarioId)
+                    : null,
                   customTitulo: String(ex?.nome ?? ""),
                   customDesc: ex?.descricao ?? "",
                   customVideoPreviewUrl: normalizeUrl(ex?.videoDemonstrativoUrl),
@@ -429,9 +501,28 @@ export default function CriarOuEditarTreino() {
       setProfessoresDisponiveis(Array.isArray(data) ? data : []);
     };
 
+    const loadClubes = async () => {
+      const res = await fetch(`${API.BASE_URL}/api/clubes`, { headers });
+      const data = await res.json().catch(() => []);
+      if (!res.ok) throw new Error(data?.message || "Erro ao carregar clubes");
+      setClubesDisponiveis(Array.isArray(data) ? data : []);
+    };
+
+    const loadEscolinhas = async () => {
+      const res = await fetch(`${API.BASE_URL}/api/escolinhas`, { headers });
+      const data = await res.json().catch(() => []);
+      if (!res.ok) throw new Error(data?.message || "Erro ao carregar escolinhas");
+      setEscolinhasDisponiveis(Array.isArray(data) ? data : []);
+    };
+
     (async () => {
       try {
-        await Promise.all([loadExercicios(), loadProfessores()]);
+        await Promise.all([
+          loadExercicios(),
+          loadProfessores(),
+          loadClubes(),
+          loadEscolinhas(),
+        ]);
         await loadTreino();
       } catch (e: any) {
         console.error(e);
@@ -442,9 +533,7 @@ export default function CriarOuEditarTreino() {
 
   const exerciciosSelecionadosSet = useMemo(() => {
     return new Set(
-      linhas
-        .filter((l) => !l.isCustom && !!l.exercicioId)
-        .map((l) => l.exercicioId)
+      linhas.filter((l) => !l.isCustom && !!l.exercicioId).map((l) => l.exercicioId)
     );
   }, [linhas]);
 
@@ -456,11 +545,36 @@ export default function CriarOuEditarTreino() {
     );
   }, [professoresDisponiveis, profSearch]);
 
+  const opcoesCriador = useMemo(() => {
+    if (tipoCriador === "Professor") {
+      return professoresDisponiveis.map((p) => ({
+        id: p.id,
+        label: formatProfessorLabel(p),
+      }));
+    }
+
+    if (tipoCriador === "Clube") {
+      return clubesDisponiveis.map((c) => ({
+        id: c.id,
+        label: formatClubeLabel(c),
+      }));
+    }
+
+    return escolinhasDisponiveis.map((e) => ({
+      id: e.id,
+      label: formatEscolinhaLabel(e),
+    }));
+  }, [tipoCriador, professoresDisponiveis, clubesDisponiveis, escolinhasDisponiveis]);
+
   const exerciciosFiltrados = useMemo(() => {
     const q = exSearch.trim().toLowerCase();
 
     return exerciciosDisponiveis.filter((ex) => {
-      const hay = [ex.nome, ex.codigo, ex.descricao, ex.nivel].filter(Boolean).join(" ").toLowerCase();
+      const hay = [ex.nome, ex.codigo, ex.descricao, ex.nivel]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
       if (q && !hay.includes(q)) return false;
 
       if (niveisSelecionados.length) {
@@ -478,13 +592,20 @@ export default function CriarOuEditarTreino() {
     });
   }, [exerciciosDisponiveis, exSearch, niveisSelecionados, catsSelecionadas]);
 
+  function revokeIfBlob(url?: string | null) {
+    if (!url || !url.startsWith("blob:")) return;
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 3000);
+  }
+
   const limparProgresso = () => {
     if (!confirm("Tem certeza que deseja limpar o progresso deste formulário?")) return;
 
     setLinhas((prev) => {
-      prev.forEach((l) => {
-        revokeIfBlob(l.customVideoPreviewUrl);
-      });
+      prev.forEach((l) => revokeIfBlob(l.customVideoPreviewUrl));
       return [];
     });
 
@@ -493,6 +614,11 @@ export default function CriarOuEditarTreino() {
     setDescricao("");
     setTipoTreino("Técnico");
     setDuracaoMin(60);
+
+    setTipoCriador("Professor");
+    setCriadorId("");
+    setTreinoFootera(false);
+
     setProfessorId("");
     setProfSearch("");
     setProfessoresColabIds([]);
@@ -562,14 +688,6 @@ export default function CriarOuEditarTreino() {
     atualizarLinha(idx, { series, reps, repeticoes });
   };
 
-  function revokeIfBlob(url?: string | null) {
-    if (!url || !url.startsWith("blob:")) return;
-    // dá tempo pro React trocar o src antes de revogar
-    setTimeout(() => {
-      try { URL.revokeObjectURL(url); } catch {}
-    }, 3000);
-  }
-
   const onUploadVideoCustom = async (idx: number, file: File | null) => {
     setLinhas((prev) => {
       const next = [...prev];
@@ -587,15 +705,14 @@ export default function CriarOuEditarTreino() {
     if (!file) return;
 
     const previewUrl = URL.createObjectURL(file);
-
     const token = getToken();
 
     let posterUrlFinal: string | null = null;
     try {
-      const posterDataUrl = await gerarPosterDoVideo(file); // data:image/jpeg;base64...
+      const posterDataUrl = await gerarPosterDoVideo(file);
       const posterFile = dataUrlToFile(posterDataUrl, `thumb-${Date.now()}.jpg`);
       const uploadedPosterUrl = await uploadImagem(token, posterFile);
-      posterUrlFinal = uploadedPosterUrl; // ✅ isso é o que vai pro banco
+      posterUrlFinal = uploadedPosterUrl;
     } catch {
       posterUrlFinal = null;
     }
@@ -607,7 +724,7 @@ export default function CriarOuEditarTreino() {
         ...cur,
         customVideoFile: file,
         customVideoPreviewUrl: previewUrl,
-        customVideoPosterUrl: posterUrlFinal, // ✅ URL do backend
+        customVideoPosterUrl: posterUrlFinal,
       };
       return next;
     });
@@ -617,16 +734,18 @@ export default function CriarOuEditarTreino() {
     if (step === 1) {
       if (!titulo.trim()) return false;
       if (!nivelTreino) return false;
+      if (!criadorId) return false;
       return true;
     }
     return true;
-  }, [step, titulo, nivelTreino]);
+  }, [step, titulo, nivelTreino, criadorId]);
 
   const onVoltar = () => {
     if (step === 1) {
       window.location.href = returnTo;
       return;
     }
+
     setStep(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -634,9 +753,10 @@ export default function CriarOuEditarTreino() {
   const onProximo = () => {
     if (step === 1) {
       if (!podeIrProximo) {
-        alert("Preencha o título e o nível.");
+        alert("Preencha o título, o nível e selecione quem será o criador.");
         return;
       }
+
       setStep(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -652,7 +772,16 @@ export default function CriarOuEditarTreino() {
       return;
     }
 
-    const temAlgum = linhas.some((l) => (!!l.exercicioId && !l.isCustom) || (l.isCustom && (l.customTitulo || "").trim()));
+    if (!criadorId.trim()) {
+      alert("Selecione quem será o criador do treino.");
+      setStep(1);
+      return;
+    }
+
+    const temAlgum = linhas.some(
+      (l) => (!!l.exercicioId && !l.isCustom) || (l.isCustom && (l.customTitulo || "").trim())
+    );
+
     if (!temAlgum) {
       alert("Adicione ao menos 1 exercício (do banco ou personalizado).");
       setStep(2);
@@ -661,32 +790,29 @@ export default function CriarOuEditarTreino() {
 
     const token = getToken();
 
-    // 1) primeiro sobe os vídeos de linhas custom (se tiver)
     const linhasComVideo = [...linhas];
     for (let idx = 0; idx < linhasComVideo.length; idx++) {
       const l = linhasComVideo[idx];
       if (l.isCustom && l.customVideoFile) {
         const up = await uploadVideo(token, l.customVideoFile);
 
-        revokeIfBlob(l.customVideoPreviewUrl); // ✅ solta o blob antigo
+        revokeIfBlob(l.customVideoPreviewUrl);
 
         linhasComVideo[idx] = {
           ...l,
           customVideoUrl: up.url,
-          customVideoPreviewUrl: up.url, // ✅ PREVIEW AGORA É URL REAL (não blob)
+          customVideoPreviewUrl: up.url,
           customVideoPosterUrl: l.customVideoPosterUrl ?? up.thumbUrl ?? null,
-          customVideoFile: null, // ✅ opcional: limpa o file após subir
+          customVideoFile: null,
         };
       }
     }
 
-    // 2) agora monta o payload usando as URLs já subidas
     const exerciciosPayload = await Promise.all(
       linhasComVideo.map(async (l, i) => {
         const ordem = Number(l.ordem ?? i + 1);
         const repeticoes = buildRepeticoes(String(l.series ?? ""), String(l.reps ?? ""));
-        
-        // ✅ oficial
+
         if (!l.isCustom && l.exercicioId) {
           return {
             exercicioId: l.exercicioId,
@@ -695,19 +821,13 @@ export default function CriarOuEditarTreino() {
           };
         }
 
-        // ✅ personalizado/temporário
         if (l.isCustom) {
           const nome = String(l.customTitulo || "").trim();
           if (!nome) return null;
 
           const descricao = String(l.customDesc || "").trim() || null;
-          // pega a URL do vídeo (ou a que veio do banco, ou a que acabou de subir)
-          const videoDemonstrativoUrl =
-            String(l.customVideoUrl || "").trim() || null;
-
-          // 👇 NOVO: enviar poster gerado do vídeo
-          const videoPosterUrl =
-            String(l.customVideoPosterUrl || "").trim() || null;
+          const videoDemonstrativoUrl = String(l.customVideoUrl || "").trim() || null;
+          const videoPosterUrl = String(l.customVideoPosterUrl || "").trim() || null;
 
           return {
             exercicioPersonalizadoId: l.exercicioPersonalizadoId ?? null,
@@ -715,7 +835,7 @@ export default function CriarOuEditarTreino() {
             nome,
             descricao,
             videoDemonstrativoUrl,
-            videoPosterUrl, // ⭐ ESSENCIAL
+            videoPosterUrl,
             ordem,
             repeticoes,
           };
@@ -733,9 +853,8 @@ export default function CriarOuEditarTreino() {
       return;
     }
 
-    const tipoUsuario = (localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "").trim();
-    const tipoUsuarioId =
-      (localStorage.getItem("tipoUsuarioId") || sessionStorage.getItem("tipoUsuarioId") || "").trim();
+    const tipoUsuario = tipoCriador;
+    const tipoUsuarioId = criadorId.trim();
 
     const payload: any = {
       nome: titulo,
@@ -745,8 +864,11 @@ export default function CriarOuEditarTreino() {
       duracao: duracaoMin,
       tipoUsuario,
       tipoUsuarioId,
-      ...(professorId ? { criadorProfessorId: professorId } : {}), // ✅ opcional na edição
-      professoresColabIds: professoresColabIds,
+      publico: treinoFootera,
+      parceiro: treinoFootera,
+      isFootera: treinoFootera,
+      ...(professorId ? { criadorProfessorId: professorId } : {}),
+      professoresColabIds,
       ...(catsSelecionadas.length ? { categoria: catsSelecionadas } : {}),
       exercicios: exerciciosFinal,
     };
@@ -783,6 +905,7 @@ export default function CriarOuEditarTreino() {
   return (
     <div className="min-h-screen bg-gray-50">
       <VideoModal open={videoOpen} title={videoTitle} src={videoSrc} onClose={closeVideo} />
+
       <div className="mx-auto max-w-5xl px-4 py-6">
         <div className="sticky top-0 z-20 -mx-4 mb-6 bg-gray-50/80 px-4 pb-3 pt-2 backdrop-blur">
           <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -819,8 +942,10 @@ export default function CriarOuEditarTreino() {
         <div className="mb-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-extrabold text-gray-900">Criar Novo Treino</h1>
-              <p className="mt-1 text-sm text-gray-600">{id}</p>
+              <h1 className="text-3xl font-extrabold text-gray-900">
+                {id ? "Editar Treino" : "Criar Novo Treino"}
+              </h1>
+              <p className="mt-1 text-sm text-gray-600">{id || ""}</p>
             </div>
 
             <div className="flex items-center gap-4">
@@ -840,7 +965,9 @@ export default function CriarOuEditarTreino() {
           <Card title="Informações Básicas">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-800">Título do Treino</label>
+                <label className="block text-sm font-semibold text-gray-800">
+                  Título do Treino
+                </label>
                 <input
                   className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
                   placeholder="Título do Treino"
@@ -862,7 +989,9 @@ export default function CriarOuEditarTreino() {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-800">Tipo do Treino</label>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Tipo do Treino
+                  </label>
                   <select
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
                     value={tipoTreino}
@@ -892,7 +1021,9 @@ export default function CriarOuEditarTreino() {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-800">Nível do Treino</label>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Nível do Treino
+                  </label>
                   <select
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
                     value={nivelTreino}
@@ -906,21 +1037,118 @@ export default function CriarOuEditarTreino() {
                   </select>
                 </div>
 
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Publicação do treino
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setTreinoFootera((v) => !v)}
+                    className={[
+                      "mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left transition",
+                      treinoFootera
+                        ? "border-green-700 bg-green-50"
+                        : "border-gray-200 bg-white hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm">
+                        {treinoFootera
+                          ? "✅ Treino Footera (público)"
+                          : "Treino normal (privado)"}
+                      </div>
+                      <div className="mt-0.5 text-xs text-gray-600">
+                        {treinoFootera
+                          ? "O treino ficará marcado como Footera."
+                          : "O treino ficará como treino normal."}
+                      </div>
+                    </div>
+
+                    <span
+                      className={[
+                        "relative inline-flex h-7 w-12 items-center rounded-full border transition",
+                        treinoFootera ? "border-green-700 bg-green-700" : "border-gray-300 bg-gray-200",
+                      ].join(" ")}
+                    >
+                      <span
+                        className={[
+                          "inline-block h-5 w-5 transform rounded-full bg-white shadow transition",
+                          treinoFootera ? "translate-x-6" : "translate-x-1",
+                        ].join(" ")}
+                      />
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-800">Professor (principal)</label>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Quem será o criador do treino
+                  </label>
+
                   <select
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
-                    value={professorId}
-                    onChange={(e) => setProfessorId(e.target.value)}
+                    value={tipoCriador}
+                    onChange={(e) => {
+                      setTipoCriador(e.target.value as TipoCriador);
+                      setCriadorId("");
+                    }}
                   >
-                    <option value="">Selecione um professor</option>
-                    {professoresDisponiveis.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {formatProfessorLabel(p)}
+                    <option value="Professor">Professor</option>
+                    <option value="Clube">Clube</option>
+                    <option value="Escolinha">Escolinha</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    {tipoCriador === "Professor"
+                      ? "Professor criador"
+                      : tipoCriador === "Clube"
+                      ? "Clube criador"
+                      : "Escolinha criadora"}
+                  </label>
+
+                  <select
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                    value={criadorId}
+                    onChange={(e) => setCriadorId(e.target.value)}
+                  >
+                    <option value="">
+                      {tipoCriador === "Professor"
+                        ? "Selecione um professor"
+                        : tipoCriador === "Clube"
+                        ? "Selecione um clube"
+                        : "Selecione uma escolinha"}
+                    </option>
+
+                    {opcoesCriador.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
                       </option>
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-800">
+                  Professor responsável (opcional)
+                </label>
+                <select
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                  value={professorId}
+                  onChange={(e) => setProfessorId(e.target.value)}
+                >
+                  <option value="">Nenhum professor responsável</option>
+                  {professoresDisponiveis.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {formatProfessorLabel(p)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -944,19 +1172,26 @@ export default function CriarOuEditarTreino() {
                         {professoresFiltrados.map((p) => {
                           const checked = professoresColabIds.includes(p.id);
                           return (
-                            <label key={p.id} className="flex cursor-pointer items-center gap-3 p-3 hover:bg-gray-50">
+                            <label
+                              key={p.id}
+                              className="flex cursor-pointer items-center gap-3 p-3 hover:bg-gray-50"
+                            >
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setProfessoresColabIds((prev) => [...prev, p.id]);
+                                    setProfessoresColabIds((prev) =>
+                                      prev.includes(p.id) ? prev : [...prev, p.id]
+                                    );
                                   } else {
                                     setProfessoresColabIds((prev) => prev.filter((x) => x !== p.id));
                                   }
                                 }}
                               />
-                              <span className="text-sm font-medium text-gray-900">{formatProfessorLabel(p)}</span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {formatProfessorLabel(p)}
+                              </span>
                             </label>
                           );
                         })}
@@ -967,7 +1202,45 @@ export default function CriarOuEditarTreino() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-800">Capa do Treino (opcional)</label>
+                <label className="block text-sm font-semibold text-gray-800">
+                  Categorias do treino
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {opcoesCategorias.map((cat) => {
+                    const checked = catsSelecionadas.includes(cat);
+                    return (
+                      <label
+                        key={cat}
+                        className={[
+                          "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition",
+                          checked
+                            ? "border-green-700 bg-green-50 text-green-800"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                        ].join(" ")}
+                      >
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setCatsSelecionadas((prev) => [...prev, cat]);
+                            } else {
+                              setCatsSelecionadas((prev) => prev.filter((x) => x !== cat));
+                            }
+                          }}
+                        />
+                        {cat}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-800">
+                  Capa do Treino (opcional)
+                </label>
 
                 <div className="mt-2 rounded-2xl border border-gray-200 bg-white p-4">
                   <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
@@ -1025,7 +1298,6 @@ export default function CriarOuEditarTreino() {
 
                     const exVideo = getVideoUrlFromEx(ex);
                     const nivel = ex ? String(ex.nivel || "").trim() : "";
-
                     const isCustom = !!l.isCustom;
 
                     return (
@@ -1037,13 +1309,13 @@ export default function CriarOuEditarTreino() {
                                 <>
                                   {getThumbUrlFromEx(ex) ? (
                                     <img
-                                      src={getThumbUrlFromEx(ex)}
+                                      src={normalizeUrl(getThumbUrlFromEx(ex))}
                                       alt="Thumb do exercício"
                                       className="absolute inset-0 h-full w-full object-cover"
                                     />
                                   ) : (
                                     <video
-                                      src={exVideo}
+                                      src={normalizeUrl(exVideo)}
                                       muted
                                       playsInline
                                       preload="metadata"
@@ -1053,7 +1325,9 @@ export default function CriarOuEditarTreino() {
 
                                   <button
                                     type="button"
-                                    onClick={() => openVideo(normalizeUrl(exVideo), ex?.nome || "Vídeo do exercício")}
+                                    onClick={() =>
+                                      openVideo(normalizeUrl(exVideo), ex?.nome || "Vídeo do exercício")
+                                    }
                                     className="absolute inset-0 grid place-items-center bg-black/25 text-white"
                                     title="Assistir vídeo"
                                   >
@@ -1084,10 +1358,12 @@ export default function CriarOuEditarTreino() {
 
                                   <button
                                     type="button"
-                                    onClick={() => openVideo(
-                                      normalizeUrl(l.customVideoUrl || l.customVideoPreviewUrl || ""),
-                                      l.customTitulo || "Vídeo"
-                                    )}
+                                    onClick={() =>
+                                      openVideo(
+                                        normalizeUrl(l.customVideoUrl || l.customVideoPreviewUrl || ""),
+                                        l.customTitulo || "Vídeo"
+                                      )
+                                    }
                                     className="absolute inset-0 grid place-items-center bg-black/25 text-white"
                                     title="Assistir vídeo"
                                   >
@@ -1113,7 +1389,9 @@ export default function CriarOuEditarTreino() {
                                     type="file"
                                     accept="video/*"
                                     className="hidden"
-                                    onChange={(e) => onUploadVideoCustom(idx, e.target.files?.[0] || null)}
+                                    onChange={(e) =>
+                                      onUploadVideoCustom(idx, e.target.files?.[0] || null)
+                                    }
                                   />
                                 </label>
 
@@ -1134,7 +1412,7 @@ export default function CriarOuEditarTreino() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <div className="truncate text-base font-extrabold text-gray-900">
                                     {isCustom
-                                      ? (l.customTitulo?.trim() || "Exercício (personalizado)")
+                                      ? l.customTitulo?.trim() || "Exercício (personalizado)"
                                       : ex
                                       ? ex.nome
                                       : "Exercício"}
@@ -1153,7 +1431,9 @@ export default function CriarOuEditarTreino() {
                                       className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
                                       placeholder="Nome do exercício"
                                       value={l.customTitulo || ""}
-                                      onChange={(e) => atualizarLinha(idx, { customTitulo: e.target.value })}
+                                      onChange={(e) =>
+                                        atualizarLinha(idx, { customTitulo: e.target.value })
+                                      }
                                     />
                                   </div>
                                 )}
@@ -1165,7 +1445,9 @@ export default function CriarOuEditarTreino() {
                                       placeholder="Descrição"
                                       rows={2}
                                       value={l.customDesc || ""}
-                                      onChange={(e) => atualizarLinha(idx, { customDesc: e.target.value })}
+                                      onChange={(e) =>
+                                        atualizarLinha(idx, { customDesc: e.target.value })
+                                      }
                                     />
                                   ) : ex?.descricao ? (
                                     <p className="text-sm text-gray-700">{ex.descricao}</p>
@@ -1184,22 +1466,30 @@ export default function CriarOuEditarTreino() {
 
                             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                               <div>
-                                <label className="block text-xs font-semibold text-gray-700">Séries</label>
+                                <label className="block text-xs font-semibold text-gray-700">
+                                  Séries
+                                </label>
                                 <input
                                   className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
                                   placeholder="ex.: 3"
                                   value={l.series || ""}
-                                  onChange={(e) => setLinhaSeriesReps(idx, e.target.value, l.reps || "")}
+                                  onChange={(e) =>
+                                    setLinhaSeriesReps(idx, e.target.value, l.reps || "")
+                                  }
                                 />
                               </div>
 
                               <div>
-                                <label className="block text-xs font-semibold text-gray-700">Repetições</label>
+                                <label className="block text-xs font-semibold text-gray-700">
+                                  Repetições
+                                </label>
                                 <input
                                   className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
                                   placeholder="ex.: 12"
                                   value={l.reps || ""}
-                                  onChange={(e) => setLinhaSeriesReps(idx, l.series || "", e.target.value)}
+                                  onChange={(e) =>
+                                    setLinhaSeriesReps(idx, l.series || "", e.target.value)
+                                  }
                                 />
                               </div>
                             </div>
@@ -1234,11 +1524,15 @@ export default function CriarOuEditarTreino() {
                           value={exSearch}
                           onChange={(e) => setExSearch(e.target.value)}
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">⌕</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                          ⌕
+                        </span>
                       </div>
                     </div>
 
-                    <div className="text-sm text-gray-600">{exerciciosFiltrados.length} resultado(s)</div>
+                    <div className="text-sm text-gray-600">
+                      {exerciciosFiltrados.length} resultado(s)
+                    </div>
                   </div>
                 </div>
 
@@ -1248,13 +1542,21 @@ export default function CriarOuEditarTreino() {
                     {opcoesCategorias.map((cat) => {
                       const checked = catsSelecionadas.includes(cat);
                       return (
-                        <label key={cat} className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800">
+                        <label
+                          key={cat}
+                          className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
+                        >
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => {
-                              if (e.target.checked) setCatsSelecionadas((prev) => [...prev, cat]);
-                              else setCatsSelecionadas((prev) => prev.filter((x) => x !== cat));
+                              if (e.target.checked) {
+                                setCatsSelecionadas((prev) =>
+                                  prev.includes(cat) ? prev : [...prev, cat]
+                                );
+                              } else {
+                                setCatsSelecionadas((prev) => prev.filter((x) => x !== cat));
+                              }
                             }}
                           />
                           {cat}
@@ -1270,13 +1572,21 @@ export default function CriarOuEditarTreino() {
                     {opcoesNiveis.map((n) => {
                       const checked = niveisSelecionados.includes(n);
                       return (
-                        <label key={n} className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800">
+                        <label
+                          key={n}
+                          className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
+                        >
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => {
-                              if (e.target.checked) setNiveisSelecionados((prev) => [...prev, n]);
-                              else setNiveisSelecionados((prev) => prev.filter((x) => x !== n));
+                              if (e.target.checked) {
+                                setNiveisSelecionados((prev) =>
+                                  prev.includes(n) ? prev : [...prev, n]
+                                );
+                              } else {
+                                setNiveisSelecionados((prev) => prev.filter((x) => x !== n));
+                              }
                             }}
                           />
                           {n}
@@ -1306,7 +1616,9 @@ export default function CriarOuEditarTreino() {
                 <div className="lg:col-span-3">
                   <div className="max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
                     {exerciciosFiltrados.length === 0 ? (
-                      <div className="p-6 text-sm text-gray-600">Nenhum exercício encontrado com esses filtros.</div>
+                      <div className="p-6 text-sm text-gray-600">
+                        Nenhum exercício encontrado com esses filtros.
+                      </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {exerciciosFiltrados.map((ex) => {
@@ -1321,16 +1633,31 @@ export default function CriarOuEditarTreino() {
                                 <div className="flex gap-4">
                                   <div className="relative grid h-24 w-40 place-items-center overflow-hidden rounded-2xl bg-black/90 text-white">
                                     {exVideo ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => openVideo(normalizeUrl(exVideo), ex.nome || "Vídeo do exercício")}
-                                        className="absolute inset-0 grid place-items-center bg-black/60"
-                                        title="Assistir vídeo"
-                                      >
-                                        <div className="grid h-12 w-12 place-items-center rounded-full bg-white/20">
-                                          <span className="text-2xl">▶</span>
-                                        </div>
-                                      </button>
+                                      <>
+                                        {getThumbUrlFromEx(ex) ? (
+                                          <img
+                                            src={normalizeUrl(getThumbUrlFromEx(ex))}
+                                            alt="Thumb do exercício"
+                                            className="absolute inset-0 h-full w-full object-cover"
+                                          />
+                                        ) : null}
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openVideo(
+                                              normalizeUrl(exVideo),
+                                              ex.nome || "Vídeo do exercício"
+                                            )
+                                          }
+                                          className="absolute inset-0 grid place-items-center bg-black/60"
+                                          title="Assistir vídeo"
+                                        >
+                                          <div className="grid h-12 w-12 place-items-center rounded-full bg-white/20">
+                                            <span className="text-2xl">▶</span>
+                                          </div>
+                                        </button>
+                                      </>
                                     ) : (
                                       <div className="text-sm text-white/80">sem vídeo</div>
                                     )}
@@ -1338,7 +1665,9 @@ export default function CriarOuEditarTreino() {
 
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <div className="text-lg font-extrabold text-gray-900">{ex.nome}</div>
+                                      <div className="text-lg font-extrabold text-gray-900">
+                                        {ex.nome}
+                                      </div>
 
                                       {nivel && (
                                         <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
@@ -1348,7 +1677,9 @@ export default function CriarOuEditarTreino() {
                                     </div>
 
                                     {ex.descricao && (
-                                      <p className="mt-1 max-w-2xl text-sm text-gray-700">{ex.descricao}</p>
+                                      <p className="mt-1 max-w-2xl text-sm text-gray-700">
+                                        {ex.descricao}
+                                      </p>
                                     )}
 
                                     {cats.length > 0 && (
@@ -1374,7 +1705,7 @@ export default function CriarOuEditarTreino() {
                                     className={[
                                       "rounded-xl px-5 py-2 text-sm font-bold text-white",
                                       jaSelecionado
-                                        ? "bg-gray-300 cursor-not-allowed"
+                                        ? "cursor-not-allowed bg-gray-300"
                                         : "bg-green-800 hover:bg-green-900",
                                     ].join(" ")}
                                   >
@@ -1389,42 +1720,42 @@ export default function CriarOuEditarTreino() {
                     )}
                   </div>
                 </div>
-                </div>
-                </Card>
+              </div>
+            </Card>
 
-                <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep(1);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    className="rounded-xl bg-gray-100 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200"
-                  >
-                    Voltar para Informações
-                  </button>
+            <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="rounded-xl bg-gray-100 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200"
+              >
+                Voltar para Informações
+              </button>
 
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => (window.location.href = returnTo)}
-                      className="rounded-xl bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-300"
-                    >
-                      Cancelar
-                    </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => (window.location.href = returnTo)}
+                  className="rounded-xl bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={handleSubmit}
-                      className="rounded-xl bg-green-800 px-6 py-3 text-sm font-semibold text-white hover:bg-green-900"
-                    >
-                      {id ? "Salvar Alterações" : "Criar"}
-                    </button>
-                  </div>
-                </div>
-                </div>
-                )}
-                </div>
-                </div>
-                );
- }
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="rounded-xl bg-green-800 px-6 py-3 text-sm font-semibold text-white hover:bg-green-900"
+                >
+                  {id ? "Salvar Alterações" : "Criar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
