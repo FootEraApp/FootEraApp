@@ -1189,11 +1189,15 @@ const podeSairDaTurma = useMemo(() => {
                               fetchAgendados={async ({ monthISO }) => {
                                 const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
                                   headers,
-                                  params: { turmaId: selecionada, month: monthISO },
+                                  params: {
+                                    turmaId: selecionada,
+                                    month: monthISO,
+                                    ownerTipo: owner?.tipo ?? "",
+                                    ownerId: owner?.id ?? "",
+                                  },
                                 });
 
                                 const data = r.data;
-
                                 const arr =
                                   (Array.isArray(data?.items) && data.items) ||
                                   (Array.isArray(data?.agendados) && data.agendados) ||

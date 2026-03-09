@@ -12,7 +12,7 @@ import {
   PosicaoCampo,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { sanitizeMediaPath } from '@/utils/mediaSanitizer.js';
+import { sanitizeMediaPath } from '../utils/mediaSanitizer.js';
 
 const prisma = new PrismaClient();
 const m = (p?: string | null) => sanitizeMediaPath(p);
@@ -1770,6 +1770,30 @@ async function main() {
         },
       });
     }
+
+    if (profClubeFooteraDb2?.id && clubeFooteraDb?.id) {
+      await garantirVinculoProfessorOrganizacaoSeed({
+        professorId: profClubeFooteraDb2.id,
+        tipo: "CLUBE",
+        ownerId: clubeFooteraDb.id,
+      });
+    }
+
+    if (profArthurDb?.id && escolinhaEstrelasDb2?.id) {
+      await garantirVinculoProfessorOrganizacaoSeed({
+        professorId: profArthurDb.id,
+        tipo: "ESCOLINHA",
+        ownerId: escolinhaEstrelasDb2.id,
+      });
+    }
+
+    if (profFreeDb2?.id && escolinhaEstrelasDb2?.id) {
+      await garantirVinculoProfessorOrganizacaoSeed({
+        professorId: profFreeDb2.id,
+        tipo: "ESCOLINHA",
+        ownerId: escolinhaEstrelasDb2.id,
+      });
+    }
   }
  console.log("✅ Seed completo executado com sucesso!");
 }
@@ -1780,3 +1804,52 @@ main()
     console.error(e);
     await prisma.$disconnect();
   });
+
+  async function garantirVinculoProfessorOrganizacaoSeed(params: {
+      professorId: string;
+      tipo: "CLUBE" | "ESCOLINHA";
+      ownerId: string;
+    }) {
+      const { professorId, tipo, ownerId } = params;
+
+      const rel = await prisma.relacaoTreinamento.findFirst({
+        where: {
+          professorId,
+          atletaId: null,
+          ...(tipo === "CLUBE" ? { clubeId: ownerId } : { escolinhaId: ownerId }),
+        },
+        select: { id: true },
+      });
+
+      if (!rel) {
+        await prisma.relacaoTreinamento.create({
+          data: {
+            professorId,
+            atletaId: null,
+            clubeId: tipo === "CLUBE" ? ownerId : null,
+            escolinhaId: tipo === "ESCOLINHA" ? ownerId : null,
+            ativo: true,
+          },
+        });
+      }
+
+      const gestor = await prisma.organizacaoGestor.findFirst({
+        where: {
+          professorId,
+          tipo: tipo as any,
+          ownerId,
+        },
+        select: { id: true },
+      });
+
+      if (!gestor) {
+        await prisma.organizacaoGestor.create({
+          data: {
+            professorId,
+            tipo: tipo as any,
+            ownerId,
+            ativo: true,
+          },
+        });
+      }
+    }

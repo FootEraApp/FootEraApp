@@ -5,7 +5,6 @@ import {
   listarMinhasOrganizacoesGerenciaveis,
   criarVinculoGestor,
   desativarVinculoGestor,
-
   // NOVO
   listarGestores,
   criarGestor,
@@ -16,17 +15,12 @@ import {
 const router = Router();
 router.use(authenticateToken);
 
-// ✅ professor descobre o que pode gerenciar
-router.get("/", listarMinhasOrganizacoesGerenciaveis);
-
-// ✅ ROTAS QUE SEU FRONT ESTÁ CHAMANDO (para Clube/Escolinha/Admin)
-router.get("/gestores", listarGestores);
-router.post("/gestores", criarGestor);
 router.put("/gestores/:id", atualizarGestor);
 router.delete("/gestores/:id", removerGestor);
-
-// ✅ (mantém as antigas)
-router.post("/", criarVinculoGestor);
+router.get("/gestores", listarGestores);
+router.post("/gestores", criarGestor);
 router.patch("/:id/desativar", desativarVinculoGestor);
+router.post("/", criarVinculoGestor);
+router.get("/", listarMinhasOrganizacoesGerenciaveis);
 
 export default router;
