@@ -228,24 +228,6 @@ export default function PaginaNotificacoes() {
           : [];
 
         setNotificacoes(items);
-
-        const naoLidas = items.filter((x) => x?.lida === false);
-
-        for (const it of naoLidas) {
-          fetch(
-            `${API.BASE_URL}/api/notificacoes/${encodeURIComponent(it.id)}/lida`,
-            {
-              method: "PATCH",
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          ).catch(() => {});
-        }
-
-        if (naoLidas.length) {
-          setNotificacoes((prev) =>
-            prev.map((n) => ({ ...n, lida: true }))
-          );
-        }
       } catch (e) {
         console.error("Erro ao buscar notificações", e);
       }
@@ -428,11 +410,24 @@ export default function PaginaNotificacoes() {
               );
             }
 
+            const isBillingWarning = String(n.tipo || "").toLowerCase() === "billing_warning";
+            const isBillingBlocked = String(n.tipo || "").toLowerCase() === "billing_blocked";
+
+            const linkResolvido =
+              (isBillingWarning || isBillingBlocked) && n.link === "/assinatura"
+                ? "/pagamentos"
+                : n.link;
             return (
               <div
                 key={n.id}
                 className={`relative bg-white shadow-md rounded-2xl p-4 border ${
-                  ehConv ? "border-green-200" : "border-transparent"
+                  isBillingBlocked
+                    ? "border-red-300 bg-red-50"
+                    : isBillingWarning
+                    ? "border-yellow-300 bg-yellow-50"
+                    : ehConv
+                    ? "border-green-200"
+                    : "border-transparent"
                 }`}
               >
                 <button
@@ -487,18 +482,18 @@ export default function PaginaNotificacoes() {
                         );
                       })()}
 
-                    {n.link && (
+                    {linkResolvido && (
                       <div className="mt-3">
                         <p className="text-sm text-gray-700">
-                          Visualizar o evento:{" "}
+                          {isBillingWarning || isBillingBlocked ? "Abrir pagamentos:" : "Visualizar o evento:"}
                         </p>
                         <Link
-                          href={n.link}
+                          href={linkResolvido}
                           onClick={() => marcarComoLida(n.id)}
                           className="inline-flex mt-2 items-center justify-center rounded-lg bg-green-800
                             text-white text-sm px-4 py-2 hover:bg-green-900"
                         >
-                          Abrir evento
+                          {isBillingWarning || isBillingBlocked ? "Abrir pagamentos" : "Abrir evento"}
                         </Link>
                       </div>
                     )}
@@ -510,9 +505,9 @@ export default function PaginaNotificacoes() {
         </div>
       )}
 
-      {solicitacoes.length === 0 ? (
-        <p className="text-gray-500">Nenhuma solicitação no momento.</p>
-      ) : (
+      {solicitacoes.length === 0 && notificacoes.length === 0 ? (
+        <p className="text-gray-500">Nenhuma notificação no momento.</p>
+      ) : solicitacoes.length > 0 ? (
         <div className="space-y-4">
           {solicitacoes.map((solicitacao) => {
             const fotoRaw = String(solicitacao.remetente?.foto ?? "").trim();
@@ -608,7 +603,7 @@ export default function PaginaNotificacoes() {
             );
           })}
         </div>
-      )}
+      ) : null}
 
       <BottomNav />
     </div>
