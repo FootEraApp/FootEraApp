@@ -92,6 +92,18 @@ type ExercicioMin = {
   videoDemonstrativoUrl?: string | null;
 };
 
+type AbaExercicios = "catalogo" | "personalizados";
+
+type ExercicioPersonalizadoItem = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  nivel?: string | null;
+  categorias?: string[];
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
+};
+
 type ExLinha = {
   exercicioId: string;
   ordem: number;
@@ -363,6 +375,17 @@ export default function CriarOuEditarTreino() {
   const [linhas, setLinhas] = useState<ExLinha[]>([]);
   const [nivelTreino, setNivelTreino] = useState("Base");
 
+  const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("catalogo");
+
+  const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<
+    ExercicioPersonalizadoItem[]
+  >([]);
+  const [loadingPersonalizados, setLoadingPersonalizados] = useState(false);
+
+  const [filtroPers, setFiltroPers] = useState("");
+  const [filtroPersNivel, setFiltroPersNivel] = useState<string>("");
+  const [filtroPersVideo, setFiltroPersVideo] = useState<"" | "com" | "sem">("");
+
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoSrc, setVideoSrc] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -531,6 +554,11 @@ export default function CriarOuEditarTreino() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (abaExercicios !== "personalizados") return;
+    fetchExerciciosPersonalizados();
+  }, [abaExercicios]);
+
   const exerciciosSelecionadosSet = useMemo(() => {
     return new Set(
       linhas.filter((l) => !l.isCustom && !!l.exercicioId).map((l) => l.exercicioId)
@@ -601,6 +629,49 @@ export default function CriarOuEditarTreino() {
     }, 3000);
   }
 
+  const fetchExerciciosPersonalizados = async () => {
+    const token = getToken();
+
+    if (!token) {
+      setExerciciosPersonalizados([]);
+      return;
+    }
+
+    try {
+      setLoadingPersonalizados(true);
+
+      const res = await fetch(`${API.BASE_URL}/api/treinos/exercicios/personalizados`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json().catch(() => []);
+      if (!res.ok) {
+        throw new Error(data?.message || "Erro ao carregar exercícios personalizados");
+      }
+
+      const arr = Array.isArray(data) ? data : data?.items ?? [];
+
+      setExerciciosPersonalizados(
+        (Array.isArray(arr) ? arr : []).map((x: any) => ({
+          id: String(x.id),
+          nome: String(x.nome ?? "Exercício"),
+          descricao: x.descricao ?? null,
+          nivel: x.nivel ?? null,
+          categorias: Array.isArray(x.categorias) ? x.categorias : [],
+          videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? null,
+          videoPosterUrl: x.videoPosterUrl ?? null,
+        }))
+      );
+    } catch (e) {
+      console.error(e);
+      setExerciciosPersonalizados([]);
+    } finally {
+      setLoadingPersonalizados(false);
+    }
+  };
+
   const limparProgresso = () => {
     if (!confirm("Tem certeza que deseja limpar o progresso deste formulário?")) return;
 
@@ -663,6 +734,43 @@ export default function CriarOuEditarTreino() {
         reps: "",
       });
       return next;
+    });
+  };
+
+  const treinoTemPersonalizado = (id: string) => {
+    return linhas.some(
+      (l) => String(l.exercicioPersonalizadoId || "") === String(id)
+    );
+  };
+
+  const adicionarPersonalizadoExistente = (p: ExercicioPersonalizadoItem) => {
+    setLinhas((prev) => {
+      const jaTem = prev.some(
+        (l) => String(l.exercicioPersonalizadoId || "") === String(p.id)
+      );
+      if (jaTem) return prev;
+
+      return [
+        ...prev,
+        {
+          exercicioId: "",
+          ordem: prev.length + 1,
+          repeticoes: "",
+          series: "",
+          reps: "",
+          isCustom: true,
+
+          exercicioPersonalizadoId: String(p.id),
+          exercicioTemporarioId: null,
+
+          customTitulo: String(p.nome ?? "").trim(),
+          customDesc: p.descricao ?? "",
+          customVideoFile: null,
+          customVideoPreviewUrl: p.videoDemonstrativoUrl ?? null,
+          customVideoUrl: p.videoDemonstrativoUrl ?? null,
+          customVideoPosterUrl: p.videoPosterUrl ?? null,
+        },
+      ];
     });
   };
 
@@ -966,7 +1074,7 @@ export default function CriarOuEditarTreino() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-800">
-                  Título do Treino
+                  Título do Treino*
                 </label>
                 <input
                   className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
@@ -977,7 +1085,7 @@ export default function CriarOuEditarTreino() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-800">Descrição</label>
+                <label className="block text-sm font-semibold text-gray-800">Descrição (opcional)</label>
                 <textarea
                   className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
                   placeholder="Descrição do Treino"
@@ -990,7 +1098,7 @@ export default function CriarOuEditarTreino() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-gray-800">
-                    Tipo do Treino
+                    Tipo do Treino*
                   </label>
                   <select
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
@@ -1007,7 +1115,7 @@ export default function CriarOuEditarTreino() {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-800">
-                    Duração do Treino (minutos)
+                    Duração do Treino (minutos) (opcional)
                   </label>
                   <input
                     type="number"
@@ -1022,7 +1130,7 @@ export default function CriarOuEditarTreino() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-gray-800">
-                    Nível do Treino
+                    Nível do Treino*
                   </label>
                   <select
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
@@ -1037,23 +1145,23 @@ export default function CriarOuEditarTreino() {
                   </select>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                <div>
                   <label className="block text-sm font-semibold text-gray-800">
-                    Publicação do treino
+                    Publicação do treino*
                   </label>
 
                   <button
                     type="button"
                     onClick={() => setTreinoFootera((v) => !v)}
                     className={[
-                      "mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left transition",
+                      "mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border p-4 text-left transition",
                       treinoFootera
                         ? "border-green-700 bg-green-50"
                         : "border-gray-200 bg-white hover:bg-gray-50",
                     ].join(" ")}
                   >
                     <div className="min-w-0">
-                      <div className="font-semibold text-sm">
+                      <div className="text-sm font-semibold text-gray-900">
                         {treinoFootera
                           ? "✅ Treino Footera (público)"
                           : "Treino normal (privado)"}
@@ -1067,8 +1175,10 @@ export default function CriarOuEditarTreino() {
 
                     <span
                       className={[
-                        "relative inline-flex h-7 w-12 items-center rounded-full border transition",
-                        treinoFootera ? "border-green-700 bg-green-700" : "border-gray-300 bg-gray-200",
+                        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition",
+                        treinoFootera
+                          ? "border-green-700 bg-green-700"
+                          : "border-gray-300 bg-gray-200",
                       ].join(" ")}
                     >
                       <span
@@ -1085,7 +1195,7 @@ export default function CriarOuEditarTreino() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-gray-800">
-                    Quem será o criador do treino
+                    Quem será o criador do treino*
                   </label>
 
                   <select
@@ -1105,10 +1215,10 @@ export default function CriarOuEditarTreino() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-800">
                     {tipoCriador === "Professor"
-                      ? "Professor criador"
+                      ? "Professor criador*"
                       : tipoCriador === "Clube"
-                      ? "Clube criador"
-                      : "Escolinha criadora"}
+                      ? "Clube criador*"
+                      : "Escolinha criadora*"}
                   </label>
 
                   <select
@@ -1153,7 +1263,7 @@ export default function CriarOuEditarTreino() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-800">
-                  Professores realizadores (colaboradores)
+                  Professores realizadores (colaboradores) (opcional)
                 </label>
 
                 <div className="mt-2 rounded-2xl border border-gray-200 bg-white p-3">
@@ -1203,7 +1313,7 @@ export default function CriarOuEditarTreino() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-800">
-                  Categorias do treino
+                  Categorias do treino (opcional)
                 </label>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {opcoesCategorias.map((cat) => {
@@ -1295,7 +1405,7 @@ export default function CriarOuEditarTreino() {
                     const ex = l.exercicioId
                       ? exerciciosDisponiveis.find((e) => e.id === l.exercicioId)
                       : null;
-
+                    const isPersonalizadoExistente = !!l.exercicioPersonalizadoId;
                     const exVideo = getVideoUrlFromEx(ex);
                     const nivel = ex ? String(ex.nivel || "").trim() : "";
                     const isCustom = !!l.isCustom;
@@ -1380,79 +1490,82 @@ export default function CriarOuEditarTreino() {
                                 </div>
                               ) : null}
                             </div>
-
-                            {isCustom && (
-                              <div className="mt-2 flex items-center gap-3">
-                                <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50">
-                                  Upload de vídeo
-                                  <input
-                                    type="file"
-                                    accept="video/*"
-                                    className="hidden"
-                                    onChange={(e) =>
-                                      onUploadVideoCustom(idx, e.target.files?.[0] || null)
-                                    }
-                                  />
-                                </label>
-
-                                <button
-                                  type="button"
-                                  onClick={() => onUploadVideoCustom(idx, null)}
-                                  className="text-sm font-semibold text-red-600 underline hover:text-red-700"
-                                >
-                                  Remover vídeo
-                                </button>
-                              </div>
-                            )}
                           </div>
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="truncate text-base font-extrabold text-gray-900">
-                                    {isCustom
-                                      ? l.customTitulo?.trim() || "Exercício (personalizado)"
-                                      : ex
-                                      ? ex.nome
-                                      : "Exercício"}
-                                  </div>
-
-                                  {!isCustom && nivel && (
-                                    <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
-                                      {nivel}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {isCustom && (
-                                  <div className="mt-3">
+                              <div className="min-w-0 flex-1">
+                                {l.isCustom ? (
+                                  isPersonalizadoExistente ? (
+                                    <div className="text-lg font-extrabold text-gray-900">
+                                      {l.customTitulo || "Exercício personalizado"}
+                                    </div>
+                                  ) : (
                                     <input
-                                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
-                                      placeholder="Nome do exercício"
+                                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:border-green-600"
+                                      placeholder="Nome do exercício personalizado"
                                       value={l.customTitulo || ""}
                                       onChange={(e) =>
                                         atualizarLinha(idx, { customTitulo: e.target.value })
                                       }
                                     />
+                                  )
+                                ) : (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-lg font-extrabold text-gray-900">{ex?.nome}</div>
+
+                                    {nivel && (
+                                      <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
+                                        {nivel}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
 
                                 <div className="mt-1">
-                                  {isCustom ? (
-                                    <textarea
-                                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
-                                      placeholder="Descrição"
-                                      rows={2}
-                                      value={l.customDesc || ""}
-                                      onChange={(e) =>
-                                        atualizarLinha(idx, { customDesc: e.target.value })
-                                      }
-                                    />
+                                  {l.isCustom ? (
+                                    isPersonalizadoExistente ? (
+                                      l.customDesc ? (
+                                        <p className="text-sm text-gray-700">{l.customDesc}</p>
+                                      ) : null
+                                    ) : (
+                                      <textarea
+                                        className="mt-2 min-h-[92px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                        placeholder="Descrição do exercício personalizado"
+                                        value={l.customDesc || ""}
+                                        onChange={(e) =>
+                                          atualizarLinha(idx, { customDesc: e.target.value })
+                                        }
+                                      />
+                                    )
                                   ) : ex?.descricao ? (
                                     <p className="text-sm text-gray-700">{ex.descricao}</p>
                                   ) : null}
                                 </div>
+
+                                {l.isCustom && !isPersonalizadoExistente && (
+                                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                                    <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50">
+                                      Upload de vídeo
+                                      <input
+                                        type="file"
+                                        accept="video/*"
+                                        className="hidden"
+                                        onChange={(e) =>
+                                          onUploadVideoCustom(idx, e.target.files?.[0] || null)
+                                        }
+                                      />
+                                    </label>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => onUploadVideoCustom(idx, null)}
+                                      className="text-sm font-semibold text-red-600 underline hover:text-red-700"
+                                    >
+                                      Remover vídeo
+                                    </button>
+                                  </div>
+                                )}
                               </div>
 
                               <button
@@ -1513,215 +1626,414 @@ export default function CriarOuEditarTreino() {
             </Card>
 
             <Card title="Exercícios Disponíveis">
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <div className="lg:col-span-3">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div className="flex-1">
-                      <div className="relative">
-                        <input
-                          className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-10 text-gray-900 outline-none focus:border-green-600"
-                          placeholder="Buscar por nome, nível ou descrição..."
-                          value={exSearch}
-                          onChange={(e) => setExSearch(e.target.value)}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          ⌕
-                        </span>
+              <div className="mb-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAbaExercicios("catalogo")}
+                  className={[
+                    "rounded-xl border px-4 py-2 text-sm font-bold transition",
+                    abaExercicios === "catalogo"
+                      ? "border-green-700 bg-green-700 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Exercícios (BD)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAbaExercicios("personalizados")}
+                  className={[
+                    "rounded-xl border px-4 py-2 text-sm font-bold transition",
+                    abaExercicios === "personalizados"
+                      ? "border-green-700 bg-green-700 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Personalizados
+                </button>
+              </div>
+              {abaExercicios === "catalogo" ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="lg:col-span-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <input
+                            className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-10 text-gray-900 outline-none focus:border-green-600"
+                            placeholder="Buscar por nome, nível ou descrição..."
+                            value={exSearch}
+                            onChange={(e) => setExSearch(e.target.value)}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                            ⌕
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-gray-600">
+                        {exerciciosFiltrados.length} resultado(s)
                       </div>
                     </div>
+                  </div>
 
-                    <div className="text-sm text-gray-600">
-                      {exerciciosFiltrados.length} resultado(s)
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="mb-2 text-sm font-bold text-gray-900">Categorias</div>
+                    <div className="max-h-48 overflow-auto pr-2">
+                      {opcoesCategorias.map((cat) => {
+                        const checked = catsSelecionadas.includes(cat);
+                        return (
+                          <label
+                            key={cat}
+                            className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setCatsSelecionadas((prev) =>
+                                    prev.includes(cat) ? prev : [...prev, cat]
+                                  );
+                                } else {
+                                  setCatsSelecionadas((prev) => prev.filter((x) => x !== cat));
+                                }
+                              }}
+                            />
+                            {cat}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="mb-2 text-sm font-bold text-gray-900">Categorias</div>
-                  <div className="max-h-48 overflow-auto pr-2">
-                    {opcoesCategorias.map((cat) => {
-                      const checked = catsSelecionadas.includes(cat);
-                      return (
-                        <label
-                          key={cat}
-                          className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setCatsSelecionadas((prev) =>
-                                  prev.includes(cat) ? prev : [...prev, cat]
-                                );
-                              } else {
-                                setCatsSelecionadas((prev) => prev.filter((x) => x !== cat));
-                              }
-                            }}
-                          />
-                          {cat}
-                        </label>
-                      );
-                    })}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="mb-2 text-sm font-bold text-gray-900">Níveis</div>
+                    <div className="max-h-48 overflow-auto pr-2">
+                      {opcoesNiveis.map((n) => {
+                        const checked = niveisSelecionados.includes(n);
+                        return (
+                          <label
+                            key={n}
+                            className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNiveisSelecionados((prev) =>
+                                    prev.includes(n) ? prev : [...prev, n]
+                                  );
+                                } else {
+                                  setNiveisSelecionados((prev) => prev.filter((x) => x !== n));
+                                }
+                              }}
+                            />
+                            {n}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600">
+                      Você pode combinar vários níveis (ex.: Base + Avancado).
+                    </p>
                   </div>
-                </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="mb-2 text-sm font-bold text-gray-900">Níveis</div>
-                  <div className="max-h-48 overflow-auto pr-2">
-                    {opcoesNiveis.map((n) => {
-                      const checked = niveisSelecionados.includes(n);
-                      return (
-                        <label
-                          key={n}
-                          className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setNiveisSelecionados((prev) =>
-                                  prev.includes(n) ? prev : [...prev, n]
-                                );
-                              } else {
-                                setNiveisSelecionados((prev) => prev.filter((x) => x !== n));
-                              }
-                            }}
-                          />
-                          {n}
-                        </label>
-                      );
-                    })}
+                  <div className="flex items-start justify-end lg:col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatsSelecionadas([]);
+                        setNiveisSelecionados([]);
+                        setExSearch("");
+                      }}
+                      className="text-sm font-semibold text-gray-600 underline hover:text-gray-800"
+                    >
+                      Limpar filtros
+                    </button>
                   </div>
-                  <p className="mt-2 text-xs text-gray-600">
-                    Você pode combinar vários níveis (ex.: Base + Avancado).
-                  </p>
-                </div>
 
-                <div className="flex items-start justify-end lg:col-span-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCatsSelecionadas([]);
-                      setNiveisSelecionados([]);
-                      setExSearch("");
-                    }}
-                    className="text-sm font-semibold text-gray-600 underline hover:text-gray-800"
-                  >
-                    Limpar filtros
-                  </button>
-                </div>
+                  <div className="lg:col-span-3">
+                    <div className="max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
+                      {exerciciosFiltrados.length === 0 ? (
+                        <div className="p-6 text-sm text-gray-600">
+                          Nenhum exercício encontrado com esses filtros.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {exerciciosFiltrados.map((ex) => {
+                            const nivel = String(ex.nivel || "").trim();
+                            const cats = coerceCategorias(ex);
+                            const exVideo = getVideoUrlFromEx(ex);
+                            const jaSelecionado = exerciciosSelecionadosSet.has(ex.id);
 
-                <div className="lg:col-span-3">
-                  <div className="max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
-                    {exerciciosFiltrados.length === 0 ? (
-                      <div className="p-6 text-sm text-gray-600">
-                        Nenhum exercício encontrado com esses filtros.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-gray-100">
-                        {exerciciosFiltrados.map((ex) => {
-                          const nivel = String(ex.nivel || "").trim();
-                          const cats = coerceCategorias(ex);
-                          const exVideo = getVideoUrlFromEx(ex);
-                          const jaSelecionado = exerciciosSelecionadosSet.has(ex.id);
+                            return (
+                              <div key={ex.id} className="p-4">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                  <div className="flex gap-4">
+                                    <div className="relative grid h-24 w-40 place-items-center overflow-hidden rounded-2xl bg-black/90 text-white">
+                                      {exVideo ? (
+                                        <>
+                                          {getThumbUrlFromEx(ex) ? (
+                                            <img
+                                              src={normalizeUrl(getThumbUrlFromEx(ex))}
+                                              alt="Thumb do exercício"
+                                              className="absolute inset-0 h-full w-full object-cover"
+                                            />
+                                          ) : null}
 
-                          return (
-                            <div key={ex.id} className="p-4">
-                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                <div className="flex gap-4">
-                                  <div className="relative grid h-24 w-40 place-items-center overflow-hidden rounded-2xl bg-black/90 text-white">
-                                    {exVideo ? (
-                                      <>
-                                        {getThumbUrlFromEx(ex) ? (
-                                          <img
-                                            src={normalizeUrl(getThumbUrlFromEx(ex))}
-                                            alt="Thumb do exercício"
-                                            className="absolute inset-0 h-full w-full object-cover"
-                                          />
-                                        ) : null}
-
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            openVideo(
-                                              normalizeUrl(exVideo),
-                                              ex.nome || "Vídeo do exercício"
-                                            )
-                                          }
-                                          className="absolute inset-0 grid place-items-center bg-black/60"
-                                          title="Assistir vídeo"
-                                        >
-                                          <div className="grid h-12 w-12 place-items-center rounded-full bg-white/20">
-                                            <span className="text-2xl">▶</span>
-                                          </div>
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <div className="text-sm text-white/80">sem vídeo</div>
-                                    )}
-                                  </div>
-
-                                  <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <div className="text-lg font-extrabold text-gray-900">
-                                        {ex.nome}
-                                      </div>
-
-                                      {nivel && (
-                                        <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
-                                          {nivel}
-                                        </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              openVideo(
+                                                normalizeUrl(exVideo),
+                                                ex.nome || "Vídeo do exercício"
+                                              )
+                                            }
+                                            className="absolute inset-0 grid place-items-center bg-black/60"
+                                            title="Assistir vídeo"
+                                          >
+                                            <div className="grid h-12 w-12 place-items-center rounded-full bg-white/20">
+                                              <span className="text-2xl">▶</span>
+                                            </div>
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <div className="text-sm text-white/80">sem vídeo</div>
                                       )}
                                     </div>
 
-                                    {ex.descricao && (
-                                      <p className="mt-1 max-w-2xl text-sm text-gray-700">
-                                        {ex.descricao}
-                                      </p>
-                                    )}
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-lg font-extrabold text-gray-900">
+                                          {ex.nome}
+                                        </div>
 
-                                    {cats.length > 0 && (
-                                      <div className="mt-2 flex flex-wrap gap-2">
-                                        {cats.slice(0, 10).map((c) => (
-                                          <span
-                                            key={c}
-                                            className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700"
-                                          >
-                                            {c}
+                                        {nivel && (
+                                          <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
+                                            {nivel}
                                           </span>
-                                        ))}
+                                        )}
                                       </div>
-                                    )}
+
+                                      {ex.descricao && (
+                                        <p className="mt-1 max-w-2xl text-sm text-gray-700">
+                                          {ex.descricao}
+                                        </p>
+                                      )}
+
+                                      {cats.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                          {cats.slice(0, 10).map((c) => (
+                                            <span
+                                              key={c}
+                                              className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700"
+                                            >
+                                              {c}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-end">
+                                    <button
+                                      type="button"
+                                      disabled={jaSelecionado}
+                                      onClick={() => adicionarExercicioExistente(ex.id)}
+                                      className={[
+                                        "rounded-xl px-5 py-2 text-sm font-bold text-white",
+                                        jaSelecionado
+                                          ? "cursor-not-allowed bg-gray-300"
+                                          : "bg-green-800 hover:bg-green-900",
+                                      ].join(" ")}
+                                    >
+                                      {jaSelecionado ? "Adicionado" : "Adicionar"}
+                                    </button>
                                   </div>
                                 </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <input
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                      placeholder="Buscar personalizado por nome/descrição..."
+                      value={filtroPers}
+                      onChange={(e) => setFiltroPers(e.target.value)}
+                    />
 
-                                <div className="flex items-center justify-end">
-                                  <button
-                                    type="button"
-                                    disabled={jaSelecionado}
-                                    onClick={() => adicionarExercicioExistente(ex.id)}
-                                    className={[
-                                      "rounded-xl px-5 py-2 text-sm font-bold text-white",
-                                      jaSelecionado
-                                        ? "cursor-not-allowed bg-gray-300"
-                                        : "bg-green-800 hover:bg-green-900",
-                                    ].join(" ")}
-                                  >
-                                    {jaSelecionado ? "Adicionado" : "Adicionar"}
-                                  </button>
+                    <select
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                      value={filtroPersNivel}
+                      onChange={(e) => setFiltroPersNivel(e.target.value)}
+                    >
+                      <option value="">Todos os níveis</option>
+                      <option value="Base">Base</option>
+                      <option value="Avancado">Avançado</option>
+                      <option value="Performance">Performance</option>
+                    </select>
+
+                    <select
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                      value={filtroPersVideo}
+                      onChange={(e) => setFiltroPersVideo(e.target.value as "" | "com" | "sem")}
+                    >
+                      <option value="">Com/sem vídeo</option>
+                      <option value="com">Somente com vídeo</option>
+                      <option value="sem">Somente sem vídeo</option>
+                    </select>
+                  </div>
+
+                  <div className="mt-4 max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
+                    {loadingPersonalizados ? (
+                      <div className="p-6 text-sm text-gray-600">
+                        Carregando personalizados...
+                      </div>
+                    ) : exerciciosPersonalizados
+                        .filter((x) => {
+                          const term = filtroPers.trim().toLowerCase();
+                          if (!term) return true;
+                          const hay = `${x.nome ?? ""} ${x.descricao ?? ""}`.toLowerCase();
+                          return hay.includes(term);
+                        })
+                        .filter((x) => {
+                          if (!filtroPersNivel) return true;
+                          return String(x.nivel ?? "") === String(filtroPersNivel);
+                        })
+                        .filter((x) => {
+                          if (!filtroPersVideo) return true;
+                          const hasVideo = !!x.videoDemonstrativoUrl;
+                          return filtroPersVideo === "com" ? hasVideo : !hasVideo;
+                        }).length === 0 ? (
+                      <div className="p-6 text-sm text-gray-600">
+                        Nenhum exercício personalizado encontrado.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {exerciciosPersonalizados
+                          .filter((x) => {
+                            const term = filtroPers.trim().toLowerCase();
+                            if (!term) return true;
+                            const hay = `${x.nome ?? ""} ${x.descricao ?? ""}`.toLowerCase();
+                            return hay.includes(term);
+                          })
+                          .filter((x) => {
+                            if (!filtroPersNivel) return true;
+                            return String(x.nivel ?? "") === String(filtroPersNivel);
+                          })
+                          .filter((x) => {
+                            if (!filtroPersVideo) return true;
+                            const hasVideo = !!x.videoDemonstrativoUrl;
+                            return filtroPersVideo === "com" ? hasVideo : !hasVideo;
+                          })
+                          .map((p) => {
+                            const jaAdicionado = treinoTemPersonalizado(p.id);
+
+                            return (
+                              <div key={p.id} className="p-4">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                  <div className="flex gap-4">
+                                    <div className="relative grid h-24 w-40 place-items-center overflow-hidden rounded-2xl bg-black/90 text-white">
+                                      {p.videoDemonstrativoUrl ? (
+                                        <>
+                                          {p.videoPosterUrl ? (
+                                            <img
+                                              src={normalizeUrl(p.videoPosterUrl)}
+                                              alt="Thumb do exercício personalizado"
+                                              className="absolute inset-0 h-full w-full object-cover"
+                                            />
+                                          ) : null}
+
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              openVideo(
+                                                normalizeUrl(p.videoDemonstrativoUrl || ""),
+                                                p.nome || "Vídeo do exercício"
+                                              )
+                                            }
+                                            className="absolute inset-0 grid place-items-center bg-black/60"
+                                            title="Assistir vídeo"
+                                          >
+                                            <div className="grid h-12 w-12 place-items-center rounded-full bg-white/20">
+                                              <span className="text-2xl">▶</span>
+                                            </div>
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <div className="text-sm text-white/80">sem vídeo</div>
+                                      )}
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-lg font-extrabold text-gray-900">
+                                          {p.nome}
+                                        </div>
+
+                                        {p.nivel && (
+                                          <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
+                                            {p.nivel}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {p.descricao && (
+                                        <p className="mt-1 max-w-2xl text-sm text-gray-700">
+                                          {p.descricao}
+                                        </p>
+                                      )}
+
+                                      {Array.isArray(p.categorias) && p.categorias.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                          {p.categorias.map((c) => (
+                                            <span
+                                              key={String(c)}
+                                              className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700"
+                                            >
+                                              {String(c)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-end">
+                                    <button
+                                      type="button"
+                                      disabled={jaAdicionado}
+                                      onClick={() => adicionarPersonalizadoExistente(p)}
+                                      className={[
+                                        "rounded-xl px-5 py-2 text-sm font-bold text-white",
+                                        jaAdicionado
+                                          ? "cursor-not-allowed bg-gray-300"
+                                          : "bg-green-800 hover:bg-green-900",
+                                      ].join(" ")}
+                                    >
+                                      {jaAdicionado ? "Adicionado" : "Adicionar"}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
-            </Card>
+                </>
+              )}
+          </Card>
 
             <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
               <button
