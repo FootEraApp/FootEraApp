@@ -5,11 +5,14 @@ import {
   MetodoPagamento,
   Periodicidade,
   PagamentoStatus,
+  NotificacaoTipo
 } from "@prisma/client";
 import QRCode from "qrcode";
 import * as mercadopagoModule from "mercadopago";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import { getIO } from "../socket.js";
+import { recomputeAndEmitBadge } from "./notificacoesController.js";
 
 function isLegacyPlano(planoId: string | null | undefined) {
   return String(planoId || "").toUpperCase() === "ATLETA_METODO_1";
@@ -161,14 +164,57 @@ function addMonths(d: Date, months: number) {
   return dt;
 }
 
+function monthsForPeriodicidade(periodicidade?: Periodicidade | null) {
+  return periodicidade === "Anual" ? 12 : 1;
+}
+
 function diffDays(a: Date, b: Date) {
   const ms = a.getTime() - b.getTime();
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }
 
-// =========================
-// Precificação Metodologia Avulsa
-// =========================
+async function criarNotificacaoBilling(args: {
+  usuarioId: string;
+  tipo: NotificacaoTipo;
+  titulo: string;
+  mensagem: string;
+  link?: string | null;
+}) {
+  const existente = await prisma.notificacao.findFirst({
+    where: {
+      usuarioId: args.usuarioId,
+      tipo: args.tipo,
+      titulo: args.titulo,
+      mensagem: args.mensagem,
+      lida: false,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existente) return existente;
+
+  const notif = await prisma.notificacao.create({
+    data: {
+      usuarioId: args.usuarioId,
+      tipo: args.tipo,
+      titulo: args.titulo,
+      mensagem: args.mensagem,
+      link: args.link ?? "/pagamentos",
+      lida: false,
+    } as any,
+  });
+
+  try {
+    getIO()?.to(args.usuarioId).emit("notification:new", notif);
+  } catch {}
+
+  try {
+    await recomputeAndEmitBadge(args.usuarioId);
+  } catch {}
+
+  return notif;
+}
+
 const METODOLOGIA_BASE = 19.9;
 const METODOLOGIA_POR_SEMANA = 2.5;
 const METODOLOGIA_POR_ITEM = 1.0;
@@ -182,11 +228,134 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-/**
- * Arredonda para terminar com ".90".
- * Eu fiz "ceiling para o próximo X.90" pra você nunca cobrar menos do que o cálculo.
- * Ex: 23.10 -> 23.90 ; 23.95 -> 24.90
- */
+export async function processExpiringSubscriptions() {
+  const now = new Date();
+
+  const assinaturas = await (prisma as any).assinatura.findMany({
+    where: {
+      OR: [
+        { status: "TRIAL", ativo: true },
+        { status: "ATIVA", ativo: true },
+        { status: "CANCELADA", ativo: true },
+      ],
+    },
+    orderBy: { startsAt: "asc" },
+  });
+
+  let bloqueadas = 0;
+  let avisadas = 0;
+  let desativadas = 0;
+
+  for (const a of assinaturas as any[]) {
+    const dataBase =
+      a.status === "TRIAL"
+        ? (a.trialStartsAt ?? a.startsAt)
+        : a.startsAt;
+
+    const months = monthsForPeriodicidade(a.periodicidade);
+    const dataLimite = dataBase ? addMonths(new Date(dataBase), months) : null;
+
+    // 1) AVISO COM 7 DIAS
+    if (dataLimite && a.lembreteEnviado === false) {
+      const dias = diffDays(dataLimite, now);
+
+      if (dias <= 7 && dias >= 0) {
+        await (prisma as any).assinatura.update({
+          where: { id: a.id },
+          data: {
+            lembreteEnviado: true,
+          } as any,
+        });
+
+        await criarNotificacaoBilling({
+          usuarioId: a.usuarioId,
+          tipo: NotificacaoTipo.BILLING_WARNING,
+          titulo: "Sua assinatura está perto do vencimento",
+          mensagem:
+            a.status === "TRIAL"
+              ? `Faltam ${dias} dia(s) para terminar seu trial grátis. Escolha uma forma de pagamento para não perder seus benefícios.`
+              : `Faltam ${dias} dia(s) para vencer sua assinatura ${a.plano}. Renove o pagamento para não perder seus benefícios.`,
+          link: "/pagamentos",
+        });
+
+        avisadas++;
+      }
+    }
+
+    // 2) TRIAL VENCIDO => BLOQUEIA
+    if (a.status === "TRIAL" && dataLimite && now > dataLimite) {
+      await (prisma as any).assinatura.update({
+        where: { id: a.id },
+        data: {
+          status: "BLOQUEADA",
+          ativo: false,
+          canceledAt: now,
+          bloqueadoEm: now,
+          trialEndsAt: dataLimite,
+          renovaEm: dataLimite,
+        } as any,
+      });
+
+      await criarNotificacaoBilling({
+        usuarioId: a.usuarioId,
+        tipo: NotificacaoTipo.BILLING_BLOCKED,
+        titulo: "Seu trial terminou",
+        mensagem:
+          "Seu período grátis terminou e sua assinatura foi bloqueada. Faça um novo pagamento para reativar os benefícios.",
+        link: "/pagamentos",
+      });
+
+      bloqueadas++;
+      continue;
+    }
+
+    // 3) ASSINATURA ATIVA VENCIDA SEM NOVO PAGAMENTO => BLOQUEIA
+    if (a.status === "ATIVA" && dataLimite && now > dataLimite) {
+      await (prisma as any).assinatura.update({
+        where: { id: a.id },
+        data: {
+          status: "BLOQUEADA",
+          ativo: false,
+          canceledAt: now,
+          bloqueadoEm: now,
+          renovaEm: dataLimite,
+        } as any,
+      });
+
+      await criarNotificacaoBilling({
+        usuarioId: a.usuarioId,
+        tipo: NotificacaoTipo.BILLING_BLOCKED,
+        titulo: "Sua assinatura venceu",
+        mensagem: `Sua assinatura ${a.plano} venceu e foi bloqueada por falta de renovação do pagamento.`,
+        link: "/pagamentos",
+      });
+
+      bloqueadas++;
+      continue;
+    }
+
+    // 4) CANCELADA E JÁ PASSOU O CICLO => DESATIVA DE VEZ
+    if (a.status === "CANCELADA" && dataLimite && now > dataLimite && a.ativo) {
+      await (prisma as any).assinatura.update({
+        where: { id: a.id },
+        data: {
+          ativo: false,
+          renovaEm: dataLimite,
+        } as any,
+      });
+
+      desativadas++;
+    }
+  }
+
+  return {
+    ok: true,
+    avisadas,
+    bloqueadas,
+    desativadas,
+  };
+}
+
 function roundToDot90Ceil(value: number) {
   const intPart = Math.floor(value);
   let candidate = intPart + 0.9;
@@ -457,26 +626,62 @@ async function getAssinaturasReadOnly(usuarioId: string) {
   const updates: any[] = [];
 
   for (const a of assinaturas as any[]) {
-    if (a.status === "TRIAL" && a.trialEndsAt && now > a.trialEndsAt) {
+    const dataBase =
+      a.status === "TRIAL"
+        ? (a.trialStartsAt ?? a.startsAt)
+        : a.startsAt;
+
+    const months = monthsForPeriodicidade(a.periodicidade);
+    const dataLimite = dataBase ? addMonths(new Date(dataBase), months) : null;
+
+    if (a.status === "TRIAL" && dataLimite && now > dataLimite) {
       updates.push(
         (prisma as any).assinatura.update({
           where: { id: a.id },
-          data: { status: "BLOQUEADA", ativo: false, canceledAt: now, bloqueadoEm: now } as any,
+          data: {
+            status: "BLOQUEADA",
+            ativo: false,
+            canceledAt: now,
+            bloqueadoEm: now,
+            trialEndsAt: dataLimite,
+            renovaEm: dataLimite,
+          } as any,
         })
       );
+      continue;
     }
 
-    if (a.status === "CANCELADA" && a.renovaEm && now > a.renovaEm) {
+    if (a.status === "ATIVA" && dataLimite && now > dataLimite) {
       updates.push(
         (prisma as any).assinatura.update({
           where: { id: a.id },
-          data: { ativo: false } as any,
+          data: {
+            status: "BLOQUEADA",
+            ativo: false,
+            canceledAt: now,
+            bloqueadoEm: now,
+            renovaEm: dataLimite,
+          } as any,
+        })
+      );
+      continue;
+    }
+
+    if (a.status === "CANCELADA" && dataLimite && now > dataLimite) {
+      updates.push(
+        (prisma as any).assinatura.update({
+          where: { id: a.id },
+          data: {
+            ativo: false,
+            renovaEm: dataLimite,
+          } as any,
         })
       );
     }
   }
 
   if (updates.length) await prisma.$transaction(updates);
+
   if (updates.length) {
     return (prisma as any).assinatura.findMany({
       where: { usuarioId },
@@ -485,7 +690,6 @@ async function getAssinaturasReadOnly(usuarioId: string) {
   }
 
   return assinaturas;
-
 }
 
 function isAssinaturaAtiva(a: any) {
@@ -562,10 +766,21 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     const status = String(assinaturaPrincipal?.status || "SEM_ASSINATURA");
     const trialEndsAt = (assinaturaPrincipal?.trialEndsAt as Date | null) ?? null;
     const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
-    const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
 
-    const precisaEscolherPagamento = trialAtivo && diasRestantes != null && diasRestantes <= 7;
+    const dataBase =
+      status === "TRIAL"
+        ? ((assinaturaPrincipal?.trialStartsAt as Date | null) ?? (assinaturaPrincipal?.startsAt as Date | null) ?? null)
+        : ((assinaturaPrincipal?.startsAt as Date | null) ?? null);
 
+    const months = monthsForPeriodicidade(assinaturaPrincipal.periodicidade);
+    const dataLimite = dataBase ? addMonths(new Date(dataBase), months) : null;
+
+    const diasRestantes = dataLimite ? diffDays(dataLimite, now) : null;
+    const precisaEscolherPagamento =
+      (status === "TRIAL" || status === "ATIVA") &&
+      diasRestantes != null &&
+      diasRestantes <= 7 &&
+      diasRestantes >= 0;
     const bloqueado = status === "BLOQUEADA";
     const cancelada = status === "CANCELADA";
 
@@ -1512,7 +1727,7 @@ export async function cancelSubscription(req: Request, res: Response) {
     await (prisma as any).assinatura.updateMany({
       where: { usuarioId, ativo: true },
       data: {
-        ativo: true,
+        ativo: false,
         canceledAt: now,
         status: "CANCELADA",
         bloqueadoEm: null,
@@ -1853,67 +2068,101 @@ export async function redeemGift(req: Request, res: Response) {
   }
 }
 
-function addDays(d: Date, days: number) {
-  return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
-}
-
 export async function checkExpiringSubscriptions(req: Request, res: Response) {
   try {
-    const daysBefore = Number(process.env.BILLING_DAYS_BEFORE_REMINDER || "7") || 7;
-    const graceDaysPaid = Number(process.env.BILLING_GRACE_DAYS || "7") || 7;
     const now = new Date();
-    const limitReminder = new Date(now.getTime() + daysBefore * 24 * 60 * 60 * 1000);
 
     const assinaturas = await (prisma as any).assinatura.findMany({
-      where: { OR: [{ status: "TRIAL" as any }, { status: "ATIVA" as any }, { status: "CANCELADA" as any }] },
-      include: { usuario: { select: { id: true, email: true, nome: true, nomeDeUsuario: true } } },
+      where: {
+        ativo: true,
+        OR: [
+          { status: "TRIAL" },
+          { status: "ATIVA" },
+          { status: "CANCELADA" },
+        ],
+      },
+      orderBy: { startsAt: "asc" },
     });
 
-    let blockedCount = 0;
-    let remindersCount = 0;
+    let bloqueadas = 0;
+    let lembretes = 0;
+    let desativadas = 0;
 
     for (const a of assinaturas as any[]) {
-      if (a.status === "TRIAL" && a.trialEndsAt) {
-        if (now > a.trialEndsAt) {
+      const dataLimite =
+        a.status === "TRIAL"
+          ? a.trialEndsAt
+          : a.renovaEm;
+
+      // aviso de 7 dias
+      if (
+        dataLimite &&
+        a.lembreteEnviado === false
+      ) {
+        const dias = diffDays(dataLimite, now);
+
+        if (dias <= 7 && dias >= 0) {
           await (prisma as any).assinatura.update({
             where: { id: a.id },
-            data: { status: "BLOQUEADA", ativo: false, canceledAt: now, bloqueadoEm: now } as any,
+            data: {
+              lembreteEnviado: true,
+            } as any,
           });
-          blockedCount++;
-          continue;
-        }
 
-        if (a.status === "CANCELADA") {
-          const due = a.renovaEm as Date | null;
-          if (due && now > due) {
-            await (prisma as any).assinatura.update({
-              where: { id: a.id },
-              data: { ativo: false } as any,
-            });
-          }
-          continue;
+          lembretes++;
         }
       }
 
-      if (a.status === "ATIVA") {
-        const due = a.renovaEm as Date | null;
-        if (!due) continue;
+      // trial vencido
+      if (a.status === "TRIAL" && a.trialEndsAt && now > a.trialEndsAt) {
+        await (prisma as any).assinatura.update({
+          where: { id: a.id },
+          data: {
+            status: "BLOQUEADA",
+            ativo: false,
+            canceledAt: now,
+            bloqueadoEm: now,
+          } as any,
+        });
+        bloqueadas++;
+        continue;
+      }
 
-        const limiteGrace = addDays(due, graceDaysPaid);
-        if (now > limiteGrace) {
-          await (prisma as any).assinatura.update({
-            where: { id: a.id },
-            data: { status: "BLOQUEADA", ativo: false, canceledAt: now, bloqueadoEm: now } as any,
-          });
-          blockedCount++;
-          continue;
-        }
+      // assinatura ativa vencida
+      if (a.status === "ATIVA" && a.renovaEm && now > a.renovaEm) {
+        await (prisma as any).assinatura.update({
+          where: { id: a.id },
+          data: {
+            status: "BLOQUEADA",
+            ativo: false,
+            canceledAt: now,
+            bloqueadoEm: now,
+          } as any,
+        });
+        bloqueadas++;
+        continue;
+      }
+
+      // cancelada e já passou da renovação
+      if (a.status === "CANCELADA" && a.renovaEm && now > a.renovaEm && a.ativo) {
+        await (prisma as any).assinatura.update({
+          where: { id: a.id },
+          data: {
+            ativo: false,
+          } as any,
+        });
+        desativadas++;
       }
     }
 
-    return res.json({ ok: true, daysBefore, graceDaysPaid, blockedCount, remindersCount });
+    return res.json({
+      ok: true,
+      bloqueadas,
+      lembretes,
+      desativadas,
+    });
   } catch (err) {
-    console.error("Erro check-expiring:", err);
-    return res.status(500).json({ message: "Erro ao checar assinaturas" });
+    console.error("Erro em checkExpiringSubscriptions:", err);
+    return res.status(500).json({ message: "Erro ao verificar assinaturas expirando" });
   }
 }

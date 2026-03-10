@@ -112,10 +112,42 @@ async function recomputeInclusoesExercicio(exercicioId: string) {
   return total;
 }
 
+function getUserFromReq(req: AuthenticatedRequest) {
+  const anyReq = req as any;
+
+  return (
+    anyReq.user ||         
+    anyReq.usuario ||
+    anyReq.auth?.user ||    
+    anyReq.auth ||         
+    null
+  );
+}
+
+const SAO_PAULO_TZ = "America/Sao_Paulo";
+const SAO_PAULO_OFFSET = "-03:00";
+
+function getSaoPauloDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SAO_PAULO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+  };
+}
+
 function parseDateInput(raw?: any): Date | null {
   if (!raw) return null;
 
-  // já veio Date
   if (raw instanceof Date) {
     return Number.isNaN(raw.getTime()) ? null : raw;
   }
@@ -123,7 +155,15 @@ function parseDateInput(raw?: any): Date | null {
   const s = String(raw).trim();
   if (!s) return null;
 
-  // ✅ datetime-local SEM timezone: "2026-02-24T19:00" ou "2026-02-24T19:00:00"
+  // ISO com timezone explícito
+  if (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.test(s)
+  ) {
+    const dt = new Date(s);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // datetime-local sem timezone
   const mLocal = s.match(
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
   );
@@ -140,15 +180,13 @@ function parseDateInput(raw?: any): Date | null {
     );
   }
 
-  // ✅ só data "YYYY-MM-DD" (sem hora) -> mantém fallback
+  // só data
   const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mDate) {
     const [, Y, M, D] = mDate;
-    // meio-dia evita “voltar dia” em fuso negativo quando serializa/mostra
     return new Date(Number(Y), Number(M) - 1, Number(D), 12, 0, 0, 0);
   }
 
-  // ✅ ISO com timezone (Z ou offset) ou qualquer formato que Date entenda
   const dt = new Date(s);
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
@@ -164,26 +202,18 @@ function parseDateOnlySafe(raw: any): Date {
     return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
   }
 
-  return new Date(s);
-}
-
-function getUserFromReq(req: AuthenticatedRequest) {
-  const anyReq = req as any;
-
-  return (
-    anyReq.user ||         
-    anyReq.usuario ||
-    anyReq.auth?.user ||    
-    anyReq.auth ||         
-    null
-  );
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? new Date(NaN) : dt;
 }
 
 function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const { year, month, day } = getSaoPauloDateParts(d);
+  return new Date(`${year}-${month}-${day}T00:00:00${SAO_PAULO_OFFSET}`);
 }
+
 function endOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+  const start = startOfDay(d);
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
 }
 
 const FAIR_USE_TURMA_MES = 30;
@@ -2195,28 +2225,41 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       const grupos = new Map<string, typeof rows>();
 
       for (const r of rows) {
-        const dt = r.dataTreino ? new Date(r.dataTreino) : null;
-        if (!dt || Number.isNaN(dt.getTime())) continue;
+  const dt = r.dataTreino ? new Date(r.dataTreino) : null;
+  if (!dt || Number.isNaN(dt.getTime())) continue;
 
-        const y = dt.getFullYear();
-        const m = String(dt.getMonth() + 1).padStart(2, "0");
-        const d = String(dt.getDate()).padStart(2, "0");
-        const hh = String(dt.getHours()).padStart(2, "0");
-        const mm = String(dt.getMinutes()).padStart(2, "0");
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(dt);
 
-        const treinoKey = String(
-          r.treinoProgramadoId ??
-          r.treinoProgramado?.id ??
-          r.titulo ??
-          r.id
-        );
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
 
-        const key = `${turmaId}__${y}-${m}-${d}__${hh}:${mm}__${treinoKey}`;
+    const y = get("year");
+    const m = get("month");
+    const d = get("day");
+    const hh = get("hour");
+    const mm = get("minute");
 
-        const atual = grupos.get(key) ?? [];
-        atual.push(r);
-        grupos.set(key, atual);
-      }
+    const treinoKey = String(
+      r.treinoProgramadoId ??
+      r.treinoProgramado?.id ??
+      r.titulo ??
+      r.id
+    );
+
+    const key = `${turmaId}__${y}-${m}-${d}__${hh}:${mm}__${treinoKey}`;
+
+    const atual = grupos.get(key) ?? [];
+    atual.push(r);
+    grupos.set(key, atual);
+  }
 
       const agora = new Date();
 

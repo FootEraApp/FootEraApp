@@ -128,6 +128,7 @@ import adminMetodologiasRoutes from "./routes/adminMetodologiasRoutes.js";
 import permissoesRoutes from "./routes/permissoesRoutes.js";
 import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js";
 import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
+import { processExpiringSubscriptions } from "./controllers/billingController.js";
 
 import { mercadoPagoWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -334,8 +335,7 @@ app.use("/api/turmas", authenticateToken, turmasRoutes);
 app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
 app.use("/api/treinosSalvos", treinosSalvosRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
-app.post("/api/billing/webhook", mercadoPagoWebhook);
-app.use("/api/billing", authenticateToken, billingRoutes);
+app.use("/api/billing", billingRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/templates", templatesRoutes);
 app.use('/api/usage', usageRouter);
@@ -399,3 +399,18 @@ process.on("uncaughtException", (err) => console.error("Uncaught Exception:", er
 setInterval(async () => {
   try { await limparTreinosSalvosExpirados({} as any, { json(){} } as any); } catch {}
 }, 24 * 60 * 60 * 1000);
+
+async function runBillingDailyCheck() {
+  try {
+    const result = await processExpiringSubscriptions();
+    console.log("[billing] rotina diária executada:", result);
+  } catch (err) {
+    console.error("[billing] erro na rotina diária:", err);
+  }
+}
+
+runBillingDailyCheck();
+
+setInterval(() => {
+  runBillingDailyCheck();
+}, 60 * 60 * 1000);

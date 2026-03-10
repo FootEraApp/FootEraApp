@@ -223,14 +223,21 @@ function toDatetimeLocalValue(d: Date) {
   return `${y}-${m}-${day}T${hh}:${mm}`; 
 }
 
-function toLocalISO_NoZ(date: Date): string {
+function toISOWithLocalOffset(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
   const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+
+  const offsetMin = -date.getTimezoneOffset(); // ex.: Brasil = -180 => +(-180 invertido) = -03:00
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMin);
+  const offH = String(Math.floor(abs / 60)).padStart(2, "0");
+  const offM = String(abs % 60).padStart(2, "0");
+
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}${sign}${offH}:${offM}`;
 }
 
 function dateKeyLocal(date: Date): string {
@@ -2164,13 +2171,76 @@ useEffect(() => {
 
     const exs = t.exercicios ?? t.exs ?? t.conteudo?.exercicios ?? [];
     const exUi: ExItemUILocal[] = (Array.isArray(exs) ? exs : []).map((ex: any, idx: number) => ({
-      idCatalogo: ex.exercicioId ?? ex.idCatalogo ?? ex.id ?? null,
-      nome: ex.nome ?? ex.exercicio?.nome ?? "",
-      descricao: ex.descricao ?? ex.exercicio?.descricao ?? "",
+      id: ex.id ?? `ex_${idx}`,
+
+      // catálogo
+      idCatalogo:
+        ex.exercicioId ??
+        ex.idCatalogo ??
+        (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
+        null,
+
+      exercicioId:
+        ex.exercicioId ??
+        ex.idCatalogo ??
+        (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
+        null,
+
+      // personalizado
+      exercicioPersonalizadoId:
+        ex.exercicioPersonalizadoId ??
+        ex.exercicioPersonalizado?.id ??
+        null,
+
+      tipo:
+        ex.exercicioPersonalizadoId || ex.exercicioPersonalizado
+          ? "personalizado"
+          : ex.exercicioTemporarioId || ex.exercicioTemporario
+          ? "temporario"
+          : "catalogo",
+
+      nome:
+        ex.nome ??
+        ex.exercicio?.nome ??
+        ex.exercicioPersonalizado?.nome ??
+        ex.exercicioTemporario?.nome ??
+        "",
+
+      descricao:
+        ex.descricao ??
+        ex.exercicio?.descricao ??
+        ex.exercicioPersonalizado?.descricao ??
+        ex.exercicioTemporario?.descricao ??
+        "",
+
       repeticoes: ex.repeticoes ?? ex.reps ?? "",
       series: ex.series ?? "",
       ordem: Number(ex.ordem ?? idx + 1),
-      videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+
+      videoUrl:
+        ex.videoDemonstrativoUrl ??
+        ex.videoUrl ??
+        ex.exercicioPersonalizado?.videoDemonstrativoUrl ??
+        ex.exercicioTemporario?.videoDemonstrativoUrl ??
+        ex.exercicio?.videoDemonstrativoUrl ??
+        null,
+
+      videoPosterUrl:
+        ex.videoPosterUrl ??
+        ex.exercicioPersonalizado?.videoPosterUrl ??
+        null,
+
+      nivel:
+        ex.nivel ??
+        ex.exercicioPersonalizado?.nivel ??
+        ex.exercicio?.nivel ??
+        null,
+
+      categorias:
+        ex.categorias ??
+        ex.exercicioPersonalizado?.categorias ??
+        ex.exercicio?.categorias ??
+        [],
     }));
 
     setExerciciosSelecionados(exUi);
@@ -2630,12 +2700,12 @@ useEffect(() => {
       }
 
       const datasLocal = datasBase.map((d) => {
-      const dateOnly = toDateOnlyBR(d);
-      if (!dateOnly) return "";
+        const dateOnly = toDateOnlyBR(d);
+        if (!dateOnly) return "";
 
-      const dt = new Date(`${dateOnly}T${baseTime}:00`);
-      return toLocalISO_NoZ(dt);
-    }).filter(Boolean);
+        const dt = new Date(`${dateOnly}T${baseTime}:00`);
+        return toISOWithLocalOffset(dt);
+      }).filter(Boolean);
 
       const body = {
         treinoProgramadoId,
@@ -2929,13 +2999,11 @@ useEffect(() => {
           };
         }
 
-        // ✅ Se tem mídia/poster (ou já é personalizado), manda como personalizado
-        // IMPORTANTÍSSIMO: não mandar exercicioId aqui, senão o backend cai no createMany "oficial" e ignora mídia.
         return {
           nome: String(e.nome || "").trim(),
-          descricao: String(e.descricao || "").trim() || null,   // ✅ AGORA VAI PRO BD
-          nivel: e.nivel ?? nivel ?? null,                      // ✅ opcional (mas recomendado)
-          categorias: Array.isArray(e.categorias) ? e.categorias : [], // ✅ opcional
+          descricao: String(e.descricao || "").trim() || null,
+          nivel: e.exercicioPersonalizadoId ? (e.nivel ?? null) : (e.nivel ?? null),
+          categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
           repeticoes: repeticoesFinal,
           observacao: e.observacao ?? null,
@@ -3174,8 +3242,8 @@ useEffect(() => {
       }
 
       const expira = new Date(quando.getTime() + 3 * 24 * 60 * 60 * 1000);
-      const dataTreinoLocal = toLocalISO_NoZ(quando);
-      const dataExpiracaoLocal = toLocalISO_NoZ(expira);
+      const dataTreinoLocal = toISOWithLocalOffset(quando);
+      const dataExpiracaoLocal = toISOWithLocalOffset(expira);
 
       const res = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",

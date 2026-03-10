@@ -154,8 +154,6 @@ function normCategoria(v?: string): Categoria {
 }
 
 export const createTreinoProgramado = async (req: Request, res: Response) => {
-  const isTemplate = !!req.body?.naoExpira === true;
-
   try {
     const body =
       typeof req.body?.payload === "string"
@@ -206,13 +204,26 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     if (!Array.isArray(exercicios) || exercicios.length === 0) {
       return res.status(400).json({ message: "Informe ao menos um exercício no treino." });
     }
-    if (exercicios.some((e: any) => {
-      const id = String(e?.exercicioId ?? e?.id ?? "").trim();
-      const nome = String(e?.nome ?? "").trim();
-      return !id && !nome;
-    })) {
+    if (
+      exercicios.some((e: any) => {
+        const exercicioId = String(e?.exercicioId ?? "").trim();
+        const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
+        const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
+        const idGenerico = String(e?.id ?? "").trim();
+        const nome = String(e?.nome ?? "").trim();
+
+        return (
+          !exercicioId &&
+          !exercicioPersonalizadoId &&
+          !exercicioTemporarioId &&
+          !idGenerico &&
+          !nome
+        );
+      })
+    ) {
       return res.status(400).json({
-        message: "Cada exercício precisa ter 'exercicioId' (catálogo) OU 'nome' (personalizado).",
+        message:
+          "Cada exercício precisa ter 'exercicioId' (catálogo), 'exercicioPersonalizadoId', 'exercicioTemporarioId' ou 'nome' (personalizado novo).",
       });
     }
 
@@ -318,27 +329,38 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           return { exercicioId: idGenerico, ordem, repeticoes };
         }
 
-        // 3) Se não veio id nenhum, aí sim cria/acha personalizado por nome (seu fluxo atual)
-
-        // ✅ 2) Exercício personalizado
-        const nome = String(e?.nome ?? "").trim();
+        const nomeNormalizado = String(e?.nome ?? "")
+          .trim()
+          .replace(/\s+/g, " ");
+          
+        if (!nomeNormalizado) {
+          throw new Error("Nome do exercício personalizado não informado.");
+        }
         const descricao = e?.descricao != null ? String(e.descricao) : null;
-
         // opcional
         const videoDemonstrativoUrl =
           e?.videoDemonstrativoUrl != null ? String(e.videoDemonstrativoUrl) : null;
-
         const videoPosterUrl = e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
         // se vier nivel/categorias no treino, dá pra salvar junto
-        const nivelDoTreino = nivel ? normNivel(nivel) : null;
-        const categoriasDoTreino: Categoria[] = Array.isArray(categoria)
-          ? (categoria.map(normCategoria) as Categoria[])
+        const nivelDoExercicio = e?.nivel ? normNivel(e.nivel) : null;
+        const categoriasDoExercicio: Categoria[] = Array.isArray(e?.categorias)
+          ? (e.categorias.map(normCategoria) as Categoria[])
           : [];
 
-        // procura por nome (único por criador)
         const existente = await prisma.exercicioPersonalizado.findFirst({
-          where: { criadorUsuarioId: viewerUserId, nome },
-          select: { id: true },
+          where: {
+            nome: {
+              equals: nomeNormalizado,
+              mode: "insensitive",
+            },
+          },
+          select: {
+            id: true,
+            nome: true,
+            nivel: true,
+            categorias: true,
+            criadorUsuarioId: true,
+          },
         });
 
         if (existente?.id && (videoDemonstrativoUrl || videoPosterUrl)) {
@@ -351,15 +373,17 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           });
         }
 
-        const personalizadoId = existente?.id
-          ? existente.id
-          : (
+        let personalizadoId = existente?.id ?? null;
+
+        if (!personalizadoId) {
+          try {
+            personalizadoId = (
               await prisma.exercicioPersonalizado.create({
                 data: {
-                  nome,
+                  nome: nomeNormalizado,
                   descricao,
-                  nivel: nivelDoTreino,
-                  categorias: categoriasDoTreino,
+                  nivel: nivelDoExercicio,
+                  categorias: categoriasDoExercicio,
                   videoDemonstrativoUrl,
                   videoPosterUrl,
                   criadorUsuarioId: viewerUserId,
@@ -367,6 +391,21 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
                 select: { id: true },
               })
             ).id;
+          } catch (err: any) {
+            const again = await prisma.exercicioPersonalizado.findFirst({
+              where: {
+                nome: {
+                  equals: nomeNormalizado,
+                  mode: "insensitive",
+                },
+              },
+              select: { id: true },
+            });
+
+            if (!again?.id) throw err;
+            personalizadoId = again.id;
+          }
+        }
 
         return {
           exercicioPersonalizadoId: personalizadoId,
@@ -530,7 +569,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         console.error("Erro ao criar treino programado:", error);
         return res.status(500).json({ message: "Erro interno ao criar treino.", error: error.message });
       }
-    };
+};
 
 export const getTreinoById = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -568,6 +607,33 @@ export async function updateTreino(req: Request, res: Response) {
       exercicios = [],
       tipoUsuario, tipoUsuarioId,
     } = req.body;
+
+    if (!Array.isArray(exercicios) || exercicios.length === 0) {
+      return res.status(400).json({ message: "Informe ao menos um exercício no treino." });
+    }
+
+    if (
+      exercicios.some((e: any) => {
+        const exercicioId = String(e?.exercicioId ?? "").trim();
+        const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
+        const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
+        const idGenerico = String(e?.id ?? "").trim();
+        const nome = String(e?.nome ?? "").trim();
+
+        return (
+          !exercicioId &&
+          !exercicioPersonalizadoId &&
+          !exercicioTemporarioId &&
+          !idGenerico &&
+          !nome
+        );
+      })
+    ) {
+      return res.status(400).json({
+        message:
+          "Cada exercício precisa ter 'exercicioId' (catálogo), 'exercicioPersonalizadoId', 'exercicioTemporarioId', 'id' ou 'nome' (personalizado novo).",
+      });
+    }
 
     const perm = await mustBeOwner(req, id);
     if (!perm.ok) return res.status(perm.status).json({ message: perm.message });
@@ -646,15 +712,33 @@ export async function updateTreino(req: Request, res: Response) {
         const videoPosterUrl =
   e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
         // se vier nivel/categorias no treino, dá pra salvar junto
-        const nivelDoTreino = nivel ? normNivel(nivel) : null;
-        const categoriasDoTreino: Categoria[] = Array.isArray(categoria)
-          ? (categoria.map(normCategoria) as Categoria[])
+        const nivelDoExercicio = e?.nivel ? normNivel(e.nivel) : null;
+        const categoriasDoExercicio: Categoria[] = Array.isArray(e?.categorias)
+          ? (e.categorias.map(normCategoria) as Categoria[])
           : [];
 
-        // procura por nome (único por criador)
+        const nomeNormalizado = String(e?.nome ?? "")
+          .trim()
+          .replace(/\s+/g, " ");
+        
+        if (!nomeNormalizado) {
+          throw new Error("Nome do exercício personalizado não informado.");
+        }
+
         const existente = await prisma.exercicioPersonalizado.findFirst({
-          where: { criadorUsuarioId: viewerUserId, nome },
-          select: { id: true },
+          where: {
+            nome: {
+              equals: nomeNormalizado,
+              mode: "insensitive",
+            },
+          },
+          select: {
+            id: true,
+            nome: true,
+            nivel: true,
+            categorias: true,
+            criadorUsuarioId: true,
+          },
         });
 
         if (existente?.id && (videoDemonstrativoUrl || videoPosterUrl)) {
@@ -667,15 +751,17 @@ export async function updateTreino(req: Request, res: Response) {
           });
         }
 
-        const personalizadoId = existente?.id
-          ? existente.id
-          : (
+        let personalizadoId = existente?.id ?? null;
+
+        if (!personalizadoId) {
+          try {
+            personalizadoId = (
               await prisma.exercicioPersonalizado.create({
                 data: {
-                  nome,
+                  nome: nomeNormalizado,
                   descricao,
-                  nivel: nivelDoTreino,
-                  categorias: categoriasDoTreino,
+                  nivel: nivelDoExercicio,
+                  categorias: categoriasDoExercicio,
                   videoDemonstrativoUrl,
                   videoPosterUrl,
                   criadorUsuarioId: viewerUserId,
@@ -683,6 +769,21 @@ export async function updateTreino(req: Request, res: Response) {
                 select: { id: true },
               })
             ).id;
+          } catch (err: any) {
+            const again = await prisma.exercicioPersonalizado.findFirst({
+              where: {
+                nome: {
+                  equals: nomeNormalizado,
+                  mode: "insensitive",
+                },
+              },
+              select: { id: true },
+            });
+
+            if (!again?.id) throw err;
+            personalizadoId = again.id;
+          }
+        }
 
         return {
           exercicioPersonalizadoId: personalizadoId,

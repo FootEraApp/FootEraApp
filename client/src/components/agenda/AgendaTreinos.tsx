@@ -1759,7 +1759,7 @@ export default function AgendaTreinos({
                                 type="button"
                                 className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-extrabold hover:bg-emerald-700"
                                 onClick={() => {
-                                  window.location.href = "/assinatura";
+                                  window.location.href = "/pagamentos";
                                 }}
                               >
                                 Ver planos
