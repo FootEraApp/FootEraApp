@@ -18,6 +18,7 @@ export default defineConfig({
       devOptions: { enabled: false },
 
       workbox: {
+        maximumFileSizeToCacheInBytes: 5000000,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
