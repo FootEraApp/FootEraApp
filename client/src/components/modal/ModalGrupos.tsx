@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { API } from "../../config.js";
+import { useState, useEffect } from "react";
+import { API, APP } from "../../config.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 interface Usuario {
   id: string;
@@ -14,12 +16,16 @@ interface Props {
   token: string;
 }
 
+function getAvatarSrc(foto?: string) {
+  if (!foto || !foto.trim()) return AVATAR_FALLBACK;
+  if (foto.startsWith("http://") || foto.startsWith("https://")) return foto;
+  return `${API.BASE_URL}${foto}`;
+}
+
 export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
-
   const [nomeGrupo, setNomeGrupo] = useState("");
   const [descricaoGrupo, setDescricaoGrupo] = useState("");
-
   const [membrosSelecionados, setMembrosSelecionados] = useState<Set<string>>(new Set([usuarioId]));
 
   const selecionadosCount = membrosSelecionados.size;
@@ -144,9 +150,13 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
             <label className="flex items-center gap-2 select-none opacity-90">
               <input type="checkbox" checked readOnly disabled />
               <img
-                src={"https://via.placeholder.com/30"}
+                src={AVATAR_FALLBACK}
                 alt="Você"
                 className="w-8 h-8 rounded-full object-cover border"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = AVATAR_FALLBACK;
+                }}
               />
               <span className="flex-1">
                 você <span className="text-xs text-green-700 font-semibold">(admin/owner)</span>
@@ -169,9 +179,13 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
                   disabled={u.id === usuarioId}
                 />
                 <img
-                  src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/30"}
+                  src={getAvatarSrc(u.foto)}
                   alt={u.nome}
                   className="w-8 h-8 rounded-full object-cover border"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = AVATAR_FALLBACK;
+                  }}
                 />
                 <span className="flex-1">
                   {u.nome}

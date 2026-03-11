@@ -12,8 +12,15 @@ import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import { ModalAdicionarMembrosGrupo } from "../components/mensagens/ModalAdicionarMembrosGrupo.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function getAvatarSrc(foto?: string | null) {
+  if (!foto || !foto.trim()) return AVATAR_FALLBACK;
+  if (foto.startsWith("http://") || foto.startsWith("https://")) return foto;
+  return `${API.BASE_URL}${foto}`;
+}
 
 interface Usuario {
   id: string;
@@ -80,6 +87,23 @@ interface Desafio {
 
 type ChatTarget = { tipo: "usuario"; usuario: Usuario } | { tipo: "grupo"; grupo: Grupo };
 
+type GrupoMembro = {
+  id: string;
+  nome: string;
+  foto?: string | null;
+  tipo: "ADMIN" | "MEMBRO";
+  isOwner?: boolean;
+};
+
+type GrupoDetalhe = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  ownerId: string;
+  meuTipo: "ADMIN" | "MEMBRO";
+  membros: GrupoMembro[];
+};
+
 export default function PaginaMensagens() {
   const [, navigate] = useLocation();
   const [showSidebar, setShowSidebar] = useState(false);
@@ -96,6 +120,10 @@ export default function PaginaMensagens() {
   const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
   const fetchPrivSeqRef = useRef(0);
   const fetchGrupoSeqRef = useRef(0);
+  const [grupoDetalhe, setGrupoDetalhe] = useState<GrupoDetalhe | null>(null);
+  const [mostrarInfoGrupo, setMostrarInfoGrupo] = useState(false);
+  const [carregandoGrupoDetalhe, setCarregandoGrupoDetalhe] = useState(false);
+  const [modalAdicionarMembrosAberto, setModalAdicionarMembrosAberto] = useState(false);
 
   type PresencaUI = {
     isOnline: boolean | null;
@@ -200,6 +228,7 @@ export default function PaginaMensagens() {
 
   function selecionarAlvo(novo: ChatTarget) {
     setAlvo(novo);
+
     localStorage.setItem(
       "mensagens_last_target",
       JSON.stringify(
@@ -208,10 +237,17 @@ export default function PaginaMensagens() {
           : { tipo: "grupo", id: novo.grupo.id }
       )
     );
+
     if (novo.tipo === "usuario") {
       saveRecentUser(novo.usuario);
       markReadFromUser(novo.usuario.id);
+      setGrupoDetalhe(null);
+      setMostrarInfoGrupo(false);
+    } else {
+      carregarDetalheGrupo(novo.grupo.id);
+      setMostrarInfoGrupo(false);
     }
+
     setShowSidebar(false);
   }
 
@@ -238,6 +274,7 @@ export default function PaginaMensagens() {
 
   const pendingOpenRef = useRef(false);
   const RECENTS_KEY = "mensagens_recent_usuarios";
+
   
   function initials(name?: string) {
     if (!name) return "U";
@@ -409,6 +446,15 @@ export default function PaginaMensagens() {
     };
   }, []);
 
+  useEffect(() => {
+    if (alvo?.tipo === "grupo" && alvo.grupo?.id) {
+      carregarDetalheGrupo(alvo.grupo.id);
+    } else {
+      setGrupoDetalhe(null);
+      setMostrarInfoGrupo(false);
+    }
+  }, [alvo]);
+
   const recarregarMensagensDoGrupoAtual = async () => {
     const current = alvoRef.current;
     if (current?.tipo === "grupo") {
@@ -557,60 +603,73 @@ export default function PaginaMensagens() {
 
             return (
               <div
-                key={u.id}
-                className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${
-                  selecionado
-                    ? "bg-green-50 border-green-300"
-                    : "hover:bg-gray-50 bg-white"
-                }`}
-                onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
-                data-testid="usuario-list-item"
+              key={u.id}
+              className={`flex items-center gap-3 p-3 mb-3 rounded-lg border shadow-sm transition ${
+                selecionado
+                  ? "bg-green-50 border-green-300"
+                  : "hover:bg-gray-50 bg-white"
+              }`}
+              data-testid="usuario-list-item"
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/perfil/${u.id}`);
+                }}
+                className="shrink-0 cursor-pointer"
+                title={`Ver perfil de ${u.nome}`}
               >
                 <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 min-w-0">
-                      <span className="font-medium text-sm truncate">
-                        {u.nome}
-                      </span>
+              </button>
 
-                      {(() => {
-                        const p = presencas[u.id];
-                        if (!p || p.privacyBlocked) return null;
+              <button
+                type="button"
+                onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
+                className="flex items-center flex-1 min-w-0 text-left"
+              >
+                <div className="flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="font-medium text-sm truncate">
+                      {u.nome}
+                    </span>
 
-                        const label = p.isOnline
-                          ? "Online"
-                          : formatLastSeen(p.lastSeenAt);
+                    {(() => {
+                      const p = presencas[u.id];
+                      if (!p || p.privacyBlocked) return null;
 
-                        // 🎯 regra da bolinha
-                        let dotClass = "bg-red-500"; // offline seco
-                        if (p.isOnline) {
-                          dotClass = "bg-green-500"; // online
-                        } else if (p.lastSeenAt) {
-                          dotClass = "bg-gray-400"; // há X min / há Xh
-                        }
+                      const label = p.isOnline
+                        ? "Online"
+                        : formatLastSeen(p.lastSeenAt);
 
-                        return (
-                          <span className="shrink-0 flex items-center gap-1 text-[11px] text-gray-500">
-                            <span
-                              className={`w-2 h-2 rounded-full ${dotClass}`}
-                            />
-                            <span>{label}</span>
-                          </span>
-                        );
-                      })()}
-                    </div>
+                      let dotClass = "bg-red-500";
+                      if (p.isOnline) {
+                        dotClass = "bg-green-500";
+                      } else if (p.lastSeenAt) {
+                        dotClass = "bg-gray-400";
+                      }
 
-                    <div className="text-xs text-gray-500 truncate">
-                      {lastMsgByUser[u.id] || ""}
-                    </div>
+                      return (
+                        <span className="shrink-0 flex items-center gap-1 text-[11px] text-gray-500">
+                          <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+                          <span>{label}</span>
+                        </span>
+                      );
+                    })()}
                   </div>
 
-                {unread > 0 && (
-                  <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-green-700 text-white shrink-0">
-                    {unread}
-                  </span>
-                )}
-              </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {lastMsgByUser[u.id] || ""}
+                  </div>
+                </div>
+              </button>
+
+              {unread > 0 && (
+                <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-green-700 text-white shrink-0">
+                  {unread}
+                </span>
+              )}
+            </div>
             );
           })}
         </div>
@@ -1067,54 +1126,167 @@ export default function PaginaMensagens() {
     });
   }, [usuariosMutuos, token]);
 
-  async function carregarMensagensPrivadas(otherId: string, append: boolean) {
-  const mySeq = ++fetchPrivSeqRef.current;
-  try {
-    const base = append ? mensagensPrivadas : [];
-    const ultimoId = append && base.length > 0 ? base[0].id : undefined;
+  async function sairDoGrupo(grupoId: string) {
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}/sair`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const query = new URLSearchParams({
-      otherId,
-      limit: String(limite),
-      ...(ultimoId ? { cursor: ultimoId } : {}),
-    });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Erro ao sair do grupo");
+      }
 
-        const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const json = await res.json();
-    const novas: Mensagem[] = Array.isArray(json)
-      ? json
-      : Array.isArray(json.items)
-      ? json.items
-      : Array.isArray(json.mensagens)
-      ? json.mensagens
-      : [];
-
-    if (!Array.isArray(novas)) {
-      setTemMaisPriv(false);
-      return;
+      alert("Você saiu do grupo.");
+      setGrupoDetalhe(null);
+      setMostrarInfoGrupo(false);
+      // aqui você pode limpar o grupo selecionado ou voltar pra lista
+    } catch (err: any) {
+      alert(err.message || "Erro ao sair do grupo");
     }
+  }
 
-    const stillSame =
-      mySeq === fetchPrivSeqRef.current &&
-      alvoRef.current?.tipo === "usuario" &&
-      alvoRef.current.usuario.id === otherId;
-    if (!stillSame) return;
+  async function alterarTipoMembroDoGrupo(
+    grupoId: string,
+    membroId: string,
+    tipo: "ADMIN" | "MEMBRO"
+  ) {
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}/membros/${membroId}/tipo`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tipo }),
+      });
 
-    if (novas.length < limite) setTemMaisPriv(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Erro ao alterar cargo do membro");
+      }
 
-    const novasOrdenadas = [...novas].reverse();
-    setMensagensPrivadas(prev => {
-      const combined = append ? [...novasOrdenadas, ...prev] : [...novasOrdenadas];
-      const next = Array.from(new Map(combined.map(m => [m.id, m])).values())
-        .sort((a,b)=> new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
-      safeSave(`conversa_${usuarioId}_${otherId}`, next);
-      return next;
-    });
-  } catch (e) { console.error(e); }
-}
+      await carregarDetalheGrupo(grupoId);
+    } catch (err: any) {
+      alert(err.message || "Erro ao alterar cargo do membro");
+    }
+  }
+
+  async function removerMembroDoGrupo(grupoId: string, membroId: string) {
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}/membros/${membroId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Erro ao remover membro");
+      }
+
+      await carregarDetalheGrupo(grupoId);
+    } catch (err: any) {
+      alert(err.message || "Erro ao remover membro");
+    }
+  }
+
+  async function adicionarMembrosNoGrupo(grupoId: string, membros: string[]) {
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}/membros`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ membros }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Erro ao adicionar membros");
+      }
+
+      await carregarDetalheGrupo(grupoId);
+    } catch (err: any) {
+      alert(err.message || "Erro ao adicionar membros");
+    }
+  }
+
+  async function carregarMensagensPrivadas(otherId: string, append: boolean) {
+    const mySeq = ++fetchPrivSeqRef.current;
+    try {
+      const base = append ? mensagensPrivadas : [];
+      const ultimoId = append && base.length > 0 ? base[0].id : undefined;
+
+      const query = new URLSearchParams({
+        otherId,
+        limit: String(limite),
+        ...(ultimoId ? { cursor: ultimoId } : {}),
+      });
+
+          const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const json = await res.json();
+      const novas: Mensagem[] = Array.isArray(json)
+        ? json
+        : Array.isArray(json.items)
+        ? json.items
+        : Array.isArray(json.mensagens)
+        ? json.mensagens
+        : [];
+
+      if (!Array.isArray(novas)) {
+        setTemMaisPriv(false);
+        return;
+      }
+
+      const stillSame =
+        mySeq === fetchPrivSeqRef.current &&
+        alvoRef.current?.tipo === "usuario" &&
+        alvoRef.current.usuario.id === otherId;
+      if (!stillSame) return;
+
+      if (novas.length < limite) setTemMaisPriv(false);
+
+      const novasOrdenadas = [...novas].reverse();
+      setMensagensPrivadas(prev => {
+        const combined = append ? [...novasOrdenadas, ...prev] : [...novasOrdenadas];
+        const next = Array.from(new Map(combined.map(m => [m.id, m])).values())
+          .sort((a,b)=> new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
+        safeSave(`conversa_${usuarioId}_${otherId}`, next);
+        return next;
+      });
+    } catch (e) { console.error(e); }
+  }
+
+  async function carregarDetalheGrupo(grupoId: string) {
+    try {
+      setCarregandoGrupoDetalhe(true);
+
+      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) throw new Error("Erro ao carregar grupo");
+
+      const data = await res.json();
+      setGrupoDetalhe(data);
+    } catch (err) {
+      console.error(err);
+      setGrupoDetalhe(null);
+    } finally {
+      setCarregandoGrupoDetalhe(false);
+    }
+  }
 
   async function carregarMensagensDoGrupo(grupoId: string, append: boolean) {
     const mySeq = ++fetchGrupoSeqRef.current;
@@ -1696,13 +1868,24 @@ function stripConvocacaoTag(text: string) {
             </div>
 
             <div className="flex items-center gap-2">
-              {alvo?.tipo === "usuario" && isAtleta &&  (
+              {alvo?.tipo === "usuario" && isAtleta && (
                 <button
                   onClick={compartilharPerfilNoChat}
                   className="flex items-center gap-1 text-green-800 hover:underline text-sm"
                   title="Compartilhar meu card nesta conversa"
                 >
                   <Share2 size={16} /> Compartilhar meu card
+                </button>
+              )}
+
+              {alvo?.tipo === "grupo" && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarInfoGrupo((v) => !v)}
+                  className="px-3 py-2 text-xs rounded-lg border border-green-800 text-green-900 bg-white hover:bg-green-50"
+                  title="Ver membros do grupo"
+                >
+                  <Users className="w-4 h-4" />
                 </button>
               )}
 
@@ -1716,6 +1899,117 @@ function stripConvocacaoTag(text: string) {
               )}
             </div>
           </div>
+
+          {alvo?.tipo === "grupo" && mostrarInfoGrupo && (
+            <div className="border-b bg-white px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-sm text-zinc-800">Membros do grupo</h3>
+                  <p className="text-xs text-zinc-500">
+                    {grupoDetalhe?.membros?.length ?? 0} participante(s)
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {grupoDetalhe?.meuTipo === "ADMIN" && (
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold"
+                      onClick={() => setModalAdicionarMembrosAberto(true)}
+                    >
+                      Adicionar
+                    </button>
+                  )}
+
+                  {grupoDetalhe?.id && (
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-semibold border border-red-200"
+                      onClick={() => sairDoGrupo(grupoDetalhe.id)}
+                    >
+                      Sair do grupo
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {carregandoGrupoDetalhe && (
+                  <p className="text-sm text-zinc-500">Carregando membros...</p>
+                )}
+
+                {!carregandoGrupoDetalhe &&
+                  grupoDetalhe?.membros?.map((membro) => (
+                    <div
+                      key={membro.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border p-2"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/perfil/${membro.id}`)}
+                          className="shrink-0"
+                          title={`Ver perfil de ${membro.nome}`}
+                        >
+                          <img
+                            src={getAvatarSrc(membro.foto)}
+                            alt={membro.nome}
+                            className="w-10 h-10 rounded-full object-cover border"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = AVATAR_FALLBACK;
+                            }}
+                          />
+                        </button>
+
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{membro.nome}</div>
+                          <div className="text-xs text-zinc-500">
+                            {membro.isOwner
+                              ? "Admin / Owner"
+                              : membro.tipo === "ADMIN"
+                              ? "Admin"
+                              : "Membro"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {grupoDetalhe?.meuTipo === "ADMIN" &&
+                        !membro.isOwner &&
+                        membro.id !== usuarioId && (
+                          <div className="flex items-center gap-2">
+                            {membro.tipo !== "ADMIN" ? (
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded-md text-xs border border-blue-200 text-blue-700 bg-blue-50"
+                                onClick={() => alterarTipoMembroDoGrupo(grupoDetalhe.id, membro.id, "ADMIN")}
+                              >
+                                Tornar admin
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded-md text-xs border border-amber-200 text-amber-700 bg-amber-50"
+                                onClick={() => alterarTipoMembroDoGrupo(grupoDetalhe.id, membro.id, "MEMBRO")}
+                              >
+                                Tornar membro
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              className="px-2 py-1 rounded-md text-xs border border-red-200 text-red-700 bg-red-50"
+                              onClick={() => removerMembroDoGrupo(grupoDetalhe.id, membro.id)}
+                            >
+                              Remover
+                            </button>
+                          </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div
             className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 pb-24 md:pb-6"
@@ -1805,6 +2099,20 @@ function stripConvocacaoTag(text: string) {
           onCriado={recarregarMensagensDoGrupoAtual}
         />
       )}
+      {alvo?.tipo === "grupo" && (
+      <ModalAdicionarMembrosGrupo
+        aberto={modalAdicionarMembrosAberto}
+        onFechar={() => setModalAdicionarMembrosAberto(false)}
+        token={token}
+        usuarioId={usuarioId ?? ""}
+        grupoId={alvo.grupo.id}
+        membrosAtuaisIds={grupoDetalhe?.membros?.map((m) => m.id) ?? []}
+        onConfirmar={async (membrosIds) => {
+          await adicionarMembrosNoGrupo(alvo.grupo.id, membrosIds);
+          await carregarDetalheGrupo(alvo.grupo.id);
+        }}
+      />
+    )}
     </div>
   );
 }
