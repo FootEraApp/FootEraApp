@@ -54,7 +54,7 @@ export const TreinosApi = {
     return axios.post(`${API.BASE_URL}/api/treinos`, payload, {
       headers: auth(),
       // NÃO joga no catch quando for 400 do limite; você trata no código
-      validateStatus: (status) => status >= 200 && status < 500,
+      validateStatus: (status) => status >= 200 && status < 400,
     });
   },
 

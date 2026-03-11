@@ -914,6 +914,7 @@ export default function NovoTreino() {
   const listRef = useRef<HTMLUListElement | null>(null);
 
   const [salvando, setSalvando] = useState(false);
+  const criandoTreinoRef = useRef(false);
 
   function setVideoNoEx(index: number, videoUrl: string | null) {
     setExerciciosSelecionados((prev: ExItemUILocal[]) => {
@@ -2769,10 +2770,12 @@ useEffect(() => {
   };
 
   const criarTreino = async () => {
-    if (salvando) return;
+    if (salvando || criandoTreinoRef.current) return;
+
+    criandoTreinoRef.current = true;
     setSalvando(true);
+
     let payloadOriginal: any = null;
-    
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
       const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
@@ -3159,7 +3162,7 @@ useEffect(() => {
         console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
       }
 
-      showToast("Treino criado! Um treino antigo foi apagado.", "success");
+      showToast(msgPrincipal + extra, "success");
       limparProgressoETela();
 
       setTimeout(() => {
@@ -3203,6 +3206,7 @@ useEffect(() => {
       console.error("[NovoTreino] erro criar treino:", data || e);
       showToast(msgErro, "error");
     } finally {
+      criandoTreinoRef.current = false;
       setSalvando(false);
     }
   };
