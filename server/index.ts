@@ -246,6 +246,12 @@ app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
     path.join(__dirname, "public/assets"),
   ];
   const found = candidates.find((dir) => fs.existsSync(dir));
+
+  console.log("[ASSETS] process.cwd():", process.cwd());
+  console.log("[ASSETS] __dirname:", __dirname);
+  console.log("[ASSETS] candidates:", candidates);
+  console.log("[ASSETS] found:", found);
+
   if (found) app.use("/assets", express.static(found));
 }
 
