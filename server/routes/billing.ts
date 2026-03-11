@@ -21,6 +21,10 @@ import {
 
 const router = Router();
 
+router.post("/mercadopago/webhook", mercadoPagoWebhook);
+router.post("/webhook/provider", providerWebhook);
+router.get("/check-expiring", checkExpiringSubscriptions);
+
 router.use(authenticateToken);
 
 router.get("/plans", getPlans);
@@ -35,9 +39,6 @@ router.post("/gift/redeem", redeemGift);
 router.post("/cancel", cancelSubscription);
 router.post("/renew", renewSubscription);
 router.post("/switch-plan", switchPlan);
-router.post("/mercadopago/webhook", mercadoPagoWebhook);
-router.post("/webhook/provider", providerWebhook);
-router.get("/check-expiring", checkExpiringSubscriptions);
 router.get("/metodologias-avulsas", getMetodologiasAvulsas);
 router.post("/metodologias-avulsas/reset-dev", resetMetodologiasAvulsasDev);
 

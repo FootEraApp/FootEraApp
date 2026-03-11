@@ -231,16 +231,12 @@ model ProfessorEscolinha {
 
 model OrganizacaoGestor {
   id String @id @default(uuid())
-
   tipo    OrganizacaoTipo
-  ownerId String // id do Clube ou da Escolinha (depende do "tipo")
-
+  ownerId String 
   professorId String
   professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
-
-  papel      String? // ex: "RESPONSAVEL", "GESTOR", "COORDENADOR"
-  permissoes Json? // opcional: granular (ex: { turmas: true, treinos: true })
-
+  papel      String? 
+  permissoes Json? 
   ativo Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -482,18 +478,12 @@ model ExercicioTemporario {
 
 model ExercicioPersonalizado {
   id         String      @id @default(uuid())
-  nome       String
+  nome       String      @unique
   descricao  String?
   nivel      Nivel?
   categorias Categoria[] @default([])
-
-  // 🎥 vídeo
   videoDemonstrativoUrl String?
-
-  // 🖼️ NOVO: THUMB GERADA DO VÍDEO
-  videoPosterUrl String? // <-- ADICIONAR ESTA LINHA
-
-  // dono
+  videoPosterUrl String?
   criadorUsuarioId String
   criadorUsuario   Usuario @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
 
@@ -503,7 +493,6 @@ model ExercicioPersonalizado {
   treinos                    TreinoProgramadoExercicio[]
   SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
 
-  @@unique([criadorUsuarioId, nome])
   @@index([criadorUsuarioId])
 }
 
@@ -2444,10 +2433,13 @@ enum NotificacaoTipo {
   FOLLOW
   FOLLOW_BACK
   FOLLOW_REMOVED
-  MENSAGEM // DM
-  MENSAGEM_GRUPO // opcional (se usar)
+  MENSAGEM
+  MENSAGEM_GRUPO 
   TREINO
   DESAFIO
+  EVENTO
+  BILLING_WARNING
+  BILLING_BLOCKED
 }
 
 enum TipoMembro {
