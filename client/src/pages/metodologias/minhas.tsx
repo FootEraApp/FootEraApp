@@ -699,12 +699,10 @@ export default function MinhasMetodologias() {
                               {m.ativo ? "Publicada" : "Aguardando validação"}
                             </span>
                           )}
-
-                          <div className="font-semibold text-green-900 truncate">
-                            {m.titulo}
-                          </div>
                         </div>
-
+                        <div className="ml-1 font-bold text-green-900 truncate">
+                          {m.titulo}
+                        </div>
                         <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
                           <StarsRating value={Number(m.mediaAvaliacao ?? 0)} />
                           <span className="font-semibold text-gray-800">

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
-import { API } from "../../config.js";
+import { API, APP } from "../../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Atleta = {
   id: string;     
@@ -21,11 +23,14 @@ type Atleta = {
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/")) return `${API.BASE_URL}${raw}`;
+  if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/")) {
+    return raw.startsWith("/assets/")
+      ? `${APP.FRONTEND_BASE_URL}${raw}`
+      : `${API.BASE_URL}${raw}`;
+  }
   if (raw.startsWith("/uploads/")) return `${API.BASE_URL}${raw}`;
   return `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
 }
-
 function initials(nome: string) {
   return nome
     .trim()
@@ -36,23 +41,28 @@ function initials(nome: string) {
 }
 
 function AvatarCircle({ src, nome, size = 40 }: { src?: string; nome: string; size?: number }) {
-  const [hidden, setHidden] = useState(false);
+  const [imgSrc, setImgSrc] = useState(src || AVATAR_FALLBACK);
   const style = { width: size, height: size };
 
-  return (
-    <div className="relative rounded-full bg-green-100 text-green-800 grid place-items-center font-semibold border"
-         style={style}
-        >
-      <span className="text-sm select-none">{initials(nome) || "?"}</span>
+  useEffect(() => {
+    setImgSrc(src || AVATAR_FALLBACK);
+  }, [src]);
 
-      {!!src && !hidden && (
-        <img
-          src={src}
-          alt={nome}
-          className="absolute inset-0 w-full h-full rounded-full object-cover"
-          onError={() => setHidden(true)}
-        />
-      )}
+  return (
+    <div
+      className="relative rounded-full overflow-hidden bg-green-100 border"
+      style={style}
+    >
+      <img
+        src={imgSrc}
+        alt={nome}
+        className="w-full h-full object-cover"
+        onError={() => {
+          if (imgSrc !== AVATAR_FALLBACK) {
+            setImgSrc(AVATAR_FALLBACK);
+          }
+        }}
+      />
     </div>
   );
 }
