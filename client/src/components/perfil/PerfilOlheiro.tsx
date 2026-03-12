@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  Activity, PlusCircle, CirclePlus, ChevronRight, House, Search, User, Eye,
-  Save, Loader2
+  Activity, PlusCircle, ChevronRight, Save, Loader2, X
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
-import { API } from "../../config.js";
+import { API, APP } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null; nomeDeUsuario?: string };
@@ -60,12 +61,21 @@ type AtletaItem = {
   pontuacao?: number | null;
 };
 
+type IndicacaoDestino = {
+  id: string;
+  nome: string;
+  logo?: string | null;
+  usuarioId?: string | null;
+  tipo?: "Clube" | "Escolinha" | string | null;
+};
+
 type IndicacaoItem = {
   id: string;
   criadoEm?: string;
   status?: "PENDENTE" | "APROVADA" | "REJEITADA";
   atleta: { id: string; nome: string; foto?: string | null };
-  clube: { id: string; nome: string; logo?: string | null };
+  clube?: IndicacaoDestino | null;
+  escolinha?: IndicacaoDestino | null;
 };
 
 type AtividadeRecente = {
@@ -76,9 +86,9 @@ type AtividadeRecente = {
   imagemUrl?: string | null;
 };
 
-type ResultadoBuscaClube = {
+type ResultadoBuscaDestino = {
   id: string;
-  tipo: "Clube";
+  tipo: "Clube" | "Escolinha";
   nome: string;
   username: string;
   fotoUrl: string | null;
@@ -115,6 +125,11 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   };
 }
 
+function withAvatarFallback(foto?: string | null) {
+  const valor = String(foto ?? "").trim();
+  return valor || AVATAR_FALLBACK;
+}
+
 export default function PerfilOlheiro({ idDaUrl }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -141,8 +156,8 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
 
   const [indicAtletaId, setIndicAtletaId] = useState("");
   const [clubeQuery, setClubeQuery] = useState("");
-  const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
-  const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
+  const [destinos, setDestinos] = useState<ResultadoBuscaDestino[]>([]);
+  const [destinoSel, setDestinoSel] = useState<ResultadoBuscaDestino | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
@@ -216,44 +231,43 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
       }
     }
 
-async function fetchObservados() {
-  const ownerId =
-    (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ??
-    data?.olheiro?.id ??
-    Storage.tipoUsuarioId ??
-    null;
+    async function fetchObservados() {
+      const ownerId =
+        (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ??
+        data?.olheiro?.id ??
+        Storage.tipoUsuarioId ??
+        null;
 
-  if (!ownerId) {
-    if (!cancel.v) setObservados([]);
-    return;
-  }
-
-  try {
-    const { data: lista } = await axios.get<AtletaItem[]>(
-      `${API.BASE_URL}/api/observados`,
-      {
-        headers,
-        params: {
-          incluirPontuacao: 1,
-          ownerId,         
-          tipo: "olheiro", 
-        },
+      if (!ownerId) {
+        if (!cancel.v) setObservados([]);
+        return;
       }
-    );
 
-    if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
-  } catch (e) {
-    if (!cancel.v) setObservados([]);
-  }
-}
+      try {
+        const { data: lista } = await axios.get<AtletaItem[]>(
+          `${API.BASE_URL}/api/observados`,
+          {
+            headers,
+            params: {
+              incluirPontuacao: 1,
+              ownerId,         
+              tipo: "olheiro", 
+            },
+          }
+        );
 
+        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+      } catch (e) {
+        if (!cancel.v) setObservados([]);
+      }
+    }
 
     async function fetchIndicacoes() {
       const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ?? null;
       if (!tipoId) { if (!cancel.v) setIndicacoes([]); return; }
       try {
         const { data: lista } = await axios.get<IndicacaoItem[]>(
-          `${API.BASE_URL}/api/olheiros/${tipoId}/indicacoes`,
+          `${API.BASE_URL}/api/indicacoes/olheiros/${tipoId}/indicacoes`,
           { headers }
         );
         if (!cancel.v) setIndicacoes(Array.isArray(lista) ? lista : []);
@@ -278,29 +292,68 @@ async function fetchObservados() {
     () =>
       debounce(async (q: string) => {
         setFeedback(null);
-        setClubeSel(null);
-        if (!q || q.trim().length < 2) return setClubes([]);
+        setDestinoSel(null);
+        if (!q || q.trim().length < 2) return setDestinos([]);
         try {
           const r = await axios.get<any[]>(
             `${API.BASE_URL}/api/cadastro/buscar`,
-            { params: { query: q, tipo: "Clube" }, headers }
+            { params: { query: q }, headers }
           );
-          const arr: ResultadoBuscaClube[] = (Array.isArray(r.data) ? r.data : [])
-            .filter((x) => x?.id && x?.nome && x?.tipo === "Clube")
-            .map((x) => ({
-              id: String(x.id),
-              tipo: "Clube",
-              nome: String(x.nome),
-              username: String(x.username || ""),
-              fotoUrl: x.fotoUrl ?? null,
-            }));
-          setClubes(arr);
+          const arr: ResultadoBuscaDestino[] = (Array.isArray(r.data) ? r.data : [])
+        .filter(
+          (x) =>
+            x?.id &&
+            x?.nome &&
+            (x?.tipo === "Clube" || x?.tipo === "Escolinha")
+        )
+        .map((x) => ({
+          id: String(x.id),
+          tipo: x.tipo === "Escolinha" ? "Escolinha" : "Clube",
+          nome: String(x.nome),
+          username: String(x.username || ""),
+          fotoUrl: x.fotoUrl ?? null,
+        }));
+          setDestinos(arr);
         } catch {
-          setClubes([]);
+          setDestinos([]);
         }
       }, 400),
     [headers]
   );
+
+  async function apagarIndicacao(indicacaoId: string) {
+    if (!confirm("Deseja apagar esta indicação?")) return;
+
+    try {
+      await axios.delete(
+        `${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}`,
+        { headers }
+      );
+
+      setIndicacoes((prev) =>
+        Array.isArray(prev) ? prev.filter((i) => i.id !== indicacaoId) : prev
+      );
+
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              metrics: {
+                ...prev.metrics,
+                indicacoesEnviadas: Math.max(0, Number(prev.metrics?.indicacoesEnviadas ?? 0) - 1),
+                indicacoes: Math.max(0, Number(prev.metrics?.indicacoes ?? 0) - 1),
+              },
+              olheiro: {
+                ...prev.olheiro,
+                totalIndicacoes: Math.max(0, Number(prev.olheiro?.totalIndicacoes ?? 0) - 1),
+              },
+            }
+          : prev
+      );
+    } catch (e: any) {
+      alert(e?.response?.data?.error || "Falha ao apagar indicação.");
+    }
+  }
 
   async function fetchNota(atletaId: string) {
     try {
@@ -344,26 +397,30 @@ async function salvarNota(atletaId: string) {
 
   useEffect(() => {
     if (clubeQuery) buscarClubes(clubeQuery);
-    else { setClubes([]); setClubeSel(null); }
+    else { setDestinos([]); setDestinoSel(null); }
   }, [clubeQuery]);
 
   async function enviarIndicacao() {
     setFeedback(null);
     if (!indicAtletaId) { setFeedback({ tipo: "erro", msg: "Informe o ID do atleta." }); return; }
-    if (!clubeSel) { setFeedback({ tipo: "erro", msg: "Selecione um clube." }); return; }
+    if (!destinoSel) { setFeedback({ tipo: "erro", msg: "Selecione um clube ou escolinha." }); return; }
 
     try {
       setEnviando(true);
       await axios.post(
         `${API.BASE_URL}/api/indicacoes`,
-        { atletaId: indicAtletaId, clubeId: clubeSel.id },
+        {
+          atletaId: indicAtletaId,
+          clubeId: destinoSel?.tipo === "Clube" ? destinoSel.id : undefined,
+          escolinhaId: destinoSel?.tipo === "Escolinha" ? destinoSel.id : undefined
+        },
         { headers: { "Content-Type": "application/json", ...(headers || {}) } }
       );
       setFeedback({ tipo: "ok", msg: "Indicação enviada com sucesso!" });
       setIndicAtletaId("");
       setClubeQuery("");
-      setClubes([]);
-      setClubeSel(null);
+      setDestinos([]);
+      setDestinoSel(null);
       setIndicacoes(null);
       setAba("indicacoes");
     } catch (e: any) {
@@ -527,7 +584,6 @@ async function salvarNota(atletaId: string) {
 
           <SectionCard
             title="Reputação & Impacto"
-            right={<span className="text-xs text-green-900/60">Futuro: badges, tiers e ranking</span>}
           >
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border border-green-100 p-3">
@@ -617,7 +673,7 @@ async function salvarNota(atletaId: string) {
                     return (
                       <li key={a.id} className="flex flex-col gap-2 rounded-xl border border-green-100 p-3">
                         <div className="flex items-center gap-3">
-                          <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                          <Avatar foto={withAvatarFallback(a.foto)} alt={a.nome} className="w-10 h-10" />
                           <div className="flex-1">
                             <div className="text-sm font-medium text-green-900">{a.nome}</div>
                             <div className="text-xs text-green-900/70">
@@ -727,20 +783,20 @@ async function salvarNota(atletaId: string) {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Buscar Clube</label>
+                <label className="block text-sm font-medium mb-1">Buscar Clube ou Escolinha</label>
                 <input
                   className="w-full border rounded px-3 py-2"
                   placeholder="Digite ao menos 2 letras..."
                   value={clubeQuery}
                   onChange={(e) => setClubeQuery(e.target.value)}
                 />
-                {clubeQuery && clubes.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-1">Buscando clubes...</p>
+                {clubeQuery && destinos.length === 0 && (
+                  <p className="text-xs text-gray-500 mt-1">Buscando organizações...</p>
                 )}
-                {clubes.length > 0 && (
+                {destinos.length > 0 && (
                   <div className="max-h-44 overflow-auto border rounded mt-2">
-                    {clubes.map((c) => {
-                      const selected = clubeSel?.id === c.id;
+                    {destinos.map((c) => {
+                      const selected = destinoSel?.id === c.id;
                       return (
                         <button
                           key={c.id}
@@ -748,7 +804,7 @@ async function salvarNota(atletaId: string) {
                           className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-gray-50 border-b last:border-b-0 ${
                             selected ? "bg-green-50" : ""
                           }`}
-                          onClick={() => setClubeSel(c)}
+                          onClick={() => setDestinoSel(c)}
                         >
                           <Avatar foto={c.fotoUrl} alt={c.nome} className="w-7 h-7" />
                           <div className="text-sm">
@@ -760,10 +816,10 @@ async function salvarNota(atletaId: string) {
                     })}
                   </div>
                 )}
-                {clubeSel && (
+                {destinoSel && (
                   <div className="mt-2 text-xs text-gray-600">
-                    Selecionado: <span className="font-medium">{clubeSel.nome}</span>
-                    <button className="ml-2 underline text-green-700" onClick={() => setClubeSel(null)}>trocar</button>
+                    Selecionado: <span className="font-medium">{destinoSel.nome}</span>
+                    <button className="ml-2 underline text-green-700" onClick={() => setDestinoSel(null)}>trocar</button>
                   </div>
                 )}
               </div>
@@ -789,22 +845,57 @@ async function salvarNota(atletaId: string) {
           <SectionCard title="Minhas Indicações">
             {indicacoes && indicacoes.length > 0 ? (
               <ul className="grid grid-cols-1 gap-3">
-                {indicacoes.map((i) => (
-                  <li key={i.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                    <Avatar foto={i.atleta.foto ?? null} alt={i.atleta.nome} className="w-10 h-10" />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-green-900">{i.atleta.nome}</div>
-                      <div className="text-xs text-green-900/70">
-                        {i.criadoEm ? new Date(i.criadoEm).toLocaleString() : "—"}{i.status ? ` • ${i.status}` : ""}
+                {indicacoes.map((i) => {
+                  const destino = i.clube ?? i.escolinha ?? null;
+                  const destinoPerfilId = destino?.usuarioId ?? destino?.id ?? "";
+
+                  return (
+                    <li key={i.id} className="relative flex items-center gap-3 rounded-xl border border-green-100 p-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          apagarIndicacao(i.id);
+                        }}
+                        className="absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white border border-red-100 text-red-600 hover:bg-red-50"
+                        title="Apagar indicação"
+                        aria-label="Apagar indicação"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                     <Avatar foto={withAvatarFallback(i.atleta.foto)} alt={i.atleta.nome} className="w-10 h-10" />
+                      <div className="flex-1 pr-8">
+                        <div className="text-sm font-medium text-green-900">{i.atleta.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {i.criadoEm ? new Date(i.criadoEm).toLocaleString() : "—"}
+                          {i.status ? ` • ${i.status}` : ""}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Avatar foto={i.clube.logo ?? null} alt={i.clube.nome} className="w-8 h-8" />
-                      <div className="text-xs text-green-900/80">{i.clube.nome}</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-green-800" />
-                  </li>
-                ))}
+
+                      {destino ? (
+                        <Link
+                          href={`/perfil/${destinoPerfilId}`}
+                          className="flex items-center gap-2"
+                        >
+                          <Avatar
+                            foto={withAvatarFallback(destino.logo)}
+                            alt={destino.nome}
+                            className="w-8 h-8"
+                          />
+                          <div className="text-xs text-green-900/80">{destino.nome}</div>
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Avatar foto={AVATAR_FALLBACK} alt="Destino" className="w-8 h-8" />
+                          <div className="text-xs text-green-900/50">Destino não encontrado</div>
+                        </div>
+                      )}
+
+                      <ChevronRight className="w-4 h-4 text-green-800" />
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <EmptyState text="Você ainda não enviou indicações" />

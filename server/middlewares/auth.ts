@@ -147,17 +147,62 @@ const parceiro = Boolean(dbUser?.parceiro);
   reqAuthed.userId = userId;
 
   try {
-    const ctx = await resolveUserContext(userId);
+      const ctx = await resolveUserContext(userId);
 
-    const user: UserPayload = {
-      id: userId,
-      tipo: ctx.tipo,
-      tipoUsuarioId: ctx.tipoUsuarioId ?? null,
-      plano: ((ctx.plano as PlanoName) ?? "FREE") as PlanoName,
-      isAdmin: !!ctx.isAdmin,
-      parceiro,
-    };
+      let tipoUsuarioIdFinal = ctx.tipoUsuarioId ?? null;
 
+      if (!tipoUsuarioIdFinal) {
+        const tipoCtx = String(ctx.tipo || "").toLowerCase();
+
+        if (tipoCtx === "olheiro") {
+          const olheiro = await prisma.olheiro.findUnique({
+            where: { usuarioId: userId },
+            select: { id: true },
+          });
+          tipoUsuarioIdFinal = olheiro?.id ?? null;
+        }
+
+        if (tipoCtx === "clube") {
+          const clube = await prisma.clube.findUnique({
+            where: { usuarioId: userId },
+            select: { id: true },
+          });
+          tipoUsuarioIdFinal = clube?.id ?? null;
+        }
+
+        if (tipoCtx === "escolinha") {
+          const escolinha = await prisma.escolinha.findUnique({
+            where: { usuarioId: userId },
+            select: { id: true },
+          });
+          tipoUsuarioIdFinal = escolinha?.id ?? null;
+        }
+
+        if (tipoCtx === "professor") {
+          const professor = await prisma.professor.findUnique({
+            where: { usuarioId: userId },
+            select: { id: true },
+          });
+          tipoUsuarioIdFinal = professor?.id ?? null;
+        }
+
+        if (tipoCtx === "atleta") {
+          const atleta = await prisma.atleta.findUnique({
+            where: { usuarioId: userId },
+            select: { id: true },
+          });
+          tipoUsuarioIdFinal = atleta?.id ?? null;
+        }
+      }
+
+      const user: UserPayload = {
+        id: userId,
+        tipo: ctx.tipo,
+        tipoUsuarioId: tipoUsuarioIdFinal,
+        plano: ((ctx.plano as PlanoName) ?? "FREE") as PlanoName,
+        isAdmin: !!ctx.isAdmin,
+        parceiro,
+      };
 
     reqAuthed.authUser = user;
     (reqAuthed as any).user = user;

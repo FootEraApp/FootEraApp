@@ -671,7 +671,7 @@ export default function Cadastro() {
                     )}
 
                     <div>
-                       <label className="block text-sm font-medium mb-1">Categoria</label>
+                       <label className="block text-sm font-medium mb-1">Categoria*</label>
                        <select
                          className="w-full border rounded px-3 py-2"
                          value={atleta.categoria}
@@ -924,7 +924,7 @@ export default function Cadastro() {
                 {tipoPerfil === "Atleta" && (
                   <div className="mt-2">
                     <div><span className="font-medium">Idade:</span> {idade ?? "-"}</div>
-                    <div><span className="font-medium">Categoria:</span> {atleta.categoria || "-"}</div>
+                    <div><span className="font-medium">Categoria*:</span> {atleta.categoria || "-"}</div>
                   </div>
                 )}
                 {tipoPerfil === "Professor" && (

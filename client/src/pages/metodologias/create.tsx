@@ -37,6 +37,7 @@ type TreinoProgramadoPicker = {
       nome: string;
       videoDemonstrativoUrl?: string | null;
       nivel?: string | null;
+      tipo?: "catalogo" | "personalizado" | "temporario" | null;
     } | null;
   }>;
 };
@@ -73,17 +74,20 @@ function getToken() {
 }
 
 async function uploadVideoMetodologia(file: File) {
+  const token = getToken();
+  if (!token) throw new Error("Sem token.");
+
   const form = new FormData();
   form.append("video", file);
 
-  const r = await fetch(`${API.BASE_URL}/api/metodologias/upload/video`, {
+  const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/video`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${Storage.token}` },
+    headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
 
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j?.message || "Falha ao subir vídeo");
+  if (!r.ok) throw new Error(j?.message || j?.error || "Falha ao subir vídeo");
 
   return {
     relativeUrl: String(j?.relativeUrl || j?.url || ""),
@@ -374,21 +378,71 @@ export default function CriarMetodologia() {
           criadorProfessorId: t.criadorProfessorId ?? null,
           origem: resolveOrigemTreino(t, tipoUsuario, tipoUsuarioId),
           exercicios: Array.isArray(t.exercicios)
-            ? t.exercicios.map((e: any) => ({
+          ? t.exercicios.map((e: any) => {
+              const ex =
+                e.exercicio ??
+                e.exercicioPersonalizado ??
+                e.exercicioTemporario ??
+                e.personalizado ??
+                e.temporario ??
+                null;
+
+              return {
                 id: String(e.id),
                 ordem: Number(e.ordem ?? 0),
                 repeticoes: e.repeticoes ?? null,
-                exercicio: e.exercicio
-                  ? {
-                      id: String(e.exercicio.id),
-                      codigo: String(e.exercicio.codigo ?? ""),
-                      nome: String(e.exercicio.nome ?? "Exercício"),
-                      videoDemonstrativoUrl: e.exercicio.videoDemonstrativoUrl ?? null,
-                      nivel: e.exercicio.nivel ?? null,
-                    }
-                  : null,
-              }))
-            : [],
+                exercicio: ex
+              ? {
+                  id: String(
+                    ex.id ??
+                    e.exercicioId ??
+                    e.exercicioPersonalizadoId ??
+                    e.exercicioTemporarioId ??
+                    e.id
+                  ),
+                  codigo: String(ex.codigo ?? ""),
+                  nome: String(
+                    ex.nome ??
+                    e.nome ??
+                    e.titulo ??
+                    "Exercício"
+                  ),
+                  videoDemonstrativoUrl:
+                    ex.videoDemonstrativoUrl ??
+                    ex.videoUrl ??
+                    e.videoDemonstrativoUrl ??
+                    e.videoUrl ??
+                    null,
+                  nivel:
+                    ex.nivel ??
+                    e.nivel ??
+                    null,
+                  tipo:
+                    e.exercicioTemporario || e.temporario
+                      ? "temporario"
+                      : e.exercicioPersonalizado || e.personalizado
+                      ? "personalizado"
+                      : "catalogo",
+                }
+              : {
+                  id: String(
+                    e.exercicioId ??
+                    e.exercicioPersonalizadoId ??
+                    e.exercicioTemporarioId ??
+                    e.id
+                  ),
+                  codigo: String(e.codigo ?? ""),
+                  nome: String(e.nome ?? e.titulo ?? "Exercício"),
+                  videoDemonstrativoUrl:
+                    e.videoDemonstrativoUrl ??
+                    e.videoUrl ??
+                    null,
+                  nivel: e.nivel ?? null,
+                  tipo: e.exercicioTemporarioId ? "temporario" : e.exercicioPersonalizadoId ? "personalizado" : "catalogo",
+                },
+              };
+            })
+          : [],
         }));
 
         const prioridade: Record<OrigemTreino, number> = {
@@ -1352,7 +1406,7 @@ export default function CriarMetodologia() {
                                                   <div className="min-w-0">
                                                     <div className="text-sm font-semibold text-gray-900">
                                                       {e.ordem ? `${e.ordem}. ` : ""}
-                                                      {e.exercicio?.nome ?? "Exercício"}
+                                                      {e.exercicio?.nome || "Exercício"}
                                                     </div>
 
                                                     <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -1695,7 +1749,7 @@ export default function CriarMetodologia() {
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                           <div className="text-sm font-semibold text-gray-900">
-                                            {e.ordem ? `${e.ordem}. ` : ""}{e.exercicio?.nome ?? "Exercício"}
+                                            {e.ordem ? `${e.ordem}. ` : ""}{e.exercicio?.nome || "Exercício"}
                                           </div>
                                           <div className="text-xs text-gray-600">
                                             {e.exercicio?.codigo ? `${e.exercicio.codigo} • ` : ""}
