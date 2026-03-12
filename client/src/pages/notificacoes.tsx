@@ -44,6 +44,18 @@ function formatarDataCurta(iso?: string | null) {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+function getIndicacaoIdFromLink(link?: string | null) {
+  if (!link) return null;
+  try {
+    const full = link.startsWith("http")
+      ? new URL(link)
+      : new URL(link, window.location.origin);
+    return full.searchParams.get("indicacaoId");
+  } catch {
+    return null;
+  }
+}
+
 function limparMensagem(mensagem: string) {
   return (mensagem || "")
     .replace(/\s*Acesse:\s*\/eventos\/[a-f0-9-]+\.?/gi, "")
@@ -417,6 +429,110 @@ export default function PaginaNotificacoes() {
               (isBillingWarning || isBillingBlocked) && n.link === "/assinatura"
                 ? "/pagamentos"
                 : n.link;
+
+            const isIndicacaoOlheiro = String(n.tipo || "").toUpperCase() === "INDICACAO_OLHEIRO";
+            const indicacaoId = getIndicacaoIdFromLink(n.link);
+                    
+            if (isIndicacaoOlheiro && indicacaoId) {
+              return (
+                <div
+                  key={n.id}
+                  className="relative bg-white shadow-md rounded-2xl p-4 border border-green-200"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Apagar esta notificação?")) apagarNotificacao(n.id);
+                    }}
+                    className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
+                    aria-label="Apagar notificação"
+                    title="Apagar"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+
+                  <div className="pr-10">
+                    <p className="font-semibold text-green-900 flex items-center gap-2">
+                      {n.titulo || "Nova indicação"}
+                      {n.lida === false && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          Novo
+                        </span>
+                      )}
+                    </p>
+
+                    {!!data && <p className="text-xs text-gray-500 mt-0.5">{data}</p>}
+
+                    <p className="text-sm text-gray-700 mt-2">
+                      {limparMensagem(n.mensagem || "")}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
+                        onClick={async () => {
+                          const token = Storage.token;
+                          if (!token) return;
+
+                          const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
+                            method: "PATCH",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ status: "APROVADA" }),
+                          });
+
+                          if (!r.ok) {
+                            alert("Não foi possível aceitar a indicação.");
+                            return;
+                          }
+
+                          await marcarComoLida(n.id);
+                          setNotificacoes((prev) =>
+                            prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                          );
+                          alert("Indicação aceita com sucesso.");
+                        }}
+                      >
+                        Aceitar
+                      </button>
+
+                      <button
+                        className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
+                        onClick={async () => {
+                          const token = Storage.token;
+                          if (!token) return;
+
+                          const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
+                            method: "PATCH",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ status: "REJEITADA" }),
+                          });
+
+                          if (!r.ok) {
+                            alert("Não foi possível recusar a indicação.");
+                            return;
+                          }
+
+                          await marcarComoLida(n.id);
+                          setNotificacoes((prev) =>
+                            prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                          );
+                          alert("Indicação recusada.");
+                        }}
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={n.id}

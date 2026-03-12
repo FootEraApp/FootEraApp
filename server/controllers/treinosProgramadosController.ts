@@ -491,7 +491,13 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             criadorProfessor: { include: { usuario: true } },
             clube: true,
             escolinha: true,
-            exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
+            exercicios: {
+              include: {
+                exercicio: true,
+                exercicioPersonalizado: true,
+                exercicioTemporario: true,
+              },
+            },
           },
         });
 
@@ -580,7 +586,13 @@ export const getTreinoById = async (req: Request, res: Response) => {
         criadorProfessor: { include: { usuario: true } }, 
         clube: true,
         escolinha: true,
-        exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
+        exercicios: {
+          include: {
+            exercicio: true,
+            exercicioPersonalizado: true,
+            exercicioTemporario: true,
+          },
+        },
       }
     });
     if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
@@ -849,7 +861,13 @@ export async function updateTreino(req: Request, res: Response) {
         clube: true,
         escolinha: true,
         professores: { include: { professor: { include: { usuario: true } } } },
-        exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
+        exercicios: {
+          include: {
+            exercicio: true,
+            exercicioPersonalizado: true,
+            exercicioTemporario: true,
+          },
+        },
       },
     });
 
@@ -988,7 +1006,13 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           clube: true,
           escolinha: true,
           professores: { include: { professor: { include: { usuario: true } } } },
-          exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
+          exercicios: {
+            include: {
+              exercicio: true,
+              exercicioPersonalizado: true,
+              exercicioTemporario: true,
+            },
+          },
         },
       });
 
@@ -1027,7 +1051,13 @@ export const getAllTreinos = async (req: Request, res: Response) => {
         professores: {
           include: { professor: { include: { usuario: true } } },
         },
-        exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
+        exercicios: {
+          include: {
+            exercicio: true,
+            exercicioPersonalizado: true,
+            exercicioTemporario: true,
+          },
+        },
       },
     });
 
