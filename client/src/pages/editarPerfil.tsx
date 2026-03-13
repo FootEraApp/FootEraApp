@@ -1,3 +1,4 @@
+// client/src/pages/editarPerfil
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -836,6 +837,7 @@ return (
           const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
           const usernameFinal = rawUsername ? rawUsername.toLowerCase() : "";
 
+          // 1. Validação de Username
           if (usernameFinal) {
             if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
               alert("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
@@ -844,35 +846,24 @@ return (
           }
 
           try {
-            let fotoUrl = dadosUsuario.foto;
+            const formData = new FormData();
+
+            // 2. Tratamento da Foto (Se for arquivo, vai pro FormData)
             if (dadosUsuario.foto instanceof File) {
-              const formData = new FormData();
               formData.append("foto", dadosUsuario.foto);
-              formData.append("usuarioId", usuarioId!);
-              formData.append("tipo", tipoUsuarioOriginal!);
-
-              const uploadRes = await axios.post(
-                `${API.BASE_URL}/api/upload/perfil`,
-                formData,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-
-              fotoUrl = uploadRes.data?.url || uploadRes.data?.midia?.url;
             }
-            const tipo: any = { ...dadosTipo };
 
+            // 3. Preparação do objeto 'tipo' (Lógica específica de cada categoria)
+            const tipo: any = { ...dadosTipo };
             if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
 
-            tipo.colaboracaoClubeId =
-              clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
+            tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
             if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
-
             delete tipo.escola;
             delete tipo.clube;
 
             if (escolinhaSelId === null) tipo.escolinhaId = null;
-            else if (typeof escolinhaSelId === "string")
-              tipo.escolinhaId = escolinhaSelId;
+            else if (typeof escolinhaSelId === "string") tipo.escolinhaId = escolinhaSelId;
 
             if (clubeSelId === null) tipo.clubeId = null;
             else if (typeof clubeSelId === "string") tipo.clubeId = clubeSelId;
@@ -887,10 +878,7 @@ return (
                 .filter(Boolean);
             }
 
-            if (
-              typeof tipo.anosExperiencia === "string" &&
-              tipo.anosExperiencia !== ""
-            ) {
+            if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
               const n = Number(tipo.anosExperiencia);
               tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
             }
@@ -914,79 +902,55 @@ return (
               }
             }
 
-            try {
-              const cepFinal = (dadosUsuario.cep ?? "").toString().trim();
+            // 4. Montagem do FormData Final
+            const cepFinal = (dadosUsuario.cep ?? "").toString().trim();
+            
+            const usuarioPayload = {
+              ...dadosUsuario,
+              // Se for File, enviamos undefined aqui para o backend não sobrescrever com string vazia
+              foto: dadosUsuario.foto instanceof File ? undefined : dadosUsuario.foto,
+              nomeDeUsuario: usernameFinal || null,
+              cep: cepFinal === "" ? null : cepFinal,
+            };
 
-              await axios.put(
-                `${API.BASE_URL}/api/perfil/${usuarioId}`,
-                {
-                  usuario: {
-                    ...dadosUsuario,
-                    foto: fotoUrl,
-                    nomeDeUsuario: usernameFinal || null,
-                    cep: cepFinal === "" ? null : cepFinal, // ✅
-                  },
-                  tipo,
-                  tipoUsuario: String(tipoUsuarioOriginal)
-                    .toLowerCase()
-                    .replace(/^escolinha$/, "escola"),
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-            } catch (err: any) {
-              console.error(
-                "[EditarPerfil] PUT /perfil erro:",
-                err?.response?.status,
-                err?.response?.data,
-                err?.message
-              );
-              alert(
-                err?.response?.data?.error ||
-                  err?.message ||
-                  "Erro ao salvar os dados (PUT)."
-              );
-              return;
-            }
+            formData.append("usuario", JSON.stringify(usuarioPayload));
+            formData.append("tipo", JSON.stringify(tipo));
+            formData.append(
+              "tipoUsuario",
+              String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola")
+            );
 
+            // 5. Única requisição PUT para o Perfil
+            await axios.put(
+              `${API.BASE_URL}/api/perfil/${usuarioId}`,
+              formData,
+              { 
+                headers: { 
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "multipart/form-data" // Necessário para enviar arquivos
+                } 
+              }
+            );
+
+            // 6. Lógica extra para Olheiro (se necessário manter separado)
             if (tipoRender === "olheiro") {
               const olheiroId = dadosTipo?.id ?? Storage.tipoUsuarioId;
               if (olheiroId) {
-                try {
-                  await axios.patch(
-                    `${API.BASE_URL}/api/olheiros/${olheiroId}`,
-                    { colaboracaoClubeId: clubeSel?.id ?? null },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                  );
-                } catch (err: any) {
-                  console.error(
-                    "[EditarPerfil] PATCH /olheiros erro:",
-                    err?.response?.status,
-                    err?.response?.data,
-                    err?.message
-                  );
-                  alert(
-                    err?.response?.data?.error ||
-                      err?.message ||
-                      "Erro ao salvar os dados (PATCH)."
-                  );
-                  return;
-                }
+                await axios.patch(
+                  `${API.BASE_URL}/api/olheiros/${olheiroId}`,
+                  { colaboracaoClubeId: clubeSel?.id ?? null },
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
               }
             }
-            alert("Dados atualizados com sucesso!");
+
+            alert("Perfil atualizado com sucesso!");
             Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
             window.location.href = "/perfil";
+
           } catch (err: any) {
-            console.error(
-              "[EditarPerfil] PUT /perfil erro:",
-              err?.response?.status,
-              err?.response?.data
-            );
-            const msg =
-              err?.response?.data?.error ||
-              err?.response?.data?.message ||
-              err?.message ||
-              "Erro ao salvar os dados.";
+            console.error("[EditarPerfil] Erro ao salvar:", err);
+            const msg = err?.response?.data?.error || err?.message || "Erro ao salvar os dados.";
             alert(msg);
           }
         }}
