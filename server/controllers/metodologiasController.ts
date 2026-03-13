@@ -844,23 +844,21 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
     }
 
     return res.json({
-      id: metodologia.id,
-      titulo: metodologia.titulo,
-      descricao: metodologia.descricao,
-      capaUrl: metodologia.capaUrl ?? null,
-      publicoAlvo: metodologia.publicoAlvo,
-      totalSemanas: metodologia.totalSemanas ?? null,
-      totalAssinantes: metodologia.totalAssinantes ?? 0,
-      mediaAvaliacao: metodologia.mediaAvaliacao ?? 0,
-      totalReviews: metodologia.totalReviews ?? 0,
-      pontosTotal,
-      criadorNome: metodologia.criadorUsuario?.nome ?? null,
-      // ✅ aqui seu front usa direto data.itens
-      itens: itens,
-      viewer: {
-        // compat (se quiser manter)
+        id: metodologia.id,
+        titulo: metodologia.titulo,
+        descricao: metodologia.descricao,
+        capaUrl: metodologia.capaUrl ?? null,
+        publicoAlvo: metodologia.publicoAlvo,
+        nivel: metodologia.nivel ?? "Base",
+        totalSemanas: metodologia.totalSemanas ?? null,
+        totalAssinantes: metodologia.totalAssinantes ?? 0,
+        mediaAvaliacao: metodologia.mediaAvaliacao ?? 0,
+        totalReviews: metodologia.totalReviews ?? 0,
+        pontosTotal,
+        criadorNome: metodologia.criadorUsuario?.nome ?? null,
+        itens: itens,
+        viewer: {
         isAssinante: hasAccess,
-        // ✅ o que o front realmente usa
         temAcesso: hasAccess,
         assinaturaTipo,
         expiraEm: assinatura?.expiraEm ? new Date(assinatura.expiraEm).toISOString() : null,
@@ -869,7 +867,6 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         podeAvaliar,
         minhaAvaliacao,
         progresso: { concluidos: concluidosIds },
-        // pode manter, mas atualize seu type do front se quiser tipar
         quota: {
           limite,
           usadasNoMes,

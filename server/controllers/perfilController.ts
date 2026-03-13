@@ -1941,7 +1941,16 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       select: {
         id: true,
         usuarioId: true,
-        usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true, verified: true } },
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            foto: true,
+            nomeDeUsuario: true,
+            verified: true,
+          },
+        },
         fotoUrl: true,
         headline: true,
         descricao: true,
@@ -1951,21 +1960,54 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         telefonePublico: true,
         reputacaoScore: true,
         totalIndicacoes: true,
-        colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } },
+        colaboracaoClube: {
+          select: { id: true, usuarioId: true, nome: true, logo: true },
+        },
         createdAt: true,
         updatedAt: true,
       },
     });
 
-    if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado" });
+    if (!olheiro) {
+      return res.status(404).json({ error: "Olheiro não encontrado" });
+    }
 
     const viewerIsOlheiro = req.user?.tipo === "Olheiro";
-    const isOwnProfile = !!req.userId && (req.userId === olheiro.usuarioId);
+    const isOwnProfile = !!req.userId && req.userId === olheiro.usuarioId;
 
     if (viewerIsOlheiro && !isOwnProfile) {
       const ok = await requireUsage(req, res, "perfis_vistos_dia");
       if (!ok) return;
     }
+
+    const [
+      observadosCount,
+      indicacoesTotais,
+      indicacoesAprovadas,
+      atletasAssinados,
+    ] = await Promise.all([
+      prisma.atletaObservado.count({
+        where: { olheiroId: olheiro.id },
+      }),
+      prisma.indicacao.count({
+        where: { olheiroId: olheiro.id },
+      }),
+      prisma.indicacao.count({
+        where: {
+          olheiroId: olheiro.id,
+          status: "APROVADA",
+        },
+      }),
+      prisma.indicacao.count({
+        where: {
+          olheiroId: olheiro.id,
+          status: "APROVADA",
+        },
+      }),
+    ]);
+
+    const taxaAprovacao =
+      indicacoesTotais > 0 ? indicacoesAprovadas / indicacoesTotais : 0;
 
     const usuarioMin = olheiro.usuario ?? null;
 
@@ -1982,19 +2024,32 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         anosExperiencia: olheiro.anosExperiencia ?? 0,
         emailPublico: olheiro.emailPublico ?? null,
         telefonePublico: olheiro.telefonePublico ?? null,
-        colaboracaoClube: olheiro.colaboracaoClube ? {
-          id: olheiro.colaboracaoClube.id,
-          usuarioId: olheiro.colaboracaoClube.usuarioId,
-          nome: olheiro.colaboracaoClube.nome,
-          logo: olheiro.colaboracaoClube.logo ?? null,
-        } : null,
+        reputacaoScore: olheiro.reputacaoScore ?? 0,
+        totalIndicacoes: olheiro.totalIndicacoes ?? indicacoesTotais,
+        colaboracaoClube: olheiro.colaboracaoClube
+          ? {
+              id: olheiro.colaboracaoClube.id,
+              usuarioId: olheiro.colaboracaoClube.usuarioId,
+              nome: olheiro.colaboracaoClube.nome,
+              logo: olheiro.colaboracaoClube.logo ?? null,
+            }
+          : null,
         createdAt: olheiro.createdAt,
         updatedAt: olheiro.updatedAt,
       },
       metrics: {
-        observados: 0,
-        indicacoes: olheiro.totalIndicacoes ?? 0,
+        atletasAcompanhados: observadosCount,
+        observados: observadosCount,
+
+        indicacoesEnviadas: indicacoesTotais,
+        indicacoes: indicacoesTotais,
+
+        reputacaoScore: olheiro.reputacaoScore ?? 0,
         reputacao: olheiro.reputacaoScore ?? 0,
+
+        indicacoesAprovadas,
+        taxaAprovacao,
+        atletasAssinados,
       },
     });
   } catch (e) {

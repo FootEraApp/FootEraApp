@@ -1,10 +1,10 @@
 import { prisma } from "../prisma.js";
 import type { Request, Response } from "express";
 
-
 export async function getIndicacoes(req: Request, res: Response) {
   try {
     const { id } = req.params;
+
     const lista = await prisma.indicacao.findMany({
       where: { olheiroId: id },
       orderBy: { criadoEm: "desc" },
@@ -12,8 +12,29 @@ export async function getIndicacoes(req: Request, res: Response) {
         id: true,
         criadoEm: true,
         status: true,
-        atleta: { select: { id: true, nome: true, foto: true } },
-        clube: { select: { id: true, nome: true, logo: true } },
+        atleta: {
+          select: {
+            id: true,
+            nome: true,
+            foto: true,
+          },
+        },
+        clube: {
+          select: {
+            id: true,
+            usuarioId: true,
+            nome: true,
+            logo: true,
+          },
+        },
+        escolinha: {
+          select: {
+            id: true,
+            usuarioId: true,
+            nome: true,
+            logo: true,
+          },
+        },
       },
     });
 
@@ -26,17 +47,30 @@ export async function getIndicacoes(req: Request, res: Response) {
         nome: i.atleta?.nome ?? "",
         foto: i.atleta?.foto ?? null,
       },
-      clube: {
-        id: i.clube?.id ?? "",
-        nome: i.clube?.nome ?? "",
-        logo: i.clube?.logo ?? null,
-      },
+      clube: i.clube
+        ? {
+            id: i.clube.id,
+            usuarioId: i.clube.usuarioId ?? null,
+            nome: i.clube.nome ?? "",
+            logo: i.clube.logo ?? null,
+            tipo: "Clube",
+          }
+        : null,
+      escolinha: i.escolinha
+        ? {
+            id: i.escolinha.id,
+            usuarioId: i.escolinha.usuarioId ?? null,
+            nome: i.escolinha.nome ?? "",
+            logo: i.escolinha.logo ?? null,
+            tipo: "Escolinha",
+          }
+        : null,
     }));
 
-    res.json(itens);
+    return res.json(itens);
   } catch (e) {
     console.error("GET /api/olheiros/:id/indicacoes", e);
-    res.status(500).json({ error: "Falha ao carregar indicações do olheiro." });
+    return res.status(500).json({ error: "Falha ao carregar indicações do olheiro." });
   }
 }
 

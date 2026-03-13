@@ -120,6 +120,7 @@ export default function Cadastro() {
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [etapa, setEtapa] = useState<Etapa>(1);
+  const [finalizandoCadastro, setFinalizandoCadastro] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: undefined, cref: "" });
@@ -258,17 +259,19 @@ export default function Cadastro() {
   };
 
   const handleFinalizar = async () => {
+    if (finalizandoCadastro) return;
+
     setErro("");
     setSucesso("");
+    setFinalizandoCadastro(true);
+
     try {
       const payload: any = {
         tipo: mapTipo[tipoPerfil],
         email: email.trim(),
         nomeDeUsuario: nomeDeUsuario.trim(),
         senha,
-        // ✅ nome completo opcional
         ...(nome.trim() ? { nome: nome.trim() } : {}),
-        // ✅ localização opcional
         ...(cidade.trim() ? { cidade: cidade.trim() } : {}),
         ...(estado.trim() ? { estado: estado.trim() } : {}),
         ...(bairro.trim() ? { bairro: bairro.trim() } : {}),
@@ -281,6 +284,7 @@ export default function Cadastro() {
         payload.categorias = atleta.categoria ? [atleta.categoria] : [];
         payload.treinaEscolinha = atleta.treinaEscolinha || "nao";
       }
+
       if (tipoPerfil === "Professor") {
         payload.areaFormacao = professor.areaFormacao;
         payload.treinaEscolinha = professor.treinaEscolinha || "nao";
@@ -295,9 +299,11 @@ export default function Cadastro() {
       if (tipoPerfil === "Clube") {
         payload.cnpjClube = clube.cnpjClube || undefined;
       }
+
       if (tipoPerfil === "Escolinha") {
         payload.cnpjEscolinha = escolinha.cnpjEscolinha || undefined;
       }
+
       if (tipoPerfil === "Olheiro") {
         payload.areaAtuacao = olheiro.areaAtuacao || undefined;
         payload.anosExperiencia =
@@ -323,9 +329,17 @@ export default function Cadastro() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || "Erro ao cadastrar.");
+        let mensagem = "Erro ao cadastrar.";
+        try {
+          const j = await res.json();
+          mensagem = j?.error || j?.message || mensagem;
+        } catch {
+          const t = await res.text().catch(() => "");
+          mensagem = t || mensagem;
+        }
+        throw new Error(mensagem);
       }
 
       const data = await res.json();
@@ -370,6 +384,8 @@ export default function Cadastro() {
       setTimeout(() => navigate("/login"), 1800);
     } catch (err: any) {
       setErro(err?.message || "Falha no cadastro.");
+    } finally {
+      setFinalizandoCadastro(false);
     }
   };
 
@@ -655,7 +671,7 @@ export default function Cadastro() {
                     )}
 
                     <div>
-                       <label className="block text-sm font-medium mb-1">Categoria</label>
+                       <label className="block text-sm font-medium mb-1">Categoria*</label>
                        <select
                          className="w-full border rounded px-3 py-2"
                          value={atleta.categoria}
@@ -908,7 +924,7 @@ export default function Cadastro() {
                 {tipoPerfil === "Atleta" && (
                   <div className="mt-2">
                     <div><span className="font-medium">Idade:</span> {idade ?? "-"}</div>
-                    <div><span className="font-medium">Categoria:</span> {atleta.categoria || "-"}</div>
+                    <div><span className="font-medium">Categoria*:</span> {atleta.categoria || "-"}</div>
                   </div>
                 )}
                 {tipoPerfil === "Professor" && (
@@ -946,8 +962,28 @@ export default function Cadastro() {
               {sucesso && <p className="text-sm text-green-700 mt-3">{sucesso}</p>}
 
               <div className="mt-6 flex justify-between">
-                <button onClick={() => setEtapa(2)} className="border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50">Voltar</button>
-                <button onClick={handleFinalizar} className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded">Finalizar cadastro</button>
+                <button
+                  onClick={() => !finalizandoCadastro && setEtapa(2)}
+                  disabled={finalizandoCadastro}
+                  className={`border px-4 py-2 rounded ${
+                    finalizandoCadastro
+                      ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={handleFinalizar}
+                  disabled={finalizandoCadastro}
+                  className={`px-4 py-2 rounded text-white ${
+                    finalizandoCadastro
+                      ? "bg-green-700 opacity-70 cursor-not-allowed"
+                      : "bg-green-900 hover:bg-green-800"
+                  }`}
+                >
+                  {finalizandoCadastro ? "Finalizando..." : "Finalizar cadastro"}
+                </button>
               </div>
 
               <p className="text-center text-sm mt-4">
