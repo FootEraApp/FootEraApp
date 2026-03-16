@@ -123,7 +123,7 @@ import estatisticasRoutes from "./routes/estatisticas.js";
 import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 import presencaRoutes from "./routes/presenca.js";
 import metodologiasRoutes from "./routes/metodologiasRoutes.js";
-import metodologiasUploadRoutes from "./routes/uploadMetodologias.js";
+//import metodologiasUploadRoutes from "./routes/uploadMetodologias.js";
 import adminMetodologiasRoutes from "./routes/adminMetodologiasRoutes.js";
 import permissoesRoutes from "./routes/permissoesRoutes.js";
 import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js";
@@ -323,7 +323,9 @@ app.use("/api/submissoes", authenticateToken, submissoesRoutes);
 app.use("/api/treinos", authenticateToken, treinoRoutes);
 app.use("/api/treino-unico", authenticateToken, treinoUnicoRoutes);
 app.use("/api/treinosprogramados", authenticateToken, treinoProgramadoRoutes);
-app.use("/api/upload/metodologias", metodologiasUploadRoutes);
+
+//app.use("/api/upload/metodologias", metodologiasUploadRoutes);
+
 app.use("/api/upload", authenticateToken, uploadRoutes);
 app.use("/api/vinculo", authenticateToken, vinculoRoutes);
 app.use("/api/vinculos", authenticateToken, vinculoRoutes);
