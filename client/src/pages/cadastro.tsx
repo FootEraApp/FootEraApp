@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { useEffect, useMemo, useState, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
 import { Eye, EyeOff } from "lucide-react";
+import axios from "axios";
+import GoogleButton from "../components/auth/GoogleButton";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -426,6 +428,80 @@ export default function Cadastro() {
     );
   };
 
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    try {
+      setErro("");
+      setSucesso("");
+
+      const resp = await axios.post(`${API.BASE_URL}/api/auth/google`, {
+        credential,
+      });
+
+      const data = resp.data ?? {};
+
+      if (data?.needsCompletion) {
+        sessionStorage.setItem(
+          "google_pre_cadastro",
+          JSON.stringify({
+            preCadastroToken: data.preCadastroToken,
+            googleProfile: data.googleProfile,
+          })
+        );
+
+        navigate("/cadastro/google/complementar");
+        return;
+      }
+
+      const usuario = data.usuario ?? {};
+      const usuarioId: string = String(usuario.id ?? data.id ?? "");
+      const usuarioNome: string = String(
+        usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? ""
+      );
+      const token: string = String(data.token ?? "");
+
+      if (!token || !usuarioId) {
+        throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
+      }
+
+      sessionStorage.setItem("token", token);
+      sessionStorage.setItem("usuarioId", usuarioId);
+
+      if (usuarioNome) sessionStorage.setItem("nomeUsuario", usuarioNome);
+
+      const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
+
+      const mapTipoStore: Record<string, string> = {
+        admin: "admin",
+        atleta: "atleta",
+        professor: "professor",
+        clube: "clube",
+        escolinha: "escolinha",
+        escola: "escola",
+        olheiro: "olheiro",
+      };
+
+      sessionStorage.setItem("tipoUsuario", mapTipoStore[rawTipo] ?? "atleta");
+      sessionStorage.setItem("usuarioTipoRaw", rawTipo);
+
+      if (data?.tipoUsuarioId) {
+        sessionStorage.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
+      }
+
+      sessionStorage.setItem(
+        "plano",
+        String(usuario.plano ?? data.plano ?? "FREE")
+      );
+
+      navigate(rawTipo === "admin" ? "/admin" : "/feed");
+    } catch (err: any) {
+      console.error("Erro no cadastro/login com Google:", err.response?.data || err.message);
+      setErro(
+        err?.response?.data?.message ||
+          "Não foi possível continuar com Google agora."
+      );
+    }
+  }, [navigate]);
+
   return (
     <div className="flex flex-col lg:flex-row min-h-screen">
       <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
@@ -457,13 +533,22 @@ export default function Cadastro() {
         </div>
       </div>
 
-      <div className="relative bg-cream flex justify-center items-center p-6 lg:p-10 w-full lg:w-1/2">
+      <div className="relative bg-cream flex justify-center lg:justify-center items-start p-6 lg:p-10 w-full lg:w-1/2">
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
-          <div aria-hidden className="w-[420px] h-[420px] opacity-[0.06] lg:opacity-[0.08] rounded-full overflow-hidden"
-            style={{ backgroundImage: `url(${logo})`, backgroundRepeat: "no-repeat", backgroundPosition: "center 20%", backgroundSize: "85% auto", filter: "grayscale(100%)" }} />
+          <div
+            aria-hidden
+            className="w-[420px] h-[420px] opacity-[0.06] lg:opacity-[0.08] rounded-full overflow-hidden"
+            style={{
+              backgroundImage: `url(${logo})`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center 20%",
+              backgroundSize: "85% auto",
+              filter: "grayscale(100%)",
+            }}
+          />
         </div>
 
-        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl p-6">
+        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl p-6 mx-auto lg:mt-6">
           <div className="flex items-center justify-between mb-6">
             <Step n={1} label="Dados de Usuário" />
             <div className={`flex-1 mx-2 h-0.5 ${etapa >= 2 ? "bg-green-800" : "bg-gray-200"}`} />
@@ -471,7 +556,6 @@ export default function Cadastro() {
             <div className={`flex-1 mx-2 h-0.5 ${etapa >= 3 ? "bg-green-800" : "bg-gray-200"}`} />
             <Step n={3} label="Complementar" />
           </div>
-
           {etapa === 1 && (
             <div>
               <h2 className="text-xl font-semibold mb-1">Criar conta</h2>
@@ -593,6 +677,21 @@ export default function Cadastro() {
 
               <div className="flex justify-end">
                 <button onClick={() => { if (podeIrParaEtapa2()) setEtapa(2); }} className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded">Próximo</button>
+              </div>
+
+              <div className="mt-4">
+                <div className="w-full max-w-[460px] mx-auto">
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px bg-gray-200 flex-1" />
+                    <span className="text-xs text-gray-500">ou</span>
+                    <div className="h-px bg-gray-200 flex-1" />
+                  </div>
+
+                  <GoogleButton
+                    text="signup_with"
+                    onCredential={handleGoogleCredential}
+                  />
+                </div>
               </div>
 
               <p className="text-center text-sm mt-4">

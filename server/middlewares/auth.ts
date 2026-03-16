@@ -48,10 +48,16 @@ type DbUser = Prisma.UsuarioGetPayload<{
 }>;
 
 export const authenticateToken: RequestHandler = async (req, res, next) => {
-  const publicPrefixes = ["/api/status/maintenance", "/api/status", "/api/auth"];
+  const publicRoutes = new Set([
+    "/api/status/maintenance",
+    "/api/status",
+    "/api/auth/login",
+    "/api/auth/google",
+    "/api/auth/google/complete-registration",
+  ]);
 
-  const url = req.originalUrl || "";
-  if (publicPrefixes.some((p) => url.startsWith(p))) {
+  const url = (req.originalUrl || "").split("?")[0];
+  if (publicRoutes.has(url)) {
     return next();
   }
 

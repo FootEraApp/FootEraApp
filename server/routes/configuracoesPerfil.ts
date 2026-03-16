@@ -7,8 +7,9 @@ import {
   patchNotificacoes,
   trocarSenha,
   encerrarSessoes,
+  getGoogleStatus,
+  unlinkGoogle,
 } from "../controllers/configuracoesPerfilController.js";
-
 const r = Router();
 
 r.get("/privacidade", authenticateToken, getPrivacidade);
@@ -17,5 +18,7 @@ r.get("/notificacoes", authenticateToken, getNotificacoes);
 r.patch("/notificacoes", authenticateToken, patchNotificacoes);
 r.put("/seguranca/senha", authenticateToken, trocarSenha);
 r.post("/seguranca/encerrar-sessoes", authenticateToken, encerrarSessoes);
+r.get("/seguranca/google", authenticateToken, getGoogleStatus);
+r.delete("/seguranca/google", authenticateToken, unlinkGoogle);
 
 export default r;

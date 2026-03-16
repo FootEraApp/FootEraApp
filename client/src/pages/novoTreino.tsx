@@ -840,6 +840,7 @@ export default function NovoTreino() {
   const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
   const [filtroProf, setFiltroProf] = useState("");
   const restoredRef = useRef(false);
+  const jaSincronizouCalendarioComDatas = useRef(false);
   const [datasAgendadasPorTreino, setDatasAgendadasPorTreino] = useState<
     Map<string, Set<string>>
   >(new Map());
@@ -890,10 +891,16 @@ export default function NovoTreino() {
     return ymd === today;
   }
 
-  const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
 
-  const [professores, setProfessores] = useState<ProfessorItem[]>([]);
+  type GrupoProfessor = {
+    tipo: "Escolinha" | "Clube";
+    ownerId: string;
+    nome: string;
+    professores: ProfessorItem[];
+  };
+
+  const [gruposProfessores, setGruposProfessores] = useState<GrupoProfessor[]>([]);
   const [professoresSelecionados, setProfessoresSelecionados] = useState<string[]>([]);
 
   const [mesCalendario, setMesCalendario] = useState<{
@@ -929,6 +936,14 @@ export default function NovoTreino() {
     type: "success" | "error" | "info" = "success",
   ) {
     setToast({ message, type });
+  }
+
+  function toggleProfessorSelecionado(id: string) {
+    setProfessoresSelecionados((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id]
+    );
   }
 
   function detectarSeFree(): boolean {
@@ -979,118 +994,49 @@ export default function NovoTreino() {
 
     (async () => {
       try {
-        const tipo = String(
-          (Storage as any).tipoSalvo ??
-            localStorage.getItem("tipoUsuario") ??
-            sessionStorage.getItem("tipoUsuario") ??
-            ""
-        )
-          .trim()
-          .toLowerCase();
-
-        // só faz sentido para professor
-        if (tipo !== "professor") {
-          if (!cancel) setIsParceiro(false);
-          return;
-        }
-
         const token = getToken();
         const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-        // rota que você mostrou no print (GET /api/professores)
-        const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
+        const r = await fetch(
+          `${API.BASE_URL}/api/professores/realizadores-disponiveis`,
+          { headers }
+        );
         if (!r.ok) throw new Error(await r.text());
 
         const j = await r.json().catch(() => null);
-        const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? []);
+        const grupos = Array.isArray(j?.grupos) ? j.grupos : [];
 
-        // acha o professor logado no retorno
-        const me = (arr || []).find((p: any) => String(p?.id) === String(professorLogadoId));
+        const norm: GrupoProfessor[] = grupos.map((g: any) => ({
+          tipo: g.tipo === "Clube" ? "Clube" : "Escolinha",
+          ownerId: String(g.ownerId),
+          nome: String(g.nome ?? (g.tipo === "Clube" ? "Clube" : "Escolinha")),
+          professores: Array.isArray(g.professores)
+            ? g.professores.map((p: any) => ({
+                id: String(p.id),
+                nome: String(p.nome ?? "Professor"),
+                codigo: p.codigo ? String(p.codigo) : undefined,
+                cref: p.cref ? String(p.cref) : undefined,
+              }))
+            : [],
+        }));
 
-        // tenta ler o flag em chaves comuns
-        const parceiro =
-          Boolean(
-            me?.parceiro ??
-              me?.isParceiro ??
-              me?.usuario?.parceiro ??
-              me?.usuario?.isParceiro ??
-              me?.perfil?.parceiro ??
-              false
-          );
-
-        if (cancel) return;
-
-        // seta state local
-        setIsParceiro(parceiro);
-
-        // persiste para o seu useMemo "podePublicarFootera" funcionar
-        try {
-          (Storage as any).parceiro = parceiro;
-        } catch {}
-        localStorage.setItem("parceiro", String(parceiro));
-        sessionStorage.setItem("parceiro", String(parceiro));
-
-        // se o cara deixou de ser parceiro, garante que o toggle não fica ligado
-        if (!parceiro) setTreinoFootera(false);
+        if (!cancel) setGruposProfessores(norm);
       } catch (e) {
-        console.warn("[NovoTreino] falha ao verificar parceiro:", e);
-        if (!cancel) {
-          setIsParceiro(false);
-          try {
-            (Storage as any).parceiro = false;
-          } catch {}
-          localStorage.setItem("parceiro", "false");
-          sessionStorage.setItem("parceiro", "false");
-          setTreinoFootera(false);
-        }
+        console.error("Erro ao carregar professores realizadores:", e);
+        if (!cancel) setGruposProfessores([]);
       }
     })();
 
     return () => {
       cancel = true;
     };
-  }, [professorLogadoId]);
+  }, []);
 
   useEffect(() => {
     if (abaExercicios !== "personalizados") return;
     fetchExerciciosPersonalizados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abaExercicios]);
-  
-  useEffect(() => {
-    let cancel = false;
-
-    (async () => {
-      try {
-        const token = getToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-        const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
-        if (!r.ok) throw new Error(await r.text());
-
-        const j = await r.json();
-        const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? []);
-
-        const norm: ProfessorItem[] = (arr || []).map((p: any) => ({
-          id: String(p.id),
-          nome: String(p.nome ?? p.usuario?.nome ?? "Professor"),
-          codigo: p.codigo ? String(p.codigo) : undefined,
-          cref: p.cref ? String(p.cref) : undefined,
-        }));
-
-        const filtrados = professorLogadoId
-          ? norm.filter((p) => String(p.id) !== String(professorLogadoId))
-          : norm;
-
-        if (!cancel) setProfessores(filtrados);
-      } catch (e) {
-        console.error("Erro ao carregar professores:", e);
-        if (!cancel) setProfessores([]);
-      }
-    })();
-
-    return () => { cancel = true; };
-  }, [professorLogadoId]);
 
   useEffect(() => {
     let cancel = false;
@@ -1243,6 +1189,29 @@ export default function NovoTreino() {
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [DRAFT_KEY]);
+
+  const gruposProfessoresFiltrados = useMemo(() => {
+    const termo = filtroProf.trim().toLowerCase();
+
+    if (!termo) return gruposProfessores;
+
+    return gruposProfessores
+      .map((grupo) => ({
+        ...grupo,
+        professores: grupo.professores.filter((p) => {
+          const texto = [
+            p.nome ?? "",
+            p.codigo ?? "",
+            p.cref ?? "",
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return texto.includes(termo);
+        }),
+      }))
+      .filter((grupo) => grupo.professores.length > 0);
+  }, [gruposProfessores, filtroProf]);
 
   const MOSTRAR_TODOS = "__todos__";
   const score = useMemo(
@@ -2763,6 +2732,7 @@ useEffect(() => {
     setExerciciosSelecionados([]);
     setAtletasSelecionados([]);
     setDatasAgendamento([]);
+    jaSincronizouCalendarioComDatas.current = false;
     setProfessoresSelecionados([]);
     setCapaUrl("");
     setCapaPreview("");
@@ -3737,51 +3707,49 @@ useEffect(() => {
                     onChange={(e) => setFiltroProf(e.target.value)}
                   />
 
-                  <div className="max-h-40 overflow-y-auto space-y-2">
-                    {professores
-                      .filter((p) => {
-                        const q = (filtroProf || "").toLowerCase();
-                        if (!q) return true;
-                        const txt = `${p.nome} ${p.codigo ?? ""} ${p.cref ?? ""}`.toLowerCase();
-                        return txt.includes(q);
-                      })
-                      .map((p) => {
-                        const pid = String(p.id);
-                        const checked = professoresSelecionados.map(String).includes(pid);
-                        return (
-                          <label
-                            key={p.id}
-                            className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                setProfessoresSelecionados((prev) => {
-                                  const pid = String(p.id);
-                                  const prevStr = prev.map(String);
-                                   if (prevStr.includes(pid)) return prevStr.filter((x) => x !== pid);
-                                  return [...prevStr, pid];
-                                });
-                              }}
-                            />
-                            <span className="text-sm">
-                              {p.nome}
-                              {p.codigo ? ` (${p.codigo})` : ""}{p.cref ? ` - ${p.cref}` : ""}
-                            </span>
-                          </label>
-                        );
-                      })}
-                  </div>
+                  <div className="space-y-4 max-h-64 overflow-auto">
+                    {gruposProfessoresFiltrados.length === 0 ? (
+                      <div className="text-sm text-gray-500 px-1 py-2">
+                        Nenhum professor disponível.
+                      </div>
+                    ) : (
+                      gruposProfessoresFiltrados.map((grupo) => (
+                        <div
+                          key={`${grupo.tipo}-${grupo.ownerId}`}
+                          className="rounded-lg border border-gray-200 p-3"
+                        >
+                          <div className="font-semibold text-sm text-gray-800 mb-2">
+                            {grupo.tipo} {grupo.nome}
+                          </div>
 
-                  {professoresSelecionados.length > 0 && (
-                    <div className="mt-2 text-xs text-gray-700">
-                      <span className="font-semibold">Selecionados:</span>{" "}
-                      {professoresSelecionados
-                        .map((id) => professores.find((p) => p.id === id)?.nome ?? id)
-                        .join(", ")}
-                    </div>
-                  )}
+                          <div className="space-y-2">
+                            {grupo.professores.map((p) => {
+                              const checked = professoresSelecionados.includes(p.id);
+
+                              return (
+                                <label
+                                  key={p.id}
+                                  className="flex items-start gap-2 p-2 rounded cursor-pointer hover:bg-gray-50"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleProfessorSelecionado(p.id)}
+                                    className="mt-1"
+                                  />
+                                  <span className="text-sm text-gray-800">
+                                    {p.nome}
+                                    {p.codigo ? ` (${p.codigo})` : ""}
+                                    {p.cref ? ` - ${p.cref}` : ""}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

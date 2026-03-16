@@ -4,14 +4,42 @@ const prisma = new PrismaClient();
 export type Plan = 'Free' | 'Pro' | string;
 
 export async function getUserPlan(userId: string): Promise<Plan> {
-  const a = await prisma.assinatura.findUnique({
+  const a = await prisma.assinatura.findFirst({
     where: { usuarioId: userId },
-    select: { ativo: true, canceledAt: true, plano: true },
+    orderBy: [
+      { ativo: "desc" },
+      { renovaEm: "desc" },
+      { startsAt: "desc" },
+    ],
+    select: {
+      ativo: true,
+      canceledAt: true,
+      plano: true,
+      status: true,
+      trialEndsAt: true,
+    },
   });
-  if (a?.ativo && (!a.canceledAt || a.canceledAt > new Date())) {
-    return (a.plano as Plan) || 'Pro';
+
+  if (!a) return "Free";
+
+  const now = new Date();
+  const status = String(a.status || "").toUpperCase();
+
+  const ativaValida =
+    a.ativo &&
+    status === "ATIVA" &&
+    (!a.canceledAt || a.canceledAt > now);
+
+  const trialValido =
+    a.ativo &&
+    status === "TRIAL" &&
+    (!a.trialEndsAt || new Date(a.trialEndsAt) > now);
+
+  if (ativaValida || trialValido) {
+    return (a.plano as Plan) || "Pro";
   }
-  return 'Free';
+
+  return "Free";
 }
 
 const INF = Number.POSITIVE_INFINITY;

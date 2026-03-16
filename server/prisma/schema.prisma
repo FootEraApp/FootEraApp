@@ -9,11 +9,18 @@ datasource db {
 }
 
 model Usuario {
-  id                        String              @id @default(uuid())
-  nomeDeUsuario             String              @unique
-  senhaHash                 String
-  nome                      String
-  email                     String              @unique
+  id            String @id @default(uuid())
+  nomeDeUsuario String @unique
+  senhaHash     String
+  nome          String
+  email         String @unique
+
+  googleSub      String?      @unique
+  googleEmail    String?
+  googlePicture  String?
+  authProvider   AuthProvider @default(LOCAL)
+  googleLinkedAt DateTime?
+
   foto                      String?
   tipo                      TipoUsuario
   cidade                    String?
@@ -39,7 +46,7 @@ model Usuario {
   parceiro                  Boolean             @default(false)
   parceiroInfo              Parceiro?
   EmailVerification         EmailVerification[]
-  assinatura                Assinatura?
+  assinatura                Assinatura[]
   administrador             Administrador?
   tokenVersion              Int                 @default(0)
   senhaAtualizadaEm         DateTime?
@@ -108,6 +115,22 @@ model Usuario {
   @@index([deleteScheduledAt])
 }
 
+model GooglePreCadastro {
+  id            String   @id @default(uuid())
+  token         String   @unique
+  googleSub     String
+  email         String
+  emailVerified Boolean  @default(false)
+  nome          String?
+  foto          String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([googleSub])
+  @@index([email])
+  @@index([expiresAt])
+}
+
 model Parceiro {
   id        String  @id @default(uuid())
   usuarioId String  @unique
@@ -130,7 +153,7 @@ model EmailVerification {
 
 model Assinatura {
   id                     String           @id @default(uuid())
-  usuarioId              String           @unique
+  usuarioId              String
   plano                  String
   periodicidade          Periodicidade
   startsAt               DateTime
@@ -149,6 +172,7 @@ model Assinatura {
 
   bloqueadoEm DateTime?
 
+  @@unique([usuarioId, plano])
   @@index([startsAt])
   @@index([canceledAt])
   @@index([status])
@@ -230,14 +254,14 @@ model ProfessorEscolinha {
 }
 
 model OrganizacaoGestor {
-  id String @id @default(uuid())
-  tipo    OrganizacaoTipo
-  ownerId String 
+  id          String          @id @default(uuid())
+  tipo        OrganizacaoTipo
+  ownerId     String
   professorId String
-  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
-  papel      String? 
-  permissoes Json? 
-  ativo Boolean @default(true)
+  professor   Professor       @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  papel       String?
+  permissoes  Json?
+  ativo       Boolean         @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -477,15 +501,15 @@ model ExercicioTemporario {
 }
 
 model ExercicioPersonalizado {
-  id         String      @id @default(uuid())
-  nome       String      @unique
-  descricao  String?
-  nivel      Nivel?
-  categorias Categoria[] @default([])
+  id                    String      @id @default(uuid())
+  nome                  String      @unique
+  descricao             String?
+  nivel                 Nivel?
+  categorias            Categoria[] @default([])
   videoDemonstrativoUrl String?
-  videoPosterUrl String?
-  criadorUsuarioId String
-  criadorUsuario   Usuario @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  videoPosterUrl        String?
+  criadorUsuarioId      String
+  criadorUsuario        Usuario     @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -2434,7 +2458,7 @@ enum NotificacaoTipo {
   FOLLOW_BACK
   FOLLOW_REMOVED
   MENSAGEM
-  MENSAGEM_GRUPO 
+  MENSAGEM_GRUPO
   TREINO
   DESAFIO
   EVENTO
@@ -2443,6 +2467,7 @@ enum NotificacaoTipo {
   INDICACAO_OLHEIRO
   INDICACAO_RESPONDIDA
 }
+
 enum TipoMembro {
   DONO
   ADMIN
@@ -2462,6 +2487,12 @@ enum EventoTipo {
   SHOWCASE
   WORKSHOP
   PALESTRA
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  LOCAL_GOOGLE
 }
 
 enum EventoStatus {
