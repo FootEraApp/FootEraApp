@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { getDailyUsage } from "../services/usage.js";
 import { prisma } from "../prisma.js";
+import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -291,62 +292,35 @@ export const postar: RequestHandler = async (req, res) => {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
 
-  const { conteudo, descricao, imagemUrl: imagemUrlBody, videoUrl: videoUrlBody } =
-    req.body as { conteudo?: string; descricao?: string; imagemUrl?: string; videoUrl?: string };
-
+  const { conteudo, descricao, imagemUrl: imagemUrlBody, videoUrl: videoUrlBody } = req.body;
   const texto = (descricao && descricao.length ? descricao : conteudo) || "";
-  const file = (req as any).file as Express.Multer.File | undefined;
+  
+  // O multer-s3 adiciona a propriedade 'location' ao file
+  const file = req.file as any; 
 
   try {
     let tipoMidia: "Imagem" | "Video" | undefined;
     let imagemUrl: string | undefined;
     let videoUrl: string | undefined;
 
-    if (file) {
+    // --- LÓGICA DO S3 AQUI ---
+    if (file && file.location) {
       const isVideo = file.mimetype?.startsWith("video");
-      const dest = (file.destination || "").replace(/\\/g, "/");
-      const leaf = dest.split("/").filter(Boolean).pop() || "";
       if (isVideo) {
         tipoMidia = "Video";
-        videoUrl = `/uploads/${leaf}/${file.filename}`;
+        videoUrl = file.location; // A URL direta do Amazon S3
       } else {
         tipoMidia = "Imagem";
-        imagemUrl = `/uploads/${leaf}/${file.filename}`;
+        imagemUrl = file.location; // A URL direta do Amazon S3
       }
-    }
-
-    if (!file) {
-      const FRONT = (process.env.FRONTEND_BASE_URL || "http://localhost:5173").replace(
-        /\/+$/,
-        ""
-      );
-
-      const norm = (u?: string): string | undefined => {
-        if (!u) return undefined;
-        let s = String(u).trim();
-        if (!s) return undefined;
-
-        if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:"))
-          return s;
-
-        if (s.startsWith("uploads/")) s = "/" + s;
-        if (s.startsWith("/uploads/")) return s;
-
-        if (s.startsWith("assets/")) s = "/" + s;
-        if (s.startsWith("/assets/")) return `${FRONT}${s}`;
-
-        return undefined;
-      };
-
-      const img = norm(imagemUrlBody);
-      const vid = norm(videoUrlBody);
-
-      if (img) {
-        imagemUrl = img;
+    } else {
+      // Se o usuário não mandou arquivo, mas mandou uma URL por texto (seu código antigo)
+      if (imagemUrlBody) {
+        imagemUrl = imagemUrlBody;
         tipoMidia = "Imagem";
       }
-      if (vid) {
-        videoUrl = vid;
+      if (videoUrlBody) {
+        videoUrl = videoUrlBody;
         tipoMidia = "Video";
       }
     }
@@ -355,6 +329,7 @@ export const postar: RequestHandler = async (req, res) => {
       return res.status(400).json({ message: "Conteúdo ou mídia obrigatória." });
     }
 
+    // Salva no banco de dados com a URL da Amazon
     const postagem = await prisma.postagem.create({
       data: {
         conteudo: texto,
@@ -366,6 +341,9 @@ export const postar: RequestHandler = async (req, res) => {
       },
     });
 
+    // ... (o resto da sua função continua igual: emissão de socket, etc.)
+    
+    // Vou colocar a parte do Socket aqui só para não cortar seu código
     const postForEmit = await prisma.postagem.findUnique({
       where: { id: postagem.id },
       include: {
@@ -381,8 +359,8 @@ export const postar: RequestHandler = async (req, res) => {
       where: { seguidoUsuarioId: usuarioId! },
       select: { seguidorUsuarioId: true },
     });
-    getIO()
-      ?.to([`u:${usuarioId}`, ...segs.map((s) => `u:${s.seguidorUsuarioId}`)])
+    
+    getIO()?.to([`u:${usuarioId}`, ...segs.map((s) => `u:${s.seguidorUsuarioId}`)])
       .emit("feed:novoPost", postForEmit);
 
     return res.status(201).json(postagem);
@@ -401,9 +379,16 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
   }
 
   try {
+    // 1. Buscamos o post incluindo as URLs das mídias
     const post = await prisma.postagem.findUnique({
       where: { id },
-      select: { id: true, usuarioId: true, repostOfId: true },
+      select: { 
+        id: true, 
+        usuarioId: true, 
+        repostOfId: true,
+        imagemUrl: true,   // Adicionado
+        videoUrl: true     // Adicionado
+      },
     });
 
     if (!post) {
@@ -411,14 +396,21 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
     }
 
     if (post.usuarioId !== usuarioId) {
-      return res
-        .status(403)
-        .json({ mensagem: "Não autorizado a excluir esta postagem." });
+      return res.status(403).json({ mensagem: "Não autorizado." });
     }
 
+    // 2. Lógica de mídias: Deletar arquivos do S3 se existirem
+    // Verificamos se a URL contém "amazonaws" para evitar tentar deletar assets locais antigos
+    if (post.imagemUrl && post.imagemUrl.includes("amazonaws.com")) {
+      await deleteFromS3(post.imagemUrl);
+    }
+    if (post.videoUrl && post.videoUrl.includes("amazonaws.com")) {
+      await deleteFromS3(post.videoUrl);
+    }
+
+    // 3. Lógica de Reposts (sua lógica original mantida)
     if (post.repostOfId) {
       let rootId = post.repostOfId;
-
       let cursor = await prisma.postagem.findUnique({
         where: { id: rootId },
         select: { repostOfId: true },
@@ -432,17 +424,16 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
         });
       }
 
-      await prisma.postagem
-        .update({
-          where: { id: rootId },
-          data: { reposts: { decrement: 1 } },
-        })
-        .catch(() => {});
+      await prisma.postagem.update({
+        where: { id: rootId },
+        data: { reposts: { decrement: 1 } },
+      }).catch(() => {});
     }
 
+    // 4. Deletar do Banco de Dados
     await prisma.postagem.delete({ where: { id } });
 
-    return res.json({ mensagem: "Postagem excluída com sucesso." });
+    return res.json({ mensagem: "Postagem e arquivos excluídos com sucesso." });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ mensagem: "Erro ao excluir postagem." });

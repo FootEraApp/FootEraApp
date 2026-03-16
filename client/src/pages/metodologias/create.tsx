@@ -73,30 +73,6 @@ function getToken() {
   );
 }
 
-async function uploadVideoMetodologia(file: File) {
-  const token = getToken();
-  if (!token) throw new Error("Sem token.");
-
-  const form = new FormData();
-  form.append("video", file);
-
-  const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/video`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
-  });
-
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j?.message || j?.error || "Falha ao subir vídeo");
-
-  return {
-    relativeUrl: String(j?.relativeUrl || j?.url || ""),
-    url: String(j?.url || j?.relativeUrl || ""),
-    filename: String(j?.filename || ""),
-    thumbUrl: String(j?.thumbUrl || j?.thumbRelativeUrl || ""),
-  };
-}
-
 function normalizeImgUrl(raw?: string | null) {
   if (!raw) return null;
 
@@ -113,27 +89,27 @@ function normalizeImgUrl(raw?: string | null) {
   return `${API.BASE_URL}/${u}`;
 }
 
-async function uploadCapaMetodologia(file: File) {
+// Substitua as antigas funções de upload por esta única função S3
+async function uploadToAWS(file: File) {
   const token = getToken();
   if (!token) throw new Error("Sem token.");
 
-  const fd = new FormData();
-  fd.append("capa", file); // ✅ o nome do campo (multer) vai ser "capa"
+  const form = new FormData();
+  // O nome do campo DEVE ser "file" para bater com o multerS3.single("file") do backend
+  form.append("file", file);
 
-  const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/capa`, {
+  const r = await fetch(`${API.BASE_URL}/api/metodologias/upload-s3`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
-    body: fd,
+    body: form,
   });
 
-  const js = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(js?.message || js?.error || "Falha no upload da capa.");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.message || j?.error || "Falha no upload para o S3");
 
   return {
-    relativeUrl: String(js?.relativeUrl || ""),
-    url: String(js?.url || ""),
-    filename: String(js?.filename || ""),
-    thumbUrl: String(js?.thumbUrl || js?.thumbRelativeUrl || ""),
+    url: String(j?.url || ""), // A URL pública gerada pela AWS
+    key: String(j?.key || ""),
   };
 }
 
@@ -766,8 +742,9 @@ export default function CriarMetodologia() {
       let finalCapaUrl: string | null = capaUrl;
 
       if (capaFile) {
-        const up = await uploadCapaMetodologia(capaFile);
-        finalCapaUrl = (up.relativeUrl || up.url || null) ? (up.relativeUrl || up.url) : null;
+        // Usa a nova função S3
+        const up = await uploadToAWS(capaFile);
+        finalCapaUrl = up.url || null;
 
         setCapaUrl(finalCapaUrl);
         setCapaFile(null);
@@ -788,20 +765,20 @@ export default function CriarMetodologia() {
           if (it.videoFile) {
             setUploadingByItem((prev) => ({ ...prev, [it.id]: true }));
             try {
-              const up = await uploadVideoMetodologia(it.videoFile);
-              const finalUrl = up.relativeUrl || up.url;
-              const finalThumb =
-                (up.thumbUrl && up.thumbUrl.trim())
-                  ? up.thumbUrl.trim()
-                  : (it.thumbUrl?.trim() ? it.thumbUrl.trim() : guessThumbFromVideo(finalUrl));
+              // Usa a nova função S3
+              const up = await uploadToAWS(it.videoFile);
+              const finalUrl = up.url;
+              
+              // Como não temos FFmpeg no S3 para gerar thumb, usamos a própria URL do vídeo 
+              // ou mantemos vazio para o front tentar extrair depois
+              const finalThumb = it.thumbUrl?.trim() || "";
 
               videoUrlByLocalId[it.id] = finalUrl;
               if (finalThumb) thumbUrlByLocalId[it.id] = finalThumb;
 
-              // ✅ atualiza o item corretamente (semana + item)
               updateItem(s.id, it.id, {
                 videoUrl: finalUrl,
-                thumbUrl: finalThumb || "",
+                thumbUrl: finalThumb,
                 videoFile: null,
               });
             } finally {
@@ -811,15 +788,8 @@ export default function CriarMetodologia() {
             const finalUrl = it.videoUrl.trim();
             videoUrlByLocalId[it.id] = finalUrl;
 
-            const finalThumb =
-              it.thumbUrl?.trim() ? it.thumbUrl.trim() : guessThumbFromVideo(finalUrl);
-
+            const finalThumb = it.thumbUrl?.trim() || "";
             if (finalThumb) thumbUrlByLocalId[it.id] = finalThumb;
-
-            // opcional: sincroniza UI também
-            if (!it.thumbUrl?.trim() && finalThumb) {
-              updateItem(s.id, it.id, { thumbUrl: finalThumb });
-            }
           }
         }
       }
