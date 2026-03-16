@@ -85,7 +85,7 @@ web_modules/
 .yarn-integrity
 
 # dotenv environment variable files
-
+# ignorar sempre os .env.production
 .env
 .env.*
 server/.env
