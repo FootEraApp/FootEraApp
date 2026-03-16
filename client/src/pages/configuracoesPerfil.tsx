@@ -3,15 +3,14 @@ import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
+import GoogleButton from "../components/auth/GoogleButton";
 
 type FeedbackTipo = "sugestao" | "bug";
 
-// ✅ Flag para liberar/bloquear o tutorial (enquanto não está pronto)
 const TUTORIAL_ENABLED = false;
 
 export default function ConfiguracoesPerfil() {
@@ -46,11 +45,26 @@ export default function ConfiguracoesPerfil() {
   const [showNotificacoesModal, setShowNotificacoesModal] = useState(false);
   const [showSegurancaModal, setShowSegurancaModal] = useState(false);
   const [mostrarOnline, setMostrarOnline] = useState(true);
+  const [googleLinked, setGoogleLinked] = useState<boolean>(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [googlePicture, setGooglePicture] = useState<string | null>(null);
+  const [googleLinkedAt, setGoogleLinkedAt] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleSuccess, setGoogleSuccess] = useState<string | null>(null);
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
+  function getToken() {
+    return (
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      ""
+    );
+  }
+
   useEffect(() => {
-    const token = Storage.token;
+    const token = getToken();
     if (!token) {
       setLocation("/login");
       return;
@@ -66,7 +80,7 @@ export default function ConfiguracoesPerfil() {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${Storage.token}`,
+            Authorization: `Bearer ${getToken()}`,
           },
           body: JSON.stringify({ senhaAtual, senhaNova }),
         });
@@ -99,7 +113,7 @@ export default function ConfiguracoesPerfil() {
     setSegMsg(null);
     setSegLoading(true);
 
-    const token = Storage.token;
+    const token = getToken();
 
     try {
       const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/encerrar-sessoes`, {
@@ -123,7 +137,7 @@ export default function ConfiguracoesPerfil() {
     const ok = confirm("Tem certeza que deseja sair?");
     if (!ok) return;
 
-    const token = Storage.token;
+    const token = getToken();
 
     try {
       if (token) {
@@ -138,7 +152,7 @@ export default function ConfiguracoesPerfil() {
 
   async function carregarPrivacidade() {
     const resp = await fetch(`${API.REST}/configuracoes-perfil/privacidade`, {
-      headers: { Authorization: `Bearer ${Storage.token}` },
+      headers: { Authorization: `Bearer ${getToken()}` },
     });
     const data = await resp.json().catch(() => ({}));
 
@@ -153,7 +167,7 @@ export default function ConfiguracoesPerfil() {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Storage.token}`,
+        Authorization: `Bearer ${getToken()}`,
       },
       body: JSON.stringify(patch),
     });
@@ -161,7 +175,7 @@ export default function ConfiguracoesPerfil() {
 
   async function carregarNotificacoes() {
     const resp = await fetch(`${API.REST}/configuracoes-perfil/notificacoes`, {
-      headers: { Authorization: `Bearer ${Storage.token}` },
+      headers: { Authorization: `Bearer ${getToken()}` },
     });
     const data = await resp.json();
     setNotifMensagens(!!data.notifMensagens);
@@ -175,7 +189,7 @@ export default function ConfiguracoesPerfil() {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Storage.token}`,
+        Authorization: `Bearer ${getToken()}`,
       },
       body: JSON.stringify(patch),
     });
@@ -191,7 +205,7 @@ export default function ConfiguracoesPerfil() {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${Storage.token}`,
+          Authorization: `Bearer ${getToken()}`,
         },
         body: JSON.stringify({ confirm: confirmText.trim() }),
       });
@@ -234,7 +248,7 @@ export default function ConfiguracoesPerfil() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${Storage.token}`,
+          Authorization: `Bearer ${getToken()}`,
         },
         body: JSON.stringify({
           tipo: feedbackTipo,
@@ -253,6 +267,93 @@ export default function ConfiguracoesPerfil() {
       setFeedbackError(err?.message || "Erro ao enviar seu feedback.");
     } finally {
       setFeedbackSending(false);
+    }
+  }
+
+    async function carregarGoogleStatus() {
+    try {
+      setGoogleError(null);
+
+      const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/google`, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.message || "Erro ao carregar status do Google.");
+      }
+
+      setGoogleLinked(!!data?.linked);
+      setGoogleEmail(data?.googleEmail ?? null);
+      setGooglePicture(data?.googlePicture ?? null);
+      setGoogleLinkedAt(data?.googleLinkedAt ?? null);
+    } catch (e: any) {
+      setGoogleError(e?.message || "Erro ao carregar status do Google.");
+    }
+  }
+
+  async function handleGoogleLink(credential: string) {
+    try {
+      setGoogleError(null);
+      setGoogleSuccess(null);
+      setGoogleLoading(true);
+
+      console.log("TOKEN GOOGLE LINK:", getToken());
+      const resp = await fetch(`${API.BASE_URL}/api/auth/google/link`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ credential }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.message || "Não foi possível vincular sua conta Google.");
+      }
+
+      setGoogleSuccess(data?.message || "Conta Google vinculada com sucesso.");
+      await carregarGoogleStatus();
+    } catch (e: any) {
+      setGoogleError(e?.message || "Erro ao vincular conta Google.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
+
+  async function desvincularGoogle() {
+    const ok = confirm("Tem certeza que deseja desvincular sua conta Google?");
+    if (!ok) return;
+
+    try {
+      setGoogleError(null);
+      setGoogleSuccess(null);
+      setGoogleLoading(true);
+
+      const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/google`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.message || "Não foi possível desvincular a conta Google.");
+      }
+
+      setGoogleSuccess(data?.message || "Conta Google desvinculada com sucesso.");
+      await carregarGoogleStatus();
+    } catch (e: any) {
+      setGoogleError(e?.message || "Erro ao desvincular conta Google.");
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -319,7 +420,7 @@ export default function ConfiguracoesPerfil() {
           </div>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               setSegErr(null);
               setSegMsg(null);
               setSenhaAtual("");
@@ -327,6 +428,7 @@ export default function ConfiguracoesPerfil() {
               setShowSegurancaModal(true);
               setShowSenhaAtual(false);
               setShowSenhaNova(false);
+              await carregarGoogleStatus();
             }}
             className="text-green-800 font-semibold"
           >
@@ -776,6 +878,67 @@ export default function ConfiguracoesPerfil() {
 
             <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700 space-y-3">
             <div className="font-semibold">Ações</div>
+
+            <div className="rounded-md border border-gray-200 p-3">
+              <div className="font-medium flex items-center gap-2">🔗 Conta Google</div>
+
+              <div className="mt-2 text-xs text-gray-600">
+                Vincule sua conta Google para poder entrar com Google e com login normal.
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <img
+                  src={googlePicture || "/assets/usuarios/footera-logo.png"}
+                  alt="Google"
+                  className="h-10 w-10 rounded-full object-cover border"
+                />
+
+                <div className="flex-1">
+                  <div className="text-sm font-medium">
+                    {googleLinked ? "Conta Google conectada" : "Conta Google não conectada"}
+                  </div>
+
+                  <div className="text-xs text-gray-500">
+                    {googleLinked
+                      ? googleEmail || "Google vinculado"
+                      : "Você ainda não vinculou uma conta Google."}
+                  </div>
+
+                  {googleLinkedAt ? (
+                    <div className="text-[11px] text-gray-400 mt-1">
+                      Vinculada em: {new Date(googleLinkedAt).toLocaleString("pt-BR")}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {googleError && (
+                <div className="mt-3 text-sm text-red-600">{googleError}</div>
+              )}
+
+              {googleSuccess && (
+                <div className="mt-3 text-sm text-green-700">{googleSuccess}</div>
+              )}
+
+              <div className="mt-3">
+                {!googleLinked ? (
+                  <GoogleButton
+                    text="continue_with"
+                    onCredential={handleGoogleLink}
+                    disabled={googleLoading}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={desvincularGoogle}
+                    disabled={googleLoading}
+                    className="w-full rounded-md border border-red-300 text-red-700 px-3 py-2 text-sm font-semibold hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {googleLoading ? "Processando..." : "Desvincular conta Google"}
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div className="rounded-md border border-gray-200 p-3">
               <div className="font-medium flex items-center gap-2">🔒 Trocar senha</div>

@@ -1236,7 +1236,12 @@ async function main() {
 
   if (atletaFree) {
     await prisma.assinatura.upsert({
-      where: { usuarioId: atletaFree.id },
+      where: {
+        usuarioId_plano: {
+          usuarioId: atletaFree.id,
+          plano: "FREE",
+        },
+      },
       update: {},
       create: {
         usuarioId: atletaFree.id,
@@ -1252,7 +1257,12 @@ async function main() {
 
   if (atletaPro) {
     await prisma.assinatura.upsert({
-      where: { usuarioId: atletaPro.id },
+      where: {
+        usuarioId_plano: {
+          usuarioId: atletaPro.id,
+          plano: "PRO",
+        },
+      },
       update: {},
       create: {
         usuarioId: atletaPro.id,
@@ -1267,8 +1277,14 @@ async function main() {
   }
 
   if (atletaTeste) {
-    await prisma.assinatura.upsert({
-      where: { usuarioId: atletaTeste.usuarioId },
+    
+     await prisma.assinatura.upsert({
+      where: {
+        usuarioId_plano: {
+          usuarioId: atletaTeste.usuarioId,
+          plano: "PRO",
+        },
+      },
       update: {},
       create: {
         usuarioId: atletaTeste.usuarioId,
@@ -1418,7 +1434,12 @@ async function main() {
     periodicidade: Periodicidade
   ) {
     await prisma.assinatura.upsert({
-      where: { usuarioId },
+      where: {
+        usuarioId_plano: {
+          usuarioId,
+          plano,
+        },
+      },
       update: {
         plano,
         periodicidade,
