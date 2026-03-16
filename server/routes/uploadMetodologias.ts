@@ -3,10 +3,6 @@ import path from "path";
 import fs from "fs-extra";
 import multer from "multer";
 import { authenticateToken } from "../middlewares/auth.js";
-import {
-  uploadMetodologiaVideo,
-  uploadMetodologiaCapa,
-} from "../controllers/metodologiasUploadController.js";
 
 const storage = multer.diskStorage({
   async destination(req, file, cb) {
@@ -36,7 +32,5 @@ const upload = multer({ storage });
 const router = Router();
 router.use(authenticateToken);
 
-router.post("/video", upload.single("video"), uploadMetodologiaVideo);
-router.post("/capa", upload.single("capa"), uploadMetodologiaCapa);
 
 export default router;

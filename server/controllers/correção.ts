@@ -1,625 +1,525 @@
-import {
-  Categoria,
-  TipoTreino,
-  TreinoAgendadoStatus,
-  Nivel,
-} from "@prisma/client";
-import { getIO } from "../socket.js";
-import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
-import { can } from "server/services/entitlements.js";
-import { requireUsage, planLimitFor } from "server/lib/usage.js";
-import jwt from "jsonwebtoken";
-import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
+
+import { Request, Response } from "express";
+import { Categoria, PosicaoCampo } from "@prisma/client";
+import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { requireUsage } from "server/lib/usage.js";
+import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
 import { prisma } from "../prisma.js";
+import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
+import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
-type Response = ExpressResponse;
-
-const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
-
-type AuthenticatedRequest = ExpressRequest & {
-  userId?: string;
-  usuarioId?: string;
-  user?: any;
-  auth?: any;
+type AtividadeUI = {
+  id: string;
+  tipo: string;         
+  titulo: string;      
+  createdAt: string;    
+  imagemUrl?: string | null;
+  link?: string | null; 
 };
 
-function parseDateInput(raw: any): Date {
-  let s = String(raw ?? "").trim();
-  if (!s) return new Date(NaN);
+const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
-  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
-    s = s.slice(0, 10);
-  }
+const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3001";
+const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const [y, m, d] = s.split("-").map(Number);
-    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
-  }
-
-  return new Date(s);
+function absUrl(path?: string | null) {
+  const s = typeof path === "string" ? path.trim() : "";
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return `${s.startsWith("/uploads") ? API_BASE_URL : FRONTEND_URL}${s}`;
 }
 
-function getUserFromReq(req: AuthenticatedRequest) {
-  const anyReq = req as any;
-
-  return (
-    anyReq.user ||         
-    anyReq.usuario ||
-    anyReq.auth?.user ||    
-    anyReq.auth ||         
-    null
-  );
+function readPrivacidadeFlags(config: any) {
+  const c = (config && typeof config === "object") ? config : {};
+  return {
+    perfilVisivel: c.perfilVisivel !== false,         
+    mostrarEmail: c.mostrarEmail === true,            
+    permitirMensagens: c.permitirMensagens !== false, 
+  };
 }
 
-type CanKey = Parameters<typeof can>[1];
+function isAdminFromReq(req: any) {
+  const t = String(req?.user?.tipo ?? req?.authUser?.tipo ?? "").toLowerCase();
+  return t === "admin";
+}
 
-const CAP_CRIAR_TREINO: CanKey = "Treinos:CriarProgramado" as CanKey;
-const FEAT = {
-  TREINOS_ILIMITADOS:  "treinos.ilimitados"   as CanKey,
-  ROTINAS_ILIMITADAS:  "rotinas.ilimitadas"   as CanKey,
-  AGENDAMENTO_LOTE:    "agendamento.lote"     as CanKey,
-  AGENDAMENTO_PESSOAL: "agendamento.pessoal"  as CanKey,  
-} as const;
+function withDefaultImg(v: any) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : DEFAULT_AVATAR;
+}
 
-async function herdarVideoParaTemporario(nome: string): Promise<string | null> {
-  const clean = String(nome || "").trim();
-  if (!clean) return null;
+async function ensureSolicitacaoVinculo(
+  tx: any,
+  params: { atletaId: string; entidadeId: string; tipoEntidade: "clube" | "escolinha" | "professor" }
+) {
+  const { atletaId, entidadeId, tipoEntidade } = params;
 
-  const ex = await prisma.exercicio.findFirst({
-    where: {
-      nome: { equals: clean, mode: "insensitive" },
-      NOT: [{ videoDemonstrativoUrl: null }, { videoDemonstrativoUrl: "" }],
-    },
-    select: { videoDemonstrativoUrl: true },
+  const existente = await tx.solicitacaoVinculo.findFirst({
+    where: { atletaId, entidadeId, tipoEntidade },
   });
 
-  return ex?.videoDemonstrativoUrl ? String(ex.videoDemonstrativoUrl) : null;
-}
-
-function normalizeCategorias(input: any): Categoria[] {
-  if (!input) return [];
-  const arr = Array.isArray(input) ? input : [input];
-
-  const mapOne = (raw: any): string => {
-    const s = String(raw).trim();
-    const m = s.match(/^sub[\s-]?(\d{1,2})$/i);
-    if (m) return `Sub-${m[1]}`;
-    if (/^livre$/i.test(s)) return "Livre";
-    return s;
-  };
-
-  const mapped = arr.map(mapOne);
-  const valid = mapped.filter((c) => (Object.values(Categoria) as string[]).includes(c));
-  if (valid.length !== mapped.length) throw new Error("Categoria(s) inválida(s)");
-  return valid as Categoria[];
-}
-
-function normalizeTipoTreino(input: any): TipoTreino | undefined {
-  if (!input) return undefined;
-  const s = String(input).toLowerCase();
-  if (s === "fisico" || s === "físico") return "Fisico";
-  if (s === "tecnico" || s === "técnico") return "Tecnico";
-  if (s === "tatico" || s === "tático") return "Tatico";
-  if (s === "mental") return "Mental";
-  return (Object.values(TipoTreino) as string[]).includes(String(input))
-    ? (input as TipoTreino)
-    : undefined;
-}
-
-function syncTreinoProgramado(treinoProgramadoId: string) {
-  const io = getIO();
-  if (!io || !treinoProgramadoId) return;
-
-  io.to("treinos:programados").emit("treinos:sync", { treinoProgramadoId });
-}
-
-export async function criarTreinoProgramado(
-  req: AuthenticatedRequest,
-  res: Response
-) {
-  let user: any = getUserFromReq(req);
-
-  if (!user) {
-    const authHeader =
-      (req.headers.authorization as string | undefined) ||
-      (req.headers.Authorization as string | undefined);
-
-    if (authHeader) {
-      const token = authHeader.startsWith("Bearer ")
-        ? authHeader.slice(7)
-        : authHeader;
-
-      try {
-        user = jwt.verify(token, JWT_SECRET) as any;
-        (req as any).user = user;
-        (req as any).userId = user.id;
-      } catch (e) {
-        console.error("[criarTreinoProgramado] Erro ao decodificar JWT:", e);
-      }
-    }
-  }
-
-  if (!user) {
-    return res.status(401).json({
-      code: "UNAUTHENTICATED",
-      message: "Usuário não autenticado.",
+  if (!existente) {
+    await tx.solicitacaoVinculo.create({
+      data: {
+        atletaId,
+        entidadeId,
+        tipoEntidade,
+        status: "pendente",
+      },
     });
   }
+}
 
-  const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
-  if (!user.plano) {
-    user.plano = "FREE";
+function pickId(raw: any): string | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === "string") return raw.trim() || undefined;
+  if (raw?.id) return String(raw.id);
+  if (raw?.value) return String(raw.value);
+  if (Array.isArray(raw) && raw[0]?.id) return String(raw[0].id);
+  return undefined;
+}
+
+function pickIds(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw) && raw.length && typeof raw[0] === "string") {
+    return raw.map((x) => String(x).trim()).filter(Boolean);
   }
 
-  user.plano = String(user.plano ?? "FREE").trim().toUpperCase();
-
-  const isOrganizador =
-    tipoStr === "professor" ||
-    tipoStr === "clube" ||
-    tipoStr === "escolinha";
-
-  if (!can(user, CAP_CRIAR_TREINO) && !isOrganizador) {
-    return res.status(403).json({
-      code: "FORBIDDEN",
-      message: "Seu plano não permite criar novos treinos programados.",
-    });
+  if (Array.isArray(raw) && raw.length && (raw[0]?.id || raw[0]?.value)) {
+    return raw
+      .map((x) => (x?.id ? String(x.id) : x?.value ? String(x.value) : ""))
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
-  const ok = await requireUsage(req as any, res, "treinos_programados_mes");
-  if (!ok) return;
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
 
+  const one = pickId(raw);
+  return one ? [one] : [];
+}
+
+function pontosDesafioInd(s: any) {
+  const cand = [
+    s?.pontosCreditados,   
+    s?.pontuacaoSnapshot,   
+    s?.pontuacao,           
+    s?.desafio?.pontuacao, 
+  ];
+  const n = cand
+    .map(v => Number(v))
+    .find(v => Number.isFinite(v) && v > 0);
+  return n ?? 0;
+}
+
+function pontosGrupo(p: any): number {
+  const baseCandidates = [
+    p?.pontosGanhos,                            
+    p?.desafioEmGrupo?.pontosAcumulados,     
+    p?.desafioEmGrupo?.pontosSnapshot,
+  ];
+  const base = baseCandidates
+    .map((v) => Number(v))
+    .find((v) => Number.isFinite(v) && v > 0) ?? 0;
+
+  const bonus = Number(p?.desafioEmGrupo?.bonus) || 0;
+  const bonusDado = !!p?.desafioEmGrupo?.bonusDado;
+
+  return base + (bonusDado ? bonus : 0);
+}
+
+async function getParticipacoesGrupo(usuarioId: string, atletaId: string) {
   try {
-    const {
-      nome,
-      descricao,
-      nivel,
-      exercicios,
-      tipoTreino,
-      objetivo,
-      duracao,
-      dataTreino,
-      dataAgendada,
-      dicas,
-      tipoUsuario,
-      tipoUsuarioId,
-      atletasIds = [],
-      elencosIds = [],
-      pontuacao,
-    } = req.body as any;
-
-    if (!(Object.values(Nivel) as string[]).includes(String(nivel))) {
-      return res.status(400).json({ message: "Nivel inválido" });
-    }
-    const nivelEnum = nivel as Nivel;
-    const usuarioIdToken = req.userId || user?.id;
-
-    if (!nome || !nivel || !Array.isArray(exercicios) || !tipoUsuarioId || !usuarioIdToken) {
-      console.warn("[criarTreinoProgramado] Dados inválidos:", {
-        nome,
-        nivel,
-        exerciciosEhArray: Array.isArray(exercicios),
-        tipoUsuarioId,
-        usuarioIdToken,
-      });
-      return res.status(400).json({ error: "Dados inválidos" });
-    }
-
-    let categorias: Categoria[] = [];
-
-    const catRaw = req.body?.categoria;
-    const categoriaVazia =
-      catRaw == null ||
-      catRaw === "" ||
-      (Array.isArray(catRaw) && catRaw.length === 0);
-
-    if (!categoriaVazia) {
-      try {
-        categorias = normalizeCategorias(catRaw);
-      } catch {
-        return res.status(400).json({
-          error: "Categoria(s) inválida(s)",
-          recebida: catRaw,
-        });
-      }
-    }
-
-    let tipoTreinoNorm: TipoTreino | undefined = undefined;
-    if (tipoTreino !== undefined) {
-      tipoTreinoNorm = normalizeTipoTreino(tipoTreino);
-      if (!tipoTreinoNorm && tipoTreino !== null) {
-        return res.status(400).json({ message: "TipoTreino inválido" });
-      }
-    }
-
-    const when = dataTreino || dataAgendada || null;
-    const tipoNorm =
-      typeof tipoUsuario === "string"
-        ? (tipoUsuario as string).toLowerCase()
-        : null;
-
-    const pontuacaoNum =
-      Number.isFinite(Number(pontuacao))
-        ? Math.max(0, Math.floor(Number(pontuacao)))
-        : null;
-
-    if (tipoStr === "professor" && !can(user, FEAT.TREINOS_ILIMITADOS)) {
-      const profId = String(tipoUsuarioId);
-      const ativos = await prisma.treinoProgramado.count({
-        where: {
-          NOT: [{ naoExpira: true }],
-          OR: [
-            { Professor: { is: { id: profId } } },
-            { professores: { some: { professorId: profId } } },
-          ],
-        }
-      });
-
-      const limAtivos = planLimitFor(user.plano ?? "FREE", "planos_ativos_total");
-      if (ativos >= limAtivos) {
-        return res.status(402).json({
-          code: "UPGRADE_REQUIRED",
-          message:
-            "Você atingiu o limite de planos/rotinas ativos para o seu plano.",
-        });
-      }
-    }
-
-    if (tipoStr === "professor" && !can(user, FEAT.ROTINAS_ILIMITADAS)) {
-      const profId = String(tipoUsuarioId);
-      const templates = await prisma.treinoProgramado.count({
-        where: { naoExpira: true, Professor: { is: { id: profId } } },
-      });
-
-      const limTpl = planLimitFor(user.plano ?? "FREE", "templates_total");
-      if (templates >= limTpl) {
-        return res.status(402).json({
-          code: "UPGRADE_REQUIRED",
-          message: "Você atingiu o limite de templates salvos para o seu plano.",
-        });
-      }
-    }
-
-    const whenDate = when ? parseDateInput(when) : null;
-      if (whenDate && Number.isNaN(whenDate.getTime())) {
-        return res.status(400).json({ message: "dataAgendada inválida" });
-      }
-
-    const body = req.body as any;
-
-    const professorCriadorId =
-      tipoStr === "professor" ? String(tipoUsuarioId).trim() : "";
-
-    const colaboradoresEntradaRaw =
-      body.colaboradoresProfessorIds ??
-      body.professoresIds ??
-      body.colaboradoresIds ??
-      body.criadoresIds ??
-      [];
-
-    const colaboradoresEntrada: string[] = Array.isArray(colaboradoresEntradaRaw)
-      ? (colaboradoresEntradaRaw as unknown[]).map((v: unknown) => String(v).trim()).filter(Boolean)
-      : typeof colaboradoresEntradaRaw === "string"
-      ? colaboradoresEntradaRaw.split(",").map((v: string) => v.trim()).filter(Boolean)
-      : [];
-
-    const colaboradoresEntradaUniq = [...new Set(colaboradoresEntrada)].filter(
-      (id) => id && id !== professorCriadorId
-    );
-
-    let colaboradoresProfessorIds: string[] = [];
-    if (colaboradoresEntradaUniq.length) {
-      const profs = await prisma.professor.findMany({
-        where: {
-          OR: [
-            { id: { in: colaboradoresEntradaUniq } },
-            { usuarioId: { in: colaboradoresEntradaUniq } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      colaboradoresProfessorIds = profs.map((p) => p.id);
-
-      const setOk = new Set(colaboradoresProfessorIds);
-      
-      if (profs.length !== colaboradoresEntradaUniq.length) {
-        return res.status(400).json({
-          message:
-            "Um ou mais colaboradores são inválidos (não encontrei professor por id/usuarioId).",
-          recebidos: colaboradoresEntradaUniq,
-          encontrados: colaboradoresProfessorIds,
-        });
-      }
-    }
-
-    const nomeTrim = String(nome || "").trim();
-    const jaExisteNome = await prisma.treinoProgramado.findFirst({
+    return await prisma.submissaoDesafioEmGrupo.findMany({
       where: {
-        nome: { equals: nomeTrim, mode: "insensitive" },
+        OR: [
+          { usuarioId },                            
+          { submissaoDesafio: { atletaId } },    
+        ],
+      },
+      include: {
+        desafioEmGrupo: {
+          include: {
+            grupo: true,
+            desafioOficial: true,
+          },
+        },
+      },
+      orderBy: { dataEnvio: "desc" },
+    });
+  } catch {
+    return [];
+  }
+}
+
+function mapGrupoToAtividade(p: any) {
+  const g = p.desafioEmGrupo;
+  const desafio = g?.desafioOficial;
+  return {
+    id: `g-${p.id}`,
+    tipo: "Desafio" as const,
+    imagemUrl: desafio?.imagemUrl ?? null,
+    nome: desafio?.titulo ?? g?.grupo?.nome ?? "Desafio em grupo",
+    data: p.dataEnvio ?? g?.dataCriacao,
+    duracao: undefined,
+    pontuacao: pontosGrupo(p),
+  };
+}
+
+
+
+export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const userIdFromToken = req.userId;
+  if (!userIdFromToken || id !== userIdFromToken) {
+    return res.status(403).json({ error: "Você só pode editar o seu próprio perfil." });
+  }
+
+  const { usuario, tipo, tipoUsuario } = req.body;
+  if (!usuario || !tipoUsuario || !tipo) {
+    return res.status(400).json({ error: "Dados incompletos." });
+  }
+
+  const file = (req as any).file as Express.Multer.File | undefined;
+  const fotoFinal: string | null = file ? `/uploads/${file.filename}` : (usuario.foto ?? null);
+
+  const raw = typeof usuario?.nomeDeUsuario === "string" ? usuario.nomeDeUsuario.trim() : "";
+  const novoUsername = raw ? raw.toLowerCase() : null;
+
+  // valida formato (mesma regra do front)
+  if (novoUsername && !/^[a-z0-9._]{3,30}$/.test(novoUsername)) {
+    return res.status(400).json({
+      error: "Nome de usuário inválido. Use letras, números, ponto e underline (3–30).",
+    });
+  }
+
+  // checa duplicado (evita conflito)
+  if (novoUsername) {
+    const existe = await prisma.usuario.findFirst({
+      where: {
+        nomeDeUsuario: novoUsername,
+        NOT: { id },
       },
       select: { id: true },
     });
 
-    if (jaExisteNome) {
-      return res.status(409).json({
-        code: "NOME_JA_UTILIZADO",
-        message: 'Esse nome já está sendo utilizado. Troque o título do treino e tente novamente.',
-      });
+    if (existe) {
+      return res.status(400).json({ error: "Esse nome de usuário já está em uso." });
     }
-
-    const treino = await prisma.treinoProgramado.create({
-      data: {
-        codigo: typeof body.codigo === "string" ? body.codigo.trim() : undefined,
-        nome: String(nome).trim(),
-        descricao: descricao ?? null,
-        nivel: nivelEnum,
-        tipoTreino: tipoTreinoNorm ?? null,
-        categoria: categorias,
-        dicas: Array.isArray(dicas) ? dicas : [],
-        duracao: duracao != null ? Number(duracao) : null,
-        objetivo: objetivo ?? null,
-        dataAgendada: whenDate,
-        pontuacao: pontuacaoNum,
-
-        ...(tipoNorm === "professor"
-          ? { Professor: { connect: { id: String(tipoUsuarioId) } } }
-          : {}),
-        ...(tipoNorm === "clube"
-          ? { clube: { connect: { id: String(tipoUsuarioId) } } }
-          : {}),
-        ...(tipoNorm === "escolinha"
-          ? { escolinha: { connect: { id: String(tipoUsuarioId) } } }
-          : {}),
-
-        ...(professorCriadorId
-          ? { criadorProfessor: { connect: { id: professorCriadorId } } }
-          : {}),
-
-
-        professores: colaboradoresProfessorIds.length
-          ? {
-              createMany: {
-                data: colaboradoresProfessorIds.map((professorId) => ({
-                  professorId,
-                  papel: "COLABORADOR",
-                })),
-                skipDuplicates: true,
-              },
-            }
-          : undefined,
-
-      },
-      include: {
-        professores: { include: { professor: { select: { id: true, nome: true } } } },
-        clube: { select: { id: true, nome: true } },
-        escolinha: { select: { id: true, nome: true } },
-      },
-    });
-
-    const exItems = Array.isArray(exercicios) ? exercicios : [];
-
-    const exsBanco = exItems
-      .map((e: any, i: number) => ({
-        exercicioId: String(e?.exercicioId ?? e?.id ?? "").trim() || null,
-        repeticoes: String(e?.repeticoes ?? ""),
-        ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
-      }))
-      .filter((e: any) => !!e.exercicioId);
-
-    const exsTemp = exItems
-      .map((e: any, i: number) => ({
-        nome: String(e?.nome ?? "").trim(),
-        descricao: e?.descricao ?? null,
-        repeticoes: String(e?.repeticoes ?? ""),
-        ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
-      }))
-      .filter((e: any) => !e.nome ? false : true)
-      .filter((e: any, idx: number) => {
-        const raw = exItems[idx];
-        const hasId = String(raw?.exercicioId ?? raw?.id ?? "").trim();
-        return !hasId;
-      });
-
-    if (exsBanco.length) {
-      await prisma.treinoProgramadoExercicio.createMany({
-        data: exsBanco.map((e: any) => ({
-          treinoProgramadoId: treino.id,
-          exercicioId: e.exercicioId,
-          repeticoes: e.repeticoes,
-          ordem: e.ordem,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    syncTreinoProgramado(treino.id);
-
-    const promoverParaBancoSeBater = async (nomeTemp: string) => {
-      const nomeNorm = nomeTemp.trim();
-      const achado = await prisma.exercicio.findFirst({
-        where: {
-          OR: [
-            { nome: { equals: nomeNorm, mode: "insensitive" } },
-            { nome: { contains: nomeNorm, mode: "insensitive" } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      return achado?.id ?? null;
-    };
-
-    for (const [i, e] of exsTemp.entries()) {
-      const nomeTemp = String(e.nome ?? "").trim();
-      if (!nomeTemp) continue;
-
-      const exercicioBancoId = await promoverParaBancoSeBater(nomeTemp);
-      if (exercicioBancoId) {
-        await prisma.treinoProgramadoExercicio.create({
-          data: {
-            treinoProgramadoId: treino.id,
-            exercicioId: exercicioBancoId,
-            repeticoes: String(e.repeticoes ?? ""),
-            ordem: e.ordem ?? exsBanco.length + i + 1,
-          },
-        });
-        continue;
-      }
-
-    const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
-
-    let temp = await prisma.exercicioTemporario.findFirst({
-      where: {
-        treinoProgramadoId: treino.id,
-        nome: { equals: nomeTemp, mode: "insensitive" },
-      },
-      select: { id: true, videoDemonstrativoUrl: true },
-    });
-
-    if (!temp) {
-      temp = await prisma.exercicioTemporario.create({
-        data: {
-          treinoProgramadoId: treino.id,
-          codigo: null,
-          nome: nomeTemp,
-          descricao: e.descricao ?? null,
-          nivel: nivelEnum,
-          categorias: categorias,
-          videoDemonstrativoUrl: videoHerdado ?? null,
-        },
-        select: { id: true, videoDemonstrativoUrl: true },
-      });
-    } else if ((!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") && videoHerdado) {
-      await prisma.exercicioTemporario.update({
-        where: { id: temp.id },
-        data: { videoDemonstrativoUrl: videoHerdado },
-      });
-    }
-
-    await prisma.treinoProgramadoExercicio.create({
-      data: {
-        treinoProgramadoId: treino.id,
-        exercicioTemporarioId: temp.id,
-        repeticoes: String(e.repeticoes ?? ""),
-        ordem: e.ordem ?? exsBanco.length + i + 1,
-      },
-    });
   }
+  try {
+    const cepDigits =
+  usuario?.cep != null ? String(usuario.cep).replace(/\D/g, "") : "";
 
-    try {
-      const rowsIncluidos = await prisma.treinoProgramadoExercicio.findMany({
-        where: {
-          treinoProgramadoId: treino.id,
-          exercicioId: { not: null },
-        },
-        select: { exercicioId: true },
-      });
+    await prisma.usuario.update({
+      where: { id },
+      data: {
+        nome: usuario.nome,
+        email: usuario.email,
+        nomeDeUsuario: novoUsername ?? undefined, // ✅ garante lowercase
+        foto: fotoFinal,
+        cep: cepDigits ? cepDigits : null,
+        cidade: usuario.cidade,
+        estado: usuario.estado,
+        pais: usuario.pais,
+        bairro: usuario.bairro,
+      },
+    });
 
-      const exercicioIdsIncluidos = Array.from(
-        new Set(rowsIncluidos.map((r) => r.exercicioId!).filter(Boolean))
-      );
+    const tipoKey = String(tipoUsuario).toLowerCase();
+    const tipoNorm = tipoKey === "escolinha" ? "escola" : tipoKey;
 
-      if (exercicioIdsIncluidos.length) {
-        await recalcularEstatisticaExercicios(exercicioIdsIncluidos);
-      }
-    } catch (e) {
-      console.warn("[criarTreinoProgramado] Falha ao recalcular estatísticas de exercícios:", e);
-    }
+    switch (tipoNorm) {
+      case "atleta": {
+        const rawEscolinha =
+          tipo.escolinhaId ??
+          tipo.escolaId ??
+          tipo.escolinha ??
+          tipo.escola ??
+          null;
 
-    const atletasFromElencos = elencosIds.length
-      ? await prisma.atletaElenco.findMany({
-          where: { elencoId: { in: elencosIds } },
-          select: { atletaId: true },
-        })
-      : [];
+        const rawClube = tipo.clubeId ?? tipo.clube ?? null;
+        
+        const escolinhaId = pickId(rawEscolinha);
+        const clubeId = pickId(rawClube);
 
-    const atletasUniqRaw = Array.from(
-      new Set([
-        ...(atletasIds || []),
-        ...atletasFromElencos.map((a) => a.atletaId),
-      ])
-    );
+        const limparEscolinha =
+          rawEscolinha === "" ||
+          rawEscolinha === null ||
+          String(rawEscolinha).toLowerCase() === "nenhum";
 
-    const atletasResolvidos = atletasUniqRaw.length
-      ? await prisma.atleta.findMany({
-          where: {
-            OR: [
-              { id: { in: atletasUniqRaw } },
-              { usuarioId: { in: atletasUniqRaw } },
-            ],
-          },
+        const limparClube =
+          rawClube === "" ||
+          rawClube === null ||
+          String(rawClube).toLowerCase() === "nenhum";
+
+        const rawProfessorMulti =
+          tipo.professorIds ??
+          tipo.professoresIds ??
+          tipo.professorIdsSelecionados ??
+          null;
+
+        const rawProfessorSingle = tipo.professorId ?? tipo.professor ?? null;
+
+        const professorIds = Array.from(
+          new Set([
+            ...pickIds(rawProfessorMulti),
+            ...(pickId(rawProfessorSingle) ? [pickId(rawProfessorSingle)!] : []),
+          ])
+        ).filter(Boolean);
+
+        const limparProfessor =
+          (rawProfessorMulti === "" ||
+            rawProfessorMulti === null ||
+            String(rawProfessorMulti).toLowerCase() === "nenhum") &&
+          (rawProfessorSingle === "" ||
+            rawProfessorSingle === null ||
+            String(rawProfessorSingle).toLowerCase() === "nenhum" ||
+            professorIds.length === 0);
+
+        const data: any = {
+          nome: tipo.nome,
+          sobrenome: tipo.sobrenome,
+          idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
+          telefone1: tipo.telefone1,
+          telefone2: tipo.telefone2,
+          email: usuario.email ?? null,
+          nacionalidade: tipo.nacionalidade,
+          naturalidade: tipo.naturalidade,
+          posicao: tipo.posicao,
+          altura: isNaN(parseFloat(tipo.altura))
+            ? undefined
+            : parseFloat(tipo.altura),
+          peso: isNaN(parseFloat(tipo.peso))
+            ? undefined
+            : parseFloat(tipo.peso),
+          seloQualidade: tipo.seloQualidade,
+          foto: fotoFinal,
+        };
+
+        if (limparEscolinha) {
+          data.escolinhaId = null;
+        } else if (escolinhaId) {
+          data.escolinhaId = escolinhaId;
+        }
+
+        if (limparClube) {
+          data.clubeId = null;
+        } else if (clubeId) {
+          data.clubeId = clubeId;
+        }
+
+        const atletaRow = await prisma.atleta.findUnique({
+          where: { usuarioId: id },
           select: { id: true },
-        })
-      : [];
-
-    const atletaIdsResolved: string[] = Array.from(
-      new Set(atletasResolvidos.map((a) => a.id))
-    );
-
-    if (atletaIdsResolved.length > 0) {
-      try {
-        const whenDate = treino.dataAgendada ?? new Date();
-        const dataExpiracao = new Date(
-          whenDate.getTime() + 3 * 24 * 60 * 60 * 1000
-        );
-
-        await prisma.treinoAgendado.createMany({
-          data: atletaIdsResolved.map((atletaId) => ({
-            titulo: treino.nome,
-            atletaId,
-            treinoProgramadoId: treino.id,
-            dataTreino: whenDate,
-            dataExpiracao,
-            dataOriginal: whenDate,
-            status: TreinoAgendadoStatus.AGENDADO,
-          })),
-          skipDuplicates: true,
         });
 
-      } catch (e) {
-        console.error(
-          "[criarTreinoProgramado] ERRO ao auto-agendar para atletas (não é crítico):",
-          e
-        );
+        if (!atletaRow) {
+          return res
+            .status(404)
+            .json({ error: "Atleta não encontrado para este usuário." });
+        }
+
+        const atletaId = atletaRow.id;
+
+        await prisma.$transaction(async (tx: any) => {
+          await tx.atleta.update({ where: { usuarioId: id }, data });
+
+          if (limparEscolinha) {
+            await tx.relacaoTreinamento.deleteMany({
+              where: { atletaId, escolinhaId: { not: null } },
+            });
+          } else if (escolinhaId) {
+            await tx.relacaoTreinamento.deleteMany({
+              where: {
+                atletaId,
+                escolinhaId: { not: escolinhaId },
+              },
+            });
+
+            const existe = await tx.relacaoTreinamento.findFirst({
+              where: { atletaId, escolinhaId },
+            });
+
+            if (!existe) {
+              await tx.relacaoTreinamento.create({
+                data: { atletaId, escolinhaId },
+              });
+
+              await ensureSolicitacaoVinculo(tx, {
+                atletaId,
+                entidadeId: escolinhaId,
+                tipoEntidade: "escolinha",
+              });
+            }
+          }
+
+          if (limparClube) {
+            await tx.relacaoTreinamento.deleteMany({
+              where: { atletaId, clubeId: { not: null } },
+            });
+          } else if (clubeId) {
+            await tx.relacaoTreinamento.deleteMany({
+              where: {
+                atletaId,
+                clubeId: { not: clubeId },
+              },
+            });
+
+            const existe = await tx.relacaoTreinamento.findFirst({
+              where: { atletaId, clubeId },
+            });
+
+            if (!existe) {
+              await tx.relacaoTreinamento.create({
+                data: { atletaId, clubeId },
+              });
+
+              await ensureSolicitacaoVinculo(tx, {
+                atletaId,
+                entidadeId: clubeId,
+                tipoEntidade: "clube",
+              });
+            }
+          }
+
+          if (limparProfessor) {
+            await tx.relacaoTreinamento.deleteMany({
+              where: { atletaId, professorId: { not: null } },
+            });
+          } else {
+            await tx.relacaoTreinamento.deleteMany({
+              where: {
+                atletaId,
+                professorId: { not: null, notIn: professorIds },
+              },
+            });
+
+            for (const pid of professorIds) {
+              const existe = await tx.relacaoTreinamento.findFirst({
+                where: { atletaId, professorId: pid },
+              });
+
+              if (!existe) {
+                await tx.relacaoTreinamento.create({
+                  data: { atletaId, professorId: pid },
+                });
+
+                await ensureSolicitacaoVinculo(tx, {
+                  atletaId,
+                  entidadeId: pid,
+                  tipoEntidade: "professor",
+                });
+              }
+            }
+          }
+        });
+        break;
       }
+
+      case "professor":
+        await prisma.professor.update({
+          where: { usuarioId: id },
+          data: {
+            nome: tipo.nome,
+            cref: tipo.cref,
+            areaFormacao: tipo.areaFormacao,
+            escola: tipo.escola,
+            qualificacoes: Array.isArray(tipo.qualificacoes)
+              ? tipo.qualificacoes
+              : tipo.qualificacoes?.split(",").map((q: string) => q.trim()),
+            certificacoes: Array.isArray(tipo.certificacoes)
+              ? tipo.certificacoes
+              : tipo.certificacoes?.split(",").map((c: string) => c.trim()),
+            fotoUrl: fotoFinal,
+          },
+        });
+        break;
+
+      case "clube": {
+        const data: any = {
+          nome: tipo.nome,
+          telefone1: tipo.telefone1 ?? null,
+          telefone2: tipo.telefone2 ?? null,
+          email: tipo.email ?? null,
+          siteOficial: tipo.siteOficial ?? null,
+          sede: tipo.sede ?? null,
+          estadio: tipo.estadio ?? null,
+          logradouro: tipo.logradouro ?? null,
+          numero: tipo.numero ?? null,
+          complemento: tipo.complemento ?? null,
+          bairro: tipo.bairro ?? null,
+          cidade: tipo.cidade ?? null,
+          estado: tipo.estado ?? null,
+          pais: tipo.pais ?? null,
+          cep: tipo.cep ?? null,
+          descricao: tipo.descricao ?? null,
+          responsavel: tipo.responsavel ?? null,
+          logo: fotoFinal,
+        };
+        if (Array.isArray(tipo.categorias)) data.categorias = { set: tipo.categorias };
+
+        await prisma.clube.update({ where: { usuarioId: id }, data });
+        break;
+      }
+
+      case "olheiro": {
+        const anos =
+          typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== ""
+            ? Number(tipo.anosExperiencia)
+            : tipo.anosExperiencia;
+
+        await prisma.olheiro.update({
+          where: { usuarioId: id },
+          data: {
+            headline: tipo.headline ?? null,
+            descricao: tipo.descricao ?? null,
+            areaAtuacao: tipo.areaAtuacao ?? null,
+            anosExperiencia: Number.isFinite(anos) ? (anos as number) : undefined,
+            emailPublico: tipo.emailPublico ?? null,
+            telefonePublico: tipo.telefonePublico ?? null,
+            fotoUrl: fotoFinal,
+          },
+        });
+        break;
+      }
+
+      case "escola":
+        await prisma.escolinha.update({
+          where: { usuarioId: id },
+          data: {
+            nome: tipo.nome,
+            telefone1: tipo.telefone1,
+            telefone2: tipo.telefone2,
+            email: tipo.email,
+            siteOficial: tipo.siteOficial,
+            sede: tipo.sede,
+            logradouro: tipo.logradouro,
+            numero: tipo.numero,
+            complemento: tipo.complemento,
+            bairro: tipo.bairro,
+            cidade: tipo.cidade,
+            estado: tipo.estado,
+            pais: tipo.pais,
+            cep: tipo.cep,
+            logo: fotoFinal,
+          },
+        });
+        break;
+
+      default:
+        return res.status(400).json({
+          error: `Tipo de usuário inválido: ${tipoUsuario} (aceitos: atleta, professor, clube, escola/escolinha, olheiro)`,
+        });
     }
 
-    return res.status(201).json(treino);
-  } catch (err: any) {
-    if (err?.code === "P2002") {
-      const target = err?.meta?.target;
-      const fields = Array.isArray(target) ? target : [target].filter(Boolean);
-
-      if (fields.includes("nome")) {
-        return res.status(409).json({
-          code: "NOME_JA_UTILIZADO",
-          message: 'Esse nome já está sendo utilizado. Troque o título do treino e tente novamente.',
-        });
-      }
-
-      if (fields.includes("codigo")) {
-        return res.status(409).json({
-          code: "CODIGO_JA_UTILIZADO",
-          message: "Esse código já está sendo utilizado. Gere outro e tente novamente.",
-        });
-      }
-
-      return res.status(409).json({
-        code: "DUPLICADO",
-        message: "Já existe um treino com dados únicos repetidos (nome/código).",
-      });
-    }
-
-    console.error(
-      "Erro ao criar treino (catch geral):",
-      err?.message,
-      err?.code,
-      err?.meta,
-      err
-    );
-
-    return res
-      .status(500)
-      .json({ error: "Erro ao criar treino", detalhe: err?.message });
+    return res.status(200).json({ message: "Perfil atualizado com sucesso." });
+  } catch (error) {
+    console.error("Erro ao atualizar perfil:", error);
+    return res.status(500).json({ error: "Erro interno ao atualizar perfil." });
   }
-}
+};

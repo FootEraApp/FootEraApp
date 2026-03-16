@@ -199,8 +199,8 @@ export function AppRoutes() {
       <Route path="/configuracoes"><PaginaConfiguracoesPerfil /></Route>
       <Route path="/notificacoes"><PaginaNotificacoes /></Route>
       <Route path="/mensagens"><PaginaMensagens /></Route>
-      {<Route path="/"><HomeRedirect /></Route>}
-      {/*<Route path="/"><LandingPage /></Route> Descomentar quando tiver pronto/e comentar o de cima*/} 
+      {/*<Route path="/"><HomeRedirect /></Route>*/}
+      {<Route path="/"><LandingPage /></Route>} 
       <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
     </Switch>
   );
