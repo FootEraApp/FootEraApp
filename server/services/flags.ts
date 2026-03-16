@@ -17,13 +17,22 @@ export interface UserFlags {
 }
 
 export async function getUserFlags(usuarioId: string): Promise<UserFlags> {
-  const assinatura = await prisma.assinatura.findUnique({
+  const assinatura = await prisma.assinatura.findFirst({
     where: { usuarioId },
-    select: { ativo: true, plano: true },
+    orderBy: [
+      { ativo: "desc" },
+      { renovaEm: "desc" },
+      { startsAt: "desc" },
+    ],
+    select: {
+      ativo: true,
+      plano: true,
+      status: true,
+      trialEndsAt: true,
+    },
   });
 
   const plano = assinatura?.ativo ? (assinatura.plano || "PRO") : "FREE";
-
   const caps: Capability[] = [
     "DM",
     "DM_GRUPO",

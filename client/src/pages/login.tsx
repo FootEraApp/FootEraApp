@@ -1,10 +1,11 @@
 // client/src/pages/login
-import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
+import { useState, useEffect, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import MaintenanceScreen from "../components/MaintenanceScreen";
+import GoogleButton from "../components/auth/GoogleButton";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -384,6 +385,105 @@ export default function PaginaLogin() {
     })();
   }, []);
 
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    try {
+      setErro("");
+      setDeletedInfo(null);
+      setBlockedInfo(null);
+      setNeedVerify(false);
+      setEmailDestino(null);
+
+      const resp = await axios.post(`${API.BASE_URL}/api/auth/google`, {
+        credential,
+      });
+
+      const data = resp.data ?? {};
+
+      if (data?.needsCompletion) {
+        sessionStorage.setItem(
+          "google_pre_cadastro",
+          JSON.stringify({
+            preCadastroToken: data.preCadastroToken,
+            googleProfile: data.googleProfile,
+          })
+        );
+
+        navigate("/cadastro/google/complementar");
+        return;
+      }
+
+      const usuario = data.usuario ?? {};
+      const usuarioId: string = String(usuario.id ?? data.id ?? "");
+      const usuarioNome: string = String(
+        usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? ""
+      );
+      const token: string = String(data.token ?? "");
+
+      if (!token || !usuarioId) {
+        throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
+      }
+
+      const store = lembrarDeMim ? localStorage : sessionStorage;
+
+      [
+        "token",
+        "usuarioId",
+        "nomeUsuario",
+        "tipoUsuario",
+        "usuarioTipoRaw",
+        "tipoUsuarioId",
+        "plano",
+      ].forEach((k) => {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
+      });
+
+      store.setItem("token", token);
+      store.setItem("usuarioId", usuarioId);
+
+      if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
+
+      const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
+      const isAdmin = rawTipo === "admin";
+
+      const mapTipo: Record<string, string> = {
+        admin: "admin",
+        atleta: "atleta",
+        professor: "professor",
+        clube: "clube",
+        escolinha: "escolinha",
+        escola: "escola",
+        olheiro: "olheiro",
+      };
+
+      const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
+      store.setItem("tipoUsuario", tipoPadrao);
+      store.setItem("usuarioTipoRaw", rawTipo);
+
+      const tipoUsuarioId =
+        data.tipoUsuarioId ||
+        data?.olheiro?.id ||
+        data?.professor?.id ||
+        data?.clube?.id ||
+        data?.escolinha?.id ||
+        data?.atleta?.id ||
+        null;
+
+      if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+
+      const plano = String(usuario.plano ?? data.plano ?? "FREE");
+      store.setItem("plano", plano);
+
+      navigate(isAdmin ? "/admin" : "/feed");
+    } catch (err: any) {
+      console.error("Erro no login com Google:", err.response?.data || err.message);
+      setErro(
+        err?.response?.data?.message ||
+          "Não foi possível entrar com Google agora."
+      );
+    }
+  }, [lembrarDeMim, navigate]);
+
   if (!maintenanceChecked) {
     return <div className="p-6">Carregando…</div>;
   }
@@ -689,9 +789,22 @@ export default function PaginaLogin() {
               Entrar
             </button>
 
+            <div className="my-4 flex items-center gap-3">
+              <div className="h-px bg-gray-200 flex-1" />
+              <span className="text-xs text-gray-500">ou</span>
+              <div className="h-px bg-gray-200 flex-1" />
+            </div>
+
+            <div className="w-full">
+              <GoogleButton
+                text="continue_with"
+                onCredential={handleGoogleCredential}
+              />
+            </div>
+
             <a
               href="/esqueci-senha"
-              className="text-green-700 underline text-right text-sm mt-2 block"
+              className="text-green-700 underline text-right text-sm mt-4 block"
             >
               Esqueci minha senha
             </a>

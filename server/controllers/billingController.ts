@@ -765,15 +765,24 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     const now = new Date();
     const status = String(assinaturaPrincipal?.status || "SEM_ASSINATURA");
     const trialEndsAt = (assinaturaPrincipal?.trialEndsAt as Date | null) ?? null;
-    const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
+    const trialAtivo = !!(status === "TRIAL" && trialEndsAt && now <= trialEndsAt);
 
     const dataBase =
       status === "TRIAL"
-        ? ((assinaturaPrincipal?.trialStartsAt as Date | null) ?? (assinaturaPrincipal?.startsAt as Date | null) ?? null)
+        ? ((assinaturaPrincipal?.trialStartsAt as Date | null) ??
+          (assinaturaPrincipal?.startsAt as Date | null) ??
+          null)
         : ((assinaturaPrincipal?.startsAt as Date | null) ?? null);
 
-    const months = monthsForPeriodicidade(assinaturaPrincipal.periodicidade);
-    const dataLimite = dataBase ? addMonths(new Date(dataBase), months) : null;
+    const months =
+      assinaturaPrincipal?.periodicidade
+        ? monthsForPeriodicidade(assinaturaPrincipal.periodicidade)
+        : 1;
+
+    const dataLimite =
+      assinaturaPrincipal && dataBase
+        ? addMonths(new Date(dataBase), months)
+        : null;
 
     const diasRestantes = dataLimite ? diffDays(dataLimite, now) : null;
     const precisaEscolherPagamento =
@@ -822,7 +831,7 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     res.json({
       tipoUsuario: tipo,
       assinatura: assinaturaPrincipal || null,
-      assinaturas: assinaturas || [],
+      assinaturas: assinaturasFiltradas || [],
       pagamentos,
       cupons,
       metodologiasAtivas,

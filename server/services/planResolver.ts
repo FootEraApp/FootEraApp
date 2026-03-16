@@ -54,7 +54,14 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
   const usuario = await prisma.usuario.findUnique({
     where: { id: userId },
     include: {
-      assinatura: true,
+      assinatura: {
+        orderBy: [
+          { ativo: "desc" },
+          { renovaEm: "desc" },
+          { startsAt: "desc" },
+        ],
+        take: 1,
+      },
       administrador: true,
     },
   });
@@ -63,10 +70,12 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
     throw new Error("Usuário não encontrado");
   }
 
+  const assinaturaAtual = usuario.assinatura?.[0] ?? null;
+
   const plano: PlanoName =
-    usuario.assinatura && usuario.assinatura.ativo
-      ? (usuario.assinatura.plano as PlanoName)
-      : "FREE";
+    assinaturaAtual?.ativo
+      ? asPlano(assinaturaAtual.plano)
+    : "FREE";
 
   return {
     id: usuario.id,

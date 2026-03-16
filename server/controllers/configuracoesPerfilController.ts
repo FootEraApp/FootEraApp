@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import bcrypt from "bcryptjs";
+import { AuthProvider } from "@prisma/client";
 
 function getUserId(req: Request): string | null {
   const r: any = req;
@@ -216,5 +217,88 @@ export async function encerrarSessoes(req: Request, res: Response) {
   } catch (err) {
     console.error("encerrarSessoes erro:", err);
     return res.status(500).json({ message: "Erro ao encerrar sessões." });
+  }
+}
+
+export async function getGoogleStatus(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        googleSub: true,
+        googleEmail: true,
+        googlePicture: true,
+        googleLinkedAt: true,
+        authProvider: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    return res.json({
+      linked: !!usuario.googleSub,
+      googleEmail: usuario.googleEmail ?? null,
+      googlePicture: usuario.googlePicture ?? null,
+      googleLinkedAt: usuario.googleLinkedAt ?? null,
+      authProvider: usuario.authProvider,
+    });
+  } catch (err) {
+    console.error("getGoogleStatus erro:", err);
+    return res.status(500).json({ message: "Erro ao carregar status do Google." });
+  }
+}
+
+export async function unlinkGoogle(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        googleSub: true,
+        authProvider: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    if (!usuario.googleSub) {
+      return res.status(400).json({ message: "Sua conta não está vinculada ao Google." });
+    }
+
+    // segurança: não deixar conta ficar sem forma de login
+    // no seu caso, como senhaHash é obrigatório no schema, tudo bem permitir desvincular.
+    const novoProvider =
+      usuario.authProvider === AuthProvider.LOCAL_GOOGLE
+        ? AuthProvider.LOCAL
+        : AuthProvider.LOCAL;
+
+    await prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        googleSub: null,
+        googleEmail: null,
+        googlePicture: null,
+        googleLinkedAt: null,
+        authProvider: novoProvider,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      message: "Conta Google desvinculada com sucesso.",
+    });
+  } catch (err) {
+    console.error("unlinkGoogle erro:", err);
+    return res.status(500).json({ message: "Erro ao desvincular conta Google." });
   }
 }
