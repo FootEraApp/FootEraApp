@@ -67,12 +67,41 @@ export async function listarFeed(req: Request, res: Response) {
 }
 
 async function isProUser(userId: string) {
-  const assinatura = await prisma.assinatura.findUnique({
+  const assinatura = await prisma.assinatura.findFirst({
     where: { usuarioId: userId },
-    select: { ativo: true, plano: true },
+    orderBy: [
+      { ativo: "desc" },
+      { renovaEm: "desc" },
+      { startsAt: "desc" },
+    ],
+    select: {
+      ativo: true,
+      plano: true,
+      status: true,
+      trialEndsAt: true,
+    },
   });
 
-  return !!assinatura?.ativo;
+  if (!assinatura) return false;
+
+  const status = String(assinatura.status || "").toUpperCase();
+  const plano = String(assinatura.plano || "").toUpperCase();
+
+  if (!assinatura.ativo) return false;
+  if (status === "BLOQUEADA" || status === "CANCELADA" || status === "SEM_ASSINATURA") {
+    return false;
+  }
+
+  if (status === "ATIVA") return true;
+
+  if (status === "TRIAL") {
+    if (assinatura.trialEndsAt) {
+      return new Date() <= new Date(assinatura.trialEndsAt);
+    }
+    return true;
+  }
+
+  return plano.includes("PRO");
 }
 
 async function getAdsConfigForUser(userId?: string) {

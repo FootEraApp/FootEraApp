@@ -2,9 +2,46 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 
+function getAssinaturaAtual<
+  T extends {
+    plano?: string | null;
+    status?: string | null;
+    trialEndsAt?: Date | string | null;
+    renovaEm?: Date | string | null;
+    startsAt?: Date | string | null;
+  }
+>(assinaturas: T[] | null | undefined): T | null {
+  if (!assinaturas || assinaturas.length === 0) return null;
+
+  const prioridadeStatus = ["ATIVA", "TRIAL", "SEM_ASSINATURA", "BLOQUEADA", "CANCELADA"];
+
+  const ordenadas = [...assinaturas].sort((a, b) => {
+    const statusA = String(a.status || "").toUpperCase();
+    const statusB = String(b.status || "").toUpperCase();
+
+    const pA = prioridadeStatus.indexOf(statusA);
+    const pB = prioridadeStatus.indexOf(statusB);
+
+    if (pA !== pB) {
+      return (pA === -1 ? 999 : pA) - (pB === -1 ? 999 : pB);
+    }
+
+    const dataA = new Date((a.renovaEm || a.startsAt || a.trialEndsAt || 0) as any).getTime();
+    const dataB = new Date((b.renovaEm || b.startsAt || b.trialEndsAt || 0) as any).getTime();
+
+    return dataB - dataA;
+  });
+
+  return ordenadas[0] ?? null;
+}
+
 function calcIsPro(
   assinatura:
-    | { plano?: string | null; status?: string | null; trialEndsAt?: Date | string | null }
+    | {
+        plano?: string | null;
+        status?: string | null;
+        trialEndsAt?: Date | string | null;
+      }
     | null
     | undefined
 ) {
@@ -13,26 +50,29 @@ function calcIsPro(
   const status = String(assinatura.status || "").trim().toUpperCase();
   const plano = String(assinatura.plano || "").trim().toUpperCase();
 
-  if (status === "BLOQUEADA" || status === "CANCELADA" || status === "INATIVA") {
+  if (
+    status === "BLOQUEADA" ||
+    status === "CANCELADA" ||
+    status === "INATIVA" ||
+    status === "SEM_ASSINATURA"
+  ) {
     return false;
   }
 
   if (status === "ATIVA") return true;
 
   if (status === "TRIAL") {
-    const trialEndsAt = assinatura.trialEndsAt ? new Date(assinatura.trialEndsAt as any) : null;
+    const trialEndsAt = assinatura.trialEndsAt ? new Date(assinatura.trialEndsAt) : null;
 
     if (trialEndsAt && !Number.isNaN(trialEndsAt.getTime())) {
       return new Date() <= trialEndsAt;
     }
 
-    // fallback: se estiver marcado como plano PRO mesmo sem trialEndsAt
     if (plano.includes("PRO")) return true;
 
     return true;
   }
 
-  // fallback importante: mantém compatibilidade com casos em que o plano já define PRO
   if (plano.includes("PRO")) return true;
 
   return false;
@@ -73,7 +113,15 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            assinatura: {
+              select: {
+                plano: true,
+                status: true,
+                trialEndsAt: true,
+                renovaEm: true,
+                startsAt: true,
+              },
+            },
           },
         },
         pontuacao: {
@@ -89,7 +137,8 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
     const payload = atletas.map((a) => {
       const pontuacaoTotal = a.pontuacao?.pontuacaoTotal ?? a.pontosTotal ?? 0;
       const independente = !a.clubeId && !a.escolinhaId;
-      const isPro = calcIsPro(a.usuario?.assinatura);
+      const assinaturaAtual = getAssinaturaAtual(a.usuario?.assinatura);
+      const isPro = calcIsPro(assinaturaAtual);
 
       const perfilVerificado = calcularPerfilVerificado({
         usuario: a.usuario
@@ -180,7 +229,15 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            assinatura: {
+              select: {
+                plano: true,
+                status: true,
+                trialEndsAt: true,
+                renovaEm: true,
+                startsAt: true,
+              },
+            },
           },
         },
         pontuacao: {
@@ -196,7 +253,8 @@ export async function explorar(req: Request, res: Response) {
     const atletas = atletasRaw.map((a) => {
       const pontuacaoTotal = a.pontuacao?.pontuacaoTotal ?? a.pontosTotal ?? 0;
       const independente = !a.clubeId && !a.escolinhaId;
-      const isPro = calcIsPro(a.usuario?.assinatura);
+      const assinaturaAtual = getAssinaturaAtual(a.usuario?.assinatura);
+      const isPro = calcIsPro(assinaturaAtual);
 
       const perfilVerificado = calcularPerfilVerificado({
         usuario: a.usuario
@@ -253,7 +311,15 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            assinatura: {
+              select: {
+                plano: true,
+                status: true,
+                trialEndsAt: true,
+                renovaEm: true,
+                startsAt: true,
+              },
+            },
           },
         },
       },
@@ -264,7 +330,7 @@ export async function explorar(req: Request, res: Response) {
 
     const clubes = clubesRaw.map((c) => ({
       ...c,
-      isPro: calcIsPro(c.usuario?.assinatura),
+      isPro: calcIsPro(getAssinaturaAtual(c.usuario?.assinatura)),
       perfilVerificado: calcularPerfilVerificado({
         usuario: c.usuario
           ? {
@@ -305,7 +371,15 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            assinatura: {
+              select: {
+                plano: true,
+                status: true,
+                trialEndsAt: true,
+                renovaEm: true,
+                startsAt: true,
+              },
+            },
           },
         },
       },
@@ -316,7 +390,7 @@ export async function explorar(req: Request, res: Response) {
 
     const escolas = escolasRaw.map((e) => ({
       ...e,
-      isPro: calcIsPro(e.usuario?.assinatura),
+      isPro: calcIsPro(getAssinaturaAtual(e.usuario?.assinatura)),
       perfilVerificado: calcularPerfilVerificado({
         usuario: e.usuario
           ? {
@@ -366,7 +440,15 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            assinatura: {
+              select: {
+                plano: true,
+                status: true,
+                trialEndsAt: true,
+                renovaEm: true,
+                startsAt: true,
+              },
+            },
           },
         },
       },
@@ -377,7 +459,7 @@ export async function explorar(req: Request, res: Response) {
 
     const professores = professoresRaw.map((p) => ({
       ...p,
-      isPro: calcIsPro(p.usuario?.assinatura),
+      isPro: calcIsPro(getAssinaturaAtual(p.usuario?.assinatura)),
       perfilVerificado: calcularPerfilVerificado({
         usuario: p.usuario
           ? {
@@ -421,7 +503,15 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+            assinatura: {
+              select: {
+                plano: true,
+                status: true,
+                trialEndsAt: true,
+                renovaEm: true,
+                startsAt: true,
+              },
+            },
           },
         },
       },
@@ -432,7 +522,7 @@ export async function explorar(req: Request, res: Response) {
 
     const olheiros = olheirosRaw.map((o) => ({
       ...o,
-      isPro: calcIsPro(o.usuario?.assinatura),
+      isPro: calcIsPro(getAssinaturaAtual(o.usuario?.assinatura)),
       perfilVerificado: calcularPerfilVerificado({
         usuario: o.usuario
           ? {
@@ -537,7 +627,15 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
-              assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+              assinatura: {
+                select: {
+                  plano: true,
+                  status: true,
+                  trialEndsAt: true,
+                  renovaEm: true,
+                  startsAt: true,
+                },
+              },
             },
           },
           pontuacao: { select: { pontuacaoTotal: true } },
@@ -572,7 +670,15 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
-              assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+              assinatura: {
+                select: {
+                  plano: true,
+                  status: true,
+                  trialEndsAt: true,
+                  renovaEm: true,
+                  startsAt: true,
+                },
+              },
             },
           },
         },
@@ -594,7 +700,15 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
-              assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
+              assinatura: {
+                select: {
+                  plano: true,
+                  status: true,
+                  trialEndsAt: true,
+                  renovaEm: true,
+                  startsAt: true,
+                },
+              },
             },
           },
         },

@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv";
 import cron from "node-cron";
 import http from "http";
 import qrcode from "qrcode-terminal";
@@ -11,6 +10,8 @@ import * as fs from "fs";
 import helmet from "helmet";
 import { createRequire } from "module";
 import ffmpeg from "fluent-ffmpeg";
+import "./loadEnv.js";
+
 const require = createRequire(import.meta.url);
 
 // força tipagem correta (resolve o erro ts2345)
@@ -129,26 +130,12 @@ import permissoesRoutes from "./routes/permissoesRoutes.js";
 import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js";
 import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
 import { processExpiringSubscriptions } from "./controllers/billingController.js";
+import googleAuthRoutes from "./routes/googleAuth.js";
 
-import { mercadoPagoWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const prisma = new PrismaClient();
-
-const envCandidates = [
-  path.resolve(__dirname, ".env"),      
-  path.resolve(__dirname, "../.env"),    
-  path.resolve(process.cwd(), ".env"),
-  path.resolve(__dirname, "../../.env"),
-];
-
-for (const p of envCandidates) {
-  if (fs.existsSync(p)) {
-    dotenv.config({ path: p });
-    break;
-  }
-}
 
 const app = express();
 app.set("trust proxy", 1);
@@ -169,14 +156,18 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 const norm = (s?: string) => (s ? s.replace(/\/+$/, "") : s);
 const fromEnv = norm(process.env.FRONTEND_URL);
 const fromEnvWww = fromEnv ? fromEnv.replace("://", "://www.") : undefined;
+const localIpOrigin = LOCAL_IP ? `http://${LOCAL_IP}:${FRONT_PORT}` : undefined;
+
 const ALLOWED = new Set(
   [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:3000",
     "https://footera.app.br",
     "https://www.footera.app.br",
     fromEnv,
     fromEnvWww,
+    localIpOrigin,
   ].filter(Boolean) as string[]
 );
 
@@ -265,6 +256,7 @@ app.get("/resetar-senha", (req, res) => {
   res.redirect(302, dest);
 });
 
+app.use("/api/auth/google", googleAuthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/termos", termoRoutes);
@@ -413,4 +405,4 @@ runBillingDailyCheck();
 
 setInterval(() => {
   runBillingDailyCheck();
-}, 60 * 60 * 1000);
+}, 12 * 60 * 60 * 1000);
