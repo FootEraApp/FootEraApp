@@ -1,3 +1,4 @@
+// server/routes/metodologiasRoutes
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import {
@@ -16,30 +17,43 @@ import {
   criarAvaliacaoMetodologia,
   concluirItemMetodologia,
 } from "../controllers/metodologiasController.js";
+import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js"; // Controller de upload
+import { uploadToS3 } from "../middlewares/s3Upload.js"; // Middleware que editamos
 import { requireMetodologiaCreator } from "../middlewares/requireMetodologiaCreator.js";
 
 const router = Router();
 
-// ✅ ROTAS ESPECÍFICAS PRIMEIRO (antes do "/:id")
+// --- NOVAS ROTAS DE UPLOAD S3 ---
+// Esta rota garante que o req.originalUrl contenha "metodologias" para a lógica de pastas no S3
+router.post(
+  "/upload-s3",
+  authenticateToken,
+  uploadToS3.single("file"),
+  uploadMetodologiaS3
+);
+
+// --- ROTAS ESPECÍFICAS ---
 router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
-// ✅ esse é o “catálogo / todos visíveis”, vai para Treinos-Instrutores
 router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
-// ✅ se você quer manter "/assinadas", faça ela apontar para "/minhas"
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
-// itens
+
+// Itens
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
-// detalhe/assinatura
+
+// Detalhe/Assinatura
 router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
 router.post("/:id/assinar", authenticateToken, assinarMetodologia);
 router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
-// por id (sempre por último!)
+
+// Por ID (Sempre por último)
 router.get("/:id", authenticateToken, getMetodologiaById);
 router.put("/:id", authenticateToken, requireMetodologiaCreator, updateMetodologia);
 router.delete("/:id", authenticateToken, requireMetodologiaCreator, deleteMetodologia);
-// CRUD
+
+// CRUD Geral
 router.get("/", authenticateToken, listMetodologias);
 router.post("/", authenticateToken, requireMetodologiaCreator, createMetodologia);
 

@@ -1,3 +1,4 @@
+// server/routes/perfil
 import { Router } from "express";
 import {
   getPerfilUsuario, getAtividadesRecentes, getBadges,
@@ -9,6 +10,7 @@ import {
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import multer from "multer";
+import { uploadToS3 } from "../middlewares/s3Upload.js";
 
 const storage = multer.diskStorage({
   destination: function (_req, _file, cb) {
@@ -53,6 +55,7 @@ router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
 router.get("/:id", authenticateToken, getPerfilUsuario);
-router.put("/:id", authenticateToken, upload.single("foto"), atualizarPerfil);
+
+router.put("/:id", authenticateToken, uploadToS3.single("foto"), atualizarPerfil);
 
 export default router;

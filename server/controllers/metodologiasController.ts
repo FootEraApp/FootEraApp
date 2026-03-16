@@ -13,6 +13,7 @@ import {
   unlockConquistaMetodologia,
   syncTemplatesMetodologiasProfissionais
 } from "../services/conquistasMetodologia.js";
+import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
 /** Pega userId do token (igual seu padrão) */
 function getUserId(req: Request): string | null {
@@ -273,6 +274,11 @@ export async function updateMetodologia(req: Request, res: Response) {
           ? (capaUrl.trim() ? capaUrl.trim() : null)
           : undefined;
 
+    // ✅ NOVIDADE: Se a capa está sendo atualizada/removida, apaga a antiga do S3
+    if (capaUrlUpdate !== undefined && current.capaUrl && current.capaUrl !== capaUrlUpdate && current.capaUrl.includes("amazonaws.com")) {
+      await deleteFromS3(current.capaUrl);
+    }
+
     const updated = await prisma.metodologia.update({
       where: { id },
       data: {
@@ -306,34 +312,56 @@ export async function updateMetodologia(req: Request, res: Response) {
  * DELETE /api/metodologias/:id
  * Exclui (somente criador)
  * ========================= */
-export async function deleteMetodologia(req: Request, res: Response) {
+export const deleteMetodologia = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const userId = getUserId(req);
+
   try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+    // 1. Busca a metodologia incluindo os itens de vídeo
+    const metodologia = await prisma.metodologia.findUnique({
+      where: { id },
+      select: { 
+        capaUrl: true, 
+        criadorUsuarioId: true,
+        itens: {
+          select: { videoUrl: true }
+        }
+      }
+    });
 
-    const { id } = req.params;
-
-    const current = await prisma.metodologia.findUnique({ where: { id } });
-    if (!current) return res.status(404).json({ message: "Metodologia não encontrada." });
-
-    if (current.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Você não tem permissão para excluir esta metodologia." });
+    if (!metodologia) {
+      return res.status(404).json({ error: "Metodologia não encontrada." });
     }
 
-    await prisma.metodologia.delete({ where: { id } });
-
-    try {
-      // como já deletou, ensure vai desativar met_prof_<id>
-      await ensureConquistaTemplateMetodologia(id);
-      await syncTemplatesMetodologiasProfissionais();
-    } catch (e) {
-      console.error("Falha ao sync template de conquista após delete metodologia:", e);
+    // Segurança extra
+    if (metodologia.criadorUsuarioId !== userId) {
+      return res.status(403).json({ message: "Sem permissão para deletar." });
     }
-    return res.json({ ok: true });
-  } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao excluir metodologia.", detail: e?.message });
+
+    // 2. Deleta do Banco de Dados (Os itens são deletados por CASCADE no Prisma)
+    await prisma.metodologia.delete({
+      where: { id },
+    });
+
+    // 3. Limpeza do S3
+    // 3.1 Apaga a capa
+    if (metodologia.capaUrl && metodologia.capaUrl.includes("amazonaws.com")) {
+      await deleteFromS3(metodologia.capaUrl);
+    }
+
+    // 3.2 Apaga os vídeos dos itens
+    for (const item of metodologia.itens) {
+      if (item.videoUrl && item.videoUrl.includes("amazonaws.com")) {
+        await deleteFromS3(item.videoUrl);
+      }
+    }
+
+    return res.json({ ok: true, message: "Metodologia e mídia removidas com sucesso." });
+  } catch (error) {
+    console.error("Erro ao deletar metodologia:", error);
+    return res.status(500).json({ error: "Erro interno ao deletar." });
   }
-}
+};
 
 export async function listMinhasMetodologiasAssinadas(req: Request, res: Response) {
   try {
