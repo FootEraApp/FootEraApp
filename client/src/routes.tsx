@@ -63,6 +63,7 @@ import MetodologiaUnicaPage from "./pages/metodologias/metodologia-unica.js";
 import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
 import TutorialPage from "./pages/tutorial.js";
 import LandingPage from "./pages/landingPage.js"
+import CadastroGoogleComplementar from "./pages/cadastroGoogleComplementar";
 
 export function AppRoutes() {
   return (
@@ -70,10 +71,12 @@ export function AppRoutes() {
       <Route path="/login">
         <PublicOnly><PaginaLogin /></PublicOnly>
       </Route>
+      <Route path="/cadastro/google/complementar">
+        <CadastroGoogleComplementar />
+      </Route>
+
       <Route path="/cadastro"><PaginaCadastro /></Route>
-
       <Route path="/verificar-email" component={PaginaVerificarEmail} />
-
       <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
       <Route path="/esqueci-senha">
         <PublicOnly><PaginaEsqueciSenha /></PublicOnly>

@@ -12,6 +12,7 @@ import {
   desvincularAtletaDoProfessor,
   listarAtletasDoProfessor,
   listarProfessoresVinculados,
+  listarProfessoresRealizadores,
   toggleProfessorParceiro,
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -27,7 +28,11 @@ router.patch(
   requireAdmin,
   toggleProfessorParceiro
 );
-
+router.get(
+  "/realizadores-disponiveis",
+  authenticateToken,
+  listarProfessoresRealizadores
+);
 router.get("/:professorId/atletas", authenticateToken, listarAtletasDoProfessor);
 router.get(
   "/:professorId/historico-atletas",

@@ -204,8 +204,13 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
         .json({ error: "Sem permissão para consultar este usuário" });
     }
 
-    const assinatura = await prisma.assinatura.findUnique({
+    const assinatura = await prisma.assinatura.findFirst({
       where: { usuarioId: id },
+      orderBy: [
+        { ativo: "desc" },
+        { renovaEm: "desc" },
+        { startsAt: "desc" },
+      ],
       select: {
         id: true,
         usuarioId: true,

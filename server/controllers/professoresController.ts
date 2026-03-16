@@ -981,3 +981,236 @@ export const toggleProfessorParceiro = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const listarProfessoresRealizadores = async (req: Request, res: Response) => {
+  try {
+    const authUserId =
+      (req as any).user?.id ||
+      (req as any).userId ||
+      (req as any).usuarioId ||
+      null;
+
+    const authTipo =
+      String(
+        (req as any).user?.tipo ||
+        (req as any).tipo ||
+        ""
+      ).trim().toLowerCase();
+
+    if (!authUserId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const grupos: Array<{
+      tipo: "Escolinha" | "Clube";
+      ownerId: string;
+      nome: string;
+      professores: Array<{
+        id: string;
+        nome: string;
+        codigo: string | null;
+        cref: string | null;
+        fotoUrl: string | null;
+      }>;
+    }> = [];
+
+    const addGrupo = async (
+      tipo: "Escolinha" | "Clube",
+      ownerId: string,
+      nome: string,
+      professorLogadoId?: string | null
+    ) => {
+      const professorIdsSet = new Set<string>();
+
+      if (tipo === "Clube") {
+        const [diretos, pivot, gestores, relacoes] = await Promise.all([
+          prisma.professor.findMany({
+            where: { clubeId: ownerId },
+            select: { id: true },
+          }),
+          prisma.professorClube.findMany({
+            where: { clubeId: ownerId },
+            select: { professorId: true },
+          }),
+          prisma.organizacaoGestor.findMany({
+            where: { tipo: "CLUBE", ownerId, ativo: true },
+            select: { professorId: true },
+          }),
+          prisma.relacaoTreinamento.findMany({
+            where: {
+              clubeId: ownerId,
+              ativo: { not: false },
+              professorId: { not: null },
+            },
+            select: { professorId: true },
+          }),
+        ]);
+
+        for (const p of diretos) professorIdsSet.add(p.id);
+        for (const p of pivot) if (p.professorId) professorIdsSet.add(p.professorId);
+        for (const p of gestores) if (p.professorId) professorIdsSet.add(p.professorId);
+        for (const p of relacoes) if (p.professorId) professorIdsSet.add(p.professorId);
+      } else {
+        const [diretos, pivot, gestores, relacoes] = await Promise.all([
+          prisma.professor.findMany({
+            where: { escolinhaId: ownerId },
+            select: { id: true },
+          }),
+          prisma.professorEscolinha.findMany({
+            where: { escolinhaId: ownerId },
+            select: { professorId: true },
+          }),
+          prisma.organizacaoGestor.findMany({
+            where: { tipo: "ESCOLINHA", ownerId, ativo: true },
+            select: { professorId: true },
+          }),
+          prisma.relacaoTreinamento.findMany({
+            where: {
+              escolinhaId: ownerId,
+              ativo: { not: false },
+              professorId: { not: null },
+            },
+            select: { professorId: true },
+          }),
+        ]);
+
+        for (const p of diretos) professorIdsSet.add(p.id);
+        for (const p of pivot) if (p.professorId) professorIdsSet.add(p.professorId);
+        for (const p of gestores) if (p.professorId) professorIdsSet.add(p.professorId);
+        for (const p of relacoes) if (p.professorId) professorIdsSet.add(p.professorId);
+      }
+
+      let professorIds = Array.from(professorIdsSet);
+
+      if (professorLogadoId) {
+        professorIds = professorIds.filter((id) => String(id) !== String(professorLogadoId));
+      }
+
+      if (!professorIds.length) return;
+
+      const professores = await prisma.professor.findMany({
+        where: { id: { in: professorIds } },
+        select: {
+          id: true,
+          nome: true,
+          codigo: true,
+          cref: true,
+          fotoUrl: true,
+        },
+        orderBy: { nome: "asc" },
+      });
+
+      grupos.push({
+        tipo,
+        ownerId,
+        nome,
+        professores: professores.map((p) => ({
+          id: p.id,
+          nome: p.nome ?? "Professor",
+          codigo: p.codigo ?? null,
+          cref: p.cref ?? null,
+          fotoUrl: p.fotoUrl ?? null,
+        })),
+      });
+    };
+
+    if (authTipo === "professor") {
+      const professor = await prisma.professor.findFirst({
+        where: { usuarioId: authUserId },
+        select: {
+          id: true,
+          clubeId: true,
+          escolinhaId: true,
+        },
+      });
+
+      if (!professor) {
+        return res.json({ grupos: [] });
+      }
+
+      const [clubesPivot, escolinhasPivot, clubesDiretos, escolinhasDiretas] = await Promise.all([
+        prisma.professorClube.findMany({
+          where: { professorId: professor.id },
+          select: {
+            clube: {
+              select: { id: true, nome: true },
+            },
+          },
+        }),
+        prisma.professorEscolinha.findMany({
+          where: { professorId: professor.id },
+          select: {
+            escolinha: {
+              select: { id: true, nome: true },
+            },
+          },
+        }),
+        professor.clubeId
+          ? prisma.clube.findUnique({
+              where: { id: professor.clubeId },
+              select: { id: true, nome: true },
+            })
+          : Promise.resolve(null),
+        professor.escolinhaId
+          ? prisma.escolinha.findUnique({
+              where: { id: professor.escolinhaId },
+              select: { id: true, nome: true },
+            })
+          : Promise.resolve(null),
+      ]);
+
+      const clubesMap = new Map<string, string>();
+      const escolinhasMap = new Map<string, string>();
+
+      if (clubesDiretos?.id) clubesMap.set(clubesDiretos.id, clubesDiretos.nome ?? "Clube");
+      if (escolinhasDiretas?.id) escolinhasMap.set(escolinhasDiretas.id, escolinhasDiretas.nome ?? "Escolinha");
+
+      for (const item of clubesPivot) {
+        if (item.clube?.id) clubesMap.set(item.clube.id, item.clube.nome ?? "Clube");
+      }
+
+      for (const item of escolinhasPivot) {
+        if (item.escolinha?.id) escolinhasMap.set(item.escolinha.id, item.escolinha.nome ?? "Escolinha");
+      }
+
+      for (const [id, nome] of escolinhasMap.entries()) {
+        await addGrupo("Escolinha", id, nome, professor.id);
+      }
+
+      for (const [id, nome] of clubesMap.entries()) {
+        await addGrupo("Clube", id, nome, professor.id);
+      }
+
+      return res.json({ grupos });
+    }
+
+    if (authTipo === "clube") {
+      const clube = await prisma.clube.findFirst({
+        where: { usuarioId: authUserId },
+        select: { id: true, nome: true },
+      });
+
+      if (!clube) return res.json({ grupos: [] });
+
+      await addGrupo("Clube", clube.id, clube.nome ?? "Clube", null);
+      return res.json({ grupos });
+    }
+
+    if (authTipo === "escolinha") {
+      const escolinha = await prisma.escolinha.findFirst({
+        where: { usuarioId: authUserId },
+        select: { id: true, nome: true },
+      });
+
+      if (!escolinha) return res.json({ grupos: [] });
+
+      await addGrupo("Escolinha", escolinha.id, escolinha.nome ?? "Escolinha", null);
+      return res.json({ grupos });
+    }
+
+    return res.json({ grupos: [] });
+  } catch (error) {
+    console.error("Erro ao listar professores realizadores:", error);
+    return res.status(500).json({ message: "Erro ao listar professores realizadores." });
+  }
+};
