@@ -131,20 +131,16 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
             titulo: true,
             descricao: true,
             tipo: true,
-
             // vídeo
             videoUrl: true,
             thumbUrl: true,
             duracaoMin: true,
-
             // treino
             treinoProgramadoId: true,
             pontos: true,
             publicado: true,
-
             criadoEm: true,
             atualizadoEm: true,
-
             // ✅ aqui é o upgrade: traz o treino completo (exercícios + vídeos demonstrativos)
             treinoProgramado: {
               select: {
@@ -177,7 +173,7 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
                         id: true,
                         codigo: true,
                         nome: true,
-                        descricao: true,
+                        objetivo: true,
                         nivel: true,
                         categorias: true,
                         videoDemonstrativoUrl: true, // ✅ “vídeo do exercício”

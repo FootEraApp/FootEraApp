@@ -409,7 +409,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 exercicioPersonalizadoId: true, // ✅ ADD
                 ordem: true,
                 exercicio: {
-                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                  select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
                 },
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -438,7 +438,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             concluido: true,
             concluidoEm: true,
             exercicio: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
             },
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -559,7 +559,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 ordem: true,
                 repeticoes: true,
                 exercicio: {
-                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                  select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
                 },
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -588,7 +588,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             concluido: true,
             concluidoEm: true,
             exercicio: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
             },
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
