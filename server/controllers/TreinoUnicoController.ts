@@ -120,7 +120,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
               exercicios: {
                 include: {
                   exercicio: {
-                    select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
+                    select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true, nivel: true },
                   },
                   exercicioTemporario: {
                     select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
@@ -173,7 +173,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
         exercicios: {
           include: {
             exercicio: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
+              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true, nivel: true },
             },
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },

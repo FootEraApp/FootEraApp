@@ -15,6 +15,7 @@ import {
 import { API, APP } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -550,8 +551,8 @@ export default function TreinosInstrutores({
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [abaProfessor, setAbaProfessor] = useState<
-    "avaliar" | "criar" | "sessoes" | "metodologias"
-  >("criar");
+    "avaliar" | "criar" | "sessoes" | "exercicios" |"metodologias"
+  >("exercicios");
   const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [profNomeById, setProfNomeById] = useState<Record<string, string>>({});
@@ -2495,6 +2496,18 @@ async function salvarProgressoSessao(sessaoId: string) {
               <div className="w-full sm:max-w-[620px]">
                 <div className="flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible sm:pb-0">
                   <button
+                    type="button"
+                    onClick={() => setAbaProfessor("exercicios")}
+                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                      abaProfessor === "exercicios"
+                        ? "bg-green-800 text-white border-green-900"
+                        : "bg-white text-gray-800 border-gray-200"
+                    }`}
+                  >
+                    Meus Exercícios
+                  </button>
+                  
+                  <button
                     onClick={() => setAbaProfessor("criar")}
                     className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
                       abaProfessor === "criar"
@@ -2710,6 +2723,8 @@ async function salvarProgressoSessao(sessaoId: string) {
               )}
             </div>
           )}
+
+          {abaProfessor === "exercicios" && <MeusExerciciosTab />}
 
           {abaProfessor === "metodologias" && (
             <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
