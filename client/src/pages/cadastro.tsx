@@ -507,7 +507,24 @@ export default function Cadastro() {
       <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
-            <img src={logo} className="w-10 h-10 lg:w-14 lg:h-14" alt="FootEra" />
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="cursor-pointer"
+              aria-label="Voltar para Home"
+            >
+              <img
+                src="/assets/usuarios/footera-logo.png"
+                alt="Logo FootEra"
+                className="
+                  shrink-0 object-contain transform-gpu
+                  w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
+                  max-[639px]:scale-[1.6]  
+                  md:scale-[1.55]          
+                  origin-left md:origin-center mr-1
+                "
+              />
+            </button>
             <h1 className="flex-1 lg:flex-none text-center text-xl lg:text-3xl font-bold">Bem-vindo à FootEra</h1>
             <button type="button" className="lg:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full" aria-expanded={infoAberto} aria-controls="cadastro-info" onClick={() => setInfoAberto(v => !v)} title={infoAberto ? "Recolher" : "Expandir"}>
               {infoAberto ? <ChevronUp /> : <ChevronDown />}
