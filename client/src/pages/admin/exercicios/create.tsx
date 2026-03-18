@@ -11,7 +11,7 @@ function getToken() {
 export default function CreateOrEditExercicio() {
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
-  const [descricao, setDescricao] = useState("");
+  const [objetivo, setObjetivo] = useState("");
   const [nivel, setNivel] = useState("Base");
   const [categorias, setCategorias] = useState<string[]>([]);
   const [categoriaAtual, setCategoriaAtual] = useState("");
@@ -40,7 +40,7 @@ export default function CreateOrEditExercicio() {
       .then(data => {
         setCodigo(data.codigo);
         setNome(data.nome);
-        setDescricao(data.descricao);
+        setObjetivo(data.objetivo || "");
         setNivel(data.nivel);
         setCategorias(data.categorias || []);
       })
@@ -60,7 +60,7 @@ export default function CreateOrEditExercicio() {
     const formData = new FormData();
     formData.append("codigo", codigo);
     formData.append("nome", nome);
-    formData.append("descricao", descricao);
+    formData.append("objetivo", objetivo);
     formData.append("nivel", nivel);
     formData.append("categorias", JSON.stringify(categorias));
     if (video) formData.append("video", video);
@@ -105,8 +105,8 @@ export default function CreateOrEditExercicio() {
         <label className="text-green-800">Nome</label>
         <input value={nome} onChange={(e) => setNome(e.target.value)} className="border p-2 w-full rounded mb-4" />
 
-        <label className="text-green-800">Descrição</label>
-        <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} className="border p-2 w-full rounded mb-4" />
+        <label className="text-green-800">Objetivo</label>
+        <textarea value={objetivo} onChange={(e) => setObjetivo(e.target.value)} className="border p-2 w-full rounded mb-4" />
 
         <label className="text-green-800">Nível</label>
         <select value={nivel} onChange={(e) => setNivel(e.target.value)} className="border p-2 w-full rounded mb-4">

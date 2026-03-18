@@ -64,6 +64,8 @@ import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
 import TutorialPage from "./pages/tutorial.js";
 import LandingPage from "./pages/landingPage.js"
 import CadastroGoogleComplementar from "./pages/cadastroGoogleComplementar";
+import ExercicioNovoPage from "./pages/treino/exercicios/novo.js"
+import ExercicioEditarPage from "./pages/treino/exercicios/editar/[id].js"
 
 export function AppRoutes() {
   return (
@@ -172,6 +174,8 @@ export function AppRoutes() {
 
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>
       
+      <Route path="/treinos/exercicios/novo"><Private><ExercicioNovoPage/></Private></Route>
+      <Route path="/treinos/exercicios/editar/:id"><Private><ExercicioEditarPage/></Private></Route>
       <Route path="/treinos/avaliar" component={AvaliarTreino} />
       <Route path="/treinos/livre/novo" component={PaginaTreinoLivreNovo} />
       <Route path="/treinos/livre/historico" component={PaginaTreinoLivresHistorico} />
