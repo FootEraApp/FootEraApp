@@ -4,27 +4,110 @@ import path, { dirname } from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { prisma } from "../prisma.js";
+import { probeVideo } from "../services/mediaMetadata.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const exercisesVideosDir = path.join(__dirname, "..", "..", "public", "exercicios", "videos");
+const exercisesDir = path.join(__dirname, "..", "..", "public", "exercicios");
+const exercisesVideosDir = path.join(exercisesDir, "videos");
+
+function ensureDirs() {
+  fs.mkdirSync(exercisesVideosDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    fs.mkdirSync(exercisesVideosDir, { recursive: true });
-    cb(null, exercisesVideosDir);
+  destination: (_req, file, cb) => {
+    ensureDirs();
+
+    if (file.fieldname === "video") {
+      cb(null, exercisesVideosDir);
+      return;
+    }
+
+    cb(null, exercisesDir);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${Date.now()}-video${ext}`);
   },
 });
 
-export const uploadVideo = multer({ storage }).single("video");
+export const uploadExercicioMidia = multer({ storage }).fields([
+  { name: "video", maxCount: 1 },
+]);
 
 const publicJoin = (p: string) =>
   path.join(__dirname, "..", "..", "public", p.replace(/^\/+/, ""));
+
+function getAuthUserId(req: Request): string | null {
+  return (req as any)?.user?.id || null;
+}
+
+function parseArrayField(value: unknown): string[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.map(String).map((v) => v.trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map(String).map((v) => v.trim()).filter(Boolean);
+      }
+    } catch {}
+
+    return trimmed
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function parseNullableString(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const str = String(value).trim();
+  return str ? str : null;
+}
+
+function parseNullableInt(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function fileUrlFromUpload(
+  files: Express.Multer.File[] | undefined,
+  type: "video"
+): string | null {
+  const file = files?.[0];
+  if (!file) return null;
+
+  if (type === "video") {
+    return `/exercicios/videos/${file.filename}`;
+  }
+
+  return null;
+}
+
+function removePublicFileIfExists(fileUrl?: string | null) {
+  if (!fileUrl) return;
+
+  const abs = publicJoin(fileUrl);
+  if (!fs.existsSync(abs)) return;
+
+  try {
+    fs.unlinkSync(abs);
+  } catch {}
+}
 
 async function mapUsoEmTreinos(exercicioIds: string[]) {
   const map: Record<string, number> = {};
@@ -56,42 +139,149 @@ async function mapUsoEmTreinos(exercicioIds: string[]) {
           map[exId] = (map[exId] || 0) + 1;
         }
 
-        return map; 
-      } catch {
-      }
+        return map;
+      } catch {}
     }
   }
 
   return map;
 }
 
+function toCardResponse(exercicio: any, usadoEmTreinos = 0) {
+  return {
+    ...exercicio,
+    tags: Array.isArray(exercicio.tags) ? exercicio.tags : [],
+    faixaEtaria: Array.isArray(exercicio.faixaEtaria) ? exercicio.faixaEtaria : [],
+    usadoEmTreinos,
+  };
+}
+
 export const criarExercicio = async (req: Request, res: Response) => {
   try {
-    const { codigo, nome, descricao, nivel } = req.body;
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
 
-    const categorias =
-      req.body.categorias
-        ? (Array.isArray(req.body.categorias)
-            ? req.body.categorias
-            : JSON.parse(req.body.categorias))
-        : [];
+    const files = req.files as
+      | {
+          [fieldname: string]: Express.Multer.File[];
+        }
+      | undefined;
 
-    const videoDemonstrativoUrl = req.file
-      ? `/exercicios/videos/${req.file.filename}`
-      : null;
+    const {
+      codigo,
+      nome,
+      objetivo,
+      nivel,
+      tipo,
+      faixaEtaria,
+      modoExecucao,
+      series,
+      repeticoes,
+      duracao,
+      descanso,
+      materiaisNecessarios,
+      quantidadeAtletas,
+      espacoNecessario,
+      tags,
+    } = req.body;
 
-    const novoExercicio = await prisma.exercicio.create({
-      data: {
-        codigo,
-        nome,
-        descricao,
-        nivel,
-        categorias: { set: categorias },
-        videoDemonstrativoUrl,
+    if (!nome || !String(nome).trim()) {
+      return res.status(400).json({ message: "Nome é obrigatório." });
+    }
+
+    if (!codigo || !String(codigo).trim()) {
+      return res.status(400).json({ message: "Código é obrigatório." });
+    }
+
+    if (
+      modoExecucao &&
+      !["Tempo", "SeriesRepeticoes", "LivreOrientativo"].includes(String(modoExecucao))
+    ) {
+      return res.status(400).json({ message: "Modo de execução inválido." });
+    }
+
+    const codigoExistente = await prisma.exercicio.findFirst({
+      where: {
+        codigo: String(codigo).trim(),
       },
     });
 
-    res.status(201).json(novoExercicio);
+    if (codigoExistente) {
+      return res.status(400).json({ message: "Já existe um exercício com esse código." });
+    }
+
+    if (tipo && !["Tecnico", "Fisico", "Tatico", "Mental"].includes(String(tipo))) {
+      return res.status(400).json({ message: "Tipo inválido." });
+    }
+
+    const faixasEtarias = parseArrayField(req.body.faixaEtaria);
+    const faixasValidas = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+
+    if (faixasEtarias.some((faixa) => !faixasValidas.includes(faixa))) {
+      return res.status(400).json({ message: "Faixa etária inválida." });
+    }
+
+    if (
+      espacoNecessario &&
+      !["Pequeno", "Medio", "Grande"].includes(String(espacoNecessario))
+    ) {
+      return res.status(400).json({ message: "Espaço necessário inválido." });
+    }
+
+    const videoDemonstrativoUrl = fileUrlFromUpload(files?.video, "video");
+    
+    if (files?.video?.[0]) {
+      const videoFile = files.video[0];
+
+      try {
+        const metadata = await probeVideo(videoFile.path);
+
+        if (metadata?.durationSec != null && metadata.durationSec > 60) {
+          try {
+            fs.unlinkSync(videoFile.path);
+          } catch {}
+
+          return res.status(400).json({
+            message: "Esse vídeo é muito longo. O máximo permitido é 60 segundos.",
+          });
+        }
+      } catch {
+        try {
+          fs.unlinkSync(videoFile.path);
+        } catch {}
+
+        return res.status(400).json({
+          message: "Não foi possível validar a duração do vídeo enviado.",
+        });
+      }
+    }
+
+    const novoExercicio = await prisma.exercicio.create({
+      data: {
+        codigo: String(codigo).trim(),
+        nome: String(nome).trim(),
+        objetivo: parseNullableString(objetivo),
+        nivel: parseNullableString(nivel) as any,
+        videoDemonstrativoUrl,
+        criadoPorId: userId,
+        favorito: false,
+        tipo: parseNullableString(tipo) as any,
+        faixaEtaria: { set: faixasEtarias as any[] },
+        modoExecucao: parseNullableString(modoExecucao) as any,
+        series: parseNullableInt(series),
+        repeticoes: parseNullableString(repeticoes),
+        duracao: parseNullableString(duracao),
+        descanso: parseNullableString(descanso),
+        tags: parseArrayField(tags),
+        quantidadeAtletas: parseNullableString(quantidadeAtletas),
+        materiaisNecessarios: parseNullableString(materiaisNecessarios),
+        espacoNecessario: parseNullableString(espacoNecessario) as any,
+      } as any,
+    });
+
+    res.status(201).json(toCardResponse(novoExercicio, 0));
   } catch (error) {
     console.error("Erro ao criar exercício:", error);
     res.status(500).json({ message: "Erro ao criar exercício." });
@@ -102,43 +292,152 @@ export const editarExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    const { codigo, nome, descricao, nivel } = req.body;
-
-    if (!["Base", "Avancado", "Performance"].includes(nivel)) {
-      return res.status(400).json({ message: "Nível inválido" });
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
     }
 
-    const exercicioAtual = await prisma.exercicio.findUnique({ where: { id } });
+    const exercicioAtual = await prisma.exercicio.findUnique({
+      where: { id },
+    });
 
-    const categorias =
-      req.body.categorias
-        ? (Array.isArray(req.body.categorias)
-            ? req.body.categorias
-            : JSON.parse(req.body.categorias))
-        : [];
+    if (!exercicioAtual) {
+      return res.status(404).json({ message: "Exercício não encontrado." });
+    }
 
-    const novaUrl = req.file ? `/exercicios/videos/${req.file.filename}` : undefined;
+    if ((exercicioAtual as any).criadoPorId && (exercicioAtual as any).criadoPorId !== userId) {
+      return res.status(403).json({ message: "Você não pode editar esse exercício." });
+    }
 
-    if (novaUrl && exercicioAtual?.videoDemonstrativoUrl) {
-      const oldAbs = publicJoin(exercicioAtual.videoDemonstrativoUrl);
-      if (fs.existsSync(oldAbs)) {
-        try { fs.unlinkSync(oldAbs); } catch {}
+    const files = req.files as
+      | {
+          [fieldname: string]: Express.Multer.File[];
+        }
+      | undefined;
+
+    const {
+      codigo,
+      nome,
+      objetivo,
+      nivel,
+      tipo,
+      faixaEtaria,
+      modoExecucao,
+      series,
+      repeticoes,
+      duracao,
+      descanso,
+      materiaisNecessarios,
+      quantidadeAtletas,
+      espacoNecessario,
+      tags,
+    } = req.body;
+
+    if (!nome || !String(nome).trim()) {
+      return res.status(400).json({ message: "Nome é obrigatório." });
+    }
+
+    if (!codigo || !String(codigo).trim()) {
+      return res.status(400).json({ message: "Código é obrigatório." });
+    }
+
+    if (nivel && !["Base", "Avancado", "Performance"].includes(String(nivel))) {
+      return res.status(400).json({ message: "Nível inválido." });
+    }
+
+    if (
+      modoExecucao &&
+      !["Tempo", "SeriesRepeticoes", "LivreOrientativo"].includes(String(modoExecucao))
+    ) {
+      return res.status(400).json({ message: "Modo de execução inválido." });
+    }
+
+    if (tipo && !["Tecnico", "Fisico", "Tatico", "Mental"].includes(String(tipo))) {
+      return res.status(400).json({ message: "Tipo inválido." });
+    }
+
+    const faixasEtarias = parseArrayField(req.body.faixaEtaria);
+    const faixasValidas = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+
+    if (faixasEtarias.some((faixa) => !faixasValidas.includes(faixa))) {
+      return res.status(400).json({ message: "Faixa etária inválida." });
+    }
+
+    if (
+      espacoNecessario &&
+      !["Pequeno", "Medio", "Grande"].includes(String(espacoNecessario))
+    ) {
+      return res.status(400).json({ message: "Espaço necessário inválido." });
+    }
+
+    const codigoDuplicado = await prisma.exercicio.findFirst({
+      where: {
+        codigo: String(codigo).trim(),
+        NOT: { id },
+      },
+    });
+
+    if (codigoDuplicado) {
+      return res.status(400).json({ message: "Já existe um exercício com esse código." });
+    }
+
+    const novaVideoUrl = fileUrlFromUpload(files?.video, "video");
+
+    if (files?.video?.[0]) {
+      const videoFile = files.video[0];
+
+      try {
+        const metadata = await probeVideo(videoFile.path);
+
+        if (metadata?.durationSec != null && metadata.durationSec > 60) {
+          try {
+            fs.unlinkSync(videoFile.path);
+          } catch {}
+
+          return res.status(400).json({
+            message: "Esse vídeo é muito longo. O máximo permitido é 60 segundos.",
+          });
+        }
+      } catch {
+        try {
+          fs.unlinkSync(videoFile.path);
+        } catch {}
+
+        return res.status(400).json({
+          message: "Não foi possível validar a duração do vídeo enviado.",
+        });
       }
+    }
+
+    if (novaVideoUrl && (exercicioAtual as any).videoDemonstrativoUrl) {
+      removePublicFileIfExists((exercicioAtual as any).videoDemonstrativoUrl);
     }
 
     const exercicio = await prisma.exercicio.update({
       where: { id },
       data: {
-        codigo,
-        nome,
-        descricao,
-        nivel,
-        categorias: { set: categorias },
-        ...(novaUrl && { videoDemonstrativoUrl: novaUrl }),
-      },
+        codigo: String(codigo).trim(),
+        nome: String(nome).trim(),
+        objetivo: parseNullableString(objetivo),
+        nivel: parseNullableString(nivel) as any,
+        ...(novaVideoUrl ? { videoDemonstrativoUrl: novaVideoUrl } : {}),
+        tipo: parseNullableString(tipo) as any,
+        faixaEtaria: { set: faixasEtarias as any[] },
+        modoExecucao: parseNullableString(modoExecucao) as any,
+        series: parseNullableInt(series),
+        repeticoes: parseNullableString(repeticoes),
+        duracao: parseNullableString(duracao),
+        descanso: parseNullableString(descanso),
+        tags: parseArrayField(tags),
+        quantidadeAtletas: parseNullableString(quantidadeAtletas),
+        materiaisNecessarios: parseNullableString(materiaisNecessarios),
+        espacoNecessario: parseNullableString(espacoNecessario) as any,
+      } as any,
     });
 
-    res.json(exercicio);
+    const usoMap = await mapUsoEmTreinos([id]);
+
+    res.json(toCardResponse(exercicio, usoMap[id] || 0));
   } catch (error) {
     const err = error as Error;
     console.error("Erro ao editar exercício:", err.message, err.stack);
@@ -146,7 +445,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
   }
 };
 
-export const listarExercicios = async (req: Request, res: Response) => {
+export const listarExercicios = async (_req: Request, res: Response) => {
   try {
     const exercicios = await prisma.exercicio.findMany({
       orderBy: { nome: "asc" },
@@ -155,10 +454,7 @@ export const listarExercicios = async (req: Request, res: Response) => {
     const ids = exercicios.map((e) => e.id);
     const usoMap = await mapUsoEmTreinos(ids);
 
-    const out = exercicios.map((e) => ({
-      ...e,
-      usadoEmTreinos: usoMap[e.id] || 0,
-    }));
+    const out = exercicios.map((e) => toCardResponse(e, usoMap[e.id] || 0));
 
     res.json(out);
   } catch (error) {
@@ -167,28 +463,222 @@ export const listarExercicios = async (req: Request, res: Response) => {
   }
 };
 
+export const listarMeusExercicios = async (req: Request, res: Response) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const busca = parseNullableString(req.query.busca);
+    const tipo = parseNullableString(req.query.tipo);
+    const faixaEtaria = parseNullableString(req.query.faixaEtaria);
+    const favorito = req.query.favorito === "true" ? true : undefined;
+    const nivel = parseNullableString(req.query.nivel);
+
+    const where: any = {
+      criadoPorId: userId,
+    };
+
+    if (busca) {
+      where.OR = [
+        { nome: { contains: busca, mode: "insensitive" } },
+        { codigo: { contains: busca, mode: "insensitive" } },
+        { objetivo: { contains: busca, mode: "insensitive" } },
+      ];
+    }
+
+    if (tipo && tipo !== "Todos") {
+      where.tipo = tipo;
+    }
+
+    if (faixaEtaria && faixaEtaria !== "Todos") {
+      where.faixaEtaria = { has: faixaEtaria };
+    }
+
+    if (nivel && nivel !== "Todos") {
+      where.nivel = nivel;
+    }
+
+    if (favorito !== undefined) {
+      where.favorito = favorito;
+    }
+
+    const exercicios = await prisma.exercicio.findMany({
+      where,
+      orderBy: [{ favorito: "desc" }, { updatedAt: "desc" as any }, { nome: "asc" }],
+    });
+
+    const ids = exercicios.map((e) => e.id);
+    const usoMap = await mapUsoEmTreinos(ids);
+
+    const out = exercicios.map((e) => toCardResponse(e, usoMap[e.id] || 0));
+
+    res.json(out);
+  } catch (error) {
+    console.error("Erro ao listar meus exercícios:", error);
+    res.status(500).json({ message: "Erro ao listar seus exercícios." });
+  }
+};
+
 export const buscarExercicioPorId = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   try {
+    const userId = getAuthUserId(req);
+
     const exercicio = await prisma.exercicio.findUnique({ where: { id } });
-    if (!exercicio) return res.status(404).json({ message: "Exercício não encontrado." });
+
+    if (!exercicio) {
+      return res.status(404).json({ message: "Exercício não encontrado." });
+    }
+
+    if (
+      userId &&
+      (exercicio as any).criadoPorId &&
+      (exercicio as any).criadoPorId !== userId
+    ) {
+      return res.status(403).json({ message: "Você não pode acessar esse exercício." });
+    }
 
     const usoMap = await mapUsoEmTreinos([id]);
 
-    res.json({
-      ...exercicio,
-      usadoEmTreinos: usoMap[id] || 0,
-    });
+    res.json(toCardResponse(exercicio, usoMap[id] || 0));
   } catch (error) {
     console.error("Erro ao buscar exercício:", error);
     res.status(500).json({ message: "Erro ao buscar exercício." });
   }
 };
 
+export const duplicarExercicio = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const original = await prisma.exercicio.findUnique({
+      where: { id },
+    });
+
+    if (!original) {
+      return res.status(404).json({ message: "Exercício não encontrado." });
+    }
+
+    const baseCodigo = `${(original as any).codigo || "EX"}-COPIA`;
+    let novoCodigo = baseCodigo;
+    let contador = 2;
+
+    while (
+      await prisma.exercicio.findFirst({
+        where: { codigo: novoCodigo },
+      })
+    ) {
+      novoCodigo = `${baseCodigo}-${contador}`;
+      contador += 1;
+    }
+
+    const duplicado = await prisma.exercicio.create({
+      data: {
+        codigo: novoCodigo,
+        nome: `${(original as any).nome} (Cópia)`,
+        objetivo: (original as any).objetivo ?? null,
+        nivel: (original as any).nivel ?? null,
+        videoDemonstrativoUrl: (original as any).videoDemonstrativoUrl ?? null,
+        criadoPorId: userId,
+        favorito: false,
+        tipo: (original as any).tipo ?? null,
+        faixaEtaria: {
+          set: Array.isArray((original as any).faixaEtaria)
+            ? (original as any).faixaEtaria
+            : [],
+        },
+        modoExecucao: (original as any).modoExecucao ?? null,
+        series: (original as any).series ?? null,
+        repeticoes: (original as any).repeticoes ?? null,
+        duracao: (original as any).duracao ?? null,
+        descanso: (original as any).descanso ?? null,
+        tags: Array.isArray((original as any).tags) ? (original as any).tags : [],
+        quantidadeAtletas: (original as any).quantidadeAtletas ?? null,
+        materiaisNecessarios: (original as any).materiaisNecessarios ?? null,
+        espacoNecessario: (original as any).espacoNecessario ?? null,
+      } as any,
+    });
+
+    res.status(201).json(toCardResponse(duplicado, 0));
+  } catch (error) {
+    console.error("Erro ao duplicar exercício:", error);
+    res.status(500).json({ message: "Erro ao duplicar exercício." });
+  }
+};
+
+export const favoritarExercicio = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const exercicio = await prisma.exercicio.findUnique({
+      where: { id },
+    });
+
+    if (!exercicio) {
+      return res.status(404).json({ message: "Exercício não encontrado." });
+    }
+
+    if ((exercicio as any).criadoPorId && (exercicio as any).criadoPorId !== userId) {
+      return res.status(403).json({ message: "Você não pode favoritar esse exercício." });
+    }
+
+    const atualizado = await prisma.exercicio.update({
+      where: { id },
+      data: {
+        favorito:
+          typeof req.body?.favorito === "boolean"
+            ? req.body.favorito
+            : !(exercicio as any).favorito,
+      } as any,
+    });
+
+    const usoMap = await mapUsoEmTreinos([id]);
+
+    res.json(toCardResponse(atualizado, usoMap[id] || 0));
+  } catch (error) {
+    console.error("Erro ao favoritar exercício:", error);
+    res.status(500).json({ message: "Erro ao favoritar exercício." });
+  }
+};
+
 export const excluirExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   try {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const exercicio = await prisma.exercicio.findUnique({
+      where: { id },
+    });
+
+    if (!exercicio) {
+      return res.status(404).json({ message: "Exercício não encontrado." });
+    }
+
+    if ((exercicio as any).criadoPorId && (exercicio as any).criadoPorId !== userId) {
+      return res.status(403).json({ message: "Você não pode excluir esse exercício." });
+    }
+
+    removePublicFileIfExists((exercicio as any).videoDemonstrativoUrl);
+
     await prisma.exercicio.delete({ where: { id } });
+
     res.status(204).send();
   } catch (error) {
     console.error("Erro ao excluir exercício:", error);

@@ -557,7 +557,6 @@ export const gerenciarAtletasController = {
         select: {
           id: true,
           nome: true,
-          descricao: true,
           objetivo: true,
           pontuacao: true,
           categoria: true,
@@ -812,7 +811,6 @@ export const gerenciarAtletasController = {
 
       const selectCompleto = {
         ...selectLeve,
-
         imagemUrl: true,
         duracao: true,
         metas: true,
@@ -831,7 +829,6 @@ export const gerenciarAtletasController = {
             repeticoes: true,
             exercicioId: true,
             exercicioTemporarioId: true,
-
             // ✅ ADICIONAR
             exercicioPersonalizadoId: true,
             exercicioPersonalizado: {
@@ -845,13 +842,12 @@ export const gerenciarAtletasController = {
                 videoPosterUrl: true,
               },
             },
-
             exercicio: {
               select: {
                 id: true,
                 codigo: true,
                 nome: true,
-                descricao: true,
+                objetivo: true,
                 nivel: true,
                 categorias: true,
                 videoDemonstrativoUrl: true,
@@ -949,7 +945,7 @@ export const gerenciarAtletasController = {
                   id: e.exercicio.id,
                   codigo: e.exercicio.codigo,
                   nome: e.exercicio.nome,
-                  descricao: e.exercicio.descricao,
+                  objetivo: e.exercicio.objetivo,
                   nivel: e.exercicio.nivel,
                   categorias: e.exercicio.categorias,
                   videoDemonstrativoUrl: e.exercicio.videoDemonstrativoUrl ?? null,

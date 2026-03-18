@@ -1215,7 +1215,7 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
               select: {
                 id: true,
                 nome: true,
-                descricao: true,
+                objetivo: true,
                 videoDemonstrativoUrl: true,
                 nivel: true,
               },
@@ -1404,7 +1404,7 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
               select: {
                 id: true,
                 nome: true,
-                descricao: true,
+                objetivo: true,
                 videoDemonstrativoUrl: true,
                 nivel: true,
               },
