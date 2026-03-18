@@ -471,13 +471,31 @@ model TreinoProgramadoExercicio {
 }
 
 model Exercicio {
-  id                         String                       @id @default(uuid())
-  codigo                     String                       @unique
-  nome                       String                       @unique
-  descricao                  String?
-  nivel                      Nivel
-  categorias                 Categoria[]
-  videoDemonstrativoUrl      String?
+  id                    String      @id @default(uuid())
+  codigo                String      @unique
+  nome                  String      @unique
+  nivel                 Nivel
+  categorias            Categoria[]
+  videoDemonstrativoUrl String?
+
+  objetivo             String?
+  tipo                 TipoExercicio?
+  faixaEtaria          FaixaEtariaExercicio[]
+  modoExecucao         ModoExecucaoExercicio?
+  series               Int?
+  repeticoes           String?
+  duracao              String?
+  descanso             String?
+  tags                 String[]
+  quantidadeAtletas    String?
+  materiaisNecessarios String?
+  espacoNecessario     EspacoExercicio?
+
+  favorito    Boolean  @default(false)
+  criadoPorId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
   EstatisticaExercicio       EstatisticaExercicio[]
   SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
@@ -2576,4 +2594,33 @@ enum MetodologiaAssinaturaOrigem {
 enum OrganizacaoTipo {
   CLUBE
   ESCOLINHA
+}
+
+enum TipoExercicio {
+  Tecnico
+  Fisico
+  Tatico
+  Mental
+}
+
+enum ModoExecucaoExercicio {
+  Tempo
+  SeriesRepeticoes
+  LivreOrientativo
+}
+
+enum EspacoExercicio {
+  Pequeno
+  Medio
+  Grande
+}
+
+enum FaixaEtariaExercicio {
+  Sub9
+  Sub11
+  Sub13
+  Sub15
+  Sub17
+  Sub20
+  Livre
 }

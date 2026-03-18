@@ -305,7 +305,8 @@ interface Exercicio {
   nome: string;
   repeticoes?: string;
   videoDemonstrativoUrl?: string;
-  descricao?: string;
+  objetivo?: string | null;
+  descricao?: string | null;
   nivel?: string;
   categorias?: string[];      
   duracaoMinutos?: number | null; 
@@ -862,6 +863,7 @@ export default function NovoTreino() {
   type ExercicioPersonalizadoItem = {
     id: string;
     nome: string;
+    objetivo?: string | null;
     descricao?: string | null;
     nivel?: string | null;
     categorias?: string[];
@@ -1111,7 +1113,8 @@ export default function NovoTreino() {
             return {
               id: String(e.id),
               nome: String(e.nome ?? e.titulo ?? ""),
-              descricao: e.descricao ?? e.desc ?? "",
+              objetivo: e.objetivo ?? e.descricao ?? e.desc ?? "",
+              descricao: e.objetivo ?? e.descricao ?? e.desc ?? "",
               nivel: e.nivel ?? e.dificuldade ?? null,
               repeticoes: e.repeticoes ?? e.reps ?? "",
               videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? null,
@@ -1243,7 +1246,8 @@ export default function NovoTreino() {
           exercicioPersonalizadoId: String(p.id),
 
           nome: String(p.nome ?? "").trim(),
-          descricao: p.descricao ?? "",
+          objetivo: p.objetivo ?? p.descricao ?? "",
+          descricao: p.objetivo ?? p.descricao ?? "",
           repeticoes: "",
           series: null,
           ordem,
@@ -2177,9 +2181,13 @@ useEffect(() => {
         "",
 
       descricao:
+        ex.objetivo ??
         ex.descricao ??
+        ex.exercicio?.objetivo ??
         ex.exercicio?.descricao ??
+        ex.exercicioPersonalizado?.objetivo ??
         ex.exercicioPersonalizado?.descricao ??
+        ex.exercicioTemporario?.objetivo ??
         ex.exercicioTemporario?.descricao ??
         "",
 
@@ -2393,7 +2401,7 @@ useEffect(() => {
     if (q) {
       lista = lista.filter((e) => {
         const nome = (e.nome || "").toLowerCase();
-        const desc = (e.descricao || "").toLowerCase();
+        const desc = (e.objetivo || e.descricao || "").toLowerCase();
         const nivel = (e.nivel || "").toLowerCase();
         return nome.includes(q) || desc.includes(q) || nivel.includes(q);
       });
@@ -2502,7 +2510,7 @@ useEffect(() => {
         {
           idCatalogo: String(exercicio.id),
           nome: exercicio.nome,
-          descricao: exercicio.descricao ?? "",
+          descricao: exercicio.objetivo ?? exercicio.descricao ?? "",
           repeticoes,
           series,
           ordem: prev.length + 1,
@@ -2864,7 +2872,12 @@ useEffect(() => {
             exercicioId: exercicioId ? String(exercicioId) : null,
             nome: nomeTemp || e.nome,
             ordem: e.ordem ?? idx + 1,
-            descricao: (typeof e.descricao === "string" ? e.descricao : null), // ✅ pega a descrição do EXERCÍCIO
+            descricao:
+              typeof (e as any).objetivo === "string"
+                ? (e as any).objetivo
+                : typeof e.descricao === "string"
+                ? e.descricao
+                : null,
             videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null, // ✅ mantém vídeo também
             repeticoes:
               e.repeticoes ??
@@ -2974,7 +2987,7 @@ useEffect(() => {
 
         return {
           nome: String(e.nome || "").trim(),
-          descricao: String(e.descricao || "").trim() || null,
+          descricao: String((e as any).objetivo || e.descricao || "").trim() || null,
           nivel: e.exercicioPersonalizadoId ? (e.nivel ?? null) : (e.nivel ?? null),
           categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
@@ -3851,7 +3864,7 @@ useEffect(() => {
                   const videoSrc = resolveVideoUrl(ex.videoUrl || base?.videoDemonstrativoUrl);
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
-                  const descFinal = base?.descricao ?? ex.descricao ?? "";
+                  const descFinal = base?.objetivo ?? base?.descricao ?? ex.descricao ?? "";
                   const ehDoBanco = Boolean(ex.idCatalogo || (ex as any).exercicioPersonalizadoId);
                   return (
                     <div
@@ -4190,9 +4203,9 @@ useEffect(() => {
                                 ) : null}
                               </div>
 
-                              {exercicio.descricao ? (
+                              {(exercicio.objetivo || exercicio.descricao) ? (
                                 <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-                                  {exercicio.descricao}
+                                  {exercicio.objetivo || exercicio.descricao}
                                 </p>
                               ) : null}
 
@@ -4293,7 +4306,7 @@ useEffect(() => {
                         .filter((x) => {
                           const term = filtroPers.trim().toLowerCase();
                           if (!term) return true;
-                          const hay = `${x.nome ?? ""} ${x.descricao ?? ""}`.toLowerCase();
+                          const hay = `${x.nome ?? ""} ${x.objetivo ?? x.descricao ?? ""}`.toLowerCase();
                           return hay.includes(term);
                         })
                         .filter((x) => {
@@ -4335,9 +4348,9 @@ useEffect(() => {
                                     ) : null}
                                   </div>
 
-                                  {p.descricao ? (
+                                  {(p.objetivo || p.descricao) ? (
                                     <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-                                      {p.descricao}
+                                      {p.objetivo || p.descricao}
                                     </p>
                                   ) : null}
 
