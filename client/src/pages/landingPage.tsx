@@ -1,30 +1,112 @@
 // client/src/pages/landingPage.tsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Instagram, Facebook } from "lucide-react";
 import Atualizacoes from "../components/Atualizacoes";
 
 // ✅ Liga/desliga redes sociais
-const SHOW_SOCIALS = true;
+const SHOW_SOCIALS = false;
 
 // ✅ Ajuste se sua logo estiver em outro caminho
-const LOGO_SRC = "/assets/usuarios/footera-logo.png";
+const LOGO_SRC = "/assets/usuarios/footera-logo.png"; // logo com o fundo transparente
+const LOGOV_SRC = "/assets/usuarios/footera-logo-fundo-verde.png"; // logo verde
+const LOGOCL_SRC = "/assets/usuarios/footera-contentlab-logo.png"; // logo do content lab
+
+const LOGO_LANDING_VERDE = "/assets/usuarios/2.png";
+const LOGO_LANDING_PRETO = "/assets/usuarios/3.png";
+
+const HERO_SLIDES = [
+  {
+    src: LOGO_LANDING_VERDE,
+    alt: "FootEra",
+    title: "Conheça a FootEra",
+    subtitle: "Treinos, desafios, pontuação e visibilidade em um só lugar.",
+    href: "/cadastro",
+  },
+  {
+    src: LOGO_LANDING_PRETO,
+    alt: "Content Lab",
+    title: "Nova parceria",
+    subtitle: "Em breve novidades e conteúdos especiais para a comunidade.",
+    href: "/?tab=novidades",
+  },
+
+  // se quiser adicionar mais imagens ao carrosel é só adicionar aqui
+
+];
 
 type LandingPageProps = {
   showSocials?: boolean;
   logoSrc?: string;
+  logoVSrc?: string;
   heroImageSrc?: string | null;
 };
 
 type AbaAtiva = "home" | "sobre" | "novidades";
 
+function getInitialLandingTab(): AbaAtiva {
+  try {
+    const qs = new URLSearchParams(window.location.search);
+    const q = (qs.get("tab") || "").toLowerCase();
+
+    if (q === "sobre") return "sobre";
+    if (q === "novidades") return "novidades";
+    return "home";
+  } catch {
+    return "home";
+  }
+}
+
 export default function LandingPage({
   showSocials = SHOW_SOCIALS,
   logoSrc = LOGO_SRC,
+  logoVSrc = LOGOV_SRC,
   heroImageSrc = null,
 }: LandingPageProps) {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<AbaAtiva>("home");
+  const [activeTab, setActiveTab] = useState<AbaAtiva>(getInitialLandingTab());
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (activeTab !== "home") return;
+
+    const interval = window.setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const onPopState = () => setActiveTab(getInitialLandingTab());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const changeTab = (tab: AbaAtiva) => {
+    setActiveTab(tab);
+
+    if (tab === "home") {
+      setCurrentSlide(0);
+    }
+
+    const url = tab === "home" ? "/" : `/?tab=${tab}`;
+    window.history.replaceState({}, "", url);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSlideClick = (href?: string) => {
+    if (!href) return;
+
+    if (href.startsWith("/?tab=")) {
+      const tab = href.replace("/?tab=", "") as AbaAtiva;
+      changeTab(tab);
+      return;
+    }
+
+    navigate(href);
+  };
 
   const menuBtnClass = (tab: AbaAtiva) =>
     `transition ${
@@ -48,10 +130,7 @@ export default function LandingPage({
               {/* LOGO */}
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab("home");
-                  navigate("/");
-                }}
+                onClick={() => changeTab("home")}
                 className="flex items-center gap-3"
                 aria-label="Ir para Home"
               >
@@ -73,7 +152,7 @@ export default function LandingPage({
               <nav className="hidden lg:flex items-center gap-7 text-sm font-semibold">
                 <button
                   type="button"
-                  onClick={() => setActiveTab("home")}
+                  onClick={() => changeTab("home")}
                   className={menuBtnClass("home")}
                 >
                   Home
@@ -81,7 +160,7 @@ export default function LandingPage({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab("sobre")}
+                  onClick={() => changeTab("sobre")}
                   className={menuBtnClass("sobre")}
                 >
                   Sobre
@@ -93,7 +172,7 @@ export default function LandingPage({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab("novidades")}
+                  onClick={() => changeTab("novidades")}
                   className={menuBtnClass("novidades")}
                 >
                   Novidades
@@ -147,7 +226,7 @@ export default function LandingPage({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab("home")}
+                  onClick={() => changeTab("home")}
                   className={mobileMenuBtnClass("home")}
                 >
                   Home
@@ -155,7 +234,7 @@ export default function LandingPage({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab("sobre")}
+                  onClick={() => changeTab("sobre")}
                   className={mobileMenuBtnClass("sobre")}
                 >
                   Sobre
@@ -170,7 +249,7 @@ export default function LandingPage({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab("novidades")}
+                  onClick={() => changeTab("novidades")}
                   className={mobileMenuBtnClass("novidades")}
                 >
                   Novidades
@@ -266,11 +345,11 @@ export default function LandingPage({
                           </p>
                         </div>
 
-                        <div className="hidden sm:flex w-12 h-12 rounded-2xl bg-green-100 items-center justify-center">
+                        <div className="hidden sm:flex shrink-0 w-14 h-14 min-w-14 min-h-14 items-center justify-center rounded-full overflow-hidden bg-white p-1">
                           <img
-                            src={logoSrc}
+                            src={logoVSrc}
                             alt="FootEra"
-                            className="w-8 h-8 object-contain"
+                            className="w-full h-full object-cover rounded-full "
                           />
                         </div>
                       </div>
@@ -313,30 +392,49 @@ export default function LandingPage({
                         </div>
                       </div>
 
-                      <div className="mt-6 rounded-2xl overflow-hidden border border-green-100 bg-[#F6F1E7] min-h-[220px] md:min-h-[260px] flex items-center justify-center">
+                    <div className="mt-6">
+                      <div className="relative h-[220px] md:h-[260px] rounded-2xl overflow-hidden border border-green-100 bg-[#F6F1E7]">
                         {heroImageSrc ? (
                           <img
                             src={heroImageSrc}
                             alt="Destaque FootEra"
-                            className="w-full h-[220px] md:h-[260px] object-cover"
+                            className="absolute inset-0 block w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="text-center px-6 py-10">
+                          <button
+                            type="button"
+                            onClick={() => handleSlideClick(HERO_SLIDES[currentSlide]?.href)}
+                            className="absolute inset-0 block w-full h-full overflow-hidden group p-0"
+                          >
                             <img
-                              src={logoSrc}
-                              alt="FootEra"
-                              className="w-20 h-20 object-contain mx-auto opacity-90"
+                              src={HERO_SLIDES[currentSlide]?.src}
+                              alt={HERO_SLIDES[currentSlide]?.alt || "Slide FootEra"}
+                              className="absolute inset-0 block w-full h-full object-cover object-center transition duration-300"
                             />
-                            <p className="mt-4 text-green-900 font-semibold">
-                              Área para imagem principal
-                            </p>
-                            <p className="mt-2 text-sm text-gray-600">
-                              Você pode colocar uma arte, jogador(a), mockup ou
-                              banner da FootEra aqui.
-                            </p>
+
+                            <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition" />
+                          </button>
+                        )}
+
+                        {!heroImageSrc && HERO_SLIDES.length > 1 && (
+                          <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2">
+                            {HERO_SLIDES.map((_, index) => (
+                              <button
+                                key={index}
+                                type="button"
+                                onClick={() => setCurrentSlide(index)}
+                                className={`h-2.5 rounded-full transition-all ${
+                                  currentSlide === index
+                                    ? "w-6 bg-white"
+                                    : "w-2.5 bg-white/60 hover:bg-white/80"
+                                }`}
+                                aria-label={`Ir para slide ${index + 1}`}
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
+                    </div>
 
                       <div className="mt-6 flex flex-wrap gap-3">
                         <button
@@ -349,7 +447,7 @@ export default function LandingPage({
 
                         <button
                           type="button"
-                          onClick={() => setActiveTab("sobre")}
+                          onClick={() => changeTab("sobre")}
                           className="flex-1 min-w-[160px] px-5 py-3 rounded-xl border border-green-900 text-green-900 font-semibold hover:bg-green-50 transition"
                         >
                           Saiba mais
@@ -451,7 +549,7 @@ export default function LandingPage({
 
                     <button
                       type="button"
-                      onClick={() => setActiveTab("novidades")}
+                      onClick={() => changeTab("novidades")}
                       className="px-5 py-3 rounded-xl border border-green-900 text-green-900 font-semibold hover:bg-green-50 transition"
                     >
                       Ver novidades
@@ -495,7 +593,7 @@ export default function LandingPage({
               <div className="flex flex-wrap gap-4 text-sm">
                 <button
                   type="button"
-                  onClick={() => setActiveTab("home")}
+                  onClick={() => changeTab("home")}
                   className="text-green-900 hover:text-green-700"
                 >
                   Home
@@ -503,7 +601,7 @@ export default function LandingPage({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab("sobre")}
+                  onClick={() => changeTab("sobre")}
                   className="text-green-900 hover:text-green-700"
                 >
                   Sobre
@@ -515,7 +613,7 @@ export default function LandingPage({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab("novidades")}
+                  onClick={() => changeTab("novidades")}
                   className="text-green-900 hover:text-green-700"
                 >
                   Novidades

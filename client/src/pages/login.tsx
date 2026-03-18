@@ -504,19 +504,24 @@ export default function PaginaLogin() {
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 md:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 md:flex-col md:gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="cursor-pointer"
+            aria-label="Voltar para Home"
+          >
             <img
               src="/assets/usuarios/footera-logo.png"
               alt="Logo FootEra"
               className="
                 shrink-0 object-contain transform-gpu
                 w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
-
                 max-[639px]:scale-[1.6]  
                 md:scale-[1.55]          
-
                 origin-left md:origin-center mr-1
               "
             />
+          </button>
 
             <h1 className="flex-1 md:flex-none text-center text-xl md:text-3xl font-bold">
               Bem-vindo à FootEra
