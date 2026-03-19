@@ -50,12 +50,12 @@ export default function FormExercicioTreinos({
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
   const [objetivo, setObjetivo] = useState("");
-  const [tipo, setTipo] = useState("Tecnico");
-  const [nivel, setNivel] = useState("Base");
-  const [faixasEtarias, setFaixasEtarias] = useState<string[]>(["Sub13"]);
+  const [tipo, setTipo] = useState("");
+  const [nivel, setNivel] = useState("");
+  const [faixasEtarias, setFaixasEtarias] = useState<string[]>([]);
   const [modoExecucao, setModoExecucao] = useState<
-    "Tempo" | "SeriesRepeticoes" | "LivreOrientativo"
-  >("SeriesRepeticoes");
+    "Tempo" | "SeriesRepeticoes" | "LivreOrientativo" | ""
+  >("");
   const [series, setSeries] = useState("");
   const [repeticoes, setRepeticoes] = useState("");
   const [duracao, setDuracao] = useState("");
@@ -64,13 +64,14 @@ export default function FormExercicioTreinos({
   const [novaTag, setNovaTag] = useState("");
   const [quantidadeAtletas, setQuantidadeAtletas] = useState("");
   const [materiaisNecessarios, setMateriaisNecessarios] = useState("");
-  const [espacoNecessario, setEspacoNecessario] = useState("Pequeno");
+  const [espacoNecessario, setEspacoNecessario] = useState("");
   const [video, setVideo] = useState<File | null>(null);
   const [videoNome, setVideoNome] = useState("");
   const [mostrarInfosAdicionais, setMostrarInfosAdicionais] = useState(false);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState("");
   const [videoModalAberto, setVideoModalAberto] = useState(false);
   const [videoExistenteUrl, setVideoExistenteUrl] = useState("");
+  const [removerVideoExistente, setRemoverVideoExistente] = useState(false);
 
   useEffect(() => {
     if (!exercicioId) return;
@@ -91,14 +92,33 @@ export default function FormExercicioTreinos({
         setCodigo(data.codigo || "");
         setNome(data.nome || "");
         setObjetivo(data.objetivo || "");
-        setTipo(data.tipo || "Tecnico");
-        setNivel(data.nivel || "Base");
+        setTipo(
+          data.tipo === "Tecnico" ||
+          data.tipo === "Fisico" ||
+          data.tipo === "Tatico" ||
+          data.tipo === "Mental"
+            ? data.tipo
+            : ""
+        );
+        setNivel(
+          data.nivel === "Base" ||
+          data.nivel === "Avancado" ||
+          data.nivel === "Performance" 
+            ? data.nivel
+            : ""
+        );
         setFaixasEtarias(
           Array.isArray(data.faixaEtaria) && data.faixaEtaria.length > 0
             ? data.faixaEtaria
-            : ["Sub13"]
+            : []
         );
-        setModoExecucao(data.modoExecucao || "SeriesRepeticoes");
+        setModoExecucao(
+          data.modoExecucao === "Tempo" ||
+          data.modoExecucao === "SeriesRepeticoes" ||
+          data.modoExecucao === "LivreOrientativo"
+            ? data.modoExecucao
+            : ""
+        );
         setSeries(data.series ? String(data.series) : "");
         setRepeticoes(data.repeticoes || "");
         setDuracao(data.duracao || "");
@@ -106,7 +126,13 @@ export default function FormExercicioTreinos({
         setTags(Array.isArray(data.tags) ? data.tags : []);
         setQuantidadeAtletas(data.quantidadeAtletas || "");
         setMateriaisNecessarios(data.materiaisNecessarios || "");
-        setEspacoNecessario(data.espacoNecessario || "Pequeno");
+        setEspacoNecessario(
+          data.espacoNecessario === "Pequeno" ||
+          data.espacoNecessario === "Medio" ||
+          data.espacoNecessario === "Grande"
+            ? data.espacoNecessario
+            : ""
+        );
         
         const videoUrlCompleta = data.videoDemonstrativoUrl
           ? data.videoDemonstrativoUrl.startsWith("http://") || data.videoDemonstrativoUrl.startsWith("https://")
@@ -126,10 +152,10 @@ export default function FormExercicioTreinos({
           (Array.isArray(data.tags) && data.tags.length > 0) ||
           !!data.quantidadeAtletas ||
           !!data.materiaisNecessarios ||
-          !!data.espacoNecessario ||
-          !!data.videoDemonstrativoUrl;
+          !!data.espacoNecessario;
 
         setMostrarInfosAdicionais(temInfosAdicionais);
+        setRemoverVideoExistente(false);
       })
       .catch((err) => {
         alert(err?.message || "Erro ao carregar exercício");
@@ -214,10 +240,15 @@ export default function FormExercicioTreinos({
 
   const handleVideoChange = async (file: File | null) => {
     if (!file) {
+      if (videoPreviewUrl && videoPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
+
       setVideo(null);
       setVideoNome("");
       setVideoPreviewUrl("");
       setVideoExistenteUrl("");
+      setRemoverVideoExistente(!!videoExistenteUrl);
       return;
     }
 
@@ -236,6 +267,11 @@ export default function FormExercicioTreinos({
       setVideo(file);
       setVideoNome(file.name);
       setVideoExistenteUrl("");
+      setRemoverVideoExistente(false);
+
+      if (videoPreviewUrl && videoPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
 
       const preview = URL.createObjectURL(file);
       setVideoPreviewUrl(preview);
@@ -245,10 +281,15 @@ export default function FormExercicioTreinos({
   };
 
   const handleRemoverVideo = () => {
+    if (videoPreviewUrl && videoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+
     setVideo(null);
     setVideoNome("");
     setVideoPreviewUrl("");
     setVideoExistenteUrl("");
+    setRemoverVideoExistente(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -270,6 +311,21 @@ export default function FormExercicioTreinos({
 
     if (!codigoFinal) {
       alert("Não foi possível gerar o código do exercício.");
+      return;
+    }
+
+    if (!tipo) {
+      alert("Escolha o tipo do exercício.");
+      return;
+    }
+
+    if (!nivel) {
+      alert("Escolha o nível do exercício.");
+      return;
+    }
+
+    if (faixasEtarias.length === 0) {
+      alert("Selecione pelo menos uma faixa etária.");
       return;
     }
 
@@ -322,6 +378,11 @@ export default function FormExercicioTreinos({
       formData.append("quantidadeAtletas", quantidadeAtletas.trim());
       formData.append("materiaisNecessarios", materiaisNecessarios.trim());
       formData.append("espacoNecessario", espacoNecessario);
+
+      if (removerVideoExistente) {
+        formData.append("removerVideo", "true");
+      }
+
       if (video) formData.append("video", video);
 
       const res = await fetch(
@@ -404,6 +465,7 @@ export default function FormExercicioTreinos({
               onChange={(e) => setTipo(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
             >
+              <option value="">Selecione</option>
               {OPCOES_TIPO.map((op) => (
                 <option key={op.value} value={op.value}>
                   {op.label}
@@ -421,6 +483,7 @@ export default function FormExercicioTreinos({
               onChange={(e) => setNivel(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
             >
+              <option value="">Selecione</option>
               {OPCOES_NIVEL.map((op) => (
                 <option key={op.value} value={op.value}>
                   {op.label}
@@ -760,6 +823,7 @@ export default function FormExercicioTreinos({
                   onChange={(e) => setEspacoNecessario(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
                 >
+                  <option value="">Selecione</option>
                   {OPCOES_ESPACO.map((op) => (
                     <option key={op.value} value={op.value}>
                       {op.label}
