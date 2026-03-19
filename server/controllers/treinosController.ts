@@ -2666,13 +2666,106 @@ export async function iniciarTreino(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-export async function getExercicios(_req: Request, res: Response) {
+export async function getExercicios(req: AuthenticatedRequest, res: Response) {
   try {
-    const exercicios = await prisma.exercicio.findMany();
+    const exercicios = await prisma.exercicio.findMany({
+      where: {
+        AND: [
+          { criadoPorId: null },
+        ],
+      },
+      orderBy: [{ nome: "asc" }],
+      select: {
+        id: true,
+        nome: true,
+        objetivo: true,
+        nivel: true,
+        faixaEtaria: true,
+        videoDemonstrativoUrl: true,
+        criadoPorId: true,
+      },
+    });
+
     return res.json(exercicios);
   } catch (err) {
     console.error("Erro ao buscar exercícios:", err);
     return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+}
+
+export async function getMeusExercicios(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const [exerciciosBancoDoUsuario, exerciciosPersonalizadosDoUsuario] =
+      await Promise.all([
+        prisma.exercicio.findMany({
+          where: {
+            criadoPorId: userId,
+          },
+          orderBy: [{ nome: "asc" }],
+        }),
+
+        prisma.exercicioPersonalizado.findMany({
+          where: {
+            criadorUsuarioId: userId,
+          },
+          orderBy: [
+            { atualizadoEm: "desc" },
+            { nome: "asc" },
+          ],
+          take: 500,
+        }),
+      ]);
+
+    const itens = [
+      ...exerciciosBancoDoUsuario.map((x) => ({
+        id: String(x.id),
+        origem: "exercicio" as const,
+        nome: x.nome ?? "Exercício",
+        objetivo: (x as any).objetivo ?? null,
+        descricao: (x as any).descricao ?? null,
+        nivel: (x as any).nivel ?? null,
+        categorias: Array.isArray((x as any).categoria)
+          ? (x as any).categoria
+          : Array.isArray((x as any).categorias)
+          ? (x as any).categorias
+          : [],
+        videoDemonstrativoUrl:
+          (x as any).videoDemonstrativoUrl ??
+          (x as any).videoUrl ??
+          null,
+        videoPosterUrl: (x as any).videoPosterUrl ?? null,
+      })),
+
+      ...exerciciosPersonalizadosDoUsuario.map((x) => ({
+        id: String(x.id),
+        origem: "personalizado" as const,
+        nome: x.nome ?? "Exercício",
+        objetivo: (x as any).objetivo ?? null,
+        descricao: (x as any).descricao ?? null,
+        nivel: (x as any).nivel ?? null,
+        categorias: Array.isArray((x as any).categorias)
+          ? (x as any).categorias
+          : Array.isArray((x as any).categoria)
+          ? (x as any).categoria
+          : [],
+        videoDemonstrativoUrl: (x as any).videoDemonstrativoUrl ?? null,
+        videoPosterUrl: (x as any).videoPosterUrl ?? null,
+      })),
+    ];
+
+    return res.json(itens);
+  } catch (error) {
+    console.error("Erro ao listar meus exercícios:", error);
+    return res.status(500).json({ message: "Erro ao listar meus exercícios." });
   }
 }
 
@@ -5913,14 +6006,23 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
   }
 }
 
-export async function listarExerciciosPersonalizados(req: any, res: Response) {
+export async function listarExerciciosPersonalizados(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const userId = String(req.user?.id || "").trim();
+    const userId = getUserId(req);
+
     if (!userId) {
       return res.status(401).json({ message: "Não autenticado." });
     }
 
     const itens = await prisma.exercicioPersonalizado.findMany({
+      where: {
+        criadorUsuarioId: {
+          not: userId,
+        },
+      },
       orderBy: [
         { atualizadoEm: "desc" },
         { nome: "asc" },
@@ -5931,9 +6033,7 @@ export async function listarExerciciosPersonalizados(req: any, res: Response) {
     return res.json(itens);
   } catch (error) {
     console.error("Erro ao listar exercícios personalizados:", error);
-    return res.status(500).json({
-      message: "Erro ao listar exercícios personalizados.",
-    });
+    return res.status(500).json({ message: "Erro ao listar exercícios personalizados." });
   }
 }
 
