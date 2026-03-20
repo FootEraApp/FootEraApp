@@ -1227,10 +1227,21 @@ export default function NovoTreino() {
         videoUrl: p.videoDemonstrativoUrl ?? null,
         videoDemonstrativoUrl: p.videoDemonstrativoUrl ?? null,
         videoPosterUrl: p.videoPosterUrl ?? null,
-        series: "",
-        repeticoes: "",
-        duracao: "",
-        descanso: "",
+        series:
+          typeof p.series === "number"
+            ? p.series
+            : p.series != null && String(p.series).trim() !== ""
+            ? Number(p.series)
+            : null,
+
+        repeticoes:
+          p.repeticoes != null ? String(p.repeticoes) : "",
+
+        duracao:
+          p.duracao != null ? String(p.duracao) : "",
+
+        descanso:
+          p.descanso != null ? String(p.descanso) : "",
         ordem: prev.length + 1,
         categorias: Array.isArray(p.categorias) ? p.categorias : [],
         origem: "personalizado",
@@ -2019,23 +2030,6 @@ useEffect(() => {
   }, [orgSelecionada]);
 
   useEffect(() => {
-    const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-    const headers = token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined;
-
-    fetch(API + "/treinos/exercicios/meus", {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(setMeusExercicios);
-  }, []);
-
-  useEffect(() => {
     saveState({
       etapa,
       nome,
@@ -2180,7 +2174,14 @@ useEffect(() => {
         ex.exercicioTemporario?.descricao ??
         "",
       repeticoes: ex.repeticoes ?? ex.reps ?? "",
-      series: ex.series ?? "",
+      series:
+        typeof ex.series === "number"
+          ? ex.series
+          : ex.series != null && String(ex.series).trim() !== ""
+          ? Number(ex.series)
+          : null,
+      duracao: ex.duracao ?? "",
+      descanso: ex.descanso ?? "",
       ordem: Number(ex.ordem ?? idx + 1),
       videoUrl:
         ex.videoDemonstrativoUrl ??
@@ -2613,10 +2614,24 @@ useEffect(() => {
         videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoPosterUrl: ex.videoPosterUrl ?? null,
-        series: "",
-        repeticoes: "",
-        duracao: "",
-        descanso: "",
+
+        // ✅ agora traz os valores já existentes do exercício
+        series:
+          typeof ex.series === "number"
+            ? ex.series
+            : ex.series != null && String(ex.series).trim() !== ""
+            ? Number(ex.series)
+            : null,
+
+        repeticoes:
+          ex.repeticoes != null ? String(ex.repeticoes) : "",
+
+        duracao:
+          ex.duracao != null ? String(ex.duracao) : "",
+
+        descanso:
+          ex.descanso != null ? String(ex.descanso) : "",
+
         ordem: prev.length + 1,
         categorias: Array.isArray(ex.categorias)
           ? ex.categorias
@@ -3058,12 +3073,11 @@ useEffect(() => {
       (payload as any).codigo = codigo;
       (payload as any).exercicios = exerciciosNormalizados.map((e: any, idx: number) => {
         const repeticoesFinal =
-          formatSerieXReps(e.series ?? null, e.repeticoes ?? null) ??
-          (typeof e.repeticoes === "string"
+          typeof e.repeticoes === "string"
             ? e.repeticoes.trim()
             : e.repeticoes != null
             ? String(e.repeticoes)
-            : "");
+            : "";
 
         // ✅ pega vídeo/poster (e ignora blob:)
         const videoRaw = e.videoDemonstrativoUrl ?? e.videoUrl ?? null;
@@ -3092,12 +3106,25 @@ useEffect(() => {
           String(e.nomeCatalogo || "").trim() ||
           "";
 
-        // ✅ Se for exercício de catálogo e NÃO tem mídia -> manda como oficial
         if (e.exercicioId && !forcePersonalizado) {
           return {
             exercicioId: String(e.exercicioId),
             ordem: Number(e.ordem ?? idx + 1),
             repeticoes: repeticoesFinal,
+            series:
+              typeof e.series === "number"
+                ? e.series
+                : e.series != null && String(e.series).trim() !== ""
+                ? parseInt(String(e.series), 10)
+                : null,
+            duracao:
+              e.duracao != null && String(e.duracao).trim() !== ""
+                ? String(e.duracao).trim()
+                : null,
+            descanso:
+              e.descanso != null && String(e.descanso).trim() !== ""
+                ? String(e.descanso).trim()
+                : null,
             observacao: e.observacao ?? null,
           };
         }
@@ -3105,12 +3132,28 @@ useEffect(() => {
         return {
           nome: String(e.nome || "").trim(),
           descricao: String((e as any).objetivo || e.descricao || "").trim() || null,
-          nivel: e.exercicioPersonalizadoId ? (e.nivel ?? null) : (e.nivel ?? null),
+          nivel: e.nivel ?? null,
           categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
           repeticoes: repeticoesFinal,
+          series:
+            typeof e.series === "number"
+              ? e.series
+              : e.series != null && String(e.series).trim() !== ""
+              ? parseInt(String(e.series), 10)
+              : null,
+          duracao:
+            e.duracao != null && String(e.duracao).trim() !== ""
+              ? String(e.duracao).trim()
+              : null,
+          descanso:
+            e.descanso != null && String(e.descanso).trim() !== ""
+              ? String(e.descanso).trim()
+              : null,
           observacao: e.observacao ?? null,
-          exercicioPersonalizadoId: e.exercicioPersonalizadoId ? String(e.exercicioPersonalizadoId) : null,
+          exercicioPersonalizadoId: e.exercicioPersonalizadoId
+            ? String(e.exercicioPersonalizadoId)
+            : null,
           videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
           videoPosterUrl: e.videoPosterUrl ?? null,
         };
