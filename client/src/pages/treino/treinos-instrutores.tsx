@@ -50,23 +50,19 @@ type ExercicioInfoMin = {
 
 interface ExercicioSessaoDetalhe {
   id: string;
-
-  // ✅ campos "flat" (se o backend já mandar pronto)
   nome?: string | null;
   detalhes?: string | null;
   repeticoes?: string | null;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
   videoDemonstrativoUrl?: string | null;
-
-  // ✅ IDs (compat/debug)
   exercicioId?: string | null;
   exercicioTemporarioId?: string | null;
   exercicioPersonalizadoId?: string | null;
-
-  // ✅ relações (quando vier include)
   exercicio?: ExercicioInfoMin | null;
   exercicioTemporario?: ExercicioInfoMin | null;
   exercicioPersonalizado?: ExercicioInfoMin | null;
-
   concluido?: boolean;
 }
 
@@ -74,6 +70,9 @@ interface Exercicio {
   id: string;
   nome: string;
   repeticoes?: string;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
 }
 
 interface TreinoProgramado {
@@ -163,27 +162,20 @@ type SessaoDeHoje = {
   data: string;
   treino: any;
   turma: any;
-
-  // status original do backend (AGENDADO / EM_ANDAMENTO / FINALIZADO / CANCELADO)
   statusRaw: string;
-
-  // status visual do frontend (inclui "faltou")
   status: "nao_iniciada" | "em_andamento" | "finalizada" | "cancelada" | "faltou";
-
-  // datas já parseadas
   dataSessao: Date | null;
-
-  // regras de janela (1h antes / 30min depois)
   win: StartWindowInfo | null;
-
-  // conveniências
   faltou: boolean;
   podeIniciar: boolean;
-
-  // (se você já usa esses campos no modal, mantém)
   exercicios?: any[];
   presencas?: any[];
   startedAt?: string | null;
+  // ✅ adicionar
+  duracaoMinutosReal?: number | null;
+  penalidadeAtraso?: boolean;
+  presentes?: any[];
+  presentesNomes?: string[];
 };
 
 type StartWindowInfo = {
@@ -1186,14 +1178,19 @@ useEffect(() => {
       const win = getStartWindowInfo(dataSessao);
 
       const faltou = s.status === "AGENDADO" && Boolean(win?.isLate);
-      const podeIniciar = s.status === "AGENDADO" && Boolean(win?.canStart) && !Boolean(win?.isLate);
+      const podeIniciar =
+        s.status === "AGENDADO" && Boolean(win?.canStart) && !Boolean(win?.isLate);
 
       const statusVisual: SessaoDeHoje["status"] =
-        s.status === "EM_ANDAMENTO" ? "em_andamento"
-        : s.status === "FINALIZADO" ? "finalizada"
-        : s.status === "CANCELADO" ? "cancelada"
-        : faltou ? "faltou"
-        : "nao_iniciada";
+        s.status === "EM_ANDAMENTO"
+          ? "em_andamento"
+          : s.status === "FINALIZADO"
+          ? "finalizada"
+          : s.status === "CANCELADO"
+          ? "cancelada"
+          : faltou
+          ? "faltou"
+          : "nao_iniciada";
 
       return {
         id: String(s.id),
@@ -1202,12 +1199,18 @@ useEffect(() => {
         turma: s.turma,
         exercicios: s.exercicios,
         presencas: s.presencas,
+        presentes: s.presentes ?? [],
+        presentesNomes: Array.isArray(s.presentesNomes) ? s.presentesNomes : [],
         statusRaw: String(s.status),
         status: statusVisual,
         dataSessao,
         win,
         faltou,
         podeIniciar,
+        // ✅ adicionar
+        duracaoMinutosReal:
+          s.duracaoMinutosReal == null ? null : Number(s.duracaoMinutosReal),
+        penalidadeAtraso: Boolean(s.penalidadeAtraso),
       };
     });
 
@@ -1729,9 +1732,24 @@ async function salvarProgressoSessao(sessaoId: string) {
             criadoresNomes,
             criadorTipo,
             exercicios: (Array.isArray(tr.exercicios) ? tr.exercicios : []).map((ex: any) => ({
-              id: String(ex?.exercicio?.id ?? ex?.id ?? ""),
-              nome: String(ex?.exercicio?.nome ?? ex?.nome ?? ""),
-              repeticoes: ex?.repeticoes ?? undefined,
+              id: String(
+                ex?.exercicio?.id ??
+                ex?.exercicioTemporario?.id ??
+                ex?.exercicioPersonalizado?.id ??
+                ex?.id ??
+                ""
+              ),
+              nome: String(
+                ex?.exercicio?.nome ??
+                ex?.exercicioTemporario?.nome ??
+                ex?.exercicioPersonalizado?.nome ??
+                ex?.nome ??
+                ""
+              ),
+              repeticoes: ex?.repeticoes ?? null,
+              series: ex?.series ?? null,
+              duracao: ex?.duracao ?? null,
+              descanso: ex?.descanso ?? null,
             })),
           };
         });
@@ -2519,6 +2537,17 @@ async function salvarProgressoSessao(sessaoId: string) {
                   </button>
 
                   <button
+                    onClick={() => setAbaProfessor("sessoes")}
+                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                      abaProfessor === "sessoes"
+                        ? "bg-green-800 text-white border-green-900"
+                        : "bg-white text-gray-800 border-gray-200"
+                    }`}
+                  >
+                    Treinos de Hoje
+                  </button>
+
+                  <button
                     onClick={() => setAbaProfessor("avaliar")}
                     className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
                       abaProfessor === "avaliar"
@@ -2529,16 +2558,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                     Avaliar Treinos
                   </button>
 
-                  <button
-                    onClick={() => setAbaProfessor("sessoes")}
-                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "sessoes"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Treinos de Hoje
-                  </button>
                   <button
                     onClick={() => setAbaProfessor("metodologias")}
                     className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
@@ -3106,8 +3125,12 @@ async function salvarProgressoSessao(sessaoId: string) {
                       const totalSec = Math.max(0, Math.floor(diffMs / 1000));
                       const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
                       const ss = String(totalSec % 60).padStart(2, "0");
-                    } else if (s.status === "finalizada" && s.duracaoMinutosReal) {
-                      labelTempo = `Duração registrada: ${s.duracaoMinutosReal} min`;
+                    } else if (
+                      s.status === "finalizada" &&
+                      s.duracaoMinutosReal != null &&
+                      s.duracaoMinutosReal > 0
+                    ) {
+                      labelTempo = `Duração realizada: ${s.duracaoMinutosReal} min`;
                     }
 
                     return (
@@ -3188,17 +3211,17 @@ async function salvarProgressoSessao(sessaoId: string) {
                             </div>
                           );
                         })()}
-
-                        {typeof s.treino?.duracao === "number" && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Duração programada: {s.treino.duracao} min
-                          </div>
-                        )}
-
+                        
                         {s.dataSessao && (
                           <div className="text-sm text-gray-500 mt-1 mb-1">
                             Agendado para: {formatarDataBR(s.dataSessao)}
                             {s.win?.hasTime ? ` às ${getHoraHHMM(s.dataSessao)}` : ""}
+                          </div>
+                        )}
+
+                        {typeof s.treino?.duracao === "number" && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Duração programada: {s.treino.duracao} min
                           </div>
                         )}
 
@@ -3386,7 +3409,25 @@ async function salvarProgressoSessao(sessaoId: string) {
                   exercicio: te.exercicio ?? null,
                   exercicioTemporario: te.exercicioTemporario ?? null,
                   exercicioPersonalizado: te.exercicioPersonalizado ?? null,
-                  repeticoes: te.repeticoes != null ? String(te.repeticoes) : (se?.repeticoes ?? null),
+                  repeticoes:
+                    te.repeticoes != null
+                      ? String(te.repeticoes)
+                      : (se?.repeticoes ?? null),
+
+                  series:
+                    te.series != null
+                      ? Number(te.series)
+                      : (se?.series ?? null),
+
+                  duracao:
+                    te.duracao != null
+                      ? String(te.duracao)
+                      : (se?.duracao ?? null),
+
+                  descanso:
+                    te.descanso != null
+                      ? String(te.descanso)
+                      : (se?.descanso ?? null),
                   // estado da sessão
                   concluido: Boolean(se?.concluido),
                   // se backend já “achatou” videoDemonstrativoUrl, mantém também
@@ -3499,8 +3540,11 @@ async function salvarProgressoSessao(sessaoId: string) {
                       null;
 
                     const repeticoes = ex.repeticoes ?? null;
-
+                    const series = ex.series ?? null;
+                    const duracao = ex.duracao ?? null;
+                    const descanso = ex.descanso ?? null;
                     const videoUrl = video ? resolveUploadUrl(video) : null;
+                    
                     return (
                       <div
                         key={ex.id}
@@ -3543,11 +3587,31 @@ async function salvarProgressoSessao(sessaoId: string) {
                                   </div>
                                 )}
 
-                                {repeticoes && (
-                                  <div className="text-xs sm:text-sm text-gray-600 mt-0.5">
-                                    Repetições: {repeticoes}
-                                  </div>
-                                )}
+                                <div className="mt-1 space-y-1">
+                                  {series != null && series !== 0 ? (
+                                    <div className="text-xs sm:text-sm text-gray-600">
+                                      Séries: {series}
+                                    </div>
+                                  ) : null}
+
+                                  {repeticoes ? (
+                                    <div className="text-xs sm:text-sm text-gray-600">
+                                      Repetições: {repeticoes}
+                                    </div>
+                                  ) : null}
+
+                                  {duracao ? (
+                                    <div className="text-xs sm:text-sm text-gray-600">
+                                      Duração: {duracao}
+                                    </div>
+                                  ) : null}
+
+                                  {descanso ? (
+                                    <div className="text-xs sm:text-sm text-gray-600">
+                                      Descanso: {descanso}
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
 
                               {videoUrl && (
