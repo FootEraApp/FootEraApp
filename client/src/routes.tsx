@@ -1,5 +1,5 @@
 import { Route, Switch } from "wouter";
-import { Private, PublicOnly, HomeRedirect } from "./auth.js";
+import { Private, PublicOnly } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";
 import { FLAGS } from "./config.js";
 
@@ -12,7 +12,6 @@ import PaginaTreinos from "./pages/treinos.js";
 import PaginaCreatePost from "./pages/post/create.js";
 import PaginaExplorar from "./pages/explorar.js";
 import PaginaCreateDesafios from "./pages/admin/desafios/create.js";
-import PaginaCreateExercicios from "./pages/admin/exercicios/create.js";
 import PaginaCreateTreinos from "./pages/admin/treinos/create.js";
 import PaginaCreateProfessores from "./pages/admin/professores/create.js";
 import PaginaLoginAdmin from "./pages/admin/login.js";
@@ -99,10 +98,6 @@ export function AppRoutes() {
           <RequireAdmin><div style={{ padding: 16 }}>Desafios desativados por enquanto.</div></RequireAdmin>
         </Route>
       )}
-
-      <Route path="/admin/exercicios/create">
-        <RequireAdmin><PaginaCreateExercicios /></RequireAdmin>
-      </Route>
       <Route path="/admin/treinos/create">
         <PaginaCreateTreinos />
       </Route>

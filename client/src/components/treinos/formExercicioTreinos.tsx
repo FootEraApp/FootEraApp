@@ -43,7 +43,7 @@ const OPCOES_ESPACO = [
 
 export default function FormExercicioTreinos({
   exercicioId = null,
-  returnTo = "/treinos?aba=exercicios",
+  returnTo,
 }: Props) {
   const [loading, setLoading] = useState(!!exercicioId);
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +73,17 @@ export default function FormExercicioTreinos({
   const [videoExistenteUrl, setVideoExistenteUrl] = useState("");
   const [removerVideoExistente, setRemoverVideoExistente] = useState(false);
 
+  const query =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : null;
+
+  const returnToFromQuery = query?.get("returnTo") || "";
+  const returnToFinal =
+    returnTo ||
+    returnToFromQuery ||
+    "/treinos?aba=exercicios";
+  
   useEffect(() => {
     if (!exercicioId) return;
 
@@ -405,7 +416,7 @@ export default function FormExercicioTreinos({
       }
 
       alert(`Exercício ${exercicioId ? "atualizado" : "criado"} com sucesso!`);
-      window.location.href = returnTo;
+      window.location.href = returnToFinal;
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar dados.");
     } finally {
@@ -840,7 +851,7 @@ export default function FormExercicioTreinos({
         <div className="flex items-center justify-end gap-3 pt-2">
           <button
             type="button"
-            onClick={() => (window.location.href = returnTo)}
+            onClick={() => (window.location.href = returnToFinal)}
             className="rounded-xl bg-[#E5E7EB] px-5 py-3 text-[15px] font-medium text-[#374151]"
           >
             Cancelar

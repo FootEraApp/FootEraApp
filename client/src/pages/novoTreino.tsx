@@ -899,7 +899,7 @@ export default function NovoTreino() {
   const [isParceiro, setIsParceiro] = useState<boolean>(false);
   const [treinoFootera, setTreinoFootera] = useState<boolean>(false);
   const [filtroEx, setFiltroEx] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState<string>("Todos");
+  const [filtroCategoria, setFiltroCategoria] = useState<string>("Todas as categorias");
   const [filtroNivel, setFiltroNivel] = useState<string>("");
   const [filtroVideo, setFiltroVideo] = useState<"" | "com" | "sem">("");
   const [filtroProf, setFiltroProf] = useState("");
@@ -2395,7 +2395,7 @@ useEffect(() => {
       });
     }
 
-    if (filtroCategoria && filtroCategoria !== "Todos") {
+    if (filtroCategoria && filtroCategoria !== "Todas as categorias") {
       const catFiltro = normalizarCategoriaFiltro(filtroCategoria);
 
       lista = lista.filter((e) => {
@@ -2441,7 +2441,7 @@ useEffect(() => {
       });
     }
 
-    if (filtroCategoria && filtroCategoria !== "Todos") {
+    if (filtroCategoria && filtroCategoria !== "Todas as categorias") {
       const catFiltro = normalizarCategoriaFiltro(filtroCategoria);
 
       lista = lista.filter((e) => {
@@ -2487,7 +2487,7 @@ useEffect(() => {
       });
     }
 
-    if (filtroCategoria && filtroCategoria !== "Todos") {
+    if (filtroCategoria && filtroCategoria !== "Todas as categorias") {
       const catFiltro = normalizarCategoriaFiltro(filtroCategoria);
 
       lista = lista.filter((e) => {
@@ -2880,11 +2880,10 @@ useEffect(() => {
   };
 
   const criarTreino = async () => {
-    if (salvando || criandoTreinoRef.current) return;
-
+    if (criandoTreinoRef.current) return;
     criandoTreinoRef.current = true;
-    setSalvando(true);
 
+    setSalvando(true);
     let payloadOriginal: any = null;
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
@@ -3032,7 +3031,7 @@ useEffect(() => {
         tipoTreino,
         dataAgendada: dataAgendadaISO,
         exerciciosSelecionados: exerciciosNormalizados,
-        titulo: nome,
+        titulo: nome + " " + Date.now(), // Adicionar timestamp para evitar duplicatas
         nivel,
         descricao,
         duracaoMinutos: duracao,
@@ -3220,6 +3219,7 @@ useEffect(() => {
 
       // ✅ 2) Qualquer outro erro 4xx/5xx
       if (status >= 400) {
+        console.error("Erro ao criar treino:", status, data);
         showToast(data?.message || "Falha ao criar treino.", "error");
         return;
       }
@@ -5123,8 +5123,9 @@ useEffect(() => {
             ) : (
               <button
                 type="button"
+                id="btnsalvar"
                 onClick={criarTreino}
-                disabled={salvando}
+                disabled={salvando || criandoTreinoRef.current}
                 className={[
                   "px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0",
                   salvando ? "opacity-60 cursor-not-allowed" : "",

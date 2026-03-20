@@ -326,9 +326,12 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       select: {
         ordem: true,
         repeticoes: true,
+        series: true,
+        duracao: true,
+        descanso: true,
         exercicioId: true,
         exercicioTemporarioId: true,
-        exercicioPersonalizadoId: true, // ✅ ADICIONAR
+        exercicioPersonalizadoId: true,
       },
     });
 
@@ -408,6 +411,10 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 exercicioTemporarioId: true,
                 exercicioPersonalizadoId: true, // ✅ ADD
                 ordem: true,
+                repeticoes: true,
+                duracao:true,
+                descanso: true,
+                series: true,
                 exercicio: {
                   select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
                 },
@@ -558,6 +565,9 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 exercicioPersonalizadoId: true, // ✅ ADD
                 ordem: true,
                 repeticoes: true,
+                series: true,
+                duracao: true,
+                descanso: true,
                 exercicio: {
                   select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
                 },
@@ -623,7 +633,15 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
     });
 
     const enriquecidas = sessoes.map((sessao: any) => {
-      const mapaReps = new Map<string, string | null>();
+      const mapaExecucao = new Map<
+        string,
+        {
+          repeticoes: string | null;
+          series: number | null;
+          duracao: string | null;
+          descanso: string | null;
+        }
+      >();
 
       if (sessao.treino && Array.isArray(sessao.treino.exercicios)) {
         sessao.treino.exercicios.forEach((tpe: any) => {
@@ -634,16 +652,27 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             : "";
 
           if (!key) return;
-          mapaReps.set(key, tpe.repeticoes != null ? String(tpe.repeticoes) : null);
+
+          mapaExecucao.set(key, {
+            repeticoes: tpe.repeticoes != null ? String(tpe.repeticoes) : null,
+            series:
+              tpe.series === null || tpe.series === undefined
+                ? null
+                : Number(tpe.series),
+            duracao: tpe.duracao != null ? String(tpe.duracao) : null,
+            descanso: tpe.descanso != null ? String(tpe.descanso) : null,
+          });
         });
       }
 
-      const exerciciosComReps = (Array.isArray(sessao.exercicios) ? sessao.exercicios : []).map((se: any) => {
+      const exerciciosComDados = (Array.isArray(sessao.exercicios) ? sessao.exercicios : []).map((se: any) => {
         const key =
           se.exercicioId ? `E:${String(se.exercicioId)}`
           : se.exercicioTemporarioId ? `T:${String(se.exercicioTemporarioId)}`
           : se.exercicioPersonalizadoId ? `P:${String(se.exercicioPersonalizadoId)}`
           : "";
+
+        const dadosExecucao = key ? mapaExecucao.get(key) : null;
 
         const video =
           se.exercicio?.videoDemonstrativoUrl ??
@@ -670,13 +699,16 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
           ...se,
           nome,
           detalhes,
-          repeticoes: (key && mapaReps.get(key)) ?? null,
+          repeticoes: dadosExecucao?.repeticoes ?? null,
+          series: dadosExecucao?.series ?? null,
+          duracao: dadosExecucao?.duracao ?? null,
+          descanso: dadosExecucao?.descanso ?? null,
           videoDemonstrativoUrl: video,
           videoPosterUrl: poster,
         };
       });
 
-      return { ...sessao, exercicios: exerciciosComReps };
+      return { ...sessao, exercicios: exerciciosComDados };
     });
 
     const nomesTemporariosSemVideo = new Set<string>();
