@@ -39,6 +39,9 @@ export type TreinoProgramadoExercicioItem = {
   id: string;
   ordem?: number | null;
   repeticoes?: string | null;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
   exercicioId?: string | null;
   exercicioTemporarioId?: string | null;
   exercicioPersonalizadoId?: string | null; // ✅ ADD
@@ -424,6 +427,9 @@ function normalizeProgramadosPayload(payload: any): {
         return {
           id: String(e?.id ?? ""),
           ordem: e?.ordem ?? null,
+          series: e?.series ?? null,
+          duracao: e?.duracao ?? null,
+          descanso: e?.descanso ?? null,
           repeticoes: e?.repeticoes ?? null,
           exercicioId: e?.exercicioId ?? null,
           exercicioTemporarioId: e?.exercicioTemporarioId ?? null,
@@ -1697,19 +1703,37 @@ export default function AgendaTreinos({
                                                     </span>
                                                   ) : null}
                                                 </div>
-
                                                 {ex.exercicio?.descricao ? (
                                                   <div className="text-[11px] text-zinc-500 mt-1 line-clamp-2">
                                                     {ex.exercicio.descricao}
                                                   </div>
                                                 ) : null}
 
-                                                {ex.repeticoes ? (
-                                                  <div className="text-xs text-zinc-600 mt-0.5">
-                                                    Repetições:{" "}
-                                                    <span className="font-semibold">{ex.repeticoes}</span>
-                                                  </div>
-                                                ) : null}
+                                                <div className="mt-2 space-y-1 text-sm text-zinc-600">
+                                                  {ex.series != null && ex.series !== 0 ? (
+                                                    <div>
+                                                      <span className="font-medium">Séries:</span> {ex.series}
+                                                    </div>
+                                                  ) : null}
+
+                                                  {ex.repeticoes ? (
+                                                    <div>
+                                                      <span className="font-medium">Repetições:</span> {ex.repeticoes}
+                                                    </div>
+                                                  ) : null}
+
+                                                  {ex.duracao ? (
+                                                    <div>
+                                                      <span className="font-medium">Duração:</span> {ex.duracao}
+                                                    </div>
+                                                  ) : null}
+
+                                                  {ex.descanso ? (
+                                                    <div>
+                                                      <span className="font-medium">Descanso:</span> {ex.descanso}
+                                                    </div>
+                                                  ) : null}
+                                                </div>
                                               </div>
 
                                               <span

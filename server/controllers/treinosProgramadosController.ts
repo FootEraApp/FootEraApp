@@ -137,6 +137,15 @@ function stripAccents(s: string) {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 
+function normalizarNomeExercicio(nome: string) {
+  return String(nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
 function normTipoTreino(v?: string): TipoTreino | null {
   const s0 = String(v || "").trim().toLowerCase();
   const s = stripAccents(s0);
@@ -299,8 +308,28 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     const itens = await Promise.all(
       (exercicios as any[]).map(async (e: any, i: number) => {
         const ordem = Number(e?.ordem ?? i + 1);
-        const repeticoes = toRepeticoes(e?.series ?? e?.serie, e?.repeticoes);
+        const seriesRaw = e?.series ?? e?.serie ?? null;
+        const series =
+          seriesRaw === null || seriesRaw === undefined || String(seriesRaw).trim() === ""
+            ? null
+            : Number.isFinite(Number(seriesRaw))
+            ? Number(seriesRaw)
+            : null;
 
+        const repeticoes =
+          e?.repeticoes === null || e?.repeticoes === undefined
+            ? ""
+            : String(e.repeticoes).trim();
+
+        const duracao =
+          e?.duracao === null || e?.duracao === undefined
+            ? null
+            : String(e.duracao).trim() || null;
+
+        const descanso =
+          e?.descanso === null || e?.descanso === undefined
+            ? null
+            : String(e.descanso).trim() || null;
         // ✅ IDs vindos do front (prioridade)
         const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
         const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
@@ -312,26 +341,34 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
 
         // 1) Se veio explícito, usa explícito
         if (exercicioPersonalizadoId) {
-          return { exercicioPersonalizadoId, ordem, repeticoes };
+          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso };
         }
         if (exercicioTemporarioId) {
-          return { exercicioTemporarioId, ordem, repeticoes };
+          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso };
         }
         if (exercicioIdCatalogo) {
-          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes };
+          return {
+            exercicioId: exercicioIdCatalogo,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso
+          };
         }
 
-        // 2) Se veio só "id", decide pelo "tipo"
         if (idGenerico) {
-          if (tipo === "personalizado") return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes };
-          if (tipo === "temporario") return { exercicioTemporarioId: idGenerico, ordem, repeticoes };
-          // default catálogo
-          return { exercicioId: idGenerico, ordem, repeticoes };
+          if (tipo === "personalizado") {
+            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+          }
+          if (tipo === "temporario") {
+            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+          }
+          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
         }
 
-        const nomeNormalizado = String(e?.nome ?? "")
-          .trim()
-          .replace(/\s+/g, " ");
+        const nomeOriginal = String(e?.nome ?? "").trim();
+        const nomeNormalizado = normalizarNomeExercicio(nomeOriginal);
           
         if (!nomeNormalizado) {
           throw new Error("Nome do exercício personalizado não informado.");
@@ -347,13 +384,28 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           ? (e.categorias.map(normCategoria) as Categoria[])
           : [];
 
-        const existente = await prisma.exercicioPersonalizado.findFirst({
-          where: {
-            nome: {
-              equals: nomeNormalizado,
-              mode: "insensitive",
-            },
+        const existenteExercicio = await prisma.exercicio.findFirst({
+          where: { nomeNormalizado },
+          select: {
+            id: true,
+            nome: true,
+            codigo: true,
           },
+        });
+
+        if (existenteExercicio?.id) {
+          return {
+            exercicioId: existenteExercicio.id,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+          };
+        }
+
+        const existente = await prisma.exercicioPersonalizado.findFirst({
+          where: { nomeNormalizado },
           select: {
             id: true,
             nome: true,
@@ -380,7 +432,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             personalizadoId = (
               await prisma.exercicioPersonalizado.create({
                 data: {
-                  nome: nomeNormalizado,
+                  nome: nomeOriginal,
+                  nomeNormalizado,
                   descricao,
                   nivel: nivelDoExercicio,
                   categorias: categoriasDoExercicio,
@@ -393,12 +446,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             ).id;
           } catch (err: any) {
             const again = await prisma.exercicioPersonalizado.findFirst({
-              where: {
-                nome: {
-                  equals: nomeNormalizado,
-                  mode: "insensitive",
-                },
-              },
+              where: { nomeNormalizado },
               select: { id: true },
             });
 
@@ -411,6 +459,9 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           exercicioPersonalizadoId: personalizadoId,
           ordem,
           repeticoes,
+          series,
+          descanso,
+          duracao,
         };
       })
     );
@@ -681,8 +732,28 @@ export async function updateTreino(req: Request, res: Response) {
     const itens = await Promise.all(
       (exercicios as any[]).map(async (e: any, i: number) => {
         const ordem = Number(e?.ordem ?? i + 1);
-        const repeticoes = toRepeticoes(e?.series ?? e?.serie, e?.repeticoes);
+        const seriesRaw = e?.series ?? e?.serie ?? null;
+        const series =
+          seriesRaw === null || seriesRaw === undefined || String(seriesRaw).trim() === ""
+            ? null
+            : Number.isFinite(Number(seriesRaw))
+            ? Number(seriesRaw)
+            : null;
 
+        const repeticoes =
+          e?.repeticoes === null || e?.repeticoes === undefined
+            ? ""
+            : String(e.repeticoes).trim();
+
+        const duracao =
+          e?.duracao === null || e?.duracao === undefined
+            ? null
+            : String(e.duracao).trim() || null;
+
+        const descanso =
+          e?.descanso === null || e?.descanso === undefined
+            ? null
+            : String(e.descanso).trim() || null;
         // ✅ IDs vindos do front (prioridade)
         const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
         const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
@@ -692,58 +763,66 @@ export async function updateTreino(req: Request, res: Response) {
         const idGenerico = String(e?.id ?? "").trim();
         const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
 
-        // 1) Se veio explícito, usa explícito
         if (exercicioPersonalizadoId) {
-          return { exercicioPersonalizadoId, ordem, repeticoes };
+          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso };
         }
         if (exercicioTemporarioId) {
-          return { exercicioTemporarioId, ordem, repeticoes };
+          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso };
         }
         if (exercicioIdCatalogo) {
-          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes };
+          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes, series, duracao, descanso };
         }
 
-        // 2) Se veio só "id", decide pelo "tipo"
         if (idGenerico) {
-          if (tipo === "personalizado") return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes };
-          if (tipo === "temporario") return { exercicioTemporarioId: idGenerico, ordem, repeticoes };
-          // default catálogo
-          return { exercicioId: idGenerico, ordem, repeticoes };
+          if (tipo === "personalizado") {
+            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+          }
+          if (tipo === "temporario") {
+            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+          }
+          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
         }
 
-        // 3) Se não veio id nenhum, aí sim cria/acha personalizado por nome (seu fluxo atual)
+        const nomeOriginal = String(e?.nome ?? "").trim();
+        const nomeNormalizado = normalizarNomeExercicio(nomeOriginal);
 
-        // ✅ 2) Exercício personalizado
-        const nome = String(e?.nome ?? "").trim();
+        if (!nomeNormalizado) {
+          throw new Error("Nome do exercício personalizado não informado.");
+        }
+
         const descricao = e?.descricao != null ? String(e.descricao) : null;
-
-        // opcional
         const videoDemonstrativoUrl =
           e?.videoDemonstrativoUrl != null ? String(e.videoDemonstrativoUrl) : null;
-
         const videoPosterUrl =
-  e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
-        // se vier nivel/categorias no treino, dá pra salvar junto
+          e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
+
         const nivelDoExercicio = e?.nivel ? normNivel(e.nivel) : null;
         const categoriasDoExercicio: Categoria[] = Array.isArray(e?.categorias)
           ? (e.categorias.map(normCategoria) as Categoria[])
           : [];
 
-        const nomeNormalizado = String(e?.nome ?? "")
-          .trim()
-          .replace(/\s+/g, " ");
-        
-        if (!nomeNormalizado) {
-          throw new Error("Nome do exercício personalizado não informado.");
+        const existenteExercicio = await prisma.exercicio.findFirst({
+          where: { nomeNormalizado },
+          select: {
+            id: true,
+            nome: true,
+            codigo: true,
+          },
+        });
+
+        if (existenteExercicio?.id) {
+          return {
+            exercicioId: existenteExercicio.id,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+          };
         }
 
         const existente = await prisma.exercicioPersonalizado.findFirst({
-          where: {
-            nome: {
-              equals: nomeNormalizado,
-              mode: "insensitive",
-            },
-          },
+          where: { nomeNormalizado },
           select: {
             id: true,
             nome: true,
@@ -770,7 +849,8 @@ export async function updateTreino(req: Request, res: Response) {
             personalizadoId = (
               await prisma.exercicioPersonalizado.create({
                 data: {
-                  nome: nomeNormalizado,
+                  nome: nomeOriginal,
+                  nomeNormalizado,
                   descricao,
                   nivel: nivelDoExercicio,
                   categorias: categoriasDoExercicio,
@@ -801,6 +881,9 @@ export async function updateTreino(req: Request, res: Response) {
           exercicioPersonalizadoId: personalizadoId,
           ordem,
           repeticoes,
+          series,
+          duracao,
+          descanso,
         };
       })
     );

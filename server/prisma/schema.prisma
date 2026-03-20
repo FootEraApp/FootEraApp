@@ -458,6 +458,9 @@ model TreinoProgramadoExercicio {
   ordem                    Int
   repeticoes               String
   exercicioTemporarioId    String?
+  series                   Int?
+  duracao                  String?
+  descanso                 String?
   exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
   exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
   treinoProgramado         TreinoProgramado        @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
@@ -471,25 +474,25 @@ model TreinoProgramadoExercicio {
 }
 
 model Exercicio {
-  id                    String      @id @default(uuid())
-  codigo                String      @unique
-  nome                  String      @unique
+  id                    String                 @id @default(uuid())
+  codigo                String                 @unique
+  nome                  String                 @unique
   nivel                 Nivel
   categorias            Categoria[]
   videoDemonstrativoUrl String?
-
-  objetivo             String?
-  tipo                 TipoExercicio?
-  faixaEtaria          FaixaEtariaExercicio[]
-  modoExecucao         ModoExecucaoExercicio?
-  series               Int?
-  repeticoes           String?
-  duracao              String?
-  descanso             String?
-  tags                 String[]
-  quantidadeAtletas    String?
-  materiaisNecessarios String?
-  espacoNecessario     EspacoExercicio?
+  nomeNormalizado       String?                @unique
+  objetivo              String?
+  tipo                  TipoExercicio?
+  faixaEtaria           FaixaEtariaExercicio[]
+  modoExecucao          ModoExecucaoExercicio?
+  series                Int?
+  repeticoes            String?
+  duracao               String?
+  descanso              String?
+  tags                  String[]
+  quantidadeAtletas     String?
+  materiaisNecessarios  String?
+  espacoNecessario      EspacoExercicio?
 
   favorito    Boolean  @default(false)
   criadoPorId String?
@@ -521,6 +524,7 @@ model ExercicioTemporario {
 model ExercicioPersonalizado {
   id                    String      @id @default(uuid())
   nome                  String      @unique
+  nomeNormalizado       String?     @unique
   descricao             String?
   nivel                 Nivel?
   categorias            Categoria[] @default([])
