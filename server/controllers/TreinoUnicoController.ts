@@ -5,12 +5,16 @@ import { prisma } from "../prisma.js";
 type RowEx = {
   id?: string;
   repeticoes?: string | null;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
   ordem?: number | null;
 
   exercicio?: {
     id: string;
     nome: string;
-    descricao: string | null;
+    objetivo?: string | null;
+    descricao?: string | null;
     videoDemonstrativoUrl: string | null;
     nivel: string | null;
   } | null;
@@ -37,11 +41,18 @@ function montarExercicios(rows: RowEx[]) {
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
     .map((x) => {
       const base = x.exercicio ?? x.exercicioTemporario ?? x.exercicioPersonalizado;
+
       return {
         id: base?.id ?? x.id ?? "",
         nome: base?.nome ?? "",
         repeticoes: x.repeticoes ?? null,
-        descricao: base?.descricao ?? null,
+        series: x.series ?? null,
+        duracao: x.duracao ?? null,
+        descanso: x.descanso ?? null,
+        descricao:
+          (x.exercicio ? x.exercicio.objetivo : null) ??
+          base?.descricao ??
+          null,
         videoUrl: base?.videoDemonstrativoUrl ?? null,
         nivel: base?.nivel ?? null,
       };

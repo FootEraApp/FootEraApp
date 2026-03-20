@@ -150,10 +150,25 @@ async function mapUsoEmTreinos(exercicioIds: string[]) {
 function toCardResponse(exercicio: any, usadoEmTreinos = 0) {
   return {
     ...exercicio,
+    objetivo: exercicio.objetivo ?? null,
+    videoDemonstrativoUrl: exercicio.videoDemonstrativoUrl ?? null,
+    series: exercicio.series ?? null,
+    repeticoes: exercicio.repeticoes ?? null,
+    duracao: exercicio.duracao ?? null,
+    descanso: exercicio.descanso ?? null,
     tags: Array.isArray(exercicio.tags) ? exercicio.tags : [],
     faixaEtaria: Array.isArray(exercicio.faixaEtaria) ? exercicio.faixaEtaria : [],
     usadoEmTreinos,
   };
+}
+
+function normalizarNomeExercicio(nome: string) {
+  return String(nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 }
 
 function mapPersonalizadoToCardResponse(exercicio: any, usadoEmTreinos = 0) {
@@ -219,14 +234,30 @@ async function gerarNomeUnicoParaExercicio(nomeBase: string) {
 }
 
 async function migrarPersonalizadoParaExercicio(personalizado: any, userId: string) {
-  const nomeUnico = await gerarNomeUnicoParaExercicio(personalizado.nome);
+  const nomeNormalizado = normalizarNomeExercicio(personalizado.nome);
+
+  const exercicioExistente = await prisma.exercicio.findFirst({
+    where: { nomeNormalizado },
+    select: { id: true },
+  });
+
+  if (exercicioExistente) {
+    await prisma.exercicioPersonalizado.delete({
+      where: { id: personalizado.id },
+    });
+
+    return prisma.exercicio.findUnique({
+      where: { id: exercicioExistente.id },
+    });
+  }
   const codigoUnico = await gerarCodigoUnicoParaExercicio(personalizado.nome);
 
   const exercicioCriado = await prisma.exercicio.create({
     data: {
       id: personalizado.id,
       codigo: codigoUnico,
-      nome: nomeUnico,
+      nome: String(personalizado.nome).trim(),
+      nomeNormalizado,
       objetivo: personalizado.descricao ?? null,
       nivel: (personalizado.nivel ?? "Base") as any,
       videoDemonstrativoUrl: personalizado.videoDemonstrativoUrl ?? null,
@@ -294,6 +325,9 @@ export const criarExercicio = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Código é obrigatório." });
     }
 
+    const nomeNormalizado = normalizarNomeExercicio(String(nome));
+    const codigoNormalizado = String(codigo).trim();
+
     if (
       modoExecucao &&
       !["Tempo", "SeriesRepeticoes", "LivreOrientativo"].includes(String(modoExecucao))
@@ -309,6 +343,28 @@ export const criarExercicio = async (req: Request, res: Response) => {
 
     if (codigoExistente) {
       return res.status(400).json({ message: "Já existe um exercício com esse código." });
+    }
+
+    const exercicioMesmoNome = await prisma.exercicio.findFirst({
+      where: { nomeNormalizado },
+      select: { id: true, nome: true },
+    });
+
+    if (exercicioMesmoNome) {
+      return res.status(400).json({
+        message: "Já existe um exercício com esse nome.",
+      });
+    }
+
+    const personalizadoMesmoNome = await prisma.exercicioPersonalizado.findFirst({
+      where: { nomeNormalizado },
+      select: { id: true, nome: true },
+    });
+
+    if (personalizadoMesmoNome) {
+      return res.status(400).json({
+        message: "Já existe um exercício personalizado com esse nome.",
+      });
     }
 
     if (tipo && !["Tecnico", "Fisico", "Tatico", "Mental"].includes(String(tipo))) {
@@ -371,8 +427,9 @@ export const criarExercicio = async (req: Request, res: Response) => {
 
     const novoExercicio = await prisma.exercicio.create({
       data: {
-        codigo: String(codigo).trim(),
+        codigo: codigoNormalizado,
         nome: String(nome).trim(),
+        nomeNormalizado,
         objetivo: parseNullableString(objetivo),
         nivel: parseNullableString(nivel) as any,
         videoDemonstrativoUrl,
@@ -506,6 +563,9 @@ export const editarExercicio = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Espaço necessário inválido." });
     }
 
+    const nomeNormalizado = normalizarNomeExercicio(String(nome));
+    const codigoNormalizado = String(codigo).trim();
+
     const codigoDuplicado = await prisma.exercicio.findFirst({
       where: {
         codigo: String(codigo).trim(),
@@ -515,6 +575,34 @@ export const editarExercicio = async (req: Request, res: Response) => {
 
     if (codigoDuplicado) {
       return res.status(400).json({ message: "Já existe um exercício com esse código." });
+    }
+
+    const nomeDuplicadoExercicio = await prisma.exercicio.findFirst({
+      where: {
+        nomeNormalizado,
+        NOT: { id },
+      },
+      select: { id: true, nome: true },
+    });
+
+    if (nomeDuplicadoExercicio) {
+      return res.status(400).json({
+        message: "Já existe outro exercício com esse nome.",
+      });
+    }
+
+    const nomeDuplicadoPersonalizado = await prisma.exercicioPersonalizado.findFirst({
+      where: {
+        nomeNormalizado,
+        NOT: { id },
+      },
+      select: { id: true, nome: true },
+    });
+
+    if (nomeDuplicadoPersonalizado) {
+      return res.status(400).json({
+        message: "Já existe um exercício personalizado com esse nome.",
+      });
     }
 
     const novaVideoUrl = fileUrlFromUpload(files?.video, "video");
@@ -558,8 +646,9 @@ export const editarExercicio = async (req: Request, res: Response) => {
     const exercicio = await prisma.exercicio.update({
       where: { id },
       data: {
-        codigo: String(codigo).trim(),
+        codigo: codigoNormalizado,
         nome: String(nome).trim(),
+        nomeNormalizado,
         objetivo: parseNullableString(objetivo),
         nivel: parseNullableString(nivel) as any,
         ...(novaVideoUrl
@@ -695,9 +784,29 @@ export const listarMeusExercicios = async (req: Request, res: Response) => {
 
     const combinado = [...exerciciosMapeados, ...personalizadosMapeados];
 
-    const unicos = combinado.filter(
-      (item, index, arr) => arr.findIndex((x) => x.id === item.id) === index
-    );
+    const map = new Map<string, any>();
+
+    for (const item of combinado) {
+      const chave = normalizarNomeExercicio(item.nome ?? "");
+      if (!chave) continue;
+
+      const existente = map.get(chave);
+
+      // prioridade: Exercicio (origem diferente de "personalizado")
+      if (!existente) {
+        map.set(chave, item);
+        continue;
+      }
+
+      const atualEhPersonalizado = item.origem === "personalizado";
+      const existenteEhPersonalizado = existente.origem === "personalizado";
+
+      if (existenteEhPersonalizado && !atualEhPersonalizado) {
+        map.set(chave, item);
+      }
+    }
+
+    const unicos = Array.from(map.values());
 
     res.json(unicos);
   } catch (error) {

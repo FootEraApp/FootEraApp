@@ -84,15 +84,24 @@ type ExercicioMin = {
   nome: string;
   codigo?: string | null;
   descricao?: string | null;
+  objetivo?: string | null;
   nivel?: string | null;
   categorias?: string[] | null;
   categoria?: string[] | string | null;
   videoUrl?: string | null;
   thumbUrl?: string | null;
+  videoPosterUrl?: string | null;
   videoDemonstrativoUrl?: string | null;
+  criadoPorId?: string | null;
+  series?: string | number | null;
+  repeticoes?: string | null;
+  duracao?: string | null;
+  descanso?: string | null;
+  origem?: "catalogo" | "personalizado" | "meu" | null;
+  exercicioPersonalizadoId?: string | null;
 };
 
-type AbaExercicios = "catalogo" | "personalizados";
+type AbaExercicios = "meus" | "catalogo" | "personalizados";
 
 type ExercicioPersonalizadoItem = {
   id: string;
@@ -102,6 +111,8 @@ type ExercicioPersonalizadoItem = {
   categorias?: string[];
   videoDemonstrativoUrl?: string | null;
   videoPosterUrl?: string | null;
+  codigo?: string | null;
+  objetivo?: string | null;
 };
 
 type ExLinha = {
@@ -110,10 +121,20 @@ type ExLinha = {
   repeticoes: string;
   series?: string;
   reps?: string;
+  duracao?: string;
+  descanso?: string;
   isCustom?: boolean;
 
   exercicioPersonalizadoId?: string | null;
   exercicioTemporarioId?: string | null;
+
+  // ✅ snapshot para o card de cima
+  titulo?: string;
+  descricao?: string;
+  nivel?: string | null;
+  videoUrl?: string | null;
+  videoPosterUrl?: string | null;
+
   customTitulo?: string;
   customDesc?: string;
   customVideoFile?: File | null;
@@ -347,49 +368,42 @@ function VideoModal({
 export default function CriarOuEditarTreino() {
   const [step, setStep] = useState<1 | 2>(1);
   const [id, setId] = useState<string | null>(null);
-
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [tipoTreino, setTipoTreino] = useState("Técnico");
   const [duracaoMin, setDuracaoMin] = useState<number>(60);
-
   const [tipoCriador, setTipoCriador] = useState<TipoCriador>("Professor");
   const [criadorId, setCriadorId] = useState("");
   const [treinoFootera, setTreinoFootera] = useState(false);
-
   const [professorId, setProfessorId] = useState("");
   const [professoresDisponiveis, setProfessoresDisponiveis] = useState<ProfessorMin[]>([]);
   const [clubesDisponiveis, setClubesDisponiveis] = useState<ClubeMin[]>([]);
   const [escolinhasDisponiveis, setEscolinhasDisponiveis] = useState<EscolinhaMin[]>([]);
-
   const [profSearch, setProfSearch] = useState("");
   const [professoresColabIds, setProfessoresColabIds] = useState<string[]>([]);
-
   const [capaFile, setCapaFile] = useState<File | null>(null);
   const [capaPreviewUrl, setCapaPreviewUrl] = useState<string>("");
-
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<ExercicioMin[]>([]);
   const [exSearch, setExSearch] = useState("");
   const [catsSelecionadas, setCatsSelecionadas] = useState<string[]>([]);
   const [niveisSelecionados, setNiveisSelecionados] = useState<string[]>([]);
   const [linhas, setLinhas] = useState<ExLinha[]>([]);
   const [nivelTreino, setNivelTreino] = useState("Base");
-
-  const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("catalogo");
-
+  const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
   const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<
     ExercicioPersonalizadoItem[]
   >([]);
   const [loadingPersonalizados, setLoadingPersonalizados] = useState(false);
-
   const [filtroPers, setFiltroPers] = useState("");
   const [filtroPersNivel, setFiltroPersNivel] = useState<string>("");
   const [filtroPersVideo, setFiltroPersVideo] = useState<"" | "com" | "sem">("");
-
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoSrc, setVideoSrc] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
   const [returnTo, setReturnTo] = useState<string>("/admin");
+  const [meusExercicios, setMeusExercicios] = useState<ExercicioMin[]>([]);
+  const [loadingMeusExercicios, setLoadingMeusExercicios] = useState(false);
+  const [loadingExerciciosPersonalizados, setLoadingExerciciosPersonalizados] = useState(false);
 
   useEffect(() => {
     const rt = getReturnTo();
@@ -476,17 +490,30 @@ export default function CriarOuEditarTreino() {
 
       const loaded: ExLinha[] =
         (data.exercicios ?? []).map((row: any, i: number) => {
-          const repStr = String(row.repeticoes ?? "");
+          const repStr = String(row.repeticoes ?? "").trim();
           const sr = parseSeriesRepsFromRepeticoes(repStr);
           const ex = row.exercicio || row.exercicioPersonalizado || row.exercicioTemporario;
           const isCustom = !!row.exercicioPersonalizadoId || !!row.exercicioTemporarioId;
 
           return {
-            exercicioId: String(row.exercicioId ?? ""),
+            exercicioId: row.exercicioId ? String(row.exercicioId) : "",
             ordem: Number(row.ordem ?? i + 1),
+
             repeticoes: repStr,
-            series: sr.series,
-            reps: sr.reps,
+            series:
+              row.series != null && String(row.series).trim() !== ""
+                ? String(row.series).trim()
+                : sr.series || "",
+            reps: repStr || sr.reps || "",
+            duracao: row.duracao != null ? String(row.duracao) : "",
+            descanso: row.descanso != null ? String(row.descanso) : "",
+
+            titulo: String(ex?.nome ?? ""),
+            descricao: ex?.descricao ?? ex?.objetivo ?? "",
+            nivel: ex?.nivel ?? null,
+            videoUrl: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
+            videoPosterUrl: ex?.videoPosterUrl ?? null,
+
             ...(isCustom
               ? {
                   isCustom: true,
@@ -497,24 +524,113 @@ export default function CriarOuEditarTreino() {
                     ? String(row.exercicioTemporarioId)
                     : null,
                   customTitulo: String(ex?.nome ?? ""),
-                  customDesc: ex?.descricao ?? "",
-                  customVideoPreviewUrl: normalizeUrl(ex?.videoDemonstrativoUrl),
-                  customVideoUrl: ex?.videoDemonstrativoUrl ? String(ex.videoDemonstrativoUrl) : null,
+                  customDesc: ex?.descricao ?? ex?.objetivo ?? "",
+                  customVideoPreviewUrl: normalizeUrl(
+                    ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null
+                  ),
+                  customVideoUrl: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
                   customVideoFile: null,
-                  customVideoPosterUrl: normalizeUrl(ex?.videoPosterUrl),
+                  customVideoPosterUrl: normalizeUrl(ex?.videoPosterUrl ?? null),
                 }
               : {}),
           };
         }) || [];
-
       setLinhas(loaded);
     };
 
-    const loadExercicios = async () => {
-      const res = await fetch(`${API.BASE_URL}/api/exercicios`, { headers });
+    const mapExercicioApi = (x: any): ExercicioMin => ({
+      id: String(x.id),
+      nome: String(x.nome ?? "Exercício"),
+      codigo: x.codigo ?? null,
+      descricao: x.objetivo ?? x.descricao ?? null,
+      objetivo: x.objetivo ?? null,
+      nivel: x.nivel ?? null,
+      categorias: Array.isArray(x.faixaEtaria)
+        ? x.faixaEtaria
+        : Array.isArray(x.categorias)
+        ? x.categorias
+        : Array.isArray(x.categoria)
+        ? x.categoria
+        : [],
+      videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
+      thumbUrl: x.videoPosterUrl ?? x.thumbUrl ?? null,
+      criadoPorId: x.criadoPorId ?? null,
+      series: x.series ?? null,
+      repeticoes: x.repeticoes ?? null,
+      duracao: x.duracao ?? null,
+      descanso: x.descanso ?? null,
+      origem: x.origem ?? "catalogo",
+      exercicioPersonalizadoId: x.exercicioPersonalizadoId ?? null,
+    });
+
+    const loadExerciciosBD = async () => {
+      const res = await fetch(`${API.BASE_URL}/api/treinos/exercicios`, { headers });
       const data = await res.json().catch(() => []);
-      if (!res.ok) throw new Error(data?.message || "Erro ao carregar exercícios");
-      setExerciciosDisponiveis(Array.isArray(data) ? data : []);
+      if (!res.ok) throw new Error(data?.message || "Erro ao carregar exercícios BD");
+      setExerciciosDisponiveis((Array.isArray(data) ? data : []).map(mapExercicioApi));
+    };
+
+    const loadExerciciosPersonalizados = async () => {
+      try {
+        setLoadingExerciciosPersonalizados(true);
+
+        const res = await fetch(
+          `${API.BASE_URL}/api/treinos/exercicios/personalizados`,
+          { headers }
+        );
+
+        const data = await res.json().catch(() => []);
+
+        if (!res.ok) {
+          throw new Error(
+            data?.message || "Erro ao carregar exercícios personalizados"
+          );
+        }
+
+        const lista = Array.isArray(data) ? data : [];
+
+        setExerciciosPersonalizados(
+          lista.map((x: any) => ({
+            id: String(x.id),
+            nome: String(x.nome ?? "Exercício"),
+            codigo: x.codigo ?? null,
+            descricao: x.descricao ?? x.objetivo ?? null,
+            objetivo: x.objetivo ?? null,
+            nivel: x.nivel ?? null,
+            categorias: Array.isArray(x.categorias)
+              ? x.categorias
+              : Array.isArray(x.faixaEtaria)
+              ? x.faixaEtaria
+              : Array.isArray(x.categoria)
+              ? x.categoria
+              : [],
+            videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
+            thumbUrl: x.videoPosterUrl ?? x.thumbUrl ?? null,
+            videoPosterUrl: x.videoPosterUrl ?? x.thumbUrl ?? null,
+            criadoPorId: x.criadorUsuarioId ?? x.criadoPorId ?? null,
+            series: x.series ?? null,
+            repeticoes: x.repeticoes ?? null,
+            duracao: x.duracao ?? null,
+            descanso: x.descanso ?? null,
+            origem: "personalizado",
+            exercicioPersonalizadoId: String(x.id),
+          }))
+        );
+      } finally {
+        setLoadingExerciciosPersonalizados(false);
+      }
+    };
+
+    const loadMeusExercicios = async () => {
+      try {
+        setLoadingMeusExercicios(true);
+        const res = await fetch(`${API.BASE_URL}/api/treinos/exercicios/meus`, { headers });
+        const data = await res.json().catch(() => []);
+        if (!res.ok) throw new Error(data?.message || "Erro ao carregar meus exercícios");
+        setMeusExercicios((Array.isArray(data) ? data : []).map(mapExercicioApi));
+      } finally {
+        setLoadingMeusExercicios(false);
+      }
     };
 
     const loadProfessores = async () => {
@@ -541,7 +657,9 @@ export default function CriarOuEditarTreino() {
     (async () => {
       try {
         await Promise.all([
-          loadExercicios(),
+          loadExerciciosBD(),
+          loadMeusExercicios(),
+          loadExerciciosPersonalizados(),
           loadProfessores(),
           loadClubes(),
           loadEscolinhas(),
@@ -561,7 +679,10 @@ export default function CriarOuEditarTreino() {
 
   const exerciciosSelecionadosSet = useMemo(() => {
     return new Set(
-      linhas.filter((l) => !l.isCustom && !!l.exercicioId).map((l) => l.exercicioId)
+      linhas.flatMap((l) => [
+        l.exercicioId ? String(l.exercicioId) : null,
+        l.exercicioPersonalizadoId ? String(l.exercicioPersonalizadoId) : null,
+      ]).filter(Boolean) as string[]
     );
   }, [linhas]);
 
@@ -593,6 +714,69 @@ export default function CriarOuEditarTreino() {
       label: formatEscolinhaLabel(e),
     }));
   }, [tipoCriador, professoresDisponiveis, clubesDisponiveis, escolinhasDisponiveis]);
+
+  const exerciciosPersonalizadosFiltrados = useMemo(() => {
+    const q = exSearch.trim().toLowerCase();
+
+    return exerciciosPersonalizados.filter((ex) => {
+      const hay = [
+        ex.nome,
+        ex.codigo,
+        ex.descricao,
+        ex.objetivo,
+        ex.nivel,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (q && !hay.includes(q)) return false;
+
+      if (niveisSelecionados.length) {
+        const n = String(ex.nivel || "").trim();
+        if (!niveisSelecionados.includes(n)) return false;
+      }
+
+      if (catsSelecionadas.length) {
+        const cats = coerceCategorias(ex);
+        const ok = catsSelecionadas.some((c) => cats.includes(c));
+        if (!ok) return false;
+      }
+
+      return true;
+    });
+  }, [
+    exerciciosPersonalizados,
+    exSearch,
+    niveisSelecionados,
+    catsSelecionadas,
+  ]);
+
+  const meusExerciciosFiltrados = useMemo(() => {
+    const q = exSearch.trim().toLowerCase();
+
+    return meusExercicios.filter((ex) => {
+      const hay = [ex.nome, ex.codigo, ex.descricao, ex.nivel]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (q && !hay.includes(q)) return false;
+
+      if (niveisSelecionados.length) {
+        const n = String(ex.nivel || "").trim();
+        if (!niveisSelecionados.includes(n)) return false;
+      }
+
+      if (catsSelecionadas.length) {
+        const cats = coerceCategorias(ex);
+        const ok = catsSelecionadas.some((c) => cats.includes(c));
+        if (!ok) return false;
+      }
+
+      return true;
+    });
+  }, [meusExercicios, exSearch, niveisSelecionados, catsSelecionadas]);
 
   const exerciciosFiltrados = useMemo(() => {
     const q = exSearch.trim().toLowerCase();
@@ -719,58 +903,110 @@ export default function CriarOuEditarTreino() {
     ]);
   };
 
-  const adicionarExercicioExistente = (exercicioId: string) => {
+  const adicionarExercicioExistente = (
+    exId: string,
+    source: "catalogo" | "meus" = "catalogo"
+  ) => {
+    const lista = source === "meus" ? meusExercicios : exerciciosDisponiveis;
+    const ex = lista.find((e) => String(e.id) === String(exId));
+    if (!ex) return;
+
     setLinhas((prev) => {
-      if (prev.some((l) => !l.isCustom && l.exercicioId === exercicioId)) {
-        return prev;
-      }
-
-      const next = [...prev];
-      next.push({
-        exercicioId,
-        ordem: next.length + 1,
-        repeticoes: "",
-        series: "",
-        reps: "",
-      });
-      return next;
-    });
-  };
-
-  const treinoTemPersonalizado = (id: string) => {
-    return linhas.some(
-      (l) => String(l.exercicioPersonalizadoId || "") === String(id)
-    );
-  };
-
-  const adicionarPersonalizadoExistente = (p: ExercicioPersonalizadoItem) => {
-    setLinhas((prev) => {
-      const jaTem = prev.some(
-        (l) => String(l.exercicioPersonalizadoId || "") === String(p.id)
+      const jaExiste = prev.some(
+        (l) =>
+          String(l.exercicioId || "") === String(ex.id) ||
+          String(l.exercicioPersonalizadoId || "") === String(ex.id)
       );
-      if (jaTem) return prev;
+
+      if (jaExiste) return prev;
+
+      const repeticoesStr =
+        ex.repeticoes != null ? String(ex.repeticoes).trim() : "";
+
+      const seriesStr =
+        ex.series != null && String(ex.series).trim() !== ""
+          ? String(ex.series).trim()
+          : "";
+
+      const sr = parseSeriesRepsFromRepeticoes(repeticoesStr);
 
       return [
         ...prev,
         {
-          exercicioId: "",
+          exercicioId: String(ex.id),
           ordem: prev.length + 1,
-          repeticoes: "",
-          series: "",
-          reps: "",
-          isCustom: true,
-
-          exercicioPersonalizadoId: String(p.id),
-          exercicioTemporarioId: null,
-
-          customTitulo: String(p.nome ?? "").trim(),
-          customDesc: p.descricao ?? "",
-          customVideoFile: null,
-          customVideoPreviewUrl: p.videoDemonstrativoUrl ?? null,
-          customVideoUrl: p.videoDemonstrativoUrl ?? null,
-          customVideoPosterUrl: p.videoPosterUrl ?? null,
+          // valor bruto que vai para o submit
+          repeticoes: repeticoesStr,
+          // ✅ o input de séries
+          series: seriesStr || sr.series || "",
+          // ✅ o input de repetições
+          reps: repeticoesStr || sr.reps || "",
+          duracao: ex.duracao != null ? String(ex.duracao) : "",
+          descanso: ex.descanso != null ? String(ex.descanso) : "",
+          titulo: ex.nome ?? "",
+          descricao: ex.descricao ?? ex.objetivo ?? "",
+          nivel: ex.nivel ?? null,
+          videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+          videoPosterUrl: ex.thumbUrl ?? null,
         },
       ];
+    });
+  };
+
+  const adicionarPersonalizado = (ex: ExercicioMin) => {
+    setLinhas((prev) => {
+      const jaExiste = prev.some(
+        (l) =>
+          String(l.exercicioPersonalizadoId || "") === String(ex.id) ||
+          String(l.exercicioId || "") === String(ex.id)
+      );
+
+      if (jaExiste) return prev;
+
+      const repeticoesStr =
+        ex.repeticoes != null ? String(ex.repeticoes).trim() : "";
+
+      const seriesStr =
+        ex.series != null && String(ex.series).trim() !== ""
+          ? String(ex.series).trim()
+          : "";
+
+      const sr = parseSeriesRepsFromRepeticoes(repeticoesStr);
+
+      const novaLinha: ExLinha = {
+        exercicioId: "",
+        ordem: prev.length + 1,
+
+        repeticoes: repeticoesStr,
+        series: seriesStr || sr.series || "",
+        reps: repeticoesStr || sr.reps || "",
+
+        duracao: ex.duracao != null ? String(ex.duracao) : "",
+        descanso: ex.descanso != null ? String(ex.descanso) : "",
+
+        isCustom: true,
+        exercicioPersonalizadoId: String(ex.id),
+        exercicioTemporarioId: null,
+
+        titulo: ex.nome ?? "",
+        descricao: ex.descricao ?? ex.objetivo ?? "",
+        nivel: ex.nivel ?? null,
+        videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+        videoPosterUrl: ex.videoPosterUrl ?? ex.thumbUrl ?? null,
+
+        customTitulo: ex.nome ?? "",
+        customDesc: ex.descricao ?? ex.objetivo ?? "",
+        customVideoPreviewUrl: normalizeUrl(
+          ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null
+        ),
+        customVideoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+        customVideoPosterUrl: normalizeUrl(
+          ex.videoPosterUrl ?? ex.thumbUrl ?? null
+        ),
+        customVideoFile: null,
+      };
+
+      return [...prev, novaLinha];
     });
   };
 
@@ -919,13 +1155,16 @@ export default function CriarOuEditarTreino() {
     const exerciciosPayload = await Promise.all(
       linhasComVideo.map(async (l, i) => {
         const ordem = Number(l.ordem ?? i + 1);
-        const repeticoes = buildRepeticoes(String(l.series ?? ""), String(l.reps ?? ""));
+        const repeticoes = String(l.reps ?? l.repeticoes ?? "").trim();
 
         if (!l.isCustom && l.exercicioId) {
           return {
             exercicioId: l.exercicioId,
             ordem,
             repeticoes,
+            series: String(l.series ?? "").trim() || null,
+            duracao: String(l.duracao ?? "").trim() || null,
+            descanso: String(l.descanso ?? "").trim() || null,
           };
         }
 
@@ -946,6 +1185,9 @@ export default function CriarOuEditarTreino() {
             videoPosterUrl,
             ordem,
             repeticoes,
+            series: String(l.series ?? "").trim() || null,
+            duracao: String(l.duracao ?? "").trim() || null,
+            descanso: String(l.descanso ?? "").trim() || null,
           };
         }
 
@@ -1402,28 +1644,59 @@ export default function CriarOuEditarTreino() {
               ) : (
                 <div className="space-y-4">
                   {linhas.map((l, idx) => {
-                    const ex = l.exercicioId
-                      ? exerciciosDisponiveis.find((e) => e.id === l.exercicioId)
-                      : null;
+                    const ex =
+                      l.exercicioId
+                        ? [...exerciciosDisponiveis, ...meusExercicios].find(
+                            (e) => String(e.id) === String(l.exercicioId)
+                          )
+                        : l.exercicioPersonalizadoId
+                        ? exerciciosPersonalizados.find(
+                            (e) => String(e.id) === String(l.exercicioPersonalizadoId)
+                          )
+                        : null;
+
                     const isPersonalizadoExistente = !!l.exercicioPersonalizadoId;
-                    const exVideo = getVideoUrlFromEx(ex);
-                    const nivel = ex ? String(ex.nivel || "").trim() : "";
                     const isCustom = !!l.isCustom;
+
+                    const tituloExibido =
+                      l.customTitulo || l.titulo || ex?.nome || "";
+
+                    const descricaoExibida =
+                      l.customDesc || l.descricao || ex?.descricao || ex?.objetivo || "";
+
+                    const nivelExibido =
+                      String(l.nivel || ex?.nivel || "").trim();
+
+                    const videoExibido =
+                      l.customVideoPreviewUrl ||
+                      normalizeUrl(l.videoPosterUrl) ||
+                      normalizeUrl(l.videoUrl) ||
+                      normalizeUrl(getThumbUrlFromEx(ex)) ||
+                      normalizeUrl(getVideoUrlFromEx(ex)) ||
+                      "";
+
+                    const exVideo =
+                      l.videoUrl ||
+                      getVideoUrlFromEx(ex);
+
+                    const exThumb =
+                      l.videoPosterUrl ||
+                      getThumbUrlFromEx(ex);
 
                     return (
                       <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-3">
                         <div className="flex flex-col gap-4 md:flex-row md:items-start">
                           <div className="w-full md:w-[180px]">
                             <div className="relative h-[110px] w-full overflow-hidden rounded-xl bg-gray-100">
-                              {!isCustom && exVideo ? (
+                              {!isCustom && (exThumb || exVideo) ? (
                                 <>
-                                  {getThumbUrlFromEx(ex) ? (
+                                  {exThumb ? (
                                     <img
-                                      src={normalizeUrl(getThumbUrlFromEx(ex))}
+                                      src={normalizeUrl(exThumb)}
                                       alt="Thumb do exercício"
                                       className="absolute inset-0 h-full w-full object-cover"
                                     />
-                                  ) : (
+                                  ) : exVideo ? (
                                     <video
                                       src={normalizeUrl(exVideo)}
                                       muted
@@ -1431,12 +1704,15 @@ export default function CriarOuEditarTreino() {
                                       preload="metadata"
                                       className="absolute inset-0 h-full w-full object-cover"
                                     />
-                                  )}
+                                  ) : null}
 
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      openVideo(normalizeUrl(exVideo), ex?.nome || "Vídeo do exercício")
+                                      openVideo(
+                                        normalizeUrl(exVideo || exThumb || ""),
+                                        tituloExibido || "Vídeo do exercício"
+                                      )
                                     }
                                     className="absolute inset-0 grid place-items-center bg-black/25 text-white"
                                     title="Assistir vídeo"
@@ -1484,7 +1760,7 @@ export default function CriarOuEditarTreino() {
                                 </>
                               ) : null}
 
-                              {!exVideo && !(isCustom && l.customVideoPreviewUrl) ? (
+                              {!videoExibido ? (
                                 <div className="grid h-full w-full place-items-center text-sm text-gray-600">
                                   sem vídeo
                                 </div>
@@ -1512,11 +1788,13 @@ export default function CriarOuEditarTreino() {
                                   )
                                 ) : (
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-lg font-extrabold text-gray-900">{ex?.nome}</div>
+                                    <div className="text-lg font-extrabold text-gray-900">
+                                      {tituloExibido}
+                                    </div>
 
-                                    {nivel && (
+                                    {nivelExibido && (
                                       <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
-                                        {nivel}
+                                        {nivelExibido}
                                       </span>
                                     )}
                                   </div>
@@ -1539,7 +1817,7 @@ export default function CriarOuEditarTreino() {
                                       />
                                     )
                                   ) : ex?.descricao ? (
-                                    <p className="text-sm text-gray-700">{ex.descricao}</p>
+                                    <p className="text-sm text-gray-700">{descricaoExibida}</p>
                                   ) : null}
                                 </div>
 
@@ -1605,6 +1883,30 @@ export default function CriarOuEditarTreino() {
                                   }
                                 />
                               </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-700">
+                                  Duração
+                                </label>
+                                <input
+                                  className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                  placeholder="ex.: 2min"
+                                  value={l.duracao || ""}
+                                  onChange={(e) => atualizarLinha(idx, { duracao: e.target.value })}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-700">
+                                  Descanso
+                                </label>
+                                <input
+                                  className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                  placeholder="ex.: 30seg"
+                                  value={l.descanso || ""}
+                                  onChange={(e) => atualizarLinha(idx, { descanso: e.target.value })}
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1627,6 +1929,19 @@ export default function CriarOuEditarTreino() {
 
             <Card title="Exercícios Disponíveis">
               <div className="mb-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAbaExercicios("meus")}
+                  className={[
+                    "rounded-xl border px-4 py-2 text-sm font-bold transition",
+                    abaExercicios === "meus"
+                      ? "border-green-700 bg-green-700 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Meus exercícios
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setAbaExercicios("catalogo")}
@@ -1653,6 +1968,105 @@ export default function CriarOuEditarTreino() {
                   Personalizados
                 </button>
               </div>
+
+              {abaExercicios === "meus" && (
+                <div className="space-y-4">
+                  {loadingMeusExercicios ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500">
+                      Carregando meus exercícios...
+                    </div>
+                  ) : meusExerciciosFiltrados.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500">
+                      Nenhum exercício encontrado em “Meus exercícios”.
+                    </div>
+                  ) : (
+                    meusExerciciosFiltrados.map((ex) => {
+                      const jaAdicionado = linhas.some(
+                        (l) =>
+                          String(l.exercicioId || "") === String(ex.id) ||
+                          String(l.exercicioPersonalizadoId || "") === String(ex.id)
+                      );
+
+                      const thumb =
+                        normalizeUrl(ex.thumbUrl) ||
+                        normalizeUrl(ex.videoDemonstrativoUrl) ||
+                        null;
+
+                      return (
+                        <div
+                          key={`meu-${ex.id}`}
+                          className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4"
+                        >
+                          <div className="h-24 w-40 shrink-0 overflow-hidden rounded-xl bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+                            {thumb ? (
+                              <video
+                                src={thumb}
+                                className="h-full w-full object-cover"
+                                muted
+                                playsInline
+                                preload="metadata"
+                              />
+                            ) : (
+                              <span>sem vídeo</span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="truncate text-xl font-extrabold text-[#0B2240]">
+                                {ex.nome}
+                              </h4>
+
+                              {ex.nivel ? (
+                                <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">
+                                  {ex.nivel}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {(ex.descricao || ex.objetivo) ? (
+                              <p className="mt-2 line-clamp-2 text-base text-[#475467]">
+                                {ex.descricao || ex.objetivo}
+                              </p>
+                            ) : null}
+
+                            <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600">
+                              {ex.series != null && String(ex.series).trim() !== "" ? (
+                                <span><strong>Séries:</strong> {String(ex.series)}</span>
+                              ) : null}
+                              {ex.repeticoes ? (
+                                <span><strong>Repetições:</strong> {ex.repeticoes}</span>
+                              ) : null}
+                              {ex.duracao ? (
+                                <span><strong>Duração:</strong> {ex.duracao}</span>
+                              ) : null}
+                              {ex.descanso ? (
+                                <span><strong>Descanso:</strong> {ex.descanso}</span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => adicionarExercicioExistente(ex.id, "meus")}
+                              disabled={jaAdicionado}
+                              className={[
+                                "rounded-2xl px-6 py-3 text-base font-bold transition",
+                                jaAdicionado
+                                  ? "cursor-not-allowed bg-gray-200 text-white"
+                                  : "bg-green-700 text-white hover:bg-green-800",
+                              ].join(" ")}
+                            >
+                              {jaAdicionado ? "Adicionado" : "Adicionar"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
               {abaExercicios === "catalogo" ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                   <div className="lg:col-span-3">
@@ -1864,171 +2278,85 @@ export default function CriarOuEditarTreino() {
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <input
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
-                      placeholder="Buscar personalizado por nome/descrição..."
-                      value={filtroPers}
-                      onChange={(e) => setFiltroPers(e.target.value)}
-                    />
-
-                    <select
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
-                      value={filtroPersNivel}
-                      onChange={(e) => setFiltroPersNivel(e.target.value)}
-                    >
-                      <option value="">Todos os níveis</option>
-                      <option value="Base">Base</option>
-                      <option value="Avancado">Avançado</option>
-                      <option value="Performance">Performance</option>
-                    </select>
-
-                    <select
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
-                      value={filtroPersVideo}
-                      onChange={(e) => setFiltroPersVideo(e.target.value as "" | "com" | "sem")}
-                    >
-                      <option value="">Com/sem vídeo</option>
-                      <option value="com">Somente com vídeo</option>
-                      <option value="sem">Somente sem vídeo</option>
-                    </select>
-                  </div>
-
-                  <div className="mt-4 max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
-                    {loadingPersonalizados ? (
-                      <div className="p-6 text-sm text-gray-600">
-                        Carregando personalizados...
+                   <div className="space-y-4">
+                    {loadingExerciciosPersonalizados ? (
+                      <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500">
+                        Carregando exercícios personalizados...
                       </div>
-                    ) : exerciciosPersonalizados
-                        .filter((x) => {
-                          const term = filtroPers.trim().toLowerCase();
-                          if (!term) return true;
-                          const hay = `${x.nome ?? ""} ${x.descricao ?? ""}`.toLowerCase();
-                          return hay.includes(term);
-                        })
-                        .filter((x) => {
-                          if (!filtroPersNivel) return true;
-                          return String(x.nivel ?? "") === String(filtroPersNivel);
-                        })
-                        .filter((x) => {
-                          if (!filtroPersVideo) return true;
-                          const hasVideo = !!x.videoDemonstrativoUrl;
-                          return filtroPersVideo === "com" ? hasVideo : !hasVideo;
-                        }).length === 0 ? (
-                      <div className="p-6 text-sm text-gray-600">
+                    ) : exerciciosPersonalizadosFiltrados.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500">
                         Nenhum exercício personalizado encontrado.
                       </div>
                     ) : (
-                      <div className="divide-y divide-gray-100">
-                        {exerciciosPersonalizados
-                          .filter((x) => {
-                            const term = filtroPers.trim().toLowerCase();
-                            if (!term) return true;
-                            const hay = `${x.nome ?? ""} ${x.descricao ?? ""}`.toLowerCase();
-                            return hay.includes(term);
-                          })
-                          .filter((x) => {
-                            if (!filtroPersNivel) return true;
-                            return String(x.nivel ?? "") === String(filtroPersNivel);
-                          })
-                          .filter((x) => {
-                            if (!filtroPersVideo) return true;
-                            const hasVideo = !!x.videoDemonstrativoUrl;
-                            return filtroPersVideo === "com" ? hasVideo : !hasVideo;
-                          })
-                          .map((p) => {
-                            const jaAdicionado = treinoTemPersonalizado(p.id);
+                      exerciciosPersonalizadosFiltrados.map((ex) => {
+                        const jaAdicionado = linhas.some(
+                          (l) =>
+                            String(l.exercicioPersonalizadoId || "") === String(ex.id) ||
+                            String(l.exercicioId || "") === String(ex.id)
+                        );
 
-                            return (
-                              <div key={p.id} className="p-4">
-                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                  <div className="flex gap-4">
-                                    <div className="relative grid h-24 w-40 place-items-center overflow-hidden rounded-2xl bg-black/90 text-white">
-                                      {p.videoDemonstrativoUrl ? (
-                                        <>
-                                          {p.videoPosterUrl ? (
-                                            <img
-                                              src={normalizeUrl(p.videoPosterUrl)}
-                                              alt="Thumb do exercício personalizado"
-                                              className="absolute inset-0 h-full w-full object-cover"
-                                            />
-                                          ) : null}
+                        const thumb =
+                          normalizeUrl(ex.videoPosterUrl) ||
+                          normalizeUrl(ex.videoDemonstrativoUrl) ||
+                          null;
 
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              openVideo(
-                                                normalizeUrl(p.videoDemonstrativoUrl || ""),
-                                                p.nome || "Vídeo do exercício"
-                                              )
-                                            }
-                                            className="absolute inset-0 grid place-items-center bg-black/60"
-                                            title="Assistir vídeo"
-                                          >
-                                            <div className="grid h-12 w-12 place-items-center rounded-full bg-white/20">
-                                              <span className="text-2xl">▶</span>
-                                            </div>
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <div className="text-sm text-white/80">sem vídeo</div>
-                                      )}
-                                    </div>
+                        return (
+                          <div
+                            key={`pers-${ex.id}`}
+                            className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4"
+                          >
+                            <div className="h-24 w-40 shrink-0 overflow-hidden rounded-xl bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+                              {thumb ? (
+                                <video
+                                  src={thumb}
+                                  className="h-full w-full object-cover"
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                />
+                              ) : (
+                                <span>sem vídeo</span>
+                              )}
+                            </div>
 
-                                    <div className="min-w-0">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <div className="text-lg font-extrabold text-gray-900">
-                                          {p.nome}
-                                        </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="truncate text-xl font-extrabold text-[#0B2240]">
+                                  {ex.nome}
+                                </h4>
 
-                                        {p.nivel && (
-                                          <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
-                                            {p.nivel}
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {p.descricao && (
-                                        <p className="mt-1 max-w-2xl text-sm text-gray-700">
-                                          {p.descricao}
-                                        </p>
-                                      )}
-
-                                      {Array.isArray(p.categorias) && p.categorias.length > 0 && (
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                          {p.categorias.map((c) => (
-                                            <span
-                                              key={String(c)}
-                                              className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700"
-                                            >
-                                              {String(c)}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center justify-end">
-                                    <button
-                                      type="button"
-                                      disabled={jaAdicionado}
-                                      onClick={() => adicionarPersonalizadoExistente(p)}
-                                      className={[
-                                        "rounded-xl px-5 py-2 text-sm font-bold text-white",
-                                        jaAdicionado
-                                          ? "cursor-not-allowed bg-gray-300"
-                                          : "bg-green-800 hover:bg-green-900",
-                                      ].join(" ")}
-                                    >
-                                      {jaAdicionado ? "Adicionado" : "Adicionar"}
-                                    </button>
-                                  </div>
-                                </div>
+                                {ex.nivel ? (
+                                  <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">
+                                    {ex.nivel}
+                                  </span>
+                                ) : null}
                               </div>
-                            );
-                          })}
-                      </div>
+
+                              {ex.descricao ? (
+                                <p className="mt-2 line-clamp-2 text-base text-[#475467]">
+                                  {ex.descricao}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => adicionarPersonalizado(ex)}
+                                disabled={jaAdicionado}
+                                className={[
+                                  "rounded-2xl px-6 py-3 text-base font-bold transition",
+                                  jaAdicionado
+                                    ? "cursor-not-allowed bg-gray-200 text-white"
+                                    : "bg-green-700 text-white hover:bg-green-800",
+                                ].join(" ")}
+                              >
+                                {jaAdicionado ? "Adicionado" : "Adicionar"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </>

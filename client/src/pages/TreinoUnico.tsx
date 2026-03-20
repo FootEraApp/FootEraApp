@@ -21,6 +21,9 @@ type ExercicioItem = {
   id: string;
   nome: string;
   repeticoes?: string | null;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
   descricao?: string | null;
   videoUrl?: string | null;
   nivel?: string | null;
@@ -411,15 +414,35 @@ export default function TreinoUnico() {
                         ) : null}
                         
                         <div className="mt-1 text-sm text-gray-700">
-                          {ex.repeticoes ? (
-                            <div className="text-gray-700">
-                              <span className="font-medium">Repetições:</span> {ex.repeticoes}
-                            </div>
-                          ) : null}
+                          <div className="mt-1 text-sm text-gray-700 space-y-1">
+                            {ex.series != null && ex.series !== 0 ? (
+                              <div>
+                                <span className="font-medium">Séries:</span> {ex.series}
+                              </div>
+                            ) : null}
 
-                          {ex.descricao ? (
-                            <p className="mt-2 whitespace-pre-line leading-relaxed">{ex.descricao}</p>
-                          ) : null}
+                            {ex.repeticoes ? (
+                              <div>
+                                <span className="font-medium">Repetições:</span> {ex.repeticoes}
+                              </div>
+                            ) : null}
+
+                            {ex.duracao ? (
+                              <div>
+                                <span className="font-medium">Duração:</span> {ex.duracao}
+                              </div>
+                            ) : null}
+
+                            {ex.descanso ? (
+                              <div>
+                                <span className="font-medium">Descanso:</span> {ex.descanso}
+                              </div>
+                            ) : null}
+
+                            {ex.descricao ? (
+                              <p className="mt-2 whitespace-pre-line leading-relaxed">{ex.descricao}</p>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
