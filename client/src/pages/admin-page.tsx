@@ -1946,7 +1946,7 @@ async function confirmarExcluirProfessor() {
               <h3 className="font-bold text-lg">Gerenciar Exercícios</h3>
               <button
                 className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
-                onClick={() => (window.location.href = "/admin/exercicios/create")}
+                onClick={() => (window.location.href = "/treinos/exercicios/novo?returnTo=/admin")}
               >
                 + Novo Exercicio
               </button>
@@ -1982,7 +1982,7 @@ async function confirmarExcluirProfessor() {
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => (window.location.href = `/admin/exercicios/create?id=${ex.id}`)}
+                        onClick={() => (window.location.href = `/treinos/exercicios/editar/${ex.id}?returnTo=/admin`)}
                         className="text-blue-600"
                         title="Editar exercício"
                       >

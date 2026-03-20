@@ -3971,19 +3971,40 @@ export async function criarTreinoProgramado(
     // ✅ bloqueia nome duplicado ANTES de criar (case-insensitive)
     const nomeFinal = String(nome || "").trim();
 
+    const whereMesmoDono =
+      tipoNorm === "professor"
+        ? {
+            OR: [
+              { professorId: professorIdToConnect! },
+              { criadorProfessorId: professorIdToConnect! },
+            ],
+          }
+        : tipoNorm === "clube"
+        ? { clubeId: String(tipoUsuarioIdFinal) }
+        : tipoNorm === "escolinha"
+        ? { escolinhaId: String(tipoUsuarioIdFinal) }
+        : {};
+
     const jaExisteNome = await prisma.treinoProgramado.findFirst({
       where: {
         nome: { equals: nomeFinal, mode: "insensitive" },
+        ...whereMesmoDono,
       },
-      select: { id: true },
+      select: { id: true, nome: true },
     });
 
     if (jaExisteNome) {
-      return res.status(409).json({
-        code: "NOME_JA_UTILIZADO",
-        message:
-          "Esse nome já está sendo utilizado. Troque o título do treino e tente novamente.",
+      const treinoExistente = await prisma.treinoProgramado.findUnique({
+        where: { id: jaExisteNome.id },
+        include: {
+          exercicios: true,
+          Professor: true,
+          clube: true,
+          escolinha: true,
+        },
       });
+
+      return res.status(200).json(treinoExistente);
     }
 
     const objetivoFinal =
