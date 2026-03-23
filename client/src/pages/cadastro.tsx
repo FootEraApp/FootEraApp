@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import GoogleButton from "../components/auth/GoogleButton";
@@ -45,11 +45,29 @@ type CamposProfessor = {
 type CamposClube = { cnpjClube: string; cidadeClube: string };
 type CamposEscolinha = { cnpjEscolinha: string; cidadeEscolinha: string };
 type CamposOlheiro = {
-  areaAtuacao: string; anosExperiencia: number | ""; headline: string; siteOuLinkedin: string;
-  telefonePublico: string; emailPublico: string; descricao: string; colaboracaoClubeId?: string;
+  areaAtuacao: string;
+  anosExperiencia: number | "";
+  headline: string;
+  siteOuLinkedin: string;
+  telefonePublico: string;
+  emailPublico: string;
+  descricao: string;
 };
-type CamposVinculo = { desejaVinculo: boolean; tipoAlvo: "Professor" | "Escolinha" | "Clube" | ""; alvoBusca: string; destinatarioId: string };
-type ResultadoBusca = { id: string; tipo: "Professor" | "Escolinha" | "Clube"; nome: string; username: string; fotoUrl: string | null };
+type CamposVinculo = {
+  desejaVinculo: boolean;
+  tipoAlvo: "Professor" | "Escolinha" | "Clube" | "";
+  alvoBusca: string;
+  destinatarioId: string;       // Usuario.id -> usado em SolicitacaoTreino
+  destinatarioEntidadeId: string; // Professor.id / Clube.id / Escolinha.id
+};
+type ResultadoBusca = {
+  id: string; // id da entidade
+  usuarioId: string; // id da tabela Usuario
+  tipo: "Professor" | "Escolinha" | "Clube";
+  nome: string;
+  username: string;
+  fotoUrl: string | null;
+};
 type Responsavel = { nome: string; email: string; telefone?: string };
 
 const CATEGORIAS_ATLETA = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
@@ -63,7 +81,13 @@ type CamposAtleta = {
   categoria: CategoriaAtleta | "";
   treinaEscolinha: "sim" | "nao" | "";
  };
-const PLACEHOLDER_AVATAR = logo;
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function getAvatarSrc(fotoUrl?: string | null) {
+  const src = String(fotoUrl || "").trim();
+  return src || AVATAR_FALLBACK;
+}
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   let t: any;
@@ -124,17 +148,30 @@ export default function Cadastro() {
   const [etapa, setEtapa] = useState<Etapa>(1);
   const [finalizandoCadastro, setFinalizandoCadastro] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
+  const [infoAdicionalProfessorAberto, setInfoAdicionalProfessorAberto] = useState(false);
+  const [infoAdicionalOlheiroAberto, setInfoAdicionalOlheiroAberto] = useState(false);
+  const [infoAdicionalEtapa1Aberto, setInfoAdicionalEtapa1Aberto] = useState(false);
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: undefined, cref: "" });
   const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "" });
   const [escolinha, setEscolinha] = useState<CamposEscolinha>({ cnpjEscolinha: "", cidadeEscolinha: "" });
   const [olheiro, setOlheiro] = useState<CamposOlheiro>({
-    areaAtuacao: "", anosExperiencia: "", headline: "", siteOuLinkedin: "",
-    telefonePublico: "", emailPublico: "", descricao: "", colaboracaoClubeId: ""
+    areaAtuacao: "",
+    anosExperiencia: "",
+    headline: "",
+    siteOuLinkedin: "",
+    telefonePublico: "",
+    emailPublico: "",
+    descricao: "",
   });
 
-  const [vinculo, setVinculo] = useState<CamposVinculo>({ desejaVinculo: false, tipoAlvo: "", alvoBusca: "", destinatarioId: "" });
-  const [emailDisp, setEmailDisp] = useState<null | boolean>(null);
+  const [vinculo, setVinculo] = useState<CamposVinculo>({
+    desejaVinculo: false,
+    tipoAlvo: "",
+    alvoBusca: "",
+    destinatarioId: "",
+    destinatarioEntidadeId: "",
+  });const [emailDisp, setEmailDisp] = useState<null | boolean>(null);
   const [userDisp, setUserDisp] = useState<null | boolean>(null);
 
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -234,7 +271,9 @@ export default function Cadastro() {
       }
     }
     if (tipoPerfil === "Professor") {
-      if (!professor.areaFormacao.trim()) return setErro("Informe a área de formação."), false;
+      if (professor.cref && !professor.cref.trim()) {
+        return setErro("CREF inválido."), false;
+      }
     }
     if (tipoPerfil === "Clube") {
       if (clube.cnpjClube && !validarCNPJ(clube.cnpjClube)) return setErro("CNPJ do clube inválido."), false;
@@ -243,11 +282,18 @@ export default function Cadastro() {
       if (escolinha.cnpjEscolinha && !validarCNPJ(escolinha.cnpjEscolinha)) return setErro("CNPJ da escolinha inválido."), false;
     }
     if (tipoPerfil === "Olheiro") {
-      if (!olheiro.areaAtuacao.trim()) return setErro("Informe a área de atuação do olheiro."), false;
-      if (olheiro.anosExperiencia !== "" && Number.isNaN(Number(olheiro.anosExperiencia))) return setErro("Anos de experiência inválido."), false;
-      if (olheiro.siteOuLinkedin && !URL_RE.test(olheiro.siteOuLinkedin)) return setErro("URL inválida (site/LinkedIn)."), false;
-      if (olheiro.telefonePublico && !PHONE_RE.test(olheiro.telefonePublico)) return setErro("Telefone inválido."), false;
-      if (olheiro.emailPublico && !EMAIL_RE.test(olheiro.emailPublico)) return setErro("E-mail público inválido."), false;
+      if (olheiro.anosExperiencia !== "" && Number.isNaN(Number(olheiro.anosExperiencia))) {
+        return setErro("Anos de experiência inválido."), false;
+      }
+      if (olheiro.siteOuLinkedin && !URL_RE.test(olheiro.siteOuLinkedin)) {
+        return setErro("URL inválida (site/LinkedIn)."), false;
+      }
+      if (olheiro.telefonePublico && !PHONE_RE.test(olheiro.telefonePublico)) {
+        return setErro("Telefone inválido."), false;
+      }
+      if (olheiro.emailPublico && !EMAIL_RE.test(olheiro.emailPublico)) {
+        return setErro("E-mail público inválido."), false;
+      }
     }
 
     if (idade !== null && idade < 18) {
@@ -288,8 +334,12 @@ export default function Cadastro() {
       }
 
       if (tipoPerfil === "Professor") {
-        payload.areaFormacao = professor.areaFormacao;
         payload.treinaEscolinha = professor.treinaEscolinha || "nao";
+
+        const areaFormacaoLimpa = (professor.areaFormacao || "").trim();
+        if (areaFormacaoLimpa) {
+          payload.areaFormacao = areaFormacaoLimpa;
+        }
 
         const crefLimpo = (professor.cref || "").trim();
         if (crefLimpo) {
@@ -315,9 +365,19 @@ export default function Cadastro() {
         payload.telefonePublico = olheiro.telefonePublico || undefined;
         payload.emailPublico = olheiro.emailPublico || undefined;
         payload.descricao = olheiro.descricao || undefined;
-        payload.colaboracaoClubeId = olheiro.colaboracaoClubeId || undefined;
-      }
 
+        if (vinculo.desejaVinculo && vinculo.destinatarioEntidadeId) {
+          if (vinculo.tipoAlvo === "Clube") {
+            payload.colaboracaoClubeId = vinculo.destinatarioEntidadeId;
+          }
+          if (vinculo.tipoAlvo === "Professor") {
+            payload.colaboracaoProfessorId = vinculo.destinatarioEntidadeId;
+          }
+          if (vinculo.tipoAlvo === "Escolinha") {
+            payload.colaboracaoEscolinhaId = vinculo.destinatarioEntidadeId;
+          }
+        }
+      }
       if (idade !== null && idade < 18) {
         payload.responsavel = {
           nome: responsavel.nome,
@@ -368,9 +428,13 @@ export default function Cadastro() {
         console.warn("Falha ao registrar consentimento:", e);
       }
 
-      if (tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.destinatarioId) {
+      if (
+        (tipoPerfil === "Atleta" || tipoPerfil === "Olheiro") &&
+        vinculo.desejaVinculo &&
+        vinculo.destinatarioId
+      ) {
         try {
-          await fetch(`${API.BASE_URL}/api/solicitacoes`, {
+          const respVinculo = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -378,6 +442,11 @@ export default function Cadastro() {
             },
             body: JSON.stringify({ destinatarioId: vinculo.destinatarioId }),
           });
+
+          if (!respVinculo.ok) {
+            const txt = await respVinculo.text().catch(() => "");
+            throw new Error(txt || "Falha ao criar solicitação de vínculo.");
+          }
         } catch (e) {
           console.warn("Falha ao criar solicitação de vínculo:", e);
         }
@@ -399,24 +468,31 @@ export default function Cadastro() {
       const r = await fetch(url);
       if (r.ok) {
         const j = await r.json();
-        const arr: ResultadoBusca[] = (Array.isArray(j) ? j : []).filter(x => x?.id && x?.nome);
+        const arr: ResultadoBusca[] = (Array.isArray(j) ? j : []).filter(
+          x => x?.id && x?.usuarioId && x?.nome
+        );
         setResultadosBusca(arr);
       }
     } catch { setResultadosBusca([]); }
   }, 400), []);
 
   useEffect(() => {
-    if (etapa === 3 && tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.tipoAlvo && vinculo.alvoBusca.length >= 2) {
+    const podeBuscar =
+      etapa === 3 &&
+      (tipoPerfil === "Atleta" || tipoPerfil === "Olheiro") &&
+      vinculo.desejaVinculo &&
+      vinculo.tipoAlvo &&
+      vinculo.alvoBusca.length >= 2;
+
+    if (podeBuscar) {
       buscarAlvo(vinculo.alvoBusca, vinculo.tipoAlvo);
     } else {
       setResultadosBusca([]);
     }
   }, [etapa, tipoPerfil, vinculo.desejaVinculo, vinculo.tipoAlvo, vinculo.alvoBusca]);
 
-  const selectedAlvo: ResultadoBusca | null = useMemo(
-    () => resultadosBusca.find(r => r.id === vinculo.destinatarioId) || null,
-    [resultadosBusca, vinculo.destinatarioId]
-  );
+  const selectedAlvo =
+  resultadosBusca.find(r => r.usuarioId === vinculo.destinatarioId) || null;
 
   const Step = ({ n, label }: { n: Etapa; label: string }) => {
     const active = etapa === n; const done = etapa > n;
@@ -582,34 +658,64 @@ export default function Cadastro() {
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                 {(["Atleta", "Escolinha", "Clube", "Professor", "Olheiro"] as TipoPerfil[]).map((t) => (
                   <label className="flex items-center text-sm" key={t}>
-                    <input type="radio" name="tipo" className="mr-2" value={t} checked={tipoPerfil === t}
-                      onChange={(e) => setTipoPerfil(e.target.value as TipoPerfil)} />
-                    {t === "Escolinha" ? "Escolinha de Futebol" : t === "Clube" ? "Clube Profissional" : t === "Professor" ? "Profissional do Futebol" : t === "Olheiro" ? "Olheiro (Scout)" : t}
+                    <input
+                      type="radio"
+                      name="tipo"
+                      className="mr-2"
+                      value={t}
+                      checked={tipoPerfil === t}
+                      onChange={(e) => setTipoPerfil(e.target.value as TipoPerfil)}
+                    />
+                    {t === "Escolinha"
+                      ? "Escolinha de Futebol"
+                      : t === "Clube"
+                      ? "Clube Profissional"
+                      : t === "Professor"
+                      ? "Profissional do Futebol"
+                      : t === "Olheiro"
+                      ? "Olheiro (Scout)"
+                      : t}
                   </label>
                 ))}
               </div>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Nome Completo (opcional)</label>
-                <input className="w-full border rounded px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
-              </div>
-
-              <div className="mt-3">
                 <label className="block text-sm font-medium mb-1">Nome de usuário*</label>
-                <input className={`w-full border rounded px-3 py-2 ${nomeDeUsuario && !usernameValido ? "border-red-400" : ""}`} value={nomeDeUsuario} onChange={(e) => setNomeDeUsuario(e.target.value)} />
+                <input
+                  className={`w-full border rounded px-3 py-2 ${nomeDeUsuario && !usernameValido ? "border-red-400" : ""}`}
+                  value={nomeDeUsuario}
+                  onChange={(e) => setNomeDeUsuario(e.target.value)}
+                />
                 {nomeDeUsuario && (
                   <p className={`text-xs mt-1 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!usernameValido ? "Use 3–20 caracteres (letras, números, . e _)." : userDisp === null ? "Verificando..." : userDisp ? "Disponível" : "Indisponível"}
+                    {!usernameValido
+                      ? "Use 3–20 caracteres (letras, números, . e _)."
+                      : userDisp === null
+                      ? "Verificando..."
+                      : userDisp
+                      ? "Disponível"
+                      : "Indisponível"}
                   </p>
                 )}
               </div>
 
               <div className="mt-3">
                 <label className="block text-sm font-medium mb-1">Email*</label>
-                <input type="email" className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`} value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input
+                  type="email"
+                  className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
                 {email && (
                   <p className={`text-xs mt-1 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!emailValido ? "Formato de e-mail inválido." : emailDisp === null ? "Verificando..." : emailDisp ? "Disponível" : "Já cadastrado"}
+                    {!emailValido
+                      ? "Formato de e-mail inválido."
+                      : emailDisp === null
+                      ? "Verificando..."
+                      : emailDisp
+                      ? "Disponível"
+                      : "Já cadastrado"}
                   </p>
                 )}
               </div>
@@ -618,78 +724,181 @@ export default function Cadastro() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Senha*</label>
                   <div className="relative">
-                    <input type={mostrarSenha ? "text" : "password"} autoComplete="new-password" className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`} value={senha} onChange={(e) => setSenha(e.target.value)} />
-                    <button type="button" aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} onClick={() => setMostrarSenha((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                    <input
+                      type={mostrarSenha ? "text" : "password"}
+                      autoComplete="new-password"
+                      className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`}
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                      onClick={() => setMostrarSenha((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
+                    >
                       {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
-                  {senha && <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>Mín. 8 caracteres com letra e número.</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Confirmar Senha*</label>
-                  <div className="relative">
-                    <input type={mostrarConfirmar ? "text" : "password"} autoComplete="new-password" className={`w-full border rounded px-3 py-2 pr-10 ${confirmarSenha && !confirmarOk ? "border-red-400" : ""}`} value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
-                    <button type="button" aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"} onClick={() => setMostrarConfirmar((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
-                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {confirmarSenha && <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>{confirmarOk ? "OK" : "Senhas não coincidem."}</p>}
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
-                  <input
-                    className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
-                    placeholder="00000-000"
-                    inputMode="numeric"
-                    value={cep}
-                    onChange={(e) => setCep(maskCEP(e.target.value))}
-                  />
-                  {cep && (
-                    <p className={`text-xs mt-1 ${
-                      cepStatus === "loading" ? "text-gray-500" :
-                      cepStatus === "ok" ? "text-green-700" :
-                      "text-red-600"
-                    }`}>
-                      {cepStatus === "loading" ? "Buscando endereço…" :
-                       cepStatus === "ok" ? "Endereço localizado pelo CEP." :
-                       cepStatus === "invalid" ? "CEP inválido." :
-                       "CEP não encontrado."}
+                  {senha && (
+                    <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>
+                      Mín. 8 caracteres com letra e número.
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
-                  <input className="w-full border rounded px-3 py-2" value={cidade} onChange={(e) => setCidade(e.target.value)} />
+                  <label className="block text-sm font-medium mb-1">Confirmar Senha*</label>
+                  <div className="relative">
+                    <input
+                      type={mostrarConfirmar ? "text" : "password"}
+                      autoComplete="new-password"
+                      className={`w-full border rounded px-3 py-2 pr-10 ${confirmarSenha && !confirmarOk ? "border-red-400" : ""}`}
+                      value={confirmarSenha}
+                      onChange={(e) => setConfirmarSenha(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"}
+                      onClick={() => setMostrarConfirmar((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
+                    >
+                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {confirmarSenha && (
+                    <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>
+                      {confirmarOk ? "OK" : "Senhas não coincidem."}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">UF (opcional)</label>
-                  <input className="w-full border rounded px-3 py-2 uppercase" maxLength={2} value={estado} onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0,2))} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
-                  <input className="w-full border rounded px-3 py-2" value={bairro} onChange={(e) => setBairro(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">País (opcional)</label>
-                  <input className="w-full border rounded px-3 py-2" value={pais} onChange={(e) => setPais(e.target.value)} />
-                </div>
+              </div>
+
+              <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => setInfoAdicionalEtapa1Aberto((v) => !v)}
+                  className="w-full flex items-center justify-between px-5 py-5 text-left hover:bg-gray-50 transition"
+                >
+                  <span className="text-sm sm:text-base font-medium text-gray-900">
+                    Informações adicionais (opcional)
+                  </span>
+                  {infoAdicionalEtapa1Aberto ? <ChevronUp /> : <ChevronDown />}
+                </button>
+
+                {infoAdicionalEtapa1Aberto && (
+                  <div className="px-4 pb-4 border-t border-gray-100">
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-1">Nome Completo (opcional)</label>
+                      <input
+                        className="w-full border rounded px-3 py-2"
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
+                        <input
+                          className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
+                          placeholder="00000-000"
+                          inputMode="numeric"
+                          value={cep}
+                          onChange={(e) => setCep(maskCEP(e.target.value))}
+                        />
+                        {cep && (
+                          <p
+                            className={`text-xs mt-1 ${
+                              cepStatus === "loading"
+                                ? "text-gray-500"
+                                : cepStatus === "ok"
+                                ? "text-green-700"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {cepStatus === "loading"
+                              ? "Buscando endereço…"
+                              : cepStatus === "ok"
+                              ? "Endereço localizado pelo CEP."
+                              : cepStatus === "invalid"
+                              ? "CEP inválido."
+                              : "CEP não encontrado."}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          value={cidade}
+                          onChange={(e) => setCidade(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">UF (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2 uppercase"
+                          maxLength={2}
+                          value={estado}
+                          onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          value={bairro}
+                          onChange={(e) => setBairro(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">País (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          value={pais}
+                          onChange={(e) => setPais(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 mb-3">
-                <label className="flex items-center text-sm">
-                  <input type="checkbox" className="mr-2" checked={aceitaTermos} onChange={(e) => setAceitaTermos(e.target.checked)} />
-                  Li e aceito os&nbsp;
-                  <a href="/termos?tab=termos" className="underline text-blue-700" target="_blank" rel="noopener noreferrer">Termos de Uso</a>
-                  &nbsp;e&nbsp;
-                  <a href="/termos?tab=privacidade" className="underline text-blue-700" target="_blank" rel="noopener noreferrer">Política de Privacidade</a>
+                <label className="flex items-start text-sm">
+                  <input
+                    type="checkbox"
+                    className="mr-2 mt-1"
+                    checked={aceitaTermos}
+                    onChange={(e) => setAceitaTermos(e.target.checked)}
+                  />
+                  <span>
+                    Li e aceito os{" "}
+                    <a
+                      href="/termos?tab=termos"
+                      className="underline text-blue-700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Termos de Uso
+                    </a>{" "}
+                    e{" "}
+                    <a
+                      href="/termos?tab=privacidade"
+                      className="underline text-blue-700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Política de Privacidade
+                    </a>
+                  </span>
                 </label>
               </div>
-
               {erro && <p className="text-sm text-red-600 mb-2">{erro}</p>}
 
               <div className="flex justify-end">
@@ -741,7 +950,13 @@ export default function Cadastro() {
                     <label className="block text-sm font-medium mb-1">Você treina em alguma escolinha cadastrada na FootEra?</label>
                     <div className="flex gap-4 text-sm">
                       <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_at" value="sim" checked={atleta.treinaEscolinha === "sim"} onChange={(e) => { const v = e.target.value as "sim" | "nao"; setAtleta(p => ({ ...p, treinaEscolinha: v })); if (v === "sim") setVinculo(p => ({ ...p, desejaVinculo: true })); }} />Sim</label>
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_at" value="nao" checked={atleta.treinaEscolinha === "nao"} onChange={(e) => { const v = e.target.value as "sim" | "nao"; setAtleta(p => ({ ...p, treinaEscolinha: v })); if (v === "nao") setVinculo(p => ({ ...p, desejaVinculo: false, destinatarioId: "", alvoBusca: "" })); }} />Não, sou independente</label>
+                      <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_at" value="nao" checked={atleta.treinaEscolinha === "nao"} onChange={(e) => { const v = e.target.value as "sim" | "nao"; setAtleta(p => ({ ...p, treinaEscolinha: v })); if (v === "nao") setVinculo(p => ({
+                        ...p,
+                        desejaVinculo: false,
+                        destinatarioId: "",
+                        destinatarioEntidadeId: "",
+                        alvoBusca: "",
+                      })); }} />Não, sou independente</label>
                     </div>
                   </div>
 
@@ -808,56 +1023,128 @@ export default function Cadastro() {
               {tipoPerfil === "Professor" && (
                 <>
                   <div className="mt-2">
-                    <label className="block text-sm font-medium mb-1">Você dá aula em alguma escolinha cadastrada?</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Você dá aula em alguma escolinha cadastrada?
+                    </label>
+
                     <div className="flex gap-4 text-sm">
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_pf" value="sim" checked={professor.treinaEscolinha === "sim"} onChange={(e) => setProfessor(p => ({ ...p, treinaEscolinha: e.target.value as any }))} />Sim</label>
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_pf" value="nao" checked={professor.treinaEscolinha === "nao"} onChange={(e) => setProfessor(p => ({ ...p, treinaEscolinha: e.target.value as any }))} />Não, independente</label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          className="mr-2"
+                          name="escolinha_pf"
+                          value="sim"
+                          checked={professor.treinaEscolinha === "sim"}
+                          onChange={(e) =>
+                            setProfessor((p) => ({
+                              ...p,
+                              treinaEscolinha: e.target.value as "sim" | "nao",
+                            }))
+                          }
+                        />
+                        Sim
+                      </label>
+
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          className="mr-2"
+                          name="escolinha_pf"
+                          value="nao"
+                          checked={professor.treinaEscolinha === "nao"}
+                          onChange={(e) =>
+                            setProfessor((p) => ({
+                              ...p,
+                              treinaEscolinha: e.target.value as "sim" | "nao",
+                            }))
+                          }
+                        />
+                        Não, independente
+                      </label>
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">Área de Formação*</label>
-                    <input className="w-full border rounded px-3 py-2" value={professor.areaFormacao} onChange={(e) => setProfessor(p => ({ ...p, areaFormacao: e.target.value }))} />
-                  </div>
+                  <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setInfoAdicionalProfessorAberto((v) => !v)}
+                      className="w-full flex items-center justify-between px-5 py-5 text-left hover:bg-gray-50 transition"
+                    >
+                      <span className="text-sm sm:text-base font-medium text-gray-900">
+                        Informações adicionais (opcional)
+                      </span>
+                      {infoAdicionalProfessorAberto ? <ChevronUp /> : <ChevronDown />}
+                    </button>
 
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">CREF (opcional)</label>
-                      <input
-                        className="w-full border rounded px-3 py-2"
-                        value={professor.cref || ""}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setProfessor((p) => ({
-                            ...p,
-                            cref: v,
-                            statusCref: v.trim() ? (p.statusCref ?? "Pendente") : undefined,
-                          }));
-                        }}
-                      />
-                    </div>
+                    {infoAdicionalProfessorAberto && (
+                      <div className="px-4 pb-4 border-t border-gray-100">
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium mb-1">
+                            Área de Formação (opcional)
+                          </label>
+                          <input
+                            className="w-full border rounded px-3 py-2"
+                            value={professor.areaFormacao}
+                            onChange={(e) =>
+                              setProfessor((p) => ({
+                                ...p,
+                                areaFormacao: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium mb-1">Status do CREF</label>
-                      <select
-                        className="w-full border rounded px-3 py-2"
-                        value={professor.statusCref ?? "Pendente"}
-                        disabled={!String(professor.cref || "").trim()}
-                        onChange={(e) =>
-                          setProfessor((p) => ({ ...p, statusCref: e.target.value as StatusCrefUI }))
-                        }
-                      >
-                        {STATUS_CREF.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              CREF (opcional)
+                            </label>
+                            <input
+                              className="w-full border rounded px-3 py-2"
+                              value={professor.cref || ""}
+                              onChange={(e) =>
+                                setProfessor((p) => ({
+                                  ...p,
+                                  cref: e.target.value,
+                                  statusCref: e.target.value.trim()
+                                    ? (p.statusCref || "Pendente")
+                                    : undefined,
+                                }))
+                              }
+                            />
+                          </div>
 
-                      {!String(professor.cref || "").trim() && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Preencha o CREF para liberar o status.
-                        </p>
-                      )}
-                    </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Status do CREF
+                            </label>
+                            <select
+                              className="w-full border rounded px-3 py-2"
+                              value={professor.statusCref || "Pendente"}
+                              disabled={!professor.cref?.trim()}
+                              onChange={(e) =>
+                                setProfessor((p) => ({
+                                  ...p,
+                                  statusCref: e.target.value as StatusCrefUI,
+                                }))
+                              }
+                            >
+                              {STATUS_CREF.map((status) => (
+                                <option key={status} value={status}>
+                                  {status}
+                                </option>
+                              ))}
+                            </select>
+
+                            {!professor.cref?.trim() && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Preencha o CREF para liberar o status.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -899,45 +1186,131 @@ export default function Cadastro() {
               )}
 
               {tipoPerfil === "Olheiro" && (
-                <>
-                  <div className="mt-2 grid grid-cols-1 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Área de Atuação *</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="Ex: Base, Profissional, Captação SP" value={olheiro.areaAtuacao} onChange={(e) => setOlheiro(p => ({ ...p, areaAtuacao: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Anos de Experiência</label>
-                      <input type="number" className="w-full border rounded px-3 py-2" placeholder="0" value={olheiro.anosExperiencia} onChange={(e) => setOlheiro(p => ({ ...p, anosExperiencia: e.target.value ? Number(e.target.value) : "" }))} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Headline</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="Ex: Scout focado em categorias de base" value={olheiro.headline} onChange={(e) => setOlheiro(p => ({ ...p, headline: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Site ou Linkedin</label>
-                      <input className={`w-full border rounded px-3 py-2 ${olheiro.siteOuLinkedin && !URL_RE.test(olheiro.siteOuLinkedin) ? "border-red-400" : ""}`} placeholder="https://..." value={olheiro.siteOuLinkedin} onChange={(e) => setOlheiro(p => ({ ...p, siteOuLinkedin: e.target.value }))} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Telefone público</label>
-                        <input className={`w-full border rounded px-3 py-2 ${olheiro.telefonePublico && !PHONE_RE.test(olheiro.telefonePublico) ? "border-red-400" : ""}`} placeholder="(00) 00000-0000" value={olheiro.telefonePublico} onChange={(e) => setOlheiro(p => ({ ...p, telefonePublico: e.target.value }))} />
+              <>
+                <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setInfoAdicionalOlheiroAberto((v) => !v)}
+                    className="w-full flex items-center justify-between px-5 py-5 text-left hover:bg-gray-50 transition"
+                  >
+                    <span className="text-sm sm:text-base font-medium text-gray-900">
+                      Informações adicionais (opcional)
+                    </span>
+                    {infoAdicionalOlheiroAberto ? <ChevronUp /> : <ChevronDown />}
+                  </button>
+
+                  {infoAdicionalOlheiroAberto && (
+                    <div className="px-4 pb-4 border-t border-gray-100">
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Área de Atuação (opcional)
+                        </label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          placeholder="Ex: Base, Profissional, Captação SP"
+                          value={olheiro.areaAtuacao}
+                          onChange={(e) =>
+                            setOlheiro((p) => ({ ...p, areaAtuacao: e.target.value }))
+                          }
+                        />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Email público</label>
-                        <input type="email" className={`w-full border rounded px-3 py-2 ${olheiro.emailPublico && !EMAIL_RE.test(olheiro.emailPublico) ? "border-red-400" : ""}`} placeholder="seuemail@exemplo.com" value={olheiro.emailPublico} onChange={(e) => setOlheiro(p => ({ ...p, emailPublico: e.target.value }))} />
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Anos de Experiência (opcional)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full border rounded px-3 py-2"
+                          value={olheiro.anosExperiencia}
+                          onChange={(e) =>
+                            setOlheiro((p) => ({
+                              ...p,
+                              anosExperiencia: e.target.value === "" ? "" : Number(e.target.value),
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Headline (opcional)
+                        </label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          placeholder="Ex: Scout focado em categorias de base"
+                          value={olheiro.headline}
+                          onChange={(e) =>
+                            setOlheiro((p) => ({ ...p, headline: e.target.value }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Site ou Linkedin (opcional)
+                        </label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          placeholder="https://..."
+                          value={olheiro.siteOuLinkedin}
+                          onChange={(e) =>
+                            setOlheiro((p) => ({ ...p, siteOuLinkedin: e.target.value }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            Telefone público (opcional)
+                          </label>
+                          <input
+                            className="w-full border rounded px-3 py-2"
+                            placeholder="(00) 00000-0000"
+                            value={olheiro.telefonePublico}
+                            onChange={(e) =>
+                              setOlheiro((p) => ({ ...p, telefonePublico: e.target.value }))
+                            }
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            Email público (opcional)
+                          </label>
+                          <input
+                            type="email"
+                            className="w-full border rounded px-3 py-2"
+                            placeholder="seuemail@exemplo.com"
+                            value={olheiro.emailPublico}
+                            onChange={(e) =>
+                              setOlheiro((p) => ({ ...p, emailPublico: e.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Descrição (opcional)
+                        </label>
+                        <textarea
+                          className="w-full border rounded px-3 py-2"
+                          rows={4}
+                          placeholder="Fale um pouco sobre seu trabalho como olheiro..."
+                          value={olheiro.descricao}
+                          onChange={(e) =>
+                            setOlheiro((p) => ({ ...p, descricao: e.target.value }))
+                          }
+                        />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Descrição</label>
-                      <textarea className="w-full border rounded px-3 py-2" rows={3} placeholder="Fale um pouco sobre seu trabalho como olheiro…" value={olheiro.descricao} onChange={(e) => setOlheiro(p => ({ ...p, descricao: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Colaboração com Clube (ID opcional)</label>
-                      <input className="w-full border rounded px-3 py-2" placeholder="UUID do clube (se houver)" value={olheiro.colaboracaoClubeId || ""} onChange={(e) => setOlheiro(p => ({ ...p, colaboracaoClubeId: e.target.value }))} />
-                    </div>
-                  </div>
-                </>
-              )}
+                  )}
+                </div>
+              </>
+            )}
 
               {erro && <p className="text-sm text-red-600 mt-3">{erro}</p>}
 
@@ -953,7 +1326,7 @@ export default function Cadastro() {
               <h2 className="text-xl font-semibold mb-1">Complementar</h2>
               <p className="text-sm text-green-600 mb-4">Revise e finalize o cadastro</p>
 
-              {tipoPerfil === "Atleta" && (
+              {(tipoPerfil === "Atleta" || tipoPerfil === "Olheiro") && (
                 <div className="border rounded-md p-3 mb-4">
                   <label className="flex items-center text-sm">
                     <input type="checkbox" className="mr-2" checked={vinculo.desejaVinculo} onChange={(e) => setVinculo(p => ({ ...p, desejaVinculo: e.target.checked }))} />
@@ -984,10 +1357,23 @@ export default function Cadastro() {
                                 return (
                                   <button key={u.id} type="button" aria-pressed={selected}
                                     className={`w-full text-left px-3 py-2 rounded-md border transition hover:bg-gray-50 ${selected ? "bg-green-50 border-green-600 ring-1 ring-green-600" : "border-gray-200"}`}
-                                    onClick={() => setVinculo((p) => ({ ...p, destinatarioId: u.id }))}>
+                                    onClick={() =>
+                                      setVinculo((p) => ({
+                                        ...p,
+                                        destinatarioId: u.usuarioId,          // Usuario.id
+                                        destinatarioEntidadeId: u.id,         // id da entidade
+                                        alvoBusca: u.nome,
+                                      }))
+                                    }>
                                     <div className="flex items-center gap-3">
-                                      <img src={u.fotoUrl || PLACEHOLDER_AVATAR} alt={u.nome} className="w-8 h-8 rounded-full object-cover border"
-                                        onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = PLACEHOLDER_AVATAR; }} />
+                                      <img
+                                        src={getAvatarSrc(u.fotoUrl)}
+                                        alt={u.nome}
+                                        className="w-8 h-8 rounded-full object-cover border"
+                                        onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                          e.currentTarget.src = AVATAR_FALLBACK;
+                                        }}
+                                      />
                                       <div>
                                         <div className="text-sm font-medium">{u.nome}</div>
                                         <div className="text-xs text-gray-500">@{u.username} • {u.tipo}</div>
@@ -1001,8 +1387,14 @@ export default function Cadastro() {
 
                           {selectedAlvo && (
                             <div className="mt-3 p-3 border rounded bg-gray-50 flex items-center gap-3">
-                              <img src={selectedAlvo.fotoUrl || PLACEHOLDER_AVATAR} alt={selectedAlvo.nome} className="w-12 h-12 rounded-full object-cover border"
-                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.src = PLACEHOLDER_AVATAR; }} />
+                              <img
+                                src={getAvatarSrc(selectedAlvo.fotoUrl)}
+                                alt={selectedAlvo.nome}
+                                className="w-12 h-12 rounded-full object-cover border"
+                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                  e.currentTarget.src = AVATAR_FALLBACK;
+                                }}
+                              />
                               <div className="text-sm">
                                 <div className="font-medium">{selectedAlvo.nome}</div>
                                 <div className="text-gray-500">@{selectedAlvo.username} • {selectedAlvo.tipo}</div>
@@ -1069,7 +1461,6 @@ export default function Cadastro() {
                     <div><span className="font-medium">Telefone público:</span> {olheiro.telefonePublico || "-"}</div>
                     <div><span className="font-medium">Email público:</span> {olheiro.emailPublico || "-"}</div>
                     <div><span className="font-medium">Descrição:</span> {olheiro.descricao || "-"}</div>
-                    <div><span className="font-medium">Colaboração Clube ID:</span> {olheiro.colaboracaoClubeId || "-"}</div>
                   </div>
                 )}
               </div>

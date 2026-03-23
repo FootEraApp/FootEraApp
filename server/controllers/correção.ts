@@ -226,7 +226,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         cidade: usuario.cidade,
         estado: usuario.estado,
         pais: usuario.pais,
-        bairro: usuario.bairro,
       },
     });
 

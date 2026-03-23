@@ -7,7 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **FootEra** is a full-stack sports/fitness training platform (Portuguese-language app). It's a monorepo with a React frontend (Vite + PWA) and an Express backend, connected to PostgreSQL via Prisma.
 
 ## Development Commands
-
 ```bash
 # Run full dev environment (server + client concurrently)
 npm run dev
@@ -102,3 +101,33 @@ All routes are prefixed with `/api/`. Key route groups:
 - **Feature access:** `server/services/entitlements.ts` controls plan-based feature gating
 - **Audit logging:** `server/services/audit.ts` tracks sensitive operations
 - **User types:** The app distinguishes between Atleta, Professor, Clube, Escolinha, and Olheiro — many features are role-specific
+
+## Code Conventions
+
+- Comentários e mensagens de erro em português (é um app PT-BR)
+- Componentes React em PascalCase, arquivos em kebab-case
+- Sempre usar os schemas Zod de `shared/` para validação — nunca validar só no client ou só no server
+- Rotas novas no backend seguem o padrão das existentes em `server/routes/`
+- Cypress roda em viewport mobile 390×844 — desenvolver sempre mobile-first
+
+## Important — Do Not
+
+- Não trocar Wouter por React Router
+- Não usar fetch direto — sempre usar Axios com o config de `client/src/config.ts`
+- Não criar migrations manualmente — usar `npx prisma migrate dev`
+- Não expor JWT_SECRET ou chaves AWS no client
+- Não alterar porta do Docker (5555) sem atualizar DATABASE_URL
+
+## Business Context
+
+- Plataforma em fase MVP com time enxuto
+- 5 perfis com permissões diferentes: Atleta, Professor, Clube, Escolinha, Olheiro
+- Planos pagos via Mercado Pago — checar `entitlements.ts` antes de liberar features premium
+- App em português brasileiro — textos, erros e comentários sempre em PT-BR
+```
+
+---
+
+**Como aplicar:** substitua o conteúdo do arquivo `CLAUDE.md` na raiz do projeto por esse, depois no terminal do Claude Code:
+```
+> git add CLAUDE.md && commit "update CLAUDE.md with conventions and business context"
