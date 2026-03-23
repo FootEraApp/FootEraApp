@@ -144,6 +144,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
       return {
         id: p.id as string,
+        usuarioId: p.usuario?.id as string,
         tipo: "Professor" as const,
         nome: p.nome as string,
         username: usuario?.nomeDeUsuario ?? "",
@@ -183,6 +184,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
         return {
           id: c.id as string,
+          usuarioId: c.usuario?.id as string,
           tipo: "Clube" as const,
           nome: c.nome as string,
           username: usuario?.nomeDeUsuario ?? "",
@@ -221,6 +223,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
         return {
           id: e.id as string,
+          usuarioId: e.usuario?.id as string,
           tipo: "Escolinha" as const,
           nome: e.nome as string,
           username: usuario?.nomeDeUsuario ?? "",
@@ -247,7 +250,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
             anosExperiencia: Number.isFinite(Number(o.anosExperiencia))
               ? Number(o.anosExperiencia)
               : null,
-            emailPublico: o.emailPublico ?? null,
+            emailPublico: (o.emailPublico ?? o.emailNorm) || null,
             telefonePublico: o.telefonePublico ?? null,
             descricao: o.descricao ?? null,
             fotoUrl: absUrl(o.fotoUrl) ?? null,
@@ -256,6 +259,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
         return {
           id: o.id as string,
+          usuarioId: o.usuario?.id as string,
           tipo: "Olheiro" as const,
           nome: usuario?.nome ?? "",
           username: usuario?.nomeDeUsuario ?? "",
@@ -287,6 +291,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           certificacoes: true,
           usuario: {
             select: {
+              id: true,
               verified: true,
               nome: true,
               email: true,
@@ -323,7 +328,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           bairro: true,
           pais: true,
           cep: true,
-          usuario: { select: { verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
+          usuario: { select: { id: true, verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
@@ -352,7 +357,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           bairro: true,
           pais: true,
           cep: true,
-          usuario: { select: { verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
+          usuario: { select: { id: true, verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
@@ -377,7 +382,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           descricao: true,
           emailPublico: true,
           telefonePublico: true,
-          usuario: { select: { verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
+          usuario: { select: { id: true, verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
@@ -396,15 +401,15 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
   const {
     nome, email, senha, tipo,
     nomeDeUsuario, cidade, estado, pais, bairro, cpf,
-    idade, categoria,
+    idade, categoria, logradouro,
     areaFormacao, cref, statusCref,
     nomeClube, cnpjClube, telefone1Clube, telefone2Clube, emailClube, siteOficialClube, sedeClube, logradouroClube, numeroClube,
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
     nomeEscolinha, cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha, siteOficialEscolinha, sedeEscolinha,
     logradouroEscolinha, numeroEscolinha, complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
     areaAtuacao, anosExperiencia,
-    telefonePublico, emailPublico, descricao, colaboracaoClubeId,
-    dataNascimento, responsavel,
+    telefonePublico, emailPublico, descricao, colaboracaoClubeId, colaboracaoProfessorId,
+    colaboracaoEscolinhaId, dataNascimento, responsavel, siteOuLinkedin, headline
   } = req.body ?? {};
 
   if (!email || !senha || !tipo || !nomeDeUsuario) {
@@ -449,7 +454,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         cidade: cidade ?? null,
         estado: estado ?? null,
         pais:   pais ?? null,
-        bairro: bairro ?? null,
+        logradouro: logradouro ?? null,
         cpf:    cpf ?? null,
         dataNascimento: dataNascFinal,
         responsavelNome: responsavel?.nome ?? null,
@@ -493,13 +498,25 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         break;
       }
       case TipoUsuario.Professor: {
+        const areaFormacaoFinal =
+          typeof areaFormacao === "string" && areaFormacao.trim()
+            ? areaFormacao.trim()
+            : null;
+
+        const crefFinal =
+          typeof cref === "string" && cref.trim()
+            ? cref.trim()
+            : null;
+
         const professor = await prisma.professor.create({
           data: {
             nome: nomeFinal,
             codigo: gerarCodigo("PRF"),
-            areaFormacao: areaFormacao ?? "Educação Física",
-            cref: cref ?? null,
-            statusCref: mapStatusCref(statusCref) ?? StatusCref.Pendente,
+            areaFormacao: areaFormacaoFinal,
+            cref: crefFinal,
+            statusCref: crefFinal
+              ? (mapStatusCref(statusCref) ?? StatusCref.Pendente)
+              : null,
             qualificacoes: [],
             certificacoes: [],
             fotoUrl: null,
@@ -508,6 +525,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
+
         tipoUsuarioId = professor.id;
         break;
       }
@@ -567,11 +585,60 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = escolinha.id;
         break;
       }
+
       case TipoUsuario.Olheiro: {
+        const qtdColabs =
+          Number(Boolean(colaboracaoClubeId)) +
+          Number(Boolean(colaboracaoProfessorId)) +
+          Number(Boolean(colaboracaoEscolinhaId));
+
+        if (tipoEnum === TipoUsuario.Olheiro && qtdColabs > 1) {
+          return res.status(400).json({
+            error: "O olheiro só pode iniciar com um vínculo selecionado.",
+          });
+        }
+
+        if (colaboracaoProfessorId) {
+          const prof = await prisma.professor.findUnique({
+            where: { id: colaboracaoProfessorId },
+            select: { id: true },
+          });
+          if (!prof) {
+            return res.status(400).json({
+              error: "colaboracaoProfessorId inválido. Envie o id da entidade Professor.",
+            });
+          }
+        }
+
+        if (colaboracaoClubeId) {
+          const clube = await prisma.clube.findUnique({
+            where: { id: colaboracaoClubeId },
+            select: { id: true },
+          });
+          if (!clube) {
+            return res.status(400).json({
+              error: "colaboracaoClubeId inválido. Envie o id da entidade Clube.",
+            });
+          }
+        }
+
+        if (colaboracaoEscolinhaId) {
+          const escola = await prisma.escolinha.findUnique({
+            where: { id: colaboracaoEscolinhaId },
+            select: { id: true },
+          });
+          if (!escola) {
+            return res.status(400).json({
+              error: "colaboracaoEscolinhaId inválido. Envie o id da entidade Escolinha.",
+            });
+          }
+        }
+
         const olheiro = await prisma.olheiro.create({
           data: {
             usuarioId: usuario.id,
             fotoUrl: null,
+            headline: headline ?? null,
             descricao: descricao ?? null,
             areaAtuacao: areaAtuacao ?? null,
             anosExperiencia:
@@ -580,7 +647,10 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
                 : (anosExperiencia ? Number(anosExperiencia) : 0),
             emailPublico: (emailPublico ?? emailNorm) || null,
             telefonePublico: telefonePublico ?? null,
+            siteOuLinkedin: siteOuLinkedin ?? null,
             colaboracaoClubeId: colaboracaoClubeId || null,
+            colaboracaoProfessorId: colaboracaoProfessorId || null,
+            colaboracaoEscolinhaId: colaboracaoEscolinhaId || null,
           },
           select: { id: true },
         });

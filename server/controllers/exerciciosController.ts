@@ -139,8 +139,12 @@ async function mapUsoEmTreinos(exercicioIds: string[]) {
           map[exId] = (map[exId] || 0) + 1;
         }
 
-        return map;
-      } catch {}
+        // Se este modelo foi executado sem erro, não precisamos tentar
+        // o outro treinoKey para o mesmo modelName
+        break;
+      } catch {
+        // Se groupBy falhar em treinoKey, tenta próximo treinoKey
+      }
     }
   }
 
@@ -382,6 +386,10 @@ export const criarExercicio = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Nível é obrigatório." });
     }
 
+    if (!["Base", "Avancado", "Performance"].includes(String(nivel))) {
+      return res.status(400).json({ message: "Nível inválido." });
+    }
+
     if (faixasEtarias.length === 0) {
       return res.status(400).json({ message: "Selecione pelo menos uma faixa etária." });
     }
@@ -483,6 +491,10 @@ export const editarExercicio = async (req: Request, res: Response) => {
       }
 
       exercicioAtual = await migrarPersonalizadoParaExercicio(personalizado, userId);
+
+      if (!exercicioAtual) {
+        return res.status(500).json({ message: "Erro ao migrar exercício." });
+      }
     }
 
     if ((exercicioAtual as any).criadoPorId && (exercicioAtual as any).criadoPorId !== userId) {
@@ -566,10 +578,12 @@ export const editarExercicio = async (req: Request, res: Response) => {
     const nomeNormalizado = normalizarNomeExercicio(String(nome));
     const codigoNormalizado = String(codigo).trim();
 
+    const idAtual = (exercicioAtual as any).id;
+
     const codigoDuplicado = await prisma.exercicio.findFirst({
       where: {
         codigo: String(codigo).trim(),
-        NOT: { id },
+        NOT: { id: idAtual },
       },
     });
 
@@ -580,7 +594,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
     const nomeDuplicadoExercicio = await prisma.exercicio.findFirst({
       where: {
         nomeNormalizado,
-        NOT: { id },
+        NOT: { id: idAtual },
       },
       select: { id: true, nome: true },
     });
@@ -594,7 +608,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
     const nomeDuplicadoPersonalizado = await prisma.exercicioPersonalizado.findFirst({
       where: {
         nomeNormalizado,
-        NOT: { id },
+        NOT: { id: idAtual },
       },
       select: { id: true, nome: true },
     });
@@ -644,7 +658,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
     }
 
     const exercicio = await prisma.exercicio.update({
-      where: { id },
+      where: { id: idAtual },
       data: {
         codigo: codigoNormalizado,
         nome: String(nome).trim(),
@@ -670,9 +684,9 @@ export const editarExercicio = async (req: Request, res: Response) => {
       } as any,
     });
 
-    const usoMap = await mapUsoEmTreinos([id]);
+    const usoMap = await mapUsoEmTreinos([idAtual]);
 
-    res.json(toCardResponse(exercicio, usoMap[id] || 0));
+    res.json(toCardResponse(exercicio, usoMap[idAtual] || 0));
   } catch (error) {
     const err = error as Error;
     console.error("Erro ao editar exercício:", err.message, err.stack);
