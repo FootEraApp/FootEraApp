@@ -26,7 +26,7 @@ model Usuario {
   cidade                    String?
   estado                    String?
   pais                      String?
-  bairro                    String?
+  logradouro                String?
   cep                       String?
   cpf                       String?
   dataNascimento            DateTime?
@@ -183,7 +183,7 @@ model Professor {
   id                  String               @id @default(uuid())
   codigo              String?
   cref                String?
-  areaFormacao        String
+  areaFormacao        String?
   dataNascimento      DateTime?
   escola              String?
   fotoUrl             String?
@@ -203,21 +203,21 @@ model Professor {
   clubes     ProfessorClube[]
   escolinhas ProfessorEscolinha[]
 
-  turmasParticipando  TurmaProfessor[]
-  TreinoSalvo         TreinoSalvo[]
-  TreinoSalvoReuso    TreinoSalvoReuso[]
-  treinosCriados      TreinoProgramado[]          @relation("TreinoProgramadoCriador")
-  treinosParticipando TreinoProgramadoProfessor[]
-
-  estatExerciciosRecomendados EstatisticaExercicio[]   @relation("ExEstRec_Rec")
-  estatExerciciosUltimo       EstatisticaExercicio[]   @relation("ExEstRec_Ult")
+  turmasParticipando          TurmaProfessor[]
+  TreinoSalvo                 TreinoSalvo[]
+  TreinoSalvoReuso            TreinoSalvoReuso[]
+  treinosCriados              TreinoProgramado[]          @relation("TreinoProgramadoCriador")
+  treinosParticipando         TreinoProgramadoProfessor[]
+  olheirosColaboradores       Olheiro[]                   @relation("OlheiroColabProfessor")
+  estatExerciciosRecomendados EstatisticaExercicio[]      @relation("ExEstRec_Rec")
+  estatExerciciosUltimo       EstatisticaExercicio[]      @relation("ExEstRec_Ult")
   TreinoAgendado              TreinoAgendado[]
   TreinoProfessorUso          TreinoProfessorUso[]
   TreinoRotina                TreinoRotina[]
   AtletaHistoricoVinculo      AtletaHistoricoVinculo[]
-  Escolinha                   Escolinha?               @relation(fields: [escolinhaId], references: [id])
+  Escolinha                   Escolinha?                  @relation(fields: [escolinhaId], references: [id])
   escolinhaId                 String?
-  Clube                       Clube?                   @relation(fields: [clubeId], references: [id])
+  Clube                       Clube?                      @relation(fields: [clubeId], references: [id])
   clubeId                     String?
   Metodologia                 Metodologia[]
   OrganizacaoGestor           OrganizacaoGestor[]
@@ -283,29 +283,40 @@ model Amigo {
 }
 
 model Olheiro {
-  id                 String            @id @default(uuid())
-  usuarioId          String            @unique
-  fotoUrl            String?
-  headline           String?
-  descricao          String?
-  areaAtuacao        String?
-  anosExperiencia    Int               @default(0)
-  emailPublico       String?
-  telefonePublico    String?
-  siteOuLinkedin     String?
-  colaboracaoClubeId String?
-  reputacaoScore     Int               @default(0)
-  totalIndicacoes    Int               @default(0)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  AtletaObservado    AtletaObservado[]
-  Indicacao          Indicacao[]
-  colaboracaoClube   Clube?            @relation(fields: [colaboracaoClubeId], references: [id], onDelete: SetNull)
-  usuario            Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  ListaOlheiro       ListaOlheiro[]
+  id                     String   @id @default(uuid())
+  usuarioId              String   @unique
+  fotoUrl                String?
+  headline               String?
+  descricao              String?
+  areaAtuacao            String?
+  anosExperiencia        Int      @default(0)
+  emailPublico           String?
+  telefonePublico        String?
+  siteOuLinkedin         String?
+  colaboracaoClubeId     String?
+  colaboracaoProfessorId String?
+  colaboracaoEscolinhaId String?
+  reputacaoScore         Int      @default(0)
+  totalIndicacoes        Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  AtletaObservado AtletaObservado[]
+  Indicacao       Indicacao[]
+  ListaOlheiro    ListaOlheiro[]
+
+  colaboracaoClube     Clube?     @relation("OlheiroColabClube", fields: [colaboracaoClubeId], references: [id], onDelete: SetNull)
+  colaboracaoProfessor Professor? @relation("OlheiroColabProfessor", fields: [colaboracaoProfessorId], references: [id], onDelete: SetNull)
+  colaboracaoEscolinha Escolinha? @relation("OlheiroColabEscolinha", fields: [colaboracaoEscolinhaId], references: [id], onDelete: SetNull)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  Clube   Clube?  @relation(fields: [clubeId], references: [id])
+  clubeId String?
 
   @@index([areaAtuacao])
   @@index([colaboracaoClubeId])
+  @@index([colaboracaoProfessorId])
+  @@index([colaboracaoEscolinhaId])
 }
 
 model Mensagem {
@@ -825,6 +836,7 @@ model Escolinha {
   Turma                  Turma[]
   TreinoSalvo            TreinoSalvo[]
   TreinoRotina           TreinoRotina[]
+  olheirosColaboradores  Olheiro[]                @relation("OlheiroColabEscolinha")
   eventos                Evento[]
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   ProfessorEscolinha     ProfessorEscolinha[]
@@ -882,6 +894,7 @@ model Clube {
   Indicacao              Indicacao[]
   midias                 Midia[]
   Olheiro                Olheiro[]
+  olheirosColaboradores  Olheiro[]                @relation("OlheiroColabClube")
   postagens              Postagem[]
   relacoesTreinamento    RelacaoTreinamento[]     @relation("RelacaoClube")
   treinoProgramado       TreinoProgramado[]

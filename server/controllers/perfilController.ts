@@ -902,6 +902,8 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         cidade: true,
         estado: true,
         pais: true,
+        logradouro: true,
+        cpf: true,
       },
     });
 
@@ -1027,14 +1029,16 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       dadosEspecificos = {
         nome: escolinha.nome,
         email: escolinha.email,
-        cidade: escolinha.cidade,
-        estado: escolinha.estado,
-        pais: escolinha.pais,
-        bairro: escolinha.bairro,
+        cnpj: escolinha.cnpj,
         telefone1: escolinha.telefone1,
         telefone2: escolinha.telefone2,
         logo: escolinha.logo,
         siteOficial: escolinha.siteOficial,
+        logradouro: escolinha.logradouro ?? null,
+        cidade: escolinha.cidade ?? null,
+        estado: escolinha.estado ?? null,
+        pais: escolinha.pais ?? null,
+        cep: escolinha.cep ?? null,
       };
       tipoPerfil = "Escolinha";
     }
@@ -1044,15 +1048,17 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       dadosEspecificos = {
         nome: clube.nome,
         email: clube.email,
-        cidade: clube.cidade,
-        estado: clube.estado,
-        pais: clube.pais,
-        bairro: clube.bairro,
+        cnpj: clube.cnpj,
         telefone1: clube.telefone1,
         telefone2: clube.telefone2,
         estadio: clube.estadio,
         logo: clube.logo,
         siteOficial: clube.siteOficial,
+        logradouro: clube.logradouro ?? null,
+        cidade: clube.cidade ?? null,
+        estado: clube.estado ?? null,
+        pais: clube.pais ?? null,
+        cep: clube.cep ?? null,
       };
       tipoPerfil = "Clube";
     }
@@ -1121,12 +1127,13 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     verified: (usuario as any).verified ?? false, // ✅ ADD
   };
 
-  // ✅ se for o dono do perfil (no EditarPerfil sempre é), devolve endereço também
   if (isOwnProfile) {
     usuarioPayload.cep = usuario.cep;
     usuarioPayload.cidade = usuario.cidade;
     usuarioPayload.estado = usuario.estado;
     usuarioPayload.pais = usuario.pais;
+    usuarioPayload.logradouro = (usuario as any).logradouro ?? null;
+    usuarioPayload.cpf = (usuario as any).cpf ?? null;
   }
 
   const fotoBase =
@@ -1299,7 +1306,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
     const cepDigits = usuario?.cep != null ? String(usuario.cep).replace(/\D/g, "") : "";
 
-    // 5. Atualização da tabela principal Usuario
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -1308,10 +1314,11 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         nomeDeUsuario: novoUsername,
         foto: fotoFinal,
         cep: cepDigits || null,
-        cidade: usuario.cidade,
-        estado: usuario.estado,
-        pais: usuario.pais,
-        bairro: usuario.bairro,
+        cidade: usuario.cidade ?? null,
+        estado: usuario.estado ?? null,
+        pais: usuario.pais ?? null,
+        logradouro: usuario.logradouro ?? null,
+        cpf: usuario.cpf ?? null,
       },
     });
 
@@ -1377,10 +1384,15 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           data: {
             nome: tipo.nome,
             telefone1: tipo.telefone1,
+            telefone2: tipo.telefone2 ?? null,
             email: tipo.email,
             siteOficial: tipo.siteOficial,
-            cidade: tipo.cidade,
-            estado: tipo.estado,
+            cnpj: tipo.cnpj ?? null,
+            logradouro: usuario.logradouro ?? null,
+            cidade: usuario.cidade ?? null,
+            estado: usuario.estado ?? null,
+            pais: usuario.pais ?? null,
+            cep: cepDigits || null,
             logo: fotoFinal,
             categorias: Array.isArray(tipo.categorias) ? { set: tipo.categorias } : undefined,
           },
@@ -1404,18 +1416,24 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         break;
 
       case "escola":
+      case "escolinha":
         await prisma.escolinha.update({
           where: { usuarioId: id },
           data: {
             nome: tipo.nome,
             telefone1: tipo.telefone1,
+            telefone2: tipo.telefone2 ?? null,
             email: tipo.email,
-            cidade: tipo.cidade,
-            estado: tipo.estado,
+            cnpj: tipo.cnpj ?? null,
+            logradouro: usuario.logradouro ?? null,
+            cidade: usuario.cidade ?? null,
+            estado: usuario.estado ?? null,
+            pais: usuario.pais ?? null,
+            cep: cepDigits || null,
             logo: fotoFinal,
           },
         });
-        break;
+      break;
 
       default:
         return res.status(400).json({ error: "Tipo de usuário inválido." });

@@ -349,7 +349,6 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         cidade: cidade ?? null,
         estado: estado ?? null,
         pais: pais ?? null,
-        bairro: bairro ?? null,
         cep: cep ?? null,
         cpf: cpf ?? null,
         dataNascimento: dataNascFinal,

@@ -330,7 +330,6 @@ async function main() {
       cidade: 'Vitória',
       estado: 'ES',
       pais: 'Brasil',
-      bairro: 'Centro',
       foto: '/assets/usuarios/arthur.jpg',
       professor: {
         create: {

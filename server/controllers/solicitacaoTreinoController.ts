@@ -169,71 +169,76 @@ export const solicitacoesTreinoController = {
 };
 
 export async function criarSolicitacao(req: Request, res: Response) {
-  const remetenteId: string | undefined = (req as any).user?.id || (req as any).userId;
-  const { destinatarioId } = (req.body ?? {}) as { destinatarioId?: string };
+  try {
+    const remetenteId: string | undefined = (req as any).user?.id || (req as any).userId;
+    const { destinatarioId } = (req.body ?? {}) as { destinatarioId?: string };
 
-  if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
-  if (!destinatarioId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
-  if (remetenteId === destinatarioId) {
-    return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
-  }
+    if (!remetenteId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
 
-  const rel = await prisma.relacaoTreinamento.findFirst({
-    where: {
-      OR: [
-        {
-          atleta: { usuarioId: remetenteId },
-          professor: { usuarioId: destinatarioId },
-        },
-        {
-          atleta: { usuarioId: destinatarioId },
-          professor: { usuarioId: remetenteId },
-        },
-        {
-          atleta: { usuarioId: remetenteId },
-          clube: { usuarioId: destinatarioId },
-        },
-        {
-          atleta: { usuarioId: destinatarioId },
-          clube: { usuarioId: remetenteId },
-        },
-        {
-          atleta: { usuarioId: remetenteId },
-          escolinha: { usuarioId: destinatarioId },
-        },
-        {
-          atleta: { usuarioId: destinatarioId },
-          escolinha: { usuarioId: remetenteId },
-        },
-      ],
-    },
-  });
+    if (!destinatarioId) {
+      return res.status(400).json({ message: "destinatarioId é obrigatório" });
+    }
 
-  if (rel) {
-    return res.status(409).json({
-      message: "Vocês já possuem vínculo de treinamento.",
-      jaVinculados: true,
+    if (remetenteId === destinatarioId) {
+      return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
+    }
+
+    const usuarioDestino = await prisma.usuario.findUnique({
+      where: { id: destinatarioId },
+      select: { id: true, tipo: true },
     });
+
+    if (!usuarioDestino) {
+      return res.status(400).json({
+        message: "destinatarioId inválido. Envie o id do Usuario, não o id da entidade.",
+      });
+    }
+
+    const rel = await prisma.relacaoTreinamento.findFirst({
+      where: {
+        OR: [
+          { atleta: { usuarioId: remetenteId }, professor: { usuarioId: destinatarioId } },
+          { atleta: { usuarioId: destinatarioId }, professor: { usuarioId: remetenteId } },
+          { atleta: { usuarioId: remetenteId }, clube: { usuarioId: destinatarioId } },
+          { atleta: { usuarioId: destinatarioId }, clube: { usuarioId: remetenteId } },
+          { atleta: { usuarioId: remetenteId }, escolinha: { usuarioId: destinatarioId } },
+          { atleta: { usuarioId: destinatarioId }, escolinha: { usuarioId: remetenteId } },
+        ],
+      },
+    });
+
+    if (rel) {
+      return res.status(409).json({
+        message: "Vocês já possuem vínculo de treinamento.",
+        jaVinculados: true,
+      });
+    }
+
+    const existente = await prisma.solicitacaoTreino.findFirst({
+      where: {
+        status: { in: ["pendente", "ativa"] },
+        OR: [
+          { remetenteId, destinatarioId },
+          { remetenteId: destinatarioId, destinatarioId: remetenteId },
+        ],
+      },
+    });
+
+    if (existente) {
+      return res.status(200).json({ ...existente, ok: true });
+    }
+
+    const row = await prisma.solicitacaoTreino.create({
+      data: { remetenteId, destinatarioId, status: "pendente" },
+    });
+
+    return res.status(201).json({ ...row, ok: true });
+  } catch (error) {
+    console.error("Erro ao criar solicitação:", error);
+    return res.status(500).json({ error: "Erro ao criar solicitação." });
   }
-
-  const existente = await prisma.solicitacaoTreino.findFirst({
-    where: {
-      status: { in: ["pendente", "ativa"] },
-      OR: [
-        { remetenteId, destinatarioId },
-        { remetenteId: destinatarioId, destinatarioId: remetenteId },
-      ],
-    },
-  });
-
-  if (existente) {
-    return res.status(200).json({ ...existente, ok: true });
-  }
-
-  const row = await prisma.solicitacaoTreino.create({
-    data: { remetenteId, destinatarioId, status: "pendente" },
-  });
-  return res.status(201).json({ ...row, ok: true });
 }
 
 async function acharPendente(
