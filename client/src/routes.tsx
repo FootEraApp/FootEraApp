@@ -63,8 +63,10 @@ import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
 import TutorialPage from "./pages/tutorial.js";
 import LandingPage from "./pages/landingPage.js"
 import CadastroGoogleComplementar from "./pages/cadastroGoogleComplementar";
-import ExercicioNovoPage from "./pages/treino/exercicios/novo.js"
-import ExercicioEditarPage from "./pages/treino/exercicios/editar/[id].js"
+import ExercicioNovoPage from "./pages/treino/exercicios/novo.js";
+import ExercicioEditarPage from "./pages/treino/exercicios/editar/[id].js";
+import LearningCreatePage from "./pages/learning/create.js";
+import LearningPage from "./pages/learning/index.js";
 
 export function AppRoutes() {
   return (
@@ -179,8 +181,8 @@ export function AppRoutes() {
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/tutorial" component={TutorialPage}/>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
-      <Route path="/treinos/Criar-Metodologia"><CriarMetodologia/></Route>
-      <Route path="/treinos/Minhas-Metodologias"><MinhasMetodologias/></Route>
+      <Route path="/treinos/Criar-Metodologia"><Private><LearningCreatePage/></Private></Route>
+      <Route path="/treinos/Minhas-Metodologias"><Private><MinhasMetodologias/></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
@@ -189,8 +191,13 @@ export function AppRoutes() {
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
       <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
-      <Route path="/metodologias/avaliar" component={AvaliarMetodologia} />
-      <Route path="/metodologias/:id"><MetodologiaUnicaPage/></Route>
+      <Route path="/metodologias/avaliar"><Private><AvaliarMetodologia /></Private></Route>
+      <Route path="/metodologias/:id"><Private><MetodologiaUnicaPage/></Private></Route>
+      <Route path="/learning/create"><Private><LearningCreatePage /></Private></Route>
+      <Route path="/learning/minhas"><Private><MinhasMetodologias /></Private></Route>
+      <Route path="/learning/:id"><Private><MetodologiaUnicaPage /></Private></Route>
+      <Route path="/learning/avaliar"><Private><AvaliarMetodologia /></Private></Route>
+      <Route path="/learning"><Private><LearningPage /></Private></Route>
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
       <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>

@@ -444,6 +444,7 @@ model TreinoProgramado {
   SessaoTreinoTurma        SessaoTreinoTurma[]
   Professor                Professor?                  @relation(fields: [professorId], references: [id])
   professorId              String?
+  MetodologiaEstruturaItem MetodologiaEstruturaItem[]
 
   @@index([criadorProfessorId])
 }
@@ -554,19 +555,25 @@ model ExercicioPersonalizado {
 }
 
 model Metodologia {
-  id               String                 @id @default(uuid())
+  id               String                   @id @default(uuid())
   titulo           String
   descricao        String?
   capaUrl          String?
   nivel            Nivel?
-  categorias       Categoria[]            @default([])
-  ativo            Boolean                @default(false)
+  categorias       Categoria[]              @default([])
+  ativo            Boolean                  @default(false)
   criadorUsuarioId String
-  criadorUsuario   Usuario                @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  criadorUsuario   Usuario                  @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
   professorId      String?
   clubeId          String?
   escolinhaId      String?
-  publicoAlvo      MetodologiaPublicoAlvo @default(AMBOS)
+  publicoAlvo      MetodologiaPublicoAlvo   @default(AMBOS)
+  tipo             MetodologiaTipo
+  estruturaTipo    MetodologiaEstruturaTipo
+  area             MetodologiaArea?
+  geraCertificado  Boolean                  @default(false)
+  geraBadge        Boolean                  @default(false)
+  estruturas       MetodologiaEstrutura[]
 
   professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
   clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -593,6 +600,39 @@ model Metodologia {
   @@index([ativo])
 }
 
+model MetodologiaEstrutura {
+  id            String      @id @default(uuid())
+  metodologiaId String
+  metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+
+  tipo      MetodologiaEstruturaTipo
+  titulo    String
+  descricao String?
+  objetivo  String?
+  ordem     Int
+
+  // config de ciclo - usada principalmente para trilha de treino
+  duracaoSemanas         Int?
+  treinosPorSemana       Int?
+  quantidadeMinConclusao Int?
+  modoExecucao           MetodologiaModoExecucao?
+  pontosPorItem          Int?
+  bonusConsistencia      Int?
+  bonusFinal             Int?
+  permiteAtraso          Boolean                  @default(true)
+  prazoFinal             DateTime?
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  itens      MetodologiaEstruturaItem[]
+  progressos MetodologiaProgressoEstrutura[]
+
+  @@unique([metodologiaId, ordem])
+  @@index([metodologiaId])
+}
+
 model MetodologiaTreino {
   id                 String   @id @default(uuid())
   metodologiaId      String
@@ -605,6 +645,61 @@ model MetodologiaTreino {
   @@unique([metodologiaId, treinoProgramadoId])
   @@index([metodologiaId])
   @@index([treinoProgramadoId])
+}
+
+model MetodologiaEstruturaItem {
+  id          String               @id @default(uuid())
+  estruturaId String
+  estrutura   MetodologiaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+
+  ordem     Int
+  titulo    String
+  descricao String?
+  tipo      MetodologiaItemTipo
+
+  videoUrl    String?
+  thumbUrl    String?
+  arquivoUrl  String?
+  materialUrl String?
+  duracaoMin  Int?
+
+  treinoProgramadoId String?
+  treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
+
+  pontos      Int?
+  obrigatorio Boolean @default(true)
+  publicado   Boolean @default(true)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([estruturaId, ordem])
+  @@index([estruturaId])
+  @@index([treinoProgramadoId])
+}
+
+model MetodologiaProgressoEstrutura {
+  id                     String @id @default(uuid())
+  metodologiaAssinanteId String
+  estruturaId            String
+
+  metodologiaAssinante MetodologiaAssinante @relation(fields: [metodologiaAssinanteId], references: [id], onDelete: Cascade)
+  estrutura            MetodologiaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+
+  iniciadoEm  DateTime?
+  concluidoEm DateTime?
+  status      MetodologiaProgressoStatus @default(NAO_INICIADA)
+
+  itensConcluidos Int @default(0)
+  pontosGanhos    Int @default(0)
+
+  progresso      Json?
+  cicloInicioEm  DateTime?
+  cicloFimEm     DateTime?
+  ultimoAcessoEm DateTime?
+
+  @@unique([metodologiaAssinanteId, estruturaId])
+  @@index([estruturaId])
 }
 
 model MetodologiaItem {
@@ -641,11 +736,12 @@ model MetodologiaAssinante {
   metodologiaId String
   usuarioId     String
 
-  metodologia Metodologia                 @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  usuario     Usuario                     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  origem      MetodologiaAssinaturaOrigem @default(LEARNING)
-  expiraEm    DateTime?
-  status      MetodologiaAssinaturaStatus @default(ATIVA)
+  metodologia         Metodologia                     @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario             Usuario                         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  origem              MetodologiaAssinaturaOrigem     @default(LEARNING)
+  expiraEm            DateTime?
+  status              MetodologiaAssinaturaStatus     @default(ATIVA)
+  progressosEstrutura MetodologiaProgressoEstrutura[]
 
   iniciouEm       DateTime  @default(now())
   cancelouEm      DateTime?
@@ -2597,6 +2693,13 @@ enum MetodologiaAssinaturaStatus {
   CONCLUIDA
 }
 
+enum MetodologiaProgressoStatus {
+  NAO_INICIADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  ATRASADA
+}
+
 enum MetodologiaPublicoAlvo {
   ATLETAS
   PROFISSIONAIS
@@ -2606,6 +2709,42 @@ enum MetodologiaPublicoAlvo {
 enum MetodologiaAssinaturaOrigem {
   LEARNING
   AVULSA
+}
+
+enum MetodologiaItemTipo {
+  TREINO
+  VIDEO
+  AULA
+  MATERIAL
+  DESAFIO
+}
+
+enum MetodologiaModoExecucao {
+  LIVRE
+  PRAZO_SUGERIDO
+  DESAFIO_FECHADO
+}
+
+enum MetodologiaTipo {
+  TRILHAS_TREINO
+  CURSO_FORMACAO
+}
+
+enum MetodologiaEstruturaTipo {
+  TRILHA
+  MODULO
+}
+
+enum MetodologiaArea {
+  TECNICO
+  FISICO
+  TATICO
+  MENTAL
+  GOLEIROS
+  PSICOLOGIA
+  INOVACAO
+  ANALISE_DESEMPENHO
+  OUTRO
 }
 
 enum OrganizacaoTipo {

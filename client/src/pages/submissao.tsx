@@ -53,6 +53,7 @@ export default function PaginaSubmissao() {
   const [treinoRecordedUrl, setTreinoRecordedUrl] = useState<string | null>(null);
   const [treinoRecError, setTreinoRecError] = useState<string | null>(null);
   const [metodologiaId, setMetodologiaId] = useState<string | null>(null);
+  const [estruturaId, setEstruturaId] = useState<string | null>(null);
   const [metodologiaItemId, setMetodologiaItemId] = useState<string | null>(null);
 
   const treinoMediaStreamRef = useRef<MediaStream | null>(null);
@@ -307,9 +308,11 @@ export default function PaginaSubmissao() {
     const pontosParam = Number(params.get("pontos") || 0);
     const atletasParam = params.get("atletas");
     const mId = params.get("metodologiaId");
+    const eId = params.get("estruturaId");
     const mItemId = params.get("metodologiaItemId");
 
     setMetodologiaId(mId);
+    setEstruturaId(eId);
     setMetodologiaItemId(mItemId);
 
     if (sId) setSessaoId(sId);
@@ -644,11 +647,11 @@ export default function PaginaSubmissao() {
   }
 
   async function concluirItemDaMetodologia(): Promise<boolean> {
-    if (!metodologiaId || !metodologiaItemId) return false;
-
     try {
+      if (!metodologiaId || !estruturaId || !metodologiaItemId) return false;
+
       const res = await fetch(
-        `${API.BASE_URL}/api/metodologias/${metodologiaId}/concluir-item`,
+        `${API.BASE_URL}/api/metodologias/${metodologiaId}/estruturas/${estruturaId}/concluir-item`,
         {
           method: "POST",
           headers: {
@@ -660,12 +663,16 @@ export default function PaginaSubmissao() {
       );
 
       const js = await res.json().catch(() => ({}));
+
       if (!res.ok) {
         console.warn("[metodologia] falha ao concluir item:", js);
         return false;
       }
 
-      return Boolean((js as any)?.metodologiaCompleta ?? (js as any)?.progresso?.metodologiaCompleta);
+      return Boolean(
+        (js as any)?.metodologiaCompleta ??
+          (js as any)?.progresso?.metodologiaCompleta
+      );
     } catch (e) {
       console.warn("[metodologia] erro ao concluir item:", e);
       return false;
@@ -774,7 +781,7 @@ export default function PaginaSubmissao() {
         const metodologiaCompleta = await concluirItemDaMetodologia();
 
         if (metodologiaCompleta && metodologiaId) {
-          navigate(`/metodologias/avaliar?metodologiaId=${encodeURIComponent(metodologiaId)}`);
+          navigate(`/learning/avaliar?metodologiaId=${encodeURIComponent(metodologiaId)}`);
           return;
         }
 
