@@ -491,7 +491,7 @@ export default function PaginaLogin() {
   if (maintenanceMode) {
     return (
       <MaintenanceScreen
-        title="Vai se aquecendo!"
+        //title="Vai se aquecendo!"
         subtitle="Enquanto isso, estamos em manutenção por aqui. Já já voltamos! ⚽🔥"
         hint="Se estiver demorando, tente recarregar."
         onRetry={() => window.location.reload()}

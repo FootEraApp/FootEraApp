@@ -1,4 +1,6 @@
-import { Dumbbell, Flame, Timer, ChevronRight } from "lucide-react";
+// client/src/components/MaintenanceScreen
+import { Dumbbell, Flame, Timer, ChevronRight, Home, Sparkles } from "lucide-react";
+import { useLocation } from "wouter";
 
 type Props = {
   title?: string;
@@ -9,10 +11,12 @@ type Props = {
 
 export default function MaintenanceScreen({
   title = "Vai se aquecendo!",
-  subtitle = "Estamos em manutenção agora. Já já voltamos pro jogo. ⚽🔥",
-  hint = "Tente novamente em instantes.",
+  subtitle = "Enquanto isso, estamos ajustando tudo por aqui. Aproveite para conhecer nossa Home e dar uma olhada na aba de novidades para ver o que está por vir. ⚽🔥",
+  hint = "Confira as novidades enquanto finalizamos os ajustes.",
   onRetry,
 }: Props) {
+  const [, navigate] = useLocation();
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg border p-6 md:p-8">
@@ -34,33 +38,57 @@ export default function MaintenanceScreen({
             <h1 className="text-2xl md:text-3xl font-extrabold text-green-900">
               {title}
             </h1>
-            <p className="mt-2 text-sm md:text-base text-gray-600">{subtitle}</p>
+            <p className="mt-2 text-sm md:text-base text-gray-600">
+              {subtitle}
+            </p>
           </div>
 
           <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded-xl border bg-gray-50 p-3 flex items-center gap-2">
-              <Flame className="w-5 h-5 text-green-800" />
+              <Flame className="w-5 h-5 text-green-800 shrink-0" />
               <div className="text-xs text-gray-700">
                 Aquecendo o sistema…
               </div>
             </div>
+
             <div className="rounded-xl border bg-gray-50 p-3 flex items-center gap-2">
-              <Timer className="w-5 h-5 text-green-800" />
-              <div className="text-xs text-gray-700">{hint}</div>
+              <Sparkles className="w-5 h-5 text-green-800 shrink-0" />
+              <div className="text-xs text-gray-700">
+                {hint}
+              </div>
             </div>
-            <div className="rounded-xl border bg-gray-50 p-3 flex items-center gap-2">
-              <ChevronRight className="w-5 h-5 text-green-800" />
-              <div className="text-xs text-gray-700">Voltamos em breve</div>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/?tab=novidades")}
+              className="rounded-xl border bg-gray-50 p-3 flex items-center gap-2 text-left hover:bg-green-50 transition active:scale-[0.99]"
+            >
+              <ChevronRight className="w-5 h-5 text-green-800 shrink-0" />
+              <div className="text-xs text-gray-700">
+                Veja o que está por vir
+              </div>
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onRetry ?? (() => window.location.reload())}
-            className="mt-2 w-full sm:w-auto px-4 py-2 rounded-lg bg-green-900 text-white hover:bg-green-800 transition active:scale-[0.99]"
-          >
-            Tentar novamente
-          </button>
+          <div className="mt-2 flex w-full flex-col sm:flex-row gap-3 justify-center">
+            <button
+              type="button"
+              onClick={onRetry ?? (() => window.location.reload())}
+              className="w-full sm:w-auto px-4 py-2 rounded-lg bg-green-900 text-white hover:bg-green-800 transition active:scale-[0.99]"
+            >
+              Tentar novamente
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="w-full sm:w-auto px-4 py-2 rounded-lg border border-green-900 text-green-900 hover:bg-green-50 transition active:scale-[0.99] inline-flex items-center justify-center gap-2"
+            >
+              <Home className="w-4 h-4" />
+              Ir para início
+            </button>
+          </div>
+
 
           <div className="text-xs text-gray-400">
             FootEra • manutenção programada

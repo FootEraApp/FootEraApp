@@ -1,3 +1,4 @@
+// client/src/pages/cadastro
 import { useEffect, useMemo, useState, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
@@ -5,6 +6,8 @@ import { API } from "../config.js";
 import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import GoogleButton from "../components/auth/GoogleButton";
+import MaintenanceScreen from "../components/MaintenanceScreen";
+
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -102,6 +105,9 @@ function validarCNPJ(v: string) {
 
 export default function Cadastro() {
   const [_, navigate] = useLocation();
+
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceChecked, setMaintenanceChecked] = useState(false);
 
   const [tipoPerfil, setTipoPerfil] = useState<TipoPerfil>("Atleta");
   const [nome, setNome] = useState("");
@@ -413,6 +419,21 @@ export default function Cadastro() {
     }
   }, [etapa, tipoPerfil, vinculo.desejaVinculo, vinculo.tipoAlvo, vinculo.alvoBusca]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await axios.get(`${API.BASE_URL}/api/status/maintenance`, {
+          timeout: 8000,
+        });
+        setMaintenanceMode(!!r.data?.maintenanceMode);
+      } catch {
+        setMaintenanceMode(false);
+      } finally {
+        setMaintenanceChecked(true);
+      }
+    })();
+  }, []);
+
   const selectedAlvo: ResultadoBusca | null = useMemo(
     () => resultadosBusca.find(r => r.id === vinculo.destinatarioId) || null,
     [resultadosBusca, vinculo.destinatarioId]
@@ -501,6 +522,20 @@ export default function Cadastro() {
       );
     }
   }, [navigate]);
+
+  if (!maintenanceChecked) {
+    return <div className="p-6">Carregando…</div>;
+  }
+
+  if (maintenanceMode) {
+    return (
+      <MaintenanceScreen
+        subtitle="Enquanto isso, estamos ajustando o cadastro por aqui. Já já voltamos! ⚽🔥"
+        hint="Confira as novidades enquanto finalizamos os ajustes."
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen">
