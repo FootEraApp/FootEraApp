@@ -458,7 +458,7 @@ export default function LearningCreatePage() {
   if (step === 1) {
     return (
       <div className="min-h-screen bg-[#f6f6f3] pb-16">
-        <div className="max-w-3xl mx-auto px-4 pt-5">
+        <div className="max-w-3xl mx-auto px-3 pt-5">
           <LearningHeader
             title="Criar Metodologia"
             backHref="/learning"
