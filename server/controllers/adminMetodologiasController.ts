@@ -34,32 +34,37 @@ export async function listMetodologiasPendentes(req: Request, res: Response) {
           criadorUsuario: {
             select: { id: true, nome: true, nomeDeUsuario: true, email: true, foto: true, parceiro: true },
           },
-          _count: { select: { assinantes: true, itens: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
 
-          // ✅ Preview: primeiros itens (pra admin bater o olho)
-          itens: {
-            take: 3,
-            orderBy: [{ semana: "asc" }, { ordem: "asc" }],
-            select: {
-              id: true,
-              semana: true,
-              ordem: true,
-              tipo: true,
-              titulo: true,
-              videoUrl: true,
-              thumbUrl: true,
-              duracaoMin: true,
-              treinoProgramadoId: true,
-              treinoProgramado: {
+          estruturas: {
+            take: 2,
+            orderBy: { ordem: "asc" },
+            include: {
+              itens: {
+                take: 3,
+                orderBy: { ordem: "asc" },
                 select: {
                   id: true,
-                  nome: true,
-                  codigo: true,
-                  imagemUrl: true,
-                  nivel: true,
-                  categoria: true,
-                  pontuacao: true,
-                  duracao: true,
+                  ordem: true,
+                  tipo: true,
+                  titulo: true,
+                  videoUrl: true,
+                  thumbUrl: true,
+                  arquivoUrl: true,
+                  materialUrl: true,
+                  treinoProgramadoId: true,
+                  treinoProgramado: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      codigo: true,
+                      imagemUrl: true,
+                      nivel: true,
+                      categoria: true,
+                      pontuacao: true,
+                      duracao: true,
+                    },
+                  },
                 },
               },
             },
@@ -91,7 +96,7 @@ export async function setMetodologiaAtivo(req: Request, res: Response) {
       data: { ativo },
       include: {
         criadorUsuario: { select: { id: true, nome: true, nomeDeUsuario: true, email: true, foto: true, parceiro: true } },
-        _count: { select: { assinantes: true, itens: true } },
+        _count: { select: { assinantes: true, estruturas: true } },
       },
     });
 
@@ -119,102 +124,40 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
           },
         },
 
-        _count: { select: { assinantes: true, itens: true } },
+        _count: { select: { assinantes: true, estruturas: true } },
 
-        // ✅ TODOS os itens da metodologia (vídeos/treinos)
-        itens: {
-          orderBy: [{ semana: "asc" }, { ordem: "asc" }],
-          select: {
-            id: true,
-            semana: true,
-            ordem: true,
-            titulo: true,
-            descricao: true,
-            tipo: true,
-            // vídeo
-            videoUrl: true,
-            thumbUrl: true,
-            duracaoMin: true,
-            // treino
-            treinoProgramadoId: true,
-            pontos: true,
-            publicado: true,
-            criadoEm: true,
-            atualizadoEm: true,
-            // ✅ aqui é o upgrade: traz o treino completo (exercícios + vídeos demonstrativos)
-            treinoProgramado: {
+        estruturas: {
+          orderBy: { ordem: "asc" },
+          include: {
+            itens: {
+              orderBy: { ordem: "asc" },
               select: {
                 id: true,
-                nome: true,
-                codigo: true,
+                ordem: true,
+                tipo: true,
+                titulo: true,
                 descricao: true,
-                imagemUrl: true,
-                nivel: true,
-                categoria: true,
-                pontuacao: true,
-                duracao: true,
-                parceiro: true,
-                metodologia: true,
-                metas: true,
-                dicas: true,
-                objetivo: true,
-                tipoTreino: true,
-
-                // 🔥 exercícios do treino (join table)
-                exercicios: {
-                  orderBy: { ordem: "asc" },
+                videoUrl: true,
+                thumbUrl: true,
+                arquivoUrl: true,
+                materialUrl: true,
+                duracaoMin: true,
+                pontos: true,
+                obrigatorio: true,
+                publicado: true,
+                treinoProgramadoId: true,
+                treinoProgramado: {
                   select: {
                     id: true,
-                    ordem: true,
-                    repeticoes: true,
-
-                    exercicio: {
-                      select: {
-                        id: true,
-                        codigo: true,
-                        nome: true,
-                        objetivo: true,
-                        nivel: true,
-                        categorias: true,
-                        videoDemonstrativoUrl: true, // ✅ “vídeo do exercício”
-                      },
-                    },
-
-                    exercicioTemporario: {
-                      select: {
-                        id: true,
-                        codigo: true,
-                        nome: true,
-                        descricao: true,
-                        nivel: true,
-                        categorias: true,
-                        videoDemonstrativoUrl: true, // ✅ “vídeo do exercício temporário”
-                      },
-                    },
-                  },
-                },
-
-                // (opcional) se você quiser mostrar exercícios temporários que existem no treino
-                temporarios: {
-                  select: {
-                    id: true,
-                    codigo: true,
                     nome: true,
-                    descricao: true,
+                    codigo: true,
+                    imagemUrl: true,
                     nivel: true,
-                    categorias: true,
-                    videoDemonstrativoUrl: true,
-                  },
-                },
-
-                // (opcional) infos do criador do treino
-                criadorProfessor: {
-                  select: {
-                    id: true,
-                    nome: true,
-                    cref: true,
-                    fotoUrl: true,
-                    codigo: true,
+                    categoria: true,
+                    pontuacao: true,
+                    duracao: true,
+                    objetivo: true,
+                    tipoTreino: true,
                   },
                 },
               },

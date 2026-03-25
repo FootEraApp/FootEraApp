@@ -94,9 +94,6 @@ export default function GoogleButton({
 
         if (initializedRef.current) return;
 
-        console.log("GOOGLE CLIENT ID:", clientId);
-        console.log("ORIGIN:", window.location.origin);
-
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: async (response: any) => {

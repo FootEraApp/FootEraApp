@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  ChevronLeft,
   Search,
   Loader2,
   Trash2,
@@ -9,8 +8,12 @@ import {
   Star as StarIcon,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
-import { API } from "../../config.js";
+import { API, APP } from "../../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import LearningHeader from "../../components/learning/LearningHeader.js";
+import LearningCard from "../../components/learning/LearningCard.js";
+
+const fallback = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Metodologia = {
   id: string;
@@ -38,79 +41,6 @@ function getToken() {
     sessionStorage.getItem("token") ??
     ""
   );
-}
-
-function normalizeImgUrl(raw?: string | null) {
-  if (!raw) return null;
-  const u = String(raw).trim();
-  if (!u || u === "null" || u === "undefined") return null;
-
-  if (u.startsWith("http://") || u.startsWith("https://")) return u;
-
-  // ✅ assets locais do frontend
-  if (u.startsWith("/assets/")) return u;
-
-  // ✅ uploads/api
-  if (u.startsWith("/uploads/") || u.startsWith("/exercicios/")) return `${API.BASE_URL}${u}`;
-
-  // ✅ qualquer outro caminho com "/"
-  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
-
-  // ✅ "uploads/..." sem barra
-  return `${API.BASE_URL}/${u}`;
-}
-
-function StarsRating({ value }: { value: number }) {
-  const v = Math.max(0, Math.min(5, Number(value || 0)));
-  const half = Math.round(v * 2) / 2; // 0.5 steps
-  const full = Math.floor(half);
-  const hasHalf = half - full === 0.5;
-
-  return (
-    <div className="flex items-center">
-      {Array.from({ length: 5 }).map((_, i) => {
-        const idx = i + 1;
-
-        if (idx <= full) {
-          return (
-            <StarIcon
-              key={i}
-              className="w-4 h-4 text-amber-500"
-              fill="currentColor"
-            />
-          );
-        }
-
-        if (idx === full + 1 && hasHalf) {
-          return (
-            <span key={i} className="relative inline-block w-4 h-4">
-              <StarIcon
-                className="absolute inset-0 w-4 h-4 text-gray-300"
-                fill="currentColor"
-              />
-              <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
-                <StarIcon className="w-4 h-4 text-amber-500" fill="currentColor" />
-              </span>
-            </span>
-          );
-        }
-
-        return <StarIcon key={i} className="w-4 h-4 text-gray-300" fill="none" />;
-      })}
-    </div>
-  );
-}
-
-function getUserId(): string | null {
-  const s: any = Storage as any;
-  const id =
-    s?.user?.id ||
-    s?.usuario?.id ||
-    s?.usuarioLogado?.id ||
-    localStorage.getItem("userId") ||
-    sessionStorage.getItem("userId");
-
-  return id ? String(id) : null;
 }
 
 function getPlanoIdLocal(): string | null {
@@ -536,64 +466,17 @@ export default function MinhasMetodologias() {
       <div className="w-full px-3 sm:px-4 lg:px-8">
         {/* Header */}
         <div className="pt-3 sticky top-0 z-20 bg-neutral-50/90 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/treinos")}
-              className="inline-flex items-center justify-center p-2 rounded-xl border bg-white hover:bg-gray-50"
-              aria-label="Voltar"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-
-            <div className="flex-1">
-              <h1 className="text-lg sm:text-xl font-bold text-green-900">
-                Minhas Metodologias
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600">
-                {isInstrutor ? "Assinadas e criadas por você." : "Tudo o que você assinou (ou tem acesso)."}
-                {quota && quota.limite > 0 && (
-                  <span className="ml-2 inline-flex items-center gap-2">
-                    <span className="px-2 py-1 rounded-full border bg-white text-[11px] font-semibold">
-                      {quota.usadasNoMes}/{quota.limite}
-                    </span>
-                    {quota.restantes === 0 && (
-                      <span className="text-[11px] text-amber-700">
-                        Limite atingido
-                      </span>
-                    )}
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {quota && quota.limite === 0 && (
-              <button
-                onClick={() => navigate("/pagamentos?produto=learning")}
-                className="px-3 py-2 rounded-xl bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
-              >
-                Ativar Learning
-              </button>
-            )}
-
-            {checkingPerm ? null : canCriarMetodologia ? (
-              <Link
-                href="/treinos/Criar-Metodologia"
-                className="px-3 py-2 rounded-xl bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
-              >
-                Criar
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate("/pagamentos")} // ou /pagamentos?produto=...
-                className="px-3 py-2 rounded-xl bg-gray-200 text-gray-600 text-sm font-semibold cursor-not-allowed"
-                title="Disponível apenas para Professor Parceiro ou planos Pro"
-                disabled
-              >
-                Criar
-              </button>
-            )}
-          </div>
+          <LearningHeader
+            title="Meus Learnings"
+            subtitle={
+              isInstrutor
+                ? "Assinadas e criadas por você."
+                : "Tudo o que você assinou (ou tem acesso)."
+            }
+            backHref="/learning"
+            createHref={canCriarMetodologia ? "/learning/create" : undefined}
+            createLabel="Criar"
+          />
 
           {/* ✅ Abas SOMENTE para instrutores */}
           {isInstrutor && (
@@ -662,117 +545,38 @@ export default function MinhasMetodologias() {
           )}
 
           {!loading && filtrados.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtrados.map((m) => {
-                const capa = normalizeImgUrl(m.capaUrl);
-                const logo = normalizeImgUrl(m.logoUrl);
-                const fallback = `${API.BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+            <div className="space-y-4">
+            {filtrados.map((m) => (
+              <LearningCard
+                key={m.id}
+                item={m}
+                href={`/learning/${m.id}`}
+                actionLabel={tab === "criadas" ? "Gerenciar" : "Acessar"}
+                extraActions={
+                  isInstrutor && tab === "criadas" ? (
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/learning/create?id=${encodeURIComponent(m.id)}`}
+                        className="inline-flex h-10 px-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold items-center gap-2"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        Editar
+                      </Link>
 
-                return (
-                  <div
-                    key={m.id}
-                    className="rounded-2xl border shadow-sm bg-white p-4 flex items-center justify-between gap-4"
-                  >
-                    {/* ESQUERDA: logo + infos */}
-                    <div className="flex items-start gap-4 min-w-0">
-                      <img
-                        src={capa || logo || fallback}
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = fallback;
-                        }}
-                        className="h-16 w-16 rounded-2xl border object-cover bg-white flex-shrink-0"
-                        alt={m.titulo}
-                      />
-
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
-                            {String(m.publicoAlvo ?? "AMBOS")}
-                          </span>
-
-                          {/* ✅ ADD: badge de status quando estiver na aba "criadas" */}
-                          {isInstrutor && tab === "criadas" && (
-                            <span className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${
-                              m.ativo ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
-                            }`}>
-                              {m.ativo ? "Publicada" : "Aguardando validação"}
-                            </span>
-                          )}
-                        </div>
-                        <div className="ml-1 font-bold text-green-900 truncate">
-                          {m.titulo}
-                        </div>
-                        <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
-                          <StarsRating value={Number(m.mediaAvaliacao ?? 0)} />
-                          <span className="font-semibold text-gray-800">
-                            {(Number(m.mediaAvaliacao ?? 0)).toFixed(1)}
-                          </span>
-                          <span>({Number((m as any).totalAvaliacoes ?? m.totalReviews ?? 0)})</span>
-                          <span className="text-gray-400">•</span>
-                          <span>
-                            <b>{Number(m.totalAssinantes ?? 0)}</b> assinaturas
-                          </span>
-                        </div>
-
-                        {/* pontos + descrição */}
-                        <div className="mt-1 text-sm text-gray-700">
-                          + <b>{Number(m.pontosTotal ?? 0)}</b> pts
-                        </div>
-
-                        {m.criadorUsuario?.nome && (
-                          <div className="mt-1 text-sm text-gray-700">
-                            Criado por: <b>{m.criadorUsuario.nome}</b>
-                          </div>
-                        )}
-
-                        {!!m.descricao && (
-                          <div className="mt-1 text-sm text-gray-600 line-clamp-2">
-                            {m.descricao}
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deletarMetodologia(m.id)}
+                        className="inline-flex h-10 px-3 rounded-xl border border-red-200 bg-white text-red-600 font-semibold items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Excluir
+                      </button>
                     </div>
-
-                    {/* DIREITA: ações */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {/* ✅ CRIADAS: só editar/apagar (sem Acessar) */}
-                      {isInstrutor && tab === "criadas" ? (
-                        <>
-                          <Link
-                            href={`/treinos/Criar-Metodologia?id=${encodeURIComponent(
-                              m.id
-                            )}`}
-                            className="p-2 rounded-xl border bg-white hover:bg-gray-50"
-                            title="Editar"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Link>
-
-                          <button
-                            type="button"
-                            onClick={() => deletarMetodologia(m.id)}
-                            className="p-2 rounded-xl border bg-white hover:bg-red-50"
-                            title="Deletar"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
-                        </>
-                      ) : (
-                        /* ✅ ASSINADAS: botão "Acessar" */
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/metodologias/${m.id}`)}
-                          className="px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
-                        >
-                          Acessar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  ) : null
+                }
+              />
+            ))}
+          </div>
           )}
         </div>
       </div>

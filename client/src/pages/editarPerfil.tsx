@@ -85,6 +85,19 @@ const EditarPerfil = () => {
     return (v || "").replace(/\D/g, "");
   }
 
+  function onlyCnpj(v: string) {
+    return (v || "").replace(/\D/g, "").slice(0, 14);
+  }
+
+  function formatCnpj(v: string) {
+    const digits = onlyCnpj(v);
+    return digits
+      .replace(/^(\d{2})(\d)/, "$1.$2")
+      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/\.(\d{3})(\d)/, ".$1/$2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+
   useEffect(() => {
     if (!usuarioId || !token) {
       console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
@@ -105,8 +118,12 @@ const EditarPerfil = () => {
         }
 
         const u = res.data.usuario || {};
+        const dadosEsp: any = { ...(res.data.dadosEspecificos || {}) };
 
-        // ✅ garante preencher o input mesmo se o backend vier com outro nome
+        if (dadosEsp.site && !dadosEsp.siteOficial) {
+          dadosEsp.siteOficial = dadosEsp.site;
+        }
+
         const nomeDeUsuario =
           u.nomeDeUsuario ??
           u.username ??
@@ -117,12 +134,15 @@ const EditarPerfil = () => {
         setDadosUsuario({
           ...u,
           nomeDeUsuario: String(nomeDeUsuario || ""),
+          cep: u.cep ?? dadosEsp.cep ?? "",
+          cidade: u.cidade ?? dadosEsp.cidade ?? "",
+          estado: u.estado ?? dadosEsp.estado ?? "",
+          pais: u.pais ?? dadosEsp.pais ?? "",
+          logradouro: u.logradouro ?? dadosEsp.logradouro ?? "",
+          cpf: u.cpf ?? dadosEsp.cpf ?? "",
         });
 
-        const dadosEsp: any = { ...(res.data.dadosEspecificos || {}) };
-        if (dadosEsp.site && !dadosEsp.siteOficial) {
-          dadosEsp.siteOficial = dadosEsp.site;
-        }
+        setDadosTipo(dadosEsp);
 
         const vinculos = res.data.vinculos || res.data.vinculo || {};
 
@@ -229,7 +249,7 @@ const EditarPerfil = () => {
         setDadosUsuario((prev: any) => ({
           ...prev,
           cep: cepDigits,
-          bairro: prev?.bairro || data.bairro || "",
+          logradouro: prev?.logradouro || data.logradouro || "",
           cidade: prev?.cidade || data.localidade || "",
           estado: prev?.estado || data.uf || "",
           pais: prev?.pais || "Brasil",
@@ -334,6 +354,14 @@ const EditarPerfil = () => {
     );
   }
 
+  const isAtleta = tipoRender === "atleta";
+  const isOlheiro = tipoRender === "olheiro";
+  const isProfessor = tipoRender === "professor";
+  const isClube = tipoRender === "clube";
+  const isEscolinha = tipoRender === "escola" || tipoRender === "escolinha";
+
+  const mostrarCepUsuario = true;
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -387,6 +415,8 @@ const EditarPerfil = () => {
           ? Array.isArray(raw)
             ? raw.join(", ")
             : raw ?? ""
+          : name === "cnpj"
+          ? formatCnpj(String(raw ?? ""))
           : raw ?? "";
 
       return (
@@ -396,7 +426,15 @@ const EditarPerfil = () => {
             type={type}
             name={`tipo_${name}`}
             value={value}
-            onChange={handleChange}
+            onChange={(e) => {
+              if (name === "cnpj") {
+                const digits = onlyCnpj(e.target.value);
+                setDadosTipo({ ...dadosTipo, [name]: digits });
+                return;
+              }
+
+              handleChange(e);
+            }}
             className="w-full border px-3 py-2 rounded"
           />
         </div>
@@ -539,17 +577,11 @@ const EditarPerfil = () => {
         return (
           <>
             {renderInput("Nome de Exibição", "nome")}
+            {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
             {renderInput("Email", "email")}
             {renderInput("Site Oficial", "siteOficial")}
-            {renderInput("Complemento", "complemento")}
-            {renderInput("Número", "numero")}
-            {renderInput("Bairro", "bairro")}
-            {renderInput("Cidade", "cidade")}
-            {renderInput("Estado", "estado")}
-            {renderInput("País", "pais")}
-            {renderInput("CEP", "cep")}
           </>
         );
 
@@ -637,20 +669,12 @@ const EditarPerfil = () => {
         return (
           <>
             {renderInput("Nome de Exibição", "nome")}
+            {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
             {renderInput("Email", "email")}
             {renderInput("Site Oficial", "siteOficial")}
-            {renderInput("Sede", "sede")}
             {renderInput("Estádio", "estadio")}
-            {renderInput("Logradouro", "logradouro")}
-            {renderInput("Número", "numero")}
-            {renderInput("Complemento", "complemento")}
-            {renderInput("Bairro", "bairro")}
-            {renderInput("Cidade", "cidade")}
-            {renderInput("Estado", "estado")}
-            {renderInput("País", "pais")}
-            {renderInput("CEP", "cep")}
 
             <div className="mb-4">
               <label className="block text-sm font-medium">Descrição</label>
@@ -777,22 +801,40 @@ return (
         />
       </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium">CEP</label>
-        <input
-          name="cep"
-          value={dadosUsuario.cep || ""}
-          onChange={(e) => {
-            const digits = onlyDigits(e.target.value);
-            setDadosUsuario((prev: any) => ({ ...prev, cep: digits }));
-          }}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="Ex: 29102-999"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Você pode deixar em branco.
-        </p>
-      </div>
+{(isProfessor || isOlheiro || isAtleta) && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium">CPF</label>
+          <input
+            name="cpf"
+            value={dadosUsuario.cpf || ""}
+            onChange={(e) => {
+              const digits = onlyDigits(e.target.value).slice(0, 11);
+              setDadosUsuario((prev: any) => ({ ...prev, cpf: digits }));
+            }}
+            className="w-full border px-3 py-2 rounded"
+            placeholder="000.000.000-00"
+          />
+        </div>
+      )}
+      
+      {mostrarCepUsuario && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium">CEP</label>
+          <input
+            name="cep"
+            value={dadosUsuario.cep || ""}
+            onChange={(e) => {
+              const digits = onlyDigits(e.target.value).slice(0, 8);
+              setDadosUsuario((prev: any) => ({ ...prev, cep: digits }));
+            }}
+            className="w-full border px-3 py-2 rounded"
+            placeholder="Ex: 29102-999"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Você pode deixar em branco.
+          </p>
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
@@ -829,6 +871,17 @@ return (
         </div>
       </div>
 
+      <div className="mb-6">
+        <label className="block text-sm font-medium">Logradouro (Endereço)</label>
+        <input
+          name="logradouro"
+          value={dadosUsuario.logradouro || ""}
+          onChange={handleChange}
+          className="w-full border px-3 py-2 rounded"
+          placeholder="Rua, avenida, etc."
+        />
+      </div>
+
       {renderCamposEspecificos()}
 
       <button
@@ -855,6 +908,16 @@ return (
 
             // 3. Preparação do objeto 'tipo' (Lógica específica de cada categoria)
             const tipo: any = { ...dadosTipo };
+
+            if (typeof tipo.cnpj === "string") {
+              const cnpjLimpo = onlyCnpj(tipo.cnpj);
+              tipo.cnpj = cnpjLimpo === "" ? null : cnpjLimpo;
+            }
+
+            if (typeof tipo.cref === "string") {
+              const crefLimpo = tipo.cref.trim();
+              tipo.cref = crefLimpo === "" ? null : crefLimpo;
+            }
             if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
 
             tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
@@ -902,12 +965,10 @@ return (
               }
             }
 
-            // 4. Montagem do FormData Final
-            const cepFinal = (dadosUsuario.cep ?? "").toString().trim();
-            
+            const cepFinal = onlyDigits((dadosUsuario.cep ?? "").toString());
+
             const usuarioPayload = {
               ...dadosUsuario,
-              // Se for File, enviamos undefined aqui para o backend não sobrescrever com string vazia
               foto: dadosUsuario.foto instanceof File ? undefined : dadosUsuario.foto,
               nomeDeUsuario: usernameFinal || null,
               cep: cepFinal === "" ? null : cepFinal,

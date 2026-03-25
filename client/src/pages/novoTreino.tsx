@@ -16,13 +16,37 @@ import { TreinosApi } from "../utils/treinosApi.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
 import {
   montarExerciciosParaPayload,
-  parseRepeticoesStr,
 } from "../utils/treinos.helpers.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import axios from "axios";
 
-type ExItemUILocal = ExItemUI & {
+type ExItemUILocal = {
+  idLocal: string;
+  id?: string | null;
+  idCatalogo?: string | null;
+  exercicioId?: string | null;
+  exercicioPersonalizadoId?: string | null;
+  exercicioTemporarioId?: string | null;
+  nome: string;
+  descricao?: string | null;
+  objetivo?: string | null;
+  nivel?: string | null;
   videoUrl?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
+  series?: string | number | null;
+  repeticoes?: string | number | null;
+  duracao?: string | null;
+  descanso?: string | null;
+  ordem?: number | null;
+  categorias?: string[];
+  tipo?: "catalogo" | "personalizado" | "meus" | "temporario";
+  origem?: "catalogo" | "personalizado" | "meus" | "temporario";
+  observacao?: string | null;
+  exercicio?: any;
+  exercicioPersonalizado?: any;
+  exercicioTemporario?: any;
+  nomeCatalogo?: string | null;
 };
 type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 type PontuacaoDetalhe = {
@@ -47,6 +71,16 @@ function toRepeticoesStr(v: any): string {
   if (typeof v === "string") return v.trim();
   if (typeof v === "number") return String(v);
   return String(v);
+}
+
+function exercicioTemExecucaoValida(ex: ExItemUILocal) {
+  const temSeriesOuReps =
+    String(ex.series ?? "").trim() !== "" ||
+    String(ex.repeticoes ?? "").trim() !== "";
+
+  const temDuracao = String(ex.duracao ?? "").trim() !== "";
+
+  return temSeriesOuReps || temDuracao;
 }
 
 function formatSerieXReps(series?: number | null, repsRaw?: string | number | null) {
@@ -280,9 +314,8 @@ function calcularPontuacaoTreino(
   nivel: string,
   tipoTreino: string,
   duracaoMin: number,
-  exercicios: ExItemUI[],
+  exercicios: ExItemUILocal[],
 ): PontuacaoDetalhe {
-
   const exCount = exercicios.filter((e) => e.idCatalogo || (e.nome && e.nome.trim())).length;
   const ptsEx = exCount * PONTOS.POR_EXERCICIO;
 
@@ -293,7 +326,14 @@ function calcularPontuacaoTreino(
   const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
 
   const total = ptsEx + ptsNivel + ptsTipo + ptsDur;
-  return { total, nivel: ptsNivel, tipo: ptsTipo, exercicios: ptsEx, duracao: ptsDur, exCount };
+  return {
+    total,
+    nivel: ptsNivel,
+    tipo: ptsTipo,
+    exercicios: ptsEx,
+    duracao: ptsDur,
+    exCount,
+  };
 }
 
 interface UsuarioLogado {
@@ -357,6 +397,18 @@ type TreinoAgendadoResp = {
   titulo: string;
   dataTreino: string;
   treinoProgramadoId: string;
+};
+
+type MeuExercicioItem = {
+  id: string;
+  origem: "exercicio" | "personalizado";
+  nome: string;
+  objetivo?: string | null;
+  descricao?: string | null;
+  nivel?: string | null;
+  categorias?: string[];
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
 };
 
 const SAVE_KEY = "novoTreinoState";
@@ -766,6 +818,16 @@ export default function NovoTreino() {
   const [route, navigate] = useLocation();
   const opcoesNiveis = ["Base", "Avancado", "Performance"] as const;
   type NivelTreino = (typeof opcoesNiveis)[number];
+  const OPCOES_CATEGORIA = [
+    "Todas as categorias",
+    "Sub9",
+    "Sub11",
+    "Sub13",
+    "Sub15",
+    "Sub17",
+    "Sub20",
+    "Livre",
+  ];
 
   const getQueryParam = (search: string, key: string) => {
     const sp = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
@@ -811,7 +873,7 @@ export default function NovoTreino() {
   const [capaPreview, setCapaPreview] = useState<string>("");
   const [capaUrl, setCapaUrl] = useState<string>("");        
   const [editProgramadoId, setEditProgramadoId] = useState<string>("");
-
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState([]);
   type AbaTreinosAtleta = "meu_professor" | "footera";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
@@ -837,8 +899,9 @@ export default function NovoTreino() {
   const [isParceiro, setIsParceiro] = useState<boolean>(false);
   const [treinoFootera, setTreinoFootera] = useState<boolean>(false);
   const [filtroEx, setFiltroEx] = useState("");
-  const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
-  const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
+  const [filtroCategoria, setFiltroCategoria] = useState<string>("Todas as categorias");
+  const [filtroNivel, setFiltroNivel] = useState<string>("");
+  const [filtroVideo, setFiltroVideo] = useState<"" | "com" | "sem">("");
   const [filtroProf, setFiltroProf] = useState("");
   const restoredRef = useRef(false);
   const jaSincronizouCalendarioComDatas = useRef(false);
@@ -856,9 +919,11 @@ export default function NovoTreino() {
 
   const [horaAgendamento, setHoraAgendamento] = useState<string>("18:00");
   const [horaAgendamentoInput, setHoraAgendamentoInput] = useState<string>("18:00");
-  
-  type AbaExercicios = "catalogo" | "personalizados";
-  const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("catalogo");
+  const [meusExercicios, setMeusExercicios] = useState<MeuExercicioItem[]>([]);
+  const [loadingMeusExercicios, setLoadingMeusExercicios] = useState(false);
+
+  type AbaExercicios = "meus" | "catalogo" | "personalizados";
+  const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
 
   type ExercicioPersonalizadoItem = {
     id: string;
@@ -874,27 +939,31 @@ export default function NovoTreino() {
   const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<ExercicioPersonalizadoItem[]>([]);
   const [loadingPersonalizados, setLoadingPersonalizados] = useState(false);
 
-  const [filtroPers, setFiltroPers] = useState("");
-  const [filtroPersNivel, setFiltroPersNivel] = useState<string>(""); // "" = todos
-  const [filtroPersVideo, setFiltroPersVideo] = useState<"" | "com" | "sem">("");
-    
   function hhmmNow() {
     const now = new Date();
     const h = String(now.getHours()).padStart(2, "0");
     const m = String(now.getMinutes()).padStart(2, "0");
     return `${h}:${m}`;
   }
+
   function isValidHHMM(v: string) {
     return /^\d{2}:\d{2}$/.test(v);
   }
+
   function isTodayYMD(ymd: string) {
     const t = new Date();
     const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
     return ymd === today;
   }
 
-  type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
+  function normalizarCategoriaFiltro(valor: string) {
+    return String(valor || "")
+      .trim()
+      .toLowerCase()
+      .replace(/sub[\s-]?/g, "sub");
+  }
 
+  type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
   type GrupoProfessor = {
     tipo: "Escolinha" | "Clube";
     ownerId: string;
@@ -931,6 +1000,18 @@ export default function NovoTreino() {
       copia[index] = { ...copia[index], videoUrl };
       return copia;
     });
+  }
+
+  function atualizarCampoExercicio(
+    idLocal: string,
+    campo: "series" | "repeticoes" | "duracao" | "descanso",
+    valor: string
+  ) {
+    setExerciciosSelecionados((prev) =>
+      prev.map((item) =>
+        item.idLocal === idLocal ? { ...item, [campo]: valor } : item
+      )
+    );
   }
 
   function showToast(
@@ -1035,111 +1116,9 @@ export default function NovoTreino() {
   }, []);
 
   useEffect(() => {
-    if (abaExercicios !== "personalizados") return;
+    fetchExerciciosCatalogo();
     fetchExerciciosPersonalizados();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abaExercicios]);
-
-  useEffect(() => {
-    let cancel = false;
-
-    (async () => {
-      try {
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-        const urls = [
-          `${API.BASE_URL}/api/exercicios`,
-          `${API.BASE_URL}/api/exercicios?ativos=1`,
-          `${API.BASE_URL}/api/exercicios/listar`,
-        ];
-
-        let arr: any[] = [];
-        for (const url of urls) {
-          const r = await fetch(url, { headers });
-          const txt = await r.text();
-
-          if (!r.ok) {
-            console.warn("[NovoTreino] falha:", r.status, txt);
-            continue;
-          }
-
-          let j: any = null;
-          try {
-            j = txt ? JSON.parse(txt) : null;
-          } catch {
-            j = null;
-          }
-
-          const list = Array.isArray(j)
-            ? j
-            : j?.items ?? j?.data ?? j?.rows ?? j?.result ?? [];
-
-          if (Array.isArray(list) && list.length) {
-            arr = list;
-            break;
-          }
-        }
-
-        const normalizados: Exercicio[] = (arr || [])
-          .map((e: any) => {
-            const video =
-              e.videoDemonstrativoUrl ??
-              e.videoDemonstrativoURL ??
-              e.videoUrl ??
-              e.video ??
-              e.midiaUrl ??
-              e?.midia?.url ??
-              null;
-
-            const cats =
-              e.categorias ??
-              e.categoria ??
-              e.categoriaBase ??
-              e.faixaEtaria ??
-              [];
-
-            const categoriasArray = Array.isArray(cats)
-              ? cats.map(String)
-              : cats
-              ? [String(cats)]
-              : [];
-
-            return {
-              id: String(e.id),
-              nome: String(e.nome ?? e.titulo ?? ""),
-              objetivo: e.objetivo ?? e.descricao ?? e.desc ?? "",
-              descricao: e.objetivo ?? e.descricao ?? e.desc ?? "",
-              nivel: e.nivel ?? e.dificuldade ?? null,
-              repeticoes: e.repeticoes ?? e.reps ?? "",
-              videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? null,
-              categorias: categoriasArray,
-              duracaoMinutos:
-                typeof e.duracaoMinutos === "number"
-                  ? e.duracaoMinutos
-                  : typeof e.duracao === "number"
-                  ? e.duracao
-                  : null,
-              tipoTreino: e.tipoTreino ?? null,
-            } as Exercicio;
-          })
-          .filter((x) => x.id && x.nome);
-
-        if (!cancel) setExerciciosDisponiveis(normalizados);
-      } catch (err) {
-        console.error("[NovoTreino] erro ao carregar exercicios:", err);
-        if (!cancel) setExerciciosDisponiveis([]);
-      }
-    })();
-
-    return () => {
-      cancel = true;
-    };
+    fetchMeusExercicios();
   }, []);
 
   useEffect(() => {
@@ -1226,50 +1205,48 @@ export default function NovoTreino() {
     return exerciciosSelecionados.some((x: any) => String((x as any).exercicioPersonalizadoId || "") === String(id));
   }
 
-  function addPersonalizadoNoTreino(p: ExercicioPersonalizadoItem) {
-    setExerciciosSelecionados((prev) => {
-      const jaTem = prev.some(
-        (x: any) =>
-          String((x as any).exercicioPersonalizadoId || "") === String(p.id),
-      );
-      if (jaTem) return prev;
-
-      const ordem = prev.length + 1;
-
-      return [
-        ...prev,
-        {
-          // igual catálogo: dados ficam no ROOT do item
-          id: `pers_${String(p.id)}`,
-          idCatalogo: null,
-
-          exercicioPersonalizadoId: String(p.id),
-
-          nome: String(p.nome ?? "").trim(),
-          objetivo: p.objetivo ?? p.descricao ?? "",
-          descricao: p.objetivo ?? p.descricao ?? "",
-          repeticoes: "",
-          series: null,
-          ordem,
-
-          // importantíssimo: isso alimenta o preview “sem vídeo”
-          videoUrl: p.videoDemonstrativoUrl ?? null,
-          videoPosterUrl: p.videoPosterUrl ?? null,
-
-          // opcionais (se seu tipo aceitar / ajuda pra UI)
-          nivel: p.nivel ?? null,
-          categorias: Array.isArray(p.categorias) ? p.categorias : [],
-        } as any,
-      ];
-    });
+  function treinoTemExercicio(id: string) {
+    return exerciciosSelecionados.some(
+      (x: any) =>
+        String((x as any).idCatalogo || (x as any).exercicioId || "") === String(id)
+    );
   }
 
-  function removePersonalizadoDoTreino(pId: string) {
-    setExerciciosSelecionados((prev) => {
-      const next = prev.filter((x: any) => String((x as any).exercicioPersonalizadoId || "") !== String(pId));
-      // reordena
-      return next.map((x: any, i: number) => ({ ...x, ordem: i + 1 }));
-    });
+  function addPersonalizadoNoTreino(p: any) {
+    setExerciciosSelecionados((prev) => [
+      ...prev,
+      {
+        idLocal: crypto.randomUUID(),
+        idCatalogo: null,
+        exercicioId: null,
+        exercicioPersonalizadoId: String(p.id ?? ""),
+        nome: p.nome ?? "Exercício",
+        descricao: p.objetivo ?? p.descricao ?? "",
+        objetivo: p.objetivo ?? null,
+        nivel: p.nivel ?? null,
+        videoUrl: p.videoDemonstrativoUrl ?? null,
+        videoDemonstrativoUrl: p.videoDemonstrativoUrl ?? null,
+        videoPosterUrl: p.videoPosterUrl ?? null,
+        series:
+          typeof p.series === "number"
+            ? p.series
+            : p.series != null && String(p.series).trim() !== ""
+            ? Number(p.series)
+            : null,
+
+        repeticoes:
+          p.repeticoes != null ? String(p.repeticoes) : "",
+
+        duracao:
+          p.duracao != null ? String(p.duracao) : "",
+
+        descanso:
+          p.descanso != null ? String(p.descanso) : "",
+        ordem: prev.length + 1,
+        categorias: Array.isArray(p.categorias) ? p.categorias : [],
+        origem: "personalizado",
+      },
+    ]);
   }
 
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
@@ -1819,13 +1796,24 @@ useEffect(() => {
           const exOld = Array.isArray(saved.exerciciosSelecionados)
             ? saved.exerciciosSelecionados
             : [];
-          const exUi: ExItemUI[] = exOld.map((x: any, idx: number) => ({
-            idCatalogo: x.exercicioId ?? null,
+          const exUi: ExItemUILocal[] = exOld.map((x: any, idx: number) => ({
+            idLocal: crypto.randomUUID(),
+            idCatalogo: x.exercicioId ?? x.idCatalogo ?? null,
+            exercicioId: x.exercicioId ?? x.idCatalogo ?? null,
+            exercicioPersonalizadoId: x.exercicioPersonalizadoId ?? null,
             nome: x.nome ?? "",
             descricao: x.descricao ?? null,
+            objetivo: x.objetivo ?? null,
             repeticoes: x.repeticoes ?? "",
             ordem: x.ordem ?? idx + 1,
             series: x.series ?? "",
+            duracao: x.duracao ?? "",
+            descanso: x.descanso ?? "",
+            videoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
+            videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
+            videoPosterUrl: x.videoPosterUrl ?? null,
+            nivel: x.nivel ?? null,
+            categorias: Array.isArray(x.categorias) ? x.categorias : [],
           }));
           setExerciciosSelecionados(exUi);
           setAtletasSelecionados(saved.atletasSelecionados ?? []);
@@ -2145,41 +2133,36 @@ useEffect(() => {
 
     const exs = t.exercicios ?? t.exs ?? t.conteudo?.exercicios ?? [];
     const exUi: ExItemUILocal[] = (Array.isArray(exs) ? exs : []).map((ex: any, idx: number) => ({
+      idLocal: crypto.randomUUID(),
       id: ex.id ?? `ex_${idx}`,
-
       // catálogo
       idCatalogo:
         ex.exercicioId ??
         ex.idCatalogo ??
         (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
         null,
-
       exercicioId:
         ex.exercicioId ??
         ex.idCatalogo ??
         (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
         null,
-
       // personalizado
       exercicioPersonalizadoId:
         ex.exercicioPersonalizadoId ??
         ex.exercicioPersonalizado?.id ??
         null,
-
       tipo:
         ex.exercicioPersonalizadoId || ex.exercicioPersonalizado
           ? "personalizado"
           : ex.exercicioTemporarioId || ex.exercicioTemporario
           ? "temporario"
           : "catalogo",
-
       nome:
         ex.nome ??
         ex.exercicio?.nome ??
         ex.exercicioPersonalizado?.nome ??
         ex.exercicioTemporario?.nome ??
         "",
-
       descricao:
         ex.objetivo ??
         ex.descricao ??
@@ -2190,11 +2173,16 @@ useEffect(() => {
         ex.exercicioTemporario?.objetivo ??
         ex.exercicioTemporario?.descricao ??
         "",
-
       repeticoes: ex.repeticoes ?? ex.reps ?? "",
-      series: ex.series ?? "",
+      series:
+        typeof ex.series === "number"
+          ? ex.series
+          : ex.series != null && String(ex.series).trim() !== ""
+          ? Number(ex.series)
+          : null,
+      duracao: ex.duracao ?? "",
+      descanso: ex.descanso ?? "",
       ordem: Number(ex.ordem ?? idx + 1),
-
       videoUrl:
         ex.videoDemonstrativoUrl ??
         ex.videoUrl ??
@@ -2202,18 +2190,15 @@ useEffect(() => {
         ex.exercicioTemporario?.videoDemonstrativoUrl ??
         ex.exercicio?.videoDemonstrativoUrl ??
         null,
-
       videoPosterUrl:
         ex.videoPosterUrl ??
         ex.exercicioPersonalizado?.videoPosterUrl ??
         null,
-
       nivel:
         ex.nivel ??
         ex.exercicioPersonalizado?.nivel ??
         ex.exercicio?.nivel ??
         null,
-
       categorias:
         ex.categorias ??
         ex.exercicioPersonalizado?.categorias ??
@@ -2380,7 +2365,7 @@ useEffect(() => {
   }
 
   function jaEstaNoTreinoPorIdOuNome(
-    lista: ExItemUI[],
+    lista: ExItemUILocal[],
     id?: string,
     nome?: string,
   ) {
@@ -2388,7 +2373,10 @@ useEffect(() => {
     const idK = id ? String(id) : null;
 
     return lista.some((ex) => {
-      const sameId = idK && ex.idCatalogo && String(ex.idCatalogo) === idK;
+      const sameId =
+        idK &&
+        (String(ex.idCatalogo ?? ex.exercicioId ?? ex.exercicioPersonalizadoId ?? "") === idK);
+
       const sameName = nomeK && normalizaNome(ex.nome) === nomeK;
       return Boolean(sameId || sameName);
     });
@@ -2407,30 +2395,135 @@ useEffect(() => {
       });
     }
 
-    if (filtroCategorias.length > 0) {
-      const catsFiltro = filtroCategorias.map((c) => c.toLowerCase());
+    if (filtroCategoria && filtroCategoria !== "Todas as categorias") {
+      const catFiltro = normalizarCategoriaFiltro(filtroCategoria);
+
       lista = lista.filter((e) => {
-        const cats = (e.categorias || []).map((c) => String(c).toLowerCase());
-        if (!cats.length) return false;
-        return cats.some((c) => catsFiltro.includes(c));
+        const cats = Array.isArray((e as any).categorias)
+          ? (e as any).categorias.map(normalizarCategoriaFiltro)
+          : Array.isArray((e as any).categoria)
+          ? (e as any).categoria.map(normalizarCategoriaFiltro)
+          : [];
+
+        return cats.includes(catFiltro);
       });
     }
 
-    if (filtroNiveis.length > 0) {
-      const niveisFiltro = filtroNiveis.map((n) => n.toLowerCase());
+    if (filtroNivel) {
+      const nivelFiltro = filtroNivel.toLowerCase();
+
       lista = lista.filter((e) => {
-        if (!e.nivel) return false;
-        return niveisFiltro.includes(String(e.nivel).toLowerCase());
+        const nivelItem = String((e as any).nivel || "").toLowerCase();
+        return nivelItem === nivelFiltro;
+      });
+    }
+
+    if (filtroVideo) {
+      lista = lista.filter((e) => {
+        const hasVideo = !!(e.videoDemonstrativoUrl || (e as any).videoUrl);
+        return filtroVideo === "com" ? hasVideo : !hasVideo;
       });
     }
 
     return lista;
-  }, [exerciciosDisponiveis, filtroEx, filtroCategorias, filtroNiveis]);
+  }, [exerciciosDisponiveis, filtroEx, filtroCategoria, filtroNivel, filtroVideo]);
+
+  const exerciciosPersonalizadosFiltrados = useMemo(() => {
+    let lista = [...exerciciosPersonalizados];
+
+    const q = filtroEx.trim().toLowerCase();
+    if (q) {
+      lista = lista.filter((e) => {
+        const nome = (e.nome || "").toLowerCase();
+        const desc = (e.objetivo || e.descricao || "").toLowerCase();
+        const nivel = (e.nivel || "").toLowerCase();
+        return nome.includes(q) || desc.includes(q) || nivel.includes(q);
+      });
+    }
+
+    if (filtroCategoria && filtroCategoria !== "Todas as categorias") {
+      const catFiltro = normalizarCategoriaFiltro(filtroCategoria);
+
+      lista = lista.filter((e) => {
+        const cats = Array.isArray((e as any).categorias)
+          ? (e as any).categorias.map(normalizarCategoriaFiltro)
+          : Array.isArray((e as any).categoria)
+          ? (e as any).categoria.map(normalizarCategoriaFiltro)
+          : [];
+
+        return cats.includes(catFiltro);
+      });
+    }
+
+    if (filtroNivel) {
+      const nivelFiltro = filtroNivel.toLowerCase();
+
+      lista = lista.filter((e) => {
+        const nivelItem = String((e as any).nivel || "").toLowerCase();
+        return nivelItem === nivelFiltro;
+      });
+    }
+
+    if (filtroVideo) {
+      lista = lista.filter((e) => {
+        const hasVideo = !!e.videoDemonstrativoUrl;
+        return filtroVideo === "com" ? hasVideo : !hasVideo;
+      });
+    }
+
+    return lista;
+  }, [exerciciosPersonalizados, filtroEx, filtroCategoria, filtroNivel, filtroVideo]);
+
+  const meusExerciciosFiltrados = useMemo(() => {
+    let lista = [...meusExercicios];
+
+    const q = filtroEx.trim().toLowerCase();
+    if (q) {
+      lista = lista.filter((e) => {
+        const nome = (e.nome || "").toLowerCase();
+        const desc = (e.objetivo || e.descricao || "").toLowerCase();
+        const nivel = (e.nivel || "").toLowerCase();
+        return nome.includes(q) || desc.includes(q) || nivel.includes(q);
+      });
+    }
+
+    if (filtroCategoria && filtroCategoria !== "Todas as categorias") {
+      const catFiltro = normalizarCategoriaFiltro(filtroCategoria);
+
+      lista = lista.filter((e) => {
+        const cats = Array.isArray((e as any).categorias)
+          ? (e as any).categorias.map(normalizarCategoriaFiltro)
+          : Array.isArray((e as any).categoria)
+          ? (e as any).categoria.map(normalizarCategoriaFiltro)
+          : [];
+
+        return cats.includes(catFiltro);
+      });
+    }
+
+    if (filtroNivel) {
+      const nivelFiltro = filtroNivel.toLowerCase();
+
+      lista = lista.filter((e) => {
+        const nivelItem = String((e as any).nivel || "").toLowerCase();
+        return nivelItem === nivelFiltro;
+      });
+    }
+
+    if (filtroVideo) {
+      lista = lista.filter((e) => {
+        const hasVideo = !!e.videoDemonstrativoUrl;
+        return filtroVideo === "com" ? hasVideo : !hasVideo;
+      });
+    }
+
+    return lista;
+  }, [meusExercicios, filtroEx, filtroCategoria, filtroNivel, filtroVideo]);
 
   useEffect(() => {
     setPageEx(1);
     if (listRef.current) listRef.current.scrollTop = 0;
-  }, [filtroEx, filtroCategorias, filtroNiveis]);
+  }, [filtroEx, filtroCategoria, filtroNivel]);
 
   const exerciciosVisiveis = useMemo(() => {
     const total = pageEx * PAGE_SIZE_EX;
@@ -2453,13 +2546,23 @@ useEffect(() => {
     setExerciciosSelecionados((prev) => [
       ...prev,
       {
+        idLocal: crypto.randomUUID(),
         idCatalogo: null,
+        exercicioId: null,
+        exercicioPersonalizadoId: null,
         nome: "",
         descricao: "",
+        objetivo: "",
         repeticoes: "",
         ordem: prev.length + 1,
         series: "",
+        duracao: "",
+        descanso: "",
         videoUrl: null,
+        videoDemonstrativoUrl: null,
+        videoPosterUrl: null,
+        categorias: [],
+        origem: "temporario",
       },
     ]);
   };
@@ -2496,31 +2599,49 @@ useEffect(() => {
     setExerciciosSelecionados(renumerado);
   };
 
-  const adicionarExercicioExistente = (exercicio: Exercicio) => {
-    setExerciciosSelecionados((prev) => {
-      if (jaEstaNoTreinoPorIdOuNome(prev, exercicio.id, exercicio.nome)) {
-        alert("Este exercício já foi adicionado ao treino.");
-        return prev;
-      }
+  function adicionarExercicioExistente(ex: any) {
+    setExerciciosSelecionados((prev) => [
+      ...prev,
+      {
+        idLocal: crypto.randomUUID(),
+        idCatalogo: String(ex.id ?? ""),
+        exercicioId: String(ex.id ?? ""),
+        exercicioPersonalizadoId: null,
+        nome: ex.nome ?? "Exercício",
+        descricao: ex.objetivo ?? ex.descricao ?? "",
+        objetivo: ex.objetivo ?? null,
+        nivel: ex.nivel ?? null,
+        videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+        videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+        videoPosterUrl: ex.videoPosterUrl ?? null,
 
-      const { series, repeticoes } = parseRepeticoesStr(exercicio.repeticoes);
+        // ✅ agora traz os valores já existentes do exercício
+        series:
+          typeof ex.series === "number"
+            ? ex.series
+            : ex.series != null && String(ex.series).trim() !== ""
+            ? Number(ex.series)
+            : null,
 
-      return [
-        ...prev,
-        {
-          idCatalogo: String(exercicio.id),
-          nome: exercicio.nome,
-          descricao: exercicio.objetivo ?? exercicio.descricao ?? "",
-          repeticoes,
-          series,
-          ordem: prev.length + 1,
-          videoUrl: null,
-        },
-      ];
-    });
-  };
+        repeticoes:
+          ex.repeticoes != null ? String(ex.repeticoes) : "",
 
+        duracao:
+          ex.duracao != null ? String(ex.duracao) : "",
 
+        descanso:
+          ex.descanso != null ? String(ex.descanso) : "",
+
+        ordem: prev.length + 1,
+        categorias: Array.isArray(ex.categorias)
+          ? ex.categorias
+          : Array.isArray(ex.categoria)
+          ? ex.categoria
+          : [],
+        origem: "catalogo",
+      },
+    ]);
+  }
 
   function getDono() {
     const tipoRaw =
@@ -2573,46 +2694,57 @@ useEffect(() => {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
 
-  async function fetchExerciciosPersonalizados() {
+  async function fetchExerciciosCatalogo() {
     const token =
-      (Storage as any)?.token ||
       localStorage.getItem("token") ||
       sessionStorage.getItem("token") ||
       "";
 
-    if (!token) {
-      setExerciciosPersonalizados([]);
-      return;
+    try {
+      const resp = await axios.get(`${API.BASE_URL}/api/treinos/exercicios`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      setExerciciosDisponiveis(Array.isArray(resp.data) ? resp.data : []);
+    } catch (error) {
+      console.error("Erro ao carregar exercícios BD:", error);
+      setExerciciosDisponiveis([]);
     }
+  }
+
+  async function fetchExerciciosPersonalizados() {
+    const token =
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
 
     try {
-      setLoadingPersonalizados(true);
+      const resp = await axios.get(`${API.BASE_URL}/api/treinos/exercicios/personalizados`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
 
-      const resp = await axios.get(
-        `${API.BASE_URL}/api/treinos/exercicios/personalizados`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      const arr = Array.isArray(resp.data) ? resp.data : (resp.data?.items ?? []);
-
-      setExerciciosPersonalizados(
-        (Array.isArray(arr) ? arr : []).map((x: any) => ({
-          id: String(x.id),
-          nome: String(x.nome ?? "Exercício"),
-          descricao: x.descricao ?? null,
-          nivel: x.nivel ?? null,
-          categorias: Array.isArray(x.categorias) ? x.categorias : [],
-          videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? null,
-          videoPosterUrl: x.videoPosterUrl ?? null,
-        }))
-      );
+      setExerciciosPersonalizados(Array.isArray(resp.data) ? resp.data : []);
     } catch (error) {
-      console.error("Erro ao carregar exercícios personalizados:", error);
+      console.error("Erro ao carregar personalizados:", error);
       setExerciciosPersonalizados([]);
-    } finally {
-      setLoadingPersonalizados(false);
+    }
+  }
+
+  async function fetchMeusExercicios() {
+    const token =
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    try {
+      const resp = await axios.get(`${API.BASE_URL}/api/treinos/exercicios/meus`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      setMeusExercicios(Array.isArray(resp.data) ? resp.data : []);
+    } catch (error) {
+      console.error("Erro ao carregar meus exercícios:", error);
+      setMeusExercicios([]);
     }
   }
 
@@ -2748,11 +2880,10 @@ useEffect(() => {
   };
 
   const criarTreino = async () => {
-    if (salvando || criandoTreinoRef.current) return;
-
+    if (criandoTreinoRef.current) return;
     criandoTreinoRef.current = true;
-    setSalvando(true);
 
+    setSalvando(true);
     let payloadOriginal: any = null;
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
@@ -2900,7 +3031,7 @@ useEffect(() => {
         tipoTreino,
         dataAgendada: dataAgendadaISO,
         exerciciosSelecionados: exerciciosNormalizados,
-        titulo: nome,
+        titulo: nome + " " + Date.now(), // Adicionar timestamp para evitar duplicatas
         nivel,
         descricao,
         duracaoMinutos: duracao,
@@ -2941,12 +3072,11 @@ useEffect(() => {
       (payload as any).codigo = codigo;
       (payload as any).exercicios = exerciciosNormalizados.map((e: any, idx: number) => {
         const repeticoesFinal =
-          formatSerieXReps(e.series ?? null, e.repeticoes ?? null) ??
-          (typeof e.repeticoes === "string"
+          typeof e.repeticoes === "string"
             ? e.repeticoes.trim()
             : e.repeticoes != null
             ? String(e.repeticoes)
-            : "");
+            : "";
 
         // ✅ pega vídeo/poster (e ignora blob:)
         const videoRaw = e.videoDemonstrativoUrl ?? e.videoUrl ?? null;
@@ -2975,12 +3105,25 @@ useEffect(() => {
           String(e.nomeCatalogo || "").trim() ||
           "";
 
-        // ✅ Se for exercício de catálogo e NÃO tem mídia -> manda como oficial
         if (e.exercicioId && !forcePersonalizado) {
           return {
             exercicioId: String(e.exercicioId),
             ordem: Number(e.ordem ?? idx + 1),
             repeticoes: repeticoesFinal,
+            series:
+              typeof e.series === "number"
+                ? e.series
+                : e.series != null && String(e.series).trim() !== ""
+                ? parseInt(String(e.series), 10)
+                : null,
+            duracao:
+              e.duracao != null && String(e.duracao).trim() !== ""
+                ? String(e.duracao).trim()
+                : null,
+            descanso:
+              e.descanso != null && String(e.descanso).trim() !== ""
+                ? String(e.descanso).trim()
+                : null,
             observacao: e.observacao ?? null,
           };
         }
@@ -2988,16 +3131,41 @@ useEffect(() => {
         return {
           nome: String(e.nome || "").trim(),
           descricao: String((e as any).objetivo || e.descricao || "").trim() || null,
-          nivel: e.exercicioPersonalizadoId ? (e.nivel ?? null) : (e.nivel ?? null),
+          nivel: e.nivel ?? null,
           categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
           repeticoes: repeticoesFinal,
+          series:
+            typeof e.series === "number"
+              ? e.series
+              : e.series != null && String(e.series).trim() !== ""
+              ? parseInt(String(e.series), 10)
+              : null,
+          duracao:
+            e.duracao != null && String(e.duracao).trim() !== ""
+              ? String(e.duracao).trim()
+              : null,
+          descanso:
+            e.descanso != null && String(e.descanso).trim() !== ""
+              ? String(e.descanso).trim()
+              : null,
           observacao: e.observacao ?? null,
-          exercicioPersonalizadoId: e.exercicioPersonalizadoId ? String(e.exercicioPersonalizadoId) : null,
+          exercicioPersonalizadoId: e.exercicioPersonalizadoId
+            ? String(e.exercicioPersonalizadoId)
+            : null,
           videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
           videoPosterUrl: e.videoPosterUrl ?? null,
         };
       });
+
+      const invalidos = exerciciosSelecionados.filter(
+        (ex) => !exercicioTemExecucaoValida(ex)
+      );
+
+      if (invalidos.length > 0) {
+        alert("Preencha pelo menos séries/repetições OU duração em todos os exercícios.");
+        return;
+      }
 
       const capaFinal = capaUrl && String(capaUrl).startsWith("blob:") ? null : capaUrl;
       (payload as any).imagemUrl = capaFinal ? String(capaFinal) : null;
@@ -3051,6 +3219,7 @@ useEffect(() => {
 
       // ✅ 2) Qualquer outro erro 4xx/5xx
       if (status >= 400) {
+        console.error("Erro ao criar treino:", status, data);
         showToast(data?.message || "Falha ao criar treino.", "error");
         return;
       }
@@ -4003,39 +4172,44 @@ useEffect(() => {
                             />
                           )}
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                             <div>
-                              <label className="block text-xs text-gray-600 mb-1">
-                                Séries
-                              </label>
+                              <label className="block text-sm text-zinc-700 mb-1">Séries</label>
                               <input
-                                className="border w-full p-1 rounded"
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
                                 placeholder="ex.: 3"
-                                value={ex.series || ""}
-                                onChange={(e) =>
-                                  atualizarExercicio(
-                                    i,
-                                    "series",
-                                    e.target.value,
-                                  )
-                                }
+                                value={ex.series ?? ""}
+                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "series", e.target.value)}
                               />
                             </div>
+
                             <div>
-                              <label className="block text-xs text-gray-600 mb-1">
-                                Repetições
-                              </label>
+                              <label className="block text-sm text-zinc-700 mb-1">Repetições</label>
                               <input
-                                className="border w-full p-1 rounded"
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
                                 placeholder="ex.: 12"
-                                value={ex.repeticoes || ""}
-                                onChange={(e) =>
-                                  atualizarExercicio(
-                                    i,
-                                    "repeticoes",
-                                    e.target.value,
-                                  )
-                                }
+                                value={ex.repeticoes ?? ""}
+                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "repeticoes", e.target.value)}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm text-zinc-700 mb-1">Duração</label>
+                              <input
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                placeholder="ex.: 2min"
+                                value={ex.duracao ?? ""}
+                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "duracao", e.target.value)}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm text-zinc-700 mb-1">Descanso</label>
+                              <input
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                placeholder="ex.: 30seg"
+                                value={ex.descanso ?? ""}
+                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "descanso", e.target.value)}
                               />
                             </div>
                           </div>
@@ -4059,6 +4233,19 @@ useEffect(() => {
             <StepCard title="Exercícios Disponíveis">
               {/* Abas */}
               <div className="mb-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAbaExercicios("meus")}
+                  className={[
+                    "px-3 py-1.5 rounded-lg text-sm font-bold border",
+                    abaExercicios === "meus"
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50",
+                  ].join(" ")}
+                >
+                  Meus Exercícios
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setAbaExercicios("catalogo")}
@@ -4086,81 +4273,180 @@ useEffect(() => {
                 </button>
               </div>
 
-              {/* Conteúdo das abas */}
-              {abaExercicios === "catalogo" ? (
+              {abaExercicios === "meus" ? (
                 <>
-                  {/* Filtros catálogo */}
-                  <div className="mb-3 flex flex-col gap-2">
+                <p className="text-sm text-gray-500 mb-3">
+                  Exercícios criados por você na aba meus exercícios da página de treino
+                </p>
+
+                <div className="flex flex-col gap-3 w-full mb-4">
+                  <input
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-emerald-600"
+                    placeholder="Buscar meus exercícios..."
+                    value={filtroEx}
+                    onChange={(e) => setFiltroEx(e.target.value)}
+                  />
+
+                  <select
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                    value={filtroCategoria}
+                    onChange={(e) => setFiltroCategoria(e.target.value)}
+                  >
+                    {OPCOES_CATEGORIA.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                    value={filtroNivel}
+                    onChange={(e) => setFiltroNivel(e.target.value)}
+                  >
+                    <option value="">Todos os níveis</option>
+                    <option value="Base">Base</option>
+                    <option value="Avancado">Avançado</option>
+                    <option value="Performance">Performance</option>
+                  </select>
+
+                  <select
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                    value={filtroVideo}
+                    onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
+                  >
+                    <option value="">Com/sem vídeo</option>
+                    <option value="com">Somente com vídeo</option>
+                    <option value="sem">Somente sem vídeo</option>
+                  </select>
+                </div>
+
+                {loadingMeusExercicios ? (
+                  <div className="text-sm text-gray-600">Carregando meus exercícios...</div>
+                ) : (
+                  <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
+                    {meusExerciciosFiltrados.map((p) => {
+                      const jaAdicionado =
+                        p.origem === "personalizado"
+                          ? treinoTemPersonalizado(p.id)
+                          : treinoTemExercicio(p.id);
+
+                      const videoSrc = p.videoDemonstrativoUrl || null;
+
+                      return (
+                        <li key={`${p.origem}-${p.id}`} className="py-3">
+                          <div className="flex flex-col sm:flex-row gap-3 items-start">
+                            <div className="w-full sm:w-44 shrink-0">
+                              {videoSrc ? (
+                                <VideoThumb
+                                  src={videoSrc}
+                                  onClick={() => setVideoModalSrc(videoSrc)}
+                                />
+                              ) : (
+                                <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                                  sem vídeo
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="font-semibold truncate">{p.nome}</div>
+
+                                {p.nivel ? (
+                                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
+                                    {p.nivel}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {(p.objetivo || p.descricao) ? (
+                                <p className="text-sm text-gray-700 mt-1 line-clamp-2">
+                                  {p.objetivo || p.descricao}
+                                </p>
+                              ) : null}
+
+                              {Array.isArray(p.categorias) && p.categorias.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 mt-2 text-[11px] text-gray-700">
+                                  {p.categorias.map((cat) => (
+                                    <span
+                                      key={String(cat)}
+                                      className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
+                                    >
+                                      {String(cat)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (jaAdicionado) return;
+
+                                if (p.origem === "personalizado") {
+                                  addPersonalizadoNoTreino(p);
+                                } else {
+                                  adicionarExercicioExistente(p as any);
+                                }
+                              }}
+                              disabled={jaAdicionado}
+                              className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
+                                jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
+                              }`}
+                            >
+                              {jaAdicionado ? "Adicionado" : "Adicionar"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
+               ) : abaExercicios === "catalogo" ? (
+                <>
+                  <div className="flex flex-col gap-3 w-full mb-4">
                     <input
-                      className="border rounded px-3 py-2"
-                      placeholder="Buscar no catálogo por nome/descrição/nível..."
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-emerald-600"
+                      placeholder="Buscar exercícios do bd..."
                       value={filtroEx}
                       onChange={(e) => setFiltroEx(e.target.value)}
                     />
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <select
-                          multiple
-                          size={7}
-                          className="border w-full p-2 rounded text-xs sm:text-sm h-32"
-                          value={filtroCategorias}
-                          onChange={(e) => {
-                            const values = Array.from(e.target.selectedOptions).map(
-                              (opt) => opt.value,
-                            );
-                            setFiltroCategorias(values);
-                          }}
-                        >
-                          <option value="Sub9">Sub-9</option>
-                          <option value="Sub11">Sub-11</option>
-                          <option value="Sub13">Sub-13</option>
-                          <option value="Sub15">Sub-15</option>
-                          <option value="Sub17">Sub-17</option>
-                          <option value="Sub20">Sub-20</option>
-                          <option value="Livre">Livre</option>
-                        </select>
-                        <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
-                          Segure <b>Ctrl</b> para selecionar várias.
-                        </p>
-                      </div>
+                    <select
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      value={filtroCategoria}
+                      onChange={(e) => setFiltroCategoria(e.target.value)}
+                    >
+                      {OPCOES_CATEGORIA.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
 
-                      <div>
-                        <select
-                          multiple
-                          size={4}
-                          className="border w-full p-2 rounded text-xs sm:text-sm h-24"
-                          value={filtroNiveis}
-                          onChange={(e) => {
-                            const values = Array.from(e.target.selectedOptions).map(
-                              (opt) => opt.value,
-                            );
-                            setFiltroNiveis(values);
-                          }}
-                        >
-                          <option value="Base">Base</option>
-                          <option value="Avancado">Avançado</option>
-                          <option value="Performance">Performance</option>
-                        </select>
-                        <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
-                          Você pode combinar vários níveis.
-                        </p>
-                      </div>
-                    </div>
+                    <select
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      value={filtroNivel}
+                      onChange={(e) => setFiltroNivel(e.target.value)}
+                    >
+                      <option value="">Todos os níveis</option>
+                      <option value="Base">Base</option>
+                      <option value="Avancado">Avançado</option>
+                      <option value="Performance">Performance</option>
+                    </select>
 
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFiltroEx("");
-                          setFiltroCategorias([]);
-                          setFiltroNiveis([]);
-                        }}
-                        className="text-[11px] sm:text-xs text-gray-600 underline"
-                      >
-                        Limpar filtros
-                      </button>
-                    </div>
+                    <select
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      value={filtroVideo}
+                      onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
+                    >
+                      <option value="">Com/sem vídeo</option>
+                      <option value="com">Somente com vídeo</option>
+                      <option value="sem">Somente sem vídeo</option>
+                    </select>
                   </div>
 
                   {/* Lista catálogo */}
@@ -4169,7 +4455,7 @@ useEffect(() => {
                     onScroll={onScrollListaExercicios}
                     className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1"
                   >
-                    {exerciciosVisiveis.map((exercicio) => {
+                    {exerciciosFiltrados.map((exercicio) => {
                       const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
                       const jaAdicionado = jaEstaNoTreinoPorIdOuNome(
                         exerciciosSelecionados,
@@ -4266,19 +4552,30 @@ useEffect(() => {
                 </>
               ) : (
                 <>
-                  {/* Filtros personalizados */}
-                  <div className="grid gap-2 sm:grid-cols-3 mb-3">
+                  <div className="flex flex-col gap-3 w-full mb-4">
                     <input
-                      className="border rounded px-3 py-2"
-                      placeholder="Buscar personalizado por nome/descrição..."
-                      value={filtroPers}
-                      onChange={(e) => setFiltroPers(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-emerald-600"
+                      placeholder="Buscar exercícios personalizados..."
+                      value={filtroEx}
+                      onChange={(e) => setFiltroEx(e.target.value)}
                     />
 
                     <select
-                      className="border rounded px-3 py-2"
-                      value={filtroPersNivel}
-                      onChange={(e) => setFiltroPersNivel(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      value={filtroCategoria}
+                      onChange={(e) => setFiltroCategoria(e.target.value)}
+                    >
+                      {OPCOES_CATEGORIA.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      value={filtroNivel}
+                      onChange={(e) => setFiltroNivel(e.target.value)}
                     >
                       <option value="">Todos os níveis</option>
                       <option value="Base">Base</option>
@@ -4287,9 +4584,9 @@ useEffect(() => {
                     </select>
 
                     <select
-                      className="border rounded px-3 py-2"
-                      value={filtroPersVideo}
-                      onChange={(e) => setFiltroPersVideo(e.target.value as any)}
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      value={filtroVideo}
+                      onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
                     >
                       <option value="">Com/sem vídeo</option>
                       <option value="com">Somente com vídeo</option>
@@ -4302,23 +4599,7 @@ useEffect(() => {
                     <div className="text-sm text-gray-600">Carregando personalizados...</div>
                   ) : (
                     <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
-                      {exerciciosPersonalizados
-                        .filter((x) => {
-                          const term = filtroPers.trim().toLowerCase();
-                          if (!term) return true;
-                          const hay = `${x.nome ?? ""} ${x.objetivo ?? x.descricao ?? ""}`.toLowerCase();
-                          return hay.includes(term);
-                        })
-                        .filter((x) => {
-                          if (!filtroPersNivel) return true;
-                          return String(x.nivel ?? "") === String(filtroPersNivel);
-                        })
-                        .filter((x) => {
-                          if (!filtroPersVideo) return true;
-                          const hasVideo = !!x.videoDemonstrativoUrl;
-                          return filtroPersVideo === "com" ? hasVideo : !hasVideo;
-                        })
-                        .map((p) => {
+                      {exerciciosPersonalizadosFiltrados.map((p) => {
                           const jaAdicionado = treinoTemPersonalizado(p.id);
                           const videoSrc = p.videoDemonstrativoUrl || null;
 
@@ -4842,8 +5123,9 @@ useEffect(() => {
             ) : (
               <button
                 type="button"
+                id="btnsalvar"
                 onClick={criarTreino}
-                disabled={salvando}
+                disabled={salvando || criandoTreinoRef.current}
                 className={[
                   "px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0",
                   salvando ? "opacity-60 cursor-not-allowed" : "",

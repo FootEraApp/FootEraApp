@@ -74,9 +74,12 @@ interface TreinoAgendado {
         nome: string;
         videoDemonstrativoUrl?: string | null;
         imgDemonstrativaUrl?: string | null;
+        objetivo?: string | null;
       };
       repeticoes: string;
       series?: number | null;
+      duracao?: string | null;
+      descanso?: string | null;
     }[];
     criador?: {
       id: string;
@@ -1060,16 +1063,33 @@ function removerFiltroMetodologia(label: string) {
                         nome: resolvedNome,
                         videoDemonstrativoUrl: resolvedVideo,
                         imgDemonstrativaUrl: resolvedImg,
-
                         // ✅ opcional: se você quiser usar em algum lugar depois
                         descricao:
-                          exNormal?.descricao ??
+                          exNormal?.descricao ?? 
+                          exNormal?.objetivo ??
                           exTemp?.descricao ??
                           exPers?.descricao ??
                           null,
                       },
-
                       repeticoes: ex.repeticoes ?? exTemp?.repeticoes ?? exPers?.repeticoes ?? "",
+                      series:
+                        ex.series ??
+                        exNormal?.series ??
+                        exTemp?.series ??
+                        exPers?.series ??
+                        null,
+                      duracao:
+                        ex.duracao ??
+                        exNormal?.duracao ??
+                        exTemp?.duracao ??
+                        exPers?.duracao ??
+                        null,
+                      descanso:
+                        ex.descanso ??
+                        exNormal?.descanso ??
+                        exTemp?.descanso ??
+                        exPers?.descanso ??
+                        null,
                     };
                   }) ?? [],
                 criador: tp.criador ?? null,
@@ -1685,9 +1705,31 @@ function removerFiltroMetodologia(label: string) {
                   >
                     {ex.exercicio.nome}
                   </div>
-                  <p className="text-sm text-gray-500">
-                    {formatSerieXReps(ex.series, ex.repeticoes)}
-                  </p>
+                  <div className="text-sm text-gray-500 space-y-1">
+                    {ex.series != null && ex.series !== 0 ? (
+                      <p>
+                        <span className="font-medium">Séries:</span> {ex.series}
+                      </p>
+                    ) : null}
+
+                    {ex.repeticoes ? (
+                      <p>
+                        <span className="font-medium">Repetições:</span> {ex.repeticoes}
+                      </p>
+                    ) : null}
+
+                    {ex.duracao ? (
+                      <p>
+                        <span className="font-medium">Duração:</span> {ex.duracao}
+                      </p>
+                    ) : null}
+
+                    {ex.descanso ? (
+                      <p>
+                        <span className="font-medium">Descanso:</span> {ex.descanso}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
@@ -1712,7 +1754,7 @@ function removerFiltroMetodologia(label: string) {
                   const midia = midiaDireta || midiaFallback;
 
                   if (!midia) {
-                    alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
+                    alert("Esse exercício não tem vídeo demonstrativo salvo.");
                     return;
                   }
 
@@ -2218,7 +2260,7 @@ function removerFiltroMetodologia(label: string) {
 
                 <button
                   type="button"
-                  onClick={() => navigate("/treinos/Minhas-Metodologias")}
+                  onClick={() => navigate("/learning/minhas")}
                   className="shrink-0 inline-flex items-center gap-2 bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow hover:bg-green-900"
                 >
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/15">

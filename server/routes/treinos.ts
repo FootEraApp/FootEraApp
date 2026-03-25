@@ -43,7 +43,8 @@ import {
   listarAlunosTreinoAgendadoTurma,
   listarExerciciosPersonalizados,
   atualizarExercicioPersonalizado,
-  deletarExercicioPersonalizado
+  deletarExercicioPersonalizado,
+  getMeusExercicios,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -110,6 +111,7 @@ router.post("/restaurar", restaurarTreinos);
 router.patch("/exercicios/personalizados/:id", atualizarExercicioPersonalizado);
 router.delete("/exercicios/personalizados/:id", deletarExercicioPersonalizado);
 router.get("/exercicios/personalizados", listarExerciciosPersonalizados);
+router.get("/exercicios/meus", getMeusExercicios);
 router.get("/exercicios", getExercicios);
 router.get("/pontuacoes", getPontuacoes);
 router.get("/desafios-semanais", statusDesafiosSemanais);

@@ -16,6 +16,12 @@ import {
   listMetodologias,
   criarAvaliacaoMetodologia,
   concluirItemMetodologia,
+  createMetodologiaEstruturas,
+  updateMetodologiaEstrutura,
+  deleteMetodologiaEstrutura,
+  createMetodologiaEstruturaItens,
+  deleteMetodologiaEstruturaItens,
+  concluirEstruturaItemMetodologia,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js"; // Controller de upload
 import { uploadToS3 } from "../middlewares/s3Upload.js"; // Middleware que editamos
@@ -39,9 +45,19 @@ router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
 
-// Itens
+// LEGADO - manter temporariamente enquanto o front antigo ainda existir
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
+
+// Estruturas: trilhas / módulos
+router.post("/:metodologiaId/estruturas", authenticateToken, requireMetodologiaCreator, createMetodologiaEstruturas);
+router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaCreator, updateMetodologiaEstrutura);
+router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaCreator, deleteMetodologiaEstrutura);
+// Itens dentro da estrutura
+router.post("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaCreator, createMetodologiaEstruturaItens);
+router.delete("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaCreator, deleteMetodologiaEstruturaItens);
+// Conclusão de item da estrutura
+router.post("/:id/estruturas/:estruturaId/concluir-item", authenticateToken, concluirEstruturaItemMetodologia);
 
 // Detalhe/Assinatura
 router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);

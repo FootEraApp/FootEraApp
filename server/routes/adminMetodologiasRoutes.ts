@@ -13,9 +13,7 @@ router.use(authenticateToken, requireAdmin);
 
 // GET /api/admin/metodologias/pendentes
 router.get("/pendentes", listMetodologiasPendentes);
-
 router.get("/:id", getMetodologiaPendenteDetail);
-
 // PATCH /api/admin/metodologias/:id/ativo  body: { ativo: true|false }
 router.patch("/:id/ativo", setMetodologiaAtivo);
 
