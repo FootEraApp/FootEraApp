@@ -774,46 +774,17 @@ function abrirMidiaExercicioDireto(
   const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
   const [agendaAberta, setAgendaAberta] = useState(false);
 
-  type MainTab = "hoje" | "treinos" | "metodologias";
+  type MainTab = "hoje" | "treinos" | "learning";
   const [mainTab, setMainTab] = useState<MainTab>("treinos");
-
   const [buscaMetodologia, setBuscaMetodologia] = useState("");
-
-  // chips escolhidos (começa vazio)
-  const [filtrosMetodologia, setFiltrosMetodologia] = useState<string[]>([]);
-  const [filtroAtivo, setFiltroAtivo] = useState<string | null>(null);
 
   // dropdown do “Adicionar filtro”
   const [addFiltroOpen, setAddFiltroOpen] = useState(false);
-
-  const FILTROS_FIXOS = ["Goleiros", "Linhas", "Base", "Avançado", "Mentalidade"];
-
-
-function adicionarFiltroMetodologia(label: string) {
-  setFiltrosMetodologia((prev) => {
-    if (prev.includes(label)) return prev;
-    return [...prev, label];
-  });
-
-  // opcional: já ativa o filtro escolhido
-  setFiltroAtivo(label);
-  setAddFiltroOpen(false);
-}
-
-function removerFiltroMetodologia(label: string) {
-  setFiltrosMetodologia((prev) => prev.filter((x) => x !== label));
-  setFiltroAtivo((cur) => (cur === label ? null : cur));
-}
-
-
-
   const [metodologias, setMetodologias] = useState<MetodologiaCatalogo[]>([]);
   const [metodologiasLoading, setMetodologiasLoading] = useState(false);
   const [metodologiasErro, setMetodologiasErro] = useState<string | null>(null);
 
-
   const stripRef = useRef<HTMLDivElement | null>(null);
-
   const [missedClickCounts, setMissedClickCounts] = useState<
     Record<string, number>
   >({});
@@ -825,7 +796,7 @@ function removerFiltroMetodologia(label: string) {
   }, []);
 
   useEffect(() => {
-    if (mainTab !== "metodologias") return;
+    if (mainTab !== "learning") return;
     carregarMetodologias();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainTab, buscaMetodologia, filtroPublico, filtroTipo, filtroNivel]);
@@ -839,7 +810,6 @@ function removerFiltroMetodologia(label: string) {
 
     return () => window.clearTimeout(id);
   }, [easterEggMsg]);
-
 
   function handleMissedClick(treinoId: string) {
     setMissedClickCounts((prev) => {
@@ -1840,14 +1810,14 @@ function removerFiltroMetodologia(label: string) {
 
               <button
                 type="button"
-                onClick={() => setMainTab("metodologias")}
+                onClick={() => navigate("/learning")}
                 className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                  mainTab === "metodologias"
+                  mainTab === "learning"
                     ? "bg-green-800 text-white"
                     : "text-green-900 hover:bg-green-50"
                 }`}
               >
-                Metodologias
+                Learning
               </button>
             </div>
 
@@ -2250,181 +2220,6 @@ function removerFiltroMetodologia(label: string) {
                 )}
           </>
         )}
-
-        {/* METODOLOGIAS */}
-          {mainTab === "metodologias" && (
-            <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-4">
-              {/* Header */}
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-green-900">Metodologias</h3>
-
-                <button
-                  type="button"
-                  onClick={() => navigate("/learning/minhas")}
-                  className="shrink-0 inline-flex items-center gap-2 bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow hover:bg-green-900"
-                >
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/15">
-                    👤
-                  </span>
-                  Minha Metodologia
-                </button>
-              </div>
-
-              {/* Busca */}
-              <div className="mt-3 flex items-center gap-2 border rounded-xl px-3 py-2 bg-white">
-                <span className="text-gray-500">🔍</span>
-                <input
-                  value={buscaMetodologia}
-                  onChange={(e) => setBuscaMetodologia(e.target.value)}
-                  placeholder="Buscar metodologias..."
-                  className="w-full outline-none text-sm"
-                />
-              </div>
-
-              {/* Filtros (igual instrutores) */}
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <select
-                  value={filtroPublico}
-                  onChange={(e) => setFiltroPublico(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
-                >
-                  <option value="TODOS">Público: Todos</option>
-                  <option value="ATLETAS">Público: Atletas</option>
-                  <option value="PROFISSIONAIS">Público: Profissionais</option>
-                  <option value="AMBOS">Público: Ambos</option>
-                </select>
-
-                <select
-                  value={filtroTipo}
-                  onChange={(e) => setFiltroTipo(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
-                >
-                  <option value="TODOS">Todos</option>
-                  <option value="VIDEOS_TREINOS">Vídeos + Treinos</option>
-                  <option value="VIDEOS">Só Vídeos</option>
-                  <option value="TREINOS">Só Treinos</option>
-                </select>
-
-                <select
-                  value={filtroNivel}
-                  onChange={(e) => setFiltroNivel(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
-                >
-                  <option value="TODOS">Nível: Todos</option>
-                  <option value="BASE">Base</option>
-                  <option value="AVANCADO">Avançado</option>
-                  <option value="PERFORMANCE">Performance</option>
-                </select>
-              </div>
-
-              {/* Lista (cards iguais do instrutores) */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {metodologiasLoading && (
-                  <div className="text-sm text-gray-600">Carregando metodologias...</div>
-                )}
-
-                {!metodologiasLoading && metodologiasErro && (
-                  <div className="text-sm text-red-600">{metodologiasErro}</div>
-                )}
-
-                {!metodologiasLoading && !metodologiasErro && metodologiasFiltradas.length === 0 && (
-                  <div className="text-sm text-gray-600">
-                    Nenhuma metodologia encontrada.
-                  </div>
-                )}
-
-                {!metodologiasLoading &&
-                  !metodologiasErro &&
-                  metodologiasFiltradas.map((m) => {
-                    const publico =
-                      (m.publicoAlvo || "AMBOS").toString().toUpperCase() === "PROFISSIONAIS"
-                        ? "PROFISSIONAIS"
-                        : (m.publicoAlvo || "AMBOS").toString().toUpperCase() === "ATLETAS"
-                        ? "ATLETAS"
-                        : "AMBOS";
-
-                    const assinaturas = m.totalAssinantes ?? 0;
-                    const media = Number(m.mediaAvaliacao ?? 0);
-                    const reviews = m.totalAvaliacoes ?? 0;
-                    const pts = Number(m.pontosTotal ?? m.pontosPorSemana ?? 0);
-
-                    return (
-                      <div
-                      key={m.id}
-                      className="rounded-2xl border shadow-sm p-4 flex flex-col gap-3 bg-white hover:bg-gray-50"
-                    >
-                      {/* HEADER: chip + titulo na esquerda, assinaturas na direita */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            {/* Público */}
-                            <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
-                              {publico}
-                            </span>
-
-                            {/* Título ao lado do chip */}
-                            <div className="font-semibold text-[16px] truncate ml-3">
-                              {m.titulo}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* assinaturas bem à direita */}
-                        <div className="text-sm text-gray-600 whitespace-nowrap">
-                          <b>{assinaturas}</b> assinaturas
-                        </div>
-                      </div>
-
-                      {/* CONTEÚDO: foto + infos + botão embaixo (self-end) */}
-                      <div className="flex gap-3">
-                        <img
-                          src={normalizeAssetUrl(m.capaUrl) || "/assets/usuarios/footera-logo-fundo-verde.png"}
-                          onError={(e) => {
-                            e.currentTarget.src = "/assets/usuarios/footera-logo-fundo-verde.png";
-                          }}
-                          alt=""
-                          className="h-16 w-16 rounded-xl border object-cover bg-white"
-                        />
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <p>Avaliação media: </p><StarsRating value={media} />
-                            <span className="font-semibold text-gray-800">{media.toFixed(1)}</span>
-                            <span>({reviews})</span>
-                          </div>
-
-                          {/* + pontos */}
-                          <div className="mt-1 text-sm text-gray-700">
-                            Pontuação: +<b>{pts}</b> pts
-                          </div>
-
-                          {m.criadorNome && (
-                            <div className="mt-1 text-sm text-gray-700">Criado por: <b>{m.criadorNome}</b></div>
-                          )}
-
-                          {/* Descrição */}
-                          {!!m.descricao && (
-                            <div className="mt-1 text-sm text-gray-700">
-                              Descrição: <b>{m.descricao}</b>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* botão mais pra baixo */}
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/metodologias/${m.id}`)}
-                          className="self-end px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
-                        >
-                          Ver / Assinar
-                        </button>
-                      </div>
-                    </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
       </div>
 
       {fullscreenId && (

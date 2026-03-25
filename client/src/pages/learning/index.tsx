@@ -1,7 +1,6 @@
 // client/src/pages/learning/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation} from "wouter";
-import { Sparkles } from "lucide-react";
 import {
   listMetodologiasVisiveis,
   listMinhasMetodologiasAssinadas,
@@ -9,7 +8,6 @@ import {
 } from "../../services/metodologias.js";
 import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningCard from "../../components/learning/LearningCard.js";
-import LearningTypeChooser from "../../components/learning/LearningTypeChooser.js";
 
 type TabKey = "explorar" | "minhas" | "criar";
 
@@ -36,11 +34,37 @@ function TabButton({
 export default function LearningPage() {
   const [tab, setTab] = useState<TabKey>("explorar");
   const [loading, setLoading] = useState(true);
-
   const [explorar, setExplorar] = useState<any[]>([]);
   const [assinadas, setAssinadas] = useState<any[]>([]);
   const [criadas, setCriadas] = useState<any[]>([]);
+  const [filtroPublico, setFiltroPublico] = useState<
+    "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
+  >("TODOS");
+
+  const [filtroEstrutura, setFiltroEstrutura] = useState<
+    "TODOS" | "TRILHA" | "MODULO"
+  >("TODOS");
+
+  const [filtroCertificado, setFiltroCertificado] = useState<
+    "TODOS" | "COM" | "SEM"
+  >("TODOS");
+
+  const [filtroMaterial, setFiltroMaterial] = useState<
+    "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
+  >("TODOS");
+
+  const [busca, setBusca] = useState("");
   const [, navigate] = useLocation();
+
+  const tipoUsuario =
+    (localStorage.getItem("tipoUsuario") ||
+        sessionStorage.getItem("tipoUsuario") ||
+        "")
+        .toLowerCase()
+        .trim();
+
+  const isAtleta = tipoUsuario === "atleta";
+  const isInstrutor = ["professor", "clube", "escolinha", "escola", "admin"].includes(tipoUsuario);
 
   useEffect(() => {
     let mounted = true;
@@ -49,11 +73,13 @@ export default function LearningPage() {
       try {
         setLoading(true);
 
-        const [visiveisRes, assinadasRes, criadasRes] = await Promise.allSettled([
-          listMetodologiasVisiveis(),
-          listMinhasMetodologiasAssinadas(),
-          listMinhasMetodologiasCriadas(),
-        ]);
+        const promises = [
+            listMetodologiasVisiveis(),
+            listMinhasMetodologiasAssinadas(),
+            isAtleta ? Promise.resolve({ items: [] }) : listMinhasMetodologiasCriadas(),
+        ] as const;
+
+        const [visiveisRes, assinadasRes, criadasRes] = await Promise.allSettled(promises);
 
         if (!mounted) return;
 
@@ -76,33 +102,94 @@ export default function LearningPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isAtleta]);
 
-  const minhasCount = useMemo(() => assinadas.length + criadas.length, [assinadas, criadas]);
+  const minhasCount = useMemo(
+    () => (isAtleta ? assinadas.length : assinadas.length + criadas.length),
+    [isAtleta, assinadas, criadas]
+  );
+
+  const explorarFiltrado = useMemo(() => {
+    let items = [...explorar];
+
+    if (filtroPublico !== "TODOS") {
+        items = items.filter((item) => String(item?.publicoAlvo || "").toUpperCase() === filtroPublico);
+    }
+
+    if (filtroEstrutura !== "TODOS") {
+        items = items.filter((item) => String(item?.estruturaTipo || "").toUpperCase() === filtroEstrutura);
+    }
+
+    if (filtroCertificado === "COM") {
+        items = items.filter((item) => !!item?.geraCertificado);
+    }
+
+    if (filtroCertificado === "SEM") {
+        items = items.filter((item) => !item?.geraCertificado);
+    }
+
+    if (filtroMaterial === "VIDEO") {
+        items = items.filter((item) => Number(item?.videoCount || 0) > 0);
+    }
+
+    if (filtroMaterial === "TREINO") {
+        items = items.filter((item) => Number(item?.treinoCount || 0) > 0);
+    }
+
+    if (filtroMaterial === "MATERIAL") {
+        items = items.filter((item) => Number(item?.materialCount || 0) > 0);
+    }
+
+    if (busca.trim()) {
+        const q = busca.trim().toLowerCase();
+        items = items.filter((item) => {
+        const titulo = String(item?.titulo || "").toLowerCase();
+        const descricao = String(item?.descricao || "").toLowerCase();
+        const area = String(item?.area || "").toLowerCase();
+        return titulo.includes(q) || descricao.includes(q) || area.includes(q);
+        });
+    }
+
+    return items;
+    }, [
+    explorar,
+    filtroPublico,
+    filtroEstrutura,
+    filtroCertificado,
+    filtroMaterial,
+    busca,
+    ]);
 
   return (
     <div className="min-h-screen bg-[#f7f7f4] pb-20">
       <div className="max-w-6xl mx-auto px-4 pt-5">
         <LearningHeader
             title="Learning"
-            subtitle="Explore, acompanhe e crie metodologias com trilhas ou módulos."
+            subtitle={
+                isAtleta
+                ? "Explore e acompanhe metodologias disponíveis para assinatura."
+                : "Explore, acompanhe e crie metodologias com trilhas ou módulos."
+            }
             backHref="/treinos"
-            createHref="/learning/create"
-            createLabel="Criar"
         />
 
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <button type="button" onClick={() => setTab("explorar")}>
+        <div className={`grid ${isAtleta ? "grid-cols-2" : "grid-cols-3"} gap-3 mb-5`}>
+        <button type="button" onClick={() => setTab("explorar")}>
             <TabButton active={tab === "explorar"}>Explorar</TabButton>
-          </button>
+        </button>
 
-          <button type="button" onClick={() => setTab("minhas")}>
+        <button type="button" onClick={() => setTab("minhas")}>
             <TabButton active={tab === "minhas"}>Minhas</TabButton>
-          </button>
+        </button>
 
-          <button type="button" onClick={() => setTab("criar")}>
-            <TabButton active={tab === "criar"}>Criar</TabButton>
-          </button>
+        {!isAtleta && (
+            <button
+                type="button"
+                onClick={() => navigate("/learning/create")}
+            >
+                <TabButton active={false}>Criar</TabButton>
+            </button>
+        )}
         </div>
 
         {loading ? (
@@ -113,22 +200,73 @@ export default function LearningPage() {
 
         {!loading && tab === "explorar" ? (
           <div className="space-y-4">
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-[#216c43]" />
-                <div>
-                  <div className="text-lg font-extrabold text-[#193b2e]">
-                    Explore metodologias
-                  </div>
-                  <div className="text-sm text-slate-500">
-                    Veja trilhas de treino e cursos disponíveis para assinatura.
-                  </div>
-                </div>
-              </div>
-            </div>
+            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                        value={busca}
+                        onChange={(e) => setBusca(e.target.value)}
+                        placeholder="Buscar por nome, descrição ou área"
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                        />
 
-            {explorar.length ? (
-              explorar.map((item) => (
+                        <select
+                        value={filtroPublico}
+                        onChange={(e) =>
+                            setFiltroPublico(
+                            e.target.value as "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
+                            )
+                        }
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                        >
+                        <option value="TODOS">Todos os públicos</option>
+                        <option value="AMBOS">Ambos</option>
+                        <option value="PROFISSIONAIS">Profissionais</option>
+                        <option value="ATLETAS">Atletas</option>
+                        </select>
+
+                        <select
+                        value={filtroEstrutura}
+                        onChange={(e) =>
+                            setFiltroEstrutura(e.target.value as "TODOS" | "TRILHA" | "MODULO")
+                        }
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                        >
+                        <option value="TODOS">Todos os formatos</option>
+                        <option value="TRILHA">Com trilhas</option>
+                        <option value="MODULO">Com módulos</option>
+                        </select>
+
+                        <select
+                        value={filtroCertificado}
+                        onChange={(e) =>
+                            setFiltroCertificado(e.target.value as "TODOS" | "COM" | "SEM")
+                        }
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                        >
+                        <option value="TODOS">Com ou sem certificado</option>
+                        <option value="COM">Com certificado</option>
+                        <option value="SEM">Sem certificado</option>
+                        </select>
+
+                        <select
+                        value={filtroMaterial}
+                        onChange={(e) =>
+                            setFiltroMaterial(
+                            e.target.value as "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
+                            )
+                        }
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                        >
+                        <option value="TODOS">Todos os materiais</option>
+                        <option value="VIDEO">Com vídeos/aulas</option>
+                        <option value="TREINO">Com treinos</option>
+                        <option value="MATERIAL">Com materiais</option>
+                        </select>
+                    </div>
+                  </div>
+
+            {explorarFiltrado.length ? (
+              explorarFiltrado.map((item) => (
                 <LearningCard
                   key={item.id}
                   item={item}
@@ -138,90 +276,74 @@ export default function LearningPage() {
               ))
             ) : (
               <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                Nenhuma metodologia visível no momento.
+                Nenhuma metodologia encontrada com os filtros selecionados.
               </div>
             )}
           </div>
         ) : null}
 
         {!loading && tab === "minhas" ? (
-          <div className="space-y-5">
+        <div className="space-y-5">
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
-              <div className="text-lg font-extrabold text-[#193b2e]">Minhas metodologias</div>
-              <div className="text-sm text-slate-500 mt-1">
+            <div className="text-lg font-extrabold text-[#193b2e]">Minhas metodologias</div>
+            <div className="text-sm text-slate-500 mt-1">
                 {minhasCount} metodologias relacionadas à sua conta.
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Link
-                  href="/learning/minhas"
-                  className="inline-flex h-10 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold items-center"
-                >
-                  Abrir página completa
-                </Link>
-
-                <Link
-                  href="/learning/create"
-                  className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
-                >
-                  Criar nova
-                </Link>
-              </div>
             </div>
 
-            <div>
-              <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas</div>
-              <div className="space-y-4">
-                {assinadas.length ? (
-                  assinadas.map((item) => (
-                    <LearningCard
-                      key={`ass_${item.id}`}
-                      item={item}
-                      href={`/learning/${item.id}`}
-                      actionLabel="Continuar"
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                    Você ainda não assinou nenhuma metodologia.
-                  </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+                
+                {!isAtleta && (
+                <Link
+                    href="/learning/create"
+                    className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+                >
+                    Criar nova metodologia
+                </Link>
                 )}
-              </div>
             </div>
-
+            </div>
             <div>
-              <div className="text-base font-bold text-[#193b2e] mb-3">Criadas</div>
-              <div className="space-y-4">
+        
+            {!isAtleta && (
+            <div>
+                <div className="text-base font-bold text-[#193b2e] mb-3">Criadas</div>
+                <div className="space-y-4">
                 {criadas.length ? (
-                  criadas.map((item) => (
+                    criadas.map((item) => (
                     <LearningCard
-                      key={`cri_${item.id}`}
-                      item={item}
-                      href={`/learning/${item.id}`}
-                      actionLabel="Gerenciar"
+                        key={`cri_${item.id}`}
+                        item={item}
+                        href={`/learning/${item.id}`}
+                        actionLabel="Gerenciar"
                     />
-                  ))
+                    ))
                 ) : (
-                  <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                    <div className="rounded-2xl border bg-white p-6 text-slate-600">
                     Você ainda não criou nenhuma metodologia.
-                  </div>
+                    </div>
                 )}
-              </div>
+                </div>
             </div>
-          </div>
-        ) : null}
-
-        {!loading && tab === "criar" ? (
-            <LearningTypeChooser
-                onChoose={(tipo, estrutura) => {
-                if (tipo === "TRILHAS_TREINO" && estrutura === "TRILHA") {
-                    navigate("/learning/create?tipo=TRILHAS_TREINO");
-                    return;
-                }
-
-                navigate("/learning/create?tipo=CURSO_FORMACAO");
-                }}
-            />
+            )}
+        </div>
+        <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas</div>
+                <div className="space-y-4">
+                    {assinadas.length ? (
+                    assinadas.map((item) => (
+                        <LearningCard
+                        key={`ass_${item.id}`}
+                        item={item}
+                        href={`/learning/${item.id}`}
+                        actionLabel="Continuar"
+                        />
+                    ))
+                    ) : (
+                    <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                        Você ainda não assinou nenhuma metodologia.
+                    </div>
+                    )}
+                </div>
+            </div>
         ) : null}
       </div>
     </div>

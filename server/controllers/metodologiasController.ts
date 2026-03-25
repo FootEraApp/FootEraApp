@@ -730,25 +730,12 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
     const tipo = String(user?.tipo ?? "").toLowerCase().trim();
     const publicoQuery = String(req.query.publico ?? "").toUpperCase().trim();
 
-    let publicoPermitido: MetodologiaPublicoAlvo[] =
-      tipo === "atleta"
-        ? [MetodologiaPublicoAlvo.ATLETAS, MetodologiaPublicoAlvo.AMBOS]
-        : [MetodologiaPublicoAlvo.PROFISSIONAIS, MetodologiaPublicoAlvo.AMBOS];
-
-    if (publicoQuery === "TODOS") {
-      publicoPermitido = [
-        MetodologiaPublicoAlvo.ATLETAS,
-        MetodologiaPublicoAlvo.PROFISSIONAIS,
-        MetodologiaPublicoAlvo.AMBOS,
-      ];
-    } else if (
-      publicoQuery === "ATLETAS" ||
-      publicoQuery === "PROFISSIONAIS" ||
-      publicoQuery === "AMBOS"
-    ) {
-      publicoPermitido = [publicoQuery as MetodologiaPublicoAlvo];
-    }
-
+    const publicoPermitido: MetodologiaPublicoAlvo[] = [
+      MetodologiaPublicoAlvo.ATLETAS,
+      MetodologiaPublicoAlvo.PROFISSIONAIS,
+      MetodologiaPublicoAlvo.AMBOS,
+    ];
+    
     const items = await prisma.metodologia.findMany({
       where: {
         ativo: true,
