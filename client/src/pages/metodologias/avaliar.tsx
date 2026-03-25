@@ -158,7 +158,7 @@ export default function AvaliarMetodologia() {
 
       alert("Avaliação enviada! ✅");
       localStorage.setItem(`metodologia:avaliada:${metodologiaId}`, "1");
-      navigate("/treinos");
+      navigate("/learning/minhas");
     } catch (e: any) {
       console.error(e);
       alert(e?.message || "Erro ao enviar avaliação");
@@ -172,8 +172,8 @@ export default function AvaliarMetodologia() {
       <div className="h-20 bg-green-900 text-white">
         <div className="max-w-3xl mx-auto h-full px-4 flex items-center justify-between">
           <Link
-            href="/treinos"
-            aria-label="Voltar para treinos"
+            href="/learning/minhas"
+            aria-label="Voltar para minhas categorias"
             className="inline-flex h-10 w-10 items-center justify-center
               rounded-full border border-green-800 bg-white text-green-900
               shadow-sm hover:bg-green-50 focus:outline-none

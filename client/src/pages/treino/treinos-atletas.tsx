@@ -2260,7 +2260,7 @@ function removerFiltroMetodologia(label: string) {
 
                 <button
                   type="button"
-                  onClick={() => navigate("/treinos/Minhas-Metodologias")}
+                  onClick={() => navigate("/learning/minhas")}
                   className="shrink-0 inline-flex items-center gap-2 bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow hover:bg-green-900"
                 >
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/15">
