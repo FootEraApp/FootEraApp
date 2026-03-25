@@ -1,7 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middlewares/auth.js";
+import { uploadToS3 } from "../middlewares/s3Upload.js"; // ✅ Nosso middleware S3
 import {
-  uploadExercicioMidia,
   criarExercicio,
   editarExercicio,
   excluirExercicio,
@@ -17,12 +17,15 @@ const router = express.Router();
 router.get("/meus", authenticateToken, listarMeusExercicios);
 router.get("/:id", authenticateToken, buscarExercicioPorId);
 
-router.put("/:id", authenticateToken, uploadExercicioMidia, editarExercicio);
+// ✅ Usando uploadToS3.single("video")
+router.put("/:id", authenticateToken, uploadToS3.single("video"), editarExercicio);
 router.delete("/:id", authenticateToken, excluirExercicio);
 
 router.post("/:id/duplicar", authenticateToken, duplicarExercicio);
 router.patch("/:id/favoritar", authenticateToken, favoritarExercicio);
 router.get("/", listarExercicios);
-router.post("/", authenticateToken, uploadExercicioMidia, criarExercicio);
+
+// ✅ Usando uploadToS3.single("video")
+router.post("/", authenticateToken, uploadToS3.single("video"), criarExercicio);
 
 export default router;
