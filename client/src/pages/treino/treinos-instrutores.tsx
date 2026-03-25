@@ -543,7 +543,7 @@ export default function TreinosInstrutores({
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [abaProfessor, setAbaProfessor] = useState<
-    "avaliar" | "criar" | "sessoes" | "exercicios" |"metodologias"
+    "avaliar" | "criar" | "sessoes" | "exercicios" | "learning"
   >("exercicios");
   const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
@@ -762,7 +762,7 @@ useEffect(() => {
   }, [usuario?.tipo, usuario?.tipoUsuarioId]);
 
   useEffect(() => {
-    if (abaProfessor !== "metodologias") return;
+    if (abaProfessor !== "learning") return;
     carregarMetodologias();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abaProfessor, filtroPublico]);
@@ -2559,14 +2559,14 @@ async function salvarProgressoSessao(sessaoId: string) {
                   </button>
 
                   <button
-                    onClick={() => setAbaProfessor("metodologias")}
+                    onClick={() => setAbaProfessor("learning")}
                     className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "metodologias"
+                      abaProfessor === "learning"
                         ? "bg-green-800 text-white border-green-900"
                         : "bg-white text-gray-800 border-gray-200"
                     }`}
                   >
-                    Metodologias
+                    Learning
                   </button>
                 </div>
               </div>
@@ -2745,14 +2745,14 @@ async function salvarProgressoSessao(sessaoId: string) {
 
           {abaProfessor === "exercicios" && <MeusExerciciosTab />}
 
-          {abaProfessor === "metodologias" && (
+          {abaProfessor === "learning" && (
             <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-green-900">Metodologias</h3>
+                <h3 className="text-lg font-semibold text-green-900">Learnings</h3>
 
                 <div className="flex items-center gap-2">
                   <Link
-                    href="/treinos/Minhas-Metodologias"
+                    href="/learning"
                     className="px-3 py-2 rounded-full bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
                   >
                     Minha Metodologia

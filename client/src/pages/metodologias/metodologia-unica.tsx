@@ -6,27 +6,53 @@ import { API, APP } from "../../config.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-type ItemTipo = "VIDEO" | "TREINO" | string;
+type ItemTipo = "VIDEO" | "TREINO" | "AULA" | "MATERIAL" | "DESAFIO" | string;
 
-type MetodologiaItem = {
+type MetodologiaEstruturaItem = {
   id: string;
-  semana: number;
   ordem: number;
   titulo: string;
   descricao?: string | null;
   tipo: ItemTipo;
   pontos?: number | null;
-
-  // video
   videoUrl?: string | null;
   thumbUrl?: string | null;
   duracaoMin?: number | null;
-
-  // treino
+  arquivoUrl?: string | null;
+  materialUrl?: string | null;
   treinoProgramadoId?: string | null;
-  treinoProgramado?: { id: string; nome: string; imagemUrl?: string | null } | null;
-
+  treinoProgramado?: {
+    id: string;
+    nome: string;
+    imagemUrl?: string | null;
+    codigo?: string | null;
+    nivel?: string | null;
+    categoria?: string | null;
+    pontuacao?: number | null;
+    duracao?: number | null;
+    objetivo?: string | null;
+    tipoTreino?: string | null;
+  } | null;
+  obrigatorio?: boolean;
   publicado?: boolean;
+};
+
+type MetodologiaEstrutura = {
+  id: string;
+  tipo: "TRILHA" | "MODULO" | string;
+  titulo: string;
+  descricao?: string | null;
+  objetivo?: string | null;
+  ordem: number;
+  duracaoSemanas?: number | null;
+  treinosPorSemana?: number | null;
+  quantidadeMinConclusao?: number | null;
+  modoExecucao?: string | null;
+  pontosPorItem?: number | null;
+  bonusConsistencia?: number | null;
+  bonusFinal?: number | null;
+  ativo?: boolean;
+  itens: MetodologiaEstruturaItem[];
 };
 
 type MetodologiaDetalhe = {
@@ -41,7 +67,12 @@ type MetodologiaDetalhe = {
   totalReviews?: number;
   pontosTotal?: number; // vindo do backend (soma dos itens)
   criadorNome?: string | null;
-  itens: MetodologiaItem[];
+  tipo?: "TRILHAS_TREINO" | "CURSO_FORMACAO" | string;
+  estruturaTipo?: "TRILHA" | "MODULO" | string;
+  area?: string | null;
+  geraCertificado?: boolean;
+  geraBadge?: boolean;
+  estruturas: MetodologiaEstrutura[];
   viewer: {
     // antigo
     isAssinante: boolean;
@@ -122,9 +153,11 @@ function Stars({ value }: { value: number }) {
 }
 
 export default function MetodologiaUnicaPage() {
-  const [, params] = useRoute("/metodologias/:id");
   const [, navigate] = useLocation();
+  const [matchLearning, paramsLearning] = useRoute("/learning/:id");
+  const [matchOld, paramsOld] = useRoute("/metodologias/:id");
 
+  const params = matchLearning ? paramsLearning : paramsOld;
   const id = params?.id;
   const token =
     (Storage as any).token ??
@@ -137,33 +170,41 @@ export default function MetodologiaUnicaPage() {
   const [busy, setBusy] = useState(false);
   const [thumbFromVideo, setThumbFromVideo] = useState<Record<string, string>>({});
   const [playerOpen, setPlayerOpen] = useState(false);
-  const [playerItem, setPlayerItem] = useState<MetodologiaItem | null>(null);
+  const [playerItem, setPlayerItem] = useState<MetodologiaEstruturaItem | null>(null);
   const [maxTime, setMaxTime] = useState(0); // trava seek
+  const [playerEstruturaId, setPlayerEstruturaId] = useState<string | null>(null);
 
-  async function concluirItem(itemId: string) {
+  async function concluirItem(estruturaId: string, itemId: string) {
     if (!id) return;
     if (!data?.viewer?.temAcesso) return;
 
     try {
-      const r = await fetch(`${API.BASE_URL}/api/metodologias/${id}/concluir-item`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ itemId }),
-      });
+      const r = await fetch(
+        `${API.BASE_URL}/api/metodologias/${id}/estruturas/${estruturaId}/concluir-item`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ itemId }),
+        }
+      );
+
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.message || "Falha ao concluir item");
 
-      // ✅ atualiza o state local sem precisar recarregar tudo
       setData((prev) => {
         if (!prev) return prev;
         const prevIds = prev.viewer?.progresso?.concluidos || [];
         const set = new Set(prevIds);
         set.add(itemId);
+
         return {
           ...prev,
           viewer: {
             ...prev.viewer,
-            progresso: { ...prev.viewer.progresso, concluidos: Array.from(set) },
+            progresso: {
+              ...prev.viewer.progresso,
+              concluidos: Array.from(set),
+            },
           },
         };
       });
@@ -226,7 +267,7 @@ export default function MetodologiaUnicaPage() {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) {
           alert(j?.message || "Erro ao carregar metodologia");
-          navigate("/treinos"); // ou /metodologias
+          navigate("/learning"); // ou /metodologias
           return;
         }
         setData(j);
@@ -239,51 +280,46 @@ export default function MetodologiaUnicaPage() {
     })();
   }, [id, headers, navigate]);
 
-  const grouped = useMemo(() => {
-    const itens = data?.itens || [];
-    const map = new Map<number, MetodologiaItem[]>();
-    for (const it of itens) {
-      if (it.publicado === false) continue;
-      const arr = map.get(it.semana) || [];
-      arr.push(it);
-      map.set(it.semana, arr);
-    }
-    for (const [k, arr] of map.entries()) {
-      arr.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
-      map.set(k, arr);
-    }
-    const weeks = Array.from(map.keys()).sort((a, b) => a - b);
-    return weeks.map((w) => ({ semana: w, itens: map.get(w)! }));
+  const estruturasOrdenadas = useMemo(() => {
+    const estruturas = data?.estruturas || [];
+
+    return estruturas
+      .filter((estrutura) => estrutura.ativo !== false)
+      .map((estrutura) => ({
+        ...estrutura,
+        itens: (estrutura.itens || [])
+          .filter((it) => it.publicado !== false)
+          .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)),
+      }))
+      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
   }, [data]);
 
+  const allItens = useMemo(
+    () => data?.estruturas?.flatMap((estrutura) => estrutura.itens || []) || [],
+    [data]
+  );
+
   useEffect(() => {
-    if (!data?.itens?.length) return;
-
-    // pega todos os vídeos publicados que não têm thumbUrl
-    const videosSemThumb = data.itens.filter((it) => {
-        const isVideo = String(it.tipo).toUpperCase() === "VIDEO";
-        return (
-        isVideo &&
-        it.publicado !== false &&
-        !it.thumbUrl &&
-        !!it.videoUrl
-        );
+    const videosSemThumb = allItens.filter((it) => {
+      const isVideo = ["VIDEO", "AULA"].includes(String(it.tipo).toUpperCase());
+      return isVideo && it.publicado !== false && !it.thumbUrl && !!it.videoUrl;
     });
 
-    // gera thumb para os que ainda não temos no state
     videosSemThumb.forEach((it) => {
-        if (thumbFromVideo[it.id]) return;
-        gerarThumbDoVideo(it.id, it.videoUrl!);
+      if (thumbFromVideo[it.id]) return;
+      gerarThumbDoVideo(it.id, it.videoUrl!);
     });
 
-    // NÃO coloque gerarThumbDoVideo nas deps; ela é função estável no mesmo render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data, thumbFromVideo]);
+  }, [allItens, thumbFromVideo]);
 
   const concluIds = useMemo(() => new Set(data?.viewer?.progresso?.concluidos || []), [data]);
-  const totalItens = useMemo(() => (data?.itens?.filter((i) => i.publicado !== false).length || 0), [data]);
+
+  const totalItens = allItens.length;
   const totalConcluidos = useMemo(() => (data?.viewer?.progresso?.concluidos?.length || 0), [data]);
-  const pct = totalItens > 0 ? Math.round((totalConcluidos / totalItens) * 100) : 0;
+  const pct = totalItens > 0 
+    ? Math.round((totalConcluidos / totalItens) * 100) 
+    : 0;
   const metodologiaCompleta = pct >= 100;
   const jaAvaliou = !!data?.viewer?.minhaAvaliacao;
 
@@ -292,7 +328,7 @@ export default function MetodologiaUnicaPage() {
 
     const motivo = String(data.viewer?.motivoBloqueio || "");
     if (motivo === "JA_ASSINADA") {
-      navigate("/treinos/Minhas-Metodologias");
+      navigate("/learning/minhas");
       return;
     }
 
@@ -310,19 +346,19 @@ export default function MetodologiaUnicaPage() {
 
         // A) Não tem Learning ativo -> vai pro pagamento (com return)
         if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") {
-        navigate(`/pagamentos?produto=learning&returnTo=/metodologias/${id}`);
+        navigate(`/pagamentos?produto=learning&returnTo=/learning/${id}`);
         return;
         }
         
         if (motivo === "PRECISA_PAGAR_AVULSA") {
-        navigate(`/pagamentos?produto=metodologia&id=${id}&returnTo=/metodologias/${id}`);
+        navigate(`/pagamentos?produto=metodologia&id=${id}&returnTo=/learning/${id}`);
         return;
         }
 
         // B) Já atingiu limite (1/1 ou 3/3) -> vai pra Minhas Metodologias
         if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
         alert("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
-        navigate("/treinos/Minhas-Metodologias");
+        navigate("/learning/minhas");
         return;
         }
 
@@ -345,14 +381,14 @@ export default function MetodologiaUnicaPage() {
         if (!r.ok) {
         // Se backend responder que precisa pagar, também joga pro pagamento
         if (j?.code === "PRECISA_PAGAR" || j?.code === "PRECISA_LEARNING") {
-            navigate(`/pagamentos?produto=learning&returnTo=/metodologias/${id}`);
+            navigate(`/pagamentos?produto=learning&returnTo=/learning/${id}`);
             return;
         }
 
         // Se backend responder limite
         if (j?.code === "LIMITE_METODOLOGIAS") {
             alert(j?.message || "Você já atingiu o limite do seu plano.");
-            navigate("/treinos/Minhas-Metodologias");
+            navigate("/learning/minhas");
             return;
         }
 
@@ -362,7 +398,7 @@ export default function MetodologiaUnicaPage() {
 
         // sucesso: redireciona para Minhas Metodologias (ou recarrega detalhe)
         alert("✅ Metodologia adicionada em 'Minhas Metodologias'!");
-        navigate("/treinos/Minhas-Metodologias");
+        navigate("/learning/minhas");
     } catch (e) {
         console.error(e);
         alert("Erro ao assinar");
@@ -388,7 +424,7 @@ export default function MetodologiaUnicaPage() {
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8">
       <Link
-        href="/treinos"
+        href="/learning"
         className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-green-800 bg-white text-green-900 shadow-sm hover:bg-green-50"
         aria-label="Voltar"
         title="Voltar"
@@ -428,7 +464,11 @@ export default function MetodologiaUnicaPage() {
                 </div>
 
                 <div className="mt-2 text-sm text-gray-700 space-y-1">
-                <div>{data.totalSemanas ?? grouped.length} semanas</div>
+                <div>
+                  {data.estruturaTipo === "MODULO"
+                    ? `${estruturasOrdenadas.length} módulos`
+                    : `${estruturasOrdenadas.length} trilhas`}
+                </div>
 
                 <div>
                     + <b>{pontosTotal}</b> pts no total
@@ -525,7 +565,7 @@ export default function MetodologiaUnicaPage() {
                   if (!metodologiaCompleta) return;
 
                   const titulo = encodeURIComponent(data.titulo || "Metodologia");
-                  navigate(`/metodologias/avaliar?metodologiaId=${data.id}`);
+                  navigate(`/learning/avaliar?metodologiaId=${data.id}`);
                 }}
                 className={`w-full h-12 rounded-xl font-semibold text-white ${
                   !data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou
@@ -546,35 +586,64 @@ export default function MetodologiaUnicaPage() {
         </div>
       </div>
 
-      {/* SEMANAS */}
       <div className="mt-6 space-y-4">
-        {grouped.map((w) => (
-          <div key={w.semana} className="rounded-2xl border bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="font-semibold text-gray-900">Semana {w.semana}</div>
+        {estruturasOrdenadas.map((estrutura, estruturaIndex) => (
+          <div key={estrutura.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-semibold text-gray-900">
+                  {estrutura.tipo === "MODULO"
+                    ? `Módulo ${estruturaIndex + 1}`
+                    : `Trilha ${estruturaIndex + 1}`}
+                </div>
+                <div className="text-sm text-gray-600">{estrutura.titulo}</div>
+
+                {estrutura.objetivo ? (
+                  <div className="mt-1 text-sm text-gray-500">{estrutura.objetivo}</div>
+                ) : null}
+
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                  {estrutura.duracaoSemanas ? (
+                    <span className="px-2 py-1 rounded-full border bg-gray-50">
+                      {estrutura.duracaoSemanas} semanas
+                    </span>
+                  ) : null}
+
+                  {estrutura.treinosPorSemana ? (
+                    <span className="px-2 py-1 rounded-full border bg-gray-50">
+                      {estrutura.treinosPorSemana} por semana
+                    </span>
+                  ) : null}
+
+                  {estrutura.modoExecucao ? (
+                    <span className="px-2 py-1 rounded-full border bg-gray-50">
+                      {String(estrutura.modoExecucao).replaceAll("_", " ")}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="text-xs text-gray-600">
-                {w.itens.filter((i) => concluIds.has(i.id)).length}/{w.itens.length} concluídos
+                {estrutura.itens.filter((i) => concluIds.has(i.id)).length}/{estrutura.itens.length} concluídos
               </div>
             </div>
 
             <div className="mt-3 space-y-3">
-              {w.itens.map((it) => {
+              {estrutura.itens.map((it) => {
                 const concluido = concluIds.has(it.id);
                 const locked = bloquearAcao();
-                const isVideo = String(it.tipo).toUpperCase() === "VIDEO";
-                const isTreino = String(it.tipo).toUpperCase() === "TREINO";
+                const tipoUpper = String(it.tipo).toUpperCase();
+                const isVideo = ["VIDEO", "AULA"].includes(tipoUpper);
+                const isTreino = tipoUpper === "TREINO";
+                const isMaterial = tipoUpper === "MATERIAL";
+
                 const capaFallback = data?.capaUrl ? normalizeMediaUrl(data.capaUrl) : null;
 
                 const thumbRaw = isVideo
-                  ? (it.thumbUrl || thumbFromVideo[it.id] || capaFallback)
+                  ? it.thumbUrl || thumbFromVideo[it.id] || capaFallback
                   : isTreino
-                    ? (
-                        it.treinoProgramado?.imagemUrl ||
-                        (it.treinoProgramado as any)?.capaUrl ||
-                        (it.treinoProgramado as any)?.thumbUrl ||
-                        capaFallback
-                      )
-                    : capaFallback;
+                  ? it.treinoProgramado?.imagemUrl || capaFallback
+                  : capaFallback;
 
                 const imgSrc = normalizeMediaUrl(thumbRaw) || AVATAR_FALLBACK;
 
@@ -621,7 +690,6 @@ export default function MetodologiaUnicaPage() {
                           {isVideo && it.duracaoMin ? `${it.duracaoMin} min` : ""}
                         </div>
 
-                        {/* BOTÕES */}
                         <div className="flex gap-2">
                           {isVideo && (
                             <button
@@ -629,7 +697,8 @@ export default function MetodologiaUnicaPage() {
                               className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
-                                setPlayerItem(it);
+                                setPlayerItem(it as any);
+                                setPlayerEstruturaId(estrutura.id);
                                 setMaxTime(0);
                                 setPlayerOpen(true);
                               }}
@@ -644,12 +713,12 @@ export default function MetodologiaUnicaPage() {
                               className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60 flex items-center gap-2"
                               onClick={() => {
                                 if (locked) return;
-                                // ✅ ir para treino
                                 if (it.treinoProgramadoId) {
                                   navigate(
                                     `/treinos/unico?programadoId=${it.treinoProgramadoId}` +
-                                    `&metodologiaId=${data.id}` +
-                                    `&metodologiaItemId=${it.id}`
+                                      `&metodologiaId=${data.id}` +
+                                      `&estruturaId=${estrutura.id}` +
+                                      `&metodologiaItemId=${it.id}`
                                   );
                                 }
                               }}
@@ -657,6 +726,17 @@ export default function MetodologiaUnicaPage() {
                               <Play className="w-4 h-4" />
                               {concluido ? "Ver novamente" : "Iniciar"}
                             </button>
+                          )}
+
+                          {isMaterial && (it.arquivoUrl || it.materialUrl) && (
+                            <a
+                              href={normalizeMediaUrl(it.arquivoUrl || it.materialUrl) || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900"
+                            >
+                              Abrir material
+                            </a>
                           )}
                         </div>
                       </div>
@@ -666,7 +746,7 @@ export default function MetodologiaUnicaPage() {
               })}
             </div>
 
-            {!data.viewer.isAssinante && (
+            {!data.viewer.temAcesso && (
               <div className="mt-3 text-xs text-gray-500">
                 * Assine para desbloquear os conteúdos desta metodologia.
               </div>
@@ -685,6 +765,7 @@ export default function MetodologiaUnicaPage() {
                 onClick={() => {
                   setPlayerOpen(false);
                   setPlayerItem(null);
+                  setPlayerEstruturaId(null);
                 }}
               >
                 Fechar
@@ -709,10 +790,13 @@ export default function MetodologiaUnicaPage() {
                   if (v.currentTime > maxTime + 0.25) v.currentTime = maxTime;
                 }}
                 onEnded={async () => {
-                  await concluirItem(playerItem.id);
+                  if (playerEstruturaId) {
+                    await concluirItem(playerEstruturaId, playerItem.id);
+                  }
                   // ✅ fecha ao concluir (opcional, mas recomendado)
                   setPlayerOpen(false);
                   setPlayerItem(null);
+                  setPlayerEstruturaId(null);
                 }}
               />
             </div>
