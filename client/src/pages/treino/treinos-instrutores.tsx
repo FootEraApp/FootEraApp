@@ -271,47 +271,6 @@ function normTxt(s: any) {
   return String(s || "").trim().toLowerCase();
 }
 
-function Stars({ rating }: { rating: number }) {
-  const v = Math.max(0, Math.min(5, Number(rating || 0)));
-  const half = Math.round(v * 2) / 2; // passos de 0.5
-  const full = Math.floor(half);
-  const hasHalf = half - full === 0.5;
-
-  return (
-    <div className="flex items-center">
-      {Array.from({ length: 5 }).map((_, i) => {
-        const idx = i + 1;
-
-        if (idx <= full) {
-          return (
-            <StarIcon
-              key={i}
-              className="w-4 h-4 text-yellow-500"
-              fill="currentColor"
-            />
-          );
-        }
-
-        if (idx === full + 1 && hasHalf) {
-          return (
-            <span key={i} className="relative inline-block w-4 h-4">
-              <StarIcon
-                className="absolute inset-0 w-4 h-4 text-gray-300"
-                fill="currentColor"
-              />
-              <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
-                <StarIcon className="w-4 h-4 text-yellow-500" fill="currentColor" />
-              </span>
-            </span>
-          );
-        }
-
-        return <StarIcon key={i} className="w-4 h-4 text-gray-300" fill="none" />;
-      })}
-    </div>
-  );
-}
-
 function formatElapsed(startedAtISO?: string | null, nowMs?: number) {
   if (!startedAtISO) return "00:00";
   const startMs = new Date(startedAtISO).getTime();
@@ -2507,95 +2466,93 @@ async function salvarProgressoSessao(sessaoId: string) {
         </div>
 
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            {isGestor ? (
-              // ✅ Mobile: vira "scroll horizontal" (não espreme)
-              // ✅ SM+: continua normal sem scroll
-              <div className="w-full sm:max-w-[620px]">
-                <div className="flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible sm:pb-0">
-                  <button
-                    type="button"
-                    onClick={() => setAbaProfessor("exercicios")}
-                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "exercicios"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Meus Exercícios
-                  </button>
-                  
-                  <button
-                    onClick={() => setAbaProfessor("criar")}
-                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "criar"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Meus Treinos
-                  </button>
+          {/* LINHA 1: abas + campo */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-2">
+              {isGestor ? (
+                <div className="w-full min-w-0">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible sm:pb-0">
+                    <button
+                      type="button"
+                      onClick={() => setAbaProfessor("exercicios")}
+                      className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                        abaProfessor === "exercicios"
+                          ? "bg-green-800 text-white border-green-900"
+                          : "bg-white text-gray-800 border-gray-200"
+                      }`}
+                    >
+                      Meus Exercícios
+                    </button>
 
-                  <button
-                    onClick={() => setAbaProfessor("sessoes")}
-                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "sessoes"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Treinos de Hoje
-                  </button>
+                    <button
+                      onClick={() => setAbaProfessor("criar")}
+                      className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                        abaProfessor === "criar"
+                          ? "bg-green-800 text-white border-green-900"
+                          : "bg-white text-gray-800 border-gray-200"
+                      }`}
+                    >
+                      Meus Treinos
+                    </button>
 
-                  <button
-                    onClick={() => setAbaProfessor("avaliar")}
-                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "avaliar"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Avaliar Treinos
-                  </button>
+                    <button
+                      onClick={() => setAbaProfessor("sessoes")}
+                      className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                        abaProfessor === "sessoes"
+                          ? "bg-green-800 text-white border-green-900"
+                          : "bg-white text-gray-800 border-gray-200"
+                      }`}
+                    >
+                      Treinos de Hoje
+                    </button>
 
-                  <button
-                    onClick={() => setAbaProfessor("learning")}
-                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
-                      abaProfessor === "learning"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Learning
-                  </button>
+                    <button
+                      onClick={() => setAbaProfessor("avaliar")}
+                      className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                        abaProfessor === "avaliar"
+                          ? "bg-green-800 text-white border-green-900"
+                          : "bg-white text-gray-800 border-gray-200"
+                      }`}
+                    >
+                      Avaliar Treinos
+                    </button>
+
+                    <button
+                      onClick={() => navigate("/learning")}
+                      className="shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 bg-white text-gray-800 border-gray-200"
+                    >
+                      Learning
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-lg font-semibold text-green-900">Treinos</div>
-            )}
+              ) : (
+                <div className="text-lg font-semibold text-green-900">Treinos</div>
+              )}
 
-            {/* ✅ Ações: no mobile vão pra segunda linha e ocupam bem o espaço */}
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              <div className="shrink-0 pt-0.5">
+                <Link
+                  href="/treinos/elenco"
+                  aria-label="Ir para o elenco (campo)"
+                  title="Elenco (campo)"
+                  className="inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
+                >
+                  <SoccerFieldIcon className="w-5 h-5" />
+                </Link>
+              </div>
+            </div>
+
+            {/* LINHA 2: gerenciar atletas */}
+            <div className="w-full flex justify-end pt-1">
               <Link
                 href="/perfil/GerenciarAtletas"
-                className="flex-1 sm:flex-none inline-flex items-center justify-center px-3 py-2 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 text-xs sm:text-sm whitespace-nowrap"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 text-xs sm:text-sm whitespace-nowrap min-w-[240px] sm:min-w-[260px]"
                 title="Gerenciador de Carreira"
               >
                 Gerenciar Atletas
               </Link>
-
-              <Link
-                href="/treinos/elenco"
-                aria-label="Ir para o elenco (campo)"
-                title="Elenco (campo)"
-                className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
-              >
-                <SoccerFieldIcon className="w-5 h-5" />
-              </Link>
             </div>
           </div>
         </div>
-
 
         <div className="space-y-6">
           {isGestor && abaProfessor === "avaliar" && (
@@ -2745,261 +2702,8 @@ async function salvarProgressoSessao(sessaoId: string) {
 
           {abaProfessor === "exercicios" && <MeusExerciciosTab />}
 
-          {abaProfessor === "learning" && (
-            <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-green-900">Learnings</h3>
-
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/learning"
-                    className="px-3 py-2 rounded-full bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
-                  >
-                    Minha Metodologia
-                  </Link>
-                </div>
-              </div>
-
-              {/* Busca */}
-              <div className="mt-3 flex items-center gap-2 bg-white border rounded-xl px-3 py-2">
-                <Search className="w-4 h-4 text-gray-500" />
-                <input
-                  value={buscaMetodologias}
-                  onChange={(e) => setBuscaMetodologias(e.target.value)}
-                  placeholder="Buscar metodologias..."
-                  className="w-full outline-none text-sm"
-                />
-              </div>
-
-              {/* Filtros estruturados + dropdown */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <select
-                  value={filtroPublico}
-                  onChange={(e) => setFiltroPublico(e.target.value as any)}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm"
-                >
-                  <option value="TODOS">Público: Todos</option>
-                  <option value="ATLETAS">Atletas</option>
-                  <option value="PROFISSIONAIS">Profissionais</option>
-                  <option value="AMBOS">Ambos</option>
-                </select>
-
-                <select
-                  value={filtroConteudo}
-                  onChange={(e) => setFiltroConteudo(e.target.value as FiltroConteudo)}
-                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
-                >
-                  <option value="TODOS">Tipo: Todos</option>
-                  <option value="VIDEOS_TREINOS">Vídeos + Treinos</option>
-                  <option value="VIDEOS">Vídeos</option>
-                  <option value="TREINOS">Treinos</option>
-                </select>
-
-                <select
-                  value={filtroNivel}
-                  onChange={(e) => setFiltroNivel(e.target.value as any)}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm"
-                >
-                  <option value="TODOS">Nível: Todos</option>
-                  <option value="Base">Base</option>
-                  <option value="Avancado">Avançado</option>
-                  <option value="Performance">Performance</option>
-                </select>
-
-                {/* dropdown de chips (simples, sem popover) */}
-                <details className="relative">
-                  <summary className="list-none cursor-pointer px-3 py-2 rounded-xl border bg-white text-sm inline-flex items-center gap-2">
-                    <SlidersHorizontal className="w-4 h-4" />
-                    Adicionar filtro
-                    <ChevronDown className="w-4 h-4" />
-                  </summary>
-
-                  <div className="absolute mt-2 left-0 z-30 w-56 rounded-xl border bg-white shadow-lg p-2">
-                    {/* chips */}
-                    <div className="flex flex-col gap-1">
-                      {OPCOES_FILTRO.map((opt) => {
-                        const ativo = filtrosSelecionados.some((x) => normTxt(x) === normTxt(opt));
-                        return (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => toggleFiltro(opt)}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
-                              ativo ? "bg-green-50 border border-green-200" : "hover:bg-gray-50"
-                            }`}
-                          >
-                            <span className="text-gray-800">{opt}</span>
-                            {ativo ? <Check className="w-4 h-4 text-green-700" /> : <span className="w-4 h-4" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-2 pt-2 border-t flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={limparFiltros}
-                        className="text-xs font-semibold text-gray-600 hover:text-gray-900"
-                      >
-                        Limpar
-                      </button>
-                      <span className="text-xs text-gray-500">{filtrosSelecionados.length} selecionado(s)</span>
-                    </div>
-                  </div>
-                </details>
-              </div>
-
-              {erroMetodologias && (
-                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
-                  {erroMetodologias}
-                </div>
-              )}
-
-              {/* Lista filtrada */}
-              <div className="mt-4">
-                {loadingMetodologias ? (
-                  <div className="flex items-center gap-2 text-gray-600 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Carregando metodologias...
-                  </div>
-                ) : (
-                  (() => {
-                    const q = buscaMetodologias.trim().toLowerCase();
-
-                    const filtradas = metodologias.filter((m) => {
-                      // busca
-                      const okBusca =
-                        !q ||
-                        (m.titulo || "").toLowerCase().includes(q) ||
-                        (m.descricao || "").toLowerCase().includes(q) ||
-                        (m.tags || []).join(" ").toLowerCase().includes(q);
-
-                      if (!okBusca) return false;
-
-                      // público alvo
-                      if (filtroPublico !== "TODOS") {
-                        const p = String(m.publicoAlvo || "").toUpperCase();
-                        if (p !== filtroPublico) return false;
-                      }
-
-                      // nível
-                      if (filtroNivel !== "TODOS") {
-                        const n = String(m.nivel || "").toLowerCase();
-                        const alvo = filtroNivel.toLowerCase();
-                        if (n !== alvo) return false;
-                      }
-
-                      const vc = Number(m.videoCount ?? 0);
-                      const tc = Number(m.treinoCount ?? 0);
-
-                      if (filtroConteudo === "TODOS") return true;
-                      // "Vídeos + Treinos" = tem os dois
-                      if (filtroConteudo === "VIDEOS_TREINOS") return vc > 0 && tc > 0;
-                      // "Vídeos" = só vídeos (tem vídeo e NÃO tem treino)
-                      if (filtroConteudo === "VIDEOS") return vc > 0 && tc === 0;
-                      // "Treinos" = só treinos (tem treino e NÃO tem vídeo)
-                      if (filtroConteudo === "TREINOS") return tc > 0 && vc === 0;
-
-                      return true;
-
-                      // filtros do dropdown (tags)
-                      if (filtrosSelecionados.length > 0) {
-                        const tagsMet = (m.tags || []).map(normTxt);
-                        const okTag = filtrosSelecionados.some((f) => tagsMet.includes(normTxt(f)));
-                        if (!okTag) return false;
-                      }
-
-                      return true;                      
-                    });
-
-                    if (filtradas.length === 0) {
-                      return <div className="text-gray-600">Nenhuma metodologia encontrada.</div>;
-                    }
-
-                    return (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filtradas.map((m) => (
-                          <label key={m.id} className="rounded-2xl border p-4 flex flex-col gap-3 cursor-pointer hover:bg-gray-50">
-                            {/* HEADER (badge + titulo + assinaturas no canto direito) */}
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  {/* Público-alvo (chip) */}
-                                  <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
-                                    {String(m.publicoAlvo ?? "AMBOS")}
-                                  </span>
-
-                                  {/* Título */}
-                                  <div className="font-semibold text-[16px] truncate ml-3">
-                                    {m.titulo}
-                                  </div>
-                                </div>                              
-                              </div>
-
-                              {/* assinaturas no canto direito */}
-                              <div className="text-sm text-gray-600 whitespace-nowrap">
-                                <b>{Number(m.totalAssinantes ?? 0)}</b> assinaturas
-                              </div>
-                            </div>
-
-                            {/* CONTEÚDO (foto embaixo, como você pediu) */}
-                            <div className="flex gap-3">
-                              <img
-                                src={normalizeAssetUrl(m.capaUrl) || AVATAR_FALLBACK}
-                                onError={(e) => {
-                                  e.currentTarget.onerror = null;
-                                  e.currentTarget.src = AVATAR_FALLBACK;
-                                }}
-                                alt={m.titulo}
-                                className="h-16 w-16 rounded-xl border object-cover bg-white"
-                              />
-
-                              <div className="flex-1 min-w-0">
-                                {/* ⭐⭐⭐⭐⭐ + nota */}
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <Stars rating={Number(m.mediaAvaliacao ?? 0)} />
-                                  <span className="font-semibold text-gray-800">
-                                    {Number(m.mediaAvaliacao ?? 0).toFixed(1)}
-                                  </span>
-                                  <span>({Number(m.totalReviews ?? m.notaCount ?? 0)})</span>
-                                </div>
-
-                                {/* + pontos */}
-                                <div className="mt-1 text-sm text-gray-700">
-                                  Pontuação: +<b>{Number(m.pontos ?? 0)}</b> pts
-                                </div>
-
-                                {/* Criado por */}
-                                <div className="mt-1 text-sm text-gray-700">
-                                  Criado por: <b>{m.criadorNome ?? "—"}</b>
-                                </div>
-
-                                {/* Descrição */}
-                                {m.descricao ? (
-                                  <div className="mt-1 text-sm text-gray-700">
-                                    Descrição: <b>{m.descricao}</b>
-                                  </div>
-                                ) : null}
-                              </div>
-                              <button
-                                type="button"
-                                className="self-end px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  navigate(`/metodologias/${m.id}`);
-                                }}
-                              >
-                                Ver / Assinar
-                              </button>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    );
-                  })()
-                )}
-              </div>
-            </div>
+          {false && abaProfessor === "learning" && (
+            <div />
           )}
 
           {abaProfessor === "criar" && (

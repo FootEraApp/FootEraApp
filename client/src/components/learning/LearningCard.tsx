@@ -1,16 +1,30 @@
 // client/src/components/learning/LearningCard.tsx
 import React from "react";
 import { Link } from "wouter";
-import { APP } from "../../config.js";
+import { API, APP } from "../../config.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 function normalizeMediaUrl(raw?: string | null) {
   if (!raw) return AVATAR_FALLBACK;
+
   const u = String(raw).trim();
   if (!u) return AVATAR_FALLBACK;
+
+  // URL absoluta
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+  // uploads servidos pelo backend
+  if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
+  if (u.startsWith("uploads/")) return `${API.BASE_URL}/${u}`;
+
+  // assets do frontend
+  if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
+  if (u.startsWith("assets/")) return `${APP.FRONTEND_BASE_URL}/${u}`;
+
+  // outros caminhos absolutos do frontend
   if (u.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${u}`;
+
   return u;
 }
 
@@ -65,6 +79,12 @@ export default function LearningCard({
                 }`}
               >
                 {item.ativo ? "Publicada" : "Aguardando validação"}
+              </span>
+            ) : null}
+
+            {item?.geraCertificado ? (
+              <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-blue-50 text-blue-800">
+                Certificado
               </span>
             ) : null}
           </div>

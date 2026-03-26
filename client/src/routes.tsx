@@ -56,8 +56,6 @@ import PaginaJogosElenco from "./pages/jogos-elenco.js";
 import PaginaGerenciarProfessores from "./pages/GerenciarProfessores.js"
 import PaginaConvocarEvento from "./pages/eventos/convocar.js";
 import PaginaVerificarEmail from "./pages/verificar-email.js";
-import CriarMetodologia from "./pages/metodologias/create.js";
-import MinhasMetodologias from "./pages/metodologias/minhas.js";
 import MetodologiaUnicaPage from "./pages/metodologias/metodologia-unica.js";
 import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
 import TutorialPage from "./pages/tutorial.js";
@@ -181,8 +179,6 @@ export function AppRoutes() {
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/tutorial" component={TutorialPage}/>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
-      <Route path="/treinos/Criar-Metodologia"><Private><LearningCreatePage/></Private></Route>
-      <Route path="/treinos/Minhas-Metodologias"><Private><MinhasMetodologias/></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
@@ -194,7 +190,6 @@ export function AppRoutes() {
       <Route path="/metodologias/avaliar"><Private><AvaliarMetodologia /></Private></Route>
       <Route path="/metodologias/:id"><Private><MetodologiaUnicaPage/></Private></Route>
       <Route path="/learning/create"><Private><LearningCreatePage /></Private></Route>
-      <Route path="/learning/minhas"><Private><MinhasMetodologias /></Private></Route>
       <Route path="/learning/:id"><Private><MetodologiaUnicaPage /></Private></Route>
       <Route path="/learning/avaliar"><Private><AvaliarMetodologia /></Private></Route>
       <Route path="/learning"><Private><LearningPage /></Private></Route>
