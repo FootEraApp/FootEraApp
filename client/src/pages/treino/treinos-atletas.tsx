@@ -796,6 +796,17 @@ function abrirMidiaExercicioDireto(
   }, []);
 
   useEffect(() => {
+    if (!FLAGS.LEARNING_ENABLED) {
+      if (
+        window.location.pathname.startsWith("/learning") ||
+        window.location.pathname.startsWith("/metodologias")
+      ) {
+        navigate("/treinos");
+      }
+    }
+  }, [navigate]);
+
+  useEffect(() => {
     if (mainTab !== "learning") return;
     carregarMetodologias();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1808,18 +1819,21 @@ function abrirMidiaExercicioDireto(
                 Treinos
               </button>
 
-              <button
-                type="button"
-                onClick={() => navigate("/learning")}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                  mainTab === "learning"
-                    ? "bg-green-800 text-white"
-                    : "text-green-900 hover:bg-green-50"
-                }`}
-              >
-                Learning
-              </button>
+              {FLAGS.LEARNING_ENABLED && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/learning")}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                    mainTab === "learning"
+                      ? "bg-green-800 text-white"
+                      : "text-green-900 hover:bg-green-50"
+                  }`}
+                >
+                  Learning
+                </button>
+              )}
             </div>
+        
 
             {/* Botão elenco (fica igual) */}
             {canVerElenco && (
