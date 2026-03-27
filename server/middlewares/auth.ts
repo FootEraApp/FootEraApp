@@ -3,13 +3,15 @@ import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { Prisma, PrismaClient, TipoUsuario } from "@prisma/client";
 import { resolveUserContext } from "../services/planResolver.js";
-import type { PlanoName, UserPayload } from "../services/planResolver.js";
-import dotenv from "dotenv";
+import type { PlanoName, UserPayload } from "../services/planResolver.js"
 
-dotenv.config();
-const prisma = new PrismaClient;
+const prisma = new PrismaClient();
 
-const SECRET = process.env.JWT_SECRET || "footera_secret";
+const SECRET = process.env.JWT_SECRET;
+
+if (!SECRET) {
+  throw new Error("JWT_SECRET não configurado no ambiente.");
+}
 
 export type AuthUser = UserPayload;
 export type AuthenticatedRequest = Request & {
@@ -78,7 +80,11 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       req.originalUrl,
       "->",
       err.name,
-      err.message
+      err.message,
+      "| tokenPrefix =",
+      token ? token.slice(0, 20) : "sem-token",
+      "| secretLoaded =",
+      !!SECRET
     );
     return res.status(401).json({ message: "Invalid/expired token" });
   }

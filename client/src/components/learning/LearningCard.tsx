@@ -31,7 +31,7 @@ function normalizeMediaUrl(raw?: string | null) {
 type Props = {
   item: any;
   href: string;
-  actionLabel: string;
+  actionLabel?: string;
   extraActions?: React.ReactNode;
 };
 
@@ -119,13 +119,14 @@ export default function LearningCard({
           </div>
 
           <div className="mt-4 flex items-center gap-2">
-            <Link
-              href={href}
-              className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center justify-center"
-            >
-              {actionLabel}
-            </Link>
-
+            {actionLabel ? (
+              <Link
+                href={href}
+                className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+              >
+                {actionLabel}
+              </Link>
+            ) : null}
             {extraActions}
           </div>
         </div>

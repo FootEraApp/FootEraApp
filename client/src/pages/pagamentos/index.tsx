@@ -530,14 +530,14 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Professor Learning 1",
     monthly: 59.9,          // se for diferente do Pro, troque aqui
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher 1 metodologia por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher 1 metodologia por mês", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
   PROFESSOR_LEARNING_3: {
     id: "PROFESSOR_LEARNING_3",
     title: "Professor Learning 3",
     monthly: 79.9,
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher até 3 metodologias por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher até 3 metodologias por mês", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
 
   // ✅ ORGANIZAÇÕES
@@ -553,7 +553,7 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Organizações Learning",
     monthly: 149.9,
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Escolher até 3 metodologias por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Escolher até 3 metodologias por mês", "Você pode criar metodologias e disponibilizar para os membros da organização"],
   },
 
   // ✅ OLHEIRO (mantém)

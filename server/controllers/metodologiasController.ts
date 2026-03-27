@@ -16,9 +16,58 @@ import {
 import {
   ensureConquistaTemplateMetodologia,
   unlockConquistaMetodologia,
-  syncTemplatesMetodologiasProfissionais
+  syncTemplatesMetodologiasProfissionais,
+  emitirCertificadoMetodologia,
 } from "../services/conquistasMetodologia.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+
+function calcularDatasExecucao(estrutura: any, assinatura: any) {
+  const modo = estrutura?.modoExecucao;
+
+  // MODULO: usa o prazo final fixo, se existir
+  if (estrutura?.tipo === "MODULO") {
+    return {
+      inicio: null,
+      fim: estrutura?.prazoFinal ?? null,
+    };
+  }
+
+  if (!modo) {
+    return { inicio: null, fim: null };
+  }
+
+  if (modo === "DESAFIO_FECHADO") {
+    if (assinatura?.iniciouEm && estrutura?.duracaoSemanas) {
+      const inicio = new Date(assinatura.iniciouEm);
+      const fim = new Date(inicio);
+      fim.setDate(fim.getDate() + Number(estrutura.duracaoSemanas) * 7);
+
+      return { inicio, fim };
+    }
+
+    return {
+      inicio: estrutura?.prazoInicio ?? null,
+      fim: estrutura?.prazoFinal ?? null,
+    };
+  }
+
+  if (modo === "PRAZO_SUGERIDO") {
+    if (assinatura?.iniciouEm && estrutura?.duracaoSemanas) {
+      const inicio = new Date(assinatura.iniciouEm);
+      const fim = new Date(inicio);
+      fim.setDate(fim.getDate() + Number(estrutura.duracaoSemanas) * 7);
+
+      return { inicio, fim };
+    }
+
+    return {
+      inicio: null,
+      fim: estrutura?.prazoFinal ?? null,
+    };
+  }
+
+  return { inicio: null, fim: null };
+}
 
 function getUserId(req: Request): string | null {
   const r: any = req;
@@ -133,9 +182,26 @@ async function recalcularStatusMetodologiaAssinante(metodologiaId: string, usuar
   });
 
   if (concluiuTudo) {
-    await unlockConquistaMetodologia(usuarioId, metodologiaId).catch(() => null);
-  }
+    const metodologia = await prisma.metodologia.findUnique({
+      where: { id: metodologiaId },
+      select: {
+        id: true,
+        geraBadge: true,
+        geraCertificado: true,
+      },
+    });
 
+    if (metodologia?.geraBadge) {
+      await unlockConquistaMetodologia(usuarioId, metodologiaId).catch(() => null);
+    }
+
+    if (metodologia?.geraCertificado) {
+      await emitirCertificadoMetodologia({
+        usuarioId,
+        metodologiaId,
+      }).catch(() => null);
+    }
+  }
   return updated;
 }
 
@@ -182,6 +248,70 @@ function pickPrincipalAssinatura(assinaturas: Array<{ plano?: string | null; sta
 
   const primeiraNaoMetodo = assinaturas.find((a) => !isMetodo(a));
   return (primeiraNaoMetodo ?? null) as any;
+}
+
+const PLANOS_QUE_PODEM_CRIAR_METODOLOGIA = new Set([
+  "PROFESSOR_PRO",
+  "PROFESSOR_LEARNING_1",
+  "PROFESSOR_LEARNING_3",
+  "ORGANIZACOES_PRO",
+  "ORGANIZACOES_LEARNING_3",
+]);
+
+function assinaturaPrincipalEstaAtiva(a: any) {
+  if (!a) return false;
+  const status = String(a?.status || "").toUpperCase();
+  return (status === "ATIVA" || status === "TRIAL") && a?.ativo === true;
+}
+
+async function getPermissaoCriacaoMetodologia(userId: string) {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      tipo: true,
+      parceiro: true,
+    },
+  });
+
+  const tipo = String(usuario?.tipo || "").toLowerCase().trim();
+  const ehProfessorParceiro = tipo === "professor" && usuario?.parceiro === true;
+
+  const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
+    where: { usuarioId: userId },
+    orderBy: { startsAt: "desc" },
+  });
+
+  const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
+  const planoPrincipal = String(assinaturaPrincipal?.plano || "").toUpperCase().trim();
+  const assinaturaAtiva = assinaturaPrincipalEstaAtiva(assinaturaPrincipal);
+
+  const temPlanoElegivel =
+    assinaturaAtiva && PLANOS_QUE_PODEM_CRIAR_METODOLOGIA.has(planoPrincipal);
+
+  const podeCriar = ehProfessorParceiro || temPlanoElegivel;
+
+  let motivoBloqueio: string | null = null;
+
+  if (!podeCriar) {
+    motivoBloqueio =
+      "Para criar uma metodologia, você deve ser um professor parceiro ou assinar um dos planos elegíveis.";
+  }
+
+  return {
+    podeCriar,
+    ehProfessorParceiro,
+    temPlanoElegivel,
+    planoPrincipal: planoPrincipal || null,
+    motivoBloqueio,
+    planosPermitidos: [
+      "PROFESSOR_PRO",
+      "PROFESSOR_LEARNING_1",
+      "PROFESSOR_LEARNING_3",
+      "ORGANIZACOES_PRO",
+      "ORGANIZACOES_LEARNING_3",
+    ],
+  };
 }
 
 async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
@@ -274,6 +404,19 @@ export async function getMetodologiaById(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
+    const userId = getUserId(req);
+
+    const assinatura = userId
+      ? await prisma.metodologiaAssinante.findUnique({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId: id,
+              usuarioId: userId,
+            },
+          },
+        })
+      : null;
+
     const item = await prisma.metodologia.findUnique({
       where: { id },
       include: {
@@ -307,6 +450,15 @@ export async function getMetodologiaById(req: Request, res: Response) {
     });
 
     if (!item) return res.status(404).json({ message: "Metodologia não encontrada." });
+        item.estruturas = item.estruturas.map((e: any) => {
+      const { inicio, fim } = calcularDatasExecucao(e, assinatura);
+
+      return {
+        ...e,
+        dataInicioCalculada: inicio,
+        dataFimCalculada: fim,
+      };
+    });
     return res.json({ item });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao buscar metodologia.", detail: e?.message });
@@ -317,6 +469,17 @@ export async function createMetodologia(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const permissaoCriacao = await getPermissaoCriacaoMetodologia(userId);
+
+    if (!permissaoCriacao.podeCriar) {
+      return res.status(403).json({
+        code: "CRIACAO_METODOLOGIA_BLOQUEADA",
+        message:
+          "Para criar uma metodologia, você deve ser um professor parceiro ou assinar um dos planos elegíveis.",
+        detalhes: permissaoCriacao,
+      });
+    }
 
     const {
       titulo,
@@ -335,6 +498,24 @@ export async function createMetodologia(req: Request, res: Response) {
 
     if (!titulo || typeof titulo !== "string") {
       return res.status(400).json({ message: "Título é obrigatório." });
+    }
+
+    const tituloTrim = titulo.trim();
+
+    const metodologiaComMesmoNome = await prisma.metodologia.findFirst({
+      where: {
+        titulo: {
+          equals: tituloTrim,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true, titulo: true },
+    });
+
+    if (metodologiaComMesmoNome) {
+      return res.status(400).json({
+        message: `Já existe uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
+      });
     }
 
     if (!tipo || !Object.values(MetodologiaTipo).includes(tipo)) {
@@ -421,13 +602,8 @@ export async function createMetodologia(req: Request, res: Response) {
       include: { _count: { select: { assinantes: true, estruturas: true } } },
     });
 
-    // ✅ garante template de conquista (o service só cria se for PROFISSIONAIS)
     try {
-      // garante/atualiza template se for profissionais, ou desativa se não for
       await ensureConquistaTemplateMetodologia(created.id);
-
-      // opcional (recomendado): mantém o catálogo todo consistente
-      // (bom pra caso tenha metodologias antigas sem template)
       await syncTemplatesMetodologiasProfissionais();
     } catch (e) {
       console.error("Falha ao sync template de conquista da metodologia:", e);
@@ -509,6 +685,27 @@ export async function updateMetodologia(req: Request, res: Response) {
     // ✅ NOVIDADE: Se a capa está sendo atualizada/removida, apaga a antiga do S3
     if (capaUrlUpdate !== undefined && current.capaUrl && current.capaUrl !== capaUrlUpdate && current.capaUrl.includes("amazonaws.com")) {
       await deleteFromS3(current.capaUrl);
+    }
+
+    if (typeof titulo === "string" && titulo.trim()) {
+      const tituloTrim = titulo.trim();
+
+      const metodologiaComMesmoNome = await prisma.metodologia.findFirst({
+        where: {
+          id: { not: id },
+          titulo: {
+            equals: tituloTrim,
+            mode: "insensitive",
+          },
+        },
+        select: { id: true, titulo: true },
+      });
+
+      if (metodologiaComMesmoNome) {
+        return res.status(400).json({
+          message: `Já existe uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
+        });
+      }
     }
 
     const updated = await prisma.metodologia.update({
@@ -690,6 +887,8 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
+    const permissaoCriacao = await getPermissaoCriacaoMetodologia(userId);
+
     const items = await prisma.metodologia.findMany({
       where: { criadorUsuarioId: userId },
       orderBy: { criadoEm: "desc" },
@@ -710,6 +909,7 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
         treinoCount: countsById[m.id]?.treinoCount ?? 0,
         criadorNome: m.criadorUsuario?.nome ?? null,
       })),
+      permissaoCriacao,
     });
 
   } catch (e: any) {
@@ -966,6 +1166,27 @@ export async function createMetodologiaItens(req: Request, res: Response) {
   }
 }
 
+function aplicarPenalidadeAtraso(
+  pontosBase: number,
+  estrutura: {
+    modoExecucao?: string | null;
+    prazoFinal?: Date | null;
+    percentualPerdaAtraso?: number | null;
+  }
+) {
+  if (!estrutura?.modoExecucao) return pontosBase;
+  if (estrutura.modoExecucao === "LIVRE") return pontosBase;
+  if (!estrutura.prazoFinal) return pontosBase;
+
+  const agora = new Date();
+  if (agora <= new Date(estrutura.prazoFinal)) return pontosBase;
+
+  const percentual = Number(estrutura.percentualPerdaAtraso ?? 20);
+  const pontosComDesconto = Math.round(pontosBase * (1 - percentual / 100));
+
+  return Math.max(0, pontosComDesconto);
+}
+
 export async function getMetodologiaDetalhe(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -1070,52 +1291,60 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
     const isOwner = metodologia.criadorUsuarioId === userId;
     const podeVerVideo = hasAccess || isOwner || isAdmin;
 
-    const estruturas = metodologia.estruturas.map((estrutura) => ({
-      id: estrutura.id,
-      tipo: estrutura.tipo,
-      titulo: estrutura.titulo,
-      descricao: estrutura.descricao,
-      objetivo: estrutura.objetivo,
-      ordem: estrutura.ordem,
-      duracaoSemanas: estrutura.duracaoSemanas,
-      treinosPorSemana: estrutura.treinosPorSemana,
-      quantidadeMinConclusao: estrutura.quantidadeMinConclusao,
-      modoExecucao: estrutura.modoExecucao,
-      pontosPorItem: estrutura.pontosPorItem,
-      bonusConsistencia: estrutura.bonusConsistencia,
-      bonusFinal: estrutura.bonusFinal,
-      ativo: estrutura.ativo,
-      itens: estrutura.itens.map((item) => ({
-        id: item.id,
-        ordem: item.ordem,
-        tipo: item.tipo,
-        titulo: item.titulo,
-        descricao: item.descricao,
-        pontos: item.pontos,
-        thumbUrl: item.thumbUrl,
-        duracaoMin: item.duracaoMin,
-        videoUrl: podeVerVideo ? item.videoUrl : null,
-        arquivoUrl: item.arquivoUrl ?? null,
-        materialUrl: item.materialUrl ?? null,
-        treinoProgramadoId: item.treinoProgramadoId,
-        treinoProgramado: item.treinoProgramado
-          ? {
-              id: item.treinoProgramado.id,
-              nome: item.treinoProgramado.nome,
-              imagemUrl: item.treinoProgramado.imagemUrl,
-              codigo: item.treinoProgramado.codigo,
-              nivel: item.treinoProgramado.nivel,
-              categoria: item.treinoProgramado.categoria,
-              pontuacao: item.treinoProgramado.pontuacao,
-              duracao: item.treinoProgramado.duracao,
-              objetivo: item.treinoProgramado.objetivo,
-              tipoTreino: item.treinoProgramado.tipoTreino,
-            }
-          : null,
-        publicado: item.publicado,
-        obrigatorio: item.obrigatorio,
-      })),
-    }));
+    const estruturas = metodologia.estruturas.map((estrutura) => {
+      const { inicio, fim } = calcularDatasExecucao(estrutura, assinatura);
+
+      return {
+        id: estrutura.id,
+        tipo: estrutura.tipo,
+        titulo: estrutura.titulo,
+        descricao: estrutura.descricao,
+        objetivo: estrutura.objetivo,
+        ordem: estrutura.ordem,
+        duracaoSemanas: estrutura.duracaoSemanas,
+        treinosPorSemana: estrutura.treinosPorSemana,
+        quantidadeMinConclusao: estrutura.quantidadeMinConclusao,
+        modoExecucao: estrutura.modoExecucao,
+        pontosPorItem: estrutura.pontosPorItem,
+        bonusConsistencia: estrutura.bonusConsistencia,
+        bonusFinal: estrutura.bonusFinal,
+        prazoInicio: estrutura.prazoInicio,
+        prazoFinal: estrutura.prazoFinal,
+        dataInicioCalculada: inicio,
+        dataFimCalculada: fim,
+        ativo: estrutura.ativo,
+        itens: estrutura.itens.map((item) => ({
+          id: item.id,
+          ordem: item.ordem,
+          tipo: item.tipo,
+          titulo: item.titulo,
+          descricao: item.descricao,
+          pontos: item.pontos,
+          thumbUrl: item.thumbUrl,
+          duracaoMin: item.duracaoMin,
+          videoUrl: podeVerVideo ? item.videoUrl : null,
+          arquivoUrl: item.arquivoUrl ?? null,
+          materialUrl: item.materialUrl ?? null,
+          treinoProgramadoId: item.treinoProgramadoId,
+          treinoProgramado: item.treinoProgramado
+            ? {
+                id: item.treinoProgramado.id,
+                nome: item.treinoProgramado.nome,
+                imagemUrl: item.treinoProgramado.imagemUrl,
+                codigo: item.treinoProgramado.codigo,
+                nivel: item.treinoProgramado.nivel,
+                categoria: item.treinoProgramado.categoria,
+                pontuacao: item.treinoProgramado.pontuacao,
+                duracao: item.treinoProgramado.duracao,
+                objetivo: item.treinoProgramado.objetivo,
+                tipoTreino: item.treinoProgramado.tipoTreino,
+              }
+            : null,
+          publicado: item.publicado,
+          obrigatorio: item.obrigatorio,
+        })),
+      };
+    });
 
     let motivoBloqueio: string | null = null;
 
@@ -1400,10 +1629,26 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
       return res.status(400).json({ message: "itemId é obrigatório." });
     }
 
-    // Confere se item pertence à metodologia e pega pontos
-    const item = await prisma.metodologiaItem.findFirst({
-      where: { id: itemId, metodologiaId: id },
-      select: { id: true, pontos: true },
+    const item = await prisma.metodologiaEstruturaItem.findFirst({
+      where: {
+        id: itemId,
+        estrutura: {
+          metodologiaId: id,
+        },
+      },
+      select: {
+        id: true,
+        pontos: true,
+        estrutura: {
+          select: {
+            id: true,
+            pontosPorItem: true,
+            modoExecucao: true,
+            prazoFinal: true,
+            percentualPerdaAtraso: true,
+          },
+        },
+      },
     });
 
     if (!item) return res.status(404).json({ message: "Item não encontrado nessa metodologia." });
@@ -1422,10 +1667,19 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
     const jaTinha = concluidos.includes(itemId);
     const novoConcluidos = jaTinha ? concluidos : [...concluidos, itemId];
     // ✅ opcional: guardar pontos ganhos só 1x
-    const pontosGanhos = Number(item.pontos ?? 0);
     const pontosTotaisAntes = Number(progresso.pontosGanhos ?? 0);
-    const pontosGanhosAgora = jaTinha ? 0 : pontosGanhos;
 
+    const pontosBase = Number(
+      item.pontos ?? item.estrutura?.pontosPorItem ?? 0
+    );
+
+    const pontosGanhosAgora = jaTinha
+      ? 0
+      : aplicarPenalidadeAtraso(pontosBase, {
+          modoExecucao: item.estrutura?.modoExecucao ?? null,
+          prazoFinal: item.estrutura?.prazoFinal ?? null,
+          percentualPerdaAtraso: item.estrutura?.percentualPerdaAtraso ?? null,
+        });
     const progressoNovo = {
       ...progresso,
       concluidos: novoConcluidos,
@@ -1516,10 +1770,12 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
         const pontosPorItem = asNullableNumber(item?.pontosPorItem);
         const bonusConsistencia = asNullableNumber(item?.bonusConsistencia);
         const bonusFinal = asNullableNumber(item?.bonusFinal);
+        const prazoInicio = item?.prazoInicio ? new Date(item.prazoInicio) : null;
         const prazoFinal = item?.prazoFinal ? new Date(item.prazoFinal) : null;
+        const percentualPerdaAtraso = asNullableNumber(item?.percentualPerdaAtraso);
         const permiteAtraso = asBool(item?.permiteAtraso, true);
-        const ativo = asBool(item?.ativo, true);
         const modoExecucao = item?.modoExecucao ?? null;
+        const ativo = asBool(item?.ativo, true);
 
         if (!titulo) {
           throw new Error("Cada estrutura precisa ter título.");
@@ -1552,15 +1808,67 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
             throw new Error(`A trilha "${titulo}" exige treinosPorSemana válido.`);
           }
 
-          if (modoExecucao && !isValidEnumValue(MetodologiaModoExecucao, modoExecucao)) {
+          if (!modoExecucao || !isValidEnumValue(MetodologiaModoExecucao, modoExecucao)) {
             throw new Error(`modoExecucao inválido na trilha "${titulo}".`);
+          }
+
+          if (modoExecucao === MetodologiaModoExecucao.LIVRE) {
+            // sem prazos
+          }
+
+          if (modoExecucao === MetodologiaModoExecucao.PRAZO_SUGERIDO) {
+            if (!prazoFinal || Number.isNaN(prazoFinal.getTime())) {
+              throw new Error(`A trilha "${titulo}" exige prazoFinal no modo PRAZO_SUGERIDO.`);
+            }
+
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            const minFinal = new Date(hoje);
+            minFinal.setDate(minFinal.getDate() + 14);
+
+            const maxFinal = new Date(hoje);
+            maxFinal.setDate(maxFinal.getDate() + 56);
+
+            if (prazoFinal < minFinal) {
+              throw new Error(`A trilha "${titulo}" exige prazoFinal de no mínimo 2 semanas a partir de hoje.`);
+            }
+
+            if (prazoFinal > maxFinal) {
+              throw new Error(`A trilha "${titulo}" exige prazoFinal de no máximo 8 semanas a partir de hoje.`);
+            }
+
+            const diffDias = Math.ceil(
+              (prazoFinal.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
+            );
+            const esperadoDias = Number(duracaoSemanas || 0) * 7;
+
+            if (Math.abs(diffDias - esperadoDias) > 7) {
+              throw new Error(
+                `O prazo final da trilha "${titulo}" deve ficar próximo da duração do ciclo (${duracaoSemanas} semanas).`
+              );
+            }
+          }
+
+          if (modoExecucao === MetodologiaModoExecucao.DESAFIO_FECHADO) {
+            if (!prazoInicio || Number.isNaN(prazoInicio.getTime())) {
+              throw new Error(`A trilha "${titulo}" exige prazoInicio no modo DESAFIO_FECHADO.`);
+            }
+
+            if (!prazoFinal || Number.isNaN(prazoFinal.getTime())) {
+              throw new Error(`A trilha "${titulo}" exige prazoFinal no modo DESAFIO_FECHADO.`);
+            }
+
+            if (prazoFinal <= prazoInicio) {
+              throw new Error(
+                `Na trilha "${titulo}", prazoFinal deve ser maior que prazoInicio.`
+              );
+            }
           }
         }
 
         if (metodologia.estruturaTipo === MetodologiaEstruturaTipo.MODULO) {
-          if (modoExecucao && !isValidEnumValue(MetodologiaModoExecucao, modoExecucao)) {
-            throw new Error(`modoExecucao inválido no módulo "${titulo}".`);
-          }
+          // módulo não exige modoExecucao nem prazo
         }
 
         let ordemFinal = ordemInformada;
@@ -1575,6 +1883,20 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
           ordemFinal = (last?.ordem ?? 0) + 1;
         }
 
+        const estruturaComMesmoNome = await tx.metodologiaEstrutura.findFirst({
+          where: {
+            titulo: {
+              equals: titulo,
+              mode: "insensitive",
+            },
+          },
+          select: { id: true, titulo: true },
+        });
+
+        if (estruturaComMesmoNome) {
+          throw new Error(`Já existe uma trilha/módulo com o nome "${titulo}". Escolha outro nome.`);
+        }
+
         const nova = await tx.metodologiaEstrutura.create({
           data: {
             metodologiaId,
@@ -1586,12 +1908,34 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
             duracaoSemanas,
             treinosPorSemana,
             quantidadeMinConclusao,
-            modoExecucao: modoExecucao ?? null,
             pontosPorItem,
             bonusConsistencia,
             bonusFinal,
-            prazoFinal,
-            permiteAtraso,
+            prazoInicio:
+              metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA &&
+              modoExecucao === MetodologiaModoExecucao.DESAFIO_FECHADO
+                ? prazoInicio
+                : null,
+
+            prazoFinal:
+              metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
+                ? (modoExecucao === MetodologiaModoExecucao.LIVRE ? null : prazoFinal)
+                : prazoFinal,
+
+            percentualPerdaAtraso:
+              metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
+                ? (modoExecucao === MetodologiaModoExecucao.LIVRE ? null : (percentualPerdaAtraso ?? 20))
+                : null,
+
+            permiteAtraso:
+              metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
+                ? (modoExecucao === MetodologiaModoExecucao.DESAFIO_FECHADO ? false : permiteAtraso)
+                : true,
+
+            modoExecucao:
+              metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
+                ? modoExecucao
+                : null,
             ativo,
           },
         });
@@ -1646,15 +1990,43 @@ export async function updateMetodologiaEstrutura(req: Request, res: Response) {
     const ordem = body.ordem !== undefined ? asNullableNumber(body.ordem) : undefined;
     const ativo = body.ativo !== undefined ? asBool(body.ativo, true) : undefined;
 
-    const duracaoSemanas = body.duracaoSemanas !== undefined ? asNullableNumber(body.duracaoSemanas) : undefined;
-    const treinosPorSemana = body.treinosPorSemana !== undefined ? asNullableNumber(body.treinosPorSemana) : undefined;
-    const quantidadeMinConclusao = body.quantidadeMinConclusao !== undefined ? asNullableNumber(body.quantidadeMinConclusao) : undefined;
-    const pontosPorItem = body.pontosPorItem !== undefined ? asNullableNumber(body.pontosPorItem) : undefined;
-    const bonusConsistencia = body.bonusConsistencia !== undefined ? asNullableNumber(body.bonusConsistencia) : undefined;
-    const bonusFinal = body.bonusFinal !== undefined ? asNullableNumber(body.bonusFinal) : undefined;
-    const prazoFinal = body.prazoFinal !== undefined ? (body.prazoFinal ? new Date(body.prazoFinal) : null) : undefined;
-    const permiteAtraso = body.permiteAtraso !== undefined ? asBool(body.permiteAtraso, true) : undefined;
-    const modoExecucao = body.modoExecucao !== undefined ? (body.modoExecucao || null) : undefined;
+    const duracaoSemanas =
+      body.duracaoSemanas !== undefined ? asNullableNumber(body.duracaoSemanas) : undefined;
+    const treinosPorSemana =
+      body.treinosPorSemana !== undefined ? asNullableNumber(body.treinosPorSemana) : undefined;
+    const quantidadeMinConclusao =
+      body.quantidadeMinConclusao !== undefined
+        ? asNullableNumber(body.quantidadeMinConclusao)
+        : undefined;
+    const pontosPorItem =
+      body.pontosPorItem !== undefined ? asNullableNumber(body.pontosPorItem) : undefined;
+    const bonusConsistencia =
+      body.bonusConsistencia !== undefined
+        ? asNullableNumber(body.bonusConsistencia)
+        : undefined;
+    const bonusFinal =
+      body.bonusFinal !== undefined ? asNullableNumber(body.bonusFinal) : undefined;
+
+    const prazoInicio =
+      body.prazoInicio !== undefined
+        ? (body.prazoInicio ? new Date(body.prazoInicio) : null)
+        : undefined;
+
+    const prazoFinal =
+      body.prazoFinal !== undefined
+        ? (body.prazoFinal ? new Date(body.prazoFinal) : null)
+        : undefined;
+
+    const percentualPerdaAtraso =
+      body.percentualPerdaAtraso !== undefined
+        ? asNullableNumber(body.percentualPerdaAtraso)
+        : undefined;
+
+    const permiteAtraso =
+      body.permiteAtraso !== undefined ? asBool(body.permiteAtraso, true) : undefined;
+
+    const modoExecucao =
+      body.modoExecucao !== undefined ? (body.modoExecucao || null) : undefined;
 
     if (titulo !== undefined && !titulo) {
       return res.status(400).json({ message: "Título não pode ser vazio." });
@@ -1668,8 +2040,16 @@ export async function updateMetodologiaEstrutura(req: Request, res: Response) {
       return res.status(400).json({ message: "modoExecucao inválido." });
     }
 
-    const futuraDuracao = duracaoSemanas !== undefined ? duracaoSemanas : estrutura.duracaoSemanas;
-    const futuroTreinos = treinosPorSemana !== undefined ? treinosPorSemana : estrutura.treinosPorSemana;
+    const futuraDuracao =
+      duracaoSemanas !== undefined ? duracaoSemanas : estrutura.duracaoSemanas;
+    const futuroTreinos =
+      treinosPorSemana !== undefined ? treinosPorSemana : estrutura.treinosPorSemana;
+    const futuroModoExecucao =
+      modoExecucao !== undefined ? modoExecucao : estrutura.modoExecucao;
+    const futuroPrazoInicio =
+      prazoInicio !== undefined ? prazoInicio : estrutura.prazoInicio;
+    const futuroPrazoFinal =
+      prazoFinal !== undefined ? prazoFinal : estrutura.prazoFinal;
 
     if (metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA) {
       if (!futuraDuracao || futuraDuracao <= 0) {
@@ -1678,6 +2058,56 @@ export async function updateMetodologiaEstrutura(req: Request, res: Response) {
 
       if (!futuroTreinos || futuroTreinos <= 0) {
         return res.status(400).json({ message: "Trilhas exigem treinosPorSemana válido." });
+      }
+
+      if (!futuroModoExecucao || !isValidEnumValue(MetodologiaModoExecucao, futuroModoExecucao)) {
+        return res.status(400).json({ message: "Trilhas exigem modoExecucao válido." });
+      }
+
+      if (futuroModoExecucao === MetodologiaModoExecucao.PRAZO_SUGERIDO) {
+        if (!futuroPrazoFinal || Number.isNaN(new Date(futuroPrazoFinal).getTime())) {
+          return res.status(400).json({
+            message: 'Trilhas no modo "Com prazo sugerido" exigem prazoFinal.',
+          });
+        }
+      }
+
+      if (futuroModoExecucao === MetodologiaModoExecucao.DESAFIO_FECHADO) {
+        if (!futuroPrazoInicio || Number.isNaN(new Date(futuroPrazoInicio).getTime())) {
+          return res.status(400).json({
+            message: 'Trilhas no modo "Desafio fechado" exigem prazoInicio.',
+          });
+        }
+
+        if (!futuroPrazoFinal || Number.isNaN(new Date(futuroPrazoFinal).getTime())) {
+          return res.status(400).json({
+            message: 'Trilhas no modo "Desafio fechado" exigem prazoFinal.',
+          });
+        }
+
+        if (new Date(futuroPrazoFinal) <= new Date(futuroPrazoInicio)) {
+          return res.status(400).json({
+            message: "prazoFinal deve ser maior que prazoInicio.",
+          });
+        }
+      }
+    }
+
+    if (titulo !== undefined && titulo) {
+      const estruturaComMesmoNome = await prisma.metodologiaEstrutura.findFirst({
+        where: {
+          id: { not: estruturaId },
+          metodologiaId,
+          titulo: {
+            equals: titulo,
+            mode: "insensitive",
+          },
+        },
+        select: { id: true, titulo: true },
+      });
+
+      if (estruturaComMesmoNome) {
+        throw new Error(`Já existe uma trilha/módulo com o nome "${titulo}". Escolha outro nome.`);
       }
     }
 
@@ -1695,9 +2125,21 @@ export async function updateMetodologiaEstrutura(req: Request, res: Response) {
         ...(pontosPorItem !== undefined ? { pontosPorItem } : {}),
         ...(bonusConsistencia !== undefined ? { bonusConsistencia } : {}),
         ...(bonusFinal !== undefined ? { bonusFinal } : {}),
-        ...(prazoFinal !== undefined ? { prazoFinal } : {}),
-        ...(permiteAtraso !== undefined ? { permiteAtraso } : {}),
-        ...(modoExecucao !== undefined ? { modoExecucao } : {}),
+        ...(metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
+          ? {
+              ...(prazoInicio !== undefined ? { prazoInicio } : {}),
+              ...(prazoFinal !== undefined ? { prazoFinal } : {}),
+              ...(percentualPerdaAtraso !== undefined ? { percentualPerdaAtraso } : {}),
+              ...(permiteAtraso !== undefined ? { permiteAtraso } : {}),
+              ...(modoExecucao !== undefined ? { modoExecucao } : {}),
+            }
+          : {
+              prazoInicio: null,
+              ...(prazoFinal !== undefined ? { prazoFinal } : {}),
+              percentualPerdaAtraso: null,
+              permiteAtraso: true,
+              modoExecucao: null,
+            }),
       },
       include: {
         itens: {
@@ -2179,4 +2621,3 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
     });
   }
 }
-
