@@ -187,12 +187,50 @@ export function AppRoutes() {
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
       <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
-      <Route path="/metodologias/avaliar"><Private><AvaliarMetodologia /></Private></Route>
-      <Route path="/metodologias/:id"><Private><MetodologiaUnicaPage/></Private></Route>
-      <Route path="/learning/create"><Private><LearningCreatePage /></Private></Route>
-      <Route path="/learning/:id"><Private><MetodologiaUnicaPage /></Private></Route>
-      <Route path="/learning/avaliar"><Private><AvaliarMetodologia /></Private></Route>
-      <Route path="/learning"><Private><LearningPage /></Private></Route>
+      
+      {FLAGS.LEARNING_ENABLED ? (
+        <>
+          <Route path="/metodologias/avaliar">
+            <Private><AvaliarMetodologia /></Private>
+          </Route>
+          <Route path="/metodologias/:id">
+            <Private><MetodologiaUnicaPage /></Private>
+          </Route>
+          <Route path="/learning/create">
+            <Private><LearningCreatePage /></Private>
+          </Route>
+          <Route path="/learning/:id">
+            <Private><MetodologiaUnicaPage /></Private>
+          </Route>
+          <Route path="/learning/avaliar">
+            <Private><AvaliarMetodologia /></Private>
+          </Route>
+          <Route path="/learning">
+            <Private><LearningPage /></Private>
+          </Route>
+        </>
+      ) : (
+        <>
+          <Route path="/metodologias/avaliar">
+            <Private><PaginaTreinos /></Private>
+          </Route>
+          <Route path="/metodologias/:id">
+            <Private><PaginaTreinos /></Private>
+          </Route>
+          <Route path="/learning/create">
+            <Private><PaginaTreinos /></Private>
+          </Route>
+          <Route path="/learning/:id">
+            <Private><PaginaTreinos /></Private>
+          </Route>
+          <Route path="/learning/avaliar">
+            <Private><PaginaTreinos /></Private>
+          </Route>
+          <Route path="/learning">
+            <Private><PaginaTreinos /></Private>
+          </Route>
+        </>
+      )}
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
       <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>
