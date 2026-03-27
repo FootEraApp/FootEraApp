@@ -2,21 +2,24 @@ import { useEffect, useRef } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
+function getToken() {
+  return (
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    (Storage as any)?.token ||
+    ""
+  );
+}
+
 export function usePresencePing() {
   const startedRef = useRef(false);
 
   useEffect(() => {
-    const getToken = () =>
-      Storage.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token") ||
-      "";
-
     const token = getToken();
     if (!token) return;
     if (startedRef.current) return;
-    startedRef.current = true;
 
+    startedRef.current = true;
     let alive = true;
 
     async function ping() {
@@ -24,14 +27,22 @@ export function usePresencePing() {
       if (!t) return;
 
       try {
-        await fetch(`${API.BASE_URL}/api/presenca/ping`, {
+        const res = await fetch(`${API.BASE_URL}/api/presenca/ping`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${t}`,
           },
         });
-      } catch {
-      }
+
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          sessionStorage.removeItem("token");
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("jwt");
+          startedRef.current = false;
+          return;
+        }
+      } catch {}
     }
 
     ping();
@@ -39,7 +50,7 @@ export function usePresencePing() {
     const interval = setInterval(() => {
       if (!alive) return;
       ping();
-    }, 25_000);
+    }, 25000);
 
     const onFocus = () => ping();
     const onVis = () => {
@@ -54,10 +65,7 @@ export function usePresencePing() {
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
+      startedRef.current = false;
     };
-  }, [
-    Storage.token,
-    localStorage.getItem("token"),
-    sessionStorage.getItem("token"),
-  ]);
+  }, []);
 }

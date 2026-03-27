@@ -53,7 +53,23 @@ type PayloadClube = {
   metrics: { atletas: number; eventos?: number; conquistas?: number };
 };
 
-type AbaTopo = "perfil" | "dashboard" | "eventos" | "atletas" | "professores" | "postagens";
+type CertificadoResumo = {
+  id: string;
+  tituloMetodologia: string;
+  emitidoEm: string;
+  codigoValidacao: string;
+  pdfUrl?: string | null;
+};
+
+type AbaTopo =
+  | "perfil"
+  | "dashboard"
+  | "eventos"
+  | "atletas"
+  | "professores"
+  | "conquistas"
+  | "postagens";
+
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 type AtletaItem = {
   id: string;
@@ -245,6 +261,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     permitirMensagens: boolean;
     mostrarEmail: boolean;
   } | null>(null);
+  const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
   const entidadeUsuarioId = isOwn
@@ -319,9 +337,42 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         );
 
         const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
-        if (!cancel) setConquistasCount(earnedArr.length); 
+        if (!cancel) {
+          setEarnedBadges(earnedArr);
+          setConquistasCount(earnedArr.length);
+        }
       } catch {
-        if (!cancel) setConquistasCount(0);
+        if (!cancel) {
+          setEarnedBadges([]);
+          setConquistasCount(0);
+        }
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, isOwn, data?.clube?.usuarioId]);
+  
+  useEffect(() => {
+    if (!token) return;
+
+    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.clube?.usuarioId ?? null);
+    if (!usuarioIdEnt) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioIdEnt)}`,
+          { headers }
+        );
+
+        const items = Array.isArray(resp?.items) ? resp.items : [];
+        if (!cancel) setCertificados(items);
+      } catch {
+        if (!cancel) setCertificados([]);
       }
     })();
 
@@ -852,12 +903,14 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
               { key: "dashboard", label: "Dashboard" },
               { key: "eventos", label: "Eventos" },
               { key: "atletas", label: "Atletas" },
+              { key: "conquistas", label: "Conquistas"},
               { key: "professores", label: "Professores" },
               { key: "postagens", label: "Postagens" }
             ]
           : [
               { key: "perfil", label: "Perfil" },
               { key: "eventos", label: "Eventos" },
+              { key: "conquistas", label: "Conquistas"},
               { key: "postagens", label: "Postagens" },
             ]
         ).map((t) => (
@@ -1652,6 +1705,57 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
             )}
           </SectionCard>
         </section>
+      )}
+
+      {aba === "conquistas" && (
+        <div className="mt-4 px-4 grid gap-4">
+          <SectionCard
+            title="Certificados emitidos"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver certificados
+              </Link>
+            }
+          >
+            {certificados && certificados.length > 0 ? (
+              <div className="text-green-900 font-medium">
+                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+              </div>
+            ) : (
+              <EmptyState text="Nenhum certificado emitido ainda." />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Conquistas e Troféus"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver conquistas
+              </Link>
+            }
+          >
+            {earnedBadges.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {earnedBadges.slice(0, 4).map((item: any) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl p-4 border border-green-100 text-center"
+                  >
+                    <Trophy className="mx-auto mb-2 text-green-800" />
+                    <div className="text-sm font-medium text-green-900">
+                      {item?.conquista?.titulo ?? "Conquista"}
+                    </div>
+                    <div className="text-xs text-green-900/70">
+                      {item?.conquista?.descricao ?? ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState text="Nenhuma conquista registrada ainda." />
+            )}
+          </SectionCard>
+        </div>
       )}
 
       {canEdit && (

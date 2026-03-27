@@ -41,12 +41,24 @@ type CatalogItem = {
   meta?: number | null;
 };
 
+type CertificadoItem = {
+  id: string;
+  metodologiaId: string;
+  tituloMetodologia: string;
+  nomeUsuario: string;
+  nomeEmissor: string;
+  codigoValidacao: string;
+  emitidoEm?: string | null;
+  concluidoEm?: string | null;
+  imagemUrl?: string | null;
+  pdfUrl?: string | null;
+};
+
 const groupOrder = [
   "Treinos",
   "Desafios",
   "Desafios em Grupo",
-  "Metodologias",
-  "Metodologias Profissionais",
+  "Learning",
   "Pontuação",
   "Gestão",
   "Eventos",
@@ -93,7 +105,7 @@ function groupLabelFromTipo(tipo?: string | null): string {
   if (t === "PERFIL") return "Pontuação";
   if (t === "ORGANIZACAO") return "Gestão";
   if (t === "EVENTO") return "Eventos";
-  if (t === "METODOLOGIA") return "Metodologias"; // ✅ ADD
+  if (t === "METODOLOGIA") return "Learning";
   return "Outros";
 }
 
@@ -144,6 +156,13 @@ function readUsuarioId(): string | null {
   return raw === "" ? null : raw;
 }
 
+function formatarData(v?: string | null) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR");
+}
+
 const USE_API = true;
 const ENABLE_DESAFIOS = false;
 const ENABLE_DESAFIOS_GRUPO = false;
@@ -155,8 +174,7 @@ const BLOQUEADOS_POR_FLAG = new Set<string>([
 
 const GROUPS_PROGRESSO_BASE = new Set<string>([
   "Treinos",
-  "Metodologias",
-  "Metodologias Profissionais",
+  "Learning",
   "Pontuação",
   "Gestão",
   "Eventos",
@@ -189,6 +207,8 @@ export default function ConquistasPage() {
   const [serverEntity, setServerEntity] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [certificados, setCertificados] = useState<CertificadoItem[]>([]);
+  const [loadingCertificados, setLoadingCertificados] = useState(true);
 
   const entity = useMemo(() => {
     return serverEntity || entityFromTipoUsuario(String(tipoRaw)) || "Atleta";
@@ -227,7 +247,14 @@ export default function ConquistasPage() {
 
         const items: CatalogItem[] = itemsRaw.map((c: any) => {
           const grupoDesc = extractGrupoFromDescricao(c?.descricao);
-          const groupLabel = grupoDesc || groupLabelFromTipo(c?.tipo);
+          const rawGroupLabel = grupoDesc || groupLabelFromTipo(c?.tipo);
+
+          const groupLabel =
+            rawGroupLabel === "Metodologias" ||
+            rawGroupLabel === "Metodologias Profissionais"
+              ? "Learning"
+              : rawGroupLabel;
+              
           const tier = extractTierFromDescricao(c?.descricao);
 
           return {
@@ -339,6 +366,46 @@ export default function ConquistasPage() {
     ).length;
   }, [earned, progressoCatalogIds]);
 
+  useEffect(() => {
+    const loadCertificados = async () => {
+      setLoadingCertificados(true);
+
+      if (!usuarioIdDaPagina || !USE_API) {
+        setCertificados([]);
+        setLoadingCertificados(false);
+        return;
+      }
+
+      try {
+        const base = (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
+        const token = getToken();
+
+        const url =
+          String(usuarioIdDaPagina) === String(usuarioId || "")
+            ? `${base}/api/conquistas/certificados`
+            : `${base}/api/conquistas/certificados/${usuarioIdDaPagina}`;
+
+        const r = await fetch(url, {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!r.ok) throw new Error(`Falha ao carregar certificados (${r.status})`);
+
+        const json = await r.json();
+        const items = Array.isArray(json?.items) ? json.items : [];
+        setCertificados(items);
+      } catch (e) {
+        console.error("ERRO loadCertificados:", e);
+        setCertificados([]);
+      } finally {
+        setLoadingCertificados(false);
+      }
+    };
+
+    loadCertificados();
+  }, [usuarioIdDaPagina, usuarioId]);
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
@@ -394,6 +461,79 @@ export default function ConquistasPage() {
             </p>
           )}
         </header>
+
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900">
+              Certificados
+            </h2>
+            {!loadingCertificados && (
+              <span className="text-sm text-gray-600">
+                {certificados.length} emitido{certificados.length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+
+          {loadingCertificados ? (
+            <div className="rounded-xl border bg-white p-4 shadow-sm">
+              <div className="h-2 w-full bg-gray-200 rounded overflow-hidden">
+                <div className="h-full w-1/3 bg-green-600 animate-pulse" />
+              </div>
+            </div>
+          ) : certificados.length === 0 ? (
+            <div className="rounded-xl border bg-white p-4 shadow-sm text-gray-500">
+              Nenhum certificado emitido ainda.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {certificados.map((cert) => (
+                <div
+                  key={cert.id}
+                  className="rounded-xl border p-4 bg-white shadow-sm transition hover:shadow-md"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-green-100 text-2xl">
+                      🎓
+                    </div>
+
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900">
+                        {cert.tituloMetodologia}
+                      </h3>
+
+                      <p className="text-sm text-gray-600 mt-1">
+                        Emitido por: {cert.nomeEmissor || "FootEra"}
+                      </p>
+
+                      <div className="mt-3 space-y-1 text-xs text-gray-500">
+                        <div>Concluído em: {formatarData(cert.concluidoEm)}</div>
+                        <div>Emitido em: {formatarData(cert.emitidoEm)}</div>
+                        <div>Código: {cert.codigoValidacao}</div>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {cert.pdfUrl ? (
+                          <a
+                            href={cert.pdfUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block px-3 py-1.5 rounded-lg bg-green-700 text-white text-sm"
+                          >
+                            Ver certificado
+                          </a>
+                        ) : (
+                          <span className="inline-block px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500 text-sm border">
+                            Certificado disponível em breve
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {groupOrder
           .filter((g) => !BLOQUEADOS_POR_FLAG.has(g))

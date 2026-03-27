@@ -7,11 +7,16 @@ import {
   syncAllUsuarios,
   getConquistasCount,
   getConquistaById,
+  getCertificadosByUsuarioId,
+  getCertificadosCount,
 } from "../controllers/conquistasController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
+router.get("/certificados/count", authenticateToken, getCertificadosCount);
+router.get("/certificados/:usuarioId", authenticateToken, getCertificadosByUsuarioId);
+router.get("/certificados", authenticateToken, getCertificadosByUsuarioId);
 router.get("/catalog/:entity", getCatalog);
 router.get("/catalog", getCatalog);
 router.get("/auditoria", getAuditoria);

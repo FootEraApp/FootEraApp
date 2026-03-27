@@ -55,55 +55,56 @@ model Usuario {
   blockedReason             String?
   reactivatedAt             DateTime?
 
-  amigosDe               Amigo[]                   @relation("AmigoUsuario")
-  amigos                 Amigo[]                   @relation("UsuarioAmigo")
-  atividadesRecentes     AtividadeRecente[]
-  atleta                 Atleta?
-  clube                  Clube?
-  comentarios            Comentario[]
-  curtidas               Curtida[]
-  desafiosCriados        DesafioEmGrupo[]          @relation("CriadorDesafioEmGrupo")
-  escolinha              Escolinha?
-  favoritadoPor          FavoritoUsuario[]         @relation("UsuarioFavorito")
-  favoritos              FavoritoUsuario[]         @relation("UsuarioFavoritador")
-  gruposDono             Grupo[]                   @relation("GruposQuePossuo")
-  logsErro               LogErro[]
-  MembroGrupo            MembroGrupo[]
-  mensagensEnviadas      Mensagem[]                @relation("MensagensEnviadas")
-  mensagensRecebidas     Mensagem[]                @relation("MensagensRecebidas")
-  mensagensReferenciando Mensagem[]                @relation("UsuarioMensagemReferencia")
-  MensagemGrupo          MensagemGrupo[]
-  olheiro                Olheiro?
-  PasswordReset          PasswordReset[]
-  postagens              Postagem[]
-  professor              Professor?
-  seguidores             Seguidor[]                @relation("Seguido")
-  seguindo               Seguidor[]                @relation("Seguidor")
-  solicitacoesRecebidas  SolicitacaoTreino[]       @relation("SolicitacoesRecebidas")
-  solicitacoesEnviadas   SolicitacaoTreino[]       @relation("SolicitacoesEnviadas")
-  submissaoDesafios      SubmissaoDesafio[]
-  submissaoEmGrupo       SubmissaoDesafioEmGrupo[]
-  submissaoTreinos       SubmissaoTreino[]
-  treinoRealizado        TreinoRealizado[]
-  desafiosEmGrupo        DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
-  Consentimento          Consentimento[]
-  Turmas                 TurmaUsuario[]
-  TreinoUsuario          TreinoUsuario[]
-  SubmissionChecklist    SubmissionChecklist[]
-  TreinoSalvo            TreinoSalvo[]
-  TreinoRotina           TreinoRotina[]
-  Pagamento              Pagamento[]
-  Cupom                  Cupom[]
-  CupomResgate           CupomResgate[]
-  LogAuditoria           LogAuditoria[]
-  inscricoesEvento       InscricaoEvento[]
-  convitesEvento         InscricaoEvento[]         @relation("ConvitesEvento")
-  feedbacks              Feedback[]
-  SessaoTreinoTurma      SessaoTreinoTurma[]
-  notificacoes           Notificacao[]             @relation("NotificacaoUsuario")
-  notificacoesGeradas    Notificacao[]             @relation("NotificacaoActor")
-  AvaliacaoTreino        AvaliacaoTreino[]
-  AvaliacaoMetodologia   AvaliacaoMetodologia[]
+  amigosDe                Amigo[]                   @relation("AmigoUsuario")
+  amigos                  Amigo[]                   @relation("UsuarioAmigo")
+  atividadesRecentes      AtividadeRecente[]
+  atleta                  Atleta?
+  certificadosMetodologia CertificadoMetodologia[]
+  clube                   Clube?
+  comentarios             Comentario[]
+  curtidas                Curtida[]
+  desafiosCriados         DesafioEmGrupo[]          @relation("CriadorDesafioEmGrupo")
+  escolinha               Escolinha?
+  favoritadoPor           FavoritoUsuario[]         @relation("UsuarioFavorito")
+  favoritos               FavoritoUsuario[]         @relation("UsuarioFavoritador")
+  gruposDono              Grupo[]                   @relation("GruposQuePossuo")
+  logsErro                LogErro[]
+  MembroGrupo             MembroGrupo[]
+  mensagensEnviadas       Mensagem[]                @relation("MensagensEnviadas")
+  mensagensRecebidas      Mensagem[]                @relation("MensagensRecebidas")
+  mensagensReferenciando  Mensagem[]                @relation("UsuarioMensagemReferencia")
+  MensagemGrupo           MensagemGrupo[]
+  olheiro                 Olheiro?
+  PasswordReset           PasswordReset[]
+  postagens               Postagem[]
+  professor               Professor?
+  seguidores              Seguidor[]                @relation("Seguido")
+  seguindo                Seguidor[]                @relation("Seguidor")
+  solicitacoesRecebidas   SolicitacaoTreino[]       @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas    SolicitacaoTreino[]       @relation("SolicitacoesEnviadas")
+  submissaoDesafios       SubmissaoDesafio[]
+  submissaoEmGrupo        SubmissaoDesafioEmGrupo[]
+  submissaoTreinos        SubmissaoTreino[]
+  treinoRealizado         TreinoRealizado[]
+  desafiosEmGrupo         DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
+  Consentimento           Consentimento[]
+  Turmas                  TurmaUsuario[]
+  TreinoUsuario           TreinoUsuario[]
+  SubmissionChecklist     SubmissionChecklist[]
+  TreinoSalvo             TreinoSalvo[]
+  TreinoRotina            TreinoRotina[]
+  Pagamento               Pagamento[]
+  Cupom                   Cupom[]
+  CupomResgate            CupomResgate[]
+  LogAuditoria            LogAuditoria[]
+  inscricoesEvento        InscricaoEvento[]
+  convitesEvento          InscricaoEvento[]         @relation("ConvitesEvento")
+  feedbacks               Feedback[]
+  SessaoTreinoTurma       SessaoTreinoTurma[]
+  notificacoes            Notificacao[]             @relation("NotificacaoUsuario")
+  notificacoesGeradas     Notificacao[]             @relation("NotificacaoActor")
+  AvaliacaoTreino         AvaliacaoTreino[]
+  AvaliacaoMetodologia    AvaliacaoMetodologia[]
 
   metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
   metodologiasAssinadas MetodologiaAssinante[]
@@ -200,8 +201,10 @@ model Professor {
   conquistas          ConquistaVinculo[]   @relation("ConquistaProfessor")
   organizacaoId       String?
 
-  clubes     ProfessorClube[]
-  escolinhas ProfessorEscolinha[]
+  clubes                  ProfessorClube[]
+  escolinhas              ProfessorEscolinha[]
+  parceriasComoProfessorA ProfessorParceiro[]  @relation("ProfessorA")
+  parceriasComoProfessorB ProfessorParceiro[]  @relation("ProfessorB")
 
   turmasParticipando          TurmaProfessor[]
   TreinoSalvo                 TreinoSalvo[]
@@ -251,6 +254,18 @@ model ProfessorEscolinha {
 
   @@unique([professorId, escolinhaId])
   @@index([escolinhaId])
+}
+
+model ProfessorParceiro {
+  id           String   @id @default(uuid())
+  professorAId String
+  professorBId String
+  criadoEm     DateTime @default(now())
+
+  professorA Professor @relation("ProfessorA", fields: [professorAId], references: [id], onDelete: Cascade)
+  professorB Professor @relation("ProfessorB", fields: [professorBId], references: [id], onDelete: Cascade)
+
+  @@unique([professorAId, professorBId])
 }
 
 model OrganizacaoGestor {
@@ -554,6 +569,26 @@ model ExercicioPersonalizado {
   @@index([criadorUsuarioId])
 }
 
+model CertificadoMetodologia {
+  id                     String    @id @default(uuid())
+  usuarioId              String
+  metodologiaId          String
+  metodologiaAssinanteId String?
+  codigoValidacao        String    @unique
+  nomeUsuario            String
+  tituloMetodologia      String
+  nomeEmissor            String
+  concluidoEm            DateTime?
+  emitidoEm              DateTime  @default(now())
+  imagemUrl              String?
+  pdfUrl                 String?
+
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  metodologia Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, metodologiaId])
+}
+
 model Metodologia {
   id               String                   @id @default(uuid())
   titulo           String
@@ -592,6 +627,7 @@ model Metodologia {
   assinantes        MetodologiaAssinante[]
   MetodologiaTreino MetodologiaTreino[]
   avaliacoes        AvaliacaoMetodologia[]
+  certificados      CertificadoMetodologia[]
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -620,7 +656,9 @@ model MetodologiaEstrutura {
   bonusConsistencia      Int?
   bonusFinal             Int?
   permiteAtraso          Boolean                  @default(true)
+  prazoInicio            DateTime? // NOVO
   prazoFinal             DateTime?
+  percentualPerdaAtraso  Int?                     @default(20) // recomendado
 
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())

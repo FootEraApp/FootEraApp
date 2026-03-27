@@ -53,6 +53,13 @@ type Organizacao = {
   tipo: "Escolinha" | "Clube";
 };
 
+type CertificadoResumo = {
+  id: string;
+  tituloMetodologia: string;
+  emitidoEm: string;
+  codigoValidacao: string;
+  pdfUrl?: string | null;
+};
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
 
@@ -243,6 +250,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [turmas, setTurmas] = useState<Turma[] | null>(null);
   const [turmasLoading, setTurmasLoading] = useState(false);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
   const professorId = data?.professor?.id;
 
@@ -628,6 +636,57 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     headers,
     isOwn,
   ]);
+
+  useEffect(() => {
+    if (!rawToken) return;
+
+    let cancel = false;
+
+    const usuarioIdPerfil = isOwn
+      ? usuarioIdStorage
+      : data?.usuario?.id ?? null;
+
+    if (!usuarioIdPerfil) {
+      setCertificados([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioIdPerfil)}`,
+          { headers }
+        );
+
+        const items = Array.isArray(resp?.items) ? resp.items : [];
+        if (!cancel) setCertificados(items);
+      } catch {
+        if (!cancel) setCertificados([]);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [rawToken, isOwn, usuarioIdStorage, data?.usuario?.id, headers]);
+
+  useEffect(() => {
+    if (!rawToken || aba !== "conquistas") return;
+
+    (async () => {
+      try {
+        const r = await axios.get(`${API.BASE_URL}/api/conquistas/certificados`, {
+          headers,
+          params: isOwn ? undefined : { usuarioId: idDaUrl },
+        });
+
+        const items = Array.isArray(r.data?.items) ? r.data.items : [];
+        setCertificados(items);
+      } catch {
+        setCertificados([]);
+      }
+    })();
+  }, [rawToken, aba, headers, isOwn, idDaUrl]);
 
   useEffect(() => {
     setOrgSelecionada(data?.professor?.escolinhaId ?? data?.professor?.clubeId ?? "");
@@ -1279,6 +1338,21 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
       {aba === "conquistas" && (
         <div className="mt-4 px-4 grid gap-4">
+          <SectionCard title="Certificados emitidos">
+            {certificados && certificados.length > 0 ? (
+              <div className="flex items-center justify-between">
+                <div className="text-green-900 font-medium">
+                  {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                </div>
+                <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                  Ver certificados
+                </Link>
+              </div>
+            ) : (
+              <EmptyState text="Nenhum certificado emitido ainda." />
+            )}
+          </SectionCard>
+
           <SectionCard
             title="Conquistas e Troféus"
             right={
