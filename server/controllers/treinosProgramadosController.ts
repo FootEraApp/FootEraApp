@@ -1,3 +1,4 @@
+// server/controllers/treinosProgramadosController
 import { Request, Response } from "express";
 import { Categoria, Nivel, TipoTreino } from "@prisma/client";
 import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
@@ -1058,7 +1059,11 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       Object.assign(where, ownerWhere);
     }
 
-    const take = limit && !Number.isNaN(Number(limit)) ? Math.min(50, Math.max(1, Number(limit))) : undefined;
+    const take =
+      limit && !Number.isNaN(Number(limit))
+        ? Math.min(200, Math.max(1, Number(limit)))
+        : undefined;
+
     const sort = String(order).toLowerCase() === "asc" ? "asc" : "desc";
 
     if (scope === "picker" && viewerTipo && viewerId) {

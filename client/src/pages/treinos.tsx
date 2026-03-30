@@ -1,3 +1,4 @@
+// client/src/pages/treinos
 import { useEffect, useState } from "react";
 import TreinosAtletas from "./treino/treinos-atletas.js";
 import TreinosInstrutores from "./treino/treinos-instrutores.js";
