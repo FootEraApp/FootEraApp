@@ -25,8 +25,7 @@ import {
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js"; // Controller de upload
 import { uploadToS3 } from "../middlewares/s3Upload.js"; // Middleware que editamos
-import { requireMetodologiaCreator } from "../middlewares/requireMetodologiaCreator.js";
-
+import { requireMetodologiaCreateAccess, requireMetodologiaOwnership } from "../middlewares/requireMetodologiaCreator.js";
 const router = Router();
 
 // --- NOVAS ROTAS DE UPLOAD S3 ---
@@ -50,12 +49,12 @@ router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
 
 // Estruturas: trilhas / módulos
-router.post("/:metodologiaId/estruturas", authenticateToken, requireMetodologiaCreator, createMetodologiaEstruturas);
-router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaCreator, updateMetodologiaEstrutura);
-router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaCreator, deleteMetodologiaEstrutura);
+router.post("/:metodologiaId/estruturas", authenticateToken, requireMetodologiaOwnership, createMetodologiaEstruturas);
+router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, updateMetodologiaEstrutura);
+router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstrutura);
 // Itens dentro da estrutura
-router.post("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaCreator, createMetodologiaEstruturaItens);
-router.delete("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaCreator, deleteMetodologiaEstruturaItens);
+router.post("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOwnership, createMetodologiaEstruturaItens);
+router.delete("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstruturaItens);
 // Conclusão de item da estrutura
 router.post("/:id/estruturas/:estruturaId/concluir-item", authenticateToken, concluirEstruturaItemMetodologia);
 
@@ -66,11 +65,11 @@ router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
 
 // Por ID (Sempre por último)
 router.get("/:id", authenticateToken, getMetodologiaById);
-router.put("/:id", authenticateToken, requireMetodologiaCreator, updateMetodologia);
-router.delete("/:id", authenticateToken, requireMetodologiaCreator, deleteMetodologia);
+router.put("/:id", authenticateToken, requireMetodologiaOwnership, updateMetodologia);
+router.delete("/:id", authenticateToken, requireMetodologiaOwnership, deleteMetodologia);
 
 // CRUD Geral
 router.get("/", authenticateToken, listMetodologias);
-router.post("/", authenticateToken, requireMetodologiaCreator, createMetodologia);
+router.post("/", authenticateToken, requireMetodologiaCreateAccess, createMetodologia);
 
 export default router;

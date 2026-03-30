@@ -6,7 +6,14 @@ export type LearningMetodoTipo = "TRILHAS_TREINO" | "CURSO_FORMACAO";
 export type LearningEstruturaTipo = "TRILHA" | "MODULO";
 export type LearningModoExecucao = "LIVRE" | "PRAZO_SUGERIDO" | "DESAFIO_FECHADO";
 export type LearningItemTipo = "TREINO" | "VIDEO" | "AULA" | "MATERIAL" | "DESAFIO";
-
+export type LearningPermissaoCriacao = {
+  podeCriar: boolean;
+  ehProfessorParceiro?: boolean;
+  temPlanoElegivel?: boolean;
+  planoPrincipal?: string | null;
+  motivoBloqueio?: string | null;
+  planosPermitidos?: string[];
+};
 export type LearningMetodologiaInput = {
   titulo: string;
   descricao?: string | null;
@@ -45,7 +52,9 @@ export type LearningEstruturaInput = {
   pontosPorItem?: number | null;
   bonusConsistencia?: number | null;
   bonusFinal?: number | null;
+  prazoInicio?: string | null;
   prazoFinal?: string | null;
+  percentualPerdaAtraso?: number | null;
   permiteAtraso?: boolean;
   ativo?: boolean;
 };
@@ -68,11 +77,10 @@ export type LearningEstruturaItemInput = {
 
 function readToken(): string | null {
   const token =
-    (Storage as any)?.token ||
     localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("jwt");
+    (Storage as any)?.token ||
+    null;
 
   if (!token || token === "null" || token === "undefined") return null;
   return token;
@@ -100,7 +108,7 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     throw new Error(
-      json?.message || json?.error || `Falha na requisição (${res.status})`
+      json?.detail || json?.message || json?.error || `Falha na requisição (${res.status})`
     );
   }
 
@@ -130,7 +138,10 @@ export async function listMinhasMetodologiasAssinadas() {
 }
 
 export async function listMinhasMetodologiasCriadas() {
-  return request<{ items: any[] }>("/api/metodologias/criadas", {
+  return request<{
+    items: any[];
+    permissaoCriacao?: LearningPermissaoCriacao;
+  }>("/api/metodologias/criadas", {
     headers: authHeaders(),
   });
 }

@@ -5,20 +5,14 @@ import {
   ConquistaOwnerTipo,
   ConquistaTipo,
   MetodologiaAssinaturaStatus,
-  MetodologiaPublicoAlvo,
   TipoUsuario,
+  MetodologiaPublicoAlvo,
 } from "@prisma/client";
 
-/**
- * Cria/atualiza o TEMPLATE de conquista para uma metodologia PROFISSIONAIS.
- * - Se a metodologia não existir => desativa a conquista "met_prof_<id>" (se existir) e retorna null
- * - Se publicoAlvo != PROFISSIONAIS => desativa e retorna null
- * - Se for PROFISSIONAIS => upsert ativo=true e retorna a Conquista
- */
 export async function ensureConquistaTemplateMetodologia(
   metodologiaId: string
 ): Promise<Conquista | null> {
-  const codigo = `met_prof_${metodologiaId}`;
+  const codigo = `metodologia_${metodologiaId}`;
 
   const m = await prisma.metodologia.findUnique({
     where: { id: metodologiaId },
@@ -27,11 +21,11 @@ export async function ensureConquistaTemplateMetodologia(
       titulo: true,
       descricao: true,
       capaUrl: true,
+      geraBadge: true,
       publicoAlvo: true,
     },
   });
 
-  // Não existe mais: desativa template (se houver) e sai
   if (!m) {
     await prisma.conquista.updateMany({
       where: { codigo },
@@ -40,8 +34,7 @@ export async function ensureConquistaTemplateMetodologia(
     return null;
   }
 
-  // Não é profissionais: desativa e sai
-  if (m.publicoAlvo !== MetodologiaPublicoAlvo.PROFISSIONAIS) {
+  if (!m.geraBadge) {
     await prisma.conquista.updateMany({
       where: { codigo },
       data: { ativo: false },
@@ -52,8 +45,8 @@ export async function ensureConquistaTemplateMetodologia(
   const descricaoFinal =
     (m.descricao?.trim()
       ? m.descricao.trim()
-      : "Conclua esta metodologia profissional.") +
-    "\n\nGrupo: Metodologias Profissionais\nTier: bronze";
+      : "Conclua esta metodologia para desbloquear esta conquista.") +
+    "\n\nGrupo: Learning\nTier: bronze";
 
   const conquista = await prisma.conquista.upsert({
     where: { codigo },
@@ -62,11 +55,7 @@ export async function ensureConquistaTemplateMetodologia(
       titulo: `Metodologia: ${m.titulo}`,
       descricao: descricaoFinal,
       tipo: ConquistaTipo.METODOLOGIA,
-      publico: [
-        ConquistaOwnerTipo.Professor,
-        ConquistaOwnerTipo.Clube,
-        ConquistaOwnerTipo.Escolinha,
-      ],
+      publico: publicoConquistaFromPublicoAlvo(m.publicoAlvo),
       icon: "🎓",
       iconUrl: m.capaUrl ?? null,
       meta: 1,
@@ -76,6 +65,7 @@ export async function ensureConquistaTemplateMetodologia(
       titulo: `Metodologia: ${m.titulo}`,
       descricao: descricaoFinal,
       tipo: ConquistaTipo.METODOLOGIA,
+      publico: publicoConquistaFromPublicoAlvo(m.publicoAlvo),
       iconUrl: m.capaUrl ?? null,
       meta: 1,
       ativo: true,
@@ -85,28 +75,26 @@ export async function ensureConquistaTemplateMetodologia(
   return conquista;
 }
 
-/**
- * Mantém o catálogo de conquistas de metodologias profissionais consistente:
- * - Garante template para TODAS as metodologias PROFISSIONAIS existentes
- * - Desativa conquistas "met_prof_" que não tem mais metodologia PROFISSIONAIS correspondente
- */
 export async function syncTemplatesMetodologiasProfissionais(): Promise<void> {
-  const metodologiasProf = await prisma.metodologia.findMany({
-    where: { publicoAlvo: MetodologiaPublicoAlvo.PROFISSIONAIS },
+  const metodologiasComBadge = await prisma.metodologia.findMany({
+    where: { geraBadge: true },
     select: { id: true },
   });
 
   const validCodes = new Set<string>();
 
-  for (const m of metodologiasProf) {
-    validCodes.add(`met_prof_${m.id}`);
-    // upsert/atualiza
+  for (const m of metodologiasComBadge) {
+    validCodes.add(`metodologia_${m.id}`);
     await ensureConquistaTemplateMetodologia(m.id);
   }
 
-  // Desativa templates órfãos (metodologia apagou ou mudou publicoAlvo)
   const allTemplates = await prisma.conquista.findMany({
-    where: { codigo: { startsWith: "met_prof_" } },
+    where: {
+      OR: [
+        { codigo: { startsWith: "met_prof_" } },
+        { codigo: { startsWith: "metodologia_" } },
+      ],
+    },
     select: { codigo: true },
   });
 
@@ -122,13 +110,31 @@ export async function syncTemplatesMetodologiasProfissionais(): Promise<void> {
   }
 }
 
-/**
- * Resolve owner SOMENTE profissionais (Professor/Clube/Escolinha).
- * Atleta NÃO pode ganhar conquista de metodologia profissional.
- */
+function publicoConquistaFromPublicoAlvo(publicoAlvo: MetodologiaPublicoAlvo): ConquistaOwnerTipo[] {
+  if (publicoAlvo === MetodologiaPublicoAlvo.ATLETAS) {
+    return [ConquistaOwnerTipo.Atleta];
+  }
+
+  if (publicoAlvo === MetodologiaPublicoAlvo.PROFISSIONAIS) {
+    return [
+      ConquistaOwnerTipo.Professor,
+      ConquistaOwnerTipo.Clube,
+      ConquistaOwnerTipo.Escolinha,
+    ];
+  }
+
+  return [
+    ConquistaOwnerTipo.Atleta,
+    ConquistaOwnerTipo.Professor,
+    ConquistaOwnerTipo.Clube,
+    ConquistaOwnerTipo.Escolinha,
+  ];
+}
+
 async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
   ownerTipo: ConquistaOwnerTipo;
   ownerId: string;
+  atletaId?: string | null;
   professorId?: string | null;
   clubeId?: string | null;
   escolinhaId?: string | null;
@@ -138,6 +144,23 @@ async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
     select: { tipo: true },
   });
   if (!u) return null;
+
+  if (u.tipo === TipoUsuario.Atleta) {
+    const atleta = await prisma.atleta.findUnique({
+      where: { usuarioId },
+      select: { id: true },
+    });
+    if (!atleta?.id) return null;
+
+    return {
+      ownerTipo: ConquistaOwnerTipo.Atleta,
+      ownerId: atleta.id,
+      atletaId: atleta.id,
+      professorId: null,
+      clubeId: null,
+      escolinhaId: null,
+    };
+  }
 
   if (u.tipo === TipoUsuario.Professor) {
     const prof = await prisma.professor.findUnique({
@@ -149,6 +172,7 @@ async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
     return {
       ownerTipo: ConquistaOwnerTipo.Professor,
       ownerId: prof.id,
+      atletaId: null,
       professorId: prof.id,
       clubeId: null,
       escolinhaId: null,
@@ -165,6 +189,7 @@ async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
     return {
       ownerTipo: ConquistaOwnerTipo.Clube,
       ownerId: clu.id,
+      atletaId: null,
       professorId: null,
       clubeId: clu.id,
       escolinhaId: null,
@@ -181,6 +206,7 @@ async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
     return {
       ownerTipo: ConquistaOwnerTipo.Escolinha,
       ownerId: esc.id,
+      atletaId: null,
       professorId: null,
       clubeId: null,
       escolinhaId: esc.id,
@@ -190,14 +216,10 @@ async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
   return null;
 }
 
-/**
- * (A) Desbloqueia a conquista quando conclui a metodologia PROFISSIONAIS.
- * - Idempotente via upsert do vínculo.
- */
 export async function unlockConquistaMetodologia(usuarioId: string, metodologiaId: string) {
   const conquista = await ensureConquistaTemplateMetodologia(metodologiaId);
   if (!conquista) {
-    return { ok: false as const, reason: "NOT_PROFESSIONAL_OR_NOT_FOUND" as const };
+    return { ok: false as const, reason: "BADGE_DISABLED_OR_NOT_FOUND" as const };
   }
 
   const owner = await resolveOwnerByUsuarioId(usuarioId);
@@ -216,6 +238,7 @@ export async function unlockConquistaMetodologia(usuarioId: string, metodologiaI
       ownerTipo: owner.ownerTipo,
       ownerId: owner.ownerId,
 
+      atletaId: owner.atletaId ?? null,
       professorId: owner.professorId ?? null,
       clubeId: owner.clubeId ?? null,
       escolinhaId: owner.escolinhaId ?? null,
@@ -232,7 +255,6 @@ export async function unlockConquistaMetodologia(usuarioId: string, metodologiaI
       refId: metodologiaId,
       progresso: 100,
       concluida: true,
-      // se você quiser manter a data original, remova essa linha:
       conquistadoEm: new Date(),
     },
   });
@@ -240,10 +262,6 @@ export async function unlockConquistaMetodologia(usuarioId: string, metodologiaI
   return { ok: true as const };
 }
 
-/**
- * (B) Fallback de sync: varre metodologias concluídas e tenta desbloquear
- * (o unlock já filtra PROFISSIONAIS e usuário profissional).
- */
 export async function syncConquistasMetodologias(usuarioId: string) {
   const concluidas = await prisma.metodologiaAssinante.findMany({
     where: {
@@ -259,4 +277,96 @@ export async function syncConquistasMetodologias(usuarioId: string) {
   for (const row of concluidas) {
     await unlockConquistaMetodologia(usuarioId, row.metodologiaId);
   }
+}
+
+function gerarCodigoCertificado() {
+  return `CERT-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
+export async function emitirCertificadoMetodologia(params: {
+  usuarioId: string;
+  metodologiaId: string;
+}) {
+  const { usuarioId, metodologiaId } = params;
+
+  const metodologia = await prisma.metodologia.findUnique({
+    where: { id: metodologiaId },
+    select: {
+      id: true,
+      titulo: true,
+      geraCertificado: true,
+      capaUrl: true,
+      criadorUsuario: { select: { nome: true } },
+      professor: { select: { nome: true } },
+      clube: { select: { nome: true } },
+      escolinha: { select: { nome: true } },
+    },
+  });
+
+  if (!metodologia || !metodologia.geraCertificado) {
+    return { ok: false as const, reason: "CERTIFICADO_DISABLED_OR_NOT_FOUND" as const };
+  }
+
+  const assinatura = await prisma.metodologiaAssinante.findUnique({
+    where: {
+      metodologiaId_usuarioId: {
+        metodologiaId,
+        usuarioId,
+      },
+    },
+    select: {
+      id: true,
+      concluiuEm: true,
+      status: true,
+    },
+  });
+
+  if (!assinatura || (assinatura.status !== MetodologiaAssinaturaStatus.CONCLUIDA && !assinatura.concluiuEm)) {
+    return { ok: false as const, reason: "NOT_COMPLETED" as const };
+  }
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { nome: true },
+  });
+
+  const emissorNome =
+    metodologia.professor?.nome ||
+    metodologia.clube?.nome ||
+    metodologia.escolinha?.nome ||
+    metodologia.criadorUsuario?.nome ||
+    "FootEra";
+
+  const certificado = await prisma.certificadoMetodologia.upsert({
+    where: {
+      usuarioId_metodologiaId: {
+        usuarioId,
+        metodologiaId,
+      },
+    },
+    create: {
+      usuarioId,
+      metodologiaId,
+      metodologiaAssinanteId: assinatura.id,
+      codigoValidacao: gerarCodigoCertificado(),
+      nomeUsuario: usuario?.nome ?? "Usuário",
+      tituloMetodologia: metodologia.titulo,
+      nomeEmissor: emissorNome,
+      concluidoEm: assinatura.concluiuEm ?? new Date(),
+      emitidoEm: new Date(),
+      imagemUrl: metodologia.capaUrl ?? null,
+      pdfUrl: null,
+    },
+    update: {
+      metodologiaAssinanteId: assinatura.id,
+      nomeUsuario: usuario?.nome ?? "Usuário",
+      tituloMetodologia: metodologia.titulo,
+      nomeEmissor: emissorNome,
+      concluidoEm: assinatura.concluiuEm ?? new Date(),
+      emitidoEm: new Date(),
+      imagemUrl: metodologia.capaUrl ?? null,
+    },
+  });
+
+  return { ok: true as const, certificado };
 }

@@ -127,6 +127,14 @@ type EventoItem = {
   endereco?: string | null;
 };
 
+type CertificadoResumo = {
+  id: string;
+  tituloMetodologia: string;
+  emitidoEm: string;
+  codigoValidacao: string;
+  pdfUrl?: string | null;
+};
+
 function SectionCard({
   title,
   children,
@@ -224,6 +232,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     mostrarEmail: boolean;
   } | null>(null);
 
+  const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
+
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
   const entidadeUsuarioId = (isOwn ? Storage.usuarioId : data?.escolinha?.usuarioId) ?? null;
   
@@ -258,6 +269,66 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   useEffect(() => {
     if (aba === "visao") setAtividades(null);
   }, [aba]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.escolinha?.usuarioId ?? null);
+    if (!usuarioIdEnt) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/${encodeURIComponent(usuarioIdEnt)}?onlyConcluidas=1`,
+          { headers, withCredentials: true }
+        );
+
+        const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
+        if (!cancel) {
+          setEarnedBadges(earnedArr);
+          setConquistasReal(earnedArr.length);
+        }
+      } catch {
+        if (!cancel) {
+          setEarnedBadges([]);
+          setConquistasReal(0);
+        }
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, isOwn, data?.escolinha?.usuarioId]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.escolinha?.usuarioId ?? null);
+    if (!usuarioIdEnt) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioIdEnt)}`,
+          { headers }
+        );
+
+        const items = Array.isArray(resp?.items) ? resp.items : [];
+        if (!cancel) setCertificados(items);
+      } catch {
+        if (!cancel) setCertificados([]);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, isOwn, data?.escolinha?.usuarioId]);
 
   useEffect(() => {
     if (!token) return;
@@ -806,11 +877,13 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   { id: "eventos", label: "Eventos" },
                   { id: "atletas", label: "Atletas" },
                   { id: "professores", label: "Professores" },
+                  { id: "conquistas", label: "Conquistas" },
                   { id: "postagens", label: "Postagens" },
                 ]
               : [
                   { id: "visao", label: "Visão Geral" },
                   { id: "eventos", label: "Eventos" },
+                  { id: "conquistas", label: "Conquistas" },
                   { id: "postagens", label: "Postagens" },
                 ]
             ).map((t) => (
@@ -1394,6 +1467,57 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               </SectionCard>
             )}
           </div>
+        </div>
+      )}
+
+      {aba === "conquistas" && (
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
+          <SectionCard
+            title="Certificados emitidos"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver certificados
+              </Link>
+            }
+          >
+            {certificados && certificados.length > 0 ? (
+              <div className="text-green-900 font-medium">
+                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+              </div>
+            ) : (
+              <EmptyState text="Nenhum certificado emitido ainda." />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Conquistas e Troféus"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver conquistas
+              </Link>
+            }
+          >
+            {earnedBadges.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {earnedBadges.slice(0, 4).map((item: any) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl p-4 border border-green-100 text-center"
+                  >
+                    <Trophy className="mx-auto mb-2 text-green-800" />
+                    <div className="text-sm font-medium text-green-900">
+                      {item?.conquista?.titulo ?? "Conquista"}
+                    </div>
+                    <div className="text-xs text-green-900/70">
+                      {item?.conquista?.descricao ?? ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState text="Nenhuma conquista registrada ainda." />
+            )}
+          </SectionCard>
         </div>
       )}
 

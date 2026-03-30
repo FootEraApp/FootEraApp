@@ -1,15 +1,44 @@
 // client/src/pages/learning/index.tsx
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation} from "wouter";
+import { useLocation} from "wouter";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   listMetodologiasVisiveis,
   listMinhasMetodologiasAssinadas,
   listMinhasMetodologiasCriadas,
+  type LearningPermissaoCriacao,
+  deleteMetodologia,
 } from "../../services/metodologias.js";
 import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningCard from "../../components/learning/LearningCard.js";
 
 type TabKey = "explorar" | "minhas" | "criar";
+
+type LearningCriadasResponse = {
+  items: any[];
+  permissaoCriacao?: LearningPermissaoCriacao;
+};
+
+const FALLBACK_PERMISSAO_CRIACAO: LearningPermissaoCriacao = {
+  podeCriar: false,
+  ehProfessorParceiro: false,
+  temPlanoElegivel: false,
+  planoPrincipal: null,
+  motivoBloqueio:
+    "Para criar uma metodologia, você deve ser um professor parceiro ou assinar um dos planos elegíveis.",
+  planosPermitidos: [
+    "PROFESSOR_PRO",
+    "PROFESSOR_LEARNING_1",
+    "PROFESSOR_LEARNING_3",
+    "ORGANIZACOES_PRO",
+    "ORGANIZACOES_LEARNING_3",
+  ],
+};
+
+const FALLBACK_CRIADAS_RESPONSE: LearningCriadasResponse = {
+  items: [],
+  permissaoCriacao: FALLBACK_PERMISSAO_CRIACAO,
+};
 
 function TabButton({
   active,
@@ -55,6 +84,27 @@ export default function LearningPage() {
 
   const [busca, setBusca] = useState("");
   const [, navigate] = useLocation();
+  const [permissaoCriacao, setPermissaoCriacao] = useState<{
+    podeCriar: boolean;
+    ehProfessorParceiro?: boolean;
+    temPlanoElegivel?: boolean;
+    planoPrincipal?: string | null;
+    motivoBloqueio?: string | null;
+    planosPermitidos?: string[];
+  }>({
+    podeCriar: false,
+    ehProfessorParceiro: false,
+    temPlanoElegivel: false,
+    planoPrincipal: null,
+    motivoBloqueio: null,
+    planosPermitidos: [
+      "PROFESSOR_PRO",
+      "PROFESSOR_LEARNING_1",
+      "PROFESSOR_LEARNING_3",
+      "ORGANIZACOES_PRO",
+      "ORGANIZACOES_LEARNING_3",
+    ],
+  });
 
   const tipoUsuario =
     (localStorage.getItem("tipoUsuario") ||
@@ -64,7 +114,22 @@ export default function LearningPage() {
         .trim();
 
   const isAtleta = tipoUsuario === "atleta";
-  const isInstrutor = ["professor", "clube", "escolinha", "escola", "admin"].includes(tipoUsuario);
+  const podeCriarMetodologia = !isAtleta && !!permissaoCriacao?.podeCriar;
+
+  async function handleDeleteMetodologia(id: string, titulo?: string) {
+    const ok = window.confirm(
+      `Tem certeza que deseja apagar a metodologia "${titulo || "sem título"}"?`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteMetodologia(id);
+
+      setCriadas((prev) => prev.filter((item) => String(item.id) !== String(id)));
+    } catch (e: any) {
+      alert(e?.message || "Falha ao apagar metodologia.");
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -74,9 +139,11 @@ export default function LearningPage() {
         setLoading(true);
 
         const promises = [
-            listMetodologiasVisiveis(),
-            listMinhasMetodologiasAssinadas(),
-            isAtleta ? Promise.resolve({ items: [] }) : listMinhasMetodologiasCriadas(),
+          listMetodologiasVisiveis(),
+          listMinhasMetodologiasAssinadas(),
+          isAtleta
+            ? Promise.resolve(FALLBACK_CRIADAS_RESPONSE)
+            : listMinhasMetodologiasCriadas(),
         ] as const;
 
         const [visiveisRes, assinadasRes, criadasRes] = await Promise.allSettled(promises);
@@ -92,6 +159,17 @@ export default function LearningPage() {
         setCriadas(
           criadasRes.status === "fulfilled" ? criadasRes.value?.items || [] : []
         );
+        if (!isAtleta) {
+          setPermissaoCriacao(
+            criadasRes.status === "fulfilled"
+              ? criadasRes.value?.permissaoCriacao || FALLBACK_PERMISSAO_CRIACAO
+              : {
+                  ...FALLBACK_PERMISSAO_CRIACAO,
+                  motivoBloqueio:
+                    "Não foi possível validar sua permissão de criação agora. Tente novamente.",
+                }
+          );
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -183,12 +261,19 @@ export default function LearningPage() {
         </button>
 
         {!isAtleta && (
-            <button
-                type="button"
-                onClick={() => navigate("/learning/create")}
-            >
-                <TabButton active={false}>Criar</TabButton>
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (podeCriarMetodologia) {
+                navigate("/learning/create");
+              } else {
+                setTab("criar");
+              }
+            }}
+            className={!podeCriarMetodologia ? "opacity-50" : ""}
+          >
+            <TabButton active={tab === "criar"}>Criar</TabButton>
+          </button>
         )}
         </div>
 
@@ -283,67 +368,167 @@ export default function LearningPage() {
         ) : null}
 
         {!loading && tab === "minhas" ? (
-        <div className="space-y-5">
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-lg font-extrabold text-[#193b2e]">Minhas metodologias</div>
-            <div className="text-sm text-slate-500 mt-1">
-                {minhasCount} metodologias relacionadas à sua conta.
-            </div>
+          <div className="space-y-5">
+              <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <div className="text-lg font-extrabold text-[#193b2e]">Minhas metodologias</div>
+              <div className="text-sm text-slate-500 mt-1">
+                  {minhasCount} metodologias relacionadas à sua conta.
+              </div>
 
-            <div className="mt-4 flex flex-wrap gap-3">
-                
+              <div className="mt-4 flex flex-wrap gap-3">   
+                  {!isAtleta && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (podeCriarMetodologia) {
+                          navigate("/learning/create");
+                        } else {
+                          setTab("criar");
+                        }
+                      }}
+                      className={`inline-flex h-10 px-4 rounded-xl font-semibold items-center ${
+                        podeCriarMetodologia
+                          ? "bg-[#216c43] text-white"
+                          : "bg-slate-200 text-slate-500"
+                      }`}
+                    >
+                      Criar nova metodologia
+                    </button>
+                  )}
+              </div>
+              </div>
+              <div>        
                 {!isAtleta && (
-                <Link
-                    href="/learning/create"
-                    className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
-                >
-                    Criar nova metodologia
-                </Link>
-                )}
-            </div>
-            </div>
-            <div>
-        
-            {!isAtleta && (
-            <div>
-                <div className="text-base font-bold text-[#193b2e] mb-3">Criadas</div>
-                <div className="space-y-4">
-                {criadas.length ? (
-                    criadas.map((item) => (
-                    <LearningCard
-                        key={`cri_${item.id}`}
-                        item={item}
-                        href={`/learning/${item.id}`}
-                        actionLabel="Gerenciar"
-                    />
-                    ))
-                ) : (
-                    <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                    Você ainda não criou nenhuma metodologia.
+                  <div>
+                    <div className="text-base font-bold text-[#193b2e] mb-3">Criadas</div>
+                    <div className="space-y-4">
+                      {criadas.length ? (
+                        criadas.map((item: any) => (
+                          <LearningCard
+                            key={item.id}
+                            item={item}
+                            href={`/learning/${item.id}`}
+                            extraActions={
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/learning/${item.id}`)}
+                                  className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+                                >
+                                  Gerenciar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/learning/create?id=${item.id}&tipo=${item.tipo}`)}
+                                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
+                                  title="Editar metodologia"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMetodologia(item.id, item.titulo)}
+                                  className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 h-10 text-red-600"
+                                  title="Apagar metodologia"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            }
+                          />
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                          Você ainda não criou nenhuma metodologia.
+                        </div>
+                      )}
                     </div>
+                  </div>
                 )}
-                </div>
+              </div>
+            <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas</div>
+            <div className="space-y-4">
+                      {assinadas.length ? (
+                      assinadas.map((item: any) => (
+                          <LearningCard
+                          key={`ass_${item.id}`}
+                          item={item}
+                          href={`/learning/${item.id}`}
+                          actionLabel="Continuar"
+                          />
+                      ))
+                      ) : (
+                      <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                          Você ainda não assinou nenhuma metodologia.
+                      </div>
+                      )}
             </div>
-            )}
-        </div>
-        <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas</div>
-                <div className="space-y-4">
-                    {assinadas.length ? (
-                    assinadas.map((item) => (
-                        <LearningCard
-                        key={`ass_${item.id}`}
-                        item={item}
-                        href={`/learning/${item.id}`}
-                        actionLabel="Continuar"
-                        />
-                    ))
-                    ) : (
-                    <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                        Você ainda não assinou nenhuma metodologia.
+          </div>
+        ) : null}
+        {!loading && tab === "criar" ? (
+          podeCriarMetodologia ? (
+            (() => {
+              navigate("/learning/create");
+              return null;
+            })()
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                <div className="text-lg font-extrabold text-[#193b2e]">
+                  Criação de metodologia bloqueada
+                </div>
+                <div className="text-sm text-slate-600 mt-2">
+                  {permissaoCriacao?.motivoBloqueio ||
+                    "Para você conseguir criar uma metodologia, você deve ser um professor parceiro ou assinar um destes planos:"}
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {[
+                    {
+                      id: "PROFESSOR_PRO",
+                      nome: "Professor Pro",
+                    },
+                    {
+                      id: "PROFESSOR_LEARNING_1",
+                      nome: "Professor Learning 1",
+                    },
+                    {
+                      id: "PROFESSOR_LEARNING_3",
+                      nome: "Professor Learning 3",
+                    },
+                    {
+                      id: "ORGANIZACOES_PRO",
+                      nome: "Organizações Pro",
+                    },
+                    {
+                      id: "ORGANIZACOES_LEARNING_3",
+                      nome: "Organizações Learning",
+                    },
+                  ].map((plano) => (
+                    <div
+                      key={plano.id}
+                      className="rounded-xl border border-slate-200 p-4 bg-slate-50"
+                    >
+                      <div className="font-semibold text-slate-800">{plano.nome}</div>
+                      <div className="text-sm text-slate-500 mt-1">ID: {plano.id}</div>
                     </div>
-                    )}
+                  ))}
                 </div>
+
+                <div className="mt-5">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/pagamentos")}
+                    className="inline-flex h-11 px-5 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+                  >
+                    Adquirir assinatura
+                  </button>
+                </div>
+              </div>
             </div>
+          )
         ) : null}
       </div>
     </div>
