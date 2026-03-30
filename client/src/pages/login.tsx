@@ -501,7 +501,7 @@ export default function PaginaLogin() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      <div className="md:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 md:p-10">
+      <div className="md:w-1/2 bg-[#14532d] text-white flex flex-col items-center p-5 md:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 md:flex-col md:gap-2">
           <button
@@ -515,9 +515,7 @@ export default function PaginaLogin() {
               alt="Logo FootEra"
               className="
                 shrink-0 object-contain transform-gpu
-                w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
-                max-[639px]:scale-[1.6]  
-                md:scale-[1.55]          
+                w-14 h-14 sm:w-16 sm:h-16 md:w-[110px] md:h-[110px] lg:w-[130px] lg:h-[130px]
                 origin-left md:origin-center mr-1
               "
             />
@@ -548,40 +546,56 @@ export default function PaginaLogin() {
                   : "max-h-0 opacity-0 md:max-h-[720px] md:opacity-100"
               }`}
           >
-            <p className="text-center text-base md:text-lg mt-4">
-              Treine, se desafie e ganhe visibilidade com a metodologia de
-              profissionais. Aqui você acompanha sua evolução e se conecta com
-              quem vive futebol.
+            <p className="text-center text-base md:text-2xl font-semibold mt-4">
+              Treine. Aprenda. Se conecte. Evolua.
             </p>
 
-            <div className="mt-6 p-5 md:p-6 rounded-xl text-sm md:text-base text-left w-full bg-white/10">
-              <h2 className="font-semibold mb-2">
-                O que você encontra na FootEra
+            <p className="text-center text-sm md:text-lg mt-4 text-white/95">
+              O ecossistema digital do futebol, feito para quem vive o jogo.
+            </p>
+
+            <div className="mt-6 p-5 md:p-6 rounded-2xl text-sm md:text-base text-left w-full bg-white/10 border border-white/10 shadow-lg">
+              <h2 className="font-semibold text-xl md:text-2xl mb-4">
+                O Que você encontra FootEra
               </h2>
-              <ul className="list-disc list-inside space-y-1">
-                <li>
-                  <span className="font-medium">Treinos Programados</span> com
-                  objetivos e instruções claras.
+
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🏋️</span>
+                  <span>
+                    <span className="font-semibold">Treinos e rotina</span> — exercícios, histórico e progresso.
+                  </span>
                 </li>
-                <li>
-                  <span className="font-medium">Desafios Oficiais</span> com
-                  validação por vídeo e rankings.
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🎓</span>
+                  <span>
+                    <span className="font-semibold">Learning</span> — metodologias, trilhas e cursos.
+                  </span>
                 </li>
-                <li>
-                  <span className="font-medium">
-                    Pontuação FootEra &amp; Badges
-                  </span>{" "}
-                  para acompanhar seu progresso.
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">👥</span>
+                  <span>
+                    <span className="font-semibold">Rede social</span> — feed, conquistas e comunidade.
+                  </span>
                 </li>
-                <li>
-                  <span className="font-medium">Perfil com vídeos</span> — seu
-                  “cartão de visitas” esportivo.
-                </li>
-                <li>
-                  <span className="font-medium">Conexão</span> com Escolinhas,
-                  Clubes e Olheiros.
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🏆</span>
+                  <span>
+                    <span className="font-semibold">Métricas & badges</span> — visualização e reputação no esporte.
+                  </span>
                 </li>
               </ul>
+
+              <div className="mt-5 flex items-center gap-3 text-white/90">
+                <div className="h-px flex-1 bg-white/30" />
+                <span className="italic font-semibold whitespace-nowrap">
+                  Para quem vive futebol.
+                </span>
+                <div className="h-px flex-1 bg-white/30" />
+              </div>
             </div>
           </div>
         </div>
@@ -602,7 +616,7 @@ export default function PaginaLogin() {
           />
         </div>
 
-        <div className="relative z-10 w-full max-w-md bg-white shadow-lg rounded-2xl p-7 md:p-8 mx-auto">
+        <div className="relative z-10 w-full max-w-md bg-[#f8f8f8] shadow-xl rounded-[28px] p-7 md:p-8 mx-auto">
           <h2 className="text-xl font-semibold mb-2 text-center">Entrar</h2>
           <p className="text-sm text-center text-gray-600 mb-6">
             Entre com seu usuário (ou e-mail) e senha

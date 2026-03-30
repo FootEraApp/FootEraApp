@@ -1,3 +1,4 @@
+// server/routes/treinoProgramado
 import express from "express";
 import multer from "multer";
 import { authenticateToken } from "../middlewares/auth.js";

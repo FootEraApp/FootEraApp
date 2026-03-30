@@ -617,7 +617,7 @@ export default function Cadastro() {
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen">
-      <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
+      <div className="md:w-1/2 bg-[#14532d] text-white flex flex-col items-center p-5 md:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
             <button
@@ -631,9 +631,7 @@ export default function Cadastro() {
                 alt="Logo FootEra"
                 className="
                   shrink-0 object-contain transform-gpu
-                  w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
-                  max-[639px]:scale-[1.6]  
-                  md:scale-[1.55]          
+                  w-14 h-14 sm:w-16 sm:h-16 md:w-[110px] md:h-[110px] lg:w-[130px] lg:h-[130px]
                   origin-left md:origin-center mr-1
                 "
               />
@@ -645,19 +643,56 @@ export default function Cadastro() {
           </div>
 
           <div id="cadastro-info" className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${infoAberto ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0 lg:max-h-[520px] lg:opacity-100"}`}>
-            <p className="text-center max-w-md text-base lg:text-lg mt-4">
-              Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar...
-              aqui é o seu lugar. FootEra. A metodologia dos profissionais, para quem vive futebol.
+            <p className="text-center text-base md:text-2xl font-semibold mt-4">
+              Treine. Aprenda. Se conecte. Evolua.
             </p>
-            <div className="mt-6 p-5 lg:p-6 rounded-xl text-sm lg:text-base text-left w-full bg-white/10 backdrop-blur-[1px]">
-              <h2 className="font-semibold mb-2">O que a FootEra oferece:</h2>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Treinamentos personalizados</li>
-                <li>Desafios para testar suas habilidades</li>
-                <li>Compartilhe seu progresso com a comunidade</li>
-                <li>Conecte-se com escolinhas e clubes profissionais</li>
-                <li>Acompanhe sua evolução com pontuações e rankings</li>
+
+            <p className="text-center text-sm md:text-lg mt-4 text-white/95">
+              O ecossistema digital do futebol, feito para quem vive o jogo.
+            </p>
+
+            <div className="mt-6 p-5 md:p-6 rounded-2xl text-sm md:text-base text-left w-full bg-white/10 border border-white/10 shadow-lg">
+              <h2 className="font-semibold text-xl md:text-2xl mb-4">
+                O Que você encontra FootEra
+              </h2>
+
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🏋️</span>
+                  <span>
+                    <span className="font-semibold">Treinos e rotina</span> — exercícios, histórico e progresso.
+                  </span>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🎓</span>
+                  <span>
+                    <span className="font-semibold">Learning</span> — metodologias, trilhas e cursos.
+                  </span>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">👥</span>
+                  <span>
+                    <span className="font-semibold">Rede social</span> — feed, conquistas e comunidade.
+                  </span>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🏆</span>
+                  <span>
+                    <span className="font-semibold">Métricas & badges</span> — visualização e reputação no esporte.
+                  </span>
+                </li>
               </ul>
+
+              <div className="mt-5 flex items-center gap-3 text-white/90">
+                <div className="h-px flex-1 bg-white/30" />
+                <span className="italic font-semibold whitespace-nowrap">
+                  Para quem vive futebol.
+                </span>
+                <div className="h-px flex-1 bg-white/30" />
+              </div>
             </div>
           </div>
         </div>
