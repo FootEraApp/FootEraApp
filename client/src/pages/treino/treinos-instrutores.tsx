@@ -1532,9 +1532,6 @@ async function salvarProgressoSessao(sessaoId: string) {
           ? jsonTreinos
           : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
 
-console.log("[treinos] resposta bruta:", jsonTreinos);
-console.log("[treinos] items recebidos:", Array.isArray(arr) ? arr.length : 0);
-
         const normTreinos: TreinoProgramado[] = (Array.isArray(arr) ? arr : []).map((tr: any) => {
           const criadoresArr = Array.isArray(tr?.criadores) ? tr.criadores : [];
           const ids = getOwnerIdsFromTreino(tr);
@@ -1715,8 +1712,6 @@ console.log("[treinos] items recebidos:", Array.isArray(arr) ? arr.length : 0);
         });
 
         setTreinos(normTreinos);
-
-console.log("[treinos] normTreinos:", normTreinos.length);
 
         // stats (se existir no backend)
         try {
@@ -2362,11 +2357,6 @@ console.log("[treinos] normTreinos:", normTreinos.length);
     if (String(usuario.tipo).toLowerCase() === "admin") return []; // admin não precisa de bloco “vinculados”
     return (listaOrdenadaParaExibir || []).filter((t) => !isTreinoMeuDeVerdade(t, usuario));
   }, [listaOrdenadaParaExibir, usuario]);
-
-console.log("[treinos] listaOrdenadaParaExibir:", listaOrdenadaParaExibir.length);
-console.log("[treinos] meusTreinosLista:", meusTreinosLista.length);
-console.log("[treinos] treinosVinculadosLista:", treinosVinculadosLista.length);
-console.log("[treinos] totalTreinosExibidos:", totalTreinosExibidos);
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
     const podeEditar = isTreinoMeuDeVerdade(treino, usuario);

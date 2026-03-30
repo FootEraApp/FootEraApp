@@ -87,8 +87,19 @@ export function AppRoutes() {
       </Route>
 
       <Route path="/admin/login"><PaginaLoginAdmin /></Route>
-      <Route path="/pagamentos"><PaginaPagamentos /></Route>
-
+      {FLAGS.PAGAMENTOS_ENABLED ? (
+        <Route path="/pagamentos">
+          <Private><PaginaPagamentos /></Private>
+        </Route>
+      ) : (
+        <Route path="/pagamentos">
+          <Private>
+            <div style={{ padding: 16 }}>
+              Estamos reformulando a página de pagamentos no momento.
+            </div>
+          </Private>
+        </Route>
+      )}
       {FLAGS.DESAFIOS_ENABLED ? (
         <Route path="/admin/desafios/create">
           <RequireAdmin><PaginaCreateDesafios /></RequireAdmin>

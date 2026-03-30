@@ -22,6 +22,7 @@ import {
   createMetodologiaEstruturaItens,
   deleteMetodologiaEstruturaItens,
   concluirEstruturaItemMetodologia,
+  createMetodologiaCompleta,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js"; // Controller de upload
 import { uploadToS3 } from "../middlewares/s3Upload.js"; // Middleware que editamos
@@ -43,7 +44,7 @@ router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
-
+router.post("/completa", authenticateToken, requireMetodologiaCreateAccess, createMetodologiaCompleta);
 // LEGADO - manter temporariamente enquanto o front antigo ainda existir
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);

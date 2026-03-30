@@ -105,6 +105,7 @@ model Usuario {
   notificacoesGeradas     Notificacao[]             @relation("NotificacaoActor")
   AvaliacaoTreino         AvaliacaoTreino[]
   AvaliacaoMetodologia    AvaliacaoMetodologia[]
+  treinosCriadosComoAdmin TreinoProgramado[]        @relation("TreinoProgramadoCriadorUsuario")
 
   metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
   metodologiasAssinadas MetodologiaAssinante[]
@@ -443,8 +444,12 @@ model TreinoProgramado {
   temporarios  ExercicioTemporario[]
 
   criadorProfessorId String?
-  criadorProfessor   Professor?                  @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id], onDelete: SetNull)
-  professores        TreinoProgramadoProfessor[]
+  criadorProfessor   Professor? @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id], onDelete: SetNull)
+
+  criadorUsuarioId String?
+  criadorUsuario   Usuario? @relation("TreinoProgramadoCriadorUsuario", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
+
+  professores TreinoProgramadoProfessor[]
 
   clube                    Clube?                      @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                Escolinha?                  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
@@ -462,6 +467,7 @@ model TreinoProgramado {
   MetodologiaEstruturaItem MetodologiaEstruturaItem[]
 
   @@index([criadorProfessorId])
+  @@index([criadorUsuarioId])
 }
 
 model TreinoProgramadoProfessor {

@@ -65,6 +65,11 @@ type ProfessorMin = {
   cref?: string | null;
 };
 
+type AdminMin = {
+  id: string;
+  nome: string;
+};
+
 type ClubeMin = {
   id: string;
   nome: string;
@@ -77,7 +82,7 @@ type EscolinhaMin = {
   codigo?: string | null;
 };
 
-type TipoCriador = "Professor" | "Clube" | "Escolinha";
+type TipoCriador = "Professor" | "Clube" | "Escolinha" | "Admin";
 
 type ExercicioMin = {
   id: string;
@@ -394,9 +399,6 @@ export default function CriarOuEditarTreino() {
     ExercicioPersonalizadoItem[]
   >([]);
   const [loadingPersonalizados, setLoadingPersonalizados] = useState(false);
-  const [filtroPers, setFiltroPers] = useState("");
-  const [filtroPersNivel, setFiltroPersNivel] = useState<string>("");
-  const [filtroPersVideo, setFiltroPersVideo] = useState<"" | "com" | "sem">("");
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoSrc, setVideoSrc] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -404,12 +406,21 @@ export default function CriarOuEditarTreino() {
   const [meusExercicios, setMeusExercicios] = useState<ExercicioMin[]>([]);
   const [loadingMeusExercicios, setLoadingMeusExercicios] = useState(false);
   const [loadingExerciciosPersonalizados, setLoadingExerciciosPersonalizados] = useState(false);
-
+  const [adminLogado, setAdminLogado] = useState<AdminMin | null>(null);
+  
   useEffect(() => {
     const rt = getReturnTo();
     setReturnTo(rt);
     sessionStorage.removeItem("treino_returnTo");
   }, []);
+
+  useEffect(() => {
+    if (tipoCriador === "Admin" && adminLogado?.id) {
+      setCriadorId(adminLogado.id);
+    } else if (tipoCriador !== "Admin") {
+      setCriadorId("");
+    }
+  }, [tipoCriador, adminLogado]);
 
   useEffect(() => {
     if (!capaFile) {
@@ -446,6 +457,37 @@ export default function CriarOuEditarTreino() {
       Authorization: `Bearer ${token}`,
     };
 
+    const loadAdminLogado = async () => {
+      const token = getToken();
+      const nomeLocal =
+        localStorage.getItem("nomeUsuario") ||
+        sessionStorage.getItem("nomeUsuario") ||
+        localStorage.getItem("usuarioTipoRaw") ||
+        sessionStorage.getItem("usuarioTipoRaw") ||
+        "Admin";
+
+      let adminUserId =
+        localStorage.getItem("tipoUsuarioId") ||
+        sessionStorage.getItem("tipoUsuarioId") ||
+        localStorage.getItem("usuarioId") ||
+        sessionStorage.getItem("usuarioId") ||
+        "";
+
+      if (!adminUserId && token) {
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1] || "e30="));
+          adminUserId = String(payload?.id || payload?.userId || "").trim();
+        } catch {}
+      }
+
+      if (adminUserId) {
+        setAdminLogado({
+          id: adminUserId,
+          nome: nomeLocal || "Admin",
+        });
+      }
+    };
+
     const params = new URLSearchParams(window.location.search);
     const treinoId = params.get("id");
     if (treinoId) setId(treinoId);
@@ -474,6 +516,9 @@ export default function CriarOuEditarTreino() {
       } else if (data.escolinhaId) {
         setTipoCriador("Escolinha");
         setCriadorId(String(data.escolinhaId));
+      } else if (data.criadorUsuarioId) {
+        setTipoCriador("Admin");
+        setCriadorId(String(data.criadorUsuarioId));
       }
 
       setTreinoFootera(Boolean(data.publico ?? data.parceiro ?? data.isFootera ?? false));
@@ -663,6 +708,7 @@ export default function CriarOuEditarTreino() {
           loadProfessores(),
           loadClubes(),
           loadEscolinhas(),
+          loadAdminLogado(),
         ]);
         await loadTreino();
       } catch (e: any) {
@@ -709,11 +755,27 @@ export default function CriarOuEditarTreino() {
       }));
     }
 
-    return escolinhasDisponiveis.map((e) => ({
-      id: e.id,
-      label: formatEscolinhaLabel(e),
-    }));
-  }, [tipoCriador, professoresDisponiveis, clubesDisponiveis, escolinhasDisponiveis]);
+    if (tipoCriador === "Escolinha") {
+      return escolinhasDisponiveis.map((e) => ({
+        id: e.id,
+        label: formatEscolinhaLabel(e),
+      }));
+    }
+
+    if (tipoCriador === "Admin") {
+      return adminLogado
+        ? [{ id: adminLogado.id, label: adminLogado.nome }]
+        : [];
+    }
+
+    return [];
+  }, [
+    tipoCriador,
+    professoresDisponiveis,
+    clubesDisponiveis,
+    escolinhasDisponiveis,
+    adminLogado,
+  ]);
 
   const exerciciosPersonalizadosFiltrados = useMemo(() => {
     const q = exSearch.trim().toLowerCase();
@@ -1203,8 +1265,14 @@ export default function CriarOuEditarTreino() {
       return;
     }
 
+    const payloadJwt = token ? JSON.parse(atob(token.split(".")[1] || "e30=")) : {};
+    const adminUserId = String(payloadJwt?.id || payloadJwt?.userId || "").trim();
+
     const tipoUsuario = tipoCriador;
-    const tipoUsuarioId = criadorId.trim();
+    const tipoUsuarioId =
+      tipoCriador === "Admin"
+        ? adminUserId
+        : criadorId.trim();
 
     const payload: any = {
       nome: titulo,
@@ -1222,6 +1290,16 @@ export default function CriarOuEditarTreino() {
       ...(catsSelecionadas.length ? { categoria: catsSelecionadas } : {}),
       exercicios: exerciciosFinal,
     };
+
+    if (tipoCriador !== "Admin" && !criadorId.trim()) {
+      alert("Selecione o criador do treino.");
+      return;
+    }
+
+    if (tipoCriador === "Admin" && !adminUserId) {
+      alert("Não foi possível identificar o admin logado.");
+      return;
+    }
 
     const url = `${API.BASE_URL}/api/treinosprogramados${id ? `/${id}` : ""}`;
 
@@ -1451,16 +1529,19 @@ export default function CriarOuEditarTreino() {
                     <option value="Professor">Professor</option>
                     <option value="Clube">Clube</option>
                     <option value="Escolinha">Escolinha</option>
+                    <option value="Admin">Admin</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-800">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     {tipoCriador === "Professor"
                       ? "Professor criador*"
                       : tipoCriador === "Clube"
                       ? "Clube criador*"
-                      : "Escolinha criadora*"}
+                      : tipoCriador === "Escolinha"
+                      ? "Escolinha criadora*"
+                      : "Admin criador*"}
                   </label>
 
                   <select
@@ -1473,7 +1554,9 @@ export default function CriarOuEditarTreino() {
                         ? "Selecione um professor"
                         : tipoCriador === "Clube"
                         ? "Selecione um clube"
-                        : "Selecione uma escolinha"}
+                        : tipoCriador === "Escolinha"
+                        ? "Selecione uma escolinha"
+                        : "Selecione um admin"}
                     </option>
 
                     {opcoesCriador.map((item) => (
