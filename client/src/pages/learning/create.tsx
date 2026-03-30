@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   createMetodologia,
+  createMetodologiaCompleta,
   updateMetodologia,
   getMetodologiaById,
   createMetodologiaEstruturas,
@@ -198,17 +199,20 @@ function tipoParaVinculoFront(tipo: string) {
   if (t === "clube") return "clube";
   if (t === "escolinha" || t === "escola") return "escolinha";
   if (t === "professor") return "professor";
+  if (t === "admin" || t === "administrador") return "admin";
   return undefined;
 }
 
 function autorEhDoLogado(autor: any, tipoSalvo: string, tipoUsuarioId: string) {
   const tipoAutorEsperado =
-    tipoSalvo === "clube"
-      ? "clube"
-      : tipoSalvo === "escolinha" || tipoSalvo === "escola"
-        ? "escolinha"
-        : tipoSalvo === "professor"
-          ? "professor"
+  tipoSalvo === "clube"
+    ? "clube"
+    : tipoSalvo === "escolinha" || tipoSalvo === "escola"
+      ? "escolinha"
+      : tipoSalvo === "professor"
+        ? "professor"
+        : tipoSalvo === "admin" || tipoSalvo === "administrador"
+          ? "admin"
           : "";
 
   if (!tipoAutorEsperado || !tipoUsuarioId) return false;
@@ -839,13 +843,27 @@ export default function LearningCreatePage() {
 
       const token = getToken();
       const tipoSalvo = getTipoSalvo();
-      const tipoUsuarioId = getTipoUsuarioId();
+      const tipoUsuarioIdSalvo = getTipoUsuarioId();
+      let tipoUsuarioId = tipoUsuarioIdSalvo;
+
+      if (!tipoUsuarioId && token && (tipoSalvo === "admin" || tipoSalvo === "Administrador")) {
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1] || "e30="));
+          tipoUsuarioId = String(payload?.id || payload?.userId || "").trim();
+        } catch {}
+      }
       const vinculo = tipoParaVinculoFront(tipoSalvo);
 
       const url = new URL(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`);
 
       if (vinculo) url.searchParams.set("vinculo", vinculo);
-      if (tipoUsuarioId) url.searchParams.set("id", tipoUsuarioId);
+      if (tipoUsuarioId) {
+        url.searchParams.set("id", tipoUsuarioId);
+      } else if (token && (tipoSalvo === "admin" || tipoSalvo === "Administrador")) {
+        const payload = JSON.parse(atob(token.split(".")[1] || "e30="));
+        const userId = String(payload?.id || payload?.userId || "").trim();
+        if (userId) url.searchParams.set("id", userId);
+      }
 
       const res = await fetch(url.toString(), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1134,6 +1152,27 @@ export default function LearningCreatePage() {
     return true;
   }
 
+  function limparFormulario() {
+    const ok = confirm("Deseja limpar todo o formulário?");
+    if (!ok) return;
+
+    localStorage.removeItem(LEARNING_DRAFT_KEY);
+    setTitulo("");
+    setDescricao("");
+    setPublicoAlvo("AMBOS");
+    setArea("TECNICO");
+    setGeraCertificado(false);
+    setGeraBadge(false);
+    setCapaUrl("");
+    setCapaPreviewUrl(null);
+
+    if (estruturaTipo) {
+      setEstruturas([emptyEstrutura(estruturaTipo)]);
+    } else {
+      setEstruturas([]);
+    }
+  }
+
   function cancelarCriacao() {
     localStorage.removeItem(LEARNING_DRAFT_KEY);
     navigate("/learning");
@@ -1145,31 +1184,78 @@ export default function LearningCreatePage() {
     try {
       setSaving(true);
 
-      const metodologiaResp = editMetodologiaId
-        ? await updateMetodologia(editMetodologiaId, {
-            titulo: titulo.trim(),
-            descricao: descricao.trim() || null,
-            capaUrl: capaUrl.trim() || null,
-            publicoAlvo,
-            tipo: tipoMetodologia,
-            estruturaTipo,
-            area,
-            geraBadge,
-            geraCertificado,
-            ativo: true,
-          })
-        : await createMetodologia({
-            titulo: titulo.trim(),
-            descricao: descricao.trim() || null,
-            capaUrl: capaUrl.trim() || null,
-            publicoAlvo,
-            tipo: tipoMetodologia,
-            estruturaTipo,
-            area,
-            geraBadge,
-            geraCertificado,
-            ativo: true,
-          });
+      if (!editMetodologiaId) {
+        await createMetodologiaCompleta({
+          titulo: titulo.trim(),
+          descricao: descricao.trim() || null,
+          capaUrl: capaUrl.trim() || null,
+          publicoAlvo,
+          tipo: tipoMetodologia,
+          estruturaTipo,
+          area,
+          geraBadge,
+          geraCertificado,
+          ativo: true,
+          estruturas: estruturas.map((estrutura, i) => ({
+            titulo: estrutura.titulo.trim(),
+            descricao: estrutura.descricao?.trim() || null,
+            objetivo: estrutura.objetivo?.trim() || null,
+            ordem: i + 1,
+            duracaoSemanas:
+              estruturaTipo === "TRILHA" ? Number(estrutura.duracaoSemanas || 0) : null,
+            treinosPorSemana:
+              estruturaTipo === "TRILHA" ? Number(estrutura.treinosPorSemana || 0) : null,
+            quantidadeMinConclusao:
+              estruturaTipo === "TRILHA" ? Number(estrutura.quantidadeMinConclusao || 0) : null,
+            pontosPorItem:
+              estruturaTipo === "TRILHA" ? Number(estrutura.pontosPorItem || 0) : null,
+            bonusConsistencia:
+              estruturaTipo === "TRILHA" ? Number(estrutura.bonusConsistencia || 0) : null,
+            bonusFinal:
+              estruturaTipo === "TRILHA" ? Number(estrutura.bonusFinal || 0) : null,
+            prazoInicio: estrutura.prazoInicio || null,
+            prazoFinal: estrutura.prazoFinal || null,
+            percentualPerdaAtraso:
+              estruturaTipo === "TRILHA" ? Number(estrutura.percentualPerdaAtraso || 0) : null,
+            permiteAtraso: !!estrutura.permiteAtraso,
+            modoExecucao: estruturaTipo === "TRILHA" ? estrutura.modoExecucao : null,
+            ativo: estrutura.ativo ?? true,
+            itens: estrutura.itens.map((item, j) => ({
+              tipo: item.tipo,
+              titulo: item.titulo.trim(),
+              descricao: item.descricao?.trim() || null,
+              ordem: j + 1,
+              videoUrl: item.videoUrl?.trim() || null,
+              thumbUrl: item.thumbUrl?.trim() || null,
+              arquivoUrl: item.arquivoUrl?.trim() || null,
+              materialUrl: item.materialUrl?.trim() || null,
+              treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
+              pontos: item.pontos ?? null,
+              duracaoMin: item.duracaoMin ?? null,
+              obrigatorio: item.obrigatorio ?? true,
+              publicado: item.publicado ?? true,
+            })),
+          })),
+        });
+
+        localStorage.removeItem(LEARNING_DRAFT_KEY);
+        navigate("/learning");
+        return;
+      }
+
+      // mantém fluxo atual só para edição
+      const metodologiaResp = await updateMetodologia(editMetodologiaId, {
+        titulo: titulo.trim(),
+        descricao: descricao.trim() || null,
+        capaUrl: capaUrl.trim() || null,
+        publicoAlvo,
+        tipo: tipoMetodologia,
+        estruturaTipo,
+        area,
+        geraBadge,
+        geraCertificado,
+        ativo: true,
+      });
 
       const metodologiaId = editMetodologiaId || metodologiaResp?.item?.id;
       if (!metodologiaId) throw new Error("Não foi possível salvar a metodologia.");
@@ -1303,7 +1389,15 @@ export default function LearningCreatePage() {
   }
 
   if (!podeCriarMetodologia && !editMetodologiaId) {
-    return null;
+    return (
+      <div className="min-h-screen bg-[#f7f7f4] pb-24">
+        <div className="max-w-4xl mx-auto px-4 pt-5">
+          <div className="rounded-[20px] bg-white border border-slate-200 shadow-sm p-6 text-slate-600">
+            Apenas professor, clube, escolinha ou admin podem criar metodologias.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loadingExisting) {
@@ -1357,7 +1451,16 @@ export default function LearningCreatePage() {
               : "Monte sua metodologia no novo formato de Learning."
           }
           backHref="/learning"
-        />
+          rightAction={
+              <button
+                type="button"
+                onClick={limparFormulario}
+                className="hidden sm:inline-flex h-11 px-4 rounded-xl bg-white border border-slate-300 text-slate-700 font-semibold items-center"
+              >
+                Limpar formulário
+              </button>
+            }
+          />
 
         <div className="space-y-4">
           <div className="rounded-[20px] bg-white border border-slate-200 shadow-sm p-4">

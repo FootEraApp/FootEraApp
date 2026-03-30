@@ -178,6 +178,14 @@ export async function createMetodologia(payload: LearningMetodologiaInput) {
   });
 }
 
+export async function createMetodologiaCompleta(payload: any) {
+  return request<{ item: any }>("/api/metodologias/completa", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateMetodologia(id: string, payload: Partial<LearningMetodologiaInput>) {
   return request<{ item: any }>(`/api/metodologias/${id}`, {
     method: "PUT",

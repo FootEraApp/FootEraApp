@@ -3,7 +3,7 @@ import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { API } from "../config.js";
+import { API, FLAGS, MESSAGES } from "../config.js";
 import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
@@ -442,9 +442,19 @@ export default function ConfiguracoesPerfil() {
             <p className="text-sm text-gray-600">Ajuste sua assinatura e forma de pagamento</p>
           </div>
 
-          <Link href="/pagamentos" className="text-green-800 font-semibold">
-            Alterar
-          </Link>
+          {FLAGS.PAGAMENTOS_ENABLED ? (
+            <Link href="/pagamentos" className="text-green-800 font-semibold">
+              Alterar
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => alert(MESSAGES.PAGAMENTOS_EM_REFORMULACAO)}
+              className="text-green-800 font-semibold"
+            >
+              Alterar
+            </button>
+          )}
         </div>
       </div>
 

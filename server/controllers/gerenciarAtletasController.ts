@@ -588,22 +588,24 @@ export const gerenciarAtletasController = {
       const vinculo = String(req.query.vinculo || "").toLowerCase() as
         | "escolinha"
         | "clube"
-        | "professor";
+        | "professor"
+        | "admin";
 
       let idOrUser = String(req.query.id || "").trim(); // ✅ vira let
       const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); 
       const debug = String(req.query.debug || "") === "1";
       const conteudo = String(req.query.conteudo ?? "1") === "1";
-      const userIdFromToken = String((req as any).userId || "").trim();
-
+      const userIdFromToken = String(
+        (req as any).user?.id || (req as any).userId || ""
+      ).trim();
       // ✅ se o front não mandar id, usa o id do token
       if (!idOrUser && !tipoUsuarioId && userIdFromToken) {
         idOrUser = userIdFromToken;
       }
 
-      if (!["escolinha", "clube", "professor"].includes(vinculo)) {
+      if (!["escolinha", "clube", "professor", "admin"].includes(vinculo)) {
         return res.status(400).json({
-          message: "Parâmetro 'vinculo' inválido (use 'professor', 'clube' ou 'escolinha')",
+          message: "Parâmetro 'vinculo' inválido (use 'admin', 'professor', 'clube' ou 'escolinha')",
         });
       }
 
@@ -615,6 +617,8 @@ export const gerenciarAtletasController = {
 
       if (tipoUsuarioId) {
         entidadeId = tipoUsuarioId;
+      } else if (vinculo === "admin") {
+        entidadeId = idOrUser;
       } else {
         const resolved = await resolveEntidadeId(vinculo, idOrUser);
         if (!resolved) return res.status(404).json({ message: "Entidade não encontrada" });
@@ -626,6 +630,200 @@ export const gerenciarAtletasController = {
       let escolinhaIds: string[] = [];
 
       const ativoOuNull = { NOT: { ativo: false } };
+
+      if (vinculo === "admin") {
+        const userIdFromToken =
+          String((req as any).user?.id || (req as any).userId || "").trim();
+
+        const adminUserId = String(tipoUsuarioId || idOrUser || userIdFromToken).trim();
+
+        if (!adminUserId) {
+          return res.status(400).json({ message: "Parâmetro 'id' obrigatório para admin." });
+        }
+
+          const treinos = await prisma.treinoProgramado.findMany({
+          orderBy: { createdAt: "desc" },
+          include: {
+            Professor: { select: { id: true, nome: true, usuarioId: true } },
+            clube: { select: { id: true, nome: true, usuarioId: true } },
+            escolinha: { select: { id: true, nome: true, usuarioId: true } },
+            criadorProfessor: { select: { id: true, nome: true, usuarioId: true } },
+            exercicios: {
+              orderBy: { ordem: "asc" },
+              include: {
+                exercicio: true,
+                exercicioTemporario: true,
+                exercicioPersonalizado: true,
+              },
+            },
+          },
+        });
+
+        const adminUserIds = Array.from(
+          new Set(
+            treinos
+              .map((t) => t.criadorUsuarioId)
+              .filter((x): x is string => !!x)
+          )
+        );
+
+        const adminUsuarios = adminUserIds.length
+          ? await prisma.usuario.findMany({
+              where: { id: { in: adminUserIds } },
+              select: { id: true, nome: true },
+            })
+          : [];
+
+        const adminMap = new Map(adminUsuarios.map((u) => [u.id, u]));
+
+        const items = treinos.map((t: any) => {
+          const autor =
+            t.criadorUsuarioId && adminMap.has(t.criadorUsuarioId)
+              ? {
+                  id: t.criadorUsuarioId,
+                  tipo: "admin",
+                  nome: adminMap.get(t.criadorUsuarioId)?.nome || "Admin",
+                }
+              : t?.Professor?.usuarioId
+              ? {
+                  id: t.Professor.usuarioId,
+                  tipo: "professor",
+                  nome: t.Professor.nome || "Professor",
+                }
+              : t?.criadorProfessor?.usuarioId
+              ? {
+                  id: t.criadorProfessor.usuarioId,
+                  tipo: "professor",
+                  nome: t.criadorProfessor.nome || "Professor",
+                }
+              : t?.clube?.usuarioId
+              ? {
+                  id: t.clube.usuarioId,
+                  tipo: "clube",
+                  nome: t.clube.nome || "Clube",
+                }
+              : t?.escolinha?.usuarioId
+              ? {
+                  id: t.escolinha.usuarioId,
+                  tipo: "escolinha",
+                  nome: t.escolinha.nome || "Escolinha",
+                }
+              : null;
+                        
+          const exercicios = Array.isArray(t?.exercicios)
+            ? t.exercicios.map((e: any) => {
+                if (e.exercicio) {
+                  return {
+                    id: e.id,
+                    ordem: e.ordem,
+                    repeticoes: e.repeticoes,
+                    series: e.series,
+                    duracao: e.duracao,
+                    descanso: e.descanso,
+                    exercicioId: e.exercicioId,
+                    exercicioTemporarioId: null,
+                    exercicioPersonalizadoId: null,
+                    exercicio: {
+                      tipo: "oficial",
+                      id: e.exercicio.id,
+                      codigo: e.exercicio.codigo,
+                      nome: e.exercicio.nome,
+                      descricao: e.exercicio.objetivo ?? null,
+                      nivel: e.exercicio.nivel ?? null,
+                      categorias: e.exercicio.categorias ?? [],
+                      videoDemonstrativoUrl: e.exercicio.videoDemonstrativoUrl ?? null,
+                      videoPosterUrl: e.exercicio.videoPosterUrl ?? null,
+                    },
+                  };
+                }
+
+                if (e.exercicioTemporario) {
+                  return {
+                    id: e.id,
+                    ordem: e.ordem,
+                    repeticoes: e.repeticoes,
+                    series: e.series,
+                    duracao: e.duracao,
+                    descanso: e.descanso,
+                    exercicioId: null,
+                    exercicioTemporarioId: e.exercicioTemporarioId,
+                    exercicioPersonalizadoId: null,
+                    exercicio: {
+                      tipo: "temporario",
+                      id: e.exercicioTemporario.id,
+                      codigo: null,
+                      nome: e.exercicioTemporario.nome,
+                      descricao: e.exercicioTemporario.descricao,
+                      nivel: e.exercicioTemporario.nivel ?? null,
+                      categorias: e.exercicioTemporario.categorias ?? [],
+                      videoDemonstrativoUrl: e.exercicioTemporario.videoDemonstrativoUrl ?? null,
+                      videoPosterUrl: e.exercicioTemporario.videoPosterUrl ?? null,
+                    },
+                  };
+                }
+
+                if (e.exercicioPersonalizado) {
+                  return {
+                    id: e.id,
+                    ordem: e.ordem,
+                    repeticoes: e.repeticoes,
+                    series: e.series,
+                    duracao: e.duracao,
+                    descanso: e.descanso,
+                    exercicioId: null,
+                    exercicioTemporarioId: null,
+                    exercicioPersonalizadoId: e.exercicioPersonalizadoId,
+                    exercicio: {
+                      tipo: "personalizado",
+                      id: e.exercicioPersonalizado.id,
+                      codigo: null,
+                      nome: e.exercicioPersonalizado.nome,
+                      descricao: e.exercicioPersonalizado.descricao,
+                      nivel: e.exercicioPersonalizado.nivel ?? null,
+                      categorias: e.exercicioPersonalizado.categorias ?? [],
+                      videoDemonstrativoUrl: e.exercicioPersonalizado.videoDemonstrativoUrl ?? null,
+                      videoPosterUrl: e.exercicioPersonalizado.videoPosterUrl ?? null,
+                    },
+                  };
+                }
+
+                return {
+                  id: e.id,
+                  ordem: e.ordem,
+                  repeticoes: e.repeticoes,
+                  series: e.series,
+                  duracao: e.duracao,
+                  descanso: e.descanso,
+                  exercicioId: null,
+                  exercicioTemporarioId: null,
+                  exercicioPersonalizadoId: null,
+                  exercicio: null,
+                };
+              })
+            : [];
+
+          return {
+            id: t.id,
+            nome: t.nome,
+            codigo: t.codigo ?? null,
+            descricao: t.descricao ?? t.objetivo ?? null,
+            imagemUrl: t.imagemUrl ?? null,
+            duracao: t.duracao ?? null,
+            metas: t.metas ?? null,
+            pontuacao: t.pontuacao ?? null,
+            categoria: t.categoria ?? [],
+            dicas: t.dicas ?? [],
+            tipoTreino: t.tipoTreino ?? null,
+            objetivo: t.objetivo ?? null,
+            expiraEm: t.expiraEm ?? null,
+            naoExpira: t.naoExpira ?? false,
+            autor,
+            exercicios,
+          };
+        });
+
+        return res.json({ items });
+      }
 
       if (vinculo === "clube") {
         const profsDiretos = await prisma.professor.findMany({
@@ -807,6 +1005,7 @@ export const gerenciarAtletasController = {
         criadorProfessorId: true,
         clubeId: true,
         escolinhaId: true,
+        criadorUsuarioId: true,
       } as const;
 
       const selectCompleto = {

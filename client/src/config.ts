@@ -61,9 +61,15 @@ export function appUrl(path: string = "/"): string {
   return `${APP.FRONTEND_BASE_URL}${p}`;
 }
 
+export const MESSAGES = {
+  PAGAMENTOS_EM_REFORMULACAO:
+    "Estamos reformulando a página de assinaturas e pagamentos no momento.",
+} as const;
+
 export const FLAGS = {
   DESAFIOS_ENABLED: false,
-  LEARNING_ENABLED: false,
+  LEARNING_ENABLED: true,
+  PAGAMENTOS_ENABLED: false,
 } as const;
 
 export default { API, APP, appUrl };

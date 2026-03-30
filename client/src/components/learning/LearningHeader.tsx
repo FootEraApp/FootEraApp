@@ -9,6 +9,7 @@ type Props = {
   backHref?: string;
   createHref?: string;
   createLabel?: string;
+  rightAction?: React.ReactNode;
 };
 
 export default function LearningHeader({
@@ -17,6 +18,7 @@ export default function LearningHeader({
   backHref = "/learning",
   createHref,
   createLabel = "Criar",
+  rightAction,
 }: Props) {
   return (
     <div className="flex items-center gap-3 mb-5">
@@ -27,12 +29,14 @@ export default function LearningHeader({
         <ArrowLeft className="w-5 h-5" />
       </Link>
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="text-[30px] font-extrabold text-[#193b2e]">{title}</div>
         {subtitle ? <div className="text-sm text-slate-500">{subtitle}</div> : null}
       </div>
 
-      {createHref ? (
+      {rightAction ? (
+        rightAction
+      ) : createHref ? (
         <Link
           href={createHref}
           className="hidden sm:inline-flex h-11 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center gap-2"

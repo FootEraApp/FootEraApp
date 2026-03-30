@@ -4,68 +4,17 @@ export async function requireMetodologiaCreateAccess(req: any, res: any, next: a
   const userId = req.user?.id || req.userId;
   const tipo = String(req.user?.tipo || "").toLowerCase().trim();
 
-  const PLANOS_QUE_PODEM_CRIAR_METODOLOGIA = new Set([
-    "PROFESSOR_PRO",
-    "PROFESSOR_LEARNING_1",
-    "PROFESSOR_LEARNING_3",
-    "ORGANIZACOES_PRO",
-    "ORGANIZACOES_LEARNING_3",
-  ]);
-
   if (!userId) {
     return res.status(401).json({ message: "Não autenticado." });
   }
 
-  if (!["professor", "clube", "escolinha"].includes(tipo)) {
-    return res.status(403).json({ message: "Sem permissão para criar metodologia." });
-  }
-
-  // Professor parceiro passa direto
-  if (tipo === "professor") {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: userId },
-      select: { parceiro: true },
+  if (!["professor", "clube", "escolinha", "admin"].includes(tipo)) {
+    return res.status(403).json({
+      message: "Apenas professor, clube, escolinha ou admin podem criar metodologias.",
     });
-
-    if (usuario?.parceiro) return next();
   }
 
-  const agora = new Date();
-
-  const assinatura = await prisma.assinatura.findFirst({
-    where: {
-      usuarioId: userId,
-      ativo: true,
-      OR: [
-        { status: "ATIVA" },
-        { status: "TRIAL", trialEndsAt: { gt: agora } },
-      ],
-    },
-    orderBy: { startsAt: "desc" },
-    select: {
-      id: true,
-      plano: true,
-      status: true,
-      ativo: true,
-      trialEndsAt: true,
-    },
-  }).catch(() => null);
-
-  const plano = String((assinatura as any)?.plano || "").toUpperCase();
-
-  if (PLANOS_QUE_PODEM_CRIAR_METODOLOGIA.has(plano)) {
-    if (tipo === "professor" && plano.startsWith("PROFESSOR_")) {
-      return next();
-    }
-
-    if (["clube", "escolinha"].includes(tipo) && plano.startsWith("ORGANIZACOES_")) {
-      return next();
-    }
-  }
-
-  return res.status(403).json({
-    message: "Disponível apenas para Professor Parceiro ou planos Learning/Pro permitidos.",
-  });
+  return next();
 }
 
 export async function requireMetodologiaOwnership(req: any, res: any, next: any) {
