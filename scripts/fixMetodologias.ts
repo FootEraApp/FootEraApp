@@ -1,10 +1,15 @@
+//fixmetodologias
+
 import { prisma } from "../server/prisma.js";
 
 async function main() {
   const updated = await prisma.metodologia.updateMany({
     where: {
-      OR: [{ tipo: null }, { estruturaTipo: null }],
-    },
+      OR: [
+        { tipo: null as any },
+        { estruturaTipo: null as any },
+      ],
+    } as any,
     data: {
       tipo: "TRILHAS_TREINO" as any,
       estruturaTipo: "TRILHA" as any,

@@ -36,6 +36,19 @@ type EarnedDTO = {
   refId?: string | null;
 };
 
+type CertificadoDTO = {
+  id: string;
+  metodologiaId: string;
+  tituloMetodologia: string;
+  nomeUsuario: string;
+  nomeEmissor: string;
+  codigoValidacao: string;
+  emitidoEm: Date | null;
+  concluidoEm: Date | null;
+  imagemUrl?: string | null;
+  pdfUrl?: string | null;
+};
+
 function ownerTipoFromTipoUsuario(tipo: TipoUsuario): ConquistaOwnerTipo | null {
   if (tipo === TipoUsuario.Atleta) return ConquistaOwnerTipo.Atleta;
   if (tipo === TipoUsuario.Professor) return ConquistaOwnerTipo.Professor;
@@ -266,7 +279,6 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     orderBy: { createdAt: "asc" },
   });
 
-  // ✅ (B) fallback de metodologias concluídas (só faz algo para profissionais)
   try {
     await syncConquistasMetodologias(usuarioId);
   } catch (e) {
@@ -277,7 +289,7 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     const tipo = String(c.tipo || "").toUpperCase();
     const codigo = String(c.codigo || "");
 
-    if (tipo === "METODOLOGIA" || codigo.startsWith("met_prof_")) {
+    if (tipo === "METODOLOGIA" || codigo.startsWith("metodologia_")) {
       // cria vínculo "travado" para aparecer em preto e branco,
       // mas sem mexer se já foi conquistada
       const existing = await prisma.conquistaVinculo.findUnique({
@@ -492,6 +504,91 @@ export async function getEarnedByUsuarioId(req: AuthReq, res: Response) {
   } catch (e: any) {
     console.error("getEarnedByUsuarioId error:", e);
     return res.status(500).json({ error: e?.message || "Erro ao obter conquistas do usuário" });
+  }
+}
+
+export async function getCertificadosByUsuarioId(req: AuthReq, res: Response) {
+  try {
+    const usuarioIdParam = String((req.params as any)?.usuarioId || "").trim();
+    const usuarioIdQuery = String((req.query as any)?.usuarioId || "").trim();
+    const usuarioId = usuarioIdParam || usuarioIdQuery || String(req.userId || "").trim();
+
+    if (!usuarioId) {
+      return res.status(401).json({ error: "Sem autenticação." });
+    }
+
+    const user = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    const rows = await prismaAny.certificadoMetodologia.findMany({
+      where: { usuarioId },
+      orderBy: [{ emitidoEm: "desc" }],
+      select: {
+        id: true,
+        metodologiaId: true,
+        tituloMetodologia: true,
+        nomeUsuario: true,
+        nomeEmissor: true,
+        codigoValidacao: true,
+        emitidoEm: true,
+        concluidoEm: true,
+        imagemUrl: true,
+        pdfUrl: true,
+      },
+    });
+
+    const items: CertificadoDTO[] = rows.map((r: any) => ({
+      id: String(r.id),
+      metodologiaId: String(r.metodologiaId),
+      tituloMetodologia: String(r.tituloMetodologia ?? ""),
+      nomeUsuario: String(r.nomeUsuario ?? ""),
+      nomeEmissor: String(r.nomeEmissor ?? ""),
+      codigoValidacao: String(r.codigoValidacao ?? ""),
+      emitidoEm: r.emitidoEm ?? null,
+      concluidoEm: r.concluidoEm ?? null,
+      imagemUrl: r.imagemUrl ?? null,
+      pdfUrl: r.pdfUrl ?? null,
+    }));
+
+    return res.json({
+      usuarioId,
+      total: items.length,
+      items,
+    });
+  } catch (e: any) {
+    console.error("getCertificadosByUsuarioId error:", e);
+    return res.status(500).json({
+      error: e?.message || "Erro ao obter certificados do usuário",
+    });
+  }
+}
+
+export async function getCertificadosCount(req: AuthReq, res: Response) {
+  try {
+    const usuarioIdParam = String((req.params as any)?.usuarioId || "").trim();
+    const usuarioIdQuery = String((req.query as any)?.usuarioId || "").trim();
+    const usuarioId = usuarioIdParam || usuarioIdQuery || String(req.userId || "").trim();
+
+    if (!usuarioId) {
+      return res.status(401).json({ error: "Sem autenticação." });
+    }
+
+    const count = await prismaAny.certificadoMetodologia.count({
+      where: { usuarioId },
+    });
+
+    return res.json({ usuarioId, count });
+  } catch (e: any) {
+    console.error("getCertificadosCount error:", e);
+    return res.status(500).json({
+      error: e?.message || "Erro ao contar certificados",
+    });
   }
 }
 

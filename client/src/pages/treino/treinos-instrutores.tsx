@@ -6,13 +6,9 @@ import {
   X,
   Pencil,
   Trash2,
-  ChevronDown,
-  SlidersHorizontal,
-  Loader2,
-  Search,
   Star as StarIcon,
 } from "lucide-react";
-import { API, APP } from "../../config.js";
+import { API, APP, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
@@ -2529,12 +2525,14 @@ console.log("[treinos] totalTreinosExibidos:", totalTreinosExibidos);
                       Avaliar Treinos
                     </button>
 
-                    <button
-                      onClick={() => navigate("/learning")}
-                      className="shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 bg-white text-gray-800 border-gray-200"
-                    >
-                      Learning
-                    </button>
+                    {FLAGS.LEARNING_ENABLED && (
+                      <button
+                        onClick={() => navigate("/learning")}
+                        className="shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 bg-white text-gray-800 border-gray-200"
+                      >
+                        Learning
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (

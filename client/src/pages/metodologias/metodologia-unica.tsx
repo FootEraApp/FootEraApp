@@ -51,6 +51,10 @@ type MetodologiaEstrutura = {
   pontosPorItem?: number | null;
   bonusConsistencia?: number | null;
   bonusFinal?: number | null;
+  prazoInicio?: string | null;
+  prazoFinal?: string | null;
+  dataInicioCalculada?: string | null;
+  dataFimCalculada?: string | null;
   ativo?: boolean;
   itens: MetodologiaEstruturaItem[];
 };
@@ -114,6 +118,24 @@ function normalizeMediaUrl(raw?: string | null) {
   if (u.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${u}`;
 
   return u;
+}
+
+function formatDateBR(raw?: string | null) {
+  if (!raw) return null;
+
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // se vier em ISO UTC, pega só YYYY-MM-DD sem converter fuso
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d.toLocaleDateString("pt-BR");
 }
 
 function Stars({ value }: { value: number }) {
@@ -589,19 +611,39 @@ export default function MetodologiaUnicaPage() {
       <div className="mt-6 space-y-4">
         {estruturasOrdenadas.map((estrutura, estruturaIndex) => (
           <div key={estrutura.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div>
+           <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="font-semibold text-gray-900">
                   {estrutura.tipo === "MODULO"
                     ? `Módulo ${estruturaIndex + 1}`
                     : `Trilha ${estruturaIndex + 1}`}
                 </div>
-                <div className="text-sm text-gray-600">{estrutura.titulo}</div>
+              </div>
+
+              <div className="text-sm text-gray-600">{estrutura.titulo}</div>
 
                 {estrutura.objetivo ? (
                   <div className="mt-1 text-sm text-gray-500">{estrutura.objetivo}</div>
                 ) : null}
 
+                {(estrutura.dataInicioCalculada || estrutura.dataFimCalculada) && (
+                  <div className="mt-2 flex flex-col gap-1 text-xs text-gray-600">
+                    {estrutura.dataInicioCalculada ? (
+                      <div>
+                        <span className="font-medium">Início:</span>{" "}
+                        {formatDateBR(estrutura.dataInicioCalculada)}
+                      </div>
+                    ) : null}
+
+                    {estrutura.dataFimCalculada ? (
+                      <div>
+                        <span className="font-medium">Prazo final:</span>{" "}
+                        {formatDateBR(estrutura.dataFimCalculada)}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
                   {estrutura.duracaoSemanas ? (
                     <span className="px-2 py-1 rounded-full border bg-gray-50">
@@ -729,14 +771,23 @@ export default function MetodologiaUnicaPage() {
                           )}
 
                           {isMaterial && (it.arquivoUrl || it.materialUrl) && (
-                            <a
-                              href={normalizeMediaUrl(it.arquivoUrl || it.materialUrl) || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900"
+                            <button
+                              type="button"
+                              disabled={locked}
+                              className={`px-3 py-2 rounded-lg text-sm font-semibold ${
+                                locked
+                                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                                  : "bg-slate-800 text-white hover:bg-slate-900"
+                              }`}
+                              onClick={() => {
+                                if (locked) return;
+
+                                const url = normalizeMediaUrl(it.arquivoUrl || it.materialUrl) || "#";
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              }}
                             >
                               Abrir material
-                            </a>
+                            </button>
                           )}
                         </div>
                       </div>

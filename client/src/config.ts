@@ -63,6 +63,7 @@ export function appUrl(path: string = "/"): string {
 
 export const FLAGS = {
   DESAFIOS_ENABLED: false,
+  LEARNING_ENABLED: false,
 } as const;
 
 export default { API, APP, appUrl };

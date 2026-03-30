@@ -11,7 +11,9 @@ import helmet from "helmet";
 import { createRequire } from "module";
 import ffmpeg from "fluent-ffmpeg";
 import "./loadEnv.js";
+import dotenv from "dotenv";
 
+dotenv.config();
 const require = createRequire(import.meta.url);
 
 // força tipagem correta (resolve o erro ts2345)
@@ -310,7 +312,7 @@ app.use("/api/professores", authenticateToken, professorRoutes);
 app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);
 app.use("/api/seguidores", seguirRoutes);
 app.use("/api/usuarios", authenticateToken, usuarioRoutes);
-app.use("/api/solicitacoes-treino", authenticateToken, solicitacaoTreinoRoutes);
+app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
 app.use("/api/submissoes", authenticateToken, submissoesRoutes);
 app.use("/api/treinos", authenticateToken, treinoRoutes);
 app.use("/api/treino-unico", authenticateToken, treinoUnicoRoutes);

@@ -5,6 +5,8 @@ import Storage from "../../../../server/utils/storage.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import TrainingProgress from "../profile/TrainingProgress.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import { Link } from "wouter";
+import { Trophy } from "lucide-react";
 
 interface Perfil {
   tipo: string;
@@ -29,6 +31,13 @@ type Props = {
   idDaUrl?: string;
 };
 
+type CertificadoResumo = {
+  id: string;
+  tituloMetodologia: string;
+  emitidoEm: string;
+  codigoValidacao: string;
+  pdfUrl?: string | null;
+};
 export default function PerfilAtleta({ idDaUrl }: Props) {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
@@ -38,8 +47,11 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const [clubeNome, setClubeNome] = useState<string | null>(null);
   const [scoreDelta, setScoreDelta] = useState(0);
   const [privacidade, setPrivacidade] = useState<{ mostrarEmail: boolean } | null>(null);
+  const [conquistasCount, setConquistasCount] = useState<number>(0);
+  const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
-  type AbaTopo = "perfil" | "postagens";
+  type AbaTopo = "perfil" | "conquistas" | "postagens";
   const [aba, setAba] = useState<AbaTopo>("perfil");
 
   const token = Storage.token;
@@ -47,6 +59,60 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
   const alvoUsuarioId = isOwnProfile ? (Storage.usuarioId as string) : (idDaUrl as string);
+
+  useEffect(() => {
+    if (!token || !usuarioId) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/${encodeURIComponent(usuarioId)}?onlyConcluidas=1`,
+          { headers, withCredentials: true }
+        );
+
+        const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
+        if (!cancel) {
+          setEarnedBadges(earnedArr);
+          setConquistasCount(earnedArr.length);
+        }
+      } catch {
+        if (!cancel) {
+          setEarnedBadges([]);
+          setConquistasCount(0);
+        }
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, usuarioId]);
+
+  useEffect(() => {
+    if (!token || !usuarioId) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioId)}`,
+          { headers }
+        );
+
+        const items = Array.isArray(resp?.items) ? resp.items : [];
+        if (!cancel) setCertificados(items);
+      } catch {
+        if (!cancel) setCertificados([]);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, usuarioId]);
 
   useEffect(() => {
     if (!token) return;
@@ -186,6 +252,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           }
           isVerified={perfil?.perfilVerificado}
           isPro={perfil?.isPro}
+          conquistasCount={conquistasCount}
         />
           {isIndependente && (
             <div className="bg-yellow-100 border border-yellow-300 rounded p-4 my-4 text-sm text-yellow-900">
@@ -195,9 +262,10 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
               </div>
           )}
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-2">
            {[
             { key: "perfil", label: "Perfil" },
+            { key: "conquistas", label: "Conquistas"},
             { key: "postagens", label: "Postagens" },
            ].map((t) => (
             <button
@@ -270,6 +338,63 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
               />
             </>
            )}
+
+          {aba === "conquistas" && (
+              <div className="mt-4 grid gap-4">
+                <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
+                  <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
+                    <h3 className="font-semibold text-green-900">Certificados emitidos</h3>
+                    <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                      Ver certificados
+                    </Link>
+                  </div>
+                  <div className="p-4">
+                    {certificados && certificados.length > 0 ? (
+                      <div className="text-green-900 font-medium">
+                        {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                      </div>
+                    ) : (
+                      <div className="text-center text-green-900/70 py-8">
+                        Nenhum certificado emitido ainda.
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
+                  <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
+                    <h3 className="font-semibold text-green-900">Conquistas e Troféus</h3>
+                    <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                      Ver conquistas
+                    </Link>
+                  </div>
+                  <div className="p-4">
+                    {earnedBadges.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {earnedBadges.slice(0, 4).map((item: any) => (
+                          <div
+                            key={item.id}
+                            className="rounded-xl p-4 border border-green-100 text-center"
+                          >
+                            <Trophy className="mx-auto mb-2 text-green-800" />
+                            <div className="text-sm font-medium text-green-900">
+                              {item?.conquista?.titulo ?? "Conquista"}
+                            </div>
+                            <div className="text-xs text-green-900/70">
+                              {item?.conquista?.descricao ?? ""}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-green-900/70 py-8">
+                        Nenhuma conquista registrada ainda.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
 
            {aba === "postagens" && (
              <section className="mt-4">
