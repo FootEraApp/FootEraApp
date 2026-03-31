@@ -25,14 +25,8 @@ const FALLBACK_PERMISSAO_CRIACAO: LearningPermissaoCriacao = {
   temPlanoElegivel: false,
   planoPrincipal: null,
   motivoBloqueio:
-    "Para criar uma metodologia, você deve ser um professor parceiro ou assinar um dos planos elegíveis.",
-  planosPermitidos: [
-    "PROFESSOR_PRO",
-    "PROFESSOR_LEARNING_1",
-    "PROFESSOR_LEARNING_3",
-    "ORGANIZACOES_PRO",
-    "ORGANIZACOES_LEARNING_3",
-  ],
+    "Apenas professor, clube, escolinha ou admin podem criar metodologias.",
+  planosPermitidos: [],
 };
 
 const FALLBACK_CRIADAS_RESPONSE: LearningCriadasResponse = {
@@ -97,13 +91,7 @@ export default function LearningPage() {
     temPlanoElegivel: false,
     planoPrincipal: null,
     motivoBloqueio: null,
-    planosPermitidos: [
-      "PROFESSOR_PRO",
-      "PROFESSOR_LEARNING_1",
-      "PROFESSOR_LEARNING_3",
-      "ORGANIZACOES_PRO",
-      "ORGANIZACOES_LEARNING_3",
-    ],
+    planosPermitidos: [],
   });
 
   const tipoUsuario =
@@ -481,50 +469,7 @@ export default function LearningPage() {
                 </div>
                 <div className="text-sm text-slate-600 mt-2">
                   {permissaoCriacao?.motivoBloqueio ||
-                    "Para você conseguir criar uma metodologia, você deve ser um professor parceiro ou assinar um destes planos:"}
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {[
-                    {
-                      id: "PROFESSOR_PRO",
-                      nome: "Professor Pro",
-                    },
-                    {
-                      id: "PROFESSOR_LEARNING_1",
-                      nome: "Professor Learning 1",
-                    },
-                    {
-                      id: "PROFESSOR_LEARNING_3",
-                      nome: "Professor Learning 3",
-                    },
-                    {
-                      id: "ORGANIZACOES_PRO",
-                      nome: "Organizações Pro",
-                    },
-                    {
-                      id: "ORGANIZACOES_LEARNING_3",
-                      nome: "Organizações Learning",
-                    },
-                  ].map((plano) => (
-                    <div
-                      key={plano.id}
-                      className="rounded-xl border border-slate-200 p-4 bg-slate-50"
-                    >
-                      <div className="font-semibold text-slate-800">{plano.nome}</div>
-                      <div className="text-sm text-slate-500 mt-1">ID: {plano.id}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-5">
-                  <button
-                    type="button"
-                    onClick={() => navigate("/pagamentos")}
-                    className="inline-flex h-11 px-5 rounded-xl bg-[#216c43] text-white font-semibold items-center"
-                  >
-                    Adquirir assinatura
-                  </button>
+                    "Apenas professor, clube, escolinha ou admin podem criar metodologias."}
                 </div>
               </div>
             </div>

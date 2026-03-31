@@ -196,3 +196,124 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
     });
   }
 }
+
+export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id || (req as any).userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const page = Math.max(1, Number(req.query.page || 1));
+    const pageSize = Math.min(50, Math.max(1, Number(req.query.pageSize || 20)));
+    const q = normStr(req.query.q).toLowerCase();
+
+    const where: any = {
+      criadorUsuarioId: userId,
+    };
+
+    if (q) {
+      where.OR = [
+        { titulo: { contains: q, mode: "insensitive" } },
+        { descricao: { contains: q, mode: "insensitive" } },
+      ];
+    }
+
+    const [total, items] = await Promise.all([
+      prisma.metodologia.count({ where }),
+      prisma.metodologia.findMany({
+        where,
+        orderBy: { criadoEm: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          criadorUsuario: {
+            select: { id: true, nome: true, nomeDeUsuario: true, email: true, foto: true, parceiro: true },
+          },
+          _count: { select: { assinantes: true, estruturas: true } },
+          estruturas: {
+            take: 2,
+            orderBy: { ordem: "asc" },
+            include: {
+              itens: {
+                take: 3,
+                orderBy: { ordem: "asc" },
+                select: {
+                  id: true,
+                  ordem: true,
+                  tipo: true,
+                  titulo: true,
+                  videoUrl: true,
+                  thumbUrl: true,
+                  arquivoUrl: true,
+                  materialUrl: true,
+                  treinoProgramadoId: true,
+                  treinoProgramado: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      codigo: true,
+                      imagemUrl: true,
+                      nivel: true,
+                      categoria: true,
+                      pontuacao: true,
+                      duracao: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return res.json({ items, total, page, pageSize });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao listar minhas metodologias do admin.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function deleteMinhaMetodologiaAdmin(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id || (req as any).userId;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const metodologia = await prisma.metodologia.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        criadorUsuarioId: true,
+      },
+    });
+
+    if (!metodologia) {
+      return res.status(404).json({ message: "Metodologia não encontrada." });
+    }
+
+    if (String(metodologia.criadorUsuarioId) !== String(userId)) {
+      return res.status(403).json({
+        message: "Você só pode apagar metodologias criadas por você.",
+      });
+    }
+
+    await prisma.metodologia.delete({
+      where: { id },
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao apagar metodologia do admin.",
+      detail: e?.message,
+    });
+  }
+}

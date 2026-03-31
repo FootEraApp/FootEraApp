@@ -275,42 +275,19 @@ async function getPermissaoCriacaoMetodologia(userId: string) {
   });
 
   const tipo = String(usuario?.tipo || "").toLowerCase().trim();
-  const ehProfessorParceiro = tipo === "professor" && usuario?.parceiro === true;
 
-  const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
-    where: { usuarioId: userId },
-    orderBy: { startsAt: "desc" },
-  });
-
-  const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
-  const planoPrincipal = String(assinaturaPrincipal?.plano || "").toUpperCase().trim();
-  const assinaturaAtiva = assinaturaPrincipalEstaAtiva(assinaturaPrincipal);
-
-  const temPlanoElegivel =
-    assinaturaAtiva && PLANOS_QUE_PODEM_CRIAR_METODOLOGIA.has(planoPrincipal);
-
-  const podeCriar = ehProfessorParceiro || temPlanoElegivel;
-
-  let motivoBloqueio: string | null = null;
-
-  if (!podeCriar) {
-    motivoBloqueio =
-      "Para criar uma metodologia, você deve ser um professor parceiro ou assinar um dos planos elegíveis.";
-  }
+  const tiposPermitidos = ["professor", "clube", "escolinha", "admin"];
+  const podeCriar = tiposPermitidos.includes(tipo);
 
   return {
     podeCriar,
-    ehProfessorParceiro,
-    temPlanoElegivel,
-    planoPrincipal: planoPrincipal || null,
-    motivoBloqueio,
-    planosPermitidos: [
-      "PROFESSOR_PRO",
-      "PROFESSOR_LEARNING_1",
-      "PROFESSOR_LEARNING_3",
-      "ORGANIZACOES_PRO",
-      "ORGANIZACOES_LEARNING_3",
-    ],
+    ehProfessorParceiro: tipo === "professor" ? usuario?.parceiro === true : false,
+    temPlanoElegivel: false,
+    planoPrincipal: null,
+    motivoBloqueio: podeCriar
+      ? null
+      : "Apenas professor, clube, escolinha ou admin podem criar metodologias.",
+    planosPermitidos: [],
   };
 }
 
@@ -475,8 +452,7 @@ export async function createMetodologia(req: Request, res: Response) {
     if (!permissaoCriacao.podeCriar) {
       return res.status(403).json({
         code: "CRIACAO_METODOLOGIA_BLOQUEADA",
-        message:
-          "Para criar uma metodologia, você deve ser um professor parceiro ou assinar um dos planos elegíveis.",
+        message: "Apenas professor, clube, escolinha ou admin podem criar metodologias.",
         detalhes: permissaoCriacao,
       });
     }
@@ -544,7 +520,6 @@ export async function createMetodologia(req: Request, res: Response) {
       });
     }
 
-    // ✅ resolve o "dono real" (professor/clube/escolinha) a partir do usuário logado
     const usuario = await prisma.usuario.findUnique({
       where: { id: userId },
       select: {
@@ -2618,6 +2593,235 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
     return res.status(500).json({
       message: "Erro ao concluir item da estrutura da metodologia.",
       detail: e?.message,
+    });
+  }
+}
+
+export async function createMetodologiaCompleta(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const permissaoCriacao = await getPermissaoCriacaoMetodologia(userId);
+    if (!permissaoCriacao.podeCriar) {
+      return res.status(403).json({
+        code: "CRIACAO_METODOLOGIA_BLOQUEADA",
+        message: "Apenas professor, clube, escolinha ou admin podem criar metodologias.",
+        detalhes: permissaoCriacao,
+      });
+    }
+
+    const {
+      titulo,
+      descricao,
+      capaUrl,
+      publicoAlvo,
+      tipo,
+      estruturaTipo,
+      area,
+      geraBadge,
+      geraCertificado,
+      estruturas,
+    } = req.body || {};
+
+    if (!titulo || typeof titulo !== "string") {
+      return res.status(400).json({ message: "Título é obrigatório." });
+    }
+
+    if (!Array.isArray(estruturas) || estruturas.length === 0) {
+      return res.status(400).json({ message: "Adicione pelo menos uma trilha/módulo." });
+    }
+
+    const tituloTrim = titulo.trim();
+
+    const metodologiaComMesmoNome = await prisma.metodologia.findFirst({
+      where: {
+        titulo: {
+          equals: tituloTrim,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
+    });
+
+    if (metodologiaComMesmoNome) {
+      return res.status(400).json({
+        message: `Já existe uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
+      });
+    }
+
+    if (!tipo || !Object.values(MetodologiaTipo).includes(tipo)) {
+      return res.status(400).json({ message: "tipo inválido." });
+    }
+
+    if (!estruturaTipo || !Object.values(MetodologiaEstruturaTipo).includes(estruturaTipo)) {
+      return res.status(400).json({ message: "estruturaTipo inválido." });
+    }
+
+    if (
+      tipo === MetodologiaTipo.TRILHAS_TREINO &&
+      estruturaTipo !== MetodologiaEstruturaTipo.TRILHA
+    ) {
+      return res.status(400).json({
+        message: "Metodologia de trilhas de treino deve usar estruturaTipo=TRILHA.",
+      });
+    }
+
+    if (
+      tipo === MetodologiaTipo.CURSO_FORMACAO &&
+      estruturaTipo !== MetodologiaEstruturaTipo.MODULO
+    ) {
+      return res.status(400).json({
+        message: "Metodologia de curso/formação deve usar estruturaTipo=MODULO.",
+      });
+    }
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        tipo: true,
+        professor: { select: { id: true } },
+        clube: { select: { id: true } },
+        escolinha: { select: { id: true } },
+      },
+    });
+
+    const professorId =
+      usuario?.tipo === "Professor" ? usuario?.professor?.id ?? null : null;
+
+    const clubeId =
+      usuario?.tipo === "Clube" ? usuario?.clube?.id ?? null : null;
+
+    const escolinhaId =
+      usuario?.tipo === "Escolinha" ? usuario?.escolinha?.id ?? null : null;
+
+    const criada = await prisma.$transaction(async (tx) => {
+      const metodologia = await tx.metodologia.create({
+        data: {
+          titulo: tituloTrim,
+          descricao: asNullableString(descricao),
+          capaUrl: asNullableString(capaUrl),
+          publicoAlvo,
+          tipo,
+          estruturaTipo,
+          area,
+          geraBadge: asBool(geraBadge),
+          geraCertificado: asBool(geraCertificado),
+          criadorUsuarioId: userId,
+          professorId,
+          clubeId,
+          escolinhaId,
+          ativo: true,
+        },
+      });
+
+      for (let i = 0; i < estruturas.length; i++) {
+        const estrutura = estruturas[i];
+        const tituloEstrutura = String(estrutura?.titulo || "").trim();
+
+        if (!tituloEstrutura) {
+          throw new Error(`A estrutura ${i + 1} precisa ter título.`);
+        }
+
+        const estruturaComMesmoNome = await tx.metodologiaEstrutura.findFirst({
+          where: {
+            metodologiaId: metodologia.id,
+            titulo: {
+              equals: tituloEstrutura,
+              mode: "insensitive",
+            },
+          },
+          select: { id: true },
+        });
+
+        if (estruturaComMesmoNome) {
+          throw new Error(`Já existe uma trilha/módulo com o nome "${tituloEstrutura}". Escolha outro nome.`);
+        }
+
+        if (
+          estruturaTipo === MetodologiaEstruturaTipo.TRILHA &&
+          estrutura.modoExecucao === MetodologiaModoExecucao.DESAFIO_FECHADO
+        ) {
+          if (!estrutura.prazoInicio) {
+            throw new Error(`A trilha "${tituloEstrutura}" exige prazoInicio.`);
+          }
+          if (!estrutura.prazoFinal) {
+            throw new Error(`A trilha "${tituloEstrutura}" exige prazoFinal.`);
+          }
+          if (new Date(estrutura.prazoFinal) <= new Date(estrutura.prazoInicio)) {
+            throw new Error(`Na trilha "${tituloEstrutura}", prazoFinal deve ser maior que prazoInicio.`);
+          }
+        }
+
+        const novaEstrutura = await tx.metodologiaEstrutura.create({
+          data: {
+            metodologiaId: metodologia.id,
+            tipo: estruturaTipo,
+            titulo: tituloEstrutura,
+            descricao: asNullableString(estrutura?.descricao),
+            objetivo: asNullableString(estrutura?.objetivo),
+            ordem: i + 1,
+            duracaoSemanas: asNullableNumber(estrutura?.duracaoSemanas),
+            treinosPorSemana: asNullableNumber(estrutura?.treinosPorSemana),
+            quantidadeMinConclusao: asNullableNumber(estrutura?.quantidadeMinConclusao),
+            pontosPorItem: asNullableNumber(estrutura?.pontosPorItem),
+            bonusConsistencia: asNullableNumber(estrutura?.bonusConsistencia),
+            bonusFinal: asNullableNumber(estrutura?.bonusFinal),
+            prazoInicio: asNullableString(estrutura?.prazoInicio) ? new Date(estrutura.prazoInicio) : null,
+            prazoFinal: asNullableString(estrutura?.prazoFinal) ? new Date(estrutura.prazoFinal) : null,
+            percentualPerdaAtraso: asNullableNumber(estrutura?.percentualPerdaAtraso),
+            permiteAtraso: asBool(estrutura?.permiteAtraso, true),
+            modoExecucao: estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? estrutura?.modoExecucao : null,
+            ativo: estrutura?.ativo ?? true,
+          },
+        });
+
+        const itens = Array.isArray(estrutura?.itens) ? estrutura.itens : [];
+
+        for (let j = 0; j < itens.length; j++) {
+          const item = itens[j];
+          const tituloItem = String(item?.titulo || "").trim();
+
+          if (!tituloItem) {
+            throw new Error(`O item ${j + 1} da estrutura "${tituloEstrutura}" precisa ter título.`);
+          }
+
+          if ((item.tipo === "VIDEO" || item.tipo === "AULA") && !String(item.videoUrl || "").trim()) {
+            throw new Error(`O item "${tituloItem}" precisa ter vídeo.`);
+          }
+
+          if (item.tipo === "MATERIAL" && !String(item.arquivoUrl || item.materialUrl || "").trim()) {
+            throw new Error(`O item "${tituloItem}" precisa ter arquivo ou link do material.`);
+          }
+
+          await tx.metodologiaEstruturaItem.create({
+            data: {
+              estruturaId: novaEstrutura.id,
+              tipo: item.tipo,
+              titulo: tituloItem,
+              descricao: asNullableString(item?.descricao),
+              ordem: j + 1,
+              videoUrl: asNullableString(item?.videoUrl),
+              thumbUrl: asNullableString(item?.thumbUrl),
+              arquivoUrl: asNullableString(item?.arquivoUrl),
+              materialUrl: asNullableString(item?.materialUrl),
+              treinoProgramadoId: asNullableString(item?.treinoProgramadoId),
+              pontos: asNullableNumber(item?.pontos),
+              duracaoMin: asNullableNumber(item?.duracaoMin),
+              obrigatorio: asBool(item?.obrigatorio, true),
+              publicado: asBool(item?.publicado, true),
+            },
+          });
+        }
+      }
+
+      return metodologia;
+    });
+
+    return res.status(201).json({ item: criada });
+  } catch (e: any) {
+    return res.status(400).json({
+      message: e?.message || "Erro ao criar metodologia completa.",
     });
   }
 }

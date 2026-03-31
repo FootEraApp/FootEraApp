@@ -2,6 +2,7 @@ import React from "react";
 import { Crown, BadgeCheck, X } from "lucide-react";
 import { Link } from "wouter";
 import { http } from "../../services/http.js";
+import { FLAGS, MESSAGES } from "../../config.js";
 
 type AssinaturaLite = {
   id: string;
@@ -137,41 +138,41 @@ export default function SubscriptionBanner({
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href="/pagamentos">
-              <div
+            {FLAGS.PAGAMENTOS_ENABLED ? (
+              <Link href="/pagamentos">
+                <div
+                  className={`relative group px-3 py-2 rounded-lg border cursor-pointer text-sm font-semibold overflow-hidden ${
+                    assinaturaAtiva
+                      ? "bg-green-600 text-white border-green-600"
+                      : "bg-green-800 text-white border-green-800"
+                  }`}
+                  title={
+                    assinaturaAtiva
+                      ? "Gerenciar assinatura"
+                      : "Assinar FootEra Pro"
+                  }
+                >
+                  <span className="relative z-20">
+                    {assinaturaAtiva ? "Gerenciar" : "Seja Pro"}
+                  </span>
+                </div>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => alert(MESSAGES.PAGAMENTOS_EM_REFORMULACAO)}
                 className={`relative group px-3 py-2 rounded-lg border cursor-pointer text-sm font-semibold overflow-hidden ${
                   assinaturaAtiva
                     ? "bg-green-600 text-white border-green-600"
                     : "bg-green-800 text-white border-green-800"
                 }`}
-                title={
-                  assinaturaAtiva
-                    ? "Gerenciar assinatura"
-                    : "Assinar FootEra Pro"
-                }
+                title="Página em reformulação"
               >
                 <span className="relative z-20">
                   {assinaturaAtiva ? "Gerenciar" : "Seja Pro"}
                 </span>
-
-                {!assinaturaAtiva && (
-                  <span
-                    className="
-                      gol-marquee
-                      pointer-events-none
-                      absolute inset-0
-                      flex items-center justify-center
-                      text-xl font-extrabold uppercase leading-none
-                      tracking-[0.35em]
-                      text-white/25
-                      z-10
-                    "
-                  >
-                    GOOOOLL!!!
-                  </span>
-                )}
-              </div>
-            </Link>
+              </button>
+            )}
 
             {dismissible && (
               <button

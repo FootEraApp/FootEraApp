@@ -6,7 +6,7 @@ import { enforceTotalLimit } from '../services/usage.js';
 import { audit } from "../services/audit.js";
 import { prisma } from "../prisma.js";
 
-type Dono = "Professor" | "Clube" | "Escolinha";
+type Dono = "Professor" | "Clube" | "Escolinha" | "Admin";
 
 function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
   const dono = normalizarTipoUsuario(tipoUsuario);
@@ -15,7 +15,8 @@ function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
 
   if (dono === "Professor") return { professorId: id };
   if (dono === "Clube") return { clubeId: id };
-  return { escolinhaId: id };
+  if (dono === "Escolinha") return { escolinhaId: id };
+  return { criadorUsuarioId: id };
 }
 
 function assertOwnerIdsFromBodyOrReq(body: any) {
@@ -24,9 +25,19 @@ function assertOwnerIdsFromBodyOrReq(body: any) {
   const professorId = String(body?.professorId ?? "").trim();
 
   if (dono && donoId) {
-    if (dono === "Professor") return { dono, professorId: donoId, clubeId: null, escolinhaId: null };
-    if (dono === "Clube") return { dono, professorId: null, clubeId: donoId, escolinhaId: null };
-    return { dono, professorId: null, clubeId: null, escolinhaId: donoId };
+    if (dono === "Professor") {
+      return { dono, professorId: donoId, clubeId: null, escolinhaId: null, criadorUsuarioId: null };
+    }
+
+    if (dono === "Clube") {
+      return { dono, professorId: null, clubeId: donoId, escolinhaId: null, criadorUsuarioId: null };
+    }
+
+    if (dono === "Escolinha") {
+      return { dono, professorId: null, clubeId: null, escolinhaId: donoId, criadorUsuarioId: null };
+    }
+
+    return { dono, professorId: null, clubeId: null, escolinhaId: null, criadorUsuarioId: donoId };
   }
 
   if (professorId) {
@@ -116,14 +127,8 @@ function normalizarTipoUsuario(v?: string): Dono | null {
   if (s === "professor") return "Professor";
   if (s === "clube") return "Clube";
   if (s === "escolinha" || s === "escola") return "Escolinha";
+  if (s === "admin" || s === "administrador" || s === "adm") return "Admin";
   return null;
-}
-
-function toRepeticoes(series?: any, repeticoes?: any): string {
-  const s = String(series ?? "").trim();
-  const r = String(repeticoes ?? "").trim();
-  if (s && r) return `${s}x${r}`;
-  return r || s || "";
 }
 
 function normNivel(v?: string): Nivel {
@@ -289,6 +294,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           owner.professorId ? { professorId: owner.professorId } : undefined,
           owner.clubeId ? { clubeId: owner.clubeId } : undefined,
           owner.escolinhaId ? { escolinhaId: owner.escolinhaId } : undefined,
+          owner.criadorUsuarioId ? { criadorUsuarioId: owner.criadorUsuarioId } : undefined,
         ].filter(Boolean) as any,
       },
       select: { id: true, nome: true },
@@ -529,6 +535,9 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
             ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
             ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
+            ...(owner.criadorUsuarioId
+              ? { criadorUsuario: { connect: { id: owner.criadorUsuarioId } } }
+              : {}),
             ...(criadorProfessorIdNorm
               ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
               : owner.dono === "Professor"
@@ -541,6 +550,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           },
           include: {
             criadorProfessor: { include: { usuario: true } },
+            criadorUsuario: true,
             clube: true,
             escolinha: true,
             exercicios: {
@@ -636,6 +646,7 @@ export const getTreinoById = async (req: Request, res: Response) => {
       where: { id },
       include: {
         criadorProfessor: { include: { usuario: true } }, 
+        criadorUsuario: true,
         clube: true,
         escolinha: true,
         exercicios: {
@@ -719,10 +730,13 @@ export async function updateTreino(req: Request, res: Response) {
       dataDono.Professor = { disconnect: true };
       dataDono.clube = { disconnect: true };
       dataDono.escolinha = { disconnect: true };
+      dataDono.criadorUsuario = { disconnect: true };
 
       if (dono === "Professor") dataDono.Professor = { connect: { id: tipoUsuarioId } };
       if (dono === "Clube") dataDono.clube = { connect: { id: tipoUsuarioId } };
       if (dono === "Escolinha") dataDono.escolinha = { connect: { id: tipoUsuarioId } };
+      if (dono === "Admin") dataDono.criadorUsuario = { connect: { id: tipoUsuarioId } };
+
     }
 
     const viewerUserId = String((req as any).user?.id || "").trim();
