@@ -111,6 +111,9 @@ client/.env.*
 server/.env
 server/.env.*
 
+# vídeos
+*.mp4
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

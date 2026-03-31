@@ -1,6 +1,24 @@
+// client/src/pages/tutorial
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
+
+import cadastroFooteraVideo from "@/components/tutorial/cadastro footera.mp4";
+import configuracoesAssinaturasVideo from "@/components/tutorial/configuracoes e assinaturas.mp4";
+import criarAgendarTreinoTurmaVideo from "@/components/tutorial/criar e agendar treino p turma.mp4";
+import criarEditarMeusExercicioVideo from "@/components/tutorial/criar e editar meus exercicio.mp4";
+import criarEditarTreinoVideo from "@/components/tutorial/criar e editar treino.mp4";
+import explorarMensagensVideo from "@/components/tutorial/explorar e mensagens.mp4";
+import feedVideo from "@/components/tutorial/feed.mp4";
+import loginFooteraVideo from "@/components/tutorial/login footera.mp4";
+import paginaTreinoClubeRealizarTreinoTurma from "@/components/tutorial/pagina treino clube-realizar treino turma.mp4";
+import paginasGerenciarClubeEscolinhaVideo from "@/components/tutorial/paginas gerenciar clube-escolinha.mp4";
+import paginasGerenciarProfessorVideo from "@/components/tutorial/paginas gerenciar professor.mp4";
+import perfilClubeVideo from "@/components/tutorial/perfil clube.mp4";
+import perfilOlheiroVideo from "@/components/tutorial/perfil olheiro.mp4";
+import perfilPrincipalAtletaVideo from "@/components/tutorial/perfil principal atleta.mp4";
+import postagemVideo from "@/components/tutorial/postagem.mp4";
+import treinosAtletaVideo from "@/components/tutorial/treinos atleta.mp4";
 
 type VideoSource =
   | { kind: "youtube"; url: string }
@@ -33,65 +51,135 @@ function youtubeEmbedUrl(url: string) {
 const TUTORIAIS: TutorialItem[] = [
   {
     id: "intro-1",
-    titulo: "Bem-vindo: como funciona a criação de treinos",
+    titulo: "Login na FootEra",
     duracao: "2:10",
     categoria: "Introdução",
-    descricao: "Visão geral do fluxo (do rascunho até a publicação).",
-    source: { kind: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+    descricao: "Como acessar sua conta na plataforma.",
+    source: { kind: "mp4", url: loginFooteraVideo },
   },
-
-  // ===== CRIAR TREINO =====
+  {
+    id: "intro-2",
+    titulo: "Cadastro na FootEra",
+    duracao: "2:40",
+    categoria: "Introdução",
+    descricao: "Como criar sua conta e começar a usar a plataforma.",
+    source: { kind: "mp4", url: cadastroFooteraVideo },
+  },
 
   {
     id: "criar-1",
-    titulo: "Passo 1 — Dados do treino",
+    titulo: "Criar e editar treino",
     duracao: "3:40",
     categoria: "Criar Treino",
-    descricao: "Nome, código, nível e categoria.",
-    source: { kind: "youtube", url: "https://youtu.be/dQw4w9WgXcQ" },
+    descricao: "Como montar e editar um treino.",
+    source: { kind: "mp4", url: criarEditarTreinoVideo },
   },
   {
     id: "criar-2",
-    titulo: "Passo 2 — Adicionar Exercícios",
+    titulo: "Criar e agendar treino para turma",
     duracao: "4:55",
     categoria: "Criar Treino",
-    descricao: "Ordem, repetições e organização.",
-    source: { kind: "mp4", url: "/assets/videos/tutorial-adicionar-exercicios.mp4" },
+    descricao: "Como criar um treino e agendar para uma turma.",
+    source: { kind: "mp4", url: criarAgendarTreinoTurmaVideo },
   },
   {
     id: "criar-3",
-    titulo: "Passo 3 — Vincular Atletas",
+    titulo: "Criar e editar meus exercícios",
     duracao: "3:20",
     categoria: "Criar Treino",
-    descricao: "Selecionar atletas e finalizar treino.",
-    source: { kind: "youtube", url: "https://youtu.be/dQw4w9WgXcQ" },
+    descricao: "Como cadastrar e ajustar seus próprios exercícios.",
+    source: { kind: "mp4", url: criarEditarMeusExercicioVideo },
   },
-
-  // ===== GERENCIAR (Clubes e Escolas) =====
 
   {
     id: "ger-1",
-    titulo: "Gerenciar Atletas — adicionar, remover e permissões",
+    titulo: "Páginas de gerenciar clube e escolinha",
     duracao: "3:30",
     categoria: "Gerenciar",
-    descricao: "Como administrar atletas vinculados ao clube/escola e permissões.",
-    source: { kind: "youtube", url: "https://youtu.be/dQw4w9WgXcQ" },
+    descricao: "Como administrar clube e escolinha dentro da plataforma.",
+    source: { kind: "mp4", url: paginasGerenciarClubeEscolinhaVideo },
   },
   {
     id: "ger-2",
-    titulo: "Turmas — criar, editar e organizar grupos",
+    titulo: "Páginas de gerenciar professor",
     duracao: "4:10",
     categoria: "Gerenciar",
-    descricao: "Como criar turmas, editar informações e organizar atletas por categoria.",
-    source: { kind: "youtube", url: "https://youtu.be/dQw4w9WgXcQ" },
+    descricao: "Como gerenciar professores e suas informações.",
+    source: { kind: "mp4", url: paginasGerenciarProfessorVideo },
   },
   {
     id: "ger-3",
-    titulo: "Professores — convidar, vincular e administrar",
+    titulo: "Configurações e assinaturas",
     duracao: "4:45",
     categoria: "Gerenciar",
-    descricao: "Fluxo para clubes e escolas adicionarem professores e gerenciarem acessos.",
-    source: { kind: "youtube", url: "https://youtu.be/dQw4w9WgXcQ" },
+    descricao: "Como acessar e configurar preferências e planos.",
+    source: { kind: "mp4", url: configuracoesAssinaturasVideo },
+  },
+
+  {
+    id: "pub-1",
+    titulo: "Feed",
+    duracao: "2:50",
+    categoria: "Publicações",
+    descricao: "Como funciona o feed da plataforma.",
+    source: { kind: "mp4", url: feedVideo },
+  },
+  {
+    id: "pub-2",
+    titulo: "Postagem",
+    duracao: "2:20",
+    categoria: "Publicações",
+    descricao: "Como criar e interagir com postagens.",
+    source: { kind: "mp4", url: postagemVideo },
+  },
+  {
+    id: "pub-3",
+    titulo: "Explorar e mensagens",
+    duracao: "3:15",
+    categoria: "Publicações",
+    descricao: "Como navegar no explorar e usar mensagens.",
+    source: { kind: "mp4", url: explorarMensagensVideo },
+  },
+
+  {
+    id: "dica-1",
+    titulo: "Perfil principal do atleta",
+    duracao: "3:10",
+    categoria: "Dicas",
+    descricao: "Visão geral do perfil principal do atleta.",
+    source: { kind: "mp4", url: perfilPrincipalAtletaVideo },
+  },
+  {
+    id: "dica-2",
+    titulo: "Treinos do atleta",
+    duracao: "3:00",
+    categoria: "Dicas",
+    descricao: "Como visualizar e acompanhar treinos do atleta.",
+    source: { kind: "mp4", url: treinosAtletaVideo },
+  },
+  {
+    id: "dica-3",
+    titulo: "Perfil do clube",
+    duracao: "2:45",
+    categoria: "Dicas",
+    descricao: "Como funciona a página de perfil do clube.",
+    source: { kind: "mp4", url: perfilClubeVideo },
+  },
+  {
+    id: "dica-4",
+    titulo: "Perfil do olheiro",
+    duracao: "2:45",
+    categoria: "Dicas",
+    descricao: "Como funciona a página de perfil do olheiro.",
+    source: { kind: "mp4", url: perfilOlheiroVideo },
+  },
+  {
+    id: "dica-5",
+    titulo: "Página treino clube — realizar treino",
+    duracao: "3:30",
+    categoria: "Dicas",
+    descricao: "Fluxo para realizar treino dentro da área do clube.",
+    source: { kind: "mp4", url: paginaTreinoClubeRealizarTreinoTurma },
   },
 ];
 
@@ -142,8 +230,7 @@ export default function TutorialPage() {
     return TUTORIAIS.find((t) => t.id === selecionadoId) ?? TUTORIAIS[0];
   }, [selecionadoId]);
 
-  const capituloVazio =
-    categoria === "Publicações" || categoria === "Dicas";
+  const capituloVazio = itensFiltrados.length === 0;
 
   function marcarConcluido(id: string) {
     setConcluidos((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -231,7 +318,8 @@ export default function TutorialPage() {
                     />
                   ) : (
                     <video className="w-full h-full" controls preload="metadata">
-                      <source src={selecionado.source.url} />
+                      <source src={selecionado.source.url} type="video/mp4" />
+                      Seu navegador não suporta vídeo.
                     </video>
                   )}
                 </div>
