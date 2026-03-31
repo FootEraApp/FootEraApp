@@ -72,6 +72,10 @@ export default function LearningPage() {
     "TODOS" | "COM" | "SEM"
   >("TODOS");
 
+  const [filtroBadge, setFiltroBadge] = useState<
+    "TODOS" | "COM" | "SEM"
+  >("TODOS");
+
   const [filtroMaterial, setFiltroMaterial] = useState<
     "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
   >("TODOS");
@@ -194,6 +198,14 @@ export default function LearningPage() {
         items = items.filter((item) => !item?.geraCertificado);
     }
 
+    if (filtroBadge === "COM") {
+        items = items.filter((item) => !!item?.geraBadge);
+    }
+
+    if (filtroBadge === "SEM") {
+        items = items.filter((item) => !item?.geraBadge);
+    }
+
     if (filtroMaterial === "VIDEO") {
         items = items.filter((item) => Number(item?.videoCount || 0) > 0);
     }
@@ -222,6 +234,7 @@ export default function LearningPage() {
     filtroPublico,
     filtroEstrutura,
     filtroCertificado,
+    filtroBadge,
     filtroMaterial,
     busca,
     ]);
@@ -319,6 +332,18 @@ export default function LearningPage() {
                         <option value="TODOS">Com ou sem certificado</option>
                         <option value="COM">Com certificado</option>
                         <option value="SEM">Sem certificado</option>
+                        </select>
+
+                        <select
+                          value={filtroBadge}
+                          onChange={(e) =>
+                            setFiltroBadge(e.target.value as "TODOS" | "COM" | "SEM")
+                          }
+                          className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                        >
+                          <option value="TODOS">Com ou sem badge</option>
+                          <option value="COM">Com badge</option>
+                          <option value="SEM">Sem badge</option>
                         </select>
 
                         <select

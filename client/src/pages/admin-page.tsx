@@ -920,30 +920,6 @@ useEffect(() => {
     }
   }
 
-  async function abrirMetodologiaDetalhe(id: string) {
-    setMetDetailOpen(true);
-    setMetDetailLoading(true);
-    setMetDetailErr("");
-    setMetDetail(null);
-
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}`, {
-        headers: authHeaders(),
-      });
-      const txt = await r.text().catch(() => "");
-      if (!r.ok) {
-        setMetDetailErr(txt || `Erro HTTP ${r.status}`);
-        return;
-      }
-      const data = txt ? JSON.parse(txt) : {};
-      setMetDetail((data.item ?? data) as MetodologiaDetail);
-    } catch (e: any) {
-      setMetDetailErr(e?.message || "Falha de rede.");
-    } finally {
-      setMetDetailLoading(false);
-    }
-  }
-
   useEffect(() => {
     if (aba !== "metodologias") return;
 
@@ -2460,7 +2436,9 @@ async function confirmarExcluirProfessor() {
 
                                 <button
                                   className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                  onClick={() => abrirMetodologiaDetalhe(m.id)}
+                                  onClick={() => {
+                                    window.location.href = `/learning/${m.id}?from=admin`;
+                                  }}
                                 >
                                   Detalhes
                                 </button>
@@ -2536,7 +2514,9 @@ async function confirmarExcluirProfessor() {
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => abrirMetodologiaDetalhe(item.id)}
+                            onClick={() => {
+                              window.location.href = `/learning/${item.id}?from=admin`;
+                            }}
                             className="px-3 py-2 rounded bg-green-700 text-white"
                           >
                             Gerenciar

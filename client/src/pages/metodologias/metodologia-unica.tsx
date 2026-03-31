@@ -181,6 +181,8 @@ export default function MetodologiaUnicaPage() {
 
   const params = matchLearning ? paramsLearning : paramsOld;
   const id = params?.id;
+  const searchParams = new URLSearchParams(window.location.search);
+  const veioDoAdmin = searchParams.get("from") === "admin";
   const token =
     (Storage as any).token ??
     localStorage.getItem("token") ??
@@ -279,6 +281,15 @@ export default function MetodologiaUnicaPage() {
     () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }),
     [token]
   );
+
+  function handleVoltar() {
+    if (veioDoAdmin) {
+      navigate("/admin");
+      return;
+    }
+
+    navigate("/learning");
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -429,6 +440,31 @@ export default function MetodologiaUnicaPage() {
     }
     }
 
+    function getItemImage(
+      it: MetodologiaEstruturaItem,
+      thumbFromVideo: Record<string, string>
+    ) {
+      const tipoUpper = String(it.tipo || "").toUpperCase();
+
+      if (tipoUpper === "VIDEO" || tipoUpper === "AULA") {
+        return normalizeMediaUrl(it.thumbUrl || thumbFromVideo[it.id] || null) || AVATAR_FALLBACK;
+      }
+
+      if (tipoUpper === "MATERIAL") {
+        return normalizeMediaUrl(it.thumbUrl || null) || AVATAR_FALLBACK;
+      }
+
+      if (tipoUpper === "TREINO") {
+        return normalizeMediaUrl(it.treinoProgramado?.imagemUrl || null) || AVATAR_FALLBACK;
+      }
+
+      if (tipoUpper === "DESAFIO") {
+        return normalizeMediaUrl(it.thumbUrl || null) || AVATAR_FALLBACK;
+      }
+
+      return AVATAR_FALLBACK;
+    }
+
   function bloquearAcao(): boolean {
     return !data?.viewer?.temAcesso;
   }
@@ -445,14 +481,13 @@ export default function MetodologiaUnicaPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8">
-      <Link
-        href="/learning"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-green-800 bg-white text-green-900 shadow-sm hover:bg-green-50"
-        aria-label="Voltar"
-        title="Voltar"
+      <button
+        type="button"
+        onClick={handleVoltar}
+        className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-[#216c43] text-[#216c43] bg-white"
       >
-        <ArrowLeft className="h-5 w-5" />
-      </Link>
+        <ArrowLeft className="w-5 h-5" />
+      </button>
 
       {/* HEADER */}
       <div className="mt-4 rounded-2xl border bg-white p-4 md:p-6 shadow-sm">
@@ -675,20 +710,24 @@ export default function MetodologiaUnicaPage() {
                 const concluido = concluIds.has(it.id);
                 const locked = bloquearAcao();
                 const tipoUpper = String(it.tipo).toUpperCase();
+                
                 const isVideo = ["VIDEO", "AULA"].includes(tipoUpper);
                 const isTreino = tipoUpper === "TREINO";
                 const isMaterial = tipoUpper === "MATERIAL";
-
-                const capaFallback = data?.capaUrl ? normalizeMediaUrl(data.capaUrl) : null;
+                const isDesafio = tipoUpper === "DESAFIO";
 
                 const thumbRaw = isVideo
-                  ? it.thumbUrl || thumbFromVideo[it.id] || capaFallback
+                  ? (it.thumbUrl || thumbFromVideo[it.id] || null)
+                  : isMaterial
+                  ? (it.thumbUrl || null)
                   : isTreino
-                  ? it.treinoProgramado?.imagemUrl || capaFallback
-                  : capaFallback;
+                  ? (it.treinoProgramado?.imagemUrl || null)
+                  : isDesafio
+                  ? (it.thumbUrl || null)
+                  : null;
 
-                const imgSrc = normalizeMediaUrl(thumbRaw) || AVATAR_FALLBACK;
-
+                const imgSrc = getItemImage(it, thumbFromVideo);
+                
                 return (
                   <div key={it.id} className="rounded-xl border p-3 flex items-center gap-3">
                     <img

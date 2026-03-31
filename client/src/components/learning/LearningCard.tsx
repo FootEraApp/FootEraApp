@@ -87,6 +87,12 @@ export default function LearningCard({
                 Certificado
               </span>
             ) : null}
+
+            {item?.geraBadge ? (
+              <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-800">
+                Badge
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-2 text-lg font-extrabold text-[#193b2e] line-clamp-1">

@@ -804,6 +804,7 @@ export default function LearningCreatePage() {
                   ? {
                       ...it,
                       videoUrl: "",
+                      thumbUrl: "",
                       videoPreviewUrl: null,
                       videoFileName: null,
                       videoModalOpen: false,
@@ -940,16 +941,22 @@ export default function LearningCreatePage() {
     file: File,
     target: "videoUrl" | "arquivoUrl" | "materialUrl"
   ) {
-    const localPreview =
-      target === "videoUrl" ? URL.createObjectURL(file) : URL.createObjectURL(file);
+    const localPreview = URL.createObjectURL(file);
 
     try {
+      let thumbGerada: string | null = null;
+
+      if (target === "videoUrl") {
+        thumbGerada = await gerarThumbDoArquivo(file);
+      }
+
       updateItem(estruturaLocalId, itemLocalId, {
         uploading: true,
         ...(target === "videoUrl"
           ? {
               videoPreviewUrl: localPreview,
               videoFileName: file.name,
+              thumbUrl: thumbGerada || "",
             }
           : {
               materialPreviewUrl: localPreview,
@@ -964,8 +971,10 @@ export default function LearningCreatePage() {
         uploading: false,
         ...(target === "videoUrl"
           ? {
+              videoUrl: up.url,
               videoPreviewUrl: up.url,
               videoFileName: file.name,
+              thumbUrl: thumbGerada || "",
             }
           : {
               arquivoUrl: up.url,
@@ -982,6 +991,7 @@ export default function LearningCreatePage() {
               videoPreviewUrl: null,
               videoFileName: null,
               videoModalOpen: false,
+              thumbUrl: "",
             }
           : {
               arquivoUrl: "",
@@ -991,6 +1001,8 @@ export default function LearningCreatePage() {
       });
 
       alert(e?.message || "Falha ao enviar arquivo.");
+    } finally {
+      URL.revokeObjectURL(localPreview);
     }
   }
 
@@ -1176,6 +1188,44 @@ export default function LearningCreatePage() {
   function cancelarCriacao() {
     localStorage.removeItem(LEARNING_DRAFT_KEY);
     navigate("/learning");
+  }
+
+  async function gerarThumbDoArquivo(file: File): Promise<string | null> {
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const video = document.createElement("video");
+      video.src = objectUrl;
+      video.muted = true;
+      video.playsInline = true;
+
+      await new Promise<void>((resolve, reject) => {
+        video.addEventListener("loadeddata", () => resolve(), { once: true });
+        video.addEventListener("error", () => reject(new Error("Erro ao carregar vídeo")), { once: true });
+      });
+
+      video.currentTime = 0.1;
+
+      await new Promise<void>((resolve) => {
+        video.addEventListener("seeked", () => resolve(), { once: true });
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 180;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      return canvas.toDataURL("image/jpeg", 0.8);
+    } catch (e) {
+      console.error("Falha ao gerar thumb do vídeo:", e);
+      return null;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   }
 
   async function salvarTudo() {
