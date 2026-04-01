@@ -11,9 +11,14 @@ import helmet from "helmet";
 import { createRequire } from "module";
 import ffmpeg from "fluent-ffmpeg";
 import "./loadEnv.js";
-import dotenv from "dotenv";
 
-dotenv.config();
+console.log("[ENV] NODE_ENV:", process.env.NODE_ENV);
+console.log("[ENV] GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
+console.log("[ENV] FRONTEND_URL:", process.env.FRONTEND_URL);
+console.log("[ENV] API_BASE_URL:", process.env.API_BASE_URL);
+console.log("[ENV] JWT_SECRET exists:", !!process.env.JWT_SECRET);
+console.log("[ENV] GOOGLE_CLIENT_ID exists:", !!process.env.GOOGLE_CLIENT_ID);
+
 const require = createRequire(import.meta.url);
 
 // força tipagem correta (resolve o erro ts2345)
@@ -154,6 +159,11 @@ const LOCAL_IP = process.env.LOCAL_IP || "192.168.18.8";
 const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
+
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  next();
+});
 
 const norm = (s?: string) => (s ? s.replace(/\/+$/, "") : s);
 const fromEnv = norm(process.env.FRONTEND_URL);

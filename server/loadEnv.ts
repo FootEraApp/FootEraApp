@@ -18,10 +18,17 @@ const candidates = [
   path.resolve(process.cwd(), ".env"),
 ];
 
+let loaded = false;
+
 for (const file of candidates) {
   if (fs.existsSync(file)) {
     dotenv.config({ path: file });
     console.log(`[dotenv] carregado: ${file}`);
+    loaded = true;
     break;
   }
+}
+
+if (!loaded) {
+  console.warn("[dotenv] nenhum arquivo .env foi encontrado.");
 }
