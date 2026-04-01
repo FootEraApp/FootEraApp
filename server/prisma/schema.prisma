@@ -556,8 +556,8 @@ model ExercicioTemporario {
 
 model ExercicioPersonalizado {
   id                    String      @id @default(uuid())
-  nome                  String      @unique
-  nomeNormalizado       String?     @unique
+  nome                  String
+  nomeNormalizado       String?
   descricao             String?
   nivel                 Nivel?
   categorias            Categoria[] @default([])

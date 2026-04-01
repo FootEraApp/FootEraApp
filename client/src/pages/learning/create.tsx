@@ -1527,7 +1527,7 @@ export default function LearningCreatePage() {
                 <input
                   value={titulo}
                   onChange={(e) => setTitulo(e.target.value)}
-                  placeholder="Ex.: Método Keeper Academy"
+                  placeholder="Ex.: Método Footera"
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-[#216c43]/20"
                 />
               </div>
