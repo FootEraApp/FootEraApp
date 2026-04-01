@@ -5,9 +5,6 @@ import { getUserFlags } from "../services/flags.js";
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 

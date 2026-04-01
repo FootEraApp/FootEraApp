@@ -73,6 +73,11 @@ export default function GoogleButton({
 
         const clientId = getGoogleClientId();
 
+        console.log("[GOOGLE] clientId usado:", clientId);
+        console.log("[GOOGLE] VITE_GOOGLE_CLIENT_ID:", import.meta.env.VITE_GOOGLE_CLIENT_ID);
+        console.log("[GOOGLE] VITE_GOOGLE_CLIENT_ID_2:", import.meta.env.VITE_GOOGLE_CLIENT_ID_2);
+        console.log("[GOOGLE] window origin:", window.location.origin);
+        
         if (!clientId) {
           setErro("VITE_GOOGLE_CLIENT_ID não configurado no frontend.");
           return;
