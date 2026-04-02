@@ -181,7 +181,7 @@ export async function googleLogin(req: Request, res: Response) {
         ok: false,
         code: "EMAIL_ALREADY_EXISTS",
         message:
-          "Já existe uma conta com esse e-mail. Entre normalmente com sua senha e conecte o Google nas configurações.",
+          "Já existe uma conta com esse e-mail. Entre com o login e a senha e conecte com o Google na parte de segurança nas configurações do perfil.",
       });
     }
 
@@ -321,7 +321,7 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     if (jaEmail) {
       return res.status(400).json({
         error:
-          "Já existe uma conta com esse e-mail. Entre com senha e conecte o Google nas configurações.",
+          "Já existe uma conta com esse e-mail. Entre com o login e a senha e conecte com o Google na parte de segurança nas configurações do perfil.",
       });
     }
 
