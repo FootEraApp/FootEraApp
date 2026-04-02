@@ -99,6 +99,40 @@ function isValidEnumValue<T extends Record<string, string>>(enumObj: T, value: a
   return Object.values(enumObj).includes(value);
 }
 
+function calcularPontuacaoVideoOuAula(duracaoMin: number | null | undefined) {
+  const minutos = Number(duracaoMin || 0);
+
+  if (!Number.isFinite(minutos) || minutos <= 0) return 15;
+
+  return 15 + Math.floor(Math.max(minutos - 0.000001, 0) / 5) * 3;
+}
+
+function calcularPontuacaoItemBackend(params: {
+  tipo: MetodologiaItemTipo;
+  duracaoMin?: number | null;
+  treinoPontuacao?: number | null;
+}) {
+  const { tipo, duracaoMin, treinoPontuacao } = params;
+
+  if (tipo === MetodologiaItemTipo.TREINO) {
+    return treinoPontuacao ?? 0;
+  }
+
+  if (tipo === MetodologiaItemTipo.VIDEO || tipo === MetodologiaItemTipo.AULA) {
+    return calcularPontuacaoVideoOuAula(duracaoMin);
+  }
+
+  if (tipo === MetodologiaItemTipo.MATERIAL) {
+    return 10;
+  }
+
+  if (tipo === MetodologiaItemTipo.DESAFIO) {
+    return 10;
+  }
+
+  return 0;
+}
+
 async function validarMetodologiaDoCriador(metodologiaId: string, userId: string) {
   const metodologia = await prisma.metodologia.findUnique({
     where: { id: metodologiaId },
@@ -1742,9 +1776,12 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
         const duracaoSemanas = asNullableNumber(item?.duracaoSemanas);
         const treinosPorSemana = asNullableNumber(item?.treinosPorSemana);
         const quantidadeMinConclusao = asNullableNumber(item?.quantidadeMinConclusao);
-        const pontosPorItem = asNullableNumber(item?.pontosPorItem);
-        const bonusConsistencia = asNullableNumber(item?.bonusConsistencia);
-        const bonusFinal = asNullableNumber(item?.bonusFinal);
+        const pontosPorItem =
+          metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? 5 : null;
+        const bonusConsistencia =
+          metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? 10 : null;
+        const bonusFinal =
+          metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? 15 : null;
         const prazoInicio = item?.prazoInicio ? new Date(item.prazoInicio) : null;
         const prazoFinal = item?.prazoFinal ? new Date(item.prazoFinal) : null;
         const percentualPerdaAtraso = asNullableNumber(item?.percentualPerdaAtraso);
@@ -2097,9 +2134,17 @@ export async function updateMetodologiaEstrutura(req: Request, res: Response) {
         ...(duracaoSemanas !== undefined ? { duracaoSemanas } : {}),
         ...(treinosPorSemana !== undefined ? { treinosPorSemana } : {}),
         ...(quantidadeMinConclusao !== undefined ? { quantidadeMinConclusao } : {}),
-        ...(pontosPorItem !== undefined ? { pontosPorItem } : {}),
-        ...(bonusConsistencia !== undefined ? { bonusConsistencia } : {}),
-        ...(bonusFinal !== undefined ? { bonusFinal } : {}),
+        ...(metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
+          ? {
+              pontosPorItem: 5,
+              bonusConsistencia: 10,
+              bonusFinal: 15,
+            }
+          : {
+              pontosPorItem: null,
+              bonusConsistencia: null,
+              bonusFinal: null,
+            }),
         ...(metodologia.estruturaTipo === MetodologiaEstruturaTipo.TRILHA
           ? {
               ...(prazoInicio !== undefined ? { prazoInicio } : {}),
@@ -2234,8 +2279,13 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
         const arquivoUrl = asNullableString(item?.arquivoUrl);
         const materialUrl = asNullableString(item?.materialUrl);
         const treinoProgramadoId = asNullableString(item?.treinoProgramadoId);
-        const pontos = asNullableNumber(item?.pontos);
-        const duracaoMin = asNullableNumber(item?.duracaoMin);
+        const duracaoMinInformada = asNullableNumber(item?.duracaoMin);
+        const duracaoMin =
+          tipo === MetodologiaItemTipo.VIDEO || tipo === MetodologiaItemTipo.AULA
+            ? duracaoMinInformada
+            : null;
+
+        let treinoPontuacao: number | null = null;
         const obrigatorio = item?.obrigatorio !== undefined ? asBool(item?.obrigatorio, true) : true;
         const publicado = item?.publicado !== undefined ? asBool(item?.publicado, true) : true;
 
@@ -2262,12 +2312,14 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
         if (treinoProgramadoId) {
           const treino = await tx.treinoProgramado.findUnique({
             where: { id: treinoProgramadoId },
-            select: { id: true },
+            select: { id: true, pontuacao: true },
           });
 
           if (!treino) {
             throw new Error(`Treino não encontrado para o item "${titulo}".`);
           }
+
+          treinoPontuacao = treino.pontuacao ?? 0;
         }
 
         let ordemFinal = ordemInformada;
@@ -2281,6 +2333,12 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
 
           ordemFinal = (last?.ordem ?? 0) + 1;
         }
+
+        const pontos = calcularPontuacaoItemBackend({
+          tipo,
+          duracaoMin,
+          treinoPontuacao,
+        });
 
         const novo = await tx.metodologiaEstruturaItem.create({
           data: {
@@ -2764,9 +2822,12 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
             duracaoSemanas: asNullableNumber(estrutura?.duracaoSemanas),
             treinosPorSemana: asNullableNumber(estrutura?.treinosPorSemana),
             quantidadeMinConclusao: asNullableNumber(estrutura?.quantidadeMinConclusao),
-            pontosPorItem: asNullableNumber(estrutura?.pontosPorItem),
-            bonusConsistencia: asNullableNumber(estrutura?.bonusConsistencia),
-            bonusFinal: asNullableNumber(estrutura?.bonusFinal),
+            pontosPorItem:
+              estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? 5 : null,
+            bonusConsistencia:
+              estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? 10 : null,
+            bonusFinal:
+              estruturaTipo === MetodologiaEstruturaTipo.TRILHA ? 15 : null,
             prazoInicio: asNullableString(estrutura?.prazoInicio) ? new Date(estrutura.prazoInicio) : null,
             prazoFinal: asNullableString(estrutura?.prazoFinal) ? new Date(estrutura.prazoFinal) : null,
             percentualPerdaAtraso: asNullableNumber(estrutura?.percentualPerdaAtraso),
@@ -2776,11 +2837,14 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
           },
         });
 
+        
         const itens = Array.isArray(estrutura?.itens) ? estrutura.itens : [];
 
         for (let j = 0; j < itens.length; j++) {
           const item = itens[j];
           const tituloItem = String(item?.titulo || "").trim();
+          const tipo = item?.tipo;
+          const treinoProgramadoId = asNullableString(item?.treinoProgramadoId);
 
           if (!tituloItem) {
             throw new Error(`O item ${j + 1} da estrutura "${tituloEstrutura}" precisa ter título.`);
@@ -2794,10 +2858,36 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
             throw new Error(`O item "${tituloItem}" precisa ter arquivo ou link do material.`);
           }
 
+          const duracaoMinFinal =
+            tipo === MetodologiaItemTipo.VIDEO || tipo === MetodologiaItemTipo.AULA
+              ? asNullableNumber(item?.duracaoMin)
+              : null;
+
+          let treinoPontuacao: number | null = null;
+
+          if (treinoProgramadoId) {
+            const treino = await tx.treinoProgramado.findUnique({
+              where: { id: treinoProgramadoId },
+              select: { id: true, pontuacao: true },
+            });
+
+            if (!treino) {
+              throw new Error(`Treino não encontrado para o item "${tituloItem}".`);
+            }
+
+            treinoPontuacao = treino.pontuacao ?? 0;
+          }
+
+          const pontosFinais = calcularPontuacaoItemBackend({
+            tipo,
+            duracaoMin: duracaoMinFinal,
+            treinoPontuacao,
+          });
+
           await tx.metodologiaEstruturaItem.create({
             data: {
               estruturaId: novaEstrutura.id,
-              tipo: item.tipo,
+              tipo,
               titulo: tituloItem,
               descricao: asNullableString(item?.descricao),
               ordem: j + 1,
@@ -2805,9 +2895,9 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
               thumbUrl: asNullableString(item?.thumbUrl),
               arquivoUrl: asNullableString(item?.arquivoUrl),
               materialUrl: asNullableString(item?.materialUrl),
-              treinoProgramadoId: asNullableString(item?.treinoProgramadoId),
-              pontos: asNullableNumber(item?.pontos),
-              duracaoMin: asNullableNumber(item?.duracaoMin),
+              treinoProgramadoId,
+              pontos: pontosFinais,
+              duracaoMin: duracaoMinFinal,
               obrigatorio: asBool(item?.obrigatorio, true),
               publicado: asBool(item?.publicado, true),
             },

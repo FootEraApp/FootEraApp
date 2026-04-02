@@ -54,6 +54,7 @@ type TreinoSelecionavel = {
   codigo?: string | null;
   descricao?: string | null;
   imagemUrl?: string | null;
+  pontuacao?: number | null;
   criadorLabel?: string | null;
   origem?: "MEU" | "VINCULADO";
   exercicios?: Array<{
@@ -149,6 +150,30 @@ function uid(prefix = "id") {
 
 function requiredLabel(label: string, required = false) {
   return required ? `${label}*` : `${label} (Opcional)`;
+}
+
+function calcularPontuacaoVideoOuAula(duracaoMin: number | null | undefined) {
+  const minutos = Number(duracaoMin || 0);
+
+  if (!Number.isFinite(minutos) || minutos <= 0) return 15;
+
+  return 15 + Math.floor(Math.max(minutos - 0.000001, 0) / 5) * 3;
+}
+
+function calcularPontuacaoItem(item: Partial<LocalItem>) {
+  switch (item.tipo) {
+    case "TREINO":
+      return item.treinoSelecionado?.pontuacao ?? item.pontos ?? null;
+    case "VIDEO":
+    case "AULA":
+      return calcularPontuacaoVideoOuAula(item.duracaoMin);
+    case "MATERIAL":
+      return 10;
+    case "DESAFIO":
+      return 10;
+    default:
+      return null;
+  }
 }
 
 function startOfToday() {
@@ -267,6 +292,7 @@ function normalizeTreinoSelecionavel(t: any): TreinoSelecionavel {
     codigo: t?.codigo ?? null,
     descricao: t?.descricao ?? null,
     imagemUrl: t?.imagemUrl ?? null,
+    pontuacao: t?.pontuacao ?? null,
     criadorLabel: t?.autor?.nome
       ? `${t?.autor?.tipo ?? "Autor"}: ${t.autor.nome}`
       : null,
@@ -314,9 +340,9 @@ function emptyEstrutura(tipo: LearningEstruturaTipo): LocalEstrutura {
     treinosPorSemana: isTrilha ? 3 : null,
     quantidadeMinConclusao: isTrilha ? 12 : null,
     modoExecucao: isTrilha ? "LIVRE" : null,
-    pontosPorItem: isTrilha ? 10 : null,
-    bonusConsistencia: isTrilha ? 20 : null,
-    bonusFinal: isTrilha ? 50 : null,
+    pontosPorItem: isTrilha ? 5 : null,
+    bonusConsistencia: isTrilha ? 10 : null,
+    bonusFinal: isTrilha ? 15 : null,
     prazoInicio: null,
     prazoFinal: null,
     percentualPerdaAtraso: isTrilha ? 20 : null,
@@ -613,6 +639,7 @@ export default function LearningCreatePage() {
                           codigo: it.treinoProgramado.codigo || null,
                           descricao: it.treinoProgramado.objetivo || null,
                           imagemUrl: it.treinoProgramado.imagemUrl || null,
+                          pontuacao: it.treinoProgramado.pontuacao ?? null,
                           criadorLabel: null,
                           origem: "MEU",
                           exercicios: [],
@@ -727,17 +754,35 @@ export default function LearningCreatePage() {
 
   function updateEstrutura(localId: string, patch: Partial<LocalEstrutura>) {
     setEstruturas((prev) =>
-      prev.map((e) => (e.localId === localId ? { ...e, ...patch } : e))
+      prev.map((e) => {
+        if (e.localId !== localId) return e;
+
+        const proximo = { ...e, ...patch };
+
+        if (proximo.tipo === "TRILHA") {
+          proximo.pontosPorItem = 5;
+          proximo.bonusConsistencia = 10;
+          proximo.bonusFinal = 15;
+        }
+
+        return proximo;
+      })
     );
   }
 
   function addItem(estruturaLocalId: string, tipo?: LearningItemTipo) {
     setEstruturas((prev) =>
-      prev.map((e) =>
-        e.localId === estruturaLocalId
-          ? { ...e, itens: [...e.itens, emptyItem(tipo || (e.tipo === "TRILHA" ? "TREINO" : "AULA"))] }
-          : e
-      )
+      prev.map((e) => {
+        if (e.localId !== estruturaLocalId) return e;
+
+        const novoItem = emptyItem(tipo || (e.tipo === "TRILHA" ? "TREINO" : "AULA"));
+        novoItem.pontos = calcularPontuacaoItem(novoItem);
+
+        return {
+          ...e,
+          itens: [...e.itens, novoItem],
+        };
+      })
     );
   }
 
@@ -751,9 +796,18 @@ export default function LearningCreatePage() {
         e.localId === estruturaLocalId
           ? {
               ...e,
-              itens: e.itens.map((it) =>
-                it.localId === itemLocalId ? { ...it, ...patch } : it
-              ),
+              itens: e.itens.map((it) => {
+                if (it.localId !== itemLocalId) return it;
+
+                const nextItem: LocalItem = {
+                  ...it,
+                  ...patch,
+                };
+
+                nextItem.pontos = calcularPontuacaoItem(nextItem);
+
+                return nextItem;
+              }),
             }
           : e
       )
@@ -826,7 +880,7 @@ export default function LearningCreatePage() {
       treinoSelecionado: treino,
       titulo: treino.nome || "",
       descricao: treino.descricao || "",
-      pontos: null,
+      pontos: treino.pontuacao ?? null,
     });
 
     setTreinoExpandidoId(null);
@@ -1257,12 +1311,9 @@ export default function LearningCreatePage() {
               estruturaTipo === "TRILHA" ? Number(estrutura.treinosPorSemana || 0) : null,
             quantidadeMinConclusao:
               estruturaTipo === "TRILHA" ? Number(estrutura.quantidadeMinConclusao || 0) : null,
-            pontosPorItem:
-              estruturaTipo === "TRILHA" ? Number(estrutura.pontosPorItem || 0) : null,
-            bonusConsistencia:
-              estruturaTipo === "TRILHA" ? Number(estrutura.bonusConsistencia || 0) : null,
-            bonusFinal:
-              estruturaTipo === "TRILHA" ? Number(estrutura.bonusFinal || 0) : null,
+            pontosPorItem: estruturaTipo === "TRILHA" ? 5 : null,
+            bonusConsistencia: estruturaTipo === "TRILHA" ? 10 : null,
+            bonusFinal: estruturaTipo === "TRILHA" ? 15 : null,
             prazoInicio: estrutura.prazoInicio || null,
             prazoFinal: estrutura.prazoFinal || null,
             percentualPerdaAtraso:
@@ -1280,8 +1331,14 @@ export default function LearningCreatePage() {
               arquivoUrl: item.arquivoUrl?.trim() || null,
               materialUrl: item.materialUrl?.trim() || null,
               treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
-              pontos: item.pontos ?? null,
-              duracaoMin: item.duracaoMin ?? null,
+              pontos:
+                item.tipo === "TREINO"
+                  ? null
+                  : calcularPontuacaoItem(item),
+              duracaoMin:
+                item.tipo === "VIDEO" || item.tipo === "AULA"
+                  ? (item.duracaoMin ? Number(item.duracaoMin) : null)
+                  : null,
               obrigatorio: item.obrigatorio ?? true,
               publicado: item.publicado ?? true,
             })),
@@ -1348,13 +1405,9 @@ export default function LearningCreatePage() {
             estruturaTipo === "TRILHA" ? Number(estrutura.quantidadeMinConclusao || 0) : null,
           modoExecucao:
             estruturaTipo === "TRILHA" ? estrutura.modoExecucao || null : null,
-          pontosPorItem:
-            estruturaTipo === "TRILHA" ? Number(estrutura.pontosPorItem || 0) : null,
-          bonusConsistencia:
-            estruturaTipo === "TRILHA" ? Number(estrutura.bonusConsistencia || 0) : null,
-          bonusFinal:
-            estruturaTipo === "TRILHA" ? Number(estrutura.bonusFinal || 0) : null,
-
+          pontosPorItem: estruturaTipo === "TRILHA" ? 5 : null,
+          bonusConsistencia: estruturaTipo === "TRILHA" ? 10 : null,
+          bonusFinal: estruturaTipo === "TRILHA" ? 15 : null,
           prazoInicio:
             estruturaTipo === "TRILHA" && estrutura.modoExecucao === "DESAFIO_FECHADO"
               ? estrutura.prazoInicio || null
@@ -1404,9 +1457,15 @@ export default function LearningCreatePage() {
             thumbUrl: item.thumbUrl?.trim() || null,
             arquivoUrl: item.arquivoUrl?.trim() || null,
             materialUrl: item.materialUrl?.trim() || null,
-            duracaoMin: item.duracaoMin ? Number(item.duracaoMin) : null,
             treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
-            pontos: item.pontos ? Number(item.pontos) : null,
+            duracaoMin:
+              item.tipo === "VIDEO" || item.tipo === "AULA"
+                ? (item.duracaoMin ? Number(item.duracaoMin) : null)
+                : null,
+            pontos:
+              item.tipo === "TREINO"
+                ? null
+                : calcularPontuacaoItem(item),
             obrigatorio: item.obrigatorio !== false,
             publicado: item.publicado !== false,
             videoPreviewUrl: item.videoUrl || null,
@@ -1842,52 +1901,40 @@ export default function LearningCreatePage() {
 
                         <div>
                           <label className="block text-sm font-semibold text-slate-700 mb-1">
-                            Pontuação por treino/item (Opcional)
+                            Pontuação por treino/item
                           </label>
                           <input
-                            type="number"
-                            min={0}
-                            value={estrutura.pontosPorItem ?? ""}
-                            onChange={(e) =>
-                              updateEstrutura(estrutura.localId, {
-                                pontosPorItem: Number(e.target.value || 0),
-                              })
-                            }
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                            type="text"
+                            value="5 pontos"
+                            readOnly
+                            disabled
+                            className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600 cursor-not-allowed"
                           />
                         </div>
 
                         <div>
                           <label className="block text-sm font-semibold text-slate-700 mb-1">
-                            Bônus por consistência semanal*
+                            Bônus por consistência semanal
                           </label>
                           <input
-                            type="number"
-                            min={0}
-                            value={estrutura.bonusConsistencia ?? ""}
-                            onChange={(e) =>
-                              updateEstrutura(estrutura.localId, {
-                                bonusConsistencia: Number(e.target.value || 0),
-                              })
-                            }
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                            type="text"
+                            value="10 pontos"
+                            readOnly
+                            disabled
+                            className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600 cursor-not-allowed"
                           />
                         </div>
 
                         <div>
                           <label className="block text-sm font-semibold text-slate-700 mb-1">
-                            Bônus final*
+                            Bônus final
                           </label>
                           <input
-                            type="number"
-                            min={0}
-                            value={estrutura.bonusFinal ?? ""}
-                            onChange={(e) =>
-                              updateEstrutura(estrutura.localId, {
-                                bonusFinal: Number(e.target.value || 0),
-                              })
-                            }
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                            type="text"
+                            value="15 pontos"
+                            readOnly
+                            disabled
+                            className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600 cursor-not-allowed"
                           />
                         </div>
 
@@ -2454,20 +2501,24 @@ export default function LearningCreatePage() {
                                   )}
                                 </div>
                               ) : null}
-                              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                                Pontos do item*
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                value={item.pontos ?? ""}
-                                onChange={(e) =>
-                                  updateItem(estrutura.localId, item.localId, {
-                                    pontos: e.target.value ? Number(e.target.value) : null,
-                                  })
-                                }
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
-                              />
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                  Pontos do item
+                                </label>
+                                <input
+                                  type="text"
+                                  value={
+                                    item.tipo === "TREINO"
+                                      ? item.treinoSelecionado?.pontuacao != null
+                                        ? `${item.treinoSelecionado.pontuacao} pontos`
+                                        : "Selecione um treino"
+                                      : `${calcularPontuacaoItem(item) ?? 0} pontos`
+                                  }
+                                  readOnly
+                                  disabled
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600 cursor-not-allowed"
+                                />
+                              </div>
                             </div>
 
                             <div>
