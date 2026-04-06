@@ -12,7 +12,7 @@ import {
   CameraIcon
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
-import { API } from "../../config.js";
+import { API, FLAGS } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
@@ -975,15 +975,26 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             <SectionCard
               title="FootEra Formadores"
               right={
-                <Link href="/formadores">
+                FLAGS.FORMADORES_ENABLED ? (
+                  <Link href="/formadores">
+                    <button
+                      className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
+                      onClick={() => {}}
+                    >
+                      <Shield className="w-4 h-4" />
+                      Acessar Módulo Formadores
+                    </button>
+                  </Link>
+                ) : (
                   <button
-                    className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
-                    onClick={() => {}}
+                    type="button"
+                    className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-gray-300 text-gray-600 cursor-not-allowed"
+                    onClick={() => alert("A página FootEra Formadores está em atualização no momento.")}
                   >
                     <Shield className="w-4 h-4" />
-                    Acessar Módulo Formadores
+                    Módulo Formadores em manuntenção
                   </button>
-                </Link>
+                )
               }
             >
               <p className="text-sm text-green-900/90">

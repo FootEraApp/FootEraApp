@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
-import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft } from "lucide-react";
+import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import socket from "../services/socket.js";
@@ -43,6 +43,9 @@ interface Grupo {
   id: string;
   nome: string;
   descricao?: string | null;
+  ultimaMensagem?: string | null;
+  ultimaMensagemTipo?: string | null;
+  ultimaMensagemEm?: string | null;
 }
 
 interface MensagemGrupo {
@@ -265,6 +268,7 @@ export default function PaginaMensagens() {
   const [modalAberto, setModalAberto] = useState(false);
   const [lastMsgAtByUser, setLastMsgAtByUser] = useState<Record<string, number>>({});
   const [lastMsgAtByGroup, setLastMsgAtByGroup] = useState<Record<string, number>>({});
+  const [lastMsgByGroup, setLastMsgByGroup] = useState<Record<string, string>>({});
 
   const abrirModal = () => setModalAberto(true);
   const fecharModal = () => setModalAberto(false);
@@ -490,7 +494,7 @@ export default function PaginaMensagens() {
     return `há ${d}d`;
   }
 
-  const SidebarContent = () => {
+  const renderSidebarContent = () => {
     const term = searchTerm.trim().toLowerCase();
     const gruposFiltradosBase = term
       ? grupos.filter((g) => g.nome.toLowerCase().includes(term))
@@ -567,11 +571,9 @@ export default function PaginaMensagens() {
                 onClick={() => selecionarAlvo({ tipo: "grupo", grupo: g })}
               >
                 <div className="font-medium text-sm">{g.nome}</div>
-                {g.descricao && (
-                  <div className="text-xs text-gray-500 line-clamp-1">
-                    {g.descricao}
-                  </div>
-                )}
+                <div className="text-xs text-gray-500 line-clamp-1">
+                  {lastMsgByGroup[g.id] || g.ultimaMensagem || g.descricao || "Sem mensagens ainda."}
+                </div>
               </div>
             );
           })}
@@ -873,12 +875,29 @@ export default function PaginaMensagens() {
     });
 
     socket.on("novaMensagemGrupo", (mensagem: MensagemGrupo) => {
+
+      setLastMsgByGroup(prev => ({
+        ...prev,
+        [mensagem.grupoId]: formatPreviewFromMsg({
+          tipo: mensagem.tipo,
+          conteudo: mensagem.conteudo,
+        }),
+      }));
+
       const current = alvoRef.current;
       if (!(current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id)) return;
 
       setLastMsgAtByGroup(prev => ({
         ...prev,
         [mensagem.grupoId]: new Date(mensagem.criadaEm).getTime(),
+      }));
+
+      setLastMsgByGroup((prev) => ({
+        ...prev,
+        [mensagem.grupoId]: formatPreviewFromMsg({
+          tipo: mensagem.tipo,
+          conteudo: mensagem.conteudo,
+        }),
       }));
 
       const replaced = reconcileGrupoByClientId(mensagem);
@@ -924,6 +943,29 @@ export default function PaginaMensagens() {
 
         let conv = { totalNaoLidas: 0, conversas: [] as Array<{ id: string; nome: string; foto?: string | null; naoLidas: number; }> };
         if (convRes.ok) conv = await convRes.json();
+
+        setLastMsgByGroup(
+          Object.fromEntries(
+            meusGrupos.map((g) => [
+              g.id,
+              g.ultimaMensagem
+                ? formatPreviewFromMsg({
+                    tipo: g.ultimaMensagemTipo || "NORMAL",
+                    conteudo: g.ultimaMensagem,
+                  })
+                : "",
+            ])
+          )
+        );
+
+        setLastMsgAtByGroup(
+          Object.fromEntries(
+            meusGrupos.map((g) => [
+              g.id,
+              g.ultimaMensagemEm ? new Date(g.ultimaMensagemEm).getTime() : 0,
+            ])
+          )
+        );
 
         setLastMsgAtByUser(
           Object.fromEntries(
@@ -1310,6 +1352,17 @@ export default function PaginaMensagens() {
         ? json.mensagens
         : [];
 
+      if (!append && novas.length > 0) {
+        const maisRecente = novas[0];
+        setLastMsgByGroup((prev) => ({
+          ...prev,
+          [grupoId]: formatPreviewFromMsg({
+            tipo: maisRecente.tipo,
+            conteudo: maisRecente.conteudo,
+          }),
+        }));
+      }
+
       if (!Array.isArray(novas)) {
         setTemMaisGrupo(false);
         return;
@@ -1496,6 +1549,14 @@ export default function PaginaMensagens() {
       setLastMsgAtByGroup(prev => ({
         ...prev,
         [alvo.grupo.id]: Date.now(),
+      }));
+
+      setLastMsgByGroup((prev) => ({
+        ...prev,
+        [alvo.grupo.id]: formatPreviewFromMsg({
+          tipo: "NORMAL",
+          conteudo: novaMensagem,
+        }),
       }));
 
       try {
@@ -1829,7 +1890,7 @@ function stripConvocacaoTag(text: string) {
               className="md:hidden absolute right-3 p-2 rounded-full hover:bg-white/10"
               title="Conversas"
             >
-              <Users size={18} />
+              <Send className="w-5 h-5" />
             </button>
 
             <h1 className="text-base font-semibold truncate">
@@ -1844,7 +1905,7 @@ function stripConvocacaoTag(text: string) {
 
       <div className="flex flex-1 min-h-0">
         <aside className="hidden md:block w-80 border-r bg-white">
-          <SidebarContent />
+          {renderSidebarContent()}
         </aside>
 
         <div className={`md:hidden fixed inset-0 z-40 ${showSidebar ? "" : "pointer-events-none"}`}>
@@ -1857,14 +1918,14 @@ function stripConvocacaoTag(text: string) {
               showSidebar ? "translate-x-0" : "-translate-x-full"
             }`}
           >
-            <SidebarContent />
+            {renderSidebarContent()}
           </aside>
         </div>
 
         <main className="flex-1 flex flex-col min-h-0">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-transparent">
             <div className="text-sm text-green-900 font-medium">
-              {alvo ? (alvo.tipo === "usuario" ? "Mensagem direta" : "Grupo") : "Selecione uma conversa"}
+              {alvo ? (alvo.tipo === "usuario" ? "Mensagem direta" : grupoDetalhe?.descricao?.trim() || "Grupo") : "Selecione uma conversa"}
             </div>
 
             <div className="flex items-center gap-2">

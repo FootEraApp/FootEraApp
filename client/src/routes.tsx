@@ -133,7 +133,29 @@ export function AppRoutes() {
       <Route path="/perfil/conquistas"><PaginaConquistas /></Route>
       <Route path="/perfil/GerenciarAtletas"><PaginaGerenciarAtleta /></Route>
       <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>
-      <Route path="/formadores" component={PaginaFormadores} />
+      {FLAGS.FORMADORES_ENABLED ? (
+        <Route path="/formadores">
+          <Private><PaginaFormadores /></Private>
+        </Route>
+      ) : (
+        <Route path="/formadores">
+          <Private>
+            <div className="min-h-screen bg-[#FFF8E6] flex items-center justify-center px-4">
+              <div className="max-w-xl w-full bg-white rounded-2xl shadow-md border border-green-100 p-8 text-center">
+                <div className="text-2xl font-bold text-green-900 mb-3">
+                  FootEra Formadores
+                </div>
+                <p className="text-green-900/80 text-base">
+                  Esta página está em manutenção no momento.
+                </p>
+                <p className="text-green-900/70 text-sm mt-2">
+                  Em breve o módulo estará disponível novamente.
+                </p>
+              </div>
+            </div>
+          </Private>
+        </Route>
+      )}
 
       <Route path="/eventos/convocar" component={PaginaConvocarEvento} />
 

@@ -70,6 +70,7 @@ export const FLAGS = {
   DESAFIOS_ENABLED: false,
   LEARNING_ENABLED: true,
   PAGAMENTOS_ENABLED: false,
+  FORMADORES_ENABLED: false,
 } as const;
 
 export default { API, APP, appUrl };

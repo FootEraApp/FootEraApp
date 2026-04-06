@@ -189,76 +189,109 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
-      <header className="hidden lg:flex w-full bg-green-900 text-white">
-        <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 py-4">
-          <img src={logo} alt="FootEra" className="w-6 h-6" />
-          <h1 className="text-2xl font-bold text-center flex-1">
-            Bem-vindo à FootEra
-          </h1>
-          <button
-            type="button"
-            className="p-1 text-white/90 hover:text-white"
-            aria-expanded={infoAberto}
-            aria-controls="cadastro-info"
-            onClick={() => setInfoAberto((v) => !v)}
-            title={infoAberto ? "Recolher" : "Expandir"}
-          >
-            {infoAberto ? <ChevronUp /> : <ChevronDown />}
-          </button>
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col lg:flex-row">
-        <section className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
-          <div className="w-full max-w-[680px]">
-            <div className="flex items-center justify-between gap-3 lg:hidden">
-              <img src={logo} className="w-10 h-10" alt="FootEra" />
-              <h2 className="flex-1 text-center text-xl font-bold">
-                Bem-vindo à FootEra
-              </h2>
-              <button
-                type="button"
-                className="p-2 text-white/90 hover:text-white rounded-full"
-                aria-expanded={infoAberto}
-                aria-controls="cadastro-info"
-                onClick={() => setInfoAberto((v) => !v)}
-                title={infoAberto ? "Recolher" : "Expandir"}
-              >
-                {infoAberto ? <ChevronUp /> : <ChevronDown />}
-              </button>
-            </div>
-
-            <div
-              id="cadastro-info"
-              className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
-                infoAberto
-                  ? "max-h-[520px] opacity-100"
-                  : "max-h-0 opacity-0 lg:max-h-[520px] lg:opacity-100"
-              }`}
+    <div className="min-h-screen bg-cream flex flex-col xl:flex-row">
+      <div className="w-full xl:w-1/2 bg-[#14532d] text-white flex flex-col items-center p-5 md:p-10">
+        <div className="w-full max-w-[680px]">
+          <div className="flex items-center justify-between gap-3 xl:flex-col xl:gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="cursor-pointer"
+              aria-label="Voltar para Home"
             >
-              <p className="text-center max-w-md text-base lg:text-lg mt-4">
-                Se você sonha em conquistar uma oportunidade, joga por amor ou
-                quer se superar... aqui é o seu lugar. FootEra. A metodologia
-                dos profissionais, para quem vive futebol.
-              </p>
-              <div className="mt-6 p-5 lg:p-6 rounded-xl text-sm lg:text-base text-left w-full bg-white/10">
-                <h3 className="font-semibold mb-2">
-                  O que a FootEra oferece:
-                </h3>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Treinamentos personalizados</li>
-                  <li>Desafios para testar suas habilidades</li>
-                  <li>Compartilhe seu progresso com a comunidade</li>
-                  <li>Conecte-se com escolinhas e clubes profissionais</li>
-                  <li>Acompanhe sua evolução com pontuações e rankings</li>
-                </ul>
+              <img
+                src="/assets/usuarios/footera-logo.png"
+                alt="Logo FootEra"
+                className="
+                  shrink-0 object-contain transform-gpu
+                  w-14 h-14 sm:w-16 sm:h-16 md:w-[110px] md:h-[110px] lg:w-[130px] lg:h-[130px]
+                  origin-left md:origin-center mr-1
+                "
+              />
+            </button>
+
+            <h1 className="flex-1 md:flex-none text-center text-xl md:text-3xl font-bold">
+              Bem-vindo à FootEra
+            </h1>
+
+            <button
+              type="button"
+              className="xl:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
+              aria-expanded={infoAberto}
+              aria-controls="info-footera"
+              onClick={() => setInfoAberto((v) => !v)}
+              title={infoAberto ? "Recolher" : "Expandir"}
+            >
+              {infoAberto ? <ChevronUp /> : <ChevronDown />}
+            </button>
+          </div>
+
+          <div
+            id="info-footera"
+            className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out
+              ${
+                infoAberto
+                  ? "max-h-[720px] opacity-100"
+                  : "max-h-0 opacity-0 xl:max-h-[720px] xl:opacity-100"
+              }`}
+          >
+            <p className="text-center text-base md:text-2xl font-semibold mt-4">
+              Treine. Aprenda. Se conecte. Evolua.
+            </p>
+
+            <p className="text-center text-sm md:text-lg mt-4 text-white/95">
+              O ecossistema digital do futebol, feito para quem vive o jogo.
+            </p>
+
+            <div className="mt-6 p-5 md:p-6 rounded-2xl text-sm md:text-base text-left w-full bg-white/10 border border-white/10 shadow-lg">
+              <h2 className="font-semibold text-xl md:text-2xl mb-4">
+                O Que você encontra FootEra
+              </h2>
+
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🏋️</span>
+                  <span>
+                    <span className="font-semibold">Treinos e rotina</span> — exercícios, histórico e progresso.
+                  </span>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🎓</span>
+                  <span>
+                    <span className="font-semibold">Learning</span> — metodologias, trilhas e cursos.
+                  </span>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">👥</span>
+                  <span>
+                    <span className="font-semibold">Rede social</span> — feed, conquistas e comunidade.
+                  </span>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="text-xl">🏆</span>
+                  <span>
+                    <span className="font-semibold">Métricas & badges</span> — visualização e reputação no esporte.
+                  </span>
+                </li>
+              </ul>
+
+              <div className="mt-5 flex items-center gap-3 text-white/90">
+                <div className="h-px flex-1 bg-white/30" />
+                <span className="italic font-semibold whitespace-nowrap">
+                  Para quem vive futebol.
+                </span>
+                <div className="h-px flex-1 bg-white/30" />
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <section className="relative w-full lg:w-1/2 flex justify-center items-center p-6 lg:p-10">
+      <main className="flex flex-1 w-full xl:w-1/2 justify-center">
+        <div className="relative w-full bg-cream flex justify-center items-center p-6 md:p-10 xl:p-14 min-h-screen">
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
             <div
               aria-hidden
@@ -273,17 +306,18 @@ export default function AdminLogin() {
             />
           </div>
 
-          <div className="relative z-10 w-full max-w-md bg-white shadow-lg rounded-2xl p-8 text-center">
-
+          <div className="relative z-10 w-full max-w-[520px] bg-[#f8f8f8] shadow-xl rounded-[28px] p-7 md:p-10 text-center mx-auto">
             <img
               src="/assets/usuarios/footera-logo-fundo-verde.png"
               alt="Logo FootEra"
-              className="w-[70px] h-[70px] mx-auto mb-3 rounded-2xl"
+              className="w-[86px] h-[86px] mx-auto mb-4 rounded-2xl"
             />
 
-            <h2 className="text-[22px] font-bold mb-3">Login Administrativo</h2>
+            <h2 className="text-[26px] md:text-[28px] font-bold mb-4 leading-tight">
+              Login Administrativo
+            </h2>
 
-            <p className="text-xs text-red-600 font-medium mb-4">
+            <p className="text-sm text-red-600 font-medium mb-6 leading-7">
               Acesso restrito. Área exclusiva para administradores autorizados.
               Tentativas de acesso indevido poderão ser registradas e tratadas conforme a legislação vigente.
             </p>
@@ -296,7 +330,7 @@ export default function AdminLogin() {
                 onChange={(e) => setUsuario(e.target.value)}
                 required
                 autoComplete="username"
-                className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
+                className="w-full border border-gray-300 rounded px-4 py-3 mb-4 text-lg"
               />
 
               <div className="relative mb-4">
@@ -307,7 +341,7 @@ export default function AdminLogin() {
                   onChange={(e) => setSenha(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="w-full border border-gray-300 rounded px-3 py-2 pr-10"
+                  className="w-full border border-gray-300 rounded px-4 py-3 pr-12 text-lg"
                 />
                 <button
                   type="button"
@@ -331,7 +365,7 @@ export default function AdminLogin() {
 
               <button
                 type="submit"
-                className="w-full bg-green-900 hover:bg-green-800 text-white font-semibold py-2 rounded"
+                className="w-full bg-green-900 hover:bg-green-800 text-white font-semibold py-3 rounded text-lg"
               >
                 Entrar
               </button>
@@ -351,7 +385,7 @@ export default function AdminLogin() {
               </div>
             </form>
           </div>
-        </section>
+        </div>
       </main>
     </div>
   );

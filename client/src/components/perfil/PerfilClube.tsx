@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
-import { API, APP } from "../../config.js";
+import { API, APP, FLAGS } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import { 
@@ -228,7 +228,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
   const [data, setData] = useState<PayloadClube | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<AbaTopo>(canEdit ? "dashboard" : "perfil");
+  const [aba, setAba] = useState<AbaTopo>(canEdit ? "perfil" : "dashboard");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
@@ -991,24 +991,6 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
           </div>
 
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-green-900 mb-1">
-              FootEra Formadores
-            </h3>
-            <p className="text-sm text-green-900/80">
-              Gerencie vínculos de formação de atletas e documentos para
-              mecanismo de solidariedade
-            </p>
-            <div className="mt-3">
-              <Link
-                href="/formadores"
-                className="inline-block rounded-lg bg-green-600 text-white px-4 py-2 font-semibold"
-              >
-                Acessar Módulo Formadores
-              </Link>
-            </div>
-          </div>
-
-          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">
               Sobre o Clube
             </h3>
@@ -1043,6 +1025,34 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                 Nenhuma categoria de base cadastrada.
               </p>
             )}
+          </div>
+
+<div className="bg-white/70 rounded-xl p-4 shadow-sm">
+            <h3 className="font-semibold text-green-900 mb-1">
+              FootEra Formadores
+            </h3>
+            <p className="text-sm text-green-900/80">
+              Gerencie vínculos de formação de atletas e documentos para
+              mecanismo de solidariedade
+            </p>
+            <div className="mt-3">
+              {FLAGS.FORMADORES_ENABLED ? (
+                <Link
+                  href="/formadores"
+                  className="inline-block rounded-lg bg-green-600 text-white px-4 py-2 font-semibold"
+                >
+                  Acessar Módulo Formadores
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="inline-block rounded-lg bg-gray-300 text-gray-600 px-4 py-2 font-semibold cursor-not-allowed"
+                  onClick={() => alert("A página FootEra Formadores está em atualização no momento.")}
+                >
+                  Módulo Formadores em manuntenção
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">

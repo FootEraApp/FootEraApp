@@ -158,6 +158,15 @@ export async function listarMeusGrupos(req: AuthenticatedRequest, res: Response)
           take: 5,
           include: { usuario: { select: { id: true, nome: true, foto: true } } },
         },
+        mensagens: {
+          take: 1,
+          orderBy: { criadaEm: "desc" },
+          select: {
+            conteudo: true,
+            tipo: true,
+            criadaEm: true,
+          },
+        },
       },
       orderBy: { updatedAt: "desc" },
     });
@@ -169,6 +178,9 @@ export async function listarMeusGrupos(req: AuthenticatedRequest, res: Response)
       ownerId: g.ownerId,
       totalMembros: g._count.membros,
       membrosPreview: g.membros.map(m => m.usuario),
+      ultimaMensagem: g.mensagens[0]?.conteudo ?? null,
+      ultimaMensagemTipo: g.mensagens[0]?.tipo ?? null,
+      ultimaMensagemEm: g.mensagens[0]?.criadaEm ?? null,
     }));
 
     res.json(payload);
