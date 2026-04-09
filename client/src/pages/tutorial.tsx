@@ -8,9 +8,12 @@ import configuracoesAssinaturasVideo from "@/components/tutorial/configuracoes e
 import criarAgendarTreinoTurmaVideo from "@/components/tutorial/criar e agendar treino p turma.mp4";
 import criarEditarMeusExercicioVideo from "@/components/tutorial/criar e editar meus exercicio.mp4";
 import criarEditarTreinoVideo from "@/components/tutorial/criar e editar treino.mp4";
+import criarMetodologiaCursoVideo from "@/components/tutorial/criar metodologia curso.mp4";
+import criarMetodologiaTrilhaVideo from "@/components/tutorial/criar metodologia trilha.mp4";
 import explorarMensagensVideo from "@/components/tutorial/explorar e mensagens.mp4";
 import feedVideo from "@/components/tutorial/feed.mp4";
 import loginFooteraVideo from "@/components/tutorial/login footera.mp4";
+import paginaMetodologiaVideo from "@/components/tutorial/pagina metodologia.mp4";
 import paginaTreinoClubeRealizarTreinoTurma from "@/components/tutorial/pagina treino clube-realizar treino turma.mp4";
 import paginasGerenciarClubeEscolinhaVideo from "@/components/tutorial/paginas gerenciar clube-escolinha.mp4";
 import paginasGerenciarProfessorVideo from "@/components/tutorial/paginas gerenciar professor.mp4";
@@ -28,7 +31,7 @@ type TutorialItem = {
   id: string;
   titulo: string;
   duracao?: string;
-  categoria: "Introdução" | "Criar Treino" | "Gerenciar" | "Publicações" | "Dicas";
+  categoria: "Introdução" | "Criar Treino" | "Gerenciar" | "Publicações" | "Dicas" | "Metodologia";
   descricao?: string;
   source: VideoSource;
   passos?: string[];
@@ -92,6 +95,23 @@ const TUTORIAIS: TutorialItem[] = [
   },
 
   {
+    id: "criar-4",
+    titulo: "Criar metodologia de curso",
+    duracao: "3:55",
+    categoria: "Metodologia",
+    descricao: "Como cadastrar e criar sua propria metodologia de curso.",
+    source: { kind: "mp4", url: criarMetodologiaCursoVideo },
+  },
+  {
+    id: "criar-5",
+    titulo: "Criar metodologia de trilha",
+    duracao: "3:18",
+    categoria: "Metodologia",
+    descricao: "Como cadastrar e criar sua propria metodologia de trilha.",
+    source: { kind: "mp4", url: criarMetodologiaTrilhaVideo },
+  },
+
+  {
     id: "ger-1",
     titulo: "Páginas de gerenciar clube e escolinha",
     duracao: "3:30",
@@ -139,6 +159,15 @@ const TUTORIAIS: TutorialItem[] = [
     categoria: "Publicações",
     descricao: "Como navegar no explorar e usar mensagens.",
     source: { kind: "mp4", url: explorarMensagensVideo },
+  },
+
+  {
+    id: "pub-4",
+    titulo: "Página Metodologia",
+    duracao: "2:14",
+    categoria: "Publicações",
+    descricao: "Como navegar no learning e editar metodologias.",
+    source: { kind: "mp4", url: paginaMetodologiaVideo },
   },
 
   {
@@ -382,4 +411,3 @@ export default function TutorialPage() {
     </div>
   );
 }
-

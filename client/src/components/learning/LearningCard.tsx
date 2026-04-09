@@ -105,6 +105,12 @@ export default function LearningCard({
             </div>
           ) : null}
 
+          {item?.origemRegistro === "AVULSA" && item?.precoAssinaturaMensal != null ? (
+            <div className="mt-2 text-sm font-semibold text-orange-700">
+              Assinatura mensal: R$ {Number(item.precoAssinaturaMensal).toFixed(2)}
+            </div>
+          ) : null}
+
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
             <span className="px-2 py-1 rounded-full border bg-slate-50">
               {item?.estruturaCount ?? item?._count?.estruturas ?? 0}{" "}

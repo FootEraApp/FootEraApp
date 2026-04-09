@@ -201,6 +201,43 @@ export async function deleteMetodologia(id: string) {
   });
 }
 
+export async function createMetodologiaAvulsa(payload: any) {
+  return request<{ item: any }>("/api/metodologias/metodologias-avulsas", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createMetodologiaAvulsaCompleta(payload: any) {
+  return request<{ item: any }>("/api/metodologias/metodologias-avulsas/completa", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateMetodologiaAvulsa(id: string, payload: any) {
+  return request<{ item: any }>(`/api/metodologias/metodologias-avulsas/${id}`, {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getMetodologiaAvulsaById(id: string) {
+  return request<{ item: any }>(`/api/metodologias/metodologias-avulsas/${id}`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function deleteMetodologiaAvulsa(id: string) {
+  return request<{ ok: boolean }>(`/api/metodologias/metodologias-avulsas/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+
 export async function createMetodologiaEstruturas(
   metodologiaId: string,
   payload: LearningEstruturaInput | { estruturas: LearningEstruturaInput[] }

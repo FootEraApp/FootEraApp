@@ -13,7 +13,6 @@ import {
   Trophy,
 } from "lucide-react";
 import {
-  createMetodologia,
   createMetodologiaCompleta,
   updateMetodologia,
   getMetodologiaById,
@@ -24,6 +23,9 @@ import {
   deleteMetodologiaEstruturaItens,
   uploadMetodologiaFile,
   listMinhasMetodologiasCriadas,
+  updateMetodologiaAvulsa,
+  getMetodologiaAvulsaById,
+  createMetodologiaAvulsaCompleta,
   type LearningEstruturaInput,
   type LearningEstruturaItemInput,
   type LearningEstruturaTipo,
@@ -89,7 +91,7 @@ type LocalEstrutura = LearningEstruturaInput & {
   expanded: boolean;
   itens: LocalItem[];
 };
-
+type DestinoMetodologia = "LEARNING" | "AVULSA";
 type LearningDraft = {
   step: 1 | 2;
   tipoMetodologia: LearningMetodoTipo | null;
@@ -103,6 +105,8 @@ type LearningDraft = {
   capaUrl: string;
   capaPreviewUrl: string | null;
   estruturas: LocalEstrutura[];
+  destinoMetodologia: DestinoMetodologia;
+  precoAssinaturaMensal: string;
 };
 
 const LEARNING_DRAFT_KEY = "learning_create_draft_v1";
@@ -430,6 +434,9 @@ export default function LearningCreatePage() {
     itemLocalId: string;
   } | null>(null);
 
+  const [destinoMetodologia, setDestinoMetodologia] = useState<DestinoMetodologia>("LEARNING");
+  const [precoAssinaturaMensal, setPrecoAssinaturaMensal] = useState("");
+
   const itemTypeOptions = useMemo(
     () => (estruturaTipo === "TRILHA" ? ITEM_TYPES_TRILHA : ITEM_TYPES_MODULO),
     [estruturaTipo]
@@ -465,6 +472,8 @@ export default function LearningCreatePage() {
       setGeraBadge(!!draft.geraBadge);
       setCapaUrl(draft.capaUrl ?? "");
       setCapaPreviewUrl(draft.capaPreviewUrl ?? null);
+      setDestinoMetodologia(draft.destinoMetodologia ?? "LEARNING");
+      setPrecoAssinaturaMensal(draft.precoAssinaturaMensal ?? "");
       setEstruturas(Array.isArray(draft.estruturas) ? draft.estruturas : []);
     } catch {
     } finally {
@@ -489,6 +498,8 @@ export default function LearningCreatePage() {
       capaUrl,
       capaPreviewUrl,
       estruturas,
+      destinoMetodologia,
+      precoAssinaturaMensal,
     };
 
     try {
@@ -509,6 +520,8 @@ export default function LearningCreatePage() {
     capaUrl,
     capaPreviewUrl,
     estruturas,
+    destinoMetodologia,
+    precoAssinaturaMensal,
   ]);
 
   useEffect(() => {
@@ -560,7 +573,14 @@ export default function LearningCreatePage() {
       try {
         setLoadingExisting(true);
 
-        const res = await getMetodologiaById(editMetodologiaId);
+        const params = new URLSearchParams(window.location.search);
+        const origem = String(params.get("origem") || "").toLowerCase();
+
+        const res =
+          origem === "avulsa"
+            ? await getMetodologiaAvulsaById(editMetodologiaId)
+            : await getMetodologiaById(editMetodologiaId);
+
         const item = res?.item;
 
         if (!ativo) return;
@@ -579,6 +599,10 @@ export default function LearningCreatePage() {
         setCapaPreviewUrl(item.capaUrl || null);
         setTipoMetodologia(item.tipo);
         setEstruturaTipo(item.estruturaTipo);
+        setDestinoMetodologia(origem === "avulsa" ? "AVULSA" : "LEARNING");
+        setPrecoAssinaturaMensal(
+          item?.precoAssinaturaMensal != null ? String(item.precoAssinaturaMensal) : ""
+        );
         setStep(2);
 
         const estruturasMapped: LocalEstrutura[] = Array.isArray(item.estruturas)
@@ -1285,11 +1309,104 @@ export default function LearningCreatePage() {
   async function salvarTudo() {
     if (!validar() || !tipoMetodologia || !estruturaTipo) return;
 
+    if (destinoMetodologia === "AVULSA") {
+      const preco = Number(precoAssinaturaMensal);
+      if (!precoAssinaturaMensal || !Number.isFinite(preco) || preco <= 0) {
+        throw new Error("Informe um preço mensal válido para a metodologia avulsa.");
+      }
+    }
+
     try {
       setSaving(true);
 
+      const payloadBase = {
+        titulo: titulo.trim(),
+        descricao: descricao.trim() || null,
+        capaUrl: capaUrl.trim() || null,
+        publicoAlvo,
+        tipo: tipoMetodologia,
+        estruturaTipo,
+        area,
+        geraBadge,
+        geraCertificado,
+        ativo: true,
+        estruturas: estruturas.map((estrutura, i) => ({
+          id: estrutura.id || undefined,
+          titulo: estrutura.titulo.trim(),
+          descricao: estrutura.descricao?.trim() || null,
+          objetivo: estrutura.objetivo?.trim() || null,
+          ordem: i + 1,
+          duracaoSemanas:
+            estruturaTipo === "TRILHA" ? Number(estrutura.duracaoSemanas || 0) : null,
+          treinosPorSemana:
+            estruturaTipo === "TRILHA" ? Number(estrutura.treinosPorSemana || 0) : null,
+          quantidadeMinConclusao:
+            estruturaTipo === "TRILHA" ? Number(estrutura.quantidadeMinConclusao || 0) : null,
+          pontosPorItem: estruturaTipo === "TRILHA" ? 5 : null,
+          bonusConsistencia: estruturaTipo === "TRILHA" ? 10 : null,
+          bonusFinal: estruturaTipo === "TRILHA" ? 15 : null,
+          prazoInicio: estrutura.prazoInicio || null,
+          prazoFinal: estrutura.prazoFinal || null,
+          percentualPerdaAtraso:
+            estruturaTipo === "TRILHA" ? Number(estrutura.percentualPerdaAtraso || 0) : null,
+          permiteAtraso: !!estrutura.permiteAtraso,
+          modoExecucao: estruturaTipo === "TRILHA" ? estrutura.modoExecucao : null,
+          ativo: estrutura.ativo ?? true,
+          itens: estrutura.itens.map((item, j) => ({
+            id: item.id || undefined,
+            tipo: item.tipo,
+            titulo: item.titulo.trim(),
+            descricao: item.descricao?.trim() || null,
+            ordem: j + 1,
+            videoUrl: item.videoUrl?.trim() || null,
+            thumbUrl: item.thumbUrl?.trim() || null,
+            arquivoUrl: item.arquivoUrl?.trim() || null,
+            materialUrl: item.materialUrl?.trim() || null,
+            treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
+            pontos: calcularPontuacaoItem(item),
+            duracaoMin:
+              item.tipo === "VIDEO" || item.tipo === "AULA"
+                ? (item.duracaoMin ? Number(item.duracaoMin) : null)
+                : null,
+            obrigatorio: item.obrigatorio ?? true,
+            publicado: item.publicado ?? true,
+          })),
+        })),
+      };
+
       if (!editMetodologiaId) {
-        await createMetodologiaCompleta({
+        if (destinoMetodologia === "LEARNING") {
+          await createMetodologiaCompleta(payloadBase);
+        } else {
+          await createMetodologiaAvulsaCompleta({
+            ...payloadBase,
+            precoAssinaturaMensal: Number(precoAssinaturaMensal),
+          });
+        }
+
+        localStorage.removeItem(LEARNING_DRAFT_KEY);
+        alert("✅ Sua metodologia foi criada com sucesso!");
+        navigate("/learning");
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const origemAtual = String(params.get("origem") || "").toLowerCase();
+
+      if (origemAtual === "avulsa" && destinoMetodologia === "AVULSA") {
+        await updateMetodologiaAvulsa(editMetodologiaId, {
+          ...payloadBase,
+          precoAssinaturaMensal: Number(precoAssinaturaMensal),
+        });
+
+        localStorage.removeItem(LEARNING_DRAFT_KEY);
+        alert("✅ Sua metodologia foi editada com sucesso!");
+        navigate("/learning");
+        return;
+      }
+
+      if (origemAtual !== "avulsa" && destinoMetodologia === "LEARNING") {
+        await updateMetodologia(editMetodologiaId, {
           titulo: titulo.trim(),
           descricao: descricao.trim() || null,
           capaUrl: capaUrl.trim() || null,
@@ -1300,52 +1417,58 @@ export default function LearningCreatePage() {
           geraBadge,
           geraCertificado,
           ativo: true,
-          estruturas: estruturas.map((estrutura, i) => ({
-            titulo: estrutura.titulo.trim(),
-            descricao: estrutura.descricao?.trim() || null,
-            objetivo: estrutura.objetivo?.trim() || null,
-            ordem: i + 1,
-            duracaoSemanas:
-              estruturaTipo === "TRILHA" ? Number(estrutura.duracaoSemanas || 0) : null,
-            treinosPorSemana:
-              estruturaTipo === "TRILHA" ? Number(estrutura.treinosPorSemana || 0) : null,
-            quantidadeMinConclusao:
-              estruturaTipo === "TRILHA" ? Number(estrutura.quantidadeMinConclusao || 0) : null,
-            pontosPorItem: estruturaTipo === "TRILHA" ? 5 : null,
-            bonusConsistencia: estruturaTipo === "TRILHA" ? 10 : null,
-            bonusFinal: estruturaTipo === "TRILHA" ? 15 : null,
-            prazoInicio: estrutura.prazoInicio || null,
-            prazoFinal: estrutura.prazoFinal || null,
-            percentualPerdaAtraso:
-              estruturaTipo === "TRILHA" ? Number(estrutura.percentualPerdaAtraso || 0) : null,
-            permiteAtraso: !!estrutura.permiteAtraso,
-            modoExecucao: estruturaTipo === "TRILHA" ? estrutura.modoExecucao : null,
-            ativo: estrutura.ativo ?? true,
-            itens: estrutura.itens.map((item, j) => ({
-              tipo: item.tipo,
-              titulo: item.titulo.trim(),
-              descricao: item.descricao?.trim() || null,
-              ordem: j + 1,
-              videoUrl: item.videoUrl?.trim() || null,
-              thumbUrl: item.thumbUrl?.trim() || null,
-              arquivoUrl: item.arquivoUrl?.trim() || null,
-              materialUrl: item.materialUrl?.trim() || null,
-              treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
-              pontos:
-                item.tipo === "TREINO"
-                  ? null
-                  : calcularPontuacaoItem(item),
-              duracaoMin:
-                item.tipo === "VIDEO" || item.tipo === "AULA"
-                  ? (item.duracaoMin ? Number(item.duracaoMin) : null)
-                  : null,
-              obrigatorio: item.obrigatorio ?? true,
-              publicado: item.publicado ?? true,
-            })),
-          })),
         });
+      }
+
+      if (origemAtual === "avulsa" && destinoMetodologia === "LEARNING") {
+        const migrada = await fetch(
+          `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${editMetodologiaId}/migrar-para-learning`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify(payloadBase),
+          }
+        );
+
+        const js = await migrada.json().catch(() => ({}));
+
+        if (!migrada.ok) {
+          throw new Error(js?.message || "Falha ao migrar metodologia avulsa para Learning.");
+        }
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
+        alert("✅ Sua metodologia foi editada com sucesso!");
+        navigate("/learning");
+        return;
+      }
+
+      if (origemAtual !== "avulsa" && destinoMetodologia === "AVULSA") {
+        const migrada = await fetch(
+          `${API.BASE_URL}/api/metodologias/${editMetodologiaId}/migrar-para-avulsa`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({
+              ...payloadBase,
+              precoAssinaturaMensal: Number(precoAssinaturaMensal),
+            }),
+          }
+        );
+
+        const js = await migrada.json().catch(() => ({}));
+
+        if (!migrada.ok) {
+          throw new Error(js?.message || "Falha ao migrar metodologia Learning para avulsa.");
+        }
+
+        localStorage.removeItem(LEARNING_DRAFT_KEY);
+        alert("✅ Sua metodologia foi editada com sucesso!");
         navigate("/learning");
         return;
       }
@@ -1580,6 +1703,37 @@ export default function LearningCreatePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Destino da metodologia*
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setDestinoMetodologia("LEARNING")}
+                      className={`h-12 rounded-xl border font-semibold ${
+                        destinoMetodologia === "LEARNING"
+                          ? "border-[#216c43] bg-[#216c43] text-white"
+                          : "border-slate-300 bg-white text-slate-700"
+                      }`}
+                    >
+                      Learning
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDestinoMetodologia("AVULSA")}
+                      className={`h-12 rounded-xl border font-semibold ${
+                        destinoMetodologia === "AVULSA"
+                          ? "border-[#216c43] bg-[#216c43] text-white"
+                          : "border-slate-300 bg-white text-slate-700"
+                      }`}
+                    >
+                      Metodologia avulsa
+                    </button>
+                  </div>
+                </div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">
                   {requiredLabel("Nome da metodologia", true)}
                 </label>
@@ -1636,6 +1790,23 @@ export default function LearningCreatePage() {
                   ))}
                 </select>
               </div>
+
+              {destinoMetodologia === "AVULSA" ? (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Assinatura mensal preço*
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precoAssinaturaMensal}
+                    onChange={(e) => setPrecoAssinaturaMensal(e.target.value)}
+                    placeholder="Ex.: 29.90"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                  />
+                </div>
+              ) : null}
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -1782,7 +1953,7 @@ export default function LearningCreatePage() {
                 <div className="p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-semibold text-slate-700 mb-1">
+                      <label className="block text-sm font-semibold text-slate-700">
                         Nome da {estruturaTipo === "TRILHA" ? "trilha" : "módulo"} *
                       </label>
                       <input

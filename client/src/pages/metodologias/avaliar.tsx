@@ -60,19 +60,15 @@ export default function AvaliarMetodologia() {
   }, [location]);
 
   const metodologiaId = useMemo(() => params.get("metodologiaId") || "", [params]);
-
-  // opcional: se você tiver uma tabela tipo "MetodologiaUsuario" (assinatura/progresso),
-  // pode passar esse id também na URL e salvar junto no backend.
-  const metodologiaUsuarioId = useMemo(() => {
-    const p = new URLSearchParams(window.location.search);
-    return p.get("metodologiaUsuarioId") || "";
-  }, []);
+  const origem = useMemo(
+    () => String(params.get("origem") || "").toLowerCase(),
+    [params]
+  );
+  const isAvulsa = origem === "avulsa";
 
   const [titulo, setTitulo] = useState<string>("Metodologia");
   const [nota, setNota] = useState<number>(0);
   const [comentario, setComentario] = useState<string>("");
-
-  // “ocorreu tudo certo” vs “teve problema”
   const [ocorreuTudoCerto, setOcorreuTudoCerto] = useState<boolean>(true);
   const [teveProblema, setTeveProblema] = useState<boolean>(false);
   const [problemaTexto, setProblemaTexto] = useState<string>("");
@@ -92,10 +88,14 @@ export default function AvaliarMetodologia() {
         if (!token) return;
 
         // ✅ prefira o /detalhe pq você já tem ele no backend
-        const candidates = [
-            `${API.BASE_URL}/api/metodologias/${metodologiaId}/detalhe`,
-            `${API.BASE_URL}/api/metodologias/${metodologiaId}`,
-        ];
+        const candidates = isAvulsa
+          ? [
+              `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaId}`,
+            ]
+          : [
+              `${API.BASE_URL}/api/metodologias/${metodologiaId}/detalhe`,
+              `${API.BASE_URL}/api/metodologias/${metodologiaId}`,
+            ];
 
         for (const url of candidates) {
             const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -138,6 +138,7 @@ export default function AvaliarMetodologia() {
 
       const payload = {
         metodologiaId,
+        origem: isAvulsa ? "AVULSA" : "LEARNING",
         nota,
         comentario: comentario.trim() || null,
       };

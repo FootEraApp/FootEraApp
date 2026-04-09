@@ -53,8 +53,7 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
 function assertPlanoPermitido(tipoUsuario: string, planoId: string) {
   const planoNorm = normalizePlanoId(planoId);
 
-  // ✅ NOVO: metodologia avulsa é permitida (não entra na lista fixa)
-  if (isMetodologiaAvulsa(planoNorm)) return;
+  if (isMetodologiaAvulsa(planoNorm) || isMetodologiaLearning(planoNorm)) return;
 
   const allowed = allowedPlanIdsByTipo(tipoUsuario);
   if (!allowed.includes(planoNorm)) {
@@ -385,13 +384,32 @@ const PLANS = [
 function normalizePlanoId(planoId: string) {
   const raw = String(planoId || "").trim();
 
-  // preserva UUID e padroniza o prefixo
+  if (raw.toUpperCase().startsWith("METODOLOGIA_AVULSA:")) {
+    const id = raw.split(":").slice(1).join(":").trim();
+    return `METODOLOGIA_AVULSA:${id}`;
+  }
+
   if (raw.toUpperCase().startsWith("METODOLOGIA:")) {
     const id = raw.split(":").slice(1).join(":").trim();
     return `METODOLOGIA:${id}`;
   }
 
   return raw.toUpperCase();
+}
+
+function isMetodologiaAvulsa(planoId: string) {
+  return String(planoId || "").toUpperCase().startsWith("METODOLOGIA_AVULSA:");
+}
+
+function isMetodologiaLearning(planoId: string) {
+  return String(planoId || "").toUpperCase().startsWith("METODOLOGIA:");
+}
+
+function extractMetodologiaId(planoId: string) {
+  return String(planoId || "")
+    .replace(/^METODOLOGIA_AVULSA:/i, "")
+    .replace(/^METODOLOGIA:/i, "")
+    .trim();
 }
 
 function findPlan(planoId: string) {
@@ -402,33 +420,17 @@ function findPlan(planoId: string) {
 async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<number> {
   const id = normalizePlanoId(planoId);
 
-  // Metodologia Avulsa
   if (isMetodologiaAvulsa(id)) {
-    if (periodicidade !== "Anual") {
-      throw new Error("Metodologia avulsa é apenas ANUAL.");
-    }
     const mid = extractMetodologiaId(id);
-    const { valorFinal } = await computeMetodologiaAvulsaPricing(mid, false);
+    const { valorFinal } = await computeMetodologiaAvulsaPricing(mid);
     return Number(valorFinal);
   }
 
   const p = findPlan(id);
   if (!p) throw new Error("Plano inválido");
 
-  if (isMetodologiaAvulsa(id) && periodicidade !== "Anual") {
-    throw new Error("Metodologias avulsas são apenas ANUAL.");
-  }
-
   if (periodicidade === "Mensal") return Number(p.monthly || 0);
   return Number(p.annual || 0);
-}
-
-function isMetodologiaAvulsa(planoId: string) {
-  return String(planoId || "").startsWith("METODOLOGIA:");
-}
-
-function extractMetodologiaId(planoId: string) {
-  return String(planoId || "").replace(/^METODOLOGIA:/, "").trim();
 }
 
 function metodologiaLimitFromPlano(planoId: string | null | undefined): number {
@@ -457,73 +459,55 @@ function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
 }
 
-async function computeMetodologiaAvulsaPricing(metodologiaId: string, incluirPontos = false) {
-  const m = await prisma.metodologia.findUnique({
+async function computeMetodologiaAvulsaPricing(metodologiaId: string) {
+  const ma = await prisma.metodologiaAvulsa.findUnique({
     where: { id: metodologiaId },
-    select: {
-      id: true,
-      titulo: true,
-      nivel: true,            // ✅ vamos devolver pro front se quiser
-      totalSemanas: true,
-      publicoAlvo: true, // ✅ vamos devolver pro front se quiser
-      itens: {
-        select: {
-          tipo: true,
-          pontos: true,
-          semana: true,
-          // ✅ se existir no seu schema:
-          // publicado: true,
+    include: {
+      estruturas: {
+        include: {
+          itens: true,
         },
       },
-      _count: { select: { itens: true } },
     },
   });
 
-  if (!m) {
-    const err: any = new Error("Metodologia não encontrada");
+  if (!ma || !ma.ativo) {
+    const err: any = new Error("Metodologia avulsa não encontrada.");
     err.statusCode = 404;
     throw err;
   }
 
-  const totalSemanasDb = Number(m.totalSemanas || 0);
-  // ✅ calcula semana real pelo maior "semana" dos itens (fallback)
-  const maxSemana = m.itens.reduce((acc, it) => Math.max(acc, Number(it.semana || 0)), 0);
-  const totalSemanas = totalSemanasDb > 0 ? totalSemanasDb : maxSemana;
-  // ✅ se você tiver "publicado", você filtra aqui.
-  // Se NÃO tiver, deixa como está.
-  const itensValidos = m.itens
-    // .filter((it: any) => it.publicado !== false) // descomente se existir publicado
-    ;
-  const itensCount = Number(m._count?.itens || 0);
-  // ✅ conta por tipo
-  const videoCount = itensValidos.filter((i) => i.tipo === "VIDEO").length;
-  const treinoCount = itensValidos.filter((i) => i.tipo === "TREINO").length;
-  const somaPontos = itensValidos.reduce((acc, i) => acc + (i.pontos ?? 0), 0);
+  const itens = ma.estruturas.flatMap((e) => e.itens || []);
 
-  let valor =
-    METODOLOGIA_BASE +
-    METODOLOGIA_POR_SEMANA * totalSemanas +
-    METODOLOGIA_POR_ITEM * itensCount +
-    METODOLOGIA_POR_VIDEO * videoCount +
-    METODOLOGIA_POR_TREINO * treinoCount +
-    METODOLOGIA_POR_PONTO * somaPontos;
+  const totalSemanas = ma.estruturas.reduce((acc, e) => {
+    return Math.max(acc, Number(e.duracaoSemanas || 0));
+  }, 0);
 
-  valor = clamp(valor, METODOLOGIA_MIN, METODOLOGIA_MAX);
-  valor = roundToDot90Ceil(valor);
-  valor = clamp(valor, METODOLOGIA_MIN, METODOLOGIA_MAX);
+  const videoCount = itens.filter((i) => i.tipo === "VIDEO" || i.tipo === "AULA").length;
+  const treinoCount = itens.filter((i) => i.tipo === "TREINO").length;
+  const itensCount = itens.length;
+  const somaPontos = itens.reduce((acc, i) => acc + Number(i.pontos || 0), 0);
 
   return {
-    metodologia: { id: m.id, titulo: m.titulo },
+    metodologiaId: ma.id,
+    titulo: ma.titulo,
+    descricao: ma.descricao,
+    valorFinal: Number(ma.precoAssinaturaMensal),
+    publicoAlvo: ma.publicoAlvo,
+    nivel: null,
+    totalSemanas,
+    videoCount,
+    treinoCount,
+    itensCount,
+    somaPontos,
     breakdown: {
-      base: METODOLOGIA_BASE,
+      precoAssinaturaMensal: Number(ma.precoAssinaturaMensal),
       totalSemanas,
-      itensCount,
       videoCount,
       treinoCount,
+      itensCount,
       somaPontos,
-      incluirPontos,
     },
-    valorFinal: Number(valor.toFixed(2)),
   };
 }
 
@@ -697,19 +681,25 @@ function isAssinaturaAtiva(a: any) {
 }
 
 function pickPrincipalAssinatura(assinaturas: any[]) {
- const principalAtiva = assinaturas.find(
+  const principalAtiva = assinaturas.find(
     (a) =>
       !isMetodologiaAvulsa(a.plano) &&
-      !isLegacyPlano(a.plano) &&          // ✅ AQUI
+      !isMetodologiaLearning(a.plano) &&
+      !isLegacyPlano(a.plano) &&
       isAssinaturaAtiva(a)
   );
 
   return (
     principalAtiva ??
-    assinaturas.find((a) => !isMetodologiaAvulsa(a.plano) && !isLegacyPlano(a.plano)) ?? // ✅ AQUI
+    assinaturas.find(
+      (a) =>
+        !isMetodologiaAvulsa(a.plano) &&
+        !isMetodologiaLearning(a.plano) &&
+        !isLegacyPlano(a.plano)
+    ) ??
     null
   );
-};
+}
 
 export async function getPlans(req: Request, res: Response) {
   try {
@@ -753,12 +743,13 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       where: {
         usuarioId,
         status: "ATIVA",
+        origem: "LEARNING",
         iniciouEm: { gte: inicioMes },
       },
     });
 
     const trialJaUsado = (assinaturas as any[]).some((a) => {
-      const principal = !isMetodologiaAvulsa(a.plano);
+      const principal = !isMetodologiaAvulsa(a.plano) && !isMetodologiaLearning(a.plano);
       return principal && Boolean(a.trialStartsAt);
     });
 
@@ -799,22 +790,63 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     const metodologiasAtivasRaw = await prisma.metodologiaAssinante.findMany({
       where: { usuarioId, status: "ATIVA" },
       include: {
-        metodologia: { select: { id: true, titulo: true, capaUrl: true, descricao: true, totalSemanas: true } },
+        metodologia: {
+          select: {
+            id: true,
+            titulo: true,
+            capaUrl: true,
+            descricao: true,
+            totalSemanas: true,
+          },
+        },
+        metodologiaAvulsa: {
+          select: {
+            id: true,
+            titulo: true,
+            capaUrl: true,
+            descricao: true,
+            precoAssinaturaMensal: true,
+          },
+        },
       },
       orderBy: { iniciouEm: "desc" },
     });
 
-    // (opcional) já devolver “achatado” pro front
-    const metodologiasAtivas = metodologiasAtivasRaw.map((ma) => ({
-      id: ma.metodologia.id,
-      titulo: ma.metodologia.titulo,
-      descricao: ma.metodologia.descricao,
-      capaUrl: ma.metodologia.capaUrl,
-      totalSemanas: ma.metodologia.totalSemanas,
-      status: ma.status,
-      iniciouEm: ma.iniciouEm,
-      planoId: `METODOLOGIA:${ma.metodologia.id}`,
-    }));
+    const metodologiasAtivas = metodologiasAtivasRaw
+      .map((ma) => {
+        if (ma.origem === "AVULSA" && ma.metodologiaAvulsa) {
+          return {
+            id: ma.metodologiaAvulsa.id,
+            titulo: ma.metodologiaAvulsa.titulo,
+            descricao: ma.metodologiaAvulsa.descricao,
+            capaUrl: ma.metodologiaAvulsa.capaUrl,
+            totalSemanas: null,
+            status: ma.status,
+            iniciouEm: ma.iniciouEm,
+            origemRegistro: "AVULSA" as const,
+            precoAssinaturaMensal: Number(ma.metodologiaAvulsa.precoAssinaturaMensal ?? 0),
+            planoId: `METODOLOGIA_AVULSA:${ma.metodologiaAvulsa.id}`,
+          };
+        }
+
+        if (ma.metodologia) {
+          return {
+            id: ma.metodologia.id,
+            titulo: ma.metodologia.titulo,
+            descricao: ma.metodologia.descricao,
+            capaUrl: ma.metodologia.capaUrl,
+            totalSemanas: ma.metodologia.totalSemanas,
+            status: ma.status,
+            iniciouEm: ma.iniciouEm,
+            origemRegistro: "LEARNING" as const,
+            precoAssinaturaMensal: null,
+            planoId: `METODOLOGIA:${ma.metodologia.id}`,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean);
 
     const billingState = {
       status,
@@ -884,10 +916,6 @@ export async function applyCoupon(req: Request, res: Response) {
 
       if (!["Mensal", "Anual"].includes(it.periodicidade as any)) {
         return res.status(400).json({ message: `Periodicidade inválida: ${it.planoId}` });
-      }
-
-      if (isMetodologiaAvulsa(it.planoId) && it.periodicidade !== "Anual") {
-        return res.status(400).json({ message: `Metodologia ${it.planoId} é apenas ANUAL.` });
       }
 
       baseTotal += await priceFor(it.planoId, it.periodicidade);
@@ -1152,7 +1180,10 @@ function validateMetodoAndFields(metodo: MetodoPagamento, pagador?: Pagador, car
   }
 }
 
-async function approvePaymentAndProvision(pagamentoId: string, items: Array<{ planoId: string; periodicidade: Periodicidade }>) {
+async function approvePaymentAndProvision(
+  pagamentoId: string,
+  items: Array<{ planoId: string; periodicidade: Periodicidade }>
+) {
   const now = new Date();
 
   return prisma.$transaction(async (tx) => {
@@ -1165,12 +1196,62 @@ async function approvePaymentAndProvision(pagamentoId: string, items: Array<{ pl
       const pid = normalizePlanoId(it.planoId);
 
       if (isMetodologiaAvulsa(pid)) {
+        const metodologiaAvulsaId = extractMetodologiaId(pid);
+
+        await (tx as any).metodologiaAssinante.upsert({
+          where: {
+            metodologiaAvulsaId_usuarioId: {
+              metodologiaAvulsaId,
+              usuarioId: pg.usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVA",
+            cancelouEm: null,
+            origem: "AVULSA",
+            metodologiaId: null,
+            metodologiaAvulsaId,
+            iniciouEm: now,
+          },
+          create: {
+            usuarioId: pg.usuarioId,
+            metodologiaId: null,
+            metodologiaAvulsaId,
+            origem: "AVULSA",
+            status: "ATIVA",
+            iniciouEm: now,
+          },
+        });
+
+        continue;
+      }
+
+      if (isMetodologiaLearning(pid)) {
         const metodologiaId = extractMetodologiaId(pid);
 
         await (tx as any).metodologiaAssinante.upsert({
-          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId: pg.usuarioId } },
-          update: { status: "ATIVA", cancelouEm: null },
-          create: { metodologiaId, usuarioId: pg.usuarioId, status: "ATIVA" },
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId,
+              usuarioId: pg.usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVA",
+            cancelouEm: null,
+            origem: "LEARNING",
+            metodologiaAvulsaId: null,
+            metodologiaId,
+            iniciouEm: now,
+          },
+          create: {
+            usuarioId: pg.usuarioId,
+            metodologiaId,
+            metodologiaAvulsaId: null,
+            origem: "LEARNING",
+            status: "ATIVA",
+            iniciouEm: now,
+          },
         });
 
         continue;
@@ -1209,11 +1290,8 @@ export async function startCheckout(req: Request, res: Response) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    // ✅ se for metodologia avulsa, NÃO usa findPlan()
     if (isMetodologiaAvulsa(planoNorm)) {
-      if (periodicidade !== "Anual") {
-        return res.status(400).json({ message: "Metodologias são apenas ANUAL." });
-      }
+      // avulsa usa o valor salvo em precoAssinaturaMensal
     } else {
       const plan = findPlan(planoNorm);
       if (!plan) return res.status(400).json({ message: "Plano inválido" });
@@ -1273,14 +1351,32 @@ export async function startCheckout(req: Request, res: Response) {
       const pid = normalizePlanoId(planoId);
 
       if (isMetodologiaAvulsa(pid)) {
-        const metodologiaId = extractMetodologiaId(pid);
+        const metodologiaAvulsaId = extractMetodologiaId(pid);
+
         await prisma.metodologiaAssinante.upsert({
-          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId } },
-          update: { status: "ATIVA", cancelouEm: null },
-          create: { metodologiaId, usuarioId, status: "ATIVA" },
+          where: {
+            metodologiaAvulsaId_usuarioId: {
+              metodologiaAvulsaId,
+              usuarioId: pagamento.usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVA",
+            cancelouEm: null,
+            origem: "AVULSA",
+            metodologiaId: null,
+            metodologiaAvulsaId,
+          },
+          create: {
+            usuarioId: pagamento.usuarioId,
+            metodologiaId: null,
+            metodologiaAvulsaId,
+            origem: "AVULSA",
+            status: "ATIVA",
+          },
         });
       } else {
-        await upsertSubscription(usuarioId, pid, periodicidade);
+        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
       }
 
       if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
@@ -1335,8 +1431,8 @@ export async function startCheckout(req: Request, res: Response) {
     let planTitle = "Plano";
     if (isMetodologiaAvulsa(normalizePlanoId(planoId))) {
       const mid = extractMetodologiaId(normalizePlanoId(planoId));
-      const pr = await computeMetodologiaAvulsaPricing(mid, false);
-      planTitle = `Metodologia Avulsa: ${pr.metodologia.titulo}`;
+      const pr = await computeMetodologiaAvulsaPricing(mid);
+      planTitle = `Metodologia Avulsa: ${pr.titulo}`;
     } else {
       const plan = findPlan(planoId);
       if (!plan) return res.status(400).json({ message: "Plano inválido" });
@@ -1489,10 +1585,6 @@ export async function startCheckoutBundle(req: Request, res: Response) {
 
       if (!["Mensal", "Anual"].includes(it.periodicidade as any)) {
         return res.status(400).json({ message: `Periodicidade inválida: ${it.planoId}` });
-      }
-
-      if (isMetodologiaAvulsa(it.planoId) && it.periodicidade !== "Anual") {
-        return res.status(400).json({ message: `Metodologia ${it.planoId} é apenas ANUAL.` });
       }
 
       totalBase += await priceFor(it.planoId, it.periodicidade);
@@ -1931,46 +2023,47 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
     const usuarioId = getUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const metodologias = await prisma.metodologia.findMany({
+    const metodologias = await prisma.metodologiaAvulsa.findMany({
       where: { ativo: true },
       orderBy: { criadoEm: "desc" },
-      select: {
-        id: true,
-        titulo: true,
-        descricao: true,
-        capaUrl: true,
-        nivel: true,              // ✅ pega nível
-        publicoAlvo: true,      // ✅ pega público alvo
-        totalSemanas: true,       // pode vir null/0, vamos corrigir no pricing
-        _count: { select: { itens: true, assinantes: true } }, // ✅ o front quer assinantes tb
+      include: {
+        estruturas: {
+          include: {
+            itens: true,
+          },
+        },
       },
     });
 
-    const items = await Promise.all(
-      metodologias.map(async (m) => {
-        // aqui já calcula semanas, vídeos, treinos e preço
-        const pr = await computeMetodologiaAvulsaPricing(m.id, false);
+    const items = metodologias.map((m) => {
+      const itens = m.estruturas.flatMap((e) => e.itens || []);
+      const videoCount = itens.filter((i) => i.tipo === "VIDEO" || i.tipo === "AULA").length;
+      const treinoCount = itens.filter((i) => i.tipo === "TREINO").length;
+      const somaPontos = itens.reduce((acc, i) => acc + Number(i.pontos || 0), 0);
+      const totalSemanas = m.estruturas.reduce(
+        (acc, e) => Math.max(acc, Number(e.duracaoSemanas || 0)),
+        0
+      );
 
-        return {
-          id: m.id,
-          titulo: m.titulo,
-          descricao: m.descricao,
-          capaUrl: m.capaUrl,
-          // ✅ front espera isso:
-          nivel: m.nivel ?? null,
-          publicoAlvo: m.publicoAlvo ?? null,
-          totalSemanas: pr.breakdown.totalSemanas || m.totalSemanas || 0,
-          videoCount: pr.breakdown.videoCount,
-          treinoCount: pr.breakdown.treinoCount,
-          precoAnual: pr.valorFinal, // ✅ nome que o front espera
-          pontosTotal: pr.breakdown.somaPontos,
-          planoId: `METODOLOGIA:${m.id}`,
-          _count: m._count,          // ✅ itens e assinantes
-          // se quiser debugar no front:
-          breakdown: pr.breakdown,
-        };
-      })
-    );
+      return {
+        id: m.id,
+        titulo: m.titulo,
+        descricao: m.descricao,
+        capaUrl: m.capaUrl,
+        nivel: null,
+        publicoAlvo: m.publicoAlvo ?? null,
+        totalSemanas,
+        videoCount,
+        treinoCount,
+        precoAssinaturaMensal: Number(m.precoAssinaturaMensal),
+        pontosTotal: somaPontos,
+        planoId: `METODOLOGIA_AVULSA:${m.id}`,
+        _count: {
+          itens: itens.length,
+          assinantes: 0,
+        },
+      };
+    });
 
     return res.json({ items });
   } catch (err) {
@@ -2034,10 +2127,6 @@ export async function redeemGift(req: Request, res: Response) {
       return res.status(400).json({ message: "Presente não válido para este plano" });
     if (cupom.periodicidade && cupom.periodicidade !== periodicidade)
       return res.status(400).json({ message: "Presente não válido para esta periodicidade" });
-
-    if (isMetodologiaAvulsa(planoNorm) && periodicidade !== "Anual") {
-      return res.status(400).json({ message: "Metodologias são apenas ANUAL." });
-    }
 
     const pagamento = await prisma.pagamento.create({
       data: {
