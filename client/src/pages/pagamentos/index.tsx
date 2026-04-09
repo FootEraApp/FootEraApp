@@ -7,10 +7,7 @@ import {
   Landmark,
   QrCode,
   XCircle,
-  CheckCircle2,
   Layers,
-  BookOpen,
-  Sparkles,
   Receipt,
 } from "lucide-react";
 import { API } from "../../config.js";
@@ -77,14 +74,15 @@ type MetodologiaAvulsa = {
   id: string;
   titulo: string;
   descricao: string | null;
-  nivel: "Base" | "Avancado" | "Performance" | string;
+  nivel: string | null;
   totalSemanas: number | null;
   _count: { itens: number; assinantes: number };
   videoCount: number;
   treinoCount: number;
-  precoAnual: number;
+  precoAssinaturaMensal: number;
   pontosTotal?: number | null;
   publicoAlvo?: "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string | null;
+  planoId: string;
 };
 
 function PagamentoModal({
@@ -571,7 +569,7 @@ type CartItem = {
   periodicidade: Periodicidade;
   label: string;
   price: number;
-  categoria: "PRO" | "LEARNING" | "PLUS" | "METODOLOGIA";
+  categoria: "PRO" | "LEARNING" | "PLUS" | "METODOLOGIA" | "METODOLOGIA_AVULSA";
 };
 
 function uniqueCart(items: CartItem[]) {
@@ -782,10 +780,20 @@ export default function PagamentosPage() {
     // ✅ metodologias avulsas (mantém como está por enquanto)
     Object.entries(pickMetods).forEach(([methId, checked]) => {
       if (!checked) return;
+
       const meth = metodologiasAvulsas.find((x) => x.id === methId);
-      const price = meth?.precoAnual ?? 0;
-      const label = `Metodologia: ${meth?.titulo ?? methId}`;
-      items.push({ planoId: methId, periodicidade: "Anual", label, price, categoria: "METODOLOGIA" });
+      if (!meth) return;
+
+      const price = Number(meth.precoAssinaturaMensal ?? 0);
+      const label = `Metodologia Avulsa: ${meth.titulo}`;
+
+      items.push({
+        planoId: meth.planoId || `METODOLOGIA_AVULSA:${meth.id}`,
+        periodicidade: "Mensal",
+        label,
+        price,
+        categoria: "METODOLOGIA_AVULSA",
+      });
     });
 
     return uniqueCart(items);
@@ -1740,7 +1748,7 @@ export default function PagamentosPage() {
         </div>
 
         <p className="text-sm text-gray-600 mb-3">
-          Pague <b>por metodologia</b>. Você escolhe uma ou mais e paga um valor anual por cada uma.
+          Pague <b>por metodologia</b>. Você escolhe uma ou mais e paga um valor mensal por cada uma.
         </p>
 
         <div className="grid gap-2 md:grid-cols-4 mb-3">
@@ -1788,7 +1796,7 @@ export default function PagamentosPage() {
 
         <div className="grid md:grid-cols-2 gap-3">
           {metodologiasFiltradas.map((m) => {
-            const preco = Number(m.precoAnual ?? 0);
+            const preco = Number(m.precoAssinaturaMensal ?? 0);
 
             return (
               <label key={m.id} className="rounded-lg border p-3 flex gap-3 cursor-pointer hover:bg-gray-50">
@@ -1825,7 +1833,7 @@ export default function PagamentosPage() {
                   </div>
 
                   <div className="text-sm text-gray-800 mt-2">
-                    <b>Anual:</b> {brl(preco)}
+                    <b>Mensal:</b> {brl(m.precoAssinaturaMensal)}
                   </div>
 
                   <div className="text-xs text-gray-500 mt-1">

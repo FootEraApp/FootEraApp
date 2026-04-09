@@ -8,7 +8,7 @@
       "@/*": ["./*"],
       "server": ["./index.ts"],
       "server/*": ["./*"],
-      "@shared/*": ["shared/*"]
+      "@shared/*": ["./shared/*"]
     },
     "typeRoots": ["../node_modules/@types", "./node_modules/@types"],
     "outDir": "dist",

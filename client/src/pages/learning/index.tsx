@@ -8,6 +8,7 @@ import {
   listMinhasMetodologiasCriadas,
   type LearningPermissaoCriacao,
   deleteMetodologia,
+  deleteMetodologiaAvulsa,
 } from "../../services/metodologias.js";
 import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningCard from "../../components/learning/LearningCard.js";
@@ -80,6 +81,10 @@ export default function LearningPage() {
     "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
   >("TODOS");
 
+  const [filtroOrigem, setFiltroOrigem] = useState<
+    "TODOS" | "LEARNING" | "AVULSA"
+  >("TODOS");
+
   const [busca, setBusca] = useState("");
   const [, navigate] = useLocation();
   const [permissaoCriacao, setPermissaoCriacao] = useState<{
@@ -108,14 +113,22 @@ export default function LearningPage() {
   const isAtleta = tipoUsuario === "atleta";
   const podeCriarMetodologia = !isAtleta && !!permissaoCriacao?.podeCriar;
 
-  async function handleDeleteMetodologia(id: string, titulo?: string) {
+  async function handleDeleteMetodologia(
+    id: string,
+    titulo?: string,
+    origemRegistro?: "LEARNING" | "AVULSA"
+  ) {
     const ok = window.confirm(
       `Tem certeza que deseja apagar a metodologia "${titulo || "sem título"}"?`
     );
     if (!ok) return;
 
     try {
-      await deleteMetodologia(id);
+      if (origemRegistro === "AVULSA") {
+        await deleteMetodologiaAvulsa(id);
+      } else {
+        await deleteMetodologia(id);
+      }
 
       setCriadas((prev) => prev.filter((item) => String(item.id) !== String(id)));
     } catch (e: any) {
@@ -179,8 +192,34 @@ export default function LearningPage() {
     [isAtleta, assinadas, criadas]
   );
 
+  const criadasLearning = useMemo(
+    () => criadas.filter((item) => item?.origemRegistro === "LEARNING"),
+    [criadas]
+  );
+
+  const criadasAvulsas = useMemo(
+    () => criadas.filter((item) => item?.origemRegistro === "AVULSA"),
+    [criadas]
+  );
+
+  const assinadasLearning = useMemo(
+    () => assinadas.filter((item) => item?.origemRegistro === "LEARNING"),
+    [assinadas]
+  );
+
+  const assinadasAvulsas = useMemo(
+    () => assinadas.filter((item) => item?.origemRegistro === "AVULSA"),
+    [assinadas]
+  );
+
   const explorarFiltrado = useMemo(() => {
     let items = [...explorar];
+
+    if (filtroOrigem !== "TODOS") {
+      items = items.filter(
+        (item) => String(item?.origemRegistro || "").toUpperCase() === filtroOrigem
+      );
+    }
 
     if (filtroPublico !== "TODOS") {
         items = items.filter((item) => String(item?.publicoAlvo || "").toUpperCase() === filtroPublico);
@@ -236,8 +275,19 @@ export default function LearningPage() {
     filtroCertificado,
     filtroBadge,
     filtroMaterial,
+    filtroOrigem,
     busca,
-    ]);
+  ]);
+
+  const explorarLearning = useMemo(
+    () => explorarFiltrado.filter((item) => item?.origemRegistro === "LEARNING"),
+    [explorarFiltrado]
+  );
+
+  const explorarAvulsas = useMemo(
+    () => explorarFiltrado.filter((item) => item?.origemRegistro === "AVULSA"),
+    [explorarFiltrado]
+  );
 
   return (
     <div className="min-h-screen bg-[#f7f7f4] pb-20">
@@ -360,18 +410,65 @@ export default function LearningPage() {
                         <option value="TREINO">Com treinos</option>
                         <option value="MATERIAL">Com materiais</option>
                         </select>
+
+                        <select
+                          value={filtroOrigem}
+                          onChange={(e) =>
+                            setFiltroOrigem(e.target.value as "TODOS" | "LEARNING" | "AVULSA")
+                          }
+                          className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                        >
+                          <option value="TODOS">Todas as metodologias</option>
+                          <option value="LEARNING">Só Learning</option>
+                          <option value="AVULSA">Só Avulsas</option>
+                        </select>
                     </div>
                   </div>
 
             {explorarFiltrado.length ? (
-              explorarFiltrado.map((item) => (
-                <LearningCard
-                  key={item.id}
-                  item={item}
-                  href={`/learning/${item.id}`}
-                  actionLabel="Ver metodologia"
-                />
-              ))
+              <div className="space-y-6">
+                {(filtroOrigem === "TODOS" || filtroOrigem === "LEARNING") && (
+                  <div className="space-y-4">
+                    <div className="text-base font-bold text-[#193b2e]">Learning</div>
+
+                    {explorarLearning.length ? (
+                      explorarLearning.map((item) => (
+                        <LearningCard
+                          key={`learning_${item.id}`}
+                          item={item}
+                          href={`/learning/${item.id}`}
+                          actionLabel="Ver metodologia"
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                        Nenhuma metodologia Learning encontrada.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(filtroOrigem === "TODOS" || filtroOrigem === "AVULSA") && (
+                  <div className="space-y-4">
+                    <div className="text-base font-bold text-[#193b2e]">Avulsas</div>
+
+                    {explorarAvulsas.length ? (
+                      explorarAvulsas.map((item) => (
+                        <LearningCard
+                          key={`avulsa_${item.id}`}
+                          item={item}
+                          href={`/learning/${item.id}?origem=avulsa`}
+                          actionLabel="Ver metodologia"
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                        Nenhuma metodologia avulsa encontrada.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="rounded-2xl border bg-white p-6 text-slate-600">
                 Nenhuma metodologia encontrada com os filtros selecionados.
@@ -413,71 +510,143 @@ export default function LearningPage() {
               <div>        
                 {!isAtleta && (
                   <div>
-                    <div className="text-base font-bold text-[#193b2e] mb-3">Criadas</div>
-                    <div className="space-y-4">
-                      {criadas.length ? (
-                        criadas.map((item: any) => (
-                          <LearningCard
-                            key={item.id}
-                            item={item}
-                            href={`/learning/${item.id}`}
-                            extraActions={
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/learning/${item.id}`)}
-                                  className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
-                                >
-                                  Gerenciar
-                                </button>
+                    <div className="text-base font-bold text-[#193b2e] mb-3">Criadas • Learning</div>
+                      <div className="space-y-4">
+                        {criadasLearning.length ? (
+                          criadasLearning.map((item: any) => (
+                            <LearningCard
+                              key={`cr_learning_${item.id}`}
+                              item={item}
+                              href={`/learning/${item.id}`}
+                              extraActions={
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/learning/${item.id}`)}
+                                    className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+                                  >
+                                    Gerenciar
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/learning/create?id=${item.id}&tipo=${item.tipo}`)}
-                                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
-                                  title="Editar metodologia"
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/learning/create?id=${item.id}&tipo=${item.tipo}&origem=${
+                                          item.origemRegistro === "AVULSA" ? "avulsa" : "learning"
+                                        }`
+                                      )
+                                    }
+                                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
+                                    title="Editar metodologia"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMetodologia(item.id, item.titulo)}
-                                  className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 h-10 text-red-600"
-                                  title="Apagar metodologia"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </>
-                            }
-                          />
-                        ))
-                      ) : (
-                        <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                          Você ainda não criou nenhuma metodologia.
-                        </div>
-                      )}
-                    </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteMetodologia(item.id, item.titulo, item.origemRegistro)}
+                                    className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 h-10 text-red-600"
+                                    title="Apagar metodologia"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              }
+                            />
+                          ))
+                        ) : (
+                          <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                            Você ainda não criou nenhuma metodologia Learning.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-base font-bold text-[#193b2e] mb-3 mt-6">Criadas • Avulsas</div>
+                      <div className="space-y-4">
+                        {criadasAvulsas.length ? (
+                          criadasAvulsas.map((item: any) => (
+                            <LearningCard
+                              key={`cr_avulsa_${item.id}`}
+                              item={item}
+                              href={`/learning/${item.id}?origem=avulsa`}
+                              extraActions={
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/learning/${item.id}?origem=avulsa`)}
+                                    className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+                                  >
+                                    Gerenciar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(`/learning/create?id=${item.id}&tipo=${item.tipo}&origem=avulsa`)
+                                    }
+                                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
+                                    title="Editar metodologia avulsa"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteMetodologia(item.id, item.titulo, item.origemRegistro)}
+                                    className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 h-10 text-red-600"
+                                    title="Apagar metodologia avulsa"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              }
+                            />
+                          ))
+                        ) : (
+                          <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                            Você ainda não criou nenhuma metodologia avulsa.
+                          </div>
+                        )}
+                      </div>
                   </div>
                 )}
               </div>
-            <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas</div>
-            <div className="space-y-4">
-                      {assinadas.length ? (
-                      assinadas.map((item: any) => (
-                          <LearningCard
-                          key={`ass_${item.id}`}
-                          item={item}
-                          href={`/learning/${item.id}`}
-                          actionLabel="Continuar"
-                          />
-                      ))
-                      ) : (
-                      <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                          Você ainda não assinou nenhuma metodologia.
-                      </div>
-                      )}
-            </div>
+            <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas • Learning</div>
+              <div className="space-y-4">
+                {assinadasLearning.length ? (
+                  assinadasLearning.map((item: any) => (
+                    <LearningCard
+                      key={`ass_learning_${item.id}`}
+                      item={item}
+                      href={`/learning/${item.id}`}
+                      actionLabel="Continuar"
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                    Você ainda não assinou nenhuma metodologia Learning.
+                  </div>
+                )}
+              </div>
+
+              <div className="text-base font-bold text-[#193b2e] mb-3 mt-6">Assinadas • Avulsas</div>
+              <div className="space-y-4">
+                {assinadasAvulsas.length ? (
+                  assinadasAvulsas.map((item: any) => (
+                    <LearningCard
+                      key={`ass_avulsa_${item.id}`}
+                      item={item}
+                      href={`/learning/${item.id}?origem=avulsa`}
+                      actionLabel="Continuar"
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                    Você ainda não assinou nenhuma metodologia avulsa.
+                  </div>
+                )}
+              </div>
           </div>
         ) : null}
         {!loading && tab === "criar" ? (
