@@ -185,6 +185,7 @@ export default function MetodologiaUnicaPage() {
   const origem = String(searchParams.get("origem") || "").toLowerCase();
   const isAvulsa = origem === "avulsa";
   const veioDoAdmin = searchParams.get("from") === "admin";
+  const adminPreview = veioDoAdmin;
   const token =
     (Storage as any).token ??
     localStorage.getItem("token") ??
@@ -299,9 +300,11 @@ export default function MetodologiaUnicaPage() {
     (async () => {
       setLoading(true);
       try {
-        const url = isAvulsa
-          ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
-          : `${API.BASE_URL}/api/metodologias/${id}/detalhe`;
+        const url = adminPreview
+          ? `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${isAvulsa ? "AVULSA" : "LEARNING"}`
+          : isAvulsa
+            ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
+            : `${API.BASE_URL}/api/metodologias/${id}/detalhe`;
 
         const r = await fetch(url, { headers });
         const j = await r.json().catch(() => ({}));
@@ -312,41 +315,42 @@ export default function MetodologiaUnicaPage() {
           return;
         }
 
-        const normalizado = isAvulsa
-        ? {
-            ...j.item,
-            totalAssinantes: j.item?._count?.assinantes ?? 0,
-            totalReviews: 0,
-            mediaAvaliacao: 0,
-            pontosTotal:
-              (j.item?.estruturas || []).flatMap((e: any) => e.itens || []).reduce(
-                (acc: number, it: any) =>
-                  acc +
-                  Number(
-                    it?.pontos ??
-                      (String(it?.tipo || "").toUpperCase() === "TREINO"
-                        ? it?.treinoProgramado?.pontuacao
-                        : 0) ??
-                      0
-                  ),
-                0
-              ),
-            criadorNome: j.item?.criadorUsuario?.nome ?? null,
-            viewer: j.item?.viewer ?? {
-              isAssinante: false,
-              temAcesso: false,
-              assinaturaTipo: "AVULSA",
-              expiraEm: null,
-              podeAssinarAgora: false,
-              podeAvaliar: false,
-              minhaAvaliacao: null,
-              motivoBloqueio: "PRECISA_PAGAR_AVULSA",
-              progresso: {
-                concluidos: [],
-              },
+        const raw = j?.item ?? j;
+
+        const normalizado = {
+          ...raw,
+          totalAssinantes: raw?._count?.assinantes ?? raw?.totalAssinantes ?? 0,
+          totalReviews: raw?.totalReviews ?? 0,
+          mediaAvaliacao: raw?.mediaAvaliacao ?? 0,
+          pontosTotal:
+            raw?.pontosTotal ??
+            (raw?.estruturas || []).flatMap((e: any) => e.itens || []).reduce(
+              (acc: number, it: any) =>
+                acc +
+                Number(
+                  it?.pontos ??
+                    (String(it?.tipo || "").toUpperCase() === "TREINO"
+                      ? it?.treinoProgramado?.pontuacao
+                      : 0) ??
+                    0
+                ),
+              0
+            ),
+          criadorNome: raw?.criadorNome ?? raw?.criadorUsuario?.nome ?? null,
+          viewer: raw?.viewer ?? {
+            isAssinante: adminPreview,
+            temAcesso: adminPreview,
+            assinaturaTipo: isAvulsa ? "AVULSA" : "LEARNING",
+            expiraEm: null,
+            podeAssinarAgora: false,
+            podeAvaliar: false,
+            minhaAvaliacao: null,
+            motivoBloqueio: null,
+            progresso: {
+              concluidos: [],
             },
-          }
-        : j;
+          },
+        };
 
         setData(normalizado);
       } catch (e) {
@@ -356,25 +360,25 @@ export default function MetodologiaUnicaPage() {
         setLoading(false);
       }
     })();
-  }, [id, headers, navigate, isAvulsa]);
+  }, [id, headers, navigate, isAvulsa, adminPreview]);
 
   const estruturasOrdenadas = useMemo(() => {
-    const estruturas = data?.estruturas || [];
+  const estruturas = data?.estruturas || [];
 
-    return estruturas
-      .filter((estrutura) => estrutura.ativo !== false)
-      .map((estrutura) => ({
-        ...estrutura,
-        itens: (estrutura.itens || [])
-          .filter((it) => it.publicado !== false)
-          .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)),
-      }))
-      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
-  }, [data]);
+  return estruturas
+    .filter((estrutura) => adminPreview || estrutura.ativo !== false)
+    .map((estrutura) => ({
+      ...estrutura,
+      itens: (estrutura.itens || [])
+        .filter((it) => adminPreview || it.publicado !== false)
+        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)),
+    }))
+    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+}, [data, adminPreview]);
 
   const allItens = useMemo(
-    () => data?.estruturas?.flatMap((estrutura) => estrutura.itens || []) || [],
-    [data]
+    () => estruturasOrdenadas.flatMap((estrutura) => estrutura.itens || []),
+    [estruturasOrdenadas]
   );
 
   useEffect(() => {
@@ -590,33 +594,33 @@ export default function MetodologiaUnicaPage() {
                 ) : null}
               </div>
 
-              {/* CTA */}
+              {!adminPreview && (
               <div className="flex flex-col items-end gap-2">
                 <button
-                disabled={busy || !!data?.viewer?.temAcesso}
-                onClick={assinarMetodologia}
-                className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
+                  disabled={busy || !!data?.viewer?.temAcesso}
+                  onClick={assinarMetodologia}
+                  className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
                 >
-                {(() => {
-                  const motivo = String(data.viewer?.motivoBloqueio || "");
+                  {(() => {
+                    const motivo = String(data.viewer?.motivoBloqueio || "");
 
-                  if (data.viewer?.temAcesso) {
-                    return data.viewer?.assinaturaTipo === "AVULSA"
-                      ? "✅ Metodologia avulsa ativa"
-                      : "✅ Metodologia no Learning";
-                  }
+                    if (data.viewer?.temAcesso) {
+                      return data.viewer?.assinaturaTipo === "AVULSA"
+                        ? "✅ Metodologia avulsa ativa"
+                        : "✅ Metodologia no Learning";
+                    }
 
-                  if (motivo === "PRECISA_PAGAR_AVULSA") return "Comprar metodologia";
-                  if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
-                  if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
-                    return "Ver minhas metodologias";
-                  }
+                    if (motivo === "PRECISA_PAGAR_AVULSA") return "Comprar metodologia";
+                    if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
+                    if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
+                      return "Ver minhas metodologias";
+                    }
 
-                  return isAvulsa ? "Comprar metodologia" : "Ativar Learning";
-                })()}
+                    return isAvulsa ? "Comprar metodologia" : "Ativar Learning";
+                  })()}
                 </button>
 
-                {(!data.viewer?.isAssinante || !data.viewer?.temAcesso) && (
+                {!adminPreview && (!data.viewer?.isAssinante || !data.viewer?.temAcesso) && (
                   <div className="text-xs text-gray-500 text-right max-w-[240px]">
                    {(() => {
                       const motivo = String(data.viewer?.motivoBloqueio || "");
@@ -641,7 +645,19 @@ export default function MetodologiaUnicaPage() {
                   </div>
                 )}
               </div>
+              )}
             </div>
+          
+            {adminPreview && (
+              <div className="flex flex-col items-end gap-2">
+                <span className="px-4 py-2 rounded-full bg-slate-100 text-slate-700 font-semibold">
+                  Visualização administrativa
+                </span>
+                <div className="text-xs text-gray-500 text-right max-w-[240px]">
+                  Como administrador, você pode visualizar todos os conteúdos desta metodologia.
+                </div>
+              </div>
+            )}
 
             {/* PROGRESSO */}
             <div className="mt-4">
@@ -869,11 +885,13 @@ export default function MetodologiaUnicaPage() {
                                   ? "bg-gray-300 text-gray-600 cursor-not-allowed"
                                   : "bg-slate-800 text-white hover:bg-slate-900"
                               }`}
-                              onClick={() => {
+                              onClick={async () => {
                                 if (locked) return;
 
                                 const url = normalizeMediaUrl(it.arquivoUrl || it.materialUrl) || "#";
                                 window.open(url, "_blank", "noopener,noreferrer");
+
+                                await concluirItem(estrutura.id, it.id);
                               }}
                             >
                               Abrir material
@@ -887,7 +905,7 @@ export default function MetodologiaUnicaPage() {
               })}
             </div>
 
-            {!data.viewer.temAcesso && (
+            {!data.viewer.temAcesso && !adminPreview && (
               <div className="mt-3 text-xs text-gray-500">
                 * Assine para desbloquear os conteúdos desta metodologia.
               </div>

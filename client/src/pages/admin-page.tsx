@@ -283,12 +283,17 @@ export default function AdminDashboard() {
   const [profToDelete, setProfToDelete] = useState<{ id: string; nome?: string } | null>(null);
   const [profDeleteBusy, setProfDeleteBusy] = useState(false);
   const [profDeleteErr, setProfDeleteErr] = useState<string>("");
-  const [metTab, setMetTab] = useState<"pendentes" | "minhas">("pendentes");
+  const [metTab, setMetTab] = useState<"pendentes" | "minhas" | "todas">("pendentes");
   const [metMinhas, setMetMinhas] = useState<MetodologiaPendente[]>([]);
   const [metMinhasLoading, setMetMinhasLoading] = useState(false);
   const [metMinhasErro, setMetMinhasErro] = useState("");
   const [metMinhasTotal, setMetMinhasTotal] = useState(0);
   const [metMinhasPage, setMetMinhasPage] = useState(1);
+  const [metTodas, setMetTodas] = useState<any[]>([]);
+  const [metTodasLoading, setMetTodasLoading] = useState(false);
+  const [metTodasErro, setMetTodasErro] = useState("");
+  const [metTodasTotal, setMetTodasTotal] = useState(0);
+  const [metTodasPage, setMetTodasPage] = useState(1);
 
   type MetodologiaItemPreview = {
     id: string;
@@ -339,6 +344,7 @@ export default function AdminDashboard() {
     categorias?: any[];
     ativo: boolean;
     criadoEm?: string | null;
+    origemTipo: "LEARNING" | "AVULSA";
     criadorUsuario?: {
       id: string;
       nome?: string | null;
@@ -525,7 +531,7 @@ async function carregarMinhasMetodologiasAdmin(page: number) {
   }
 }
 
-async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string) {
+async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string, origemTipo: "LEARNING" | "AVULSA" = "LEARNING") {
   const ok = window.confirm(
     `Tem certeza que deseja apagar a metodologia "${titulo || "sem título"}"?`
   );
@@ -534,10 +540,13 @@ async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string) {
   setAcaoBusyId(id);
 
   try {
-    const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
+    const r = await fetch(
+      `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${encodeURIComponent(origemTipo)}`,
+      {
+        method: "DELETE",
+        headers: authHeaders(),
+      }
+    );
 
     const txt = await r.text().catch(() => "");
     if (!r.ok) {
@@ -852,6 +861,39 @@ useEffect(() => {
     return () => clearTimeout(h);
   }, [metQ]);
 
+  async function carregarTodasMetodologiasAdmin(page = 1) {
+    setMetTodasLoading(true);
+    setMetTodasErro("");
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(metPageSize));
+      if (metDebQ) params.set("q", metDebQ);
+
+      const r = await fetch(
+        `${API.BASE_URL}/api/admin/metodologias/todas?${params.toString()}`,
+        { headers: authHeaders() }
+      );
+
+      const j = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        throw new Error(j?.message || "Erro ao carregar metodologias.");
+      }
+
+      setMetTodas(Array.isArray(j.items) ? j.items : []);
+      setMetTodasTotal(Number(j.total || 0));
+      setMetTodasPage(Number(j.page || page));
+    } catch (e: any) {
+      setMetTodas([]);
+      setMetTodasTotal(0);
+      setMetTodasErro(e?.message || "Erro ao carregar metodologias.");
+    } finally {
+      setMetTodasLoading(false);
+    }
+  }
+
   async function carregarMetodologiasPendentes(page: number) {
     setMetLoading(true);
     setMetErro("");
@@ -889,13 +931,13 @@ useEffect(() => {
     }
   }
 
-  async function setMetodologiaAtiva(id: string, ativo: boolean) {
+  async function setMetodologiaAtiva(id: string, ativo: boolean, origemTipo: "LEARNING" | "AVULSA" = "LEARNING") {
     setAcaoBusyId(id);
     try {
       const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}/ativo`, {
         method: "PATCH",
         headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ ativo }),
+        body: JSON.stringify({ ativo, origemTipo }),
       });
       const txt = await r.text().catch(() => "");
       if (!r.ok) {
@@ -925,131 +967,132 @@ useEffect(() => {
 
     if (metTab === "pendentes") {
       void carregarMetodologiasPendentes(1);
-    } else {
+    } else if (metTab === "minhas") {
       void carregarMinhasMetodologiasAdmin(1);
+    } else {
+      void carregarTodasMetodologiasAdmin(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, metTab, metDebQ]);
 
-async function carregarAssinantes(page: number) {
-  setAssLoading(true);
-  setAssErro("");
-  try {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("pageSize", String(assPageSize));
-    if (assDebQ) params.set("q", assDebQ);
-    if (assPlano) params.set("plano", assPlano);
-    if (assAtivo) params.set("ativo", assAtivo);
+  async function carregarAssinantes(page: number) {
+    setAssLoading(true);
+    setAssErro("");
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(assPageSize));
+      if (assDebQ) params.set("q", assDebQ);
+      if (assPlano) params.set("plano", assPlano);
+      if (assAtivo) params.set("ativo", assAtivo);
 
-    const r = await fetch(`${API.BASE_URL}/api/admin/assinantes?${params}`, { headers: authHeaders() });
-    if (!r.ok) {
-      setAssErro(await r.text());
+      const r = await fetch(`${API.BASE_URL}/api/admin/assinantes?${params}`, { headers: authHeaders() });
+      if (!r.ok) {
+        setAssErro(await r.text());
+        setAssinantes([]);
+        setAssTotal(0);
+        return;
+      }
+      const j = await r.json();
+      setAssinantes(Array.isArray(j.items) ? j.items : []);
+      setAssTotal(Number(j.total || 0));
+      setAssPage(Number(j.page || page));
+    } catch {
+      setAssErro("Falha ao carregar assinantes.");
       setAssinantes([]);
       setAssTotal(0);
-      return;
+    } finally {
+      setAssLoading(false);
     }
-    const j = await r.json();
-    setAssinantes(Array.isArray(j.items) ? j.items : []);
-    setAssTotal(Number(j.total || 0));
-    setAssPage(Number(j.page || page));
-  } catch {
-    setAssErro("Falha ao carregar assinantes.");
-    setAssinantes([]);
-    setAssTotal(0);
-  } finally {
-    setAssLoading(false);
   }
-}
 
-async function carregarAssOverview() {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/admin/assinantes/overview`, { headers: authHeaders() });
-    if (r.ok) setAssOverview(await r.json());
-    else setAssOverview(null);
-  } catch {
-    setAssOverview(null);
-  }
-}
-
-async function carregarExercicios() {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() });
-    const j = await r.json();
-
-    const arr = Array.isArray(j)
-      ? j
-      : j.items ?? j.data ?? j.exercicios ?? j.rows ?? j.result ?? [];
-
-    setExercicios(Array.isArray(arr) ? arr : []);
-  } catch {
-    setExercicios([]);
-  }
-}
-
-async function carregarFeedback() {
-  setFbLoading(true);
-  setFbError(null);
-  try {
-    const params = new URLSearchParams();
-    if (fbTipo) params.set("tipo", fbTipo);
-    if (fbFrom) params.set("from", fbFrom);
-
-    const url = `${API.BASE_URL}/api/feedback?${params.toString()}`;
-    const r = await fetch(url, { headers: authHeaders() });
-    const txt = await r.text();
-
-    if (!r.ok) {
-      throw new Error(txt || `Erro HTTP ${r.status}`);
+  async function carregarAssOverview() {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/admin/assinantes/overview`, { headers: authHeaders() });
+      if (r.ok) setAssOverview(await r.json());
+      else setAssOverview(null);
+    } catch {
+      setAssOverview(null);
     }
-
-    const data = txt ? JSON.parse(txt) : [];
-    let arr: FeedbackAdmin[] = Array.isArray(data) ? data : data.items ?? [];
-
-    if (fbOnlyUnread) {
-      arr = arr.filter((f) => !f.lidoEm);
-    }
-
-    arr = [...arr].sort((a, b) => {
-      const da = new Date(a.createdAt).getTime();
-      const db = new Date(b.createdAt).getTime();
-      return da - db; 
-    });
-
-    setFbItems(arr);
-  } catch (err: any) {
-    console.error("Erro ao carregar feedbacks:", err);
-    setFbError(err?.message || "Erro ao carregar feedbacks.");
-    setFbItems([]);
-  } finally {
-    setFbLoading(false);
   }
-}
 
-async function marcarFeedbackComoLido(id: string) {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/feedback/${id}/lido`, {
-      method: "PATCH",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-    });
+  async function carregarExercicios() {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() });
+      const j = await r.json();
 
-    if (!r.ok) {
+      const arr = Array.isArray(j)
+        ? j
+        : j.items ?? j.data ?? j.exercicios ?? j.rows ?? j.result ?? [];
+
+      setExercicios(Array.isArray(arr) ? arr : []);
+    } catch {
+      setExercicios([]);
+    }
+  }
+
+  async function carregarFeedback() {
+    setFbLoading(true);
+    setFbError(null);
+    try {
+      const params = new URLSearchParams();
+      if (fbTipo) params.set("tipo", fbTipo);
+      if (fbFrom) params.set("from", fbFrom);
+
+      const url = `${API.BASE_URL}/api/feedback?${params.toString()}`;
+      const r = await fetch(url, { headers: authHeaders() });
       const txt = await r.text();
-      alert(`Erro ao marcar como lido: ${txt || r.status}`);
-      return;
+
+      if (!r.ok) {
+        throw new Error(txt || `Erro HTTP ${r.status}`);
+      }
+
+      const data = txt ? JSON.parse(txt) : [];
+      let arr: FeedbackAdmin[] = Array.isArray(data) ? data : data.items ?? [];
+
+      if (fbOnlyUnread) {
+        arr = arr.filter((f) => !f.lidoEm);
+      }
+
+      arr = [...arr].sort((a, b) => {
+        const da = new Date(a.createdAt).getTime();
+        const db = new Date(b.createdAt).getTime();
+        return da - db; 
+      });
+
+      setFbItems(arr);
+    } catch (err: any) {
+      console.error("Erro ao carregar feedbacks:", err);
+      setFbError(err?.message || "Erro ao carregar feedbacks.");
+      setFbItems([]);
+    } finally {
+      setFbLoading(false);
     }
-
-    setFbItems((prev) =>
-      prev.map((f) =>
-        f.id === id ? { ...f, lidoEm: new Date().toISOString() } : f
-      )
-    );
-  } catch (e) {
-    console.error(e);
-    alert("Falha ao marcar feedback como lido.");
   }
-}
 
+  async function marcarFeedbackComoLido(id: string) {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/feedback/${id}/lido`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text();
+        alert(`Erro ao marcar como lido: ${txt || r.status}`);
+        return;
+      }
+
+      setFbItems((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, lidoEm: new Date().toISOString() } : f
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      alert("Falha ao marcar feedback como lido.");
+    }
+  }
 
   function fmtDate(d?: string | null) {
     return d ? new Date(d).toLocaleString("pt-BR") : "—";
@@ -2350,6 +2393,13 @@ async function confirmarExcluirProfessor() {
                 >
                   Minhas metodologias
                 </button>
+
+                <button
+                  className={`px-4 py-2 rounded ${metTab === "todas" ? "bg-green-700 text-white" : "bg-gray-200"}`}
+                  onClick={() => setMetTab("todas")}
+                >
+                  Metodologias totais
+                </button>
               </div>
 
               <button
@@ -2375,19 +2425,35 @@ async function confirmarExcluirProfessor() {
                 onClick={() => {
                   if (metTab === "pendentes") {
                     carregarMetodologiasPendentes(1);
-                  } else {
+                  } else if (metTab === "minhas") {
                     carregarMinhasMetodologiasAdmin(1);
+                  } else {
+                    carregarTodasMetodologiasAdmin(1);
                   }
                 }}
-                disabled={metTab === "pendentes" ? metLoading : metMinhasLoading}
+                disabled={
+                  metTab === "pendentes"
+                    ? metLoading
+                    : metTab === "minhas"
+                    ? metMinhasLoading
+                    : metTodasLoading
+                }
               >
-                {(metTab === "pendentes" ? metLoading : metMinhasLoading) ? "Carregando…" : "Atualizar"}
+                {(metTab === "pendentes"
+                  ? metLoading
+                  : metTab === "minhas"
+                  ? metMinhasLoading
+                  : metTodasLoading)
+                  ? "Carregando…"
+                  : "Atualizar"}
               </button>
 
               <div className="ml-auto text-sm text-gray-600">
                 {metTab === "pendentes"
                   ? (metLoading ? "Carregando…" : `${metTotal} pendente(s)`)
-                  : (metMinhasLoading ? "Carregando…" : `${metMinhasTotal} metodologia(s)`)}
+                  : metTab === "minhas"
+                  ? (metMinhasLoading ? "Carregando…" : `${metMinhasTotal} metodologia(s)`)
+                  : (metTodasLoading ? "Carregando…" : `${metTodasTotal} metodologia(s)`)}
               </div>
             </div>
 
@@ -2437,7 +2503,11 @@ async function confirmarExcluirProfessor() {
                                 <button
                                   className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
                                   onClick={() => {
-                                    window.location.href = `/learning/${m.id}?from=admin`;
+                                    const isAvulsa = String(m.origemTipo || "").toUpperCase() === "AVULSA";
+
+                                    window.location.href = isAvulsa
+                                      ? `/learning/${m.id}?from=admin&origem=avulsa`
+                                      : `/learning/${m.id}?from=admin`;
                                   }}
                                 >
                                   Detalhes
@@ -2449,7 +2519,11 @@ async function confirmarExcluirProfessor() {
                                   onClick={() => {
                                     const ok = confirm(`Ativar esta metodologia?\n\n"${m.titulo}"`);
                                     if (!ok) return;
-                                    void setMetodologiaAtiva(m.id, true);
+                                    void setMetodologiaAtiva(
+                                      m.id,
+                                      true,
+                                      (m.origemTipo || "LEARNING") as "LEARNING" | "AVULSA"
+                                    );
                                   }}
                                 >
                                   {acaoBusyId === m.id ? "Ativando..." : "Ativar ✅"}
@@ -2515,7 +2589,10 @@ async function confirmarExcluirProfessor() {
                           <button
                             type="button"
                             onClick={() => {
-                              window.location.href = `/learning/${item.id}?from=admin`;
+                              window.location.href =
+                                item.origemTipo === "AVULSA"
+                                  ? `/learning/${item.id}?from=admin&origem=avulsa`
+                                  : `/learning/${item.id}?from=admin`;
                             }}
                             className="px-3 py-2 rounded bg-green-700 text-white"
                           >
@@ -2525,7 +2602,10 @@ async function confirmarExcluirProfessor() {
                           <button
                             type="button"
                             onClick={() => {
-                              window.location.href = `/learning/create?id=${item.id}`;
+                              window.location.href =
+                                item.origemTipo === "AVULSA"
+                                  ? `/learning/create?id=${item.id}&origem=avulsa`
+                                  : `/learning/create?id=${item.id}`;
                             }}
                             className="px-3 py-2 rounded border bg-white text-slate-700"
                             title="Editar metodologia"
@@ -2535,7 +2615,13 @@ async function confirmarExcluirProfessor() {
 
                           <button
                             type="button"
-                            onClick={() => apagarMinhaMetodologiaAdmin(item.id, item.titulo)}
+                            onClick={() =>
+                              apagarMinhaMetodologiaAdmin(
+                                item.id,
+                                item.titulo,
+                                item.origemTipo,
+                              )
+                            }
                             className="px-3 py-2 rounded border border-red-200 bg-white text-red-600"
                             title="Apagar metodologia"
                           >
@@ -2572,6 +2658,110 @@ async function confirmarExcluirProfessor() {
                 </div>
               </div>
             )}
+
+            {metTab === "todas" && (
+              <div className="space-y-4">
+                {metTodasErro ? <div className="mb-3 text-sm text-red-600">{metTodasErro}</div> : null}
+
+                {metTodasLoading && metTodas.length === 0 ? (
+                  <div className="bg-white p-6 rounded shadow text-center text-gray-500">
+                    Carregando metodologias...
+                  </div>
+                ) : metTodas.length === 0 ? (
+                  <div className="bg-white p-6 rounded shadow text-center text-gray-500">
+                    Nenhuma metodologia encontrada.
+                  </div>
+                ) : (
+                  metTodas.map((item) => {
+                    const capa = toAbsoluteUrl(item.capaUrl ?? null);
+                    const isAvulsa = String(item.origemTipo || "").toUpperCase() === "AVULSA";
+
+                    return (
+                      <div key={`${item.origemTipo}-${item.id}`} className="bg-white p-4 rounded shadow border">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-lg font-bold text-[#193b2e]">{item.titulo}</div>
+                            <div className="text-sm text-slate-500 mt-1">
+                              {item.descricao || "Sem descrição"}
+                            </div>
+
+                            <div className="text-xs text-slate-500 mt-2 flex flex-wrap gap-2">
+                              <span className="px-2 py-1 rounded bg-slate-100">
+                                {isAvulsa ? "Avulsa" : "Learning"}
+                              </span>
+                              <span>Status: {item.ativo ? "Ativa" : "Pendente"}</span>
+                              <span>Criado por: {item.criadorUsuario?.nome || item.criadorUsuario?.email || "—"}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            {capa ? (
+                              <button
+                                type="button"
+                                onClick={() => setPlayer({ kind: "image", src: capa })}
+                                className="px-3 py-2 rounded border bg-white text-slate-700"
+                              >
+                                Ver capa
+                              </button>
+                            ) : null}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = isAvulsa
+                                  ? `/learning/${item.id}?from=admin&origem=avulsa`
+                                  : `/learning/${item.id}?from=admin`;
+                              }}
+                              className="px-3 py-2 rounded bg-green-700 text-white"
+                            >
+                              Ver metodologia
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = isAvulsa
+                                  ? `/learning/create?id=${item.id}&origem=avulsa`
+                                  : `/learning/create?id=${item.id}`;
+                              }}
+                              className="px-3 py-2 rounded border bg-white text-slate-700"
+                              title="Editar metodologia"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+
+                <div className="flex items-center justify-between mt-3">
+                  <button
+                    disabled={metTodasPage <= 1 || metTodasLoading}
+                    onClick={() => carregarTodasMetodologiasAdmin(metTodasPage - 1)}
+                    className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+
+                  <div className="text-sm text-gray-600">Página {metTodasPage}</div>
+
+                  <button
+                    disabled={
+                      metTodasLoading ||
+                      metTodasPage * metPageSize >= metTodasTotal ||
+                      metTodas.length < metPageSize
+                    }
+                    onClick={() => carregarTodasMetodologiasAdmin(metTodasPage + 1)}
+                    className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
         
@@ -3270,7 +3460,11 @@ async function confirmarExcluirProfessor() {
                       onClick={() => {
                         const ok = confirm(`Ativar esta metodologia?\n\n"${metDetail.titulo}"`);
                         if (!ok) return;
-                        void setMetodologiaAtiva(metDetail.id, true).then(() => {
+                        void setMetodologiaAtiva(
+                          metDetail.id,
+                          true,
+                          (metDetail.origemTipo || "LEARNING") as "LEARNING" | "AVULSA"
+                        ).then(() => {
                           setMetDetailOpen(false);
                         });
                       }}

@@ -74,6 +74,17 @@ function getUserId(req: Request): string | null {
   return r.userId || r.user?.id || r.usuarioId || null;
 }
 
+async function isAdminUser(userId: string | null | undefined) {
+  if (!userId) return false;
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: userId },
+    select: { tipo: true },
+  });
+
+  return String(usuario?.tipo || "").toLowerCase().trim() === "admin";
+}
+
 function asNullableString(v: any): string | null {
   const s = String(v ?? "").trim();
   return s ? s : null;
@@ -718,7 +729,7 @@ export async function updateMetodologia(req: Request, res: Response) {
         descricao: typeof descricao === "string" ? descricao.trim() : undefined,
         capaUrl: capaUrlUpdate,
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : undefined,
-        ativo: typeof ativo === "boolean" ? ativo : undefined,
+        ativo: false,
         nivel: nivel ?? undefined,
         categorias: Array.isArray(categorias) ? categorias : undefined,
         ...(publicoAlvoUpdate !== undefined ? { publicoAlvo: publicoAlvoUpdate } : {}),
@@ -1451,8 +1462,8 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
     });
 
     const tipoUsuario = String(u?.tipo ?? "").toUpperCase();
-    const isAdmin = tipoUsuario === "ADMIN" || tipoUsuario === "ADMINISTRADOR";
     const isOwner = metodologia.criadorUsuarioId === userId;
+    const isAdmin = await isAdminUser(userId);
     const podeVerVideo = hasAccess || isOwner || isAdmin;
 
     const estruturas = metodologia.estruturas.map((estrutura) => {
@@ -1524,6 +1535,10 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       motivoBloqueio = "LIMITE_METODOLOGIAS";
     }
 
+    
+    const hasAdminPreview = isAdmin;
+    const acessoFinal = hasAccess || hasAdminPreview;
+
     return res.json({
         id: metodologia.id,
         titulo: metodologia.titulo,
@@ -1539,13 +1554,13 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         criadorNome: metodologia.criadorUsuario?.nome ?? null,
         estruturas,
         viewer: {
-          isAssinante: hasAccess,
-          temAcesso: hasAccess,
-          assinaturaTipo,
+          isAssinante: acessoFinal,
+          temAcesso: acessoFinal,
+          assinaturaTipo: hasAccess ? assinaturaTipo : (hasAdminPreview ? "LEARNING" : assinaturaTipo),
           expiraEm: assinatura?.expiraEm ? new Date(assinatura.expiraEm).toISOString() : null,
-          podeAssinarAgora,
-          motivoBloqueio,
-          podeAvaliar,
+          podeAssinarAgora: hasAdminPreview ? false : podeAssinarAgora,
+          motivoBloqueio: hasAdminPreview ? null : motivoBloqueio,
+          podeAvaliar: hasAdminPreview ? false : podeAvaliar,
           minhaAvaliacao,
           progresso: { concluidos: concluidosIds },
           quota: {
@@ -1553,7 +1568,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
             usadasNoMes,
             restantes: Math.max(0, limite - usadasNoMes),
           },
-        },
+        }
     });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao buscar detalhe da metodologia.", detail: e?.message });
@@ -2753,6 +2768,7 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
       return res.status(404).json({ message: "Item da estrutura não encontrado." });
     }
 
+    const tipo = String(item.tipo || "").toUpperCase();
     const [totalItensEstrutura, totalItensConcluidosEstrutura] = await prisma.$transaction(async (tx) => {
       const progressoExistente = await tx.metodologiaProgressoEstrutura.findUnique({
         where: {
@@ -2768,6 +2784,7 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
           ? { ...(progressoExistente.progresso as any) }
           : {};
 
+      
       const concluidos: string[] = Array.isArray(payloadAtual.concluidos)
         ? payloadAtual.concluidos.map((v: any) => String(v))
         : [];
@@ -2983,7 +3000,7 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
           professorId,
           clubeId,
           escolinhaId,
-          ativo: true,
+          ativo: false,
         },
       });
 
@@ -3181,7 +3198,7 @@ export async function createMetodologiaAvulsaCompleta(req: Request, res: Respons
           geraCertificado: asBool(geraCertificado, false),
           precoAssinaturaMensal: preco,
           criadorUsuarioId: userId,
-          ativo: true,
+          ativo: false,
           estruturas: {
             create: (Array.isArray(estruturas) ? estruturas : []).map((estrutura: any, i: number) => ({
               titulo: String(estrutura?.titulo ?? "").trim(),
@@ -3322,7 +3339,7 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
         capaUrl: asNullableString(capaUrl),
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
-        ativo: true,
+        ativo: false,
         tipo,
         estruturaTipo,
         area: area ?? null,
@@ -3411,8 +3428,9 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
       return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
     }
 
+    const isAdmin = await isAdminUser(userId);
     const hasAccess = assinaturaDaAcesso(assinatura);
-
+    const acessoFinal = hasAccess || isAdmin;
     const concluidosIds: string[] = [];
     const podeAvaliar = !!userId && hasAccess;
     const minhaAvaliacao = null;
@@ -3437,16 +3455,16 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
         ...item,
         pontosTotal,
         viewer: {
-          isAssinante: hasAccess,
-          temAcesso: hasAccess,
+          isAssinante: acessoFinal,
+          temAcesso: acessoFinal,
           assinaturaTipo: "AVULSA",
           expiraEm: assinatura?.expiraEm
             ? new Date(assinatura.expiraEm).toISOString()
             : null,
           podeAssinarAgora: false,
-          motivoBloqueio: hasAccess ? null : "PRECISA_PAGAR_AVULSA",
-          podeAvaliar,
-          minhaAvaliacao,
+          motivoBloqueio: isAdmin ? null : (hasAccess ? null : "PRECISA_PAGAR_AVULSA"),
+          podeAvaliar: !!userId && hasAccess && !isAdmin,
+          minhaAvaliacao: null,
           progresso: {
             concluidos: concluidosIds,
           },
@@ -3545,6 +3563,7 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
           geraCertificado:
             geraCertificado !== undefined ? asBool(geraCertificado, false) : atual.geraCertificado,
           precoAssinaturaMensal: Number(preco),
+          ativo: false,
         },
       });
 
@@ -3955,7 +3974,7 @@ export async function migrarMetodologiaParaAvulsa(req: Request, res: Response) {
           professorId: atual.professorId,
           clubeId: atual.clubeId,
           escolinhaId: atual.escolinhaId,
-          ativo: atual.ativo,
+          ativo: false,
           estruturas: {
             create: estruturasProcessadas,
           },
@@ -4138,7 +4157,7 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
           professorId: atual.professorId,
           clubeId: atual.clubeId,
           escolinhaId: atual.escolinhaId,
-          ativo: atual.ativo,
+          ativo: false,
           estruturas: {
             create: estruturasProcessadas,
           },
@@ -4185,6 +4204,93 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
   } catch (e: any) {
     return res.status(500).json({
       message: "Erro ao migrar metodologia avulsa para Learning.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const isAdmin = await isAdminUser(userId);
+    if (!isAdmin) return res.status(403).json({ message: "Apenas admin pode acessar esta listagem." });
+
+    const page = Math.max(1, Number(req.query.page || 1));
+    const pageSize = Math.max(1, Math.min(50, Number(req.query.pageSize || 10)));
+    const q = String(req.query.q || "").trim();
+
+    const whereLearning = q
+      ? {
+          OR: [
+            { titulo: { contains: q, mode: "insensitive" as const } },
+            { descricao: { contains: q, mode: "insensitive" as const } },
+            { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" as const } } } },
+            { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" as const } } } },
+          ],
+        }
+      : {};
+
+    const whereAvulsa = q
+      ? {
+          OR: [
+            { titulo: { contains: q, mode: "insensitive" as const } },
+            { descricao: { contains: q, mode: "insensitive" as const } },
+            { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" as const } } } },
+            { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" as const } } } },
+          ],
+        }
+      : {};
+
+    const [learning, avulsas] = await Promise.all([
+      prisma.metodologia.findMany({
+        where: whereLearning as any,
+        include: {
+          criadorUsuario: { select: { id: true, nome: true, email: true, foto: true, parceiro: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
+        },
+        orderBy: { criadoEm: "desc" },
+      }),
+      prisma.metodologiaAvulsa.findMany({
+        where: whereAvulsa as any,
+        include: {
+          criadorUsuario: { select: { id: true, nome: true, email: true, foto: true, parceiro: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
+        },
+        orderBy: { criadoEm: "desc" },
+      }),
+    ]);
+
+    const items = [
+      ...learning.map((m) => ({
+        ...m,
+        origemTipo: "LEARNING",
+      })),
+      ...avulsas.map((m) => ({
+        ...m,
+        origemTipo: "AVULSA",
+      })),
+    ]
+      .sort((a, b) => {
+        const da = new Date(a.criadoEm || 0).getTime();
+        const db = new Date(b.criadoEm || 0).getTime();
+        return db - da;
+      });
+
+    const total = items.length;
+    const start = (page - 1) * pageSize;
+    const paged = items.slice(start, start + pageSize);
+
+    return res.json({
+      items: paged,
+      total,
+      page,
+      pageSize,
+    });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao listar todas as metodologias do admin.",
       detail: e?.message,
     });
   }
