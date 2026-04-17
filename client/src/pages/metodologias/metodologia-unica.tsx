@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Lock, Play, CheckCircle2, Star } from "lucide-react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useRoute, useLocation } from "wouter";
+import { ArrowLeft, Lock, CheckCircle2, Star } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 
@@ -182,8 +182,11 @@ export default function MetodologiaUnicaPage() {
   const params = matchLearning ? paramsLearning : paramsOld;
   const id = params?.id;
   const searchParams = new URLSearchParams(window.location.search);
-  const origem = String(searchParams.get("origem") || "").toLowerCase();
-  const isAvulsa = origem === "avulsa";
+  const isAvulsa =
+    searchParams.get("origemTipo") === "AVULSA" ||
+    searchParams.get("origem") === "avulsa" ||
+    window.location.search.includes("origemTipo=AVULSA") ||
+    window.location.search.includes("origem=avulsa");
   const veioDoAdmin = searchParams.get("from") === "admin";
   const adminPreview = veioDoAdmin;
   const token =
@@ -200,14 +203,30 @@ export default function MetodologiaUnicaPage() {
   const [playerItem, setPlayerItem] = useState<MetodologiaEstruturaItem | null>(null);
   const [maxTime, setMaxTime] = useState(0); // trava seek
   const [playerEstruturaId, setPlayerEstruturaId] = useState<string | null>(null);
+  const [videoConcluindo, setVideoConcluindo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoConcluindoRef = useRef(false);
+  const maxTimeRef = useRef(0);
+  const playerEstruturaIdRef = useRef<string | null>(null);
+  const playerItemIdRef = useRef<string | null>(null);
 
   async function concluirItem(estruturaId: string, itemId: string) {
     if (!id) return;
     if (!data?.viewer?.temAcesso) return;
 
     try {
+      const params = new URLSearchParams(window.location.search);
+      const isAvulsaAtual =
+        params.get("origemTipo") === "AVULSA" ||
+        params.get("origem") === "avulsa" ||
+        window.location.search.includes("origemTipo=AVULSA") ||
+        window.location.search.includes("origem=avulsa");
+      const base = isAvulsaAtual
+        ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
+        : `${API.BASE_URL}/api/metodologias/${id}`;
+
       const r = await fetch(
-        `${API.BASE_URL}/api/metodologias/${id}/estruturas/${estruturaId}/concluir-item`,
+        `${base}/estruturas/${estruturaId}/concluir-item`,
         {
           method: "POST",
           headers,
@@ -220,9 +239,22 @@ export default function MetodologiaUnicaPage() {
 
       setData((prev) => {
         if (!prev) return prev;
-        const prevIds = prev.viewer?.progresso?.concluidos || [];
-        const set = new Set(prevIds);
-        set.add(itemId);
+
+        const backendConcluidos: string[] = Array.isArray(j?.progresso?.concluidos)
+          ? j.progresso.concluidos.map((v: any) => String(v))
+          : [];
+
+        const prevIds: string[] = Array.isArray(prev.viewer?.progresso?.concluidos)
+          ? prev.viewer.progresso.concluidos.map((v) => String(v))
+          : [];
+
+        const concluidos: string[] = Array.from(
+          new Set<string>([
+            ...prevIds,
+            ...backendConcluidos,
+            String(itemId),
+          ])
+        );
 
         return {
           ...prev,
@@ -230,7 +262,7 @@ export default function MetodologiaUnicaPage() {
             ...prev.viewer,
             progresso: {
               ...prev.viewer.progresso,
-              concluidos: Array.from(set),
+              concluidos,
             },
           },
         };
@@ -238,6 +270,31 @@ export default function MetodologiaUnicaPage() {
     } catch (e: any) {
       console.error(e);
       alert(e?.message || "Erro ao marcar como concluído");
+    }
+  }
+
+  async function concluirVideoAtual() {
+    const estruturaIdAtual = playerEstruturaIdRef.current;
+    const itemIdAtual = playerItemIdRef.current;
+
+    if (!estruturaIdAtual || !itemIdAtual) return;
+    if (videoConcluindoRef.current) return;
+
+    try {
+      videoConcluindoRef.current = true;
+      setVideoConcluindo(true);
+
+      await concluirItem(estruturaIdAtual, itemIdAtual);
+    } finally {
+      setPlayerOpen(false);
+      setPlayerItem(null);
+      setPlayerEstruturaId(null);
+      setVideoConcluindo(false);
+      videoConcluindoRef.current = false;
+      maxTimeRef.current = 0;
+      playerEstruturaIdRef.current = null;
+      playerItemIdRef.current = null;
+      setMaxTime(0);
     }
   }
 
@@ -294,73 +351,174 @@ export default function MetodologiaUnicaPage() {
     navigate("/learning");
   }
 
-  useEffect(() => {
-    if (!id) return;
+  async function loadMetodologia() {
+    if (!id || id === "minhas") {
+      navigate(adminPreview ? "/admin" : "/learning");
+      return;
+    }
 
-    (async () => {
-      setLoading(true);
-      try {
-        const url = adminPreview
-          ? `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${isAvulsa ? "AVULSA" : "LEARNING"}`
-          : isAvulsa
-            ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
-            : `${API.BASE_URL}/api/metodologias/${id}/detalhe`;
+    setLoading(true);
+    try {
+      const search = new URLSearchParams(window.location.search);
+      const fromAdmin = search.get("from") === "admin";
+      const isAvulsa =
+        search.get("origemTipo") === "AVULSA" ||
+        search.get("origem") === "avulsa" ||
+        window.location.search.includes("origemTipo=AVULSA") ||
+        window.location.search.includes("origem=avulsa");
 
-        const r = await fetch(url, { headers });
-        const j = await r.json().catch(() => ({}));
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 
-        if (!r.ok) {
-          alert(j?.message || "Erro ao carregar metodologia");
-          navigate("/learning");
-          return;
-        }
+      const url = fromAdmin
+        ? `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${isAvulsa ? "AVULSA" : "LEARNING"}`
+        : isAvulsa
+          ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
+          : `${API.BASE_URL}/api/metodologias/${id}/detalhe`;
 
-        const raw = j?.item ?? j;
+      const r = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const j = await r.json().catch(() => ({}));
 
-        const normalizado = {
-          ...raw,
-          totalAssinantes: raw?._count?.assinantes ?? raw?.totalAssinantes ?? 0,
-          totalReviews: raw?.totalReviews ?? 0,
-          mediaAvaliacao: raw?.mediaAvaliacao ?? 0,
-          pontosTotal:
-            raw?.pontosTotal ??
-            (raw?.estruturas || []).flatMap((e: any) => e.itens || []).reduce(
-              (acc: number, it: any) =>
-                acc +
-                Number(
-                  it?.pontos ??
-                    (String(it?.tipo || "").toUpperCase() === "TREINO"
-                      ? it?.treinoProgramado?.pontuacao
-                      : 0) ??
-                    0
-                ),
-              0
-            ),
-          criadorNome: raw?.criadorNome ?? raw?.criadorUsuario?.nome ?? null,
-          viewer: raw?.viewer ?? {
-            isAssinante: adminPreview,
-            temAcesso: adminPreview,
-            assinaturaTipo: isAvulsa ? "AVULSA" : "LEARNING",
-            expiraEm: null,
-            podeAssinarAgora: false,
-            podeAvaliar: false,
-            minhaAvaliacao: null,
-            motivoBloqueio: null,
+      if (!r.ok) {
+        alert(j?.message || "Erro ao carregar metodologia");
+        navigate(adminPreview ? "/admin" : "/learning");
+        return;
+      }
+
+      const raw = j?.item ?? j;
+
+      const normalizado = {
+        ...raw,
+        totalAssinantes: raw?._count?.assinantes ?? raw?.totalAssinantes ?? 0,
+        totalReviews: raw?.totalReviews ?? 0,
+        mediaAvaliacao: raw?.mediaAvaliacao ?? 0,
+        pontosTotal:
+          raw?.pontosTotal ??
+          (raw?.estruturas || []).flatMap((e: any) => e.itens || []).reduce(
+            (acc: number, it: any) =>
+              acc +
+              Number(
+                it?.pontos ??
+                  (String(it?.tipo || "").toUpperCase() === "TREINO"
+                    ? it?.treinoProgramado?.pontuacao
+                    : 0) ?? 0
+              ),
+            0
+          ),
+        criadorNome: raw?.criadorNome ?? raw?.criadorUsuario?.nome ?? null,
+        viewer: {
+          isAssinante: raw?.viewer?.isAssinante ?? adminPreview,
+          temAcesso: raw?.viewer?.temAcesso ?? adminPreview,
+          assinaturaTipo: raw?.viewer?.assinaturaTipo ?? (isAvulsa ? "AVULSA" : "LEARNING"),
+          expiraEm: raw?.viewer?.expiraEm ?? null,
+          podeAssinarAgora: raw?.viewer?.podeAssinarAgora ?? false,
+          podeAvaliar: raw?.viewer?.podeAvaliar ?? false,
+          minhaAvaliacao:
+            raw?.viewer?.minhaAvaliacao ??
+            (raw?.minhaAvaliacao ?? null),
+          motivoBloqueio: raw?.viewer?.motivoBloqueio ?? null,
+          progresso: {
+            concluidos: Array.isArray(raw?.viewer?.progresso?.concluidos)
+              ? raw.viewer.progresso.concluidos.map((v: any) => String(v))
+              : [],
+          },
+        },
+      };
+
+      setData((prev) => {
+        const backendIds = Array.isArray(normalizado?.viewer?.progresso?.concluidos)
+          ? normalizado.viewer.progresso.concluidos.map((v: any) => String(v))
+          : [];
+
+        const prevIds = Array.isArray(prev?.viewer?.progresso?.concluidos)
+          ? prev.viewer.progresso.concluidos.map((v: any) => String(v))
+          : [];
+
+        const mergedIds = Array.from(new Set([...prevIds, ...backendIds]));
+
+        return {
+          ...normalizado,
+          viewer: {
+            ...normalizado.viewer,
             progresso: {
-              concluidos: [],
+              ...normalizado.viewer.progresso,
+              concluidos: mergedIds,
             },
           },
         };
+      });
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao carregar metodologia");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-        setData(normalizado);
-      } catch (e) {
-        console.error(e);
-        alert("Erro ao carregar metodologia");
-      } finally {
-        setLoading(false);
-      }
-    })();
+  useEffect(() => {
+    loadMetodologia();
   }, [id, headers, navigate, isAvulsa, adminPreview]);
+
+  useEffect(() => {
+  if (!playerOpen) return;
+
+  const video = videoRef.current;
+  if (!video) return;
+
+  const handleLoadedMetadata = () => {
+    maxTimeRef.current = 0;
+    setMaxTime(0);
+    videoConcluindoRef.current = false;
+    setVideoConcluindo(false);
+  };
+
+  const handleTimeUpdate = async () => {
+    const duration = Number(video.duration || 0);
+    const current = Number(video.currentTime || 0);
+
+    if (current > maxTimeRef.current) {
+      maxTimeRef.current = current;
+      setMaxTime(current);
+    }
+
+    const chegouNoFim =
+      duration > 0 &&
+      current >= Math.max(duration - 0.3, duration * 0.99);
+
+    if (chegouNoFim && !videoConcluindoRef.current) {
+      await concluirVideoAtual();
+    }
+  };
+
+  const handleSeeking = () => {
+    if (video.currentTime > maxTimeRef.current + 0.25) {
+      video.currentTime = maxTimeRef.current;
+    }
+  };
+
+  const handleEnded = async () => {
+    if (!videoConcluindoRef.current) {
+      await concluirVideoAtual();
+    }
+  };
+
+  video.addEventListener("loadedmetadata", handleLoadedMetadata);
+  video.addEventListener("timeupdate", handleTimeUpdate);
+  video.addEventListener("seeking", handleSeeking);
+  video.addEventListener("ended", handleEnded);
+
+  return () => {
+    video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+    video.removeEventListener("timeupdate", handleTimeUpdate);
+    video.removeEventListener("seeking", handleSeeking);
+    video.removeEventListener("ended", handleEnded);
+  };
+}, [playerOpen]);
 
   const estruturasOrdenadas = useMemo(() => {
   const estruturas = data?.estruturas || [];
@@ -403,14 +561,16 @@ export default function MetodologiaUnicaPage() {
     ? Math.round((totalConcluidos / totalItens) * 100) 
     : 0;
   const metodologiaCompleta = pct >= 100;
-  const jaAvaliou = !!data?.viewer?.minhaAvaliacao;
+  const jaAvaliou =
+    !!data?.viewer?.minhaAvaliacao &&
+    typeof data.viewer.minhaAvaliacao.nota === "number";
 
   async function assinarMetodologia() {
     if (!data || !id) return;
 
     const motivo = String(data.viewer?.motivoBloqueio || "");
     if (motivo === "JA_ASSINADA") {
-      navigate("/learning/minhas");
+      navigate(adminPreview ? "/admin" : "/learning")
       return;
     }
 
@@ -440,7 +600,7 @@ export default function MetodologiaUnicaPage() {
         // B) Já atingiu limite (1/1 ou 3/3) -> vai pra Minhas Metodologias
         if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
         alert("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
-        navigate("/learning/minhas");
+        navigate(adminPreview ? "/admin" : "/learning")
         return;
         }
 
@@ -473,7 +633,7 @@ export default function MetodologiaUnicaPage() {
         // Se backend responder limite
         if (j?.code === "LIMITE_METODOLOGIAS") {
             alert(j?.message || "Você já atingiu o limite do seu plano.");
-            navigate("/learning/minhas");
+            navigate(adminPreview ? "/admin" : "/learning")
             return;
         }
 
@@ -483,7 +643,7 @@ export default function MetodologiaUnicaPage() {
 
         // sucesso: redireciona para Minhas Metodologias (ou recarrega detalhe)
         alert("✅ Metodologia adicionada em 'Minhas Metodologias'!");
-        navigate("/learning/minhas");
+        navigate(adminPreview ? "/admin" : "/learning")
     } catch (e) {
         console.error(e);
         alert("Erro ao assinar");
@@ -675,28 +835,52 @@ export default function MetodologiaUnicaPage() {
             {/* ✅ FINALIZAR METODOLOGIA (COLE AQUI) */}
             <div className="mt-4">
               <button
-                disabled={!data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou || !podeAvaliar}
+                disabled={!data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou}
                 onClick={() => {
-                  if (!data.viewer.temAcesso) return;
-                  if (!metodologiaCompleta) return;
+                    if (!data.viewer.temAcesso) return;
 
-                  const titulo = encodeURIComponent(data.titulo || "Metodologia");
-                  navigate(
-                    `/learning/avaliar?metodologiaId=${data.id}${isAvulsa ? "&origem=avulsa" : ""}`
-                  );
-                }}
+                    if (!metodologiaCompleta) {
+                      alert("Conclua todos os itens obrigatórios para finalizar a metodologia.");
+                      return;
+                    }
+
+                    const partes: string[] = ["Metodologia concluída com sucesso!"];
+
+                    if (data.geraBadge) {
+                      partes.push("Sua badge/conquista será disponibilizada.");
+                    }
+
+                    if (data.geraCertificado) {
+                      partes.push("Seu certificado será disponibilizado.");
+                    }
+
+                    alert(partes.join(" "));
+
+                    const temRecompensa = data.geraBadge || data.geraCertificado;
+
+                    navigate(
+                      `/learning/avaliar?metodologiaId=${encodeURIComponent(data.id)}` +
+                        `${isAvulsa ? "&origem=avulsa" : ""}` +
+                        `${adminPreview ? "&from=admin" : ""}` +
+                        `${temRecompensa ? "&reward=1" : ""}`
+                    );
+                  }}
                 className={`w-full h-12 rounded-xl font-semibold text-white ${
                   !data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou
-                    ? "bg-gray-300"
+                    ? "bg-gray-300 cursor-not-allowed"
                     : "bg-green-800 hover:bg-green-900"
                 }`}
               >
-                {jaAvaliou ? "Metodologia já avaliada ✅" : "Finalizar metodologia"}
+                {!metodologiaCompleta
+                  ? "Finalizar metodologia"
+                  : jaAvaliou
+                    ? "Metodologia concluída"
+                    : "Concluir metodologia"}
               </button>
 
               {!metodologiaCompleta && (
                 <div className="mt-2 text-xs text-gray-500">
-                  Conclua todos os vídeos e treinos para liberar o botão.
+                  Conclua todos os itens da metodologia para liberar o botão.
                 </div>
               )}
             </div>
@@ -768,15 +952,13 @@ export default function MetodologiaUnicaPage() {
 
             <div className="mt-3 space-y-3">
               {estrutura.itens.map((it) => {
-                const concluido = concluIds.has(it.id);
-                const locked = bloquearAcao();
-                const tipoUpper = String(it.tipo).toUpperCase();
-                
-                const isVideo = ["VIDEO", "AULA"].includes(tipoUpper);
-                const isTreino = tipoUpper === "TREINO";
+                const tipoUpper = String(it.tipo || "").toUpperCase();
+                const isVideo = tipoUpper === "VIDEO" || tipoUpper === "AULA";
                 const isMaterial = tipoUpper === "MATERIAL";
+                const isTreino = tipoUpper === "TREINO";
                 const isDesafio = tipoUpper === "DESAFIO";
-
+                const concluido = concluIds.has(it.id);
+                const locked = !adminPreview && !data.viewer.temAcesso;
                 const thumbRaw = isVideo
                   ? (it.thumbUrl || thumbFromVideo[it.id] || null)
                   : isMaterial
@@ -788,7 +970,14 @@ export default function MetodologiaUnicaPage() {
                   : null;
 
                 const imgSrc = getItemImage(it, thumbFromVideo);
-                
+                const pontosItem = Number(
+                  it?.pontos ??
+                    (String(it?.tipo || "").toUpperCase() === "TREINO"
+                      ? it?.treinoProgramado?.pontuacao
+                      : 0) ??
+                    0
+                );
+
                 return (
                   <div key={it.id} className="rounded-xl border p-3 flex items-center gap-3">
                     <img
@@ -811,14 +1000,8 @@ export default function MetodologiaUnicaPage() {
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="px-2 py-1 rounded-full text-xs border bg-amber-50 text-amber-900">
-                            + {Number(
-                                it.pontos ??
-                                (String(it.tipo || "").toUpperCase() === "TREINO"
-                                  ? it.treinoProgramado?.pontuacao
-                                  : 0) ??
-                                0
-                              )} pts
+                          <span className="rounded-full border border-[#d8c9a7] bg-[#f6f1e4] text-[#a76500] text-sm px-3 py-1 whitespace-nowrap">
+                            + {pontosItem} pts
                           </span>
 
                           {concluido ? (
@@ -845,9 +1028,15 @@ export default function MetodologiaUnicaPage() {
                               className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
+                                videoConcluindoRef.current = false;
+                                maxTimeRef.current = 0;
+                                playerEstruturaIdRef.current = estrutura.id;
+                                playerItemIdRef.current = it.id;
+
+                                setVideoConcluindo(false);
+                                setMaxTime(0);
                                 setPlayerItem(it as any);
                                 setPlayerEstruturaId(estrutura.id);
-                                setMaxTime(0);
                                 setPlayerOpen(true);
                               }}
                             >
@@ -858,33 +1047,33 @@ export default function MetodologiaUnicaPage() {
                           {isTreino && (
                             <button
                               disabled={locked}
-                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60 flex items-center gap-2"
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
-                                if (it.treinoProgramadoId) {
-                                  navigate(
-                                    `/treinos/unico?programadoId=${it.treinoProgramadoId}` +
-                                      `&metodologiaId=${data.id}` +
-                                      `&estruturaId=${estrutura.id}` +
-                                      `&metodologiaItemId=${it.id}`
-                                  );
+                                if (!it.treinoProgramadoId) {
+                                  alert("Este item não possui treino vinculado.");
+                                  return;
                                 }
+
+                                navigate(
+                                  `/treinos/metodologia` +
+                                    `?treinoProgramadoId=${encodeURIComponent(it.treinoProgramadoId)}` +
+                                    `&metodologiaId=${encodeURIComponent(data.id)}` +
+                                    `&estruturaId=${encodeURIComponent(estrutura.id)}` +
+                                    `&metodologiaItemId=${encodeURIComponent(it.id)}` +
+                                    `${isAvulsa ? `&origem=avulsa` : ""}` +
+                                    `${adminPreview ? `&from=admin` : ""}`
+                                );
                               }}
                             >
-                              <Play className="w-4 h-4" />
-                              {concluido ? "Ver novamente" : "Iniciar"}
+                              {concluido ? "Treino enviado" : "Iniciar"}
                             </button>
                           )}
 
-                          {isMaterial && (it.arquivoUrl || it.materialUrl) && (
+                          {isMaterial && (
                             <button
-                              type="button"
                               disabled={locked}
-                              className={`px-3 py-2 rounded-lg text-sm font-semibold ${
-                                locked
-                                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                                  : "bg-slate-800 text-white hover:bg-slate-900"
-                              }`}
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={async () => {
                                 if (locked) return;
 
@@ -894,7 +1083,29 @@ export default function MetodologiaUnicaPage() {
                                 await concluirItem(estrutura.id, it.id);
                               }}
                             >
-                              Abrir material
+                              {concluido ? "Concluído" : "Abrir material"}
+                            </button>
+                          )}
+
+                          {isDesafio && (
+                            <button
+                              disabled={locked}
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              onClick={() => {
+                                if (locked) return;
+
+                                navigate(
+                                  `/submissao?desafioId=${it.id}` +
+                                  `&metodologiaId=${data.id}` +
+                                  `&estruturaId=${estrutura.id}` +
+                                  `&metodologiaItemId=${it.id}` +
+                                  `&tipo=desafio` +
+                                  `${isAvulsa ? `&origemTipo=AVULSA` : ``}` +
+                                  `${adminPreview ? `&from=admin` : ``}`
+                                );
+                              }}
+                            >
+                              {concluido ? "Ver submissão" : "Enviar submissão"}
                             </button>
                           )}
                         </div>
@@ -925,6 +1136,12 @@ export default function MetodologiaUnicaPage() {
                   setPlayerOpen(false);
                   setPlayerItem(null);
                   setPlayerEstruturaId(null);
+                  setVideoConcluindo(false);
+                  videoConcluindoRef.current = false;
+                  maxTimeRef.current = 0;
+                  playerEstruturaIdRef.current = null;
+                  playerItemIdRef.current = null;
+                  setMaxTime(0);
                 }}
               >
                 Fechar
@@ -933,30 +1150,15 @@ export default function MetodologiaUnicaPage() {
 
             <div className="bg-black">
               <video
+                ref={videoRef}
                 src={normalizeMediaUrl(playerItem.videoUrl) || playerItem.videoUrl || ""}
+                preload="metadata"
                 controls
                 controlsList="nodownload noplaybackrate"
                 disablePictureInPicture
                 playsInline
                 autoPlay
                 className="w-full max-h-[70vh]"
-                onTimeUpdate={(e) => {
-                  const v = e.currentTarget;
-                  setMaxTime((prev) => Math.max(prev, v.currentTime));
-                }}
-                onSeeking={(e) => {
-                  const v = e.currentTarget;
-                  if (v.currentTime > maxTime + 0.25) v.currentTime = maxTime;
-                }}
-                onEnded={async () => {
-                  if (playerEstruturaId) {
-                    await concluirItem(playerEstruturaId, playerItem.id);
-                  }
-                  // ✅ fecha ao concluir (opcional, mas recomendado)
-                  setPlayerOpen(false);
-                  setPlayerItem(null);
-                  setPlayerEstruturaId(null);
-                }}
               />
             </div>
 

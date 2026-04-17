@@ -45,6 +45,7 @@ import {
   atualizarExercicioPersonalizado,
   deletarExercicioPersonalizado,
   getMeusExercicios,
+  iniciarTreinoViaMetodologia,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -88,6 +89,7 @@ router.put(
   ),
   atualizarTreinoProgramado
 );
+router.post("/programados/:id/iniciar-via-metodologia", iniciarTreinoViaMetodologia);
 router.delete("/programados/:id", deletarTreinoProgramado);
 router.get("/programados", listarTodosTreinosProgramados);
 router.post(

@@ -5,6 +5,73 @@ function normStr(v: any) {
   return String(v ?? "").trim();
 }
 
+async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
+  const out: Record<
+    string,
+    {
+      treinoCount: number;
+      videoCount: number;
+      aulaCount: number;
+      materialCount: number;
+      desafioCount: number;
+      estruturaCount: number;
+    }
+  > = {};
+
+  if (!ids.length) return out;
+
+  const [estruturas, itens] = await Promise.all([
+    prisma.metodologiaEstrutura.findMany({
+      where: { metodologiaId: { in: ids } },
+      select: { id: true, metodologiaId: true },
+    }),
+    prisma.metodologiaEstruturaItem.findMany({
+      where: {
+        estrutura: {
+          metodologiaId: { in: ids },
+        },
+      },
+      select: {
+        tipo: true,
+        estrutura: {
+          select: {
+            metodologiaId: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  for (const id of ids) {
+    out[id] = {
+      treinoCount: 0,
+      videoCount: 0,
+      aulaCount: 0,
+      materialCount: 0,
+      desafioCount: 0,
+      estruturaCount: 0,
+    };
+  }
+
+  for (const e of estruturas) {
+    if (!out[e.metodologiaId]) continue;
+    out[e.metodologiaId].estruturaCount++;
+  }
+
+  for (const it of itens) {
+    const metodologiaId = it.estrutura.metodologiaId;
+    if (!out[metodologiaId]) continue;
+
+    if (it.tipo === "TREINO") out[metodologiaId].treinoCount++;
+    if (it.tipo === "VIDEO") out[metodologiaId].videoCount++;
+    if (it.tipo === "AULA") out[metodologiaId].aulaCount++;
+    if (it.tipo === "MATERIAL") out[metodologiaId].materialCount++;
+    if (it.tipo === "DESAFIO") out[metodologiaId].desafioCount++;
+  }
+
+  return out;
+}
+
 export async function listMetodologiasPendentes(req: Request, res: Response) {
   try {
     const page = Math.max(1, Number(req.query.page || 1));
@@ -115,9 +182,37 @@ export async function listMetodologiasPendentes(req: Request, res: Response) {
       }),
     ]);
 
+    const learningIds = learningItems.map((m) => m.id);
+    const learningCountsById = await anexarCountsEstruturaPorMetodologia(learningIds);
+
     const items = [
-      ...learningItems.map((m) => ({ ...m, origemTipo: "LEARNING" })),
-      ...avulsaItems.map((m) => ({ ...m, origemTipo: "AVULSA" })),
+      ...learningItems.map((m) => ({
+        ...m,
+        origemTipo: "LEARNING",
+        videoCount: learningCountsById[m.id]?.videoCount ?? 0,
+        aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+        treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
+        materialCount: learningCountsById[m.id]?.materialCount ?? 0,
+        desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
+        estruturaCount: learningCountsById[m.id]?.estruturaCount ?? 0,
+      })),
+      ...avulsaItems.map((m) => {
+        const itens = (m.estruturas || []).flatMap((e: any) => e.itens || []);
+        return {
+          ...m,
+          origemTipo: "AVULSA",
+          videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
+          aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
+          treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
+          materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
+          desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,
+          estruturaCount: (m.estruturas || []).length,
+          _count: {
+            ...(m as any)._count,
+            estruturas: (m.estruturas || []).length,
+          },
+        };
+      }),
     ].sort(
       (a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime()
     );
@@ -190,8 +285,133 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
   try {
     const { id } = req.params;
     const origemTipo = String(req.query.origemTipo || "LEARNING").toUpperCase();
+    const userId = (req as any).user?.id || (req as any).userId || null;
 
-    if (origemTipo === "AVULSA") {
+    const isAvulsa = origemTipo === "AVULSA";
+
+    const assinatura = userId
+      ? isAvulsa
+        ? await prisma.metodologiaAssinante.findFirst({
+            where: {
+              metodologiaAvulsaId: id,
+              usuarioId: userId,
+            },
+            select: {
+              id: true,
+              status: true,
+              expiraEm: true,
+              iniciouEm: true,
+              concluiuEm: true,
+              origem: true,
+              progresso: true,
+            },
+          })
+        : await prisma.metodologiaAssinante.findUnique({
+            where: {
+              metodologiaId_usuarioId: {
+                metodologiaId: id,
+                usuarioId: userId,
+              },
+            },
+            select: {
+              id: true,
+              status: true,
+              expiraEm: true,
+              iniciouEm: true,
+              concluiuEm: true,
+              origem: true,
+              progresso: true,
+            },
+          })
+      : null;
+
+    const progressoEstruturas =
+      assinatura?.id && !isAvulsa
+        ? await prisma.metodologiaProgressoEstrutura.findMany({
+            where: {
+              metodologiaAssinanteId: assinatura.id,
+            },
+            select: {
+              progresso: true,
+            },
+          })
+        : [];
+
+    const concluidosAssinatura = Array.isArray((assinatura as any)?.progresso?.concluidos)
+      ? (assinatura as any).progresso.concluidos.map((v: any) => String(v))
+      : [];
+
+    const concluidosEstruturas = progressoEstruturas.flatMap((p: any) =>
+      Array.isArray(p?.progresso?.concluidos)
+        ? p.progresso.concluidos.map((v: any) => String(v))
+        : []
+    );
+
+    const concluidosSubmissoes = userId
+      ? isAvulsa
+        ? await (prisma as any).metodologiaItemSubmissao.findMany({
+            where: {
+              metodologiaAvulsaId: id,
+              usuarioId: userId,
+            },
+            select: { itemAvulsaId: true },
+          })
+        : await (prisma as any).metodologiaItemSubmissao.findMany({
+            where: {
+              metodologiaId: id,
+              usuarioId: userId,
+            },
+            select: { itemId: true },
+          })
+      : [];
+
+    const concluidosSubmissoesIds = isAvulsa
+      ? concluidosSubmissoes
+          .map((c: any) => c?.itemAvulsaId)
+          .filter(Boolean)
+          .map((v: any) => String(v))
+      : concluidosSubmissoes
+          .map((c: any) => c?.itemId)
+          .filter(Boolean)
+          .map((v: any) => String(v));
+
+    const concluidosIds = Array.from(
+      new Set<string>([
+        ...concluidosAssinatura,
+        ...concluidosEstruturas,
+        ...concluidosSubmissoesIds,
+      ])
+    );
+
+    const minhaAvaliacao = userId
+      ? isAvulsa
+        ? await prisma.avaliacaoMetodologia.findFirst({
+            where: {
+              usuarioId: userId,
+              metodologiaAvulsaId: id,
+            },
+            select: {
+              nota: true,
+              comentario: true,
+              updatedAt: true,
+            },
+          })
+        : await prisma.avaliacaoMetodologia.findUnique({
+            where: {
+              metodologiaId_usuarioId: {
+                metodologiaId: id,
+                usuarioId: userId,
+              },
+            },
+            select: {
+              nota: true,
+              comentario: true,
+              updatedAt: true,
+            },
+          })
+      : null;
+
+    if (isAvulsa) {
       const item = await prisma.metodologiaAvulsa.findUnique({
         where: { id },
         include: {
@@ -254,6 +474,34 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
         item: {
           ...item,
           origemTipo: "AVULSA",
+          viewer: {
+            isAssinante: true,
+            temAcesso: true,
+            assinaturaTipo: "AVULSA",
+            expiraEm: assinatura?.expiraEm
+              ? new Date(assinatura.expiraEm).toISOString()
+              : null,
+            podeAssinarAgora: false,
+            podeAvaliar:
+              !!userId &&
+              !minhaAvaliacao &&
+              (Boolean(assinatura?.concluiuEm) || concluidosIds.length > 0),
+            minhaAvaliacao: minhaAvaliacao
+              ? {
+                  nota: minhaAvaliacao.nota,
+                  comentario: minhaAvaliacao.comentario,
+                  updatedAt: minhaAvaliacao.updatedAt.toISOString(),
+                }
+              : null,
+            motivoBloqueio: null,
+            progresso: {
+              concluidos: concluidosIds,
+            },
+            status: assinatura?.status ?? null,
+            concluiuEm: assinatura?.concluiuEm
+              ? new Date(assinatura.concluiuEm).toISOString()
+              : null,
+          },
         },
       });
     }
@@ -338,6 +586,34 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
       item: {
         ...item,
         origemTipo: "LEARNING",
+        viewer: {
+          isAssinante: true,
+          temAcesso: true,
+          assinaturaTipo: "LEARNING",
+          expiraEm: assinatura?.expiraEm
+            ? new Date(assinatura.expiraEm).toISOString()
+            : null,
+          podeAssinarAgora: false,
+          podeAvaliar:
+            !!userId &&
+            !minhaAvaliacao &&
+            (Boolean(assinatura?.concluiuEm) || concluidosIds.length > 0),
+          minhaAvaliacao: minhaAvaliacao
+            ? {
+                nota: minhaAvaliacao.nota,
+                comentario: minhaAvaliacao.comentario,
+                updatedAt: minhaAvaliacao.updatedAt.toISOString(),
+              }
+            : null,
+          motivoBloqueio: null,
+          progresso: {
+            concluidos: concluidosIds,
+          },
+          status: assinatura?.status ?? null,
+          concluiuEm: assinatura?.concluiuEm
+            ? new Date(assinatura.concluiuEm).toISOString()
+            : null,
+        },
       },
     });
   } catch (e: any) {
@@ -481,15 +757,37 @@ export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
       }),
     ]);
 
+    const learningIds = learningItems.map((m) => m.id);
+    const learningCountsById = await anexarCountsEstruturaPorMetodologia(learningIds);
+
     const allItems = [
       ...learningItems.map((m) => ({
         ...m,
         origemTipo: "LEARNING" as const,
+        videoCount: learningCountsById[m.id]?.videoCount ?? 0,
+        aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+        treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
+        materialCount: learningCountsById[m.id]?.materialCount ?? 0,
+        desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
+        estruturaCount: learningCountsById[m.id]?.estruturaCount ?? 0,
       })),
-      ...avulsaItems.map((m) => ({
-        ...m,
-        origemTipo: "AVULSA" as const,
-      })),
+      ...avulsaItems.map((m) => {
+        const itens = (m.estruturas || []).flatMap((e: any) => e.itens || []);
+        return {
+          ...m,
+          origemTipo: "AVULSA" as const,
+          videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
+          aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
+          treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
+          materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
+          desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,
+          estruturaCount: (m.estruturas || []).length,
+          _count: {
+            ...(m as any)._count,
+            estruturas: (m.estruturas || []).length,
+          },
+        };
+      })
     ].sort(
       (a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime()
     );

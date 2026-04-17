@@ -28,6 +28,50 @@ function normalizeMediaUrl(raw?: string | null) {
   return u;
 }
 
+function Stars({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(5, Number(value || 0)));
+  const half = Math.round(v * 2) / 2;
+  const full = Math.floor(half);
+  const hasHalf = half - full === 0.5;
+
+  return (
+    <div className="flex items-center gap-[2px]">
+      {Array.from({ length: 5 }).map((_, i) => {
+        const idx = i + 1;
+
+        if (idx <= full) {
+          return (
+            <svg key={i} viewBox="0 0 20 20" className="w-4 h-4 text-amber-500 fill-amber-500">
+              <path d="M10 1.5l2.47 5 5.52.8-4 3.9.95 5.5L10 14.1 5.06 16.7 6 11.2l-4-3.9 5.53-.8L10 1.5z" />
+            </svg>
+          );
+        }
+
+        if (idx === full + 1 && hasHalf) {
+          return (
+            <span key={i} className="relative inline-block w-4 h-4">
+              <svg viewBox="0 0 20 20" className="absolute inset-0 w-4 h-4 text-gray-300 fill-gray-300">
+                <path d="M10 1.5l2.47 5 5.52.8-4 3.9.95 5.5L10 14.1 5.06 16.7 6 11.2l-4-3.9 5.53-.8L10 1.5z" />
+              </svg>
+              <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
+                <svg viewBox="0 0 20 20" className="w-4 h-4 text-amber-500 fill-amber-500">
+                  <path d="M10 1.5l2.47 5 5.52.8-4 3.9.95 5.5L10 14.1 5.06 16.7 6 11.2l-4-3.9 5.53-.8L10 1.5z" />
+                </svg>
+              </span>
+            </span>
+          );
+        }
+
+        return (
+          <svg key={i} viewBox="0 0 20 20" className="w-4 h-4 text-gray-300 fill-gray-300">
+            <path d="M10 1.5l2.47 5 5.52.8-4 3.9.95 5.5L10 14.1 5.06 16.7 6 11.2l-4-3.9 5.53-.8L10 1.5z" />
+          </svg>
+        );
+      })}
+    </div>
+  );
+}
+
 type Props = {
   item: any;
   href: string;
@@ -42,6 +86,12 @@ export default function LearningCard({
   extraActions,
 }: Props) {
   const capa = normalizeMediaUrl(item?.capaUrl || item?.logoUrl);
+  const statusAssinatura = String(item?.status || "").toUpperCase();
+  const concluida =
+    statusAssinatura === "CONCLUIDA" || !!item?.concluiuEm;
+  const rating = Number(item?.mediaAvaliacao ?? 0);
+  const reviews = Number(item?.totalReviews ?? 0);
+  const assinaturas = Number(item?._count?.assinantes ?? item?.totalAssinantes ?? 0);
 
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
@@ -93,10 +143,24 @@ export default function LearningCard({
                 Badge
               </span>
             ) : null}
+
+            {concluida ? (
+              <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800">
+                Concluída
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-2 text-lg font-extrabold text-[#193b2e] line-clamp-1">
             {item?.titulo || "Metodologia"}
+          </div>
+
+          <div className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+            <Stars value={rating} />
+            <span className="font-semibold text-slate-800">{rating.toFixed(1)}</span>
+            <span>({reviews})</span>
+            <span className="text-slate-400">•</span>
+            <span><b>{assinaturas}</b> assinaturas</span>
           </div>
 
           {item?.descricao ? (
@@ -118,7 +182,7 @@ export default function LearningCard({
             </span>
 
             <span className="px-2 py-1 rounded-full border bg-slate-50">
-              {item?.videoCount ?? 0} vídeos/aulas
+              {(Number(item?.videoCount ?? 0) + Number(item?.aulaCount ?? 0))} vídeos/aulas
             </span>
 
             <span className="px-2 py-1 rounded-full border bg-slate-50">
@@ -127,6 +191,10 @@ export default function LearningCard({
 
             <span className="px-2 py-1 rounded-full border bg-slate-50">
               {item?.materialCount ?? 0} materiais
+            </span>
+
+            <span className="px-2 py-1 rounded-full border bg-slate-50">
+              {item?.desafioCount ?? 0} desafios
             </span>
           </div>
 

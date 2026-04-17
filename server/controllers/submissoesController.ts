@@ -46,31 +46,49 @@ export async function criarSubmissaoTreinoUpload(
     const {
       observacao,
       treinoAgendadoId,
-      atletaId,
+      atletaId: atletaIdBody,
       duracaoMinutos,
       tempoSeg,
       repeticoes,
+      metodologiaId,
+      estruturaId,
+      metodologiaItemId,
+      origemTipo,
     } = req.body as {
       observacao?: string;
       treinoAgendadoId: string;
-      atletaId: string;
+      atletaId?: string;
       duracaoMinutos?: number | string;
       tempoSeg?: number | string;
       repeticoes?: number | string;
+      metodologiaId?: string;
+      estruturaId?: string;
+      metodologiaItemId?: string;
+      origemTipo?: string;
     };
 
     const file = (req as any).file as Express.Multer.File | undefined;
 
-    if (!treinoAgendadoId || !atletaId) {
-      return res
-        .status(400)
-        .json({ error: "Informe atletaId e treinoAgendadoId." });
+    if (!treinoAgendadoId) {
+      return res.status(400).json({ error: "Informe treinoAgendadoId." });
     }
+
     if (!file) {
       return res
         .status(400)
         .json({ error: "Envie um arquivo de imagem/vídeo do treino." });
     }
+
+    const ag = await prisma.treinoAgendado.findUnique({
+      where: { id: treinoAgendadoId },
+      include: { treinoProgramado: true, atleta: true },
+    });
+
+    if (!ag?.treinoProgramado) {
+      return res.status(400).json({ error: "Treino inválido." });
+    }
+
+    const atletaId = atletaIdBody || ag.atletaId || null;
 
     const assetUrl = `/uploads/${file.filename}`;
     const isVideo = !!file.mimetype?.startsWith("video");
@@ -84,29 +102,19 @@ export async function criarSubmissaoTreinoUpload(
       storageClass: StorageClass.HOT,
     };
 
-    const usuarioIdForActivity = await resolveUsuarioIdForActivity(req.user?.id, atletaId);
-
     const tempoSegNum =
       tempoSeg != null
         ? Number(tempoSeg)
         : duracaoMinutos != null
-        ? Math.round(Number(duracaoMinutos) * 60)
-        : undefined;
-
-    const ag = await prisma.treinoAgendado.findUnique({
-      where: { id: treinoAgendadoId },
-      include: { treinoProgramado: true },
-    });
-    if (!ag?.treinoProgramado) {
-      return res.status(400).json({ error: "Treino inválido." });
-    }
+          ? Math.round(Number(duracaoMinutos) * 60)
+          : undefined;
 
     const minutosProgramados =
-      ag.treinoProgramado.duracao != null ? Number(ag.treinoProgramado.duracao) : undefined;
+      ag.treinoProgramado.duracao != null
+        ? Number(ag.treinoProgramado.duracao)
+        : undefined;
 
-    
     const tempoRealSeg = tempoSegNum != null ? Number(tempoSegNum) : undefined;
-
     const minutosReais = toMinutos(tempoRealSeg);
 
     const duracaoMinutosFinal =
@@ -121,6 +129,7 @@ export async function criarSubmissaoTreinoUpload(
       minutosReais ?? minutosProgramados ?? undefined;
 
     if (minutosConsiderados == null) minutosConsiderados = 1;
+
     if (
       minutosProgramados != null &&
       minutosReais != null &&
@@ -131,9 +140,89 @@ export async function criarSubmissaoTreinoUpload(
     }
 
     const pontosBase = Number(ag.treinoProgramado.pontuacao ?? 0);
-    const pontosConsiderados = penalidadeAtraso ? Math.floor(pontosBase / 2) : pontosBase;
+    const pontosConsiderados = penalidadeAtraso
+      ? Math.floor(pontosBase / 2)
+      : pontosBase;
     const repeticoesNum =
       repeticoes != null ? Number(repeticoes) : undefined;
+
+    let isAvulsa = String(origemTipo || "").toUpperCase() === "AVULSA";
+
+    if (!isAvulsa && metodologiaId && estruturaId && metodologiaItemId) {
+      const itemAvulsa = await prisma.metodologiaAvulsaEstruturaItem.findFirst({
+        where: {
+          id: metodologiaItemId,
+          estruturaId,
+          estrutura: {
+            metodologiaAvulsaId: metodologiaId,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (itemAvulsa) {
+        isAvulsa = true;
+      }
+    }
+    
+    if (!atletaId) {
+      if (metodologiaId && estruturaId && metodologiaItemId) {
+        await (prisma as any).metodologiaItemSubmissao.create({
+          data: isAvulsa
+            ? {
+                metodologiaId: null,
+                metodologiaAvulsaId: metodologiaId,
+                estruturaId: null,
+                estruturaAvulsaId: estruturaId,
+                itemId: null,
+                itemAvulsaId: metodologiaItemId,
+                usuarioId: req.user?.id || "",
+                tipoItem: "TREINO",
+                observacao: observacao || null,
+                arquivoUrl: assetUrl,
+                mimeType: file?.mimetype || null,
+                status: "ENVIADA",
+              }
+            : {
+                metodologiaId,
+                metodologiaAvulsaId: null,
+                estruturaId,
+                estruturaAvulsaId: null,
+                itemId: metodologiaItemId,
+                itemAvulsaId: null,
+                usuarioId: req.user?.id || "",
+                tipoItem: "TREINO",
+                observacao: observacao || null,
+                arquivoUrl: assetUrl,
+                mimeType: file?.mimetype || null,
+                status: "ENVIADA",
+              },
+        });
+
+        return res.status(201).json({
+          ok: true,
+          autoAprovado: true,
+          pontosBase,
+          pontosCreditados: 0,
+          minutosConsiderados: minutosConsiderados ?? null,
+          penalidadeAtraso,
+          mensagem: "Submissão do treino da metodologia enviada com sucesso.",
+        });
+      }
+
+      return res.status(400).json({
+        error:
+          "Este treino não possui atleta vinculado. Envie como treino de metodologia.",
+      });
+    }
+
+    // =========================
+    // FLUXO NORMAL COM ATLETA
+    // =========================
+    const usuarioIdForActivity = await resolveUsuarioIdForActivity(
+      req.user?.id,
+      atletaId
+    );
 
     const existing = await prisma.submissaoTreino.findUnique({
       where: { atletaId_treinoAgendadoId: { atletaId, treinoAgendadoId } },
@@ -171,7 +260,12 @@ export async function criarSubmissaoTreinoUpload(
 
     const isFirst = !existing;
     if (isFirst) {
-      await aplicarEstatisticasPosSubmissao(created.id, atletaId, treinoAgendadoId, minutosConsiderados).catch(() => {});
+      await aplicarEstatisticasPosSubmissao(
+        created.id,
+        atletaId,
+        treinoAgendadoId,
+        minutosConsiderados
+      ).catch(() => {});
     }
 
     if (usuarioIdForActivity) {
@@ -192,7 +286,10 @@ export async function criarSubmissaoTreinoUpload(
       where: { id: atletaId },
       select: { usuarioId: true },
     });
-    if (atleta?.usuarioId) atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
+
+    if (atleta?.usuarioId) {
+      atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
+    }
 
     const tipoStr = inferirTipoTreino({
       nome: ag?.treinoProgramado?.nome ?? undefined,
@@ -205,12 +302,14 @@ export async function criarSubmissaoTreinoUpload(
         .normalize("NFD")
         .replace(/\p{Diacritic}/gu, "")
         .toLowerCase();
+
       const map: Record<string, TipoTreino> = {
         fisico: "Fisico",
         tecnico: "Tecnico",
         tatico: "Tatico",
         mental: "Mental",
       };
+
       const enumVal = map[v];
       if (enumVal) {
         await prisma.atleta.update({
@@ -221,6 +320,40 @@ export async function criarSubmissaoTreinoUpload(
           },
         });
       }
+    }
+
+    if (metodologiaId && estruturaId && metodologiaItemId) {
+      await (prisma as any).metodologiaItemSubmissao.create({
+        data: isAvulsa
+          ? {
+              metodologiaId: null,
+              metodologiaAvulsaId: metodologiaId,
+              estruturaId: null,
+              estruturaAvulsaId: estruturaId,
+              itemId: null,
+              itemAvulsaId: metodologiaItemId,
+              usuarioId: req.user?.id || "",
+              tipoItem: "TREINO",
+              observacao: observacao || null,
+              arquivoUrl: assetUrl,
+              mimeType: file?.mimetype || null,
+              status: "ENVIADA",
+            }
+          : {
+              metodologiaId,
+              metodologiaAvulsaId: null,
+              estruturaId,
+              estruturaAvulsaId: null,
+              itemId: metodologiaItemId,
+              itemAvulsaId: null,
+              usuarioId: req.user?.id || "",
+              tipoItem: "TREINO",
+              observacao: observacao || null,
+              arquivoUrl: assetUrl,
+              mimeType: file?.mimetype || null,
+              status: "ENVIADA",
+            },
+      }).catch(() => null);
     }
 
     return res.status(201).json({
@@ -236,9 +369,7 @@ export async function criarSubmissaoTreinoUpload(
     });
   } catch (error) {
     console.error("Erro ao salvar submissão de treino:", error);
-    return res
-      .status(500)
-      .json({ error: "Erro ao salvar submissão de treino." });
+    return res.status(500).json({ error: "Erro ao salvar submissão de treino." });
   }
 }
 
@@ -481,7 +612,11 @@ export async function criarSubmissaoTreinoSessaoUpload(
     });
 
     const agendadoByAtleta = new Map<string, string>();
-    agendados.forEach((a) => agendadoByAtleta.set(a.atletaId, a.id));
+      agendados.forEach((a) => {
+        if (a.atletaId) {
+          agendadoByAtleta.set(a.atletaId, a.id);
+        }
+    });
 
     const faltando = presentesIds.filter((id) => !agendadoByAtleta.get(id));
     if (faltando.length) {

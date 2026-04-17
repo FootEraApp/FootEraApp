@@ -7,7 +7,8 @@ import { FLAGS } from "../config.js";
 import ToggleSwitch from "../components/ToggleSwitch";
 import axios from "axios";
 import Storage from "../utils/storage.js"
-
+import LearningCard from "../components/learning/LearningCard.js";
+import { Pencil, Trash2 } from "lucide-react";
 // <-- ajuste o caminho correto do seu storage.ts do CLIENT
 type Tab =
   | "dashboard"
@@ -215,6 +216,15 @@ function formatResultado(it: ModeracaoItem) {
 
   if (unidade === "s") return `${r}s`;
   return unidade ? `${r} ${unidade}` : String(r);
+}
+
+function getAdminMetodologiaHref(item: any) {
+  const origemTipo = String(item?.origemTipo || item?.origemRegistro || "LEARNING").toUpperCase();
+  const isAvulsa = origemTipo === "AVULSA";
+
+  return isAvulsa
+    ? `/learning/${item.id}?from=admin&origem=avulsa`
+    : `/learning/${item.id}?from=admin`;
 }
 
 export default function AdminDashboard() {
@@ -562,6 +572,145 @@ async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string, origemTi
   } finally {
     setAcaoBusyId(null);
   }
+}
+
+async function ativarMetodologiaAdmin(
+  id: string,
+  origemTipo: "LEARNING" | "AVULSA",
+  titulo?: string
+) {
+  setAcaoBusyId(id);
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}/ativo`, {
+      method: "PATCH",
+      headers: {
+        ...authHeaders({ "Content-Type": "application/json" }),
+      },
+      body: JSON.stringify({
+        ativo: true,
+        origemTipo,
+      }),
+    });
+
+    const txt = await r.text().catch(() => "");
+    let json: any = null;
+    try {
+      json = txt ? JSON.parse(txt) : null;
+    } catch {
+      json = null;
+    }
+
+    if (!r.ok) {
+      showToast("error", json?.message || txt || `Erro HTTP ${r.status}`);
+      return;
+    }
+
+    setMetPendentes((prev) => prev.filter((m) => m.id !== id));
+    setMetTotal((prev) => Math.max(0, prev - 1));
+
+    showToast(
+      "success",
+      `Metodologia "${titulo || "sem título"}" ativada com sucesso.`
+    );
+
+    // opcional: recarrega também a aba "todas"
+    carregarTodasMetodologiasAdmin(metTodasPage);
+  } catch (e: any) {
+    showToast("error", e?.message || "Erro ao ativar metodologia.");
+  } finally {
+    setAcaoBusyId(null);
+  }
+}
+
+function renderMetodologiaAdminActions(
+  item: any,
+  tabOrigem: "pendentes" | "minhas" | "todas"
+) {
+  const origemTipo = String(
+    item?.origemTipo || item?.origemRegistro || "LEARNING"
+  ).toUpperCase() as "LEARNING" | "AVULSA";
+
+  if (tabOrigem === "pendentes") {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = getAdminMetodologiaHref(item);
+          }}
+          className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+        >
+          Ver metodologia
+        </button>
+
+        <button
+          type="button"
+          onClick={() => ativarMetodologiaAdmin(item.id, origemTipo, item.titulo)}
+          className="inline-flex h-10 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold items-center"
+          disabled={acaoBusyId === item.id}
+        >
+          {acaoBusyId === item.id ? "Ativando..." : "Ativar"}
+        </button>
+      </>
+    );
+  }
+
+  if (tabOrigem === "minhas") {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = getAdminMetodologiaHref(item);
+          }}
+          className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+        >
+          Gerenciar
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href =
+              `/learning/create?id=${item.id}` +
+              `&tipo=${encodeURIComponent(item.tipo || "")}` +
+              `&origem=${origemTipo === "AVULSA" ? "avulsa" : "learning"}`;
+          }}
+          className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
+          title="Editar metodologia"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            apagarMinhaMetodologiaAdmin(item.id, item.titulo, origemTipo)
+          }
+          className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 h-10 text-red-600"
+          title="Apagar metodologia"
+          disabled={acaoBusyId === item.id}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          window.location.href = getAdminMetodologiaHref(item);
+        }}
+        className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+      >
+        Ver metodologia
+      </button>
+    </>
+  );
 }
 
 async function bloquearOuReativarConta(
@@ -2472,69 +2621,23 @@ async function confirmarExcluirProfessor() {
                     Nenhuma metodologia pendente no momento.
                   </div>
                 ) : (
-                  <ul className="space-y-3">
-                    {metPendentes.map((m) => {
-                      const capa = toAbsoluteUrl(m.capaUrl ?? null);
-
-                      return (
-                        <li key={m.id} className="bg-white rounded shadow border p-4">
-                          <div className="flex flex-col gap-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-lg font-bold text-[#193b2e]">{m.titulo}</div>
-                                <div className="text-sm text-slate-600 mt-1">
-                                  {m.descricao || "Sem descrição"}
-                                </div>
-                                <div className="text-xs text-slate-500 mt-2">
-                                  Criado por: {m.criadorUsuario?.nome || m.criadorUsuario?.email || "—"}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                {capa ? (
-                                  <button
-                                    className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                    onClick={() => setPlayer({ kind: "image", src: capa })}
-                                  >
-                                    Ver capa
-                                  </button>
-                                ) : null}
-
-                                <button
-                                  className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                  onClick={() => {
-                                    const isAvulsa = String(m.origemTipo || "").toUpperCase() === "AVULSA";
-
-                                    window.location.href = isAvulsa
-                                      ? `/learning/${m.id}?from=admin&origem=avulsa`
-                                      : `/learning/${m.id}?from=admin`;
-                                  }}
-                                >
-                                  Detalhes
-                                </button>
-
-                                <button
-                                  className="px-3 py-2 rounded bg-green-700 hover:bg-green-800 text-white text-sm disabled:opacity-60"
-                                  disabled={acaoBusyId === m.id}
-                                  onClick={() => {
-                                    const ok = confirm(`Ativar esta metodologia?\n\n"${m.titulo}"`);
-                                    if (!ok) return;
-                                    void setMetodologiaAtiva(
-                                      m.id,
-                                      true,
-                                      (m.origemTipo || "LEARNING") as "LEARNING" | "AVULSA"
-                                    );
-                                  }}
-                                >
-                                  {acaoBusyId === m.id ? "Ativando..." : "Ativar ✅"}
-                                </button>
-                              </div>
-                            </div>
+                  <div className="space-y-3">
+                    {metPendentes.map((item: MetodologiaPendente) => (
+                      <LearningCard
+                        key={`met_pendente_${item.id}`}
+                        item={{
+                          ...item,
+                          origemRegistro: item.origemTipo,
+                        }}
+                        href={getAdminMetodologiaHref(item)}
+                        extraActions={
+                          <div className="flex items-center gap-2">
+                            {renderMetodologiaAdminActions(item, "pendentes")}
                           </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between mt-3">
@@ -2572,65 +2675,23 @@ async function confirmarExcluirProfessor() {
                     Você ainda não criou nenhuma metodologia.
                   </div>
                 ) : (
-                  metMinhas.map((item) => (
-                    <div key={item.id} className="bg-white p-4 rounded shadow border">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-lg font-bold text-[#193b2e]">{item.titulo}</div>
-                          <div className="text-sm text-slate-500 mt-1">
-                            {item.descricao || "Sem descrição"}
+                  <div className="space-y-4">
+                    {metMinhas.map((item: MetodologiaPendente) => (
+                      <LearningCard
+                        key={`met_minha_${item.id}`}
+                        item={{
+                          ...item,
+                          origemRegistro: item.origemTipo,
+                        }}
+                        href={getAdminMetodologiaHref(item)}
+                        extraActions={
+                          <div className="flex items-center gap-2">
+                            {renderMetodologiaAdminActions(item, "minhas")}
                           </div>
-                          <div className="text-xs text-slate-500 mt-2">
-                            Status: {item.ativo ? "Ativa" : "Pendente"}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              window.location.href =
-                                item.origemTipo === "AVULSA"
-                                  ? `/learning/${item.id}?from=admin&origem=avulsa`
-                                  : `/learning/${item.id}?from=admin`;
-                            }}
-                            className="px-3 py-2 rounded bg-green-700 text-white"
-                          >
-                            Gerenciar
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              window.location.href =
-                                item.origemTipo === "AVULSA"
-                                  ? `/learning/create?id=${item.id}&origem=avulsa`
-                                  : `/learning/create?id=${item.id}`;
-                            }}
-                            className="px-3 py-2 rounded border bg-white text-slate-700"
-                            title="Editar metodologia"
-                          >
-                            ✏️
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              apagarMinhaMetodologiaAdmin(
-                                item.id,
-                                item.titulo,
-                                item.origemTipo,
-                              )
-                            }
-                            className="px-3 py-2 rounded border border-red-200 bg-white text-red-600"
-                            title="Apagar metodologia"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between mt-3">
@@ -2672,68 +2733,23 @@ async function confirmarExcluirProfessor() {
                     Nenhuma metodologia encontrada.
                   </div>
                 ) : (
-                  metTodas.map((item) => {
-                    const capa = toAbsoluteUrl(item.capaUrl ?? null);
-                    const isAvulsa = String(item.origemTipo || "").toUpperCase() === "AVULSA";
-
-                    return (
-                      <div key={`${item.origemTipo}-${item.id}`} className="bg-white p-4 rounded shadow border">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="text-lg font-bold text-[#193b2e]">{item.titulo}</div>
-                            <div className="text-sm text-slate-500 mt-1">
-                              {item.descricao || "Sem descrição"}
-                            </div>
-
-                            <div className="text-xs text-slate-500 mt-2 flex flex-wrap gap-2">
-                              <span className="px-2 py-1 rounded bg-slate-100">
-                                {isAvulsa ? "Avulsa" : "Learning"}
-                              </span>
-                              <span>Status: {item.ativo ? "Ativa" : "Pendente"}</span>
-                              <span>Criado por: {item.criadorUsuario?.nome || item.criadorUsuario?.email || "—"}</span>
-                            </div>
+                  <div className="space-y-4">
+                    {metTodas.map((item: any) => (
+                      <LearningCard
+                        key={`met_todas_${item.id}`}
+                        item={{
+                          ...item,
+                          origemRegistro: item.origemTipo,
+                        }}
+                        href={getAdminMetodologiaHref(item)}
+                        extraActions={
+                          <div className="flex items-center gap-2">
+                            {renderMetodologiaAdminActions(item, "todas")}
                           </div>
-
-                          <div className="flex gap-2">
-                            {capa ? (
-                              <button
-                                type="button"
-                                onClick={() => setPlayer({ kind: "image", src: capa })}
-                                className="px-3 py-2 rounded border bg-white text-slate-700"
-                              >
-                                Ver capa
-                              </button>
-                            ) : null}
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                window.location.href = isAvulsa
-                                  ? `/learning/${item.id}?from=admin&origem=avulsa`
-                                  : `/learning/${item.id}?from=admin`;
-                              }}
-                              className="px-3 py-2 rounded bg-green-700 text-white"
-                            >
-                              Ver metodologia
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                window.location.href = isAvulsa
-                                  ? `/learning/create?id=${item.id}&origem=avulsa`
-                                  : `/learning/create?id=${item.id}`;
-                              }}
-                              className="px-3 py-2 rounded border bg-white text-slate-700"
-                              title="Editar metodologia"
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between mt-3">

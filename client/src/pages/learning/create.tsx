@@ -576,16 +576,28 @@ export default function LearningCreatePage() {
         const params = new URLSearchParams(window.location.search);
         const origem = String(params.get("origem") || "").toLowerCase();
 
-        const res =
-          origem === "avulsa"
-            ? await getMetodologiaAvulsaById(editMetodologiaId)
-            : await getMetodologiaById(editMetodologiaId);
+        let res: any = null;
 
-        const item = res?.item;
+        if (origem === "avulsa") {
+          res = await getMetodologiaAvulsaById(editMetodologiaId);
+        } else {
+          res = await getMetodologiaById(editMetodologiaId);
+
+          if (!(res?.item ?? res)?.id) {
+            try {
+              const tentativaAvulsa = await getMetodologiaAvulsaById(editMetodologiaId);
+              if ((tentativaAvulsa?.item ?? tentativaAvulsa)?.id) {
+                res = tentativaAvulsa;
+              }
+            } catch {}
+          }
+        }
+
+        const item = res?.item ?? res;
 
         if (!ativo) return;
 
-        if (!item) {
+        if (!item || !item.id) {
           throw new Error("Metodologia não encontrada para edição.");
         }
 
@@ -599,7 +611,11 @@ export default function LearningCreatePage() {
         setCapaPreviewUrl(item.capaUrl || null);
         setTipoMetodologia(item.tipo);
         setEstruturaTipo(item.estruturaTipo);
-        setDestinoMetodologia(origem === "avulsa" ? "AVULSA" : "LEARNING");
+        const veioComoAvulsa =
+          origem === "avulsa" ||
+          item?.precoAssinaturaMensal != null;
+
+        setDestinoMetodologia(veioComoAvulsa ? "AVULSA" : "LEARNING");
         setPrecoAssinaturaMensal(
           item?.precoAssinaturaMensal != null ? String(item.precoAssinaturaMensal) : ""
         );

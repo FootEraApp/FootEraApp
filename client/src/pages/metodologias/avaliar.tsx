@@ -52,19 +52,14 @@ function Stars({
 
 export default function AvaliarMetodologia() {
   const [, navigate] = useLocation();
-  const [location] = useLocation();
 
-  const params = useMemo(() => {
-    const q = location.split("?")[1] ?? "";
-    return new URLSearchParams(q);
-  }, [location]);
+  const searchParams = new URLSearchParams(window.location.search);
 
-  const metodologiaId = useMemo(() => params.get("metodologiaId") || "", [params]);
-  const origem = useMemo(
-    () => String(params.get("origem") || "").toLowerCase(),
-    [params]
-  );
+  const metodologiaId = searchParams.get("metodologiaId") || "";
+  const origem = String(searchParams.get("origem") || "").toLowerCase();
   const isAvulsa = origem === "avulsa";
+  const veioDoAdmin = String(searchParams.get("from") || "") === "admin";
+  const temReward = String(searchParams.get("reward") || "") === "1";
 
   const [titulo, setTitulo] = useState<string>("Metodologia");
   const [nota, setNota] = useState<number>(0);
@@ -119,7 +114,13 @@ export default function AvaliarMetodologia() {
     }
 
     carregarTituloPorId();
-  }, [metodologiaId]);
+  }, [metodologiaId, isAvulsa]);
+
+  function destinoPosAvaliacao() {
+    if (veioDoAdmin) return "/admin";
+    if (temReward) return "/perfil/conquistas";
+    return "/learning";
+  }
 
   async function enviar() {
     try {
@@ -159,7 +160,7 @@ export default function AvaliarMetodologia() {
 
       alert("Avaliação enviada! ✅");
       localStorage.setItem(`metodologia:avaliada:${metodologiaId}`, "1");
-      navigate("/learning/minhas");
+      navigate(destinoPosAvaliacao());
     } catch (e: any) {
       console.error(e);
       alert(e?.message || "Erro ao enviar avaliação");
@@ -173,7 +174,7 @@ export default function AvaliarMetodologia() {
       <div className="h-20 bg-green-900 text-white">
         <div className="max-w-3xl mx-auto h-full px-4 flex items-center justify-between">
           <Link
-            href="/learning/minhas"
+            href={destinoPosAvaliacao()}
             aria-label="Voltar para minhas categorias"
             className="inline-flex h-10 w-10 items-center justify-center
               rounded-full border border-green-800 bg-white text-green-900
@@ -299,7 +300,7 @@ export default function AvaliarMetodologia() {
 
             <div className="mt-3 text-center">
               <Link
-                href="/treinos"
+                href={destinoPosAvaliacao()}
                 className="text-sm text-gray-500 underline"
               >
                 Pular avaliação
