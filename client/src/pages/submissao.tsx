@@ -738,7 +738,12 @@ export default function PaginaSubmissao() {
   const handleEnviar = async () => {
     if (enviando) return;
 
-    if (isSessaoTreino && !atletaId) {
+    if (isSessaoTreino && awardAtletas.length === 0) {
+      alert("Nenhum atleta presente foi encontrado para esta sessão.");
+      return;
+    }
+
+    if (!isSessaoTreino && isDesafio && !atletaId) {
       alert("Selecione o atleta.");
       return;
     }

@@ -31,6 +31,7 @@ import jwt from "jsonwebtoken";
 import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 import { prisma } from "../prisma.js";
+import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
 type Request = ExpressRequest;
 type Response = ExpressResponse;
@@ -6526,5 +6527,262 @@ export async function iniciarTreinoViaMetodologia(req: AuthenticatedRequest, res
     return res.status(500).json({
       message: e?.message || "Erro ao iniciar treino via metodologia.",
     });
+  }
+}
+
+export async function uploadExecucaoVideoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const file = (req as any).file as Express.Multer.File | undefined;
+
+    if (!file) {
+      return res.status(400).json({ message: "Arquivo não enviado." });
+    }
+
+    const location = (file as any).location || null;
+    if (!location) {
+      return res.status(500).json({ message: "Upload sem URL retornada pelo S3." });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      url: location,
+      key: (file as any).key ?? null,
+      mimetype: file.mimetype ?? null,
+      size: file.size ?? null,
+      originalname: file.originalname ?? null,
+    });
+  } catch (e) {
+    console.error("uploadExecucaoVideoTreino", e);
+    return res.status(500).json({ message: "Erro ao enviar vídeo de execução." });
+  }
+}
+
+export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { id } = req.params; // treinoAgendadoId
+    const usuarioId = req.userId!;
+
+    const { updates } = req.body as {
+      updates?: Array<{
+        exerciseRowId: string;
+        kind: "catalogo" | "temporario" | "personalizado";
+        entityId: string;
+        existingUrl?: string | null;
+        uploadedUrl: string;
+        selectedUrl?: string | null;
+        saveMode: "SESSION_ONLY" | "UPDATE_OFFICIAL";
+        officialChoice?: "KEEP_OLD" | "USE_NEW" | null;
+      }>;
+    };
+
+    if (!Array.isArray(updates) || !updates.length) {
+      return res.status(400).json({ message: "Nenhuma atualização enviada." });
+    }
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    console.log("[salvarVideosExecucaoTreino] id recebido:", id);
+    console.log("[salvarVideosExecucaoTreino] updates:", updates?.length ?? 0);
+
+    const treinoAgendado = await prisma.treinoAgendado.findUnique({
+      where: { id },
+      include: {
+        treinoProgramado: {
+          include: {
+            exercicios: true,
+          },
+        },
+      },
+    });
+
+    if (!treinoAgendado) {
+      console.log("[salvarVideosExecucaoTreino] treinoAgendado não encontrado para id:", id);
+      return res.status(404).json({ message: "Treino agendado não encontrado." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of updates) {
+        if (!item.uploadedUrl || !item.selectedUrl || !item.entityId) continue;
+
+        if (item.saveMode === "UPDATE_OFFICIAL") {
+          if (item.kind === "catalogo") {
+            const atual = await tx.exercicio.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicio.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.selectedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.selectedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+          }
+
+          if (item.kind === "temporario") {
+            const atual = await tx.exercicioTemporario.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioTemporario.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.selectedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.selectedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+          }
+
+          if (item.kind === "personalizado") {
+            const atual = await tx.exercicioPersonalizado.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioPersonalizado.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.selectedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.selectedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+          }
+        }
+
+        if (item.saveMode === "SESSION_ONLY") {
+          await tx.midia.create({
+            data: {
+              titulo: `Execução do exercício ${item.exerciseRowId}`,
+              tipo: TipoMidia.Video,
+              url: item.uploadedUrl,
+              dataEnvio: new Date(),
+              descricao: JSON.stringify({
+                origem: "treino_execucao_instrutor",
+                treinoAgendadoId: id,
+                exerciseRowId: item.exerciseRowId,
+                kind: item.kind,
+                entityId: item.entityId,
+                criadoPorUsuarioId: usuarioId,
+              }),
+              storageClass: "HOT" as any,
+            } as any,
+          });
+
+          continue;
+        }
+
+        if (item.saveMode === "UPDATE_OFFICIAL") {
+          if (item.officialChoice === "KEEP_OLD") {
+            continue;
+          }
+
+          if (item.officialChoice !== "USE_NEW" || !item.uploadedUrl) {
+            continue;
+          }
+
+          if (item.kind === "catalogo") {
+            const atual = await tx.exercicio.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicio.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+
+          if (item.kind === "temporario") {
+            const atual = await tx.exercicioTemporario.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioTemporario.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+
+          if (item.kind === "personalizado") {
+            const atual = await tx.exercicioPersonalizado.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioPersonalizado.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+        }
+      }
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("salvarVideosExecucaoTreino", e);
+    return res.status(500).json({ message: "Erro ao salvar vídeos da execução." });
   }
 }

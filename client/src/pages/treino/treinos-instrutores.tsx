@@ -13,8 +13,6 @@ import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
 const Storage = {
   get token() {
     return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
@@ -155,6 +153,7 @@ type MetodologiaCard = {
 
 type SessaoDeHoje = {
   id: string;
+  treinoAgendadoId?: string | null;
   data: string;
   treino: any;
   turma: any;
@@ -255,7 +254,6 @@ function getStartWindowInfo(d: Date | null): StartWindowInfo | null {
   // ✅ se NÃO tem hora: libera apenas no dia (BRT); depois do dia acabar => faltou
   const startDay = startOfDayBRT(d);
   const endDay = endOfDayBRT(d);
-
   const canStart = now >= startDay && now <= endDay;
   const isLate = now > endDay;
 
@@ -450,17 +448,6 @@ function normalizeAssetUrl(raw?: string | null) {
   return `${API.BASE_URL}/${u}`; // cobre "uploads/..." sem barra
 }
 
-function normalizeImgUrl(raw?: string | null) {
-  if (!raw) return null;
-  const u = String(raw).trim();
-  if (!u) return null;
-
-  // se vier "/uploads/..." ou "/assets/..." → precisa apontar para o BACKEND
-  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
-
-  return u; // já é URL absoluta
-}
-
 function isUsuarioFree() {
   try {
     const planoRaw =
@@ -509,33 +496,47 @@ export default function TreinosInstrutores({
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
   const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
   const [metodologias, setMetodologias] = useState<MetodologiaCard[]>([]);
-  const [exerciciosConcluidos, setExerciciosConcluidos] = useState<string[]>([]);
-  const [buscaMetodologias, setBuscaMetodologias] = useState("");
   const [loadingMetodologias, setLoadingMetodologias] = useState(false);
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
   // filtros selecionados (chips)
   const [filtrosSelecionados, setFiltrosSelecionados] = useState<string[]>([]);
   type FiltroConteudo = "TODOS" | "VIDEOS_TREINOS" | "VIDEOS" | "TREINOS";
-  const [filtroConteudo, setFiltroConteudo] = useState<FiltroConteudo>("TODOS");
-  const [filtroNivel, setFiltroNivel] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
-  const OPCOES_FILTRO = [
-    "Goleiros",
-    "Linhas",
-    "Base",
-    "Avançado",
-    "Mentalidade",
-  ] as const;
 
-  function toggleFiltro(tag: string) {
-    setFiltrosSelecionados((prev) => {
-      const has = prev.some((x) => normTxt(x) === normTxt(tag));
-      if (has) return prev.filter((x) => normTxt(x) !== normTxt(tag));
-      return [...prev, tag];
-    });
+  function getExerciseVideoKey(ex: ExercicioSessaoDetalhe) {
+    if (ex.exercicioId) return `catalogo:${ex.exercicioId}`;
+    if (ex.exercicioTemporarioId) return `temporario:${ex.exercicioTemporarioId}`;
+    if (ex.exercicioPersonalizadoId) return `personalizado:${ex.exercicioPersonalizadoId}`;
+    return `row:${ex.id}`;
   }
 
-  function limparFiltros() {
-    setFiltrosSelecionados([]);
+  function getExerciseEntityInfo(ex: ExercicioSessaoDetalhe) {
+    if (ex.exercicioId) {
+      return { kind: "catalogo" as const, entityId: ex.exercicioId };
+    }
+    if (ex.exercicioTemporarioId) {
+      return { kind: "temporario" as const, entityId: ex.exercicioTemporarioId };
+    }
+    if (ex.exercicioPersonalizadoId) {
+      return { kind: "personalizado" as const, entityId: ex.exercicioPersonalizadoId };
+    }
+    return null;
+  }
+
+  function getExistingExerciseVideoUrl(ex: ExercicioSessaoDetalhe | null) {
+    if (!ex) return null;
+
+    const raw =
+      ex.videoDemonstrativoUrl ||
+      ex.exercicio?.videoDemonstrativoUrl ||
+      (ex.exercicio as any)?.videoUrl ||
+      ex.exercicioTemporario?.videoDemonstrativoUrl ||
+      ex.exercicioPersonalizado?.videoDemonstrativoUrl ||
+      (ex.exercicioId ? videoByExId[String(ex.exercicioId)] : null) ||
+      (ex.exercicioTemporarioId ? videoByExId[String(ex.exercicioTemporarioId)] : null) ||
+      (ex.exercicioPersonalizadoId ? videoByExId[String(ex.exercicioPersonalizadoId)] : null) ||
+      null;
+
+    return raw ? resolveUploadUrl(raw) : null;
   }
 
   const [filtroPublico, setFiltroPublico] = useState<"TODOS" | "ATLETAS" | "PROFISSIONAIS" | "AMBOS">("TODOS");
@@ -564,8 +565,44 @@ export default function TreinosInstrutores({
   const [realizadoCountByTreinoId, setRealizadoCountByTreinoId] = useState<Record<string, number>>({});
   const [exerciciosCountByTreinoId, setExerciciosCountByTreinoId] = useState<Record<string, number>>({});
   const [videoByExId, setVideoByExId] = useState<Record<string, string>>({});
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
+  const [recordingNow, setRecordingNow] = useState<number>(Date.now());
+  const [cameraModal, setCameraModal] = useState<{
+    open: boolean;
+    sessaoId: string | null;
+    exercicio: ExercicioSessaoDetalhe | null;
+    facingMode: "user" | "environment";
+    previewUrl: string | null;
+    recordedBlob: Blob | null;
+    mediaStream: MediaStream | null;
+    isRecording: boolean;
+  }>({
+    open: false,
+    sessaoId: null,
+    exercicio: null,
+    facingMode: "environment",
+    previewUrl: null,
+    recordedBlob: null,
+    mediaStream: null,
+    isRecording: false,
+  });
+
+  const [exerciseVideoDrafts, setExerciseVideoDrafts] = useState<Record<string, {
+    sessaoId: string;
+    exerciseRowId: string;
+    kind: "catalogo" | "temporario" | "personalizado";
+    entityId: string;
+    existingUrl: string | null;
+    uploadedUrl: string | null;
+    selectedUrl: string | null;
+    saveMode: "SESSION_ONLY" | "UPDATE_OFFICIAL" | null;
+    officialChoice: "KEEP_OLD" | "USE_NEW" | null;
+  }>>({});
+
   const startedAtRef = useRef<string | null>(null);
-  const debugOnceRef = useRef(false);
+  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
 
   const turmaById = useMemo(() => {
     const map: Record<string, Turma> = {};
@@ -573,77 +610,67 @@ export default function TreinosInstrutores({
       return map;
   }, [turmas]);
 
-  const atletaNomeById = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const a of atletasVinculados) {
-      const id = String(a?.id ?? "").trim();
-      const nome = String(a?.usuario?.nome ?? "").trim();
-      if (id && nome) map[id] = nome;
-    }
-    return map;
-  }, [atletasVinculados]);
-
   useEffect(() => {
-  const token = getToken();
-  if (!token) return;
+    const token = getToken();
+    if (!token) return;
 
-  (async () => {
-    const res = await fetch(`${API.BASE_URL}/api/exercicios`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return;
-
-    const data = await res.json();
-    const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
-
-    const map: Record<string, string> = {};
-    for (const e of list) {
-      const v = e.videoDemonstrativoUrl ?? e.videoUrl ?? e.video ?? null;
-      if (e.id && v) map[String(e.id)] = String(v);
-    }
-    setVideoByExId(map);
-  })();
-}, []);
-
-useEffect(() => {
-  const token = getToken();
-  if (!token) return;
-
-  (async () => {
-    try {
-      const res = await fetch(`${API.BASE_URL}/api/professores`, {
+    (async () => {
+      const res = await fetch(`${API.BASE_URL}/api/exercicios`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
       const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
 
       const map: Record<string, string> = {};
-
-      for (const p of list) {
-        const professorId = String(p?.id ?? "").trim();
-        const usuarioId = String(p?.usuarioId ?? p?.usuario?.id ?? "").trim();
-
-        const nome =
-          p?.usuario?.nome ||
-          p?.nome ||
-          p?.usuario?.nomeCompleto ||
-          "";
-
-        const nomeLimpo = String(nome || "").trim();
-        if (!nomeLimpo) continue;
-
-        if (professorId) map[professorId] = nomeLimpo;
-        if (usuarioId) map[usuarioId] = nomeLimpo;
+      for (const e of list) {
+        const v = e.videoDemonstrativoUrl ?? e.videoUrl ?? e.video ?? null;
+        if (e.id && v) map[String(e.id)] = String(v);
       }
+      setVideoByExId(map);
+    })();
+  }, []);
 
-      setProfNomeById(map);
-    } catch (e) {
-      console.warn("[treinos] falha ao carregar /api/professores", e);
-    }
-  })();
-}, []);
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/professores`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+
+        const data = await res.json().catch(() => ({}));
+        const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
+
+        const map: Record<string, string> = {};
+
+        for (const p of list) {
+          const professorId = String(p?.id ?? "").trim();
+          const usuarioId = String(p?.usuarioId ?? p?.usuario?.id ?? "").trim();
+
+          const nome =
+            p?.usuario?.nome ||
+            p?.nome ||
+            p?.usuario?.nomeCompleto ||
+            "";
+
+          const nomeLimpo = String(nome || "").trim();
+          if (!nomeLimpo) continue;
+
+          if (professorId) map[professorId] = nomeLimpo;
+          if (usuarioId) map[usuarioId] = nomeLimpo;
+        }
+
+        setProfNomeById(map);
+      } catch (e) {
+        console.warn("[treinos] falha ao carregar /api/professores", e);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const token = getToken();
@@ -676,9 +703,7 @@ useEffect(() => {
         }
 
         const data = txt ? JSON.parse(txt) : [];
-
         const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
-
         const ids: string[] = [];
         const nomeById: Record<string, string> = {};
 
@@ -748,7 +773,6 @@ useEffect(() => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-
       const js = await r.json().catch(() => null);
       if (!r.ok) {
         throw new Error(js?.message || js?.error || "Falha ao carregar metodologias.");
@@ -760,10 +784,8 @@ useEffect(() => {
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
         descricao: m.descricao ?? null,
-
         // ✅ capa correta (evita 404 em localhost:5173/uploads/...)
         capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
-
         publicoAlvo: m.publicoAlvo ?? "AMBOS",
         nivel: m.nivel ?? null,
         tipo: m.tipo ?? null,
@@ -783,7 +805,6 @@ useEffect(() => {
           m.professor?.nome ??
           m.usuarioCriador?.nome ??
           null,
-
       }));
 
       // ✅ ENRIQUECE (pontos + capa garantida) usando /detalhe
@@ -858,132 +879,394 @@ useEffect(() => {
     }
   }
 
-  async function assinarMetodologia(metodologiaId: string) {
+  function manterVideoAntigo() {
+    if (!cameraModal.exercicio) return;
+
+    const key = getExerciseVideoKey(cameraModal.exercicio);
+    const nomeExercicio =
+      cameraModal.exercicio.nome ||
+      cameraModal.exercicio.exercicio?.nome ||
+      cameraModal.exercicio.exercicioTemporario?.nome ||
+      cameraModal.exercicio.exercicioPersonalizado?.nome ||
+      "este exercício";
+
+    setExerciseVideoDrafts((prev) => {
+      const current = prev[key];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          selectedUrl: current.existingUrl,
+          officialChoice: "KEEP_OLD",
+        },
+      };
+    });
+
+    alert(`Você escolheu manter o vídeo atual de ${nomeExercicio}. A decisão será aplicada ao finalizar o treino.`);
+    fecharCameraModal();
+  }
+
+  function usarVideoNovoComoOficial() {
+    if (!cameraModal.exercicio) return;
+
+    const key = getExerciseVideoKey(cameraModal.exercicio);
+    const nomeExercicio =
+      cameraModal.exercicio.nome ||
+      cameraModal.exercicio.exercicio?.nome ||
+      cameraModal.exercicio.exercicioTemporario?.nome ||
+      cameraModal.exercicio.exercicioPersonalizado?.nome ||
+      "este exercício";
+
+    setExerciseVideoDrafts((prev) => {
+      const current = prev[key];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          selectedUrl: current.uploadedUrl,
+          officialChoice: "USE_NEW",
+        },
+      };
+    });
+
+    alert(`Você escolheu atualizar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
+    fecharCameraModal();
+  }
+
+  async function uploadExerciseExecutionVideo(blob: Blob) {
     const token = getToken();
-    if (!token) return;
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([blob], `execucao-${Date.now()}.webm`, { type: "video/webm" })
+    );
+
+    const res = await fetch(`${API.BASE_URL}/api/treinos/upload-execucao-video`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data?.message || "Erro ao enviar vídeo.");
+    }
+
+    return data as { ok: true; url: string };
+  }
+
+  async function confirmarVideoGravado(saveMode: "SESSION_ONLY" | "UPDATE_OFFICIAL") {
+    if (!cameraModal.exercicio || !cameraModal.recordedBlob || !cameraModal.sessaoId) return;
+
+    const entity = getExerciseEntityInfo(cameraModal.exercicio);
+    if (!entity) {
+      alert("Não foi possível identificar o exercício.");
+      return;
+    }
 
     try {
-      // ajuste se sua rota for outra:
-      // ex: POST /api/metodologias/:id/assinar
-      const res = await fetch(
-        `${API.BASE_URL}/api/metodologias/${encodeURIComponent(metodologiaId)}/assinar`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const uploaded = await uploadExerciseExecutionVideo(cameraModal.recordedBlob);
+      const existingUrl = getExistingExerciseVideoUrl(cameraModal.exercicio);
+      const key = getExerciseVideoKey(cameraModal.exercicio);
+      const nomeExercicio =
+        cameraModal.exercicio.nome ||
+        cameraModal.exercicio.exercicio?.nome ||
+        cameraModal.exercicio.exercicioTemporario?.nome ||
+        cameraModal.exercicio.exercicioPersonalizado?.nome ||
+        "este exercício";
 
-      const payload = await res.json().catch(() => ({}));
+      setExerciseVideoDrafts((prev) => ({
+        ...prev,
+        [key]: {
+          sessaoId: cameraModal.sessaoId!,
+          exerciseRowId: cameraModal.exercicio!.id,
+          kind: entity.kind,
+          entityId: entity.entityId,
+          existingUrl,
+          uploadedUrl: uploaded.url,
+          selectedUrl:
+            saveMode === "SESSION_ONLY"
+              ? uploaded.url
+              : existingUrl
+              ? null
+              : uploaded.url,
+          saveMode,
+          officialChoice:
+            saveMode === "SESSION_ONLY"
+              ? null
+              : existingUrl
+              ? null
+              : "USE_NEW",
+        },
+      }));
 
-      if (!res.ok) {
-        alert(payload?.message || "Não foi possível assinar a metodologia.");
+      if (saveMode === "SESSION_ONLY") {
+        alert("Vídeo selecionado para salvar só para este treino. Ele será salvo ao finalizar o treino.");
+        fecharCameraModal();
         return;
       }
 
-      // marca como assinada sem precisar refetch
-      setMetodologias((prev) =>
-        prev.map((m) => (m.id === metodologiaId ? { ...m, jaAssinada: true } : m))
-      );
-    } catch {
-      alert("Erro ao assinar a metodologia.");
+      // UPDATE_OFFICIAL sem vídeo antigo:
+      if (!existingUrl) {
+        alert(`Vídeo selecionado para virar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
+        fecharCameraModal();
+        return;
+      }
+
+      // Se já existe vídeo antigo, não fecha.
+      // A comparação entre vídeo atual e novo continua aberta.
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Erro ao enviar vídeo.");
     }
   }
 
-  async function buscarAlunosDaTurma(turmaId: string): Promise<AtletaVinculado[]> {
-    const token = getToken();
-    if (!token) return [];
+  async function abrirCameraParaExercicio(
+    sessaoId: string,
+    exercicio: ExercicioSessaoDetalhe
+  ) {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert("Seu navegador não suporta acesso à câmera.");
+        return;
+      }
+
+      if (cameraModal.mediaStream) {
+        cameraModal.mediaStream.getTracks().forEach((track) => track.stop());
+      }
+
+      if (cameraModal.previewUrl) {
+        URL.revokeObjectURL(cameraModal.previewUrl);
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: true,
+      });
+
+      setCameraModal({
+        open: true,
+        sessaoId,
+        exercicio,
+        facingMode: "environment",
+        previewUrl: null,
+        recordedBlob: null,
+        mediaStream: stream,
+        isRecording: false,
+      });
+
+      setTimeout(() => {
+        if (liveVideoRef.current) {
+          liveVideoRef.current.srcObject = stream;
+          liveVideoRef.current.play().catch(() => {});
+        }
+      }, 80);
+    } catch (error) {
+      console.error(error);
+      alert("Não foi possível acessar a câmera.");
+    }
+  }
+
+  function fecharCameraModal() {
+    if (cameraModal.mediaStream) {
+      cameraModal.mediaStream.getTracks().forEach((track) => track.stop());
+    }
+
+    if (cameraModal.previewUrl) {
+      URL.revokeObjectURL(cameraModal.previewUrl);
+    }
+
+    setRecordingStartedAt(null);
+    setRecordingNow(Date.now());
+
+    setCameraModal({
+      open: false,
+      sessaoId: null,
+      exercicio: null,
+      facingMode: "environment",
+      previewUrl: null,
+      recordedBlob: null,
+      mediaStream: null,
+      isRecording: false,
+    });
+  }
+
+  async function trocarCamera() {
+    const nextFacingMode =
+      cameraModal.facingMode === "environment" ? "user" : "environment";
 
     try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/turmas/${encodeURIComponent(turmaId)}/alunos`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (!res.ok) {
-        console.warn("[treinos] rota /turmas/:id/alunos não retornou alunos com atletaId");
-        return [];
+      if (cameraModal.mediaStream) {
+        cameraModal.mediaStream.getTracks().forEach((track) => track.stop());
       }
 
-      const data = await res.json();
-      
-      if (Array.isArray((data as any).alunos)) {
-        const raw = (data as any).alunos;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: nextFacingMode },
+        audio: true,
+      });
 
-      const alunos: AtletaVinculado[] = raw
-        .map((a: any) => {
-          const usuarioId = a.usuario?.id ?? a.usuarioId ?? "";
-          const atletaId  = a.atletaId ?? a.id ?? null;
+      setCameraModal((prev) => ({
+        ...prev,
+        facingMode: nextFacingMode,
+        mediaStream: stream,
+        previewUrl: null,
+        recordedBlob: null,
+        isRecording: false,
+      }));
 
-          const id = atletaId || "";
-
-          if (!id) return null;
-
-          const nome = a.usuario?.nome ?? a.nome ?? "Atleta";
-          const foto = a.usuario?.foto ?? a.foto ?? null;
-
-          return {
-            id, 
-            usuario: { id: usuarioId || id, nome, foto },
-          };
-        })
-        .filter((a: any) => !!a);
-
-      return alunos;
-      }
-
-      console.warn("[treinos] backend não retornou alunos com atletaId. Ajuste /api/turmas/:id/alunos para retornar alunos[].atletaId");
-      return [];
-
-    } catch (e) {
-      console.error("[treinos] erro ao buscar alunos da turma", turmaId, e);
-      return [];
+      setTimeout(() => {
+        if (liveVideoRef.current) {
+          liveVideoRef.current.srcObject = stream;
+          liveVideoRef.current.play().catch(() => {});
+        }
+      }, 80);
+    } catch (error) {
+      console.error(error);
+      alert("Não foi possível trocar a câmera.");
     }
   }
 
- async function finalizarTreinoSessao(sessaoId: string) {
-  const token = getToken();
+  function getSupportedMimeType() {
+    const candidates = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4",
+    ];
 
-  const sessao = sessoesDeHoje.find((x: any) => x.id === sessaoId);
-
-  let tempoSeg = 0;
-
-  if (sessao?.startedAt) {
-    const inicioMs = new Date(sessao.startedAt).getTime();
-    tempoSeg = Math.max(1, Math.round((Date.now() - inicioMs) / 1000));
-  } else if (startedAtRef.current) {
-    const inicioMs = new Date(startedAtRef.current).getTime();
-    tempoSeg = Math.max(1, Math.round((Date.now() - inicioMs) / 1000));
-  }
-
-  const res = await fetch(
-    `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}/finalizar`,
-    {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
+    for (const type of candidates) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) {
+        return type;
+      }
     }
-  );
 
-  const js = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    alert(js?.erro || js?.message || "Erro ao finalizar treino.");
-    return;
+    return "";
   }
 
-  const pontos = encodeURIComponent(String(js?.pontosAplicadosPorAtleta ?? 0));
-  const tempo = encodeURIComponent(String(tempoSeg));
+  function iniciarGravacao() {
+    if (!cameraModal.mediaStream) return;
 
-  window.location.href =
-    `/submissao?sessaoId=${encodeURIComponent(sessaoId)}` +
-    `&pontos=${pontos}` +
-    `&tempoSeg=${tempo}`;
-}
+    recordedChunksRef.current = [];
+
+    const mimeType = getSupportedMimeType();
+
+    const recorder = mimeType
+      ? new MediaRecorder(cameraModal.mediaStream, { mimeType })
+      : new MediaRecorder(cameraModal.mediaStream);
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const finalMimeType = mimeType || "video/webm";
+      const blob = new Blob(recordedChunksRef.current, { type: finalMimeType });
+      const previewUrl = URL.createObjectURL(blob);
+
+      setCameraModal((prev) => ({
+        ...prev,
+        recordedBlob: blob,
+        previewUrl,
+        isRecording: false,
+      }));
+
+      setRecordingStartedAt(null);
+      setRecordingNow(Date.now());
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+
+    setRecordingStartedAt(Date.now());
+    setRecordingNow(Date.now());
+
+    setCameraModal((prev) => ({
+      ...prev,
+      isRecording: true,
+      previewUrl: null,
+      recordedBlob: null,
+    }));
+  }
+
+  function pararGravacao() {
+    if (!mediaRecorderRef.current) return;
+    if (mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+  }
+
+  function regravarVideo() {
+    if (cameraModal.previewUrl) {
+      URL.revokeObjectURL(cameraModal.previewUrl);
+    }
+
+    setRecordingStartedAt(null);
+    setRecordingNow(Date.now());
+
+    setCameraModal((prev) => ({
+      ...prev,
+      previewUrl: null,
+      recordedBlob: null,
+      isRecording: false,
+    }));
+
+    setTimeout(() => {
+      if (liveVideoRef.current && cameraModal.mediaStream) {
+        liveVideoRef.current.srcObject = cameraModal.mediaStream;
+        liveVideoRef.current.play().catch(() => {});
+      }
+    }, 80);
+  }
+
+  async function finalizarTreinoSessao(sessaoId: string) {
+    const token = getToken();
+
+    const sessao = sessoesDeHoje.find((x: any) => x.id === sessaoId);
+
+    let tempoSeg = 0;
+
+    if (sessao?.startedAt) {
+      const inicioMs = new Date(sessao.startedAt).getTime();
+      tempoSeg = Math.max(1, Math.round((Date.now() - inicioMs) / 1000));
+    } else if (startedAtRef.current) {
+      const inicioMs = new Date(startedAtRef.current).getTime();
+      tempoSeg = Math.max(1, Math.round((Date.now() - inicioMs) / 1000));
+    }
+
+    const res = await fetch(
+      `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}/finalizar`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    const js = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(js?.erro || js?.message || "Erro ao finalizar treino.");
+      return;
+    }
+
+    const pontos = encodeURIComponent(String(js?.pontosAplicadosPorAtleta ?? 0));
+    const tempo = encodeURIComponent(String(tempoSeg));
+
+    sessionStorage.removeItem(getStartedAtStorageKey(sessaoId));
+    startedAtRef.current = null;
+
+    window.location.href =
+      `/submissao?sessaoId=${encodeURIComponent(sessaoId)}` +
+      `&pontos=${pontos}` +
+      `&tempoSeg=${tempo}`;
+  }
 
   async function abrirModalIniciar(sessaoId: string, turmaId?: string) {
     const token = getToken();
@@ -1096,8 +1379,10 @@ useEffect(() => {
 
       const js = await res.json().catch(() => ({}));
 
-      startedAtRef.current = js?.startedAt ?? new Date().toISOString();
-      
+      const startedAtValue = js?.startedAt ?? new Date().toISOString();
+      startedAtRef.current = startedAtValue;
+      sessionStorage.setItem(getStartedAtStorageKey(sessaoId), startedAtValue);
+
       setModalSessaoId(null);
       setSessaoAbertaExerciciosId(sessaoId);
       await carregarSessoesDeHoje();
@@ -1131,11 +1416,9 @@ useEffect(() => {
     const norm: SessaoDeHoje[] = (items ?? []).map((s: any) => {
       const dataSessao = parseDateSafe(s.data);
       const win = getStartWindowInfo(dataSessao);
-
       const faltou = s.status === "AGENDADO" && Boolean(win?.isLate);
       const podeIniciar =
         s.status === "AGENDADO" && Boolean(win?.canStart) && !Boolean(win?.isLate);
-
       const statusVisual: SessaoDeHoje["status"] =
         s.status === "EM_ANDAMENTO"
           ? "em_andamento"
@@ -1147,11 +1430,18 @@ useEffect(() => {
           ? "faltou"
           : "nao_iniciada";
 
+      const persistedStartedAt =
+        s.startedAt ??
+        s.iniciadoEm ??
+        sessionStorage.getItem(getStartedAtStorageKey(String(s.id))) ??
+        null;
+
       return {
         id: String(s.id),
         data: String(s.data),
         treino: s.treino,
         turma: s.turma,
+        treinoAgendadoId: s.treinoAgendadoId ?? s.treino?.agendadoId ?? s.agendadoId ?? null,
         exercicios: s.exercicios,
         presencas: s.presencas,
         presentes: s.presentes ?? [],
@@ -1162,7 +1452,7 @@ useEffect(() => {
         win,
         faltou,
         podeIniciar,
-        // ✅ adicionar
+        startedAt: persistedStartedAt,
         duracaoMinutosReal:
           s.duracaoMinutosReal == null ? null : Number(s.duracaoMinutosReal),
         penalidadeAtraso: Boolean(s.penalidadeAtraso),
@@ -1186,6 +1476,10 @@ useEffect(() => {
   } catch (e) {
     console.error("Erro ao carregar sessões:", e);
   }
+}
+
+function getStartedAtStorageKey(sessaoId: string) {
+  return `treino_startedAt_${sessaoId}`;
 }
 
 async function remarcarSessao(
@@ -1252,39 +1546,53 @@ async function remarcarSessao(
   }
 }
 
-async function excluirSessao(sessaoId: string) {
+async function salvarVideosDaSessao(sessaoId: string) {
   const token = getToken();
-  if (!token) return;
 
-  if (!window.confirm("Tem certeza que deseja excluir esse treino da sua agenda?")) {
-    return;
-  }
+  const updates = Object.values(exerciseVideoDrafts).filter(
+    (item) =>
+      item.sessaoId === sessaoId &&
+      item.uploadedUrl &&
+      item.saveMode &&
+      (
+        item.saveMode === "SESSION_ONLY" ||
+        (
+          item.saveMode === "UPDATE_OFFICIAL" &&
+          item.officialChoice &&
+          item.selectedUrl
+        )
+      )
+  );
 
-  try {
-    const res = await fetch(
-      `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+  if (!updates.length) return;
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.error("[treinos] erro ao excluir sessão:", res.status, txt);
-      alert("Não foi possível excluir esse treino.");
-      return;
+  const res = await fetch(
+    `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}/videos-execucao`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ updates }),
     }
+  );
 
-    setSessoesDeHoje((prev) => prev.filter((s) => s.id !== sessaoId));
-    setSessaoAbertaExerciciosId((prev) => (prev === sessaoId ? null : prev));
+  const data = await res.json().catch(() => ({}));
 
-    alert("Treino removido da sua agenda.");
-
-  } catch (e) {
-    console.error("[treinos] erro inesperado ao excluir sessão:", e);
-    alert("Erro inesperado ao excluir o treino.");
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Erro ao salvar vídeos da sessão.");
   }
+
+  setExerciseVideoDrafts((prev) => {
+    const next = { ...prev };
+    for (const [key, value] of Object.entries(next)) {
+      if (value.sessaoId === sessaoId) {
+        delete next[key];
+      }
+    }
+    return next;
+  });
 }
 
 async function salvarProgressoSessao(sessaoId: string) {
@@ -1316,6 +1624,21 @@ async function salvarProgressoSessao(sessaoId: string) {
     if (abaProfessor === "sessoes") carregarSessoesDeHoje();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abaProfessor, atletasVinculados.length]);
+
+  useEffect(() => {
+    if (!cameraModal.open) return;
+    if (cameraModal.previewUrl) return;
+    if (!cameraModal.mediaStream) return;
+
+    const id = setTimeout(() => {
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = cameraModal.mediaStream;
+        liveVideoRef.current.play().catch(() => {});
+      }
+    }, 50);
+
+    return () => clearTimeout(id);
+  }, [cameraModal.open, cameraModal.previewUrl, cameraModal.mediaStream]);
 
   useEffect(() => {
     const tipoSalvo =
@@ -1387,37 +1710,6 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }, []);
 
-  const meusTreinos = treinos.filter((t) => {
-    const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
-    const meuTipo = String(usuario?.tipo ?? "").toLowerCase();
-
-    const donoId = {
-      clubeId: String(t.clubeId ?? "").trim(),
-      escolinhaId: String(t.escolinhaId ?? "").trim(),
-      professorId: String(t.professorId ?? "").trim(),
-    };
-
-    const euSouDono =
-      (!!meuId && (donoId.clubeId === meuId || donoId.escolinhaId === meuId || donoId.professorId === meuId));
-
-    const euSouColaborador =
-      Array.isArray(t.professoresIds) &&
-      !!meuId &&
-      t.professoresIds.map(String).includes(meuId);
-
-    const treinoDoMeuProfessorVinculado =
-      (meuTipo === "clube" || meuTipo === "escolinha") &&
-      !!donoId.professorId &&
-      professoresVinculadosIds.map(String).includes(donoId.professorId);
-
-    const fallbackPorNome =
-      !!meuNome &&
-      Array.isArray(t.criadoresNomes) &&
-      t.criadoresNomes.some((n) => normTxt(n) === normTxt(meuNome));
-
-    return euSouDono || euSouColaborador || treinoDoMeuProfessorVinculado || fallbackPorNome;
-  });
-
   const listaParaExibir =
     usuario?.tipo === "admin"
       ? treinos
@@ -1467,8 +1759,6 @@ async function salvarProgressoSessao(sessaoId: string) {
   }, [listaParaExibir, usuario?.tipoUsuarioId, profNomeById, professoresVinculadosNomeById]);
 
   const totalTreinosExibidos = useMemo(() => listaOrdenadaParaExibir.length, [listaOrdenadaParaExibir]);
-
-  
 
   const totalExerciciosExibidos = useMemo(() => {
     return (listaOrdenadaParaExibir || []).reduce((acc, t) => {
@@ -1770,6 +2060,16 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }, [abaProfessor]);
 
+  useEffect(() => {
+    if (!recordingStartedAt) return;
+
+    const id = setInterval(() => {
+      setRecordingNow(Date.now());
+    }, 500);
+
+    return () => clearInterval(id);
+  }, [recordingStartedAt]);
+
   async function carregarAtletasVinculados() {
     const token = getToken();
     if (!token) return;
@@ -1955,6 +2255,18 @@ async function salvarProgressoSessao(sessaoId: string) {
     setTurmas([]);
   }
 
+  function getNomeExercicioCamera(ex: ExercicioSessaoDetalhe | null) {
+    if (!ex) return "Exercício";
+
+    return (
+      ex.nome ||
+      ex.exercicio?.nome ||
+      ex.exercicioTemporario?.nome ||
+      ex.exercicioPersonalizado?.nome ||
+      "Exercício"
+    );
+  }
+
   async function carregarSubmissoes(append = false) {
     const token = getToken();
     if (!token || !usuario) return;
@@ -2085,209 +2397,6 @@ async function salvarProgressoSessao(sessaoId: string) {
     } catch (e) {
       console.error("[treinos] erro ao obter atletas da turma", turmaId, e);
       return [];
-    }
-  }
-
-  async function agendarTreinoProgramado(
-    treino: TreinoProgramado,
-    dataSelecionadaISO: string,
-    horaSelecionada?: string,
-    observacao?: string,
-  ) {
-    const token = getToken();
-    if (!token) {
-      alert("Faça login para agendar um treino.");
-      return;
-    }
-
-    const tipoUser = String(
-      usuario?.tipo ?? (Storage as any).tipoSalvo ?? "",
-    ).toLowerCase();
-
-    let atletaIdsParaAgendar: string[] = [];
-
-    if (tipoUser === "atleta") {
-      const atletaId =
-        (Storage as any).tipoUsuarioId ||
-        (Storage as any).atletaId ||
-        usuario?.tipoUsuarioId;
-
-      if (!atletaId) {
-        alert(
-          "Não foi possível identificar o atleta logado. Tente entrar novamente.",
-        );
-        return;
-      }
-
-      atletaIdsParaAgendar = [atletaId];
-        } else {
-      const turmaIdSelecionada = turmaSelecionadaByTreinoId[treino.id] || "";
-
-      if (turmaIdSelecionada) {
-        const turma = turmas.find((t) => t.id === turmaIdSelecionada);
-
-        if (!turma) {
-          alert("Turma selecionada não encontrada.");
-          return;
-        }
-
-        const idsDaTurma = await obterAtletaIdsDaTurma(turma.id);
-
-        if (!idsDaTurma.length) {
-          alert("Turma selecionada não possui alunos cadastrados.");
-          return;
-        }
-
-        atletaIdsParaAgendar = idsDaTurma;
-      } else {
-        const selecionados = atletasSelecionadosByTreinoId[treino.id] || [];
-        if (selecionados.length === 0) {
-          alert(
-            "Selecione ao menos um atleta vinculado ou escolha uma turma para agendar o treino.",
-          );
-          return;
-        }
-        atletaIdsParaAgendar = selecionados;
-      }
-    }
-
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    const diaSelecionadoStr =
-      dataSelecionadaISO || new Date().toISOString().slice(0, 10);
-    const diaSelecionado = new Date(`${diaSelecionadoStr}T00:00:00`);
-
-    if (diaSelecionado < hoje) {
-      alert("Você não pode agendar um treino em uma data que já passou.");
-      return;
-    }
-
-    if (isUsuarioFree()) {
-      const limite = new Date(hoje);
-      limite.setMonth(limite.getMonth() + 1);
-      limite.setHours(0, 0, 0, 0);
-
-      if (diaSelecionado > limite) {
-        alert(
-          "Contas Free só podem agendar treinos até 30 dias a partir de hoje. Escolha uma data mais próxima.",
-        );
-        return;
-      }
-    }
-
-    const dia = diaSelecionado.toISOString().slice(0, 10);
-
-    let quandoISO: string;
-    if (horaSelecionada && /^\d{2}:\d{2}$/.test(horaSelecionada)) {
-      const [h, m] = horaSelecionada.split(":").map(Number);
-      const dataComHora = new Date(diaSelecionado);
-      dataComHora.setHours(h, m, 0, 0);
-      quandoISO = dataComHora.toISOString();
-    } else {
-      quandoISO = `${dia}T23:59:59.000Z`;
-    }
-
-    const turmaIdSelecionada = turmaSelecionadaByTreinoId[treino.id] || "";
-    if (turmaIdSelecionada) {
-      try {
-        const respSessao = await fetch(`${API.BASE_URL}/api/sessoes-turma`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            treinoProgramadoId: treino.id,
-            turmaId: turmaIdSelecionada,
-            dataISO: quandoISO,
-          }),
-        });
-
-        const txt = await respSessao.text().catch(() => "");
-        if (!respSessao.ok) {
-          console.error("Erro ao criar sessão de turma:", respSessao.status, txt);
-          alert("Não foi possível criar a sessão da turma.");
-          return;
-        }
-
-        // ✅ AGORA O BACKEND já cria TreinoAgendado para todos os atletas.
-        alert("Treino enviado para a turma (sessão + agendamentos criados)!");
-        return; // 🔥 ISSO EVITA DUPLICAR (não roda o loop abaixo)
-      } catch (e) {
-        console.error("Erro inesperado ao criar sessão de turma:", e);
-        alert("Erro inesperado ao criar sessão da turma.");
-        return;
-      }
-    }
-
-    try {
-      let sucessos = 0;
-      let conflitos = 0;
-
-      for (const atletaId of atletaIdsParaAgendar) {
-        const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            titulo: treino.nome,
-            dataTreino: quandoISO,
-            dataExpiracao: null,
-            atletaId,
-            treinoProgramadoId: treino.id,
-            observacao: observacao ?? null,
-            turmaId: turmaIdSelecionada || null,
-          }),
-        });
-
-        if (!r.ok) {
-          const txt = await r.text().catch(() => "");
-          if (r.status === 409) {
-            conflitos++;
-            console.warn(
-              "Já existe agendamento futuro desse treino para o atleta",
-              atletaId,
-              txt,
-            );
-            continue;
-          }
-          console.error("Falha ao agendar para atleta", atletaId, r.status, txt);
-          continue;
-        }
-
-        const novo = await r.json().catch(() => null);
-        window.dispatchEvent(
-          new CustomEvent("treino:agendado", { detail: novo }),
-        );
-        sucessos++;
-      }
-
-      if (sucessos > 0) {
-        const textoBase =
-          sucessos === 1
-            ? "Treino agendado para 1 atleta!"
-            : `Treino agendado para ${sucessos} atletas!`;
-
-        if (conflitos > 0) {
-          alert(
-            `${textoBase} Alguns atletas já tinham esse treino agendado e foram ignorados (${conflitos}).`,
-          );
-        } else {
-          alert(textoBase);
-        }
-      } else if (conflitos > 0) {
-        alert(
-          "Todos os atletas selecionados já tinham esse treino agendado em uma data futura.",
-        );
-      } else {
-        alert("Não foi possível agendar o treino para nenhum atleta.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Erro inesperado ao agendar treino.");
     }
   }
 
@@ -2445,16 +2554,11 @@ async function salvarProgressoSessao(sessaoId: string) {
     );
   };
 
-  const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
-
   const isGestor =
     usuario?.tipo &&
     ["professor", "admin", "escola", "escolinha", "clube"].includes(
       String(usuario.tipo).toLowerCase(),
     );
-
-  const isOlheiro =
-    String((Storage as any).tipoSalvo ?? "").toLowerCase() === "olheiro";
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
@@ -2973,7 +3077,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                         <button
                           onClick={() => setSessaoAbertaExerciciosId(String(s.id))}
                           disabled={!(s.status === "em_andamento" || (s.status === "nao_iniciada" && s.podeIniciar))}
-                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                          className={`px-4 py-2 rounded-xl mt-2 text-sm font-semibold transition ${
                             (s.status === "em_andamento" || (s.status === "nao_iniciada" && s.podeIniciar))
                               ? "bg-blue-600 text-white hover:bg-blue-700"
                               : "bg-gray-300 text-gray-600 cursor-not-allowed"
@@ -3318,21 +3422,31 @@ async function salvarProgressoSessao(sessaoId: string) {
                                 </div>
                               </div>
 
-                              {videoUrl && (
+                              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                {videoUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVideoModal({
+                                        url: videoUrl,
+                                        nome,
+                                        repeticoes: repeticoes ?? undefined,
+                                      })
+                                    }
+                                    className="text-xs sm:text-sm font-medium text-green-700 hover:underline underline-offset-2"
+                                  >
+                                    Ver vídeo
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setVideoModal({
-                                      url: videoUrl,
-                                      nome,
-                                      repeticoes: repeticoes ?? undefined,
-                                    })
-                                  }
-                                  className="text-xs sm:text-sm font-medium text-green-700 hover:underline underline-offset-2 flex-shrink-0"
+                                  onClick={() => abrirCameraParaExercicio(sessao.id, ex)}
+                                  className="text-xs sm:text-sm font-medium text-blue-700 hover:underline underline-offset-2"
                                 >
-                                  Ver vídeo
+                                  Filmar execução
                                 </button>
-                              )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -3374,6 +3488,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                           if (!podeFinalizar) return;
 
                           await salvarProgressoSessao(sessao.id);
+                          await salvarVideosDaSessao(sessao.id);
                           await finalizarTreinoSessao(sessao.id);
                         }}
                       >
@@ -3458,6 +3573,192 @@ async function salvarProgressoSessao(sessaoId: string) {
           </div>
         );
       })()}
+
+      {cameraModal.open && (
+        <div className="fixed inset-0 z-[120] bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl h-[92vh] bg-white rounded-[28px] shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div>
+                <h3 className="text-lg sm:text-xl font-semibold text-[#14532d]">
+                  Filmar execução
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {getNomeExercicioCamera(cameraModal.exercicio)}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={fecharCameraModal}
+                className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {!cameraModal.previewUrl ? (
+                <div className="relative rounded-2xl overflow-hidden bg-black">
+                  {cameraModal.isRecording && recordingStartedAt && (
+                    <div className="absolute top-3 left-3 z-10 bg-red-600 text-white text-xs px-3 py-1 rounded-full flex items-center gap-2">
+                      <span className="animate-pulse">●</span>
+                      {formatElapsed(new Date(recordingStartedAt).toISOString(), recordingNow)}
+                    </div>
+                  )}
+
+                  <video
+                    ref={liveVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full max-h-[420px] object-cover bg-black"
+                  />
+                </div>
+              ) : (
+                  <div className="rounded-2xl overflow-hidden bg-black">
+                    <video
+                      src={cameraModal.previewUrl}
+                      controls
+                      playsInline
+                      className="w-full max-h-[420px] object-contain bg-black"
+                    />
+                  </div>
+                )}
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={trocarCamera}
+                  className="px-4 py-2 rounded-full border border-gray-300 text-sm font-medium hover:bg-gray-50"
+                >
+                  Câmera {cameraModal.facingMode === "environment" ? "frontal" : "traseira"}
+                </button>
+
+                {!cameraModal.isRecording && !cameraModal.previewUrl && (
+                  <button
+                    type="button"
+                    onClick={iniciarGravacao}
+                    className="px-4 py-2 rounded-full bg-green-700 text-white text-sm font-medium hover:bg-green-800"
+                  >
+                    Iniciar gravação
+                  </button>
+                )}
+
+                {cameraModal.isRecording && (
+                  <button
+                    type="button"
+                    onClick={pararGravacao}
+                    className="px-4 py-2 rounded-full bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+                  >
+                    Parar
+                  </button>
+                )}
+
+                {!!cameraModal.previewUrl && (
+                  <button
+                    type="button"
+                    onClick={regravarVideo}
+                    className="px-4 py-2 rounded-full border border-gray-300 text-sm font-medium hover:bg-gray-50"
+                  >
+                    Regravar
+                  </button>
+                )}
+              </div>
+
+              {!!cameraModal.previewUrl && (
+                <div className="border rounded-2xl p-4 bg-gray-50 space-y-4">
+                  <h4 className="text-sm font-semibold text-gray-800">
+                    O que deseja fazer com este vídeo?
+                  </h4>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => confirmarVideoGravado("SESSION_ONLY")}
+                      className="flex-1 px-4 py-3 rounded-2xl bg-blue-700 text-white text-sm font-medium hover:bg-blue-800"
+                    >
+                      Salvar só para este treino
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => confirmarVideoGravado("UPDATE_OFFICIAL")}
+                      className="flex-1 px-4 py-3 rounded-2xl bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800"
+                    >
+                      Atualizar vídeo oficial do exercício
+                    </button>
+                  </div>
+
+                  {(() => {
+                    const ex = cameraModal.exercicio;
+                    if (!ex) return null;
+
+                    const key = getExerciseVideoKey(ex);
+                    const draft = exerciseVideoDrafts[key];
+
+                    if (
+                      !draft ||
+                      draft.saveMode !== "UPDATE_OFFICIAL" ||
+                      !draft.uploadedUrl ||
+                      !draft.existingUrl
+                    ) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="mt-4 border-t pt-4 space-y-4">
+                        <div className="text-sm font-semibold text-gray-800">
+                          Este exercício já possui um vídeo oficial. Escolha qual deseja manter:
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          <div className="border rounded-2xl p-3 bg-white min-h-0">
+                            <div className="text-sm font-medium text-gray-700 mb-2">
+                              Vídeo atual
+                            </div>
+                            <video
+                              src={draft.existingUrl ? resolveUploadUrl(draft.existingUrl) ?? draft.existingUrl : undefined}
+                              controls
+                              playsInline
+                              className="w-full rounded-xl bg-black max-h-[320px]"
+                            />
+                            <button
+                              type="button"
+                              onClick={manterVideoAntigo}
+                              className="mt-3 w-full px-4 py-2 rounded-full border border-gray-300 text-sm font-medium hover:bg-gray-50"
+                            >
+                              Manter vídeo atual
+                            </button>
+                          </div>
+
+                          <div className="border rounded-2xl p-3 bg-white min-h-0">
+                            <div className="text-sm font-medium text-gray-700 mb-2">
+                              Novo vídeo gravado
+                            </div>
+                            <video
+                              src={draft.uploadedUrl ? resolveUploadUrl(draft.uploadedUrl) ?? draft.uploadedUrl : undefined}
+                              controls
+                              playsInline
+                              className="w-full rounded-xl bg-black max-h-[320px]"
+                            />
+                            <button
+                              type="button"
+                              onClick={usarVideoNovoComoOficial}
+                              className="mt-3 w-full px-4 py-2 rounded-full bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800"
+                            >
+                              Trocar para o novo vídeo
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <BottomNav active="treinos" />
 
