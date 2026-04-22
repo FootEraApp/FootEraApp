@@ -74,6 +74,17 @@ function getUserId(req: Request): string | null {
   return r.userId || r.user?.id || r.usuarioId || null;
 }
 
+async function isAdminUser(userId: string | null | undefined) {
+  if (!userId) return false;
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: userId },
+    select: { tipo: true },
+  });
+
+  return String(usuario?.tipo || "").toLowerCase().trim() === "admin";
+}
+
 function asNullableString(v: any): string | null {
   const s = String(v ?? "").trim();
   return s ? s : null;
@@ -151,8 +162,13 @@ async function validarMetodologiaDoCriador(metodologiaId: string, userId: string
     return { erro: { status: 404, message: "Metodologia não encontrada." } };
   }
 
-  if (metodologia.criadorUsuarioId !== userId) {
-    return { erro: { status: 403, message: "Você não tem permissão para alterar esta metodologia." } };
+  const isAdmin = await isAdminUser(userId);
+
+  if (
+    metodologia.criadorUsuarioId !== userId &&
+    !isAdmin
+  ) {
+    return { erro: { status: 403, message: "Sem permissão." } };
   }
 
   return { metodologia };
@@ -336,13 +352,18 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
 
   const [estruturas, itens] = await Promise.all([
     prisma.metodologiaEstrutura.findMany({
-      where: { metodologiaId: { in: ids } },
+      where: {
+        metodologiaId: { in: ids },
+        ativo: true,
+      },
       select: { id: true, metodologiaId: true },
     }),
     prisma.metodologiaEstruturaItem.findMany({
       where: {
+        publicado: true,
         estrutura: {
           metodologiaId: { in: ids },
+          ativo: true,
         },
       },
       select: {
@@ -718,7 +739,7 @@ export async function updateMetodologia(req: Request, res: Response) {
         descricao: typeof descricao === "string" ? descricao.trim() : undefined,
         capaUrl: capaUrlUpdate,
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : undefined,
-        ativo: typeof ativo === "boolean" ? ativo : undefined,
+        ativo: false,
         nivel: nivel ?? undefined,
         categorias: Array.isArray(categorias) ? categorias : undefined,
         ...(publicoAlvoUpdate !== undefined ? { publicoAlvo: publicoAlvoUpdate } : {}),
@@ -899,6 +920,9 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             assinada: true,
             iniciouEm: r.iniciouEm,
             status: r.status,
+            concluiuEm: r.concluiuEm,
+            mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+            totalReviews: Number(m.totalReviews ?? 0),
             videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
             aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
             treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
@@ -933,6 +957,8 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             criadorNome: m.criadorUsuario?.nome ?? null,
             _count: m._count,
             origemRegistro: "LEARNING" as const,
+            mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+            totalReviews: Number(m.totalReviews ?? 0),
             videoCount: countsById[m.id]?.videoCount ?? 0,
             aulaCount: countsById[m.id]?.aulaCount ?? 0,
             treinoCount: countsById[m.id]?.treinoCount ?? 0,
@@ -942,6 +968,7 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             assinada: true,
             iniciouEm: r.iniciouEm,
             status: r.status,
+            concluiuEm: r.concluiuEm,
           };
         }
 
@@ -1353,15 +1380,21 @@ function aplicarPenalidadeAtraso(
 
 export async function getMetodologiaDetalhe(req: Request, res: Response) {
   try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
-
     const { id } = req.params;
+    const userId = getUserId(req);
+
+    if (!id) {
+      return res.status(400).json({ message: "ID da metodologia é obrigatório." });
+    }
+
+    const isAdmin = await isAdminUser(userId);
 
     const metodologia = await prisma.metodologia.findUnique({
       where: { id },
       include: {
-        criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+        criadorUsuario: {
+          select: { id: true, nome: true, foto: true, parceiro: true },
+        },
         estruturas: {
           where: { ativo: true },
           orderBy: { ordem: "asc" },
@@ -1388,34 +1421,113 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
             },
           },
         },
-        _count: { select: { assinantes: true, estruturas: true } },
+        _count: {
+          select: {
+            assinantes: true,
+            estruturas: true,
+          },
+        },
       },
     });
 
-    if (!metodologia) return res.status(404).json({ message: "Metodologia não encontrada." });
+    if (!metodologia) {
+      return res.status(404).json({ message: "Metodologia não encontrada." });
+    }
 
-    const assinatura = await prisma.metodologiaAssinante.findUnique({
-      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
-    });
+    const assinatura = userId
+      ? await prisma.metodologiaAssinante.findUnique({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId: id,
+              usuarioId: userId,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            iniciouEm: true,
+            concluiuEm: true,
+            origem: true,
+          },
+        })
+      : null;
 
-    const podeAvaliar =
-      !!assinatura && ((assinatura as any).status === "CONCLUIDA" || !!(assinatura as any).concluiuEm);
-
-    const minhaAvaliacao = await prisma.avaliacaoMetodologia.findUnique({
-      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
-      select: { nota: true, comentario: true, updatedAt: true },
-    });
-
-    const hasAccess = assinaturaDaAcesso(assinatura);
-    const concluidosIds: string[] = Array.isArray((assinatura as any)?.progresso?.concluidos)
-      ? ((assinatura as any).progresso.concluidos as string[])
+    const progressoEstruturas = assinatura?.id
+      ? await prisma.metodologiaProgressoEstrutura.findMany({
+          where: {
+            metodologiaAssinanteId: assinatura.id,
+          },
+          select: {
+            progresso: true,
+          },
+        })
       : [];
 
-    // ✅ regra de quota / Learning
-    const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
-      where: { usuarioId: userId },
-      orderBy: { startsAt: "desc" },
-    });
+    const concluidosAssinatura = Array.isArray((assinatura as any)?.progresso?.concluidos)
+      ? (assinatura as any).progresso.concluidos.map((v: any) => String(v))
+      : [];
+
+    const concluidosEstruturas = progressoEstruturas.flatMap((p: any) =>
+      Array.isArray(p?.progresso?.concluidos)
+        ? p.progresso.concluidos.map((v: any) => String(v))
+        : []
+    );
+
+    const concluidosSubmissoes = userId
+      ? await (prisma as any).metodologiaItemSubmissao.findMany({
+          where: {
+            metodologiaId: id,
+            usuarioId: userId,
+          },
+          select: { itemId: true },
+        })
+      : [];
+
+    const concluidosIds = Array.from(
+      new Set<string>([
+        ...concluidosAssinatura,
+        ...concluidosEstruturas,
+        ...concluidosSubmissoes.map((c: any) => String(c.itemId)),
+      ])
+    );
+
+    const podeAvaliar =
+      !!assinatura &&
+      (assinatura.status === MetodologiaAssinaturaStatus.CONCLUIDA ||
+        !!assinatura.concluiuEm);
+
+    const minhaAvaliacao =
+      userId
+        ? await prisma.avaliacaoMetodologia.findUnique({
+            where: {
+              metodologiaId_usuarioId: {
+                metodologiaId: id,
+                usuarioId: userId,
+              },
+            },
+            select: {
+              nota: true,
+              comentario: true,
+              updatedAt: true,
+            },
+          })
+        : null;
+
+    const hasAccess = assinaturaDaAcesso(assinatura);
+    const assinaturaTipo = assinatura
+      ? assinatura.origem === MetodologiaAssinaturaOrigem.AVULSA
+        ? "AVULSA"
+        : "LEARNING"
+      : null;
+
+    const assinaturasPrincipais = userId
+      ? await (prisma as any).assinatura.findMany({
+          where: { usuarioId: userId },
+          orderBy: { startsAt: "desc" },
+        })
+      : [];
 
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
     const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
@@ -1423,7 +1535,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
     const inicioMes = startOfMonth(new Date());
 
     const usadasNoMes =
-      limite > 0
+      userId && limite > 0
         ? await prisma.metodologiaAssinante.count({
             where: {
               usuarioId: userId,
@@ -1434,26 +1546,22 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
           })
         : 0;
 
-    const assinaturaTipo = assinatura
-      ? (assinatura.origem === MetodologiaAssinaturaOrigem.AVULSA ? "AVULSA" : "LEARNING")
-      : null;
+    const podeAssinarAgora = !!userId && !hasAccess && limite > 0 && usadasNoMes < limite;
 
-    const podeAssinarAgora = !hasAccess && limite > 0 && usadasNoMes < limite;
+    let motivoBloqueio: string | null = null;
 
-    const pontosTotal = metodologia.estruturas.reduce((accEstrutura, estrutura) => {
-      const somaEstrutura = estrutura.itens.reduce((accItem, item) => accItem + Number(item.pontos ?? 0), 0);
-      return accEstrutura + somaEstrutura;
-    }, 0);
+    if (hasAccess) {
+      motivoBloqueio = "JA_ASSINADA";
+    } else if (podeAssinarAgora) {
+      motivoBloqueio = null;
+    } else if (limite <= 0) {
+      motivoBloqueio = "PRECISA_LEARNING";
+    } else {
+      motivoBloqueio = "LIMITE_METODOLOGIAS";
+    }
 
-    const u = await prisma.usuario.findUnique({
-      where: { id: userId },
-      select: { tipo: true },
-    });
-
-    const tipoUsuario = String(u?.tipo ?? "").toUpperCase();
-    const isAdmin = tipoUsuario === "ADMIN" || tipoUsuario === "ADMINISTRADOR";
-    const isOwner = metodologia.criadorUsuarioId === userId;
-    const podeVerVideo = hasAccess || isOwner || isAdmin;
+    const acessoFinal = hasAccess || isAdmin;
+    const podeVerVideo = acessoFinal || metodologia.criadorUsuarioId === userId;
 
     const estruturas = metodologia.estruturas.map((estrutura) => {
       const { inicio, fim } = calcularDatasExecucao(estrutura, assinatura);
@@ -1510,53 +1618,79 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       };
     });
 
-    let motivoBloqueio: string | null = null;
+    const pontosTotal = estruturas.reduce((accEstrutura, estrutura) => {
+      const somaEstrutura = (estrutura.itens || []).reduce((accItem, item) => {
+        const pontosItem =
+          item.pontos ??
+          (String(item.tipo).toUpperCase() === "TREINO"
+            ? Number(item.treinoProgramado?.pontuacao ?? 0)
+            : 0);
 
-    if (hasAccess) {
-      motivoBloqueio = "JA_ASSINADA";
-    } else if (podeAssinarAgora) {
-      motivoBloqueio = null; // pode selecionar via Learning
-    } else if (limite <= 0) {
-      // sem plano Learning ativo
-      motivoBloqueio = "PRECISA_LEARNING";
-    } else {
-      // tem plano Learning, mas já atingiu o limite do ciclo
-      motivoBloqueio = "LIMITE_METODOLOGIAS";
-    }
+        return accItem + Number(pontosItem ?? 0);
+      }, 0);
+
+      return accEstrutura + somaEstrutura;
+    }, 0);
 
     return res.json({
-        id: metodologia.id,
-        titulo: metodologia.titulo,
-        descricao: metodologia.descricao,
-        capaUrl: metodologia.capaUrl ?? null,
-        publicoAlvo: metodologia.publicoAlvo,
-        nivel: metodologia.nivel ?? "Base",
-        totalSemanas: metodologia.totalSemanas ?? null,
-        totalAssinantes: metodologia.totalAssinantes ?? 0,
-        mediaAvaliacao: metodologia.mediaAvaliacao ?? 0,
-        totalReviews: metodologia.totalReviews ?? 0,
-        pontosTotal,
-        criadorNome: metodologia.criadorUsuario?.nome ?? null,
-        estruturas,
-        viewer: {
-          isAssinante: hasAccess,
-          temAcesso: hasAccess,
-          assinaturaTipo,
-          expiraEm: assinatura?.expiraEm ? new Date(assinatura.expiraEm).toISOString() : null,
-          podeAssinarAgora,
-          motivoBloqueio,
-          podeAvaliar,
-          minhaAvaliacao,
-          progresso: { concluidos: concluidosIds },
-          quota: {
-            limite,
-            usadasNoMes,
-            restantes: Math.max(0, limite - usadasNoMes),
-          },
+      id: metodologia.id,
+      titulo: metodologia.titulo,
+      descricao: metodologia.descricao,
+      capaUrl: metodologia.capaUrl ?? null,
+      publicoAlvo: metodologia.publicoAlvo,
+      nivel: metodologia.nivel ?? "Base",
+      totalSemanas: metodologia.totalSemanas ?? null,
+      totalAssinantes: metodologia._count?.assinantes ?? 0,
+      mediaAvaliacao: (metodologia as any).mediaAvaliacao ?? 0,
+      totalReviews: (metodologia as any).totalReviews ?? 0,
+      pontosTotal,
+      criadorNome: metodologia.criadorUsuario?.nome ?? null,
+      tipo: metodologia.tipo,
+      estruturaTipo: metodologia.estruturaTipo,
+      area: metodologia.area ?? null,
+      geraBadge: !!metodologia.geraBadge,
+      geraCertificado: !!metodologia.geraCertificado,
+      estruturas,
+      viewer: {
+        isAssinante: acessoFinal,
+        temAcesso: acessoFinal,
+        assinaturaTipo: hasAccess
+          ? assinaturaTipo
+          : isAdmin
+            ? "LEARNING"
+            : assinaturaTipo,
+        expiraEm: assinatura?.expiraEm
+          ? new Date(assinatura.expiraEm).toISOString()
+          : null,
+        podeAssinarAgora: isAdmin ? false : podeAssinarAgora,
+        motivoBloqueio: isAdmin ? null : motivoBloqueio,
+        podeAvaliar: !!userId && acessoFinal && !minhaAvaliacao,
+        minhaAvaliacao: minhaAvaliacao
+          ? {
+              nota: minhaAvaliacao.nota,
+              comentario: minhaAvaliacao.comentario,
+              updatedAt: minhaAvaliacao.updatedAt.toISOString(),
+            }
+          : null,
+        progresso: {
+          concluidos: concluidosIds,
         },
+        status: assinatura?.status ?? null,
+        concluiuEm: assinatura?.concluiuEm
+          ? new Date(assinatura.concluiuEm).toISOString()
+          : null,
+        quota: {
+          limite,
+          usadasNoMes,
+          restantes: Math.max(0, limite - usadasNoMes),
+        },
+      },
     });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao buscar detalhe da metodologia.", detail: e?.message });
+    return res.status(500).json({
+      message: "Erro ao buscar detalhe da metodologia.",
+      detail: e?.message,
+    });
   }
 }
 
@@ -1730,9 +1864,14 @@ export async function deleteMetodologiaItens(req: Request, res: Response) {
 export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+    if (!userId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
 
-    const { metodologiaId, nota, comentario } = req.body || {};
+    const { metodologiaId, nota, comentario, origem } = req.body || {};
+    const origemFinal = String(origem || "LEARNING").toUpperCase().trim();
+    const isAvulsa = origemFinal === "AVULSA";
+    const isAdmin = await isAdminUser(userId);
 
     if (!metodologiaId || typeof metodologiaId !== "string") {
       return res.status(400).json({ message: "metodologiaId é obrigatório." });
@@ -1743,48 +1882,140 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
       return res.status(400).json({ message: "nota inválida (0 a 5)." });
     }
 
-    // ✅ existe?
-    const existe = await prisma.metodologia.findUnique({
-      where: { id: metodologiaId },
-      select: { id: true },
-    });
-    if (!existe) return res.status(404).json({ message: "Metodologia não encontrada." });
+    const existe = isAvulsa
+      ? await prisma.metodologiaAvulsa.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true },
+        })
+      : await prisma.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true },
+        });
 
-    const assinatura = await prisma.metodologiaAssinante.findUnique({
-      where: { metodologiaId_usuarioId: { metodologiaId, usuarioId: userId } },
-      select: { status: true, concluiuEm: true },
-    });
+    if (!existe) {
+      return res.status(404).json({ message: "Metodologia não encontrada." });
+    }
 
-    const podeAvaliar =
-      !!assinatura && ((assinatura as any).status === "CONCLUIDA" || !!(assinatura as any).concluiuEm);
+    const assinatura = isAvulsa
+      ? await prisma.metodologiaAssinante.findFirst({
+          where: {
+            usuarioId: userId,
+            metodologiaAvulsaId: metodologiaId,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            concluiuEm: true,
+          },
+        })
+      : await prisma.metodologiaAssinante.findUnique({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId,
+              usuarioId: userId,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            concluiuEm: true,
+          },
+        });
 
-    if (!podeAvaliar) {
+    const temAcesso = assinaturaDaAcesso(assinatura) || isAdmin;
+
+    if (!temAcesso) {
       return res.status(403).json({
-        error: "Só pode avaliar quem assinou e concluiu a metodologia.",
+        message: "Você não possui acesso a esta metodologia.",
+      });
+    }
+
+    if (!isAdmin && !assinatura?.concluiuEm) {
+      return res.status(400).json({
+        message: "Conclua a metodologia antes de avaliá-la.",
       });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const review = await tx.avaliacaoMetodologia.upsert({
-        where: {
-          metodologiaId_usuarioId: { metodologiaId, usuarioId: userId },
-        },
-        create: {
-          metodologiaId,
-          usuarioId: userId,
-          nota: Math.round(n),
-          comentario: typeof comentario === "string" ? comentario.trim() : null,
-        },
-        update: {
-          nota: Math.round(n),
-          comentario: typeof comentario === "string" ? comentario.trim() : null,
-        },
-        select: { id: true, nota: true, comentario: true, updatedAt: true },
-      });
+      let review: {
+        id: string;
+        nota: number;
+        comentario: string | null;
+        updatedAt: Date;
+      };
 
-      // ✅ recalcula média + total no banco (fonte da verdade)
+      if (isAvulsa) {
+        const existente = await tx.avaliacaoMetodologia.findFirst({
+          where: {
+            usuarioId: userId,
+            metodologiaAvulsaId: metodologiaId,
+          },
+          select: { id: true },
+        });
+
+        review = existente
+          ? await tx.avaliacaoMetodologia.update({
+              where: { id: existente.id },
+              data: {
+                nota: Math.round(n),
+                comentario: asNullableString(comentario),
+              },
+              select: {
+                id: true,
+                nota: true,
+                comentario: true,
+                updatedAt: true,
+              },
+            })
+          : await tx.avaliacaoMetodologia.create({
+              data: {
+                usuarioId: userId,
+                metodologiaId: null,
+                metodologiaAvulsaId: metodologiaId,
+                nota: Math.round(n),
+                comentario: asNullableString(comentario),
+              },
+              select: {
+                id: true,
+                nota: true,
+                comentario: true,
+                updatedAt: true,
+              },
+            });
+      } else {
+        review = await tx.avaliacaoMetodologia.upsert({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId,
+              usuarioId: userId,
+            },
+          },
+          create: {
+            metodologiaId,
+            metodologiaAvulsaId: null,
+            usuarioId: userId,
+            nota: Math.round(n),
+            comentario: asNullableString(comentario),
+          },
+          update: {
+            nota: Math.round(n),
+            comentario: asNullableString(comentario),
+          },
+          select: {
+            id: true,
+            nota: true,
+            comentario: true,
+            updatedAt: true,
+          },
+        });
+      }
+
       const agg = await tx.avaliacaoMetodologia.aggregate({
-        where: { metodologiaId },
+        where: isAvulsa
+          ? { metodologiaAvulsaId: metodologiaId }
+          : { metodologiaId },
         _avg: { nota: true },
         _count: { _all: true },
       });
@@ -1792,26 +2023,44 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
       const media = Number(agg._avg.nota ?? 0);
       const total = Number(agg._count._all ?? 0);
 
-      await tx.metodologia.update({
-        where: { id: metodologiaId },
-        data: {
-          mediaAvaliacao: media,
-          totalReviews: total,
-        },
-        select: { id: true },
-      });
+      if (isAvulsa) {
+        await tx.metodologiaAvulsa.update({
+          where: { id: metodologiaId },
+          data: {
+            mediaAvaliacao: media,
+            totalReviews: total,
+          },
+        });
+      } else {
+        await tx.metodologia.update({
+          where: { id: metodologiaId },
+          data: {
+            mediaAvaliacao: media,
+            totalReviews: total,
+          },
+        });
+      }
 
-      return { review, mediaAvaliacao: media, totalReviews: total };
+      return { review, media, total };
     });
 
     return res.status(201).json({
       ok: true,
-      avaliacao: result.review,
-      mediaAvaliacao: result.mediaAvaliacao,
-      totalReviews: result.totalReviews,
+      avaliacao: {
+        id: result.review.id,
+        nota: result.review.nota,
+        comentario: result.review.comentario,
+        updatedAt: result.review.updatedAt,
+      },
+      mediaAvaliacao: result.media,
+      totalReviews: result.total,
     });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao salvar avaliação.", detail: e?.message });
+    console.error("[criarAvaliacaoMetodologia]", e);
+    return res.status(500).json({
+      message: "Erro ao salvar avaliação da metodologia.",
+      detail: e?.message,
+    });
   }
 }
 
@@ -1820,41 +2069,94 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
-    const { id } = req.params; // metodologiaId
+    const { id } = req.params;
     const { itemId } = req.body || {};
+
+    const isAvulsa =
+      req.originalUrl.includes("/metodologias-avulsas/") ||
+      String(req.query.origemTipo || "").toUpperCase() === "AVULSA";
 
     if (!itemId || typeof itemId !== "string") {
       return res.status(400).json({ message: "itemId é obrigatório." });
     }
 
-    const item = await prisma.metodologiaEstruturaItem.findFirst({
-      where: {
-        id: itemId,
-        estrutura: {
-          metodologiaId: id,
-        },
-      },
-      select: {
-        id: true,
-        pontos: true,
-        estrutura: {
-          select: {
-            id: true,
-            pontosPorItem: true,
-            modoExecucao: true,
-            prazoFinal: true,
-            percentualPerdaAtraso: true,
+    const item = isAvulsa
+    ? await prisma.metodologiaAvulsaEstruturaItem.findFirst({
+        where: {
+          id: itemId,
+          estrutura: {
+            metodologiaAvulsaId: id,
           },
         },
-      },
-    });
+        select: {
+          id: true,
+          pontos: true,
+          treinoProgramado: {
+            select: {
+              pontuacao: true,
+            },
+          },
+          estrutura: {
+            select: {
+              id: true,
+              pontosPorItem: true,
+              modoExecucao: true,
+              prazoFinal: true,
+              percentualPerdaAtraso: true,
+            },
+          },
+        },
+      })
+    : await prisma.metodologiaEstruturaItem.findFirst({
+        where: {
+          id: itemId,
+          estrutura: {
+            metodologiaId: id,
+          },
+        },
+        select: {
+          id: true,
+          pontos: true,
+          treinoProgramado: {
+            select: {
+              pontuacao: true,
+            },
+          },
+          estrutura: {
+            select: {
+              id: true,
+              pontosPorItem: true,
+              modoExecucao: true,
+              prazoFinal: true,
+              percentualPerdaAtraso: true,
+            },
+          },
+        },
+      });
 
-    if (!item) return res.status(404).json({ message: "Item não encontrado nessa metodologia." });
+      if (!item) {
+        return res.status(404).json({
+          message: isAvulsa
+            ? "Item não encontrado nessa metodologia avulsa."
+            : "Item não encontrado nessa metodologia.",
+        });
+      }
 
-    // Confere assinatura e acesso
-    const assinatura = await prisma.metodologiaAssinante.findUnique({
-      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
-    });
+    const assinatura = isAvulsa
+      ? await prisma.metodologiaAssinante.findFirst({
+          where: {
+            usuarioId: userId,
+            metodologiaAvulsaId: id,
+          },
+        })
+      : await prisma.metodologiaAssinante.findUnique({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId: id,
+              usuarioId: userId,
+            },
+          },
+        });
 
     if (!assinatura || !assinaturaDaAcesso(assinatura)) {
       return res.status(403).json({ message: "Sem acesso à metodologia." });
@@ -1864,52 +2166,88 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
     const concluidos: string[] = Array.isArray(progresso.concluidos) ? progresso.concluidos : [];
     const jaTinha = concluidos.includes(itemId);
     const novoConcluidos = jaTinha ? concluidos : [...concluidos, itemId];
-    // ✅ opcional: guardar pontos ganhos só 1x
     const pontosTotaisAntes = Number(progresso.pontosGanhos ?? 0);
-
-    const pontosBase = Number(
-      item.pontos ?? item.estrutura?.pontosPorItem ?? 0
-    );
-
+    const pontosBase = Number(item.pontos ?? item.estrutura?.pontosPorItem ?? 0);
     const pontosGanhosAgora = jaTinha
       ? 0
       : aplicarPenalidadeAtraso(pontosBase, {
-          modoExecucao: item.estrutura?.modoExecucao ?? null,
-          prazoFinal: item.estrutura?.prazoFinal ?? null,
-          percentualPerdaAtraso: item.estrutura?.percentualPerdaAtraso ?? null,
+          modoExecucao: item.estrutura.modoExecucao ?? null,
+          prazoFinal: item.estrutura.prazoFinal ?? null,
+          percentualPerdaAtraso: item.estrutura.percentualPerdaAtraso ?? null,
         });
+
     const progressoNovo = {
       ...progresso,
       concluidos: novoConcluidos,
       pontosGanhos: pontosTotaisAntes + pontosGanhosAgora,
-      // ajuda pra debug
       atualizadoEm: new Date().toISOString(),
     };
 
-    await prisma.metodologiaAssinante.update({
-      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
-      data: { progresso: progressoNovo as any },
-    });
+    if (isAvulsa) {
+      await prisma.metodologiaAssinante.update({
+        where: { id: assinatura.id },
+        data: { progresso: progressoNovo as any },
+      });
+    } else {
+      await prisma.metodologiaAssinante.update({
+        where: {
+          metodologiaId_usuarioId: {
+            metodologiaId: id,
+            usuarioId: userId,
+          },
+        },
+        data: { progresso: progressoNovo as any },
+      });
+    }
 
-    // ✅ calcula se a metodologia ficou completa (comparando total publicado vs concluidos)
-    const totalPublicados = await prisma.metodologiaItem.count({
-      where: { metodologiaId: id, publicado: true },
-    });
+    const totalPublicados = isAvulsa
+      ? await prisma.metodologiaAvulsaEstruturaItem.count({
+          where: {
+            publicado: true,
+            estrutura: {
+              metodologiaAvulsaId: id,
+            },
+          },
+        })
+      : await prisma.metodologiaEstruturaItem.count({
+          where: {
+            publicado: true,
+            estrutura: {
+              metodologiaId: id,
+            },
+          },
+        });
 
     const metodologiaCompleta = totalPublicados > 0 && novoConcluidos.length >= totalPublicados;
 
     if (metodologiaCompleta) {
-      await prisma.metodologiaAssinante.update({
-        where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
-        data: {
-          status: MetodologiaAssinaturaStatus.CONCLUIDA as any,
-          concluiuEm: new Date() as any,
-        },
-      });
+      if (isAvulsa) {
+        await prisma.metodologiaAssinante.update({
+          where: { id: assinatura.id },
+          data: {
+            status: MetodologiaAssinaturaStatus.CONCLUIDA as any,
+            concluiuEm: new Date() as any,
+          },
+        });
+      } else {
+        await prisma.metodologiaAssinante.update({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId: id,
+              usuarioId: userId,
+            },
+          },
+          data: {
+            status: MetodologiaAssinaturaStatus.CONCLUIDA as any,
+            concluiuEm: new Date() as any,
+          },
+        });
+      }
 
-      // ✅ AQUI É O (A): dá a conquista (idempotente)
       try {
-        await unlockConquistaMetodologia(userId, id);
+        if (!isAvulsa) {
+          await unlockConquistaMetodologia(userId, id);
+        }
       } catch (e) {
         console.error("Falha ao desbloquear conquista da metodologia:", e);
       }
@@ -1919,7 +2257,7 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
       ok: true,
       jaTinha,
       pontosGanhosAgora,
-      metodologiaCompleta, // ✅ ESSENCIAL pro Caminho 1
+      metodologiaCompleta,
       progresso: {
         concluidos: novoConcluidos,
         pontosGanhos: progressoNovo.pontosGanhos,
@@ -1928,7 +2266,10 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao concluir item.", detail: e?.message });
+    return res.status(500).json({
+      message: "Erro ao concluir item.",
+      detail: e?.message,
+    });
   }
 }
 
@@ -2695,139 +3036,230 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
       return res.status(400).json({ message: "itemId é obrigatório." });
     }
 
-    const metodologia = await prisma.metodologia.findUnique({
-      where: { id: metodologiaId },
-      select: {
-        id: true,
-        ativo: true,
-      },
-    });
+    const isAvulsa =
+      req.originalUrl.includes("/metodologias-avulsas/") ||
+      String(req.query.origemTipo || "").toUpperCase() === "AVULSA";
 
-    if (!metodologia || metodologia.ativo === false) {
-      return res.status(404).json({ message: "Metodologia não encontrada." });
+    const isAdmin = await isAdminUser(userId);
+
+    const metodologiaBase = isAvulsa
+      ? await prisma.metodologiaAvulsa.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true, ativo: true },
+        })
+      : await prisma.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true, ativo: true },
+        });
+
+    if (!metodologiaBase) {
+      return res.status(404).json({
+        message: isAvulsa
+          ? "Metodologia avulsa não encontrada."
+          : "Metodologia não encontrada.",
+      });
     }
 
-    const assinatura = await prisma.metodologiaAssinante.findUnique({
-      where: {
-        metodologiaId_usuarioId: {
-          metodologiaId,
-          usuarioId: userId,
-        },
-      },
-      select: {
-        id: true,
-        status: true,
-        expiraEm: true,
-        progresso: true,
-      },
-    });
+    if (!isAdmin && metodologiaBase.ativo === false) {
+      return res.status(404).json({
+        message: isAvulsa
+          ? "Metodologia avulsa não encontrada."
+          : "Metodologia não encontrada.",
+      });
+    }
 
-    if (!assinatura || assinatura.status === MetodologiaAssinaturaStatus.CANCELADA) {
+    let assinatura = isAvulsa
+      ? await prisma.metodologiaAssinante.findFirst({
+          where: {
+            usuarioId: userId,
+            metodologiaAvulsaId: metodologiaId,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        })
+      : await prisma.metodologiaAssinante.findUnique({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId,
+              usuarioId: userId,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        });
+
+    if (!assinatura && isAdmin) {
+      if (isAvulsa) {
+        const existeAvulsa = await prisma.metodologiaAvulsa.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true },
+        });
+
+        if (!existeAvulsa) {
+          return res.status(404).json({
+            message: "Metodologia avulsa não encontrada para criar assinatura do admin.",
+          });
+        }
+
+        assinatura = await prisma.metodologiaAssinante.create({
+          data: {
+            usuarioId: userId,
+            metodologiaAvulsaId: metodologiaId,
+            origem: MetodologiaAssinaturaOrigem.AVULSA,
+            status: MetodologiaAssinaturaStatus.ATIVA,
+            iniciouEm: new Date(),
+            progresso: {
+              concluidos: [],
+              pontosGanhos: 0,
+              atualizadoEm: new Date().toISOString(),
+            } as any,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        });
+      } else {
+        const existeLearning = await prisma.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true },
+        });
+
+        if (!existeLearning) {
+          return res.status(404).json({
+            message: "Metodologia não encontrada para criar assinatura do admin.",
+          });
+        }
+
+        assinatura = await prisma.metodologiaAssinante.create({
+          data: {
+            usuarioId: userId,
+            metodologiaId,
+            origem: MetodologiaAssinaturaOrigem.LEARNING,
+            status: MetodologiaAssinaturaStatus.ATIVA,
+            iniciouEm: new Date(),
+            progresso: {
+              concluidos: [],
+              pontosGanhos: 0,
+              atualizadoEm: new Date().toISOString(),
+            } as any,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        });
+      }
+    }
+
+    const temAcesso = assinaturaDaAcesso(assinatura) || isAdmin;
+
+    if (!temAcesso) {
       return res.status(403).json({ message: "Você não possui acesso a esta metodologia." });
     }
 
-    if (assinatura.expiraEm && new Date(assinatura.expiraEm) <= new Date()) {
+    if (!isAdmin && assinatura?.status === MetodologiaAssinaturaStatus.CANCELADA) {
+      return res.status(403).json({ message: "Você não possui acesso a esta metodologia." });
+    }
+
+    if (
+      !isAdmin &&
+      assinatura?.expiraEm &&
+      new Date(assinatura.expiraEm) <= new Date()
+    ) {
       return res.status(403).json({ message: "Sua assinatura desta metodologia expirou." });
     }
 
-    const item = await prisma.metodologiaEstruturaItem.findFirst({
-      where: {
-        id: itemId,
-        estruturaId,
-        estrutura: {
-          metodologiaId,
-        },
-      },
-      include: {
-        estrutura: {
-          select: {
-            id: true,
-            metodologiaId: true,
-            titulo: true,
+    const item = isAvulsa
+      ? await prisma.metodologiaAvulsaEstruturaItem.findFirst({
+          where: {
+            id: itemId,
+            estruturaId,
+            estrutura: {
+              metodologiaAvulsaId: metodologiaId,
+            },
           },
-        },
-      },
-    });
+          include: {
+            estrutura: {
+              select: {
+                id: true,
+                metodologiaAvulsaId: true,
+                titulo: true,
+                pontosPorItem: true,
+                modoExecucao: true,
+                prazoFinal: true,
+                percentualPerdaAtraso: true,
+              },
+            },
+            treinoProgramado: {
+              select: {
+                pontuacao: true,
+              },
+            },
+          },
+        })
+      : await prisma.metodologiaEstruturaItem.findFirst({
+          where: {
+            id: itemId,
+            estruturaId,
+            estrutura: {
+              metodologiaId,
+            },
+          },
+          include: {
+            estrutura: {
+              select: {
+                id: true,
+                metodologiaId: true,
+                titulo: true,
+                pontosPorItem: true,
+                modoExecucao: true,
+                prazoFinal: true,
+                percentualPerdaAtraso: true,
+              },
+            },
+            treinoProgramado: {
+              select: {
+                pontuacao: true,
+              },
+            },
+          },
+        });
 
     if (!item) {
       return res.status(404).json({ message: "Item da estrutura não encontrado." });
     }
 
-    const [totalItensEstrutura, totalItensConcluidosEstrutura] = await prisma.$transaction(async (tx) => {
-      const progressoExistente = await tx.metodologiaProgressoEstrutura.findUnique({
-        where: {
-          metodologiaAssinanteId_estruturaId: {
-            metodologiaAssinanteId: assinatura.id,
-            estruturaId,
-          },
-        },
-      });
+    const tipo = String(item.tipo || "").toUpperCase();
 
-      const payloadAtual: any =
-        progressoExistente?.progresso && typeof progressoExistente.progresso === "object"
-          ? { ...(progressoExistente.progresso as any) }
-          : {};
+    if (!assinatura) {
+      return res.status(403).json({ message: "Você não possui acesso a esta metodologia." });
+    }
 
-      const concluidos: string[] = Array.isArray(payloadAtual.concluidos)
-        ? payloadAtual.concluidos.map((v: any) => String(v))
-        : [];
-
-      if (!concluidos.includes(itemId)) {
-        concluidos.push(itemId);
-      }
-
-      const itensPublicados = await tx.metodologiaEstruturaItem.count({
-        where: {
-          estruturaId,
-          publicado: true,
-        },
-      });
-
-      const statusEstrutura =
-        itensPublicados > 0 && concluidos.length >= itensPublicados
-          ? MetodologiaProgressoStatus.CONCLUIDA
-          : MetodologiaProgressoStatus.EM_ANDAMENTO;
-
-      const pontosGanhos = concluidos.length * ((item.estrutura as any).pontosPorItem ?? 0);
-
-      await tx.metodologiaProgressoEstrutura.upsert({
-        where: {
-          metodologiaAssinanteId_estruturaId: {
-            metodologiaAssinanteId: assinatura.id,
-            estruturaId,
-          },
-        },
-        create: {
-          metodologiaAssinanteId: assinatura.id,
-          estruturaId,
-          status: statusEstrutura,
-          iniciadoEm: new Date(),
-          concluidoEm: statusEstrutura === MetodologiaProgressoStatus.CONCLUIDA ? new Date() : null,
-          cicloInicioEm: new Date(),
-          itensConcluidos: concluidos.length,
-          pontosGanhos,
-          ultimoAcessoEm: new Date(),
-          progresso: {
-            concluidos,
-            ultimoItemConcluidoId: itemId,
-          } as any,
-        },
-        update: {
-          status: statusEstrutura,
-          concluidoEm: statusEstrutura === MetodologiaProgressoStatus.CONCLUIDA ? new Date() : null,
-          itensConcluidos: concluidos.length,
-          pontosGanhos,
-          ultimoAcessoEm: new Date(),
-          progresso: {
-            concluidos,
-            ultimoItemConcluidoId: itemId,
-          } as any,
-        },
-      });
-
-      // mantém compatibilidade com progresso legado da assinatura
+    const [totalItensEstrutura, totalItensConcluidosEstrutura, concluidosAtualizados] =
+    await prisma.$transaction(async (tx) => {
       const progressoAssinaturaAtual: any =
-        assinatura.progresso && typeof assinatura.progresso === "object"
+        assinatura?.progresso && typeof assinatura.progresso === "object"
           ? { ...(assinatura.progresso as any) }
           : {};
 
@@ -2839,19 +3271,195 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
         concluidosLegado.push(itemId);
       }
 
-      progressoAssinaturaAtual.concluidos = concluidosLegado;
+      const pontosBase = Number(
+        item.pontos ??
+        item.estrutura?.pontosPorItem ??
+        (String(item.tipo || "").toUpperCase() === "TREINO"
+          ? item.treinoProgramado?.pontuacao
+          : 0) ??
+        0
+      );
 
-      await tx.metodologiaAssinante.update({
+      const pontosItem = concluidosLegado.includes(itemId)
+        ? 0
+        : aplicarPenalidadeAtraso(pontosBase, {
+            modoExecucao: item.estrutura?.modoExecucao ?? null,
+            prazoFinal: item.estrutura?.prazoFinal ?? null,
+            percentualPerdaAtraso: item.estrutura?.percentualPerdaAtraso ?? null,
+          });
+
+      const itensPublicados = isAvulsa
+        ? await tx.metodologiaAvulsaEstruturaItem.count({
+            where: { estruturaId, publicado: true },
+          })
+        : await tx.metodologiaEstruturaItem.count({
+            where: { estruturaId, publicado: true },
+          });
+
+      const statusEstrutura =
+        itensPublicados > 0 && concluidosLegado.length >= itensPublicados
+          ? MetodologiaProgressoStatus.CONCLUIDA
+          : concluidosLegado.length > 0
+            ? MetodologiaProgressoStatus.EM_ANDAMENTO
+            : MetodologiaProgressoStatus.NAO_INICIADA;
+
+      progressoAssinaturaAtual.concluidos = concluidosLegado;
+      progressoAssinaturaAtual.pontosGanhos =
+        Number(progressoAssinaturaAtual.pontosGanhos ?? 0) + pontosItem;
+      progressoAssinaturaAtual.ultimoItemConcluidoId = itemId;
+      progressoAssinaturaAtual.atualizadoEm = new Date().toISOString();
+
+      if (isAvulsa) {
+        // salva por estrutura dentro do JSON da assinatura
+        const estruturasMap =
+          progressoAssinaturaAtual.estruturas &&
+          typeof progressoAssinaturaAtual.estruturas === "object"
+            ? { ...progressoAssinaturaAtual.estruturas }
+            : {};
+
+        const estruturaAtual =
+          estruturasMap[estruturaId] && typeof estruturasMap[estruturaId] === "object"
+            ? { ...estruturasMap[estruturaId] }
+            : {};
+
+        estruturaAtual.status = statusEstrutura;
+        estruturaAtual.itensConcluidos = concluidosLegado.filter((id) => {
+          // conta só os itens desta estrutura
+          return true;
+        }).length;
+        estruturaAtual.ultimoItemConcluidoId = itemId;
+        estruturaAtual.ultimoAcessoEm = new Date().toISOString();
+        if (!estruturaAtual.iniciadoEm) estruturaAtual.iniciadoEm = new Date().toISOString();
+        if (statusEstrutura === MetodologiaProgressoStatus.CONCLUIDA) {
+          estruturaAtual.concluidoEm = new Date().toISOString();
+        }
+
+        estruturasMap[estruturaId] = estruturaAtual;
+        progressoAssinaturaAtual.estruturas = estruturasMap;
+
+        await tx.metodologiaAssinante.update({
+          where: { id: assinatura.id },
+          data: {
+            progresso: progressoAssinaturaAtual,
+          },
+        });
+      } else {
+        const progressoExistente = await tx.metodologiaProgressoEstrutura.findUnique({
+          where: {
+            metodologiaAssinanteId_estruturaId: {
+              metodologiaAssinanteId: assinatura.id,
+              estruturaId,
+            },
+          },
+        });
+
+        const payloadAtual: any =
+          progressoExistente?.progresso && typeof progressoExistente.progresso === "object"
+            ? { ...(progressoExistente.progresso as any) }
+            : {};
+
+        payloadAtual.concluidos = concluidosLegado;
+        payloadAtual.ultimoItemConcluidoId = itemId;
+        payloadAtual.pontosGanhos = Number(payloadAtual.pontosGanhos ?? 0) + pontosItem;
+
+        await tx.metodologiaProgressoEstrutura.upsert({
+          where: {
+            metodologiaAssinanteId_estruturaId: {
+              metodologiaAssinanteId: assinatura.id,
+              estruturaId,
+            },
+          },
+          create: {
+            metodologiaAssinanteId: assinatura.id,
+            estruturaId,
+            status: statusEstrutura,
+            iniciadoEm: new Date(),
+            concluidoEm:
+              statusEstrutura === MetodologiaProgressoStatus.CONCLUIDA ? new Date() : null,
+            cicloInicioEm: new Date(),
+            itensConcluidos: concluidosLegado.length,
+            pontosGanhos: Number(payloadAtual.pontosGanhos ?? 0),
+            ultimoAcessoEm: new Date(),
+            progresso: payloadAtual,
+          },
+          update: {
+            status: statusEstrutura,
+            concluidoEm:
+              statusEstrutura === MetodologiaProgressoStatus.CONCLUIDA ? new Date() : null,
+            itensConcluidos: concluidosLegado.length,
+            pontosGanhos: Number(payloadAtual.pontosGanhos ?? 0),
+            ultimoAcessoEm: new Date(),
+            progresso: payloadAtual,
+          },
+        });
+
+        await tx.metodologiaAssinante.update({
+          where: { id: assinatura.id },
+          data: {
+            progresso: progressoAssinaturaAtual,
+          },
+        });
+      }
+
+      return [itensPublicados, concluidosLegado.length, concluidosLegado] as const;
+    });
+
+    if (!isAvulsa) {
+      await recalcularStatusMetodologiaAssinante(metodologiaId, userId);
+    } else {
+      const [totalItensPublicadosMetodologia, totalEstruturasConcluidas] = await Promise.all([
+        prisma.metodologiaAvulsaEstruturaItem.count({
+          where: {
+            estrutura: {
+              metodologiaAvulsaId: metodologiaId,
+            },
+            publicado: true,
+          },
+        }),
+        prisma.metodologiaProgressoEstrutura.count({
+          where: {
+            metodologiaAssinanteId: assinatura.id,
+            status: MetodologiaProgressoStatus.CONCLUIDA,
+          },
+        }),
+      ]);
+
+      const assinaturaAtualizada = await prisma.metodologiaAssinante.findUnique({
         where: { id: assinatura.id },
-        data: {
-          progresso: progressoAssinaturaAtual,
+        select: { progresso: true, concluiuEm: true, status: true },
+      });
+
+      const payload: any =
+        assinaturaAtualizada?.progresso && typeof assinaturaAtualizada.progresso === "object"
+          ? { ...(assinaturaAtualizada.progresso as any) }
+          : {};
+
+      payload.totalItens = totalItensPublicadosMetodologia;
+      payload.estruturasConcluidas = totalEstruturasConcluidas;
+
+      const totalEstruturasAtivas = await prisma.metodologiaAvulsaEstrutura.count({
+        where: {
+          metodologiaAvulsaId: metodologiaId,
+          ativo: true,
         },
       });
 
-      return [itensPublicados, concluidos.length] as const;
-    });
+      const concluiuTudo =
+        totalEstruturasAtivas > 0 && totalEstruturasConcluidas >= totalEstruturasAtivas;
 
-    await recalcularStatusMetodologiaAssinante(metodologiaId, userId);
+      await prisma.metodologiaAssinante.update({
+        where: { id: assinatura.id },
+        data: {
+          progresso: payload,
+          status: concluiuTudo
+            ? (MetodologiaAssinaturaStatus.CONCLUIDA as any)
+            : assinaturaAtualizada?.status,
+          concluiuEm: concluiuTudo
+            ? (assinaturaAtualizada?.concluiuEm ?? new Date())
+            : assinaturaAtualizada?.concluiuEm,
+        },
+      });
+    }
 
     return res.json({
       ok: true,
@@ -2859,7 +3467,11 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
       itemId,
       totalItensEstrutura,
       totalItensConcluidosEstrutura,
-      estruturaConcluida: totalItensEstrutura > 0 && totalItensConcluidosEstrutura >= totalItensEstrutura,
+      estruturaConcluida:
+        totalItensEstrutura > 0 && totalItensConcluidosEstrutura >= totalItensEstrutura,
+      progresso: {
+        concluidos: concluidosAtualizados,
+      },
     });
   } catch (e: any) {
     return res.status(500).json({
@@ -2983,7 +3595,7 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
           professorId,
           clubeId,
           escolinhaId,
-          ativo: true,
+          ativo: false,
         },
       });
 
@@ -3181,7 +3793,7 @@ export async function createMetodologiaAvulsaCompleta(req: Request, res: Respons
           geraCertificado: asBool(geraCertificado, false),
           precoAssinaturaMensal: preco,
           criadorUsuarioId: userId,
-          ativo: true,
+          ativo: false,
           estruturas: {
             create: (Array.isArray(estruturas) ? estruturas : []).map((estrutura: any, i: number) => ({
               titulo: String(estrutura?.titulo ?? "").trim(),
@@ -3322,7 +3934,7 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
         capaUrl: asNullableString(capaUrl),
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
-        ativo: true,
+        ativo: false,
         tipo,
         estruturaTipo,
         area: area ?? null,
@@ -3364,6 +3976,9 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
             status: true,
             expiraEm: true,
             iniciouEm: true,
+            progresso: true,
+            concluiuEm: true,
+            origem: true,
           },
         })
       : null;
@@ -3375,9 +3990,11 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
           select: { id: true, nome: true, foto: true, parceiro: true },
         },
         estruturas: {
+          where: { ativo: true },
           orderBy: { ordem: "asc" },
           include: {
             itens: {
+              where: { publicado: true },
               orderBy: { ordem: "asc" },
               include: {
                 treinoProgramado: {
@@ -3408,49 +4025,182 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
     });
 
     if (!item) {
-      return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
+      return res.status(404).json({
+        message: "Metodologia avulsa não encontrada.",
+      });
     }
 
+    const isAdmin = await isAdminUser(userId);
     const hasAccess = assinaturaDaAcesso(assinatura);
+    const acessoFinal = hasAccess || isAdmin;
 
-    const concluidosIds: string[] = [];
-    const podeAvaliar = !!userId && hasAccess;
-    const minhaAvaliacao = null;
+    const concluidosSubmissoes = userId
+      ? await (prisma as any).metodologiaItemSubmissao.findMany({
+          where: {
+            metodologiaAvulsaId: id,
+            usuarioId: userId,
+          },
+          select: {
+            itemAvulsaId: true,
+          },
+        })
+      : [];
 
-    const pontosTotal = (item.estruturas || [])
-      .flatMap((e) => e.itens || [])
-      .reduce(
-        (acc, it) =>
-          acc +
-          Number(
-            it?.pontos ??
-              (String(it?.tipo || "").toUpperCase() === "TREINO"
-                ? it?.treinoProgramado?.pontuacao
-                : 0) ??
-              0
-          ),
-        0
-      );
+    const concluidosSubmissoesIds = concluidosSubmissoes
+      .map((c: any) => c?.itemAvulsaId)
+      .filter(Boolean)
+      .map((v: any) => String(v));
+
+    const progressoAssinatura: any =
+      assinatura?.progresso && typeof assinatura.progresso === "object"
+        ? assinatura.progresso
+        : {};
+
+    const concluidosAssinaturaIds: string[] = Array.isArray(progressoAssinatura.concluidos)
+      ? progressoAssinatura.concluidos.map((v: any) => String(v))
+      : [];
+
+    const concluidosIds = Array.from(
+      new Set<string>([...concluidosAssinaturaIds, ...concluidosSubmissoesIds])
+    );
+
+    const minhaAvaliacao = userId
+      ? await prisma.avaliacaoMetodologia.findFirst({
+          where: {
+            usuarioId: userId,
+            metodologiaAvulsaId: id,
+          },
+          select: {
+            nota: true,
+            comentario: true,
+            updatedAt: true,
+          },
+        })
+      : null;
+
+    const estruturas = (item.estruturas || []).map((estrutura: any) => {
+      const { inicio, fim } = calcularDatasExecucao(estrutura, assinatura);
+
+      return {
+        id: estrutura.id,
+        tipo: estrutura.tipo,
+        titulo: estrutura.titulo,
+        descricao: estrutura.descricao,
+        objetivo: estrutura.objetivo,
+        ordem: estrutura.ordem,
+        duracaoSemanas: estrutura.duracaoSemanas,
+        treinosPorSemana: estrutura.treinosPorSemana,
+        quantidadeMinConclusao: estrutura.quantidadeMinConclusao,
+        modoExecucao: estrutura.modoExecucao,
+        pontosPorItem: estrutura.pontosPorItem,
+        bonusConsistencia: estrutura.bonusConsistencia,
+        bonusFinal: estrutura.bonusFinal,
+        prazoInicio: estrutura.prazoInicio,
+        prazoFinal: estrutura.prazoFinal,
+        dataInicioCalculada: inicio,
+        dataFimCalculada: fim,
+        ativo: estrutura.ativo,
+        itens: (estrutura.itens || []).map((it: any) => ({
+          id: it.id,
+          ordem: it.ordem,
+          tipo: it.tipo,
+          titulo: it.titulo,
+          descricao: it.descricao,
+          pontos: it.pontos,
+          thumbUrl: it.thumbUrl,
+          duracaoMin: it.duracaoMin,
+          videoUrl: acessoFinal ? it.videoUrl : null,
+          arquivoUrl: it.arquivoUrl ?? null,
+          materialUrl: it.materialUrl ?? null,
+          treinoProgramadoId: it.treinoProgramadoId,
+          treinoProgramado: it.treinoProgramado
+            ? {
+                id: it.treinoProgramado.id,
+                nome: it.treinoProgramado.nome,
+                imagemUrl: it.treinoProgramado.imagemUrl,
+                codigo: it.treinoProgramado.codigo,
+                nivel: it.treinoProgramado.nivel,
+                categoria: it.treinoProgramado.categoria,
+                pontuacao: it.treinoProgramado.pontuacao,
+                duracao: it.treinoProgramado.duracao,
+                objetivo: it.treinoProgramado.objetivo,
+                tipoTreino: it.treinoProgramado.tipoTreino,
+              }
+            : null,
+          publicado: it.publicado,
+          obrigatorio: it.obrigatorio,
+        })),
+      };
+    });
+
+    const pontosTotal = estruturas.reduce((accEstrutura: number, estrutura: any) => {
+      const somaEstrutura = (estrutura.itens || []).reduce((accItem: number, it: any) => {
+        const pontosItem =
+          it?.pontos ??
+          (String(it?.tipo || "").toUpperCase() === "TREINO"
+            ? Number(it?.treinoProgramado?.pontuacao ?? 0)
+            : 0);
+
+        return accItem + Number(pontosItem ?? 0);
+      }, 0);
+
+      return accEstrutura + somaEstrutura;
+    }, 0);
 
     return res.json({
-      item: {
-        ...item,
-        pontosTotal,
-        viewer: {
-          isAssinante: hasAccess,
-          temAcesso: hasAccess,
-          assinaturaTipo: "AVULSA",
-          expiraEm: assinatura?.expiraEm
-            ? new Date(assinatura.expiraEm).toISOString()
+      id: item.id,
+      titulo: item.titulo,
+      descricao: item.descricao,
+      capaUrl: item.capaUrl ?? null,
+      publicoAlvo: item.publicoAlvo,
+      totalAssinantes: item._count?.assinantes ?? 0,
+      mediaAvaliacao: (item as any).mediaAvaliacao ?? 0,
+      totalReviews: (item as any).totalReviews ?? 0,
+      pontosTotal,
+      criadorNome: item.criadorUsuario?.nome ?? null,
+      tipo: item.tipo,
+      estruturaTipo: item.estruturaTipo,
+      area: item.area ?? null,
+      geraBadge: !!item.geraBadge,
+      geraCertificado: !!item.geraCertificado,
+      precoAssinaturaMensal: item.precoAssinaturaMensal ?? null,
+      estruturas,
+      viewer: {
+        isAssinante: hasAccess,
+        temAcesso: acessoFinal,
+        assinaturaTipo: hasAccess
+          ? "AVULSA"
+          : isAdmin
+            ? "AVULSA"
             : null,
-          podeAssinarAgora: false,
-          motivoBloqueio: hasAccess ? null : "PRECISA_PAGAR_AVULSA",
-          podeAvaliar,
-          minhaAvaliacao,
-          progresso: {
-            concluidos: concluidosIds,
-          },
+        expiraEm: assinatura?.expiraEm
+          ? new Date(assinatura.expiraEm).toISOString()
+          : null,
+        podeAssinarAgora: !isAdmin && !hasAccess,
+        motivoBloqueio: isAdmin
+          ? null
+          : hasAccess
+            ? null
+            : "PRECISA_PAGAR_AVULSA",
+        podeAvaliar:
+          !!userId &&
+          acessoFinal &&
+          !minhaAvaliacao &&
+          (isAdmin || !!assinatura?.concluiuEm),
+        minhaAvaliacao: minhaAvaliacao
+          ? {
+              nota: minhaAvaliacao.nota,
+              comentario: minhaAvaliacao.comentario,
+              updatedAt: minhaAvaliacao.updatedAt.toISOString(),
+            }
+          : null,
+        progresso: {
+          concluidos: concluidosIds,
         },
+        status: assinatura?.status ?? null,
+        concluiuEm: assinatura?.concluiuEm
+          ? new Date(assinatura.concluiuEm).toISOString()
+          : null,
       },
     });
   } catch (e: any) {
@@ -3545,6 +4295,7 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
           geraCertificado:
             geraCertificado !== undefined ? asBool(geraCertificado, false) : atual.geraCertificado,
           precoAssinaturaMensal: Number(preco),
+          ativo: false,
         },
       });
 
@@ -3955,7 +4706,7 @@ export async function migrarMetodologiaParaAvulsa(req: Request, res: Response) {
           professorId: atual.professorId,
           clubeId: atual.clubeId,
           escolinhaId: atual.escolinhaId,
-          ativo: atual.ativo,
+          ativo: false,
           estruturas: {
             create: estruturasProcessadas,
           },
@@ -4138,7 +4889,7 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
           professorId: atual.professorId,
           clubeId: atual.clubeId,
           escolinhaId: atual.escolinhaId,
-          ativo: atual.ativo,
+          ativo: false,
           estruturas: {
             create: estruturasProcessadas,
           },
@@ -4185,6 +4936,615 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
   } catch (e: any) {
     return res.status(500).json({
       message: "Erro ao migrar metodologia avulsa para Learning.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const isAdmin = await isAdminUser(userId);
+    if (!isAdmin) return res.status(403).json({ message: "Apenas admin pode acessar esta listagem." });
+
+    const page = Math.max(1, Number(req.query.page || 1));
+    const pageSize = Math.max(1, Math.min(50, Number(req.query.pageSize || 10)));
+    const q = String(req.query.q || "").trim();
+
+    const whereLearning = q
+      ? {
+          OR: [
+            { titulo: { contains: q, mode: "insensitive" as const } },
+            { descricao: { contains: q, mode: "insensitive" as const } },
+            { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" as const } } } },
+            { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" as const } } } },
+          ],
+        }
+      : {};
+
+    const whereAvulsa = q
+      ? {
+          OR: [
+            { titulo: { contains: q, mode: "insensitive" as const } },
+            { descricao: { contains: q, mode: "insensitive" as const } },
+            { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" as const } } } },
+            { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" as const } } } },
+          ],
+        }
+      : {};
+
+    const [learning, avulsas] = await Promise.all([
+      prisma.metodologia.findMany({
+        where: whereLearning as any,
+        include: {
+          criadorUsuario: { select: { id: true, nome: true, email: true, foto: true, parceiro: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
+        },
+        orderBy: { criadoEm: "desc" },
+      }),
+      prisma.metodologiaAvulsa.findMany({
+        where: whereAvulsa as any,
+        include: {
+          criadorUsuario: { select: { id: true, nome: true, email: true, foto: true, parceiro: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
+          estruturas: {
+            include: {
+              itens: true,
+            },
+          },
+        },
+        orderBy: { criadoEm: "desc" },
+      }),
+    ]);
+
+    const learningIds = learning.map((m) => m.id);
+    const learningCountsById = await anexarCountsEstruturaPorMetodologia(learningIds);
+
+    const items = [
+      ...learning.map((m) => ({
+        ...m,
+        origemTipo: "LEARNING",
+        videoCount: learningCountsById[m.id]?.videoCount ?? 0,
+        aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+        treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
+        materialCount: learningCountsById[m.id]?.materialCount ?? 0,
+        desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
+        estruturaCount: learningCountsById[m.id]?.estruturaCount ?? 0,
+      })),
+      ...avulsas.map((m) => {
+        const itens = (m.estruturas || []).flatMap((e: any) => e.itens || []);
+        return {
+          ...m,
+          origemTipo: "AVULSA",
+          videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
+          aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
+          treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
+          materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
+          desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,
+          estruturaCount: (m.estruturas || []).length,
+          _count: {
+            ...(m as any)._count,
+            estruturas: (m.estruturas || []).length,
+          },
+        };
+      })
+    ]
+      .sort((a, b) => {
+        const da = new Date(a.criadoEm || 0).getTime();
+        const db = new Date(b.criadoEm || 0).getTime();
+        return db - da;
+      });
+
+    const total = items.length;
+    const start = (page - 1) * pageSize;
+    const paged = items.slice(start, start + pageSize);
+
+    return res.json({
+      items: paged,
+      total,
+      page,
+      pageSize,
+    });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao listar todas as metodologias do admin.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function criarSubmissaoMetodologiaItem(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const isAdmin = await isAdminUser(userId);
+
+    const { id: metodologiaId, estruturaId } = req.params;
+    const itemId = String(req.body?.itemId ?? "").trim();
+    const observacao = asNullableString(req.body?.observacao);
+    const file = (req as any).file as Express.Multer.File | undefined;
+
+    if (!itemId) {
+      return res.status(400).json({ message: "itemId é obrigatório." });
+    }
+
+    const itemAvulsa = await prisma.metodologiaAvulsaEstruturaItem.findFirst({
+      where: {
+        id: itemId,
+        estruturaId,
+        estrutura: {
+          metodologiaAvulsaId: metodologiaId,
+        },
+      },
+      include: {
+        estrutura: {
+          select: {
+            id: true,
+            metodologiaAvulsaId: true,
+            titulo: true,
+            pontosPorItem: true,
+            modoExecucao: true,
+            prazoFinal: true,
+            percentualPerdaAtraso: true,
+          },
+        },
+        treinoProgramado: {
+          select: {
+            pontuacao: true,
+          },
+        },
+      },
+    });
+
+    const itemLearning = !itemAvulsa
+      ? await prisma.metodologiaEstruturaItem.findFirst({
+          where: {
+            id: itemId,
+            estruturaId,
+            estrutura: {
+              metodologiaId,
+            },
+          },
+          include: {
+            estrutura: {
+              select: {
+                id: true,
+                metodologiaId: true,
+                titulo: true,
+                pontosPorItem: true,
+                modoExecucao: true,
+                prazoFinal: true,
+                percentualPerdaAtraso: true,
+              },
+            },
+            treinoProgramado: {
+              select: {
+                pontuacao: true,
+              },
+            },
+          },
+        })
+      : null;
+
+    const isAvulsa = !!itemAvulsa;
+    const item = itemAvulsa ?? itemLearning;
+
+    if (!item) {
+      return res.status(404).json({
+        message: "Item da estrutura não encontrado nesta metodologia.",
+      });
+    }
+
+    let assinatura = isAvulsa
+      ? await prisma.metodologiaAssinante.findFirst({
+          where: {
+            usuarioId: userId,
+            metodologiaAvulsaId: metodologiaId,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        })
+      : await prisma.metodologiaAssinante.findUnique({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId,
+              usuarioId: userId,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        });
+
+    if (!assinatura && isAdmin) {
+      if (isAvulsa) {
+        const existeAvulsa = await prisma.metodologiaAvulsa.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true },
+        });
+
+        if (!existeAvulsa) {
+          return res.status(404).json({
+            message: "Metodologia avulsa não encontrada para criar assinatura do admin.",
+          });
+        }
+
+        assinatura = await prisma.metodologiaAssinante.create({
+          data: {
+            usuarioId: userId,
+            metodologiaAvulsaId: metodologiaId,
+            origem: MetodologiaAssinaturaOrigem.AVULSA,
+            status: MetodologiaAssinaturaStatus.ATIVA,
+            iniciouEm: new Date(),
+            progresso: {
+              concluidos: [],
+              pontosGanhos: 0,
+              atualizadoEm: new Date().toISOString(),
+            } as any,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        });
+      } else {
+        const existeLearning = await prisma.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true },
+        });
+
+        if (!existeLearning) {
+          return res.status(404).json({
+            message: "Metodologia não encontrada para criar assinatura do admin.",
+          });
+        }
+
+        assinatura = await prisma.metodologiaAssinante.create({
+          data: {
+            usuarioId: userId,
+            metodologiaId,
+            origem: MetodologiaAssinaturaOrigem.LEARNING,
+            status: MetodologiaAssinaturaStatus.ATIVA,
+            iniciouEm: new Date(),
+            progresso: {
+              concluidos: [],
+              pontosGanhos: 0,
+              atualizadoEm: new Date().toISOString(),
+            } as any,
+          },
+          select: {
+            id: true,
+            status: true,
+            expiraEm: true,
+            progresso: true,
+            concluiuEm: true,
+            iniciouEm: true,
+          },
+        });
+      }
+    }
+
+    const temAcesso = assinaturaDaAcesso(assinatura) || isAdmin;
+
+    if (!temAcesso) {
+      return res.status(403).json({
+        message: "Você não possui acesso a esta metodologia.",
+      });
+    }
+
+    if (!isAdmin && assinatura?.status === MetodologiaAssinaturaStatus.CANCELADA) {
+      return res.status(403).json({
+        message: "Você não possui acesso a esta metodologia.",
+      });
+    }
+
+    if (!isAdmin && assinatura?.expiraEm && new Date(assinatura.expiraEm) <= new Date()) {
+      return res.status(403).json({
+        message: "Sua assinatura desta metodologia expirou.",
+      });
+    }
+
+    const tipo = String(item.tipo || "").toUpperCase();
+    if (tipo !== "TREINO" && tipo !== "DESAFIO") {
+      return res.status(400).json({
+        message: "Somente itens de treino ou desafio aceitam submissão.",
+      });
+    }
+
+    const arquivoUrl =
+      (file as any)?.location ||
+      (file as any)?.key ||
+      (file as any)?.url ||
+      (file?.filename ? `/uploads/${file.filename}` : null);
+
+    if (!arquivoUrl) {
+      return res.status(400).json({ message: "Envie um arquivo." });
+    }
+
+    await (prisma as any).metodologiaItemSubmissao.create({
+      data: isAvulsa
+        ? {
+            metodologiaId: null,
+            metodologiaAvulsaId: metodologiaId,
+            estruturaId: null,
+            estruturaAvulsaId: estruturaId,
+            itemId: null,
+            itemAvulsaId: itemId,
+            usuarioId: userId,
+            tipoItem: tipo,
+            observacao,
+            arquivoUrl,
+            mimeType: file?.mimetype || null,
+            status: "ENVIADA",
+          }
+        : {
+            metodologiaId,
+            metodologiaAvulsaId: null,
+            estruturaId,
+            estruturaAvulsaId: null,
+            itemId,
+            itemAvulsaId: null,
+            usuarioId: userId,
+            tipoItem: tipo,
+            observacao,
+            arquivoUrl,
+            mimeType: file?.mimetype || null,
+            status: "ENVIADA",
+          },
+    });
+
+    const assinaturaCompleta = await prisma.metodologiaAssinante.findUnique({
+      where: { id: assinatura!.id },
+      select: {
+        id: true,
+        progresso: true,
+        status: true,
+        concluiuEm: true,
+      },
+    });
+
+    if (!assinaturaCompleta) {
+      return res.status(404).json({
+        message: "Assinatura da metodologia não encontrada.",
+      });
+    }
+
+    const pontosItem = calcularPontuacaoItemBackend({
+      tipo: item.tipo as MetodologiaItemTipo,
+      duracaoMin: (item as any).duracaoMin ?? null,
+      treinoPontuacao: item.treinoProgramado?.pontuacao ?? null,
+    });
+
+    const itensPublicados = isAvulsa
+      ? await prisma.metodologiaAvulsaEstruturaItem.count({
+          where: {
+            estruturaId,
+            publicado: true,
+          },
+        })
+      : await prisma.metodologiaEstruturaItem.count({
+          where: {
+            estruturaId,
+            publicado: true,
+          },
+        });
+
+    const progressoAssinaturaAtual: any =
+      assinaturaCompleta.progresso && typeof assinaturaCompleta.progresso === "object"
+        ? { ...(assinaturaCompleta.progresso as any) }
+        : {};
+
+    const concluidosAssinatura: string[] = Array.isArray(progressoAssinaturaAtual.concluidos)
+      ? progressoAssinaturaAtual.concluidos.map((v: any) => String(v))
+      : [];
+
+    const jaTinhaNaAssinatura = concluidosAssinatura.includes(itemId);
+
+    if (!jaTinhaNaAssinatura) {
+      concluidosAssinatura.push(itemId);
+    }
+
+    progressoAssinaturaAtual.concluidos = concluidosAssinatura;
+    progressoAssinaturaAtual.ultimoItemConcluidoId = itemId;
+    progressoAssinaturaAtual.atualizadoEm = new Date().toISOString();
+
+    if (!isAvulsa) {
+      const progressoEstruturaAtual = await prisma.metodologiaProgressoEstrutura.findUnique({
+        where: {
+          metodologiaAssinanteId_estruturaId: {
+            metodologiaAssinanteId: assinaturaCompleta.id,
+            estruturaId,
+          },
+        },
+        select: {
+          progresso: true,
+          pontosGanhos: true,
+        },
+      });
+
+      const concluidosEstrutura: string[] = Array.isArray(
+        (progressoEstruturaAtual as any)?.progresso?.concluidos
+      )
+        ? (progressoEstruturaAtual as any).progresso.concluidos.map((v: any) => String(v))
+        : [];
+
+      const jaTinhaNoProgressoEstrutura = concluidosEstrutura.includes(itemId);
+
+      if (!jaTinhaNoProgressoEstrutura) {
+        concluidosEstrutura.push(itemId);
+      }
+
+      const totalItensConcluidosEstrutura = concluidosEstrutura.length;
+      const estruturaConcluida =
+        itensPublicados > 0 && totalItensConcluidosEstrutura >= itensPublicados;
+
+      const pontosGanhosAnteriores = Number(progressoEstruturaAtual?.pontosGanhos ?? 0);
+      const pontosGanhos = jaTinhaNoProgressoEstrutura
+        ? pontosGanhosAnteriores
+        : pontosGanhosAnteriores + Number(pontosItem || 0);
+
+      await prisma.metodologiaProgressoEstrutura.upsert({
+        where: {
+          metodologiaAssinanteId_estruturaId: {
+            metodologiaAssinanteId: assinaturaCompleta.id,
+            estruturaId,
+          },
+        },
+        create: {
+          metodologiaAssinanteId: assinaturaCompleta.id,
+          estruturaId,
+          status: estruturaConcluida
+            ? MetodologiaProgressoStatus.CONCLUIDA
+            : MetodologiaProgressoStatus.EM_ANDAMENTO,
+          iniciadoEm: new Date(),
+          concluidoEm: estruturaConcluida ? new Date() : null,
+          cicloInicioEm: new Date(),
+          itensConcluidos: totalItensConcluidosEstrutura,
+          pontosGanhos,
+          ultimoAcessoEm: new Date(),
+          progresso: {
+            concluidos: concluidosEstrutura,
+            ultimoItemConcluidoId: itemId,
+            pontosGanhos,
+          } as any,
+        },
+        update: {
+          status: estruturaConcluida
+            ? MetodologiaProgressoStatus.CONCLUIDA
+            : MetodologiaProgressoStatus.EM_ANDAMENTO,
+          concluidoEm: estruturaConcluida ? new Date() : null,
+          itensConcluidos: totalItensConcluidosEstrutura,
+          pontosGanhos,
+          ultimoAcessoEm: new Date(),
+          progresso: {
+            concluidos: concluidosEstrutura,
+            ultimoItemConcluidoId: itemId,
+            pontosGanhos,
+          } as any,
+        },
+      });
+
+      progressoAssinaturaAtual.pontosGanhos =
+        Number(progressoAssinaturaAtual.pontosGanhos ?? 0) +
+        (!jaTinhaNaAssinatura ? Number(pontosItem || 0) : 0);
+
+      await prisma.metodologiaAssinante.update({
+        where: { id: assinaturaCompleta.id },
+        data: {
+          progresso: progressoAssinaturaAtual,
+        },
+      });
+
+      await recalcularStatusMetodologiaAssinante(metodologiaId, userId);
+    } else {
+      const estruturasMap =
+        progressoAssinaturaAtual.estruturas &&
+        typeof progressoAssinaturaAtual.estruturas === "object"
+          ? { ...progressoAssinaturaAtual.estruturas }
+          : {};
+
+      const estruturaAtual =
+        estruturasMap[estruturaId] && typeof estruturasMap[estruturaId] === "object"
+          ? { ...estruturasMap[estruturaId] }
+          : {};
+
+      const concluidosEstrutura: string[] = Array.isArray(estruturaAtual.concluidos)
+        ? estruturaAtual.concluidos.map((v: any) => String(v))
+        : [];
+
+      const jaTinhaNaEstrutura = concluidosEstrutura.includes(itemId);
+
+      if (!jaTinhaNaEstrutura) {
+        concluidosEstrutura.push(itemId);
+      }
+
+      const totalItensConcluidosEstrutura = concluidosEstrutura.length;
+      const estruturaConcluida =
+        itensPublicados > 0 && totalItensConcluidosEstrutura >= itensPublicados;
+
+      estruturaAtual.concluidos = concluidosEstrutura;
+      estruturaAtual.status = estruturaConcluida
+        ? MetodologiaProgressoStatus.CONCLUIDA
+        : MetodologiaProgressoStatus.EM_ANDAMENTO;
+      estruturaAtual.itensConcluidos = totalItensConcluidosEstrutura;
+      estruturaAtual.ultimoItemConcluidoId = itemId;
+      estruturaAtual.ultimoAcessoEm = new Date().toISOString();
+
+      if (!estruturaAtual.iniciadoEm) {
+        estruturaAtual.iniciadoEm = new Date().toISOString();
+      }
+
+      if (estruturaConcluida && !estruturaAtual.concluidoEm) {
+        estruturaAtual.concluidoEm = new Date().toISOString();
+      }
+
+      estruturasMap[estruturaId] = estruturaAtual;
+      progressoAssinaturaAtual.estruturas = estruturasMap;
+      progressoAssinaturaAtual.pontosGanhos =
+        Number(progressoAssinaturaAtual.pontosGanhos ?? 0) +
+        (!jaTinhaNaAssinatura ? Number(pontosItem || 0) : 0);
+
+      const totalEstruturasConcluidas = Object.values(estruturasMap).filter(
+        (e: any) => e?.status === MetodologiaProgressoStatus.CONCLUIDA
+      ).length;
+
+      progressoAssinaturaAtual.estruturasConcluidas = totalEstruturasConcluidas;
+
+      const totalEstruturasAtivas = await prisma.metodologiaAvulsaEstrutura.count({
+        where: {
+          metodologiaAvulsaId: metodologiaId,
+          ativo: true,
+        },
+      });
+
+      const concluiuTudo =
+        totalEstruturasAtivas > 0 && totalEstruturasConcluidas >= totalEstruturasAtivas;
+
+      await prisma.metodologiaAssinante.update({
+        where: { id: assinaturaCompleta.id },
+        data: {
+          progresso: progressoAssinaturaAtual,
+          status: concluiuTudo
+            ? MetodologiaAssinaturaStatus.CONCLUIDA
+            : assinaturaCompleta.status,
+          concluiuEm: concluiuTudo
+            ? (assinaturaCompleta.concluiuEm ?? new Date())
+            : assinaturaCompleta.concluiuEm,
+        },
+      });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      message: "Submissão da metodologia criada com sucesso.",
+      itemId,
+      metodologiaId,
+      estruturaId,
+    });
+  } catch (e: any) {
+    console.error("[criarSubmissaoMetodologiaItem]", e);
+    return res.status(500).json({
+      message: "Erro ao criar submissão da metodologia.",
       detail: e?.message,
     });
   }

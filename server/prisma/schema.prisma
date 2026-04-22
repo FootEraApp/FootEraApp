@@ -111,8 +111,9 @@ model Usuario {
   metodologiasAssinadas      MetodologiaAssinante[]
   metodologiasAvulsasCriadas MetodologiaAvulsa[]    @relation("MetodologiaAvulsaCriador")
 
-  LoginEvent             LoginEvent[]
-  ExercicioPersonalizado ExercicioPersonalizado[]
+  LoginEvent               LoginEvent[]
+  ExercicioPersonalizado   ExercicioPersonalizado[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -638,11 +639,12 @@ model Metodologia {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens             MetodologiaItem[]
-  assinantes        MetodologiaAssinante[]
-  MetodologiaTreino MetodologiaTreino[]
-  avaliacoes        AvaliacaoMetodologia[]
-  certificados      CertificadoMetodologia[]
+  itens                    MetodologiaItem[]
+  assinantes               MetodologiaAssinante[]
+  MetodologiaTreino        MetodologiaTreino[]
+  avaliacoes               AvaliacaoMetodologia[]
+  certificados             CertificadoMetodologia[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -678,8 +680,9 @@ model MetodologiaEstrutura {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens      MetodologiaEstruturaItem[]
-  progressos MetodologiaProgressoEstrutura[]
+  itens                    MetodologiaEstruturaItem[]
+  progressos               MetodologiaProgressoEstrutura[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([metodologiaId, ordem])
   @@index([metodologiaId])
@@ -722,8 +725,9 @@ model MetodologiaEstruturaItem {
   obrigatorio Boolean @default(true)
   publicado   Boolean @default(true)
 
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([estruturaId, ordem])
   @@index([estruturaId])
@@ -781,6 +785,44 @@ model MetodologiaItem {
   @@index([metodologiaId])
   @@index([treinoProgramadoId])
   @@index([semana])
+}
+
+model MetodologiaItemSubmissao {
+  id String @id @default(uuid())
+
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+
+  estruturaId       String?
+  estruturaAvulsaId String?
+
+  itemId       String?
+  itemAvulsaId String?
+
+  usuarioId String
+
+  tipoItem   String
+  observacao String?
+  arquivoUrl String?
+  mimeType   String?
+  status     String  @default("ENVIADA")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+
+  estrutura       MetodologiaEstrutura?       @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  estruturaAvulsa MetodologiaAvulsaEstrutura? @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+
+  item       MetodologiaEstruturaItem?       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemAvulsa MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([metodologiaId, estruturaId, itemId, usuarioId])
+  @@index([metodologiaAvulsaId, estruturaAvulsaId, itemAvulsaId, usuarioId])
 }
 
 model MetodologiaAssinante {
@@ -843,12 +885,17 @@ model MetodologiaAvulsa {
 
   precoAssinaturaMensal Decimal @db.Decimal(10, 2)
 
+  mediaAvaliacao Float?
+  totalReviews   Int    @default(0)
+
   estruturas   MetodologiaAvulsaEstrutura[]
   assinantes   MetodologiaAssinante[]
   certificados CertificadoMetodologia[]
 
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  AvaliacaoMetodologia     AvaliacaoMetodologia[]
 
   @@index([criadorUsuarioId])
   @@index([ativo])
@@ -881,21 +928,22 @@ model MetodologiaAvulsaEstrutura {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens MetodologiaAvulsaEstruturaItem[]
+  itens                    MetodologiaAvulsaEstruturaItem[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([metodologiaAvulsaId, ordem])
   @@index([metodologiaAvulsaId])
 }
 
 model MetodologiaAvulsaEstruturaItem {
-  id          String                     @id @default(uuid())
-  estruturaId String
-  estrutura   MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
-
-  ordem     Int
-  titulo    String
-  descricao String?
-  tipo      MetodologiaItemTipo
+  id                       String                     @id @default(uuid())
+  estruturaId              String
+  estrutura                MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  ordem                    Int
+  titulo                   String
+  descricao                String?
+  tipo                     MetodologiaItemTipo
 
   videoUrl    String?
   thumbUrl    String?
@@ -1277,18 +1325,23 @@ model AvaliacaoTreino {
 }
 
 model AvaliacaoMetodologia {
-  id            String      @id @default(uuid())
-  metodologiaId String
-  usuarioId     String
-  nota          Int
-  comentario    String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(uuid())
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+  usuarioId           String
+  nota                Int
+  comentario          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  usuario           Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([metodologiaId, usuarioId])
+  @@unique([metodologiaAvulsaId, usuarioId])
   @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
   @@index([usuarioId])
   @@index([createdAt])
 }
@@ -1441,7 +1494,7 @@ model TreinoAgendado {
   id                 String  @id @default(uuid())
   titulo             String
   local              String?
-  atletaId           String
+  atletaId           String?
   treinoProgramadoId String?
 
   dataTreino    DateTime?
@@ -1468,7 +1521,7 @@ model TreinoAgendado {
   finishedAt      DateTime?
   duracaoSegundos Int?
 
-  atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
   submissaoTreinos SubmissaoTreino[]
   avaliacaoTreino  AvaliacaoTreino[]

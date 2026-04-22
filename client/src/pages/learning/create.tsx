@@ -576,16 +576,28 @@ export default function LearningCreatePage() {
         const params = new URLSearchParams(window.location.search);
         const origem = String(params.get("origem") || "").toLowerCase();
 
-        const res =
-          origem === "avulsa"
-            ? await getMetodologiaAvulsaById(editMetodologiaId)
-            : await getMetodologiaById(editMetodologiaId);
+        let res: any = null;
 
-        const item = res?.item;
+        if (origem === "avulsa") {
+          res = await getMetodologiaAvulsaById(editMetodologiaId);
+        } else {
+          res = await getMetodologiaById(editMetodologiaId);
+
+          if (!(res?.item ?? res)?.id) {
+            try {
+              const tentativaAvulsa = await getMetodologiaAvulsaById(editMetodologiaId);
+              if ((tentativaAvulsa?.item ?? tentativaAvulsa)?.id) {
+                res = tentativaAvulsa;
+              }
+            } catch {}
+          }
+        }
+
+        const item = res?.item ?? res;
 
         if (!ativo) return;
 
-        if (!item) {
+        if (!item || !item.id) {
           throw new Error("Metodologia não encontrada para edição.");
         }
 
@@ -599,7 +611,11 @@ export default function LearningCreatePage() {
         setCapaPreviewUrl(item.capaUrl || null);
         setTipoMetodologia(item.tipo);
         setEstruturaTipo(item.estruturaTipo);
-        setDestinoMetodologia(origem === "avulsa" ? "AVULSA" : "LEARNING");
+        const veioComoAvulsa =
+          origem === "avulsa" ||
+          item?.precoAssinaturaMensal != null;
+
+        setDestinoMetodologia(veioComoAvulsa ? "AVULSA" : "LEARNING");
         setPrecoAssinaturaMensal(
           item?.precoAssinaturaMensal != null ? String(item.precoAssinaturaMensal) : ""
         );
@@ -1329,7 +1345,7 @@ export default function LearningCreatePage() {
         area,
         geraBadge,
         geraCertificado,
-        ativo: true,
+        ativo: false,
         estruturas: estruturas.map((estrutura, i) => ({
           id: estrutura.id || undefined,
           titulo: estrutura.titulo.trim(),
@@ -1396,6 +1412,7 @@ export default function LearningCreatePage() {
       if (origemAtual === "avulsa" && destinoMetodologia === "AVULSA") {
         await updateMetodologiaAvulsa(editMetodologiaId, {
           ...payloadBase,
+          ativo: false, // força inativo para revisão do time antes de publicar
           precoAssinaturaMensal: Number(precoAssinaturaMensal),
         });
 
@@ -1416,7 +1433,7 @@ export default function LearningCreatePage() {
           area,
           geraBadge,
           geraCertificado,
-          ativo: true,
+          ativo: false,
         });
       }
 
@@ -1429,7 +1446,10 @@ export default function LearningCreatePage() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${getToken()}`,
             },
-            body: JSON.stringify(payloadBase),
+            body: JSON.stringify({
+              ...payloadBase,
+              ativo: false,
+            }),
           }
         );
 
@@ -1456,6 +1476,7 @@ export default function LearningCreatePage() {
             },
             body: JSON.stringify({
               ...payloadBase,
+              ativo: false,
               precoAssinaturaMensal: Number(precoAssinaturaMensal),
             }),
           }
@@ -1484,7 +1505,7 @@ export default function LearningCreatePage() {
         area,
         geraBadge,
         geraCertificado,
-        ativo: true,
+        ativo: false,
       });
 
       const metodologiaId = editMetodologiaId || metodologiaResp?.item?.id;
@@ -1519,7 +1540,6 @@ export default function LearningCreatePage() {
           objetivo: estrutura.objetivo?.trim() || null,
           tipo: estruturaTipo,
           ordem: i + 1,
-
           duracaoSemanas:
             estruturaTipo === "TRILHA" ? Number(estrutura.duracaoSemanas || 0) : null,
           treinosPorSemana:
@@ -1551,7 +1571,7 @@ export default function LearningCreatePage() {
               ? (estrutura.modoExecucao === "DESAFIO_FECHADO" ? false : !!estrutura.permiteAtraso)
               : true,
 
-          ativo: true,
+          ativo: estrutura.ativo ?? true,
         };
         let estruturaId = estrutura.id;
 

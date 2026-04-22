@@ -66,6 +66,7 @@ import ExercicioEditarPage from "./pages/treino/exercicios/editar/[id].js";
 import LearningCreatePage from "./pages/learning/create.js";
 import LearningPage from "./pages/learning/index.js";
 import FooteraContentLab from "./pages/landingPageContentLab.js";
+import TreinoMetodologiaPage from "./pages/treino/treino-metodologia.js";
 
 export function AppRoutes() {
   return (
@@ -215,6 +216,7 @@ export function AppRoutes() {
       <Route path="/treinos/elenco/jogos"><Private><PaginaJogosElenco/></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/tutorial" component={TutorialPage}/>
+      <Route path="/treinos/metodologia" component={TreinoMetodologiaPage} />
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
@@ -236,11 +238,11 @@ export function AppRoutes() {
           <Route path="/learning/create">
             <Private><LearningCreatePage /></Private>
           </Route>
-          <Route path="/learning/:id">
-            <Private><MetodologiaUnicaPage /></Private>
-          </Route>
           <Route path="/learning/avaliar">
             <Private><AvaliarMetodologia /></Private>
+          </Route>
+          <Route path="/learning/:id">
+            <Private><MetodologiaUnicaPage /></Private>
           </Route>
           <Route path="/learning">
             <Private><LearningPage /></Private>

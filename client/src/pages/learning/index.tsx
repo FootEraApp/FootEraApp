@@ -531,11 +531,7 @@ export default function LearningPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      navigate(
-                                        `/learning/create?id=${item.id}&tipo=${item.tipo}&origem=${
-                                          item.origemRegistro === "AVULSA" ? "avulsa" : "learning"
-                                        }`
-                                      )
+                                      navigate(`/learning/create?id=${item.id}&tipo=${item.tipo}&origem=learning`)
                                     }
                                     className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
                                     title="Editar metodologia"
@@ -620,7 +616,11 @@ export default function LearningPage() {
                       key={`ass_learning_${item.id}`}
                       item={item}
                       href={`/learning/${item.id}`}
-                      actionLabel="Continuar"
+                      actionLabel={
+                        String(item?.status || "").toUpperCase() === "CONCLUIDA" || !!item?.concluiuEm
+                          ? "Ver conclusão"
+                          : "Continuar"
+                      }
                     />
                   ))
                 ) : (
@@ -638,7 +638,11 @@ export default function LearningPage() {
                       key={`ass_avulsa_${item.id}`}
                       item={item}
                       href={`/learning/${item.id}?origem=avulsa`}
-                      actionLabel="Continuar"
+                      actionLabel={
+                        String(item?.status || "").toUpperCase() === "CONCLUIDA" || !!item?.concluiuEm
+                          ? "Ver conclusão"
+                          : "Continuar"
+                      }
                     />
                   ))
                 ) : (

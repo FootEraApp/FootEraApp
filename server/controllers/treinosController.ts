@@ -31,6 +31,7 @@ import jwt from "jsonwebtoken";
 import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 import { prisma } from "../prisma.js";
+import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
 type Request = ExpressRequest;
 type Response = ExpressResponse;
@@ -1949,7 +1950,9 @@ export const excluirTreinoAgendado = async (req: AuthenticatedRequest, res: Resp
       meta: { atletaId: ag.atletaId, dataTreino: ag.dataTreino, status: "Cancelado" },
     });
 
-    syncAgendaAtleta(ag.atleta?.usuarioId!, ag.atletaId);
+    if (ag.atletaId && ag.atleta?.usuarioId) {
+      syncAgendaAtleta(ag.atleta.usuarioId, ag.atletaId);
+    }
     syncTreinoProgramado(String(ag.treinoProgramadoId ?? ""));
 
     return res.status(200).json({ message: "Treino agendado deletado." });
@@ -3235,11 +3238,14 @@ export async function atualizarAgendamento(req: AuthenticatedRequest, res: Respo
     data: { dataTreino: dt },
   });
 
-  const at = await prisma.atleta.findUnique({
-    where: { id: row.atletaId },
-    select: { usuarioId: true },
-  });
-  if (at?.usuarioId) syncAgendaAtleta(at.usuarioId, row.atletaId);
+  let at: { usuarioId: string | null } | null = null;
+
+  if (row.atletaId) {
+    at = await prisma.atleta.findUnique({
+      where: { id: row.atletaId },
+      select: { usuarioId: true },
+    });
+  }
 
   await audit(req, {
     acao: 'ALTERAR_AGENDA',
@@ -5882,36 +5888,37 @@ export async function expirarTreinosVencidos(req: AuthenticatedRequest, res: Res
 
 export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;               
-    const usuarioId = req.userId!;           
-    const atletaId = req.user?.tipoUsuarioId; 
-
+    const { id } = req.params;
+    const usuarioId = req.userId!;
     const tipo = String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
-    if (!atletaId || tipo !== "atleta") {
-      return res.status(403).json({ message: "Apenas atleta pode iniciar o treino." });
-    }
+    const atletaId = req.user?.tipoUsuarioId ? String(req.user.tipoUsuarioId) : null;
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { tipo: true },
+    });
 
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
       include: { atleta: { select: { usuarioId: true } } },
     });
 
-    if (!ag) return res.status(404).json({ message: "Treino agendado não encontrado." });
-
-    if (ag.atletaId !== atletaId || ag.atleta?.usuarioId !== usuarioId) {
-      return res.status(403).json({ message: "Não autorizado para iniciar este treino." });
+    if (!ag) {
+      return res.status(404).json({ message: "Treino agendado não encontrado." });
     }
 
-    if (ag.startedAt) {
-      const tuExistente = await prisma.treinoUsuario.findUnique({
-        where: { treinoId_usuarioId: { treinoId: id, usuarioId } },
-      });
-      return res.json({
-        ok: true,
-        treino: ag,
-        treinoUsuario: tuExistente,
-        startedAt: ag.startedAt,
-      });
+    const podeIniciarComoNaoAtleta =
+      ["professor", "clube", "escolinha", "admin"].includes(tipo) ||
+      String(usuario?.tipo || "").toLowerCase() === "admin";
+
+    if (ag.atletaId) {
+      if (ag.atletaId !== atletaId || ag.atleta?.usuarioId !== usuarioId) {
+        return res.status(403).json({ message: "Não autorizado para iniciar este treino." });
+      }
+    } else {
+      if (!podeIniciarComoNaoAtleta) {
+        return res.status(403).json({ message: "Não autorizado para iniciar este treino." });
+      }
     }
 
     const now = new Date();
@@ -5919,7 +5926,10 @@ export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Resp
     const [updated, treinoUsuario] = await prisma.$transaction([
       prisma.treinoAgendado.update({
         where: { id },
-        data: { startedAt: now, status: TreinoAgendadoStatus.EM_ANDAMENTO },
+        data: {
+          startedAt: now,
+          status: TreinoAgendadoStatus.EM_ANDAMENTO,
+        },
       }),
       prisma.treinoUsuario.upsert({
         where: { treinoId_usuarioId: { treinoId: id, usuarioId } },
@@ -5942,7 +5952,11 @@ export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Resp
       entidade: "TreinoAgendado",
       entidadeId: id,
       descricao: "Treino agendado iniciado",
-      meta: { atletaId: updated.atletaId, dataTreino: updated.dataTreino, status: "EmAndamento" },
+      meta: {
+        atletaId: updated.atletaId ?? null,
+        dataTreino: updated.dataTreino,
+        status: "EmAndamento",
+      },
     });
 
     return res.json({
@@ -5959,45 +5973,53 @@ export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Resp
 
 export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const usuarioId = req.userId!;
-    const atletaId = req.user?.tipoUsuarioId;
-
-    const { observacao, midiaUrl, midiaTipo } = req.body as {
-      observacao?: string;
-      midiaUrl?: string;
-      midiaTipo?: TipoMidia | string;
-    };
-
-    let obsSan: string | null = null;
-      if (observacao && observacao.trim()) {
-        const clean = sanitizeText(observacao, 800);
-        const fail = basicModerationFails(clean);
-        if (fail) {
-          return res.status(422).json({ message: fail });
-        }
-        obsSan = clean;
-      }
-
-      if (req.user?.plano !== "PRO") {
-        const ok = await requireUsage(req as any, res, "treinos_semana");
-        if (!ok) return;
-      }
-
     const tipo = String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
-    if (!atletaId || tipo !== "atleta") {
-      return res.status(403).json({ message: "Apenas atleta pode iniciar o treino." });
-    }
+    const atletaId = req.user?.tipoUsuarioId ? String(req.user.tipoUsuarioId) : null;
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { tipo: true },
+    });
 
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
       include: { atleta: { select: { usuarioId: true } } },
     });
 
-    if (!ag) return res.status(404).json({ message: "Treino agendado não encontrado." });
-    if (ag.atletaId !== atletaId || ag.atleta?.usuarioId !== usuarioId) {
-      return res.status(403).json({ message: "Não autorizado." });
+    if (!ag) {
+      return res.status(404).json({ message: "Treino agendado não encontrado." });
     }
+
+    const podeFinalizarComoNaoAtleta =
+      ["professor", "clube", "escolinha", "admin"].includes(tipo) ||
+      String(usuario?.tipo || "").toLowerCase() === "admin";
+
+    if (ag.atletaId) {
+      if (ag.atletaId !== atletaId || ag.atleta?.usuarioId !== usuarioId) {
+        return res.status(403).json({ message: "Não autorizado." });
+      }
+    } else {
+      if (!podeFinalizarComoNaoAtleta) {
+        return res.status(403).json({ message: "Não autorizado." });
+      }
+    }
+
+    const { metodologiaId } = req.body as {
+      metodologiaId?: string | null;
+    };
+
+    const tipoUsuario = String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
+    const ehAdmin =
+      tipoUsuario === "admin" || String(usuario?.tipo || "").toLowerCase() === "admin";
+
+    // admin pode finalizar treino de metodologia sem cair em limite
+    if (!ehAdmin && req.user?.plano !== "PRO") {
+      const ok = await requireUsage(req as any, res, "treinos_semana");
+      if (!ok) return;
+    }
+
     if (!ag.startedAt) {
       return res
         .status(400)
@@ -6010,20 +6032,7 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       Math.floor((finishedAt.getTime() - new Date(ag.startedAt).getTime()) / 1000)
     );
 
-    let midiaEnum: TipoMidia | null = null;
-    if (typeof midiaTipo === "string") {
-      const s = midiaTipo.toLowerCase();
-      if (s.includes("video")) midiaEnum = TipoMidia.Video;
-      else if (s.includes("img") || s.includes("foto") || s.includes("image"))
-        midiaEnum = TipoMidia.Imagem;
-      else if (s.includes("doc")) midiaEnum = TipoMidia.Documento;
-    } else if (midiaTipo) {
-      midiaEnum = midiaTipo;
-    } else if (midiaUrl) {
-      midiaEnum = TipoMidia.Video;
-    }
-
-    const [updated, treinoUsuario, sub] = await prisma.$transaction([
+    const [updated, treinoUsuario] = await prisma.$transaction([
       prisma.treinoAgendado.update({
         where: { id },
         data: {
@@ -6046,16 +6055,6 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
           completedAt: finishedAt,
         },
       }),
-      prisma.submissaoTreino.create({
-        data: {
-          treinoAgendadoId: id,
-          observacao: observacao ?? null,
-          midiaUrl: midiaUrl ?? null,
-          midiaTipo: midiaEnum,
-          duracaoSegundos: duracao,
-          atletaId,
-        } as any,
-      }),
     ]);
 
     await audit(req, {
@@ -6063,54 +6062,31 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       entidade: "TreinoAgendado",
       entidadeId: id,
       descricao: "Treino agendado finalizado",
-      meta: { atletaId: updated.atletaId, dataTreino: updated.dataTreino, status: "Concluido" },
+      meta: {
+        atletaId: updated.atletaId ?? null,
+        dataTreino: updated.dataTreino,
+        status: "Concluido",
+        duracaoSegundos: duracao,
+        metodologiaId: metodologiaId ?? null,
+      },
     });
 
-    try {
-      await onTreinoFeitoPorAlunoFromSubmissao(sub.id);
-          const titulo = updated.titulo ?? "Treino";
-          let conteudo = `🏅 Concluí o treino: ${titulo}`;
-          if (Number.isFinite(Number(duracao))) conteudo += ` — ${Math.round(Number(duracao))}s`;
+    if (updated.atletaId && ag.atleta?.usuarioId) {
+      syncAgendaAtleta(ag.atleta.usuarioId, updated.atletaId);
+    }
 
-          const post = await prisma.postagem.create({
-            data: {
-              usuarioId,
-              conteudo,
-              tipoMidia: midiaEnum ?? TipoMidia.Documento,
-              imagemUrl: midiaEnum === TipoMidia.Imagem ? (midiaUrl ?? null) : null,
-              videoUrl: midiaEnum === TipoMidia.Video ? (midiaUrl ?? null) : null,
-            },
-            include: {
-              usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
-              curtidas: true,
-              comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
-            },
-          });
-
-          const segs = await prisma.seguidor.findMany({
-            where: { seguidoUsuarioId: usuarioId },
-            select: { seguidorUsuarioId: true },
-          });
-
-          getIO()
-            ?.to([`u:${usuarioId}`, ...segs.map((s) => `u:${s.seguidorUsuarioId}`)])
-            .emit("feed:novoPost", post);
-
-          } catch (e) {
-            console.warn("onTreinoFeitoPorAlunoFromSubmissao falhou em finalizarTreinoAgendado:", e);
-          }
-
-          return res.json({
-            ok: true,
-            treino: updated,
-            treinoUsuario,
-            submissao: sub,
-          });
-        } catch (e) {
-          console.error("finalizarTreinoAgendado", e);
-          return res.status(500).json({ message: "Erro ao finalizar treino agendado." });
-        }
- }
+    return res.json({
+      ok: true,
+      treino: updated,
+      treinoUsuario,
+      finishedAt,
+      duracaoSegundos: duracao,
+    });
+  } catch (e) {
+    console.error("finalizarTreinoAgendado", e);
+    return res.status(500).json({ message: "Erro ao finalizar treino agendado." });
+  }
+}
 
 export async function relacaoStatus(req: Request, res: Response) {
   const atletaId = String(req.query.atletaId || "");
@@ -6412,4 +6388,401 @@ export async function deletarExercicioPersonalizado(req: any, res: Response) {
 
   await prisma.exercicioPersonalizado.delete({ where: { id } });
   return res.json({ ok: true });
+}
+
+export async function iniciarTreinoViaMetodologia(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = req.userId;
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const treinoProgramadoId = String(req.params.id || "").trim();
+    if (!treinoProgramadoId) {
+      return res.status(400).json({ message: "treinoProgramadoId é obrigatório." });
+    }
+
+    const [atleta, professor, clube, escolinha, usuario] = await Promise.all([
+      prisma.atleta.findUnique({
+        where: { usuarioId },
+        select: { id: true },
+      }),
+      prisma.professor.findFirst({
+        where: { usuarioId },
+        select: { id: true },
+      }),
+      prisma.clube.findFirst({
+        where: { usuarioId },
+        select: { id: true },
+      }),
+      prisma.escolinha.findFirst({
+        where: { usuarioId },
+        select: { id: true },
+      }),
+      prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { id: true, tipo: true },
+      }),
+    ]);
+
+    const podeExecutar =
+      !!atleta?.id ||
+      !!professor?.id ||
+      !!clube?.id ||
+      !!escolinha?.id ||
+      String(usuario?.tipo || "").toLowerCase() === "admin";
+
+    if (!podeExecutar) {
+      return res.status(403).json({
+        message: "Seu tipo de usuário não pode iniciar treino via metodologia.",
+      });
+    }
+    const treinoProgramado = await prisma.treinoProgramado.findUnique({
+      where: { id: treinoProgramadoId },
+      select: { id: true, nome: true },
+    });
+
+    if (!treinoProgramado) {
+      return res.status(404).json({ message: "Treino programado não encontrado." });
+    }
+
+    const now = new Date();
+    const startDay = new Date(now);
+    startDay.setHours(0, 0, 0, 0);
+
+    const endDay = new Date(now);
+    endDay.setHours(23, 59, 59, 999);
+
+    const atletaId = atleta?.id ?? null;
+
+    let agendado = await prisma.treinoAgendado.findFirst({
+      where: {
+        treinoProgramadoId,
+        dataTreino: {
+          gte: startDay,
+          lte: endDay,
+        },
+        ...(atletaId ? { atletaId } : { titulo: { startsWith: `[METODOLOGIA:${usuarioId}]` } }),
+      },
+      orderBy: { startedAt: "desc" },
+    });
+
+    if (!agendado) {
+      const dataExpiracao = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+      const dataCreate: Prisma.TreinoAgendadoUncheckedCreateInput = {
+        titulo: atletaId
+          ? (treinoProgramado.nome ?? "Treino")
+          : `[METODOLOGIA:${usuarioId}] ${treinoProgramado.nome ?? "Treino"}`,
+        atletaId: atletaId ?? null,
+        treinoProgramadoId,
+        dataTreino: now,
+        dataOriginal: now,
+        dataExpiracao,
+        status: TreinoAgendadoStatus.AGENDADO,
+      };
+
+      agendado = await prisma.treinoAgendado.create({
+        data: dataCreate,
+      });
+    }
+
+    const treinoUsuario = await prisma.treinoUsuario.upsert({
+      where: {
+        treinoId_usuarioId: {
+          treinoId: agendado.id,
+          usuarioId,
+        },
+      },
+      create: {
+        treinoId: agendado.id,
+        usuarioId,
+        status: TreinoStatus.IN_PROGRESS,
+        startedAt: now,
+      },
+      update: {
+        status: TreinoStatus.IN_PROGRESS,
+        startedAt: now,
+        completedAt: null,
+      },
+    });
+
+    await prisma.treinoAgendado.update({
+      where: { id: agendado.id },
+      data: {
+        status: TreinoAgendadoStatus.EM_ANDAMENTO,
+        startedAt: now,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      treinoAgendadoId: agendado.id,
+      treino: agendado,
+      treinoUsuario,
+      startedAt: treinoUsuario.startedAt,
+    });
+  } catch (e: any) {
+    console.error("iniciarTreinoViaMetodologia", e);
+    return res.status(500).json({
+      message: e?.message || "Erro ao iniciar treino via metodologia.",
+    });
+  }
+}
+
+export async function uploadExecucaoVideoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const file = (req as any).file as Express.Multer.File | undefined;
+
+    if (!file) {
+      return res.status(400).json({ message: "Arquivo não enviado." });
+    }
+
+    const location = (file as any).location || null;
+    if (!location) {
+      return res.status(500).json({ message: "Upload sem URL retornada pelo S3." });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      url: location,
+      key: (file as any).key ?? null,
+      mimetype: file.mimetype ?? null,
+      size: file.size ?? null,
+      originalname: file.originalname ?? null,
+    });
+  } catch (e) {
+    console.error("uploadExecucaoVideoTreino", e);
+    return res.status(500).json({ message: "Erro ao enviar vídeo de execução." });
+  }
+}
+
+export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { id } = req.params; // treinoAgendadoId
+    const usuarioId = req.userId!;
+
+    const { updates } = req.body as {
+      updates?: Array<{
+        exerciseRowId: string;
+        kind: "catalogo" | "temporario" | "personalizado";
+        entityId: string;
+        existingUrl?: string | null;
+        uploadedUrl: string;
+        selectedUrl?: string | null;
+        saveMode: "SESSION_ONLY" | "UPDATE_OFFICIAL";
+        officialChoice?: "KEEP_OLD" | "USE_NEW" | null;
+      }>;
+    };
+
+    if (!Array.isArray(updates) || !updates.length) {
+      return res.status(400).json({ message: "Nenhuma atualização enviada." });
+    }
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    console.log("[salvarVideosExecucaoTreino] id recebido:", id);
+    console.log("[salvarVideosExecucaoTreino] updates:", updates?.length ?? 0);
+
+    const treinoAgendado = await prisma.treinoAgendado.findUnique({
+      where: { id },
+      include: {
+        treinoProgramado: {
+          include: {
+            exercicios: true,
+          },
+        },
+      },
+    });
+
+    if (!treinoAgendado) {
+      console.log("[salvarVideosExecucaoTreino] treinoAgendado não encontrado para id:", id);
+      return res.status(404).json({ message: "Treino agendado não encontrado." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of updates) {
+        if (!item.uploadedUrl || !item.selectedUrl || !item.entityId) continue;
+
+        if (item.saveMode === "UPDATE_OFFICIAL") {
+          if (item.kind === "catalogo") {
+            const atual = await tx.exercicio.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicio.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.selectedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.selectedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+          }
+
+          if (item.kind === "temporario") {
+            const atual = await tx.exercicioTemporario.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioTemporario.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.selectedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.selectedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+          }
+
+          if (item.kind === "personalizado") {
+            const atual = await tx.exercicioPersonalizado.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioPersonalizado.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.selectedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.selectedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+          }
+        }
+
+        if (item.saveMode === "SESSION_ONLY") {
+          await tx.midia.create({
+            data: {
+              titulo: `Execução do exercício ${item.exerciseRowId}`,
+              tipo: TipoMidia.Video,
+              url: item.uploadedUrl,
+              dataEnvio: new Date(),
+              descricao: JSON.stringify({
+                origem: "treino_execucao_instrutor",
+                treinoAgendadoId: id,
+                exerciseRowId: item.exerciseRowId,
+                kind: item.kind,
+                entityId: item.entityId,
+                criadoPorUsuarioId: usuarioId,
+              }),
+              storageClass: "HOT" as any,
+            } as any,
+          });
+
+          continue;
+        }
+
+        if (item.saveMode === "UPDATE_OFFICIAL") {
+          if (item.officialChoice === "KEEP_OLD") {
+            continue;
+          }
+
+          if (item.officialChoice !== "USE_NEW" || !item.uploadedUrl) {
+            continue;
+          }
+
+          if (item.kind === "catalogo") {
+            const atual = await tx.exercicio.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicio.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+
+          if (item.kind === "temporario") {
+            const atual = await tx.exercicioTemporario.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioTemporario.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+
+          if (item.kind === "personalizado") {
+            const atual = await tx.exercicioPersonalizado.findUnique({
+              where: { id: item.entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioPersonalizado.update({
+              where: { id: item.entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+        }
+      }
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("salvarVideosExecucaoTreino", e);
+    return res.status(500).json({ message: "Erro ao salvar vídeos da execução." });
+  }
 }

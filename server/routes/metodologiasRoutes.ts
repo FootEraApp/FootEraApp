@@ -30,6 +30,7 @@ import {
   deleteMetodologiaAvulsa,
   migrarMetodologiaAvulsaParaLearning,
   migrarMetodologiaParaAvulsa,
+  criarSubmissaoMetodologiaItem,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js";
 import { uploadToS3 } from "../middlewares/s3Upload.js";
@@ -97,8 +98,29 @@ router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, require
 router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstrutura);
 router.post("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOwnership, createMetodologiaEstruturaItens);
 router.delete("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstruturaItens);
-router.post("/:id/estruturas/:estruturaId/concluir-item", authenticateToken, concluirEstruturaItemMetodologia);
+router.post(
+  "/:id/estruturas/:estruturaId/submissoes",
+  authenticateToken,
+  uploadToS3.single("file"),
+  criarSubmissaoMetodologiaItem
+);
+router.post(
+  "/metodologias-avulsas/:id/estruturas/:estruturaId/submissoes",
+  authenticateToken,
+  uploadToS3.single("file"),
+  criarSubmissaoMetodologiaItem
+);
 
+router.post(
+  "/metodologias-avulsas/:id/estruturas/:estruturaId/concluir-item",
+  authenticateToken,
+  concluirEstruturaItemMetodologia
+);
+router.post(
+  "/:id/estruturas/:estruturaId/concluir-item",
+  authenticateToken,
+  concluirEstruturaItemMetodologia
+);
 router.post(
   "/:id/migrar-para-avulsa",
   authenticateToken,
@@ -115,6 +137,7 @@ router.post(
 router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
 router.post("/:id/assinar", authenticateToken, assinarMetodologia);
 router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
+router.post("/metodologias-avulsas/:id/concluir-item", authenticateToken, concluirItemMetodologia);
 
 // por id por último
 router.get("/:id", authenticateToken, getMetodologiaById);
