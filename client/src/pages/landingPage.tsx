@@ -28,7 +28,7 @@ const HERO_SLIDES = [
     alt: "Content Lab",
     title: "Nova parceria",
     subtitle: "Em breve novidades e conteúdos especiais para a comunidade.",
-    href: "/?tab=novidades",
+    href: "/content-lab",
   },
 
   // se quiser adicionar mais imagens ao carrosel é só adicionar aqui

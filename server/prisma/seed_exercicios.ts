@@ -2455,8 +2455,21 @@ async function main() {
 
     await prisma.exercicio.upsert({
       where: { codigo: ex.codigo },
-      update: {},
-      create: ex
+      update: {
+        nome: ex.nome,
+        nivel: ex.nivel,
+        categorias: ex.categorias,
+        videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? null,
+        objetivo: ex.descricao ?? null,
+      },
+      create: {
+        codigo: ex.codigo,
+        nome: ex.nome,
+        nivel: ex.nivel,
+        categorias: ex.categorias,
+        videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? null,
+        objetivo: ex.descricao ?? null,
+      }
     });
   }
 

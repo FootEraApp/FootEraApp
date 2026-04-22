@@ -65,6 +65,7 @@ import ExercicioNovoPage from "./pages/treino/exercicios/novo.js";
 import ExercicioEditarPage from "./pages/treino/exercicios/editar/[id].js";
 import LearningCreatePage from "./pages/learning/create.js";
 import LearningPage from "./pages/learning/index.js";
+import FooteraContentLab from "./pages/landingPageContentLab.js";
 
 export function AppRoutes() {
   return (
@@ -79,6 +80,9 @@ export function AppRoutes() {
       <Route path="/cadastro"><PaginaCadastro /></Route>
       <Route path="/verificar-email" component={PaginaVerificarEmail} />
       <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
+
+<Route path="/content-lab"><FooteraContentLab /></Route>
+
       <Route path="/esqueci-senha">
         <PublicOnly><PaginaEsqueciSenha /></PublicOnly>
       </Route>
