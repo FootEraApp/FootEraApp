@@ -1622,7 +1622,24 @@ export default function LearningCreatePage() {
       localStorage.removeItem(LEARNING_DRAFT_KEY);
       navigate(`/learning/${metodologiaId}`);
     } catch (e: any) {
-      alert(e?.message || (editMetodologiaId ? "Erro ao atualizar metodologia." : "Erro ao criar metodologia."));
+      const msg =
+        e?.response?.data?.message ||
+        e?.data?.message ||
+        e?.message ||
+        "Esse título já existe em outra metodologia criada por você. Se quiser criá-la, mude o título.";
+
+      const code =
+        e?.response?.data?.code ||
+        e?.data?.code ||
+        null;
+
+      if (code === "METODOLOGIA_NOME_DUPLICADO_DO_MESMO_CRIADOR") {
+        alert(msg);
+        return;
+      }
+
+      alert(msg);
+      return;
     } finally {
       setSaving(false);
     }

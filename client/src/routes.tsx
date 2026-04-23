@@ -82,7 +82,7 @@ export function AppRoutes() {
       <Route path="/verificar-email" component={PaginaVerificarEmail} />
       <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
 
-<Route path="/content-lab"><FooteraContentLab /></Route>
+      <Route path="/content-lab"><FooteraContentLab /></Route>
 
       <Route path="/esqueci-senha">
         <PublicOnly><PaginaEsqueciSenha /></PublicOnly>

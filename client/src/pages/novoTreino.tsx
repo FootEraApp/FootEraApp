@@ -13,7 +13,7 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
-import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
+import type { TreinoCreatePayload } from "../utils/treinos.types.js";
 import {
   montarExerciciosParaPayload,
 } from "../utils/treinos.helpers.js";
@@ -47,6 +47,8 @@ type ExItemUILocal = {
   exercicioPersonalizado?: any;
   exercicioTemporario?: any;
   nomeCatalogo?: string | null;
+  tipoExecucao?: "repeticao" | "duracao";
+  descricaoExecucao?: string | null;  
 };
 type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 type PontuacaoDetalhe = {
@@ -74,13 +76,14 @@ function toRepeticoesStr(v: any): string {
 }
 
 function exercicioTemExecucaoValida(ex: ExItemUILocal) {
-  const temSeriesOuReps =
-    String(ex.series ?? "").trim() !== "" ||
-    String(ex.repeticoes ?? "").trim() !== "";
+  if (ex.tipoExecucao === "duracao") {
+    return String(ex.duracao ?? "").trim() !== "";
+  }
 
-  const temDuracao = String(ex.duracao ?? "").trim() !== "";
-
-  return temSeriesOuReps || temDuracao;
+  return (
+    String(ex.series ?? "").trim() !== "" &&
+    String(ex.repeticoes ?? "").trim() !== ""
+  );
 }
 
 function formatSerieXReps(series?: number | null, repsRaw?: string | number | null) {
@@ -100,7 +103,7 @@ function formatSerieXReps(series?: number | null, repsRaw?: string | number | nu
   return reps;
 }
 
-export function montarPayloadSomenteInfoEExercicios(params: {
+function montarPayloadSomenteInfoEExercicios(params: {
   titulo: string;
   descricao: string;
   nivel: any; 
@@ -127,6 +130,7 @@ export function montarPayloadSomenteInfoEExercicios(params: {
     categoria,
     dicas,
     exerciciosSelecionados,
+    
   } = params;
 
   const exercicios = (exerciciosSelecionados ?? [])
@@ -140,22 +144,42 @@ export function montarPayloadSomenteInfoEExercicios(params: {
       const nomeCustom = String(it.nome ?? "").trim();
       const descCustom = String(it.descricao ?? "").trim();
       const repsFinal =
-        formatSerieXReps(it.series ?? null, it.repeticoes) ??
-        toRepeticoesStr(it.repeticoes);
+        it.tipoExecucao === "repeticao"
+          ? formatSerieXReps(it.series ?? null, it.repeticoes)
+          : null;
       const base = {
         ordem: Number.isFinite(Number(it.ordem)) ? Number(it.ordem) : idx + 1,
-        repeticoes: repsFinal,
-        descansoSeg: it.descansoSeg ?? null,
+        repeticoes: it.tipoExecucao === "repeticao" ? repsFinal : null,
+        series:
+          it.tipoExecucao === "repeticao" &&
+          Number.isFinite(Number(it.series)) &&
+          Number(it.series) > 0
+            ? Number(it.series)
+            : null,
+        duracao:
+          it.tipoExecucao === "duracao" && String(it.duracao ?? "").trim() !== ""
+            ? String(it.duracao).trim()
+            : null,
+        descanso:
+          String(it.descanso ?? "").trim() !== ""
+            ? String(it.descanso).trim()
+            : null,
       };
 
-      // ✅ catálogo
       if (exercicioId) {
-        return { ...base, exercicioId };
+        return {
+          ...base,
+          exercicioId,
+          descricao: descCustom || null,
+        };
       }
 
-      // ✅ personalizado EXISTENTE (só linka, não recria)
       if (exercicioPersonalizadoId) {
-        return { ...base, exercicioPersonalizadoId };
+        return {
+          ...base,
+          exercicioPersonalizadoId,
+          descricao: descCustom || null,
+        };
       }
 
       // ✅ personalizado NOVO (linha adicionada) — TEM que ir NO ROOT (o backend lê assim)
@@ -168,6 +192,7 @@ export function montarPayloadSomenteInfoEExercicios(params: {
           videoPosterUrl: it.videoPosterUrl ?? null,
           // (opcional) se você tiver esses campos na UI
           nivel: it.nivel ?? nivel,
+          duracao: it.tipoExecucao === "duracao" ? it.duracao : null,
           categorias: Array.isArray(it.categorias) ? it.categorias : (Array.isArray(categoria) ? categoria : []),
         };
       }
@@ -1002,18 +1027,6 @@ export default function NovoTreino() {
     });
   }
 
-  function atualizarCampoExercicio(
-    idLocal: string,
-    campo: "series" | "repeticoes" | "duracao" | "descanso",
-    valor: string
-  ) {
-    setExerciciosSelecionados((prev) =>
-      prev.map((item) =>
-        item.idLocal === idLocal ? { ...item, [campo]: valor } : item
-      )
-    );
-  }
-
   function showToast(
     message: string,
     type: "success" | "error" | "info" = "success",
@@ -1233,18 +1246,16 @@ export default function NovoTreino() {
             : p.series != null && String(p.series).trim() !== ""
             ? Number(p.series)
             : null,
-
         repeticoes:
           p.repeticoes != null ? String(p.repeticoes) : "",
-
         duracao:
           p.duracao != null ? String(p.duracao) : "",
-
         descanso:
           p.descanso != null ? String(p.descanso) : "",
         ordem: prev.length + 1,
         categorias: Array.isArray(p.categorias) ? p.categorias : [],
         origem: "personalizado",
+        tipoExecucao: p.duracao ? "duracao" : "repeticao",
       },
     ]);
   }
@@ -1514,66 +1525,66 @@ export default function NovoTreino() {
     };
   }, [atletaIdLogado]);
 
-useEffect(() => {
-  const tipo =
-    (Storage as any).tipoSalvo ??
-    localStorage.getItem("tipoUsuario") ??
-    sessionStorage.getItem("tipoUsuario") ??
-    "";
+  useEffect(() => {
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
 
-  if (String(tipo).toLowerCase() !== "atleta") return;
+    if (String(tipo).toLowerCase() !== "atleta") return;
 
-  let cancel = false;
+    let cancel = false;
 
-  (async () => {
-    try {
-      const token = getToken();
-      if (!token) return;
+    (async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
 
-      const atletaId = String(atletaIdLogado || "").trim();
-      if (!atletaId) return;
+        const atletaId = String(atletaIdLogado || "").trim();
+        if (!atletaId) return;
 
-      const headers = { Authorization: `Bearer ${token}` };
+        const headers = { Authorization: `Bearer ${token}` };
 
-      const tries = [
-        `${API.BASE_URL}/api/atletas/${encodeURIComponent(atletaId)}`,
-        `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, 
-      ];
+        const tries = [
+          `${API.BASE_URL}/api/atletas/${encodeURIComponent(atletaId)}`,
+          `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, 
+        ];
 
-      let data: any = null;
-      for (const url of tries) {
-        const r = await fetch(url, { headers });
-        if (!r.ok) continue;
-        data = await r.json().catch(() => null);
-        if (data) break;
+        let data: any = null;
+        for (const url of tries) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          data = await r.json().catch(() => null);
+          if (data) break;
+        }
+
+        const rels =
+          data?.relacoesTreinamento ??
+          data?.atleta?.relacoesTreinamento ??
+          data?.data?.relacoesTreinamento ??
+          [];
+
+        const profIds = Array.from(
+          new Set(
+            (Array.isArray(rels) ? rels : [])
+              .filter((x: any) => x?.ativo !== false)
+              .map((x: any) => String(x?.professorId ?? x?.professor?.id ?? "").trim())
+              .filter((id: string) => id && id !== "undefined" && id !== "null"),
+          ),
+        );
+
+        if (!cancel) setProfessorVinculadoIds(profIds);
+      } catch (e) {
+        console.warn("[NovoTreino] falha ao carregar professorVinculadoIds:", e);
+        if (!cancel) setProfessorVinculadoIds([]);
       }
+    })();
 
-      const rels =
-        data?.relacoesTreinamento ??
-        data?.atleta?.relacoesTreinamento ??
-        data?.data?.relacoesTreinamento ??
-        [];
-
-      const profIds = Array.from(
-        new Set(
-          (Array.isArray(rels) ? rels : [])
-            .filter((x: any) => x?.ativo !== false)
-            .map((x: any) => String(x?.professorId ?? x?.professor?.id ?? "").trim())
-            .filter((id: string) => id && id !== "undefined" && id !== "null"),
-        ),
-      );
-
-      if (!cancel) setProfessorVinculadoIds(profIds);
-    } catch (e) {
-      console.warn("[NovoTreino] falha ao carregar professorVinculadoIds:", e);
-      if (!cancel) setProfessorVinculadoIds([]);
-    }
-  })();
-
-  return () => {
-    cancel = true;
-  };
-}, [atletaIdLogado]);
+    return () => {
+      cancel = true;
+    };
+  }, [atletaIdLogado]);
 
   useEffect(() => {
     const tipo =
@@ -1802,13 +1813,14 @@ useEffect(() => {
             exercicioId: x.exercicioId ?? x.idCatalogo ?? null,
             exercicioPersonalizadoId: x.exercicioPersonalizadoId ?? null,
             nome: x.nome ?? "",
-            descricao: x.descricao ?? null,
+            descricao: x.descricaoExecucao ?? x.exercicio?.descricao ?? "",
             objetivo: x.objetivo ?? null,
             repeticoes: x.repeticoes ?? "",
             ordem: x.ordem ?? idx + 1,
             series: x.series ?? "",
             duracao: x.duracao ?? "",
             descanso: x.descanso ?? "",
+            tipoExecucao: x.duracao ? "duracao" : "repeticao",
             videoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
             videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
             videoPosterUrl: x.videoPosterUrl ?? null,
@@ -2108,7 +2120,6 @@ useEffect(() => {
     setCapaUrl(String(t.imagemUrl ?? t.capaUrl ?? t.capa ?? t.foto ?? ""));
     const cats = t.categoria ?? t.categorias ?? [];
     setCategorias(Array.isArray(cats) ? cats.map(String) : cats ? [String(cats)] : []);
-
     // ✅ se vier do backend como publico/parceiro
     setTreinoFootera(Boolean(t.publico ?? t.parceiro ?? t.isFootera ?? false));
 
@@ -2135,54 +2146,81 @@ useEffect(() => {
     const exUi: ExItemUILocal[] = (Array.isArray(exs) ? exs : []).map((ex: any, idx: number) => ({
       idLocal: crypto.randomUUID(),
       id: ex.id ?? `ex_${idx}`,
-      // catálogo
+
       idCatalogo:
         ex.exercicioId ??
         ex.idCatalogo ??
         (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
         null,
+
       exercicioId:
         ex.exercicioId ??
         ex.idCatalogo ??
         (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
         null,
-      // personalizado
+
       exercicioPersonalizadoId:
         ex.exercicioPersonalizadoId ??
         ex.exercicioPersonalizado?.id ??
         null,
+
+      exercicioTemporarioId:
+        ex.exercicioTemporarioId ??
+        ex.exercicioTemporario?.id ??
+        null,
+
       tipo:
         ex.exercicioPersonalizadoId || ex.exercicioPersonalizado
           ? "personalizado"
           : ex.exercicioTemporarioId || ex.exercicioTemporario
           ? "temporario"
           : "catalogo",
+
+      origem:
+        ex.exercicioPersonalizadoId || ex.exercicioPersonalizado
+          ? "personalizado"
+          : ex.exercicioTemporarioId || ex.exercicioTemporario
+          ? "temporario"
+          : "catalogo",
+
       nome:
         ex.nome ??
         ex.exercicio?.nome ??
         ex.exercicioPersonalizado?.nome ??
         ex.exercicioTemporario?.nome ??
         "",
-      descricao:
+
+      objetivo:
         ex.objetivo ??
-        ex.descricao ??
         ex.exercicio?.objetivo ??
-        ex.exercicio?.descricao ??
         ex.exercicioPersonalizado?.objetivo ??
-        ex.exercicioPersonalizado?.descricao ??
         ex.exercicioTemporario?.objetivo ??
+        null,
+
+      descricao:
+        ex.descricaoExecucao ??
+        ex.descricao ??
+        ex.exercicio?.descricao ??
+        ex.exercicioPersonalizado?.descricao ??
         ex.exercicioTemporario?.descricao ??
         "",
+
       repeticoes: ex.repeticoes ?? ex.reps ?? "",
+
       series:
         typeof ex.series === "number"
           ? ex.series
           : ex.series != null && String(ex.series).trim() !== ""
           ? Number(ex.series)
-          : null,
+          : "",
+
       duracao: ex.duracao ?? "",
       descanso: ex.descanso ?? "",
       ordem: Number(ex.ordem ?? idx + 1),
+
+      tipoExecucao:
+        String(ex.duracao ?? "").trim() !== "" ? "duracao" : "repeticao",
+
       videoUrl:
         ex.videoDemonstrativoUrl ??
         ex.videoUrl ??
@@ -2190,18 +2228,33 @@ useEffect(() => {
         ex.exercicioTemporario?.videoDemonstrativoUrl ??
         ex.exercicio?.videoDemonstrativoUrl ??
         null,
+
+      videoDemonstrativoUrl:
+        ex.videoDemonstrativoUrl ??
+        ex.videoUrl ??
+        ex.exercicioPersonalizado?.videoDemonstrativoUrl ??
+        ex.exercicioTemporario?.videoDemonstrativoUrl ??
+        ex.exercicio?.videoDemonstrativoUrl ??
+        null,
+
       videoPosterUrl:
         ex.videoPosterUrl ??
         ex.exercicioPersonalizado?.videoPosterUrl ??
+        ex.exercicioTemporario?.videoPosterUrl ??
+        ex.exercicio?.videoPosterUrl ??
         null,
+
       nivel:
         ex.nivel ??
         ex.exercicioPersonalizado?.nivel ??
+        ex.exercicioTemporario?.nivel ??
         ex.exercicio?.nivel ??
         null,
+
       categorias:
         ex.categorias ??
         ex.exercicioPersonalizado?.categorias ??
+        ex.exercicioTemporario?.categorias ??
         ex.exercicio?.categorias ??
         [],
     }));
@@ -2563,6 +2616,7 @@ useEffect(() => {
         videoPosterUrl: null,
         categorias: [],
         origem: "temporario",
+        tipoExecucao: "repeticao",
       },
     ]);
   };
@@ -2614,7 +2668,6 @@ useEffect(() => {
         videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoPosterUrl: ex.videoPosterUrl ?? null,
-
         // ✅ agora traz os valores já existentes do exercício
         series:
           typeof ex.series === "number"
@@ -2622,16 +2675,9 @@ useEffect(() => {
             : ex.series != null && String(ex.series).trim() !== ""
             ? Number(ex.series)
             : null,
-
-        repeticoes:
-          ex.repeticoes != null ? String(ex.repeticoes) : "",
-
-        duracao:
-          ex.duracao != null ? String(ex.duracao) : "",
-
-        descanso:
-          ex.descanso != null ? String(ex.descanso) : "",
-
+        repeticoes: ex.repeticoes != null ? String(ex.repeticoes) : "",
+        duracao: ex.duracao != null ? String(ex.duracao) : "",
+        descanso: ex.descanso != null ? String(ex.descanso) : "",
         ordem: prev.length + 1,
         categorias: Array.isArray(ex.categorias)
           ? ex.categorias
@@ -2639,6 +2685,7 @@ useEffect(() => {
           ? ex.categoria
           : [],
         origem: "catalogo",
+        tipoExecucao: ex.duracao ? "duracao" : "repeticao",
       },
     ]);
   }
@@ -3004,10 +3051,10 @@ useEffect(() => {
             nome: nomeTemp || e.nome,
             ordem: e.ordem ?? idx + 1,
             descricao:
-              typeof (e as any).objetivo === "string"
-                ? (e as any).objetivo
-                : typeof e.descricao === "string"
-                ? e.descricao
+              typeof e.descricao === "string" && e.descricao.trim()
+                ? e.descricao.trim()
+                : typeof (e as any).objetivo === "string" && (e as any).objetivo.trim()
+                ? (e as any).objetivo.trim()
                 : null,
             videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null, // ✅ mantém vídeo também
             repeticoes:
@@ -3098,39 +3145,45 @@ useEffect(() => {
         const forcePersonalizado =
           !!videoFinal || !!posterFinal || !!String(e.exercicioPersonalizadoId ?? "").trim();
 
-        // nome fallback (importante quando forçar personalizado mesmo tendo exercicioId)
-        const nomeFinal =
-          String(e.nome || "").trim() ||
-          String(e.exercicio?.nome || "").trim() ||
-          String(e.nomeCatalogo || "").trim() ||
-          "";
-
         if (e.exercicioId && !forcePersonalizado) {
           return {
-            exercicioId: String(e.exercicioId),
-            ordem: Number(e.ordem ?? idx + 1),
+            exercicioId: e.exercicioId ?? null,
+            exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null,
+            exercicioTemporarioId: e.exercicioTemporarioId ?? null,
+            nome:
+              typeof e.nome === "string" && e.nome.trim()
+                ? e.nome.trim()
+                : null,
+            descricao:
+              typeof e.descricao === "string" && e.descricao.trim()
+                ? e.descricao.trim()
+                : null,
+            videoDemonstrativoUrl:
+              (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null,
+            videoPosterUrl: (e as any).videoPosterUrl ?? null,
             repeticoes: repeticoesFinal,
             series:
               typeof e.series === "number"
                 ? e.series
-                : e.series != null && String(e.series).trim() !== ""
-                ? parseInt(String(e.series), 10)
+                : e.series != null && String(e.series).trim()
+                ? parseInt(String(e.series), 10) || null
                 : null,
             duracao:
-              e.duracao != null && String(e.duracao).trim() !== ""
+              e.duracao != null && String(e.duracao).trim()
                 ? String(e.duracao).trim()
                 : null,
             descanso:
-              e.descanso != null && String(e.descanso).trim() !== ""
+              e.descanso != null && String(e.descanso).trim()
                 ? String(e.descanso).trim()
                 : null,
-            observacao: e.observacao ?? null,
+            ordem: Number.isFinite(Number(e.ordem)) ? Number(e.ordem) : idx + 1,
+            nivel: e.nivel ?? null,
+            categorias: Array.isArray(e.categorias) ? e.categorias : [],
           };
         }
 
         return {
           nome: String(e.nome || "").trim(),
-          descricao: String((e as any).objetivo || e.descricao || "").trim() || null,
           nivel: e.nivel ?? null,
           categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
@@ -3149,7 +3202,14 @@ useEffect(() => {
             e.descanso != null && String(e.descanso).trim() !== ""
               ? String(e.descanso).trim()
               : null,
-          observacao: e.observacao ?? null,
+          descricao:
+            String(
+              e.descricaoExecucao ??
+              e.descricao ??
+              e.observacao ??
+              e.objetivo ??
+              ""
+            ).trim() || null,
           exercicioPersonalizadoId: e.exercicioPersonalizadoId
             ? String(e.exercicioPersonalizadoId)
             : null,
@@ -3353,9 +3413,21 @@ useEffect(() => {
         return;
       }
 
-      // fallback normal
-      const msgErro = data?.message || e?.message || "Falha inesperada ao criar treino.";
+      const msgErro =
+        data?.message ||
+        e?.message ||
+        "Falha inesperada ao criar treino.";
+
       console.error("[NovoTreino] erro criar treino:", data || e);
+
+      if (data?.code === "TREINO_NOME_DUPLICADO_DO_MESMO_DONO") {
+        alert(
+          data?.message ||
+            "Esse treino não pode ser criado porque você já possui um treino com esse nome. Se quiser criar, mude o nome do treino."
+        );
+        return;
+      }
+
       showToast(msgErro, "error");
     } finally {
       criandoTreinoRef.current = false;
@@ -4157,59 +4229,99 @@ useEffect(() => {
                             <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">
                               {descFinal || " "}
                             </p>
-                          ) : (
+                          ) : ex.origem === "temporario" ? null : (
                             <textarea
                               className="border w-full mb-2 p-1 rounded"
                               placeholder="Descrição"
                               value={ex.descricao || ""}
                               onChange={(e) =>
-                                atualizarExercicio(
-                                  i,
-                                  "descricao",
-                                  e.target.value,
-                                )
+                                atualizarExercicio(i, "descricao", e.target.value)
                               }
                             />
                           )}
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Séries</label>
-                              <input
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder="ex.: 3"
-                                value={ex.series ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "series", e.target.value)}
-                              />
+                            <div className="md:col-span-2 flex gap-2 mb-1">
+                              <button
+                                type="button"
+                                onClick={() => atualizarExercicio(i, "tipoExecucao", "repeticao")}
+                                className={`px-3 py-1 rounded ${
+                                  ex.tipoExecucao === "repeticao"
+                                    ? "bg-green-600 text-white"
+                                    : "bg-gray-200 text-gray-700"
+                                }`}
+                              >
+                                Série / Repetição
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => atualizarExercicio(i, "tipoExecucao", "duracao")}
+                                className={`px-3 py-1 rounded ${
+                                  ex.tipoExecucao === "duracao"
+                                    ? "bg-green-600 text-white"
+                                    : "bg-gray-200 text-gray-700"
+                                }`}
+                              >
+                                Duração
+                              </button>
                             </div>
 
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Repetições</label>
-                              <input
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder="ex.: 12"
-                                value={ex.repeticoes ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "repeticoes", e.target.value)}
-                              />
-                            </div>
+                            {ex.tipoExecucao === "repeticao" ? (
+                              <>
+                                <div>
+                                  <label className="block text-sm text-zinc-700 mb-1">Séries</label>
+                                  <input
+                                    type="number"
+                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                    placeholder="ex.: 3"
+                                    value={ex.series ?? ""}
+                                    onChange={(e) => atualizarExercicio(i, "series", e.target.value)}
+                                  />
+                                </div>
 
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Duração</label>
-                              <input
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder="ex.: 2min"
-                                value={ex.duracao ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "duracao", e.target.value)}
-                              />
-                            </div>
+                                <div>
+                                  <label className="block text-sm text-zinc-700 mb-1">Repetições</label>
+                                  <input
+                                    type="text"
+                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                    placeholder="ex.: 12"
+                                    value={ex.repeticoes ?? ""}
+                                    onChange={(e) => atualizarExercicio(i, "repeticoes", e.target.value)}
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <div className="md:col-span-2">
+                                <label className="block text-sm text-zinc-700 mb-1">Duração</label>
+                                <input
+                                  type="text"
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                  placeholder="ex.: 2min"
+                                  value={ex.duracao ?? ""}
+                                  onChange={(e) => atualizarExercicio(i, "duracao", e.target.value)}
+                                />
+                              </div>
+                            )}
 
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Descanso</label>
+                            <div className={ex.tipoExecucao === "duracao" ? "md:col-span-2" : ""}>
+                              <label className="block text-sm text-zinc-700 mb-1">Descanso (opcional)</label>
                               <input
+                                type="text"
                                 className="w-full rounded-lg border border-zinc-300 px-3 py-2"
                                 placeholder="ex.: 30seg"
                                 value={ex.descanso ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "descanso", e.target.value)}
+                                onChange={(e) => atualizarExercicio(i, "descanso", e.target.value)}
+                              />
+                            </div>
+
+                            <div className="md:col-span-2">
+                              <label className="block text-sm text-zinc-700 mb-1">Descrição (opcional)</label>
+                              <textarea
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 min-h-[90px]"
+                                placeholder="Descreva instruções, observações ou detalhes do exercício"
+                                value={ex.descricao ?? ""}
+                                onChange={(e) => atualizarExercicio(i, "descricao", e.target.value)}
                               />
                             </div>
                           </div>

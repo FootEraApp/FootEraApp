@@ -346,12 +346,26 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         const idGenerico = String(e?.id ?? "").trim();
         const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
 
+        const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
+
         // 1) Se veio explícito, usa explícito
         if (exercicioPersonalizadoId) {
-          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso };
+          if (descricaoExercicio) {
+            await prisma.exercicioPersonalizado.update({
+              where: { id: exercicioPersonalizadoId },
+              data: { descricao: descricaoExercicio },
+            });
+          }
+          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
         if (exercicioTemporarioId) {
-          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso };
+          if (descricaoExercicio) {
+            await prisma.exercicioTemporario.update({
+              where: { id: exercicioTemporarioId },
+              data: { descricao: descricaoExercicio },
+            });
+          }
+          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
         if (exercicioIdCatalogo) {
           return {
@@ -360,18 +374,31 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             repeticoes,
             series,
             duracao,
-            descanso
+            descanso,
+            descricaoExecucao: descricaoExercicio,
           };
         }
 
         if (idGenerico) {
           if (tipo === "personalizado") {
-            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+            if (descricaoExercicio) {
+              await prisma.exercicioPersonalizado.update({
+                where: { id: idGenerico },
+                data: { descricao: descricaoExercicio },
+              });
+            }
+            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
           }
           if (tipo === "temporario") {
-            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+            if (descricaoExercicio) {
+              await prisma.exercicioTemporario.update({
+                where: { id: idGenerico },
+                data: { descricao: descricaoExercicio },
+              });
+            }
+            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
           }
-          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
 
         const nomeOriginal = String(e?.nome ?? "").trim();
@@ -778,24 +805,50 @@ export async function updateTreino(req: Request, res: Response) {
         const idGenerico = String(e?.id ?? "").trim();
         const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
 
+        const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
+
         if (exercicioPersonalizadoId) {
-          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso };
+          if (descricaoExercicio) {
+            await prisma.exercicioPersonalizado.update({
+              where: { id: exercicioPersonalizadoId },
+              data: { descricao: descricaoExercicio },
+            });
+          }
+          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
         if (exercicioTemporarioId) {
-          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso };
+          if (descricaoExercicio) {
+            await prisma.exercicioTemporario.update({
+              where: { id: exercicioTemporarioId },
+              data: { descricao: descricaoExercicio },
+            });
+          }
+          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
         if (exercicioIdCatalogo) {
-          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes, series, duracao, descanso };
+          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
 
         if (idGenerico) {
           if (tipo === "personalizado") {
-            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+            if (descricaoExercicio) {
+              await prisma.exercicioPersonalizado.update({
+                where: { id: idGenerico },
+                data: { descricao: descricaoExercicio },
+              });
+            }
+            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
           }
           if (tipo === "temporario") {
-            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+            if (descricaoExercicio) {
+              await prisma.exercicioTemporario.update({
+                where: { id: idGenerico },
+                data: { descricao: descricaoExercicio },
+              });
+            }
+            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
           }
-          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
 
         const nomeOriginal = String(e?.nome ?? "").trim();

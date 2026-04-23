@@ -961,7 +961,11 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
           return {
             id: e.id,
             ordem: e.ordem ?? null,
+            series: e.series ?? null,
             repeticoes: e.repeticoes ?? "",
+            duracao: e.duracao ?? null,
+            descanso: e.descanso ?? null,
+            descricaoExecucao: e.descricaoExecucao ?? null,
             exercicioId: e.exercicioId ?? null,
             exercicioTemporarioId: e.exercicioTemporarioId ?? null,
             exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null,
@@ -975,7 +979,10 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
                   id: resolved.id,
                   codigo: (resolved as any).codigo ?? null,
                   nome: resolved.nome ?? "Exercício",
-                  descricao: (resolved as any).descricao ?? null,
+                  descricao:
+                    (resolved as any).descricao ??
+                    (resolved as any).objetivo ??
+                    null,
                   videoUrl:
                     (resolved as any).videoUrl ??
                     (resolved as any).videoDemonstrativoUrl ??
@@ -1109,7 +1116,7 @@ export async function treinosPublicosProfessoresParceiros(
             exercicioPersonalizado: row.exercicioPersonalizado ?? null,
             exercicioTemporario: row.exercicioTemporario ?? null,
             nome: base?.nome ?? null,
-            descricao: base?.descricao ?? null,
+            descricao: (base as any)?.descricao ?? (base as any)?.objetivo ?? null,
             videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
             videoPosterUrl: base?.videoPosterUrl ?? null,
             nivel: base?.nivel ?? null,
@@ -1235,8 +1242,12 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
             ordem: true,
             repeticoes: true,
             series: true,
-            descanso: true,
             duracao: true,
+            descanso: true,
+            descricaoExecucao: true,
+            exercicioId: true,
+            exercicioPersonalizadoId: true,
+            exercicioTemporarioId: true,
             exercicio: {
               select: {
                 id: true,
@@ -1253,6 +1264,7 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
                 nome: true,
                 descricao: true,
                 videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
                 nivel: true,
               },
             },
@@ -1263,7 +1275,7 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
                 nome: true,
                 descricao: true,
                 videoDemonstrativoUrl: true,
-                videoPosterUrl: true, // se existir no model
+                videoPosterUrl: true,
                 nivel: true,
               },
             },
@@ -1334,15 +1346,39 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
     const out = rows.map((t) => {
       const criadores: { tipo: string; id: string; nome: string }[] = [];
 
-      if (t.clube) criadores.push({ tipo: "clube", id: t.clube.id, nome: t.clube.nome });
-      if (t.escolinha) criadores.push({ tipo: "escolinha", id: t.escolinha.id, nome: t.escolinha.nome });
-      if (t.Professor) criadores.push({ tipo: "professor", id: t.Professor.id, nome: t.Professor.nome });
+      if ((t as any).clube) {
+        criadores.push({
+          tipo: "clube",
+          id: (t as any).clube.id,
+          nome: (t as any).clube.nome,
+        });
+      }
 
-      // ✅ IDs que o FRONT precisa pra liberar lápis/lixeira
-      const clubeId = String((t as any).clubeId ?? t.clube?.id ?? "").trim() || null;
-      const escolinhaId = String((t as any).escolinhaId ?? t.escolinha?.id ?? "").trim() || null;
-      const professorId = String((t as any).professorId ?? t.Professor?.id ?? "").trim() || null;      // ✅ colaboradores (professores) que o FRONT usa pra "sou colaborador"
-      const professoresIds: string[] = Array.from(
+      if ((t as any).escolinha) {
+        criadores.push({
+          tipo: "escolinha",
+          id: (t as any).escolinha.id,
+          nome: (t as any).escolinha.nome,
+        });
+      }
+
+      if ((t as any).Professor) {
+        criadores.push({
+          tipo: "professor",
+          id: (t as any).Professor.id,
+          nome: (t as any).Professor.nome,
+        });
+      }
+
+      const clubeId =
+        String((t as any).clubeId ?? (t as any).clube?.id ?? "").trim() || null;
+
+      const escolinhaId =
+        String((t as any).escolinhaId ?? (t as any).escolinha?.id ?? "").trim() || null;
+
+      const professorId =
+        String((t as any).professorId ?? (t as any).Professor?.id ?? "").trim() || null;
+  const professoresIds: string[] = Array.from(
         new Set(
           (Array.isArray((t as any).professores) ? (t as any).professores : [])
             .map((p: any) => String(p?.professorId ?? p?.professor?.id ?? p?.id ?? "").trim())
@@ -1389,15 +1425,13 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
             id: String(row.id),
             ordem: row.ordem ?? null,
             repeticoes: row.repeticoes ?? null,
-
             // mantém as 3 possibilidades pro front (igual treinos-instrutores/treinos-unicos)
             exercicio: row.exercicio ?? null,
             exercicioPersonalizado: row.exercicioPersonalizado ?? null,
             exercicioTemporario: row.exercicioTemporario ?? null,
-
             // e ainda manda um "atalho" (opcional) pra facilitar em qualquer tela
             nome: base?.nome ?? null,
-            descricao: base?.descricao ?? null,
+            descricao: (base as any)?.descricao ?? (base as any)?.objetivo ?? null,
             videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
             videoPosterUrl: base?.videoPosterUrl ?? null,
             nivel: base?.nivel ?? null,
@@ -1428,6 +1462,10 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
             series: true,
             duracao: true,
             descanso: true,
+            descricaoExecucao: true,
+            exercicioId: true,
+            exercicioPersonalizadoId: true,
+            exercicioTemporarioId: true,
             exercicio: {
               select: {
                 id: true,
@@ -1444,17 +1482,18 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
                 nome: true,
                 descricao: true,
                 videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
                 nivel: true,
               },
             },
 
-            // ✅ FALTAVA ISSO AQUI
             exercicioPersonalizado: {
               select: {
                 id: true,
                 nome: true,
                 descricao: true,
                 videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
                 nivel: true,
               },
             },
@@ -1473,7 +1512,7 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
     // ✅ devolve cada row com o "base" completo (catálogo OU temporário OU personalizado)
     const out = {
       ...treino,
-      exercicios: (treino.exercicios ?? []).map((row) => {
+      exercicios: (Array.isArray((treino as any).exercicios) ? (treino as any).exercicios : []).map((row: any) => {
         const exBase =
           row.exercicio ||
           row.exercicioPersonalizado ||
@@ -1486,6 +1525,10 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
           series: row.series ?? null,
           duracao: row.duracao ?? null,
           descanso: row.descanso ?? null,
+          descricaoExecucao: row.descricaoExecucao ?? null,
+          exercicioId: row.exercicioId ?? null,
+          exercicioPersonalizadoId: row.exercicioPersonalizadoId ?? null,
+          exercicioTemporarioId: row.exercicioTemporarioId ?? null,
           exercicio: exBase
             ? {
                 id: exBase.id,
@@ -1493,7 +1536,6 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
                 descricao: (exBase as any).descricao ?? (exBase as any).objetivo ?? null,
                 nivel: (exBase as any).nivel ?? null,
                 videoDemonstrativoUrl: (exBase as any).videoDemonstrativoUrl ?? null,
-                videoPosterUrl: (exBase as any).videoPosterUrl ?? null,
               }
             : null,
         };
@@ -3542,16 +3584,42 @@ const atletas = atletasRaw as unknown as AtletaComUsuarioEPontuacao[];
 
 export async function restaurarTreinos(req: Request, res: Response) {
   const { nomes } = req.body as { nomes: string[] };
+
   if (!Array.isArray(nomes) || nomes.length === 0) {
     return res.status(400).json({ error: "Informe 'nomes: string[]'." });
   }
-  const ops = nomes.map((nome) =>
-    prisma.treinoProgramado.upsert({
-      where: { nome },
-      update: { naoExpira: true, dataAgendada: null },
-      create: {
+
+  const restaurados = [];
+
+  for (const nomeRaw of nomes) {
+    const nome = String(nomeRaw || "").trim();
+    if (!nome) continue;
+
+    const existente = await prisma.treinoProgramado.findFirst({
+      where: {
+        nome: { equals: nome, mode: "insensitive" },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+
+    if (existente) {
+      const atualizado = await prisma.treinoProgramado.update({
+        where: { id: existente.id },
+        data: {
+          naoExpira: true,
+          dataAgendada: null,
+        },
+      });
+
+      restaurados.push(atualizado);
+      continue;
+    }
+
+    const criado = await prisma.treinoProgramado.create({
+      data: {
         nome,
-        codigo: `${nome}-${Date.now()}`,
+        codigo: `${nome}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         nivel: Nivel.Base,
         tipoTreino: TipoTreino.Fisico,
         categoria: [],
@@ -3561,10 +3629,12 @@ export async function restaurarTreinos(req: Request, res: Response) {
         naoExpira: true,
         dataAgendada: null,
       },
-    })
-  );
-  await Promise.all(ops);
-  return res.json({ ok: true, restaurados: nomes.length });
+    });
+
+    restaurados.push(criado);
+  }
+
+  return res.json({ ok: true, restaurados: restaurados.length });
 }
 
 export async function criarTreinoProgramado(
@@ -3989,6 +4059,8 @@ export async function criarTreinoProgramado(
         ? { clubeId: String(tipoUsuarioIdFinal) }
         : tipoNorm === "escolinha"
         ? { escolinhaId: String(tipoUsuarioIdFinal) }
+        : tipoNorm === "admin"
+        ? { criadorUsuarioId: String(tipoUsuarioIdFinal) }
         : {};
 
     const jaExisteNome = await prisma.treinoProgramado.findFirst({
@@ -4000,17 +4072,13 @@ export async function criarTreinoProgramado(
     });
 
     if (jaExisteNome) {
-      const treinoExistente = await prisma.treinoProgramado.findUnique({
-        where: { id: jaExisteNome.id },
-        include: {
-          exercicios: true,
-          Professor: true,
-          clube: true,
-          escolinha: true,
-        },
+      return res.status(409).json({
+        code: "TREINO_NOME_DUPLICADO_DO_MESMO_DONO",
+        message:
+          "Esse treino não pode ser criado porque você já possui um treino com esse nome. Se quiser criar, mude o nome do treino.",
+        treinoExistenteId: jaExisteNome.id,
+        treinoExistenteNome: jaExisteNome.nome,
       });
-
-      return res.status(200).json(treinoExistente);
     }
 
     const objetivoFinal =
@@ -4033,7 +4101,6 @@ export async function criarTreinoProgramado(
         pontuacao: pontuacaoNum,
         imagemUrl: imagemUrl || null,
         parceiro: parceiroFinal,
-
         ...(tipoNorm === "professor"
           ? { Professor: { connect: { id: professorIdToConnect! } } }
           : {}),
@@ -4043,11 +4110,9 @@ export async function criarTreinoProgramado(
         ...(tipoNorm === "escolinha"
           ? { escolinha: { connect: { id: String(tipoUsuarioIdFinal) } } }
           : {}),
-
         ...(professorCriadorId
           ? { criadorProfessor: { connect: { id: professorCriadorId } } }
           : {}),
-
         professores: colaboradoresProfessorIds.length
           ? {
               createMany: {
@@ -4161,7 +4226,58 @@ export async function criarTreinoProgramado(
             e.descanso != null && String(e.descanso).trim() !== ""
               ? String(e.descanso).trim()
               : null;
+          const descricaoSalvar =
+            typeof e?.descricao === "string" && e.descricao.trim()
+              ? e.descricao.trim()
+              : typeof e?.observacao === "string" && e.observacao.trim()
+              ? e.observacao.trim()
+              : typeof e?.descricaoExecucao === "string" && e.descricaoExecucao.trim()
+              ? e.descricaoExecucao.trim()
+              : null;
 
+          // 1. atualiza descrição na origem, se existir
+          if (e.exercicioId && typeof e.descricao === "string" && e.descricao.trim()) {
+            await tx.exercicio.update({
+              where: { id: String(e.exercicioId) },
+              data: {
+                objetivo: descricaoSalvar,
+              },
+            });
+          }
+
+          if (
+            e.exercicioPersonalizadoId &&
+            typeof e.descricao === "string" &&
+            e.descricao.trim()
+          ) {
+            await tx.exercicioPersonalizado.update({
+              where: { id: String(e.exercicioPersonalizadoId) },
+              data: {
+                descricao:
+                  typeof e.descricao === "string" && e.descricao.trim()
+                    ? e.descricao.trim()
+                    : null,
+              },
+            });
+          }
+
+          if (
+            e.exercicioTemporarioId &&
+            typeof e.descricao === "string" &&
+            e.descricao.trim()
+          ) {
+            await tx.exercicioTemporario.update({
+              where: { id: String(e.exercicioTemporarioId) },
+              data: {
+                descricao:
+                  typeof e.descricao === "string" && e.descricao.trim()
+                    ? e.descricao.trim()
+                    : null,
+              },
+            });
+          }
+              
+          // 2. cria o vínculo no treino
           await tx.treinoProgramadoExercicio.create({
             data: {
               treinoProgramadoId: treino.id,
@@ -4171,6 +4287,7 @@ export async function criarTreinoProgramado(
               series: seriesFinal,
               duracao: duracaoFinal,
               descanso: descansoFinal,
+              descricaoExecucao: descricaoSalvar,
             },
           });
 
@@ -4181,6 +4298,7 @@ export async function criarTreinoProgramado(
               series: seriesFinal,
               duracao: duracaoFinal,
               descanso: descansoFinal,
+              objetivo: descricaoSalvar,
             },
           });
         }
@@ -4194,8 +4312,6 @@ export async function criarTreinoProgramado(
 
         const hasVideo = !!String(e.videoDemonstrativoUrl ?? e.videoUrl ?? "").trim();
         const hasPoster = !!String(e.videoPosterUrl ?? "").trim();
-
-        // ✅ Se o front mandou vídeo/poster, force criar/usar ExercicioPersonalizado
         const forcePersonalizado = hasVideo || hasPoster || !!String(e.exercicioPersonalizadoId ?? "").trim();
 
         // ✅ se bater no BD, salva como oficial (não cria personalizado)
@@ -4220,6 +4336,24 @@ export async function criarTreinoProgramado(
               ? String(e.descanso).trim()
               : null;
 
+          const descricaoSalvar =
+            typeof e.descricao === "string" && e.descricao.trim()
+              ? e.descricao.trim()
+              : typeof e.observacao === "string" && e.observacao.trim()
+              ? e.observacao.trim()
+              : typeof e.descricaoExecucao === "string" && e.descricaoExecucao.trim()
+              ? e.descricaoExecucao.trim()
+              : null;
+
+          if (exercicioBancoId && typeof e.descricao === "string" && e.descricao.trim()) {
+            await tx.exercicio.update({
+              where: { id: String(exercicioBancoId) },
+              data: {
+                objetivo: descricaoSalvar,
+              },
+            });
+          }
+
           await tx.treinoProgramadoExercicio.create({
             data: {
               treinoProgramadoId: treino.id,
@@ -4231,6 +4365,7 @@ export async function criarTreinoProgramado(
               series: seriesFinal,
               duracao: duracaoFinal,
               descanso: descansoFinal,
+              descricaoExecucao: descricaoSalvar,
             },
           });
 
@@ -4242,6 +4377,7 @@ export async function criarTreinoProgramado(
               series: seriesFinal,
               duracao: duracaoFinal,
               descanso: descansoFinal,
+              objetivo: descricaoSalvar,
             },
           });
 
@@ -4286,6 +4422,18 @@ export async function criarTreinoProgramado(
         // ✅ 3) “narrow” pro TS parar de reclamar de null
         if (!pers) throw new Error("Falha ao criar ExercicioPersonalizado.");
 
+        if (
+          typeof e.descricao === "string" &&
+          e.descricao.trim() &&
+          pers
+        ) {
+          await tx.exercicioPersonalizado.update({
+            where: { id: pers.id },
+            data: {
+              descricao: e.descricao.trim(),
+            },
+          });
+        }
         // ✅ 4) atualiza vídeo se estava vazio e agora veio
         const novoVideo = e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado ?? null;
         if ((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo) {
@@ -4302,6 +4450,15 @@ export async function criarTreinoProgramado(
             data: { videoPosterUrl: novoPoster },
           });
         }
+
+        const descricaoSalvar =
+          typeof e.descricao === "string" && e.descricao.trim()
+            ? e.descricao.trim()
+            : typeof e.observacao === "string" && e.observacao.trim()
+            ? e.observacao.trim()
+            : typeof e.descricaoExecucao === "string" && e.descricaoExecucao.trim()
+            ? e.descricaoExecucao.trim()
+            : null;
 
         // ✅ 5) linka no treino usando exercicioPersonalizadoId
         await tx.treinoProgramadoExercicio.create({
@@ -4323,6 +4480,7 @@ export async function criarTreinoProgramado(
               e.descanso != null && String(e.descanso).trim() !== ""
                 ? String(e.descanso).trim()
                 : null,
+            descricaoExecucao: descricaoSalvar, 
             repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
           },
         });
@@ -4495,15 +4653,47 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
     if (nome || codigo) {
       const OR: any[] = [];
-      if (nome) OR.push({ nome });
-      if (codigo) OR.push({ codigo });
+      if (nome) {
+        OR.push({
+          nome: { equals: String(nome).trim(), mode: "insensitive" },
+        });
+      }
+      if (codigo) {
+        OR.push({ codigo: String(codigo).trim() });
+      }
+
+      const mesmoDono =
+        String(tipoUsuario || "").toLowerCase() === "professor"
+          ? {
+              OR: [
+                { professorId: String(tipoUsuarioId) },
+                { criadorProfessorId: String(tipoUsuarioId) },
+              ],
+            }
+          : String(tipoUsuario || "").toLowerCase() === "clube"
+          ? { clubeId: String(tipoUsuarioId) }
+          : String(tipoUsuario || "").toLowerCase() === "escolinha" ||
+            String(tipoUsuario || "").toLowerCase() === "escola"
+          ? { escolinhaId: String(tipoUsuarioId) }
+          : String(tipoUsuario || "").toLowerCase() === "admin"
+          ? { criadorUsuarioId: String(tipoUsuarioId) }
+          : {};
 
       const dup = await prisma.treinoProgramado.findFirst({
-        where: { id: { not: id }, OR },
+        where: {
+          id: { not: id },
+          ...mesmoDono,
+          OR,
+        },
         select: { id: true, nome: true, codigo: true },
       });
 
-      if (dup) return res.status(400).json({ message: "Já existe treino com esse nome ou código.", duplicado: dup });
+      if (dup) {
+        return res.status(400).json({
+          message: "Já existe treino com esse nome ou código para este mesmo dono.",
+          duplicado: dup,
+        });
+      }
     }
 
     let categoriasNorm: Categoria[] | undefined = undefined;
@@ -4777,6 +4967,15 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               ? String(ex.descanso).trim()
               : null;
 
+          const descricaoSalvar =
+            typeof ex?.descricao === "string" && ex.descricao.trim()
+              ? ex.descricao.trim()
+              : typeof ex?.observacao === "string" && ex.observacao.trim()
+              ? ex.observacao.trim()
+              : typeof ex?.descricaoExecucao === "string" && ex.descricaoExecucao.trim()
+              ? ex.descricaoExecucao.trim()
+              : null;
+
           await tx.treinoProgramadoExercicio.create({
             data: {
               treinoProgramadoId: id,
@@ -4786,10 +4985,10 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               series: seriesFinal,
               duracao: duracaoFinal,
               descanso: descansoFinal,
+              descricaoExecucao: descricaoSalvar,
             },
           });
 
-          // ✅ atualiza também a tabela Exercicio
           await tx.exercicio.update({
             where: { id: exId },
             data: {
@@ -4797,6 +4996,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               series: seriesFinal,
               duracao: duracaoFinal,
               descanso: descansoFinal,
+              objetivo: descricaoSalvar,
             },
           });
 
@@ -4804,54 +5004,77 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           continue;
         }
 
-        // ✅ 1.5) personalizado (ExercicioPersonalizado)
         const exercicioPersonalizadoId = ex?.exercicioPersonalizadoId ?? null;
         if (exercicioPersonalizadoId) {
           const persId = String(exercicioPersonalizadoId);
 
-          // (opcional, mas recomendado) garantir que existe
+          const descricaoSalvar =
+            typeof ex?.descricao === "string" && ex.descricao.trim()
+              ? ex.descricao.trim()
+              : typeof ex?.observacao === "string" && ex.observacao.trim()
+              ? ex.observacao.trim()
+              : typeof ex?.descricaoExecucao === "string" && ex.descricaoExecucao.trim()
+              ? ex.descricaoExecucao.trim()
+              : null;
+
           const pers = await tx.exercicioPersonalizado.findUnique({
             where: { id: persId },
             select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
-          if (!pers) throw new Error(`ExercicioPersonalizadoId inválido no índice ${i}`);
 
-          // ✅ se veio vídeo/poster novo do front, salva no personalizado (principalmente quando era null)
-          const novoVideo = (ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null) ? String(ex?.videoDemonstrativoUrl ?? ex?.videoUrl) : null;
+          if (!pers) {
+            throw new Error(`ExercicioPersonalizadoId inválido no índice ${i}`);
+          }
+
+          const novoVideo =
+            (ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null)
+              ? String(ex?.videoDemonstrativoUrl ?? ex?.videoUrl)
+              : null;
+
           const novoPoster = ex?.videoPosterUrl ? String(ex.videoPosterUrl) : null;
 
-          if ((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo) {
-            await tx.exercicioPersonalizado.update({
-              where: { id: persId },
-              data: { videoDemonstrativoUrl: novoVideo },
-            });
-          }
+          await tx.exercicioPersonalizado.update({
+            where: { id: persId },
+            data: {
+              descricao: descricaoSalvar,
+              ...((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo
+                ? { videoDemonstrativoUrl: novoVideo }
+                : {}),
+              ...((!pers.videoPosterUrl || pers.videoPosterUrl === "") && novoPoster
+                ? { videoPosterUrl: novoPoster }
+                : {}),
+            },
+          });
 
-          if ((!pers.videoPosterUrl || pers.videoPosterUrl === "") && novoPoster) {
-            await tx.exercicioPersonalizado.update({
-              where: { id: persId },
-              data: { videoPosterUrl: novoPoster },
-            });
-          }
+          const repeticoesFinal = String(
+            ex?.repeticoes ?? ex?.repeticao ?? ex?.reps ?? ""
+          ).trim();
+
+          const seriesFinal =
+            Number.isFinite(Number(ex?.series)) && Number(ex.series) > 0
+              ? Number(ex.series)
+              : null;
+
+          const duracaoFinal =
+            ex?.duracao != null && String(ex.duracao).trim() !== ""
+              ? String(ex.duracao).trim()
+              : null;
+
+          const descansoFinal =
+            ex?.descanso != null && String(ex.descanso).trim() !== ""
+              ? String(ex.descanso).trim()
+              : null;
 
           await tx.treinoProgramadoExercicio.create({
             data: {
               treinoProgramadoId: id,
               exercicioPersonalizadoId: persId,
-              repeticoes,
+              repeticoes: repeticoesFinal,
               ordem,
-              series:
-                Number.isFinite(Number(ex.series)) && Number(ex.series) > 0
-                  ? Number(ex.series)
-                  : null,
-              duracao:
-                ex.duracao != null && String(ex.duracao).trim() !== ""
-                  ? String(ex.duracao).trim()
-                  : null,
-              descanso:
-                ex.descanso != null && String(ex.descanso).trim() !== ""
-                  ? String(ex.descanso).trim()
-                  : null,
+              series: seriesFinal,
+              duracao: duracaoFinal,
+              descanso: descansoFinal,
+              descricaoExecucao: descricaoSalvar,
             },
           });
 
@@ -4862,6 +5085,15 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
         if (exercicioTemporarioId) {
           const tempId = String(exercicioTemporarioId);
 
+          const descricaoSalvar =
+            typeof ex?.descricao === "string" && ex.descricao.trim()
+              ? ex.descricao.trim()
+              : typeof ex?.observacao === "string" && ex.observacao.trim()
+              ? ex.observacao.trim()
+              : typeof ex?.descricaoExecucao === "string" && ex.descricaoExecucao.trim()
+              ? ex.descricaoExecucao.trim()
+              : null;
+
           // ✅ segurança: só deixa usar temporário que é desse treino
           const exists = await tx.exercicioTemporario.findFirst({
             where: { id: tempId, treinoProgramadoId: id },
@@ -4871,6 +5103,11 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           if (!exists) {
             throw new Error(`ExercicioTemporarioId inválido (não pertence ao treino) no índice ${i}`);
           }
+
+          await tx.exercicioTemporario.update({
+            where: { id: tempId },
+            data: { descricao: descricaoSalvar },
+          });
 
           await tx.treinoProgramadoExercicio.create({
             data: {
@@ -4890,6 +5127,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
                 ex.descanso != null && String(ex.descanso).trim() !== ""
                   ? String(ex.descanso).trim()
                   : null,
+              descricaoExecucao: descricaoSalvar,
             },
           });
 
@@ -4920,13 +5158,22 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
             select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
 
+          const descricaoSalvar =
+            typeof ex?.descricao === "string" && ex.descricao.trim()
+              ? ex.descricao.trim()
+              : typeof ex?.observacao === "string" && ex.observacao.trim()
+              ? ex.observacao.trim()
+              : typeof ex?.descricaoExecucao === "string" && ex.descricaoExecucao.trim()
+              ? ex.descricaoExecucao.trim()
+              : null;
+
           if (!temp) {
             temp = await tx.exercicioTemporario.create({
               data: {
                 treinoProgramadoId: id,     // ✅ obrigatório
                 codigo: null,
                 nome: nomeTemp,
-                descricao: tempObj?.descricao ?? null,
+                descricao: descricaoSalvar,
                 nivel: (nivel !== undefined ? nivel : "Base"), // ✅ obrigatório
                 categorias: categoriasNorm ?? [],              // ✅ obrigatório
                 videoDemonstrativoUrl:
@@ -4947,6 +5194,13 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               await tx.exercicioTemporario.update({
                 where: { id: temp.id },
                 data: { videoDemonstrativoUrl: videoHerdado },
+              });
+            }
+
+            if (descricaoSalvar) {
+              await tx.exercicioTemporario.update({
+                where: { id: temp.id },
+                data: { descricao: descricaoSalvar },
               });
             }
           }
@@ -4981,6 +5235,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
                 ex.descanso != null && String(ex.descanso).trim() !== ""
                   ? String(ex.descanso).trim()
                   : null,
+              descricaoExecucao: descricaoSalvar,
             },
           });
 
@@ -6664,6 +6919,7 @@ export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res:
               },
             });
 
+            
             if (
               atual?.videoDemonstrativoUrl &&
               atual.videoDemonstrativoUrl !== item.selectedUrl &&

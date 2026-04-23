@@ -533,13 +533,14 @@ export async function createMetodologia(req: Request, res: Response) {
           equals: tituloTrim,
           mode: "insensitive",
         },
+        criadorUsuarioId: userId,
       },
       select: { id: true, titulo: true },
     });
 
     if (metodologiaComMesmoNome) {
       return res.status(400).json({
-        message: `Já existe uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
+        message: `Você já possui uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
       });
     }
 
@@ -721,13 +722,14 @@ export async function updateMetodologia(req: Request, res: Response) {
             equals: tituloTrim,
             mode: "insensitive",
           },
+          criadorUsuarioId: userId,
         },
         select: { id: true, titulo: true },
       });
 
       if (metodologiaComMesmoNome) {
         return res.status(400).json({
-          message: `Já existe uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
+          message: `Você já possui uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
         });
       }
     }
@@ -3524,13 +3526,14 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
           equals: tituloTrim,
           mode: "insensitive",
         },
+        criadorUsuarioId: userId,
       },
       select: { id: true },
     });
 
     if (metodologiaComMesmoNome) {
       return res.status(400).json({
-        message: `Já existe uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
+        message: `Você já possui uma metodologia com o nome "${tituloTrim}". Escolha outro nome.`,
       });
     }
 
@@ -3779,10 +3782,30 @@ export async function createMetodologiaAvulsaCompleta(req: Request, res: Respons
       return res.status(400).json({ message: "Preço mensal inválido." });
     }
 
+    const tituloTrim = titulo.trim();
+
+    const metodologiaComMesmoNome = await prisma.metodologiaAvulsa.findFirst({
+      where: {
+        titulo: {
+          equals: tituloTrim,
+          mode: "insensitive",
+        },
+        criadorUsuarioId: userId,
+      },
+      select: { id: true, titulo: true },
+    });
+
+    if (metodologiaComMesmoNome) {
+      return res.status(400).json({
+        code: "METODOLOGIA_NOME_DUPLICADO_DO_MESMO_CRIADOR",
+        message: `Você já possui uma metodologia com o nome "${tituloTrim}". Se quiser criá-la, mude o título.`,
+      });
+    }
+
     const item = await prisma.$transaction(async (tx) => {
       const criada = await tx.metodologiaAvulsa.create({
         data: {
-          titulo: titulo.trim(),
+          titulo: tituloTrim,
           descricao: asNullableString(descricao),
           capaUrl: asNullableString(capaUrl),
           publicoAlvo,
@@ -3894,13 +3917,15 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
           equals: tituloTrim,
           mode: "insensitive",
         },
+        criadorUsuarioId: userId,
       },
       select: { id: true, titulo: true },
     });
 
     if (metodologiaComMesmoNome) {
       return res.status(400).json({
-        message: `Já existe uma metodologia avulsa com o nome "${tituloTrim}". Escolha outro nome.`,
+        code: "METODOLOGIA_NOME_DUPLICADO_DO_MESMO_CRIADOR",
+        message: `Você já possui uma metodologia com o nome "${tituloTrim}". Se quiser criá-la, mude o título.`,
       });
     }
 
@@ -4260,13 +4285,14 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
             equals: tituloTrim,
             mode: "insensitive",
           },
+          criadorUsuarioId: userId,
         },
         select: { id: true },
       });
 
       if (duplicada) {
         return res.status(400).json({
-          message: `Já existe uma metodologia avulsa com o nome "${tituloTrim}". Escolha outro nome.`,
+          message: `Você já possui uma metodologia avulsa com o nome "${tituloTrim}". Escolha outro nome.`,
         });
       }
     }

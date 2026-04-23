@@ -424,7 +424,7 @@ model Atleta {
 model TreinoProgramado {
   id           String                @id @default(uuid())
   codigo       String?
-  nome         String                @unique
+  nome         String
   descricao    String?
   nivel        Nivel
   createdAt    DateTime              @default(now())
@@ -499,6 +499,7 @@ model TreinoProgramadoExercicio {
   series                   Int?
   duracao                  String?
   descanso                 String?
+  descricaoExecucao        String?
   exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
   exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
   treinoProgramado         TreinoProgramado        @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
