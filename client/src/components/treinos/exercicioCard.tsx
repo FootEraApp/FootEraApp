@@ -55,12 +55,14 @@ function formatarFaixas(faixas?: string[] | null) {
   if (!Array.isArray(faixas) || faixas.length === 0) return "";
 
   const mapa: Record<string, string> = {
+    Sub3: "Sub-3",
+    Sub5: "Sub-5",
+    Sub7: "Sub-7",
     Sub9: "Sub-9",
     Sub11: "Sub-11",
     Sub13: "Sub-13",
     Sub15: "Sub-15",
-    Sub17: "Sub-17",
-    Sub20: "Sub-20",
+    Sub16: "Sub-16",
     Livre: "Livre",
   };
 

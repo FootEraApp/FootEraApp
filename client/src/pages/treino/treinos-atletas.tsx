@@ -58,6 +58,9 @@ interface TreinoAgendado {
   meuStatus?: TreinoStatus | string;
   startedAt?: string | null;
   completedAt?: string | null;
+  sessaoTreinoId?: string | null;
+  sessaoTreino?: { id: string; nome: string } | null;
+  sessaoTreinoNome?: string | null;
   submissao?: { enviados: number; aprovados: number; feito: boolean } | null;
   treinoProgramado?: {
     id?: string;
@@ -1324,6 +1327,7 @@ function abrirMidiaExercicioDireto(
   type TileInfo = {
     id: string;
     titulo: string;
+    sessaoTreinoNome?: string | null;
     label: string;
     date: Date | null;
     isToday: boolean;
@@ -1379,6 +1383,12 @@ function abrirMidiaExercicioDireto(
     return {
       id: t.id,
       titulo: t.titulo,
+      sessaoTreinoNome:
+        (t as any).sessaoTreinoNome ||
+        (t as any).sessaoTreino?.nome ||
+        (t as any).treinoProgramado?.sessaoTreinoNome ||
+        (t as any).treinoProgramado?.sessaoTreino?.nome ||
+        null,
       label,
       date: d,
       isToday,
@@ -2186,6 +2196,11 @@ function abrirMidiaExercicioDireto(
                             <div className="mt-1 text-sm line-clamp-2">
                               {tl.titulo}
                             </div>
+                            {tl.sessaoTreinoNome ? (
+                              <div className="mt-1 text-[11px] text-gray-600">
+                                Sessão: {tl.sessaoTreinoNome}
+                              </div>
+                            ) : null}
                             <div className="mt-1 text-[11px] opacity-80">
                               {tl.label}
                             </div>

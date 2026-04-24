@@ -119,6 +119,10 @@ const EditarPerfil = () => {
 
         const u = res.data.usuario || {};
         const dadosEsp: any = { ...(res.data.dadosEspecificos || {}) };
+        
+        if (!Array.isArray(dadosEsp.categorias)) {
+          dadosEsp.categorias = dadosEsp.categorias ? [dadosEsp.categorias] : [];
+        }
 
         if (dadosEsp.site && !dadosEsp.siteOficial) {
           dadosEsp.siteOficial = dadosEsp.site;
@@ -688,13 +692,36 @@ const EditarPerfil = () => {
               />
             </div>
 
-            {renderInput(
-              "Categorias de Base (separadas por vírgula)",
-              "categorias"
-            )}
-            <p className="text-xs text-gray-500 -mt-3 mb-2">
-              Ex.: Sub9, Sub11, Sub13, Sub15, Sub17, Sub20, Livre
+           <div className="mb-4">
+            <label className="block text-sm font-medium">Categorias de Base</label>
+
+            <select
+              multiple
+              value={Array.isArray(dadosTipo.categorias) ? dadosTipo.categorias : []}
+              onChange={(e) => {
+                const values = Array.from(e.target.selectedOptions).map((o) => o.value);
+                setDadosTipo((prev: any) => ({
+                  ...prev,
+                  categorias: values,
+                }));
+              }}
+              className="w-full border px-3 py-2 rounded bg-white min-h-[180px]"
+            >
+              <option value="Sub3">Sub-3</option>
+              <option value="Sub5">Sub-5</option>
+              <option value="Sub7">Sub-7</option>
+              <option value="Sub9">Sub-9</option>
+              <option value="Sub11">Sub-11</option>
+              <option value="Sub13">Sub-13</option>
+              <option value="Sub15">Sub-15</option>
+              <option value="Sub16">Sub-16</option>
+              <option value="Livre">Livre</option>
+            </select>
+
+            <p className="text-xs text-gray-500 mt-1">
+              Segure Ctrl (ou Cmd no Mac) para selecionar mais de uma categoria.
             </p>
+          </div>
           </>
         );
     }
@@ -934,11 +961,8 @@ return (
             tipo.professorIds = professorSelIds;
             tipo.professorId = professorSelIds.length > 0 ? professorSelIds[0] : null;
 
-            if (typeof tipo.categorias === "string") {
-              tipo.categorias = tipo.categorias
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean);
+            if (!Array.isArray(tipo.categorias)) {
+              tipo.categorias = tipo.categorias ? [tipo.categorias] : [];
             }
 
             if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {

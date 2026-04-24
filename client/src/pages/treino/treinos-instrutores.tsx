@@ -8,7 +8,7 @@ import {
   Trash2,
   Star as StarIcon,
 } from "lucide-react";
-import { API, APP, FLAGS } from "../../config.js";
+import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
@@ -82,6 +82,9 @@ interface TreinoProgramado {
   professorId?: string;
   escolinhaId?: string;
   clubeId?: string;
+  sessaoTreinoId?: string | null;
+  sessaoTreino?: { id: string; nome: string } | null;
+  sessaoTreinoNome?: string | null;
   pontuacao?: number | null;
   professoresIds?: string[];
   criadoresNomes?: string[];
@@ -1978,6 +1981,12 @@ async function salvarProgressoSessao(sessaoId: string) {
             professoresIds,
             criadoresNomes,
             criadorTipo,
+            sessaoTreinoId: tr?.sessaoTreinoId ?? null,
+            sessaoTreino: tr?.sessaoTreino ?? null,
+            sessaoTreinoNome:
+              tr?.sessaoTreinoNome ??
+              tr?.sessaoTreino?.nome ??
+              null,
             exercicios: (Array.isArray(tr.exercicios) ? tr.exercicios : []).map((ex: any) => ({
               id: String(
                 ex?.exercicio?.id ??
@@ -2514,6 +2523,13 @@ async function salvarProgressoSessao(sessaoId: string) {
         <div className="mt-2 text-sm text-gray-700">
           <strong>Nível:</strong> {treino.nivel || "—"}
         </div>
+
+        {(treino as any).sessaoTreinoNome || (treino as any).sessaoTreino?.nome ? (
+          <div className="mt-1 text-xs text-gray-600">
+            <strong>Sessão:</strong>{" "}
+            {(treino as any).sessaoTreinoNome || (treino as any).sessaoTreino?.nome}
+          </div>
+        ) : null}
 
         <div className="mt-2 flex items-center justify-between gap-2">
         <div className="text-xs text-gray-500">

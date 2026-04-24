@@ -287,7 +287,7 @@ export const criarExercicio = async (req: Request, res: Response) => {
     }
 
     const faixasEtarias = parseArrayField(req.body.faixaEtaria);
-    const faixasValidas = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+    const faixasValidas = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
 
     if (!tipo || !String(tipo).trim()) return res.status(400).json({ message: "Tipo é obrigatório." });
     if (!nivel || !String(nivel).trim()) return res.status(400).json({ message: "Nível é obrigatório." });
@@ -399,7 +399,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
     if (!nivel || !String(nivel).trim()) return res.status(400).json({ message: "Nível é obrigatório." });
 
     const faixasEtarias = parseArrayField(req.body.faixaEtaria);
-    const faixasValidas = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+    const faixasValidas = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
 
     if (faixasEtarias.some((faixa) => !faixasValidas.includes(faixa))) return res.status(400).json({ message: "Faixa etária inválida." });
     if (faixasEtarias.length === 0) return res.status(400).json({ message: "Selecione pelo menos uma faixa etária." });

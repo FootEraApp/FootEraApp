@@ -45,7 +45,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         username,
         age: 18,
         position: "Atacante",
-        team: "Sub-20",
+        team: "Livre",
         avatar: "/avatar.png"
       });
       setScore({

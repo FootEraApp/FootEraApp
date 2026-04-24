@@ -28,6 +28,26 @@ function absUrl(path?: string | null) {
   if (/^https?:\/\//i.test(s)) return s;
   return `${s.startsWith("/uploads") ? API_BASE_URL : FRONTEND_URL}${s}`;
 }
+function normalizarCategorias(input: any): Categoria[] {
+  if (!input) return [];
+
+  const arr = Array.isArray(input) ? input : String(input).split(",");
+
+  return arr
+    .map((c: string) => {
+      const s = c.trim().toLowerCase();
+
+      if (s.startsWith("sub")) {
+        const num = s.replace(/\D/g, "");
+        return `Sub${num}`; // Sub9, Sub16
+      }
+
+      if (s === "livre") return "Livre";
+
+      return null;
+    })
+    .filter(Boolean) as Categoria[];
+}
 
 function readPrivacidadeFlags(config: any) {
   const c = (config && typeof config === "object") ? config : {};
@@ -1044,25 +1064,25 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     }
 
     const clube = await prisma.clube.findUnique({ where: { usuarioId: id } });
-    if (clube) {
-      dadosEspecificos = {
-        nome: clube.nome,
-        email: clube.email,
-        cnpj: clube.cnpj,
-        telefone1: clube.telefone1,
-        telefone2: clube.telefone2,
-        estadio: clube.estadio,
-        logo: clube.logo,
-        siteOficial: clube.siteOficial,
-        logradouro: clube.logradouro ?? null,
-        cidade: clube.cidade ?? null,
-        estado: clube.estado ?? null,
-        pais: clube.pais ?? null,
-        cep: clube.cep ?? null,
-      };
-      tipoPerfil = "Clube";
-    }
-
+      if (clube) {
+        dadosEspecificos = {
+          nome: clube.nome,
+          email: clube.email,
+          cnpj: clube.cnpj,
+          telefone1: clube.telefone1,
+          telefone2: clube.telefone2,
+          estadio: clube.estadio,
+          logo: clube.logo,
+          siteOficial: clube.siteOficial,
+          logradouro: clube.logradouro ?? null,
+          cidade: clube.cidade ?? null,
+          estado: clube.estado ?? null,
+          pais: clube.pais ?? null,
+          cep: clube.cep ?? null,
+          categorias: Array.isArray((clube as any).categorias) ? (clube as any).categorias : [],
+        };
+        tipoPerfil = "Clube";
+      }
     const olheiro = await prisma.olheiro.findUnique({
       where: { usuarioId: id },
       select: {
@@ -1394,7 +1414,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             pais: usuario.pais ?? null,
             cep: cepDigits || null,
             logo: fotoFinal,
-            categorias: Array.isArray(tipo.categorias) ? { set: tipo.categorias } : undefined,
+            categorias: Array.isArray(tipo.categorias) ? { set: normalizarCategorias(tipo.categorias), } : undefined,
           },
         });
         break;

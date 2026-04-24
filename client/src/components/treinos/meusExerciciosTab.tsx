@@ -265,12 +265,14 @@ export default function MeusExerciciosTab() {
               className="rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-[#0D6A43]"
             >
               <option value="Todos">Faixa etária: Todas</option>
+              <option value="Sub3">Sub-3</option>
+              <option value="Sub5">Sub-5</option>
+              <option value="Sub7">Sub-7</option>
               <option value="Sub9">Sub-9</option>
               <option value="Sub11">Sub-11</option>
               <option value="Sub13">Sub-13</option>
               <option value="Sub15">Sub-15</option>
-              <option value="Sub17">Sub-17</option>
-              <option value="Sub20">Sub-20</option>
+              <option value="Sub16">Sub-16</option>
               <option value="Livre">Livre</option>
             </select>
 

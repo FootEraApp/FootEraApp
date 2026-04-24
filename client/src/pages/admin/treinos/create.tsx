@@ -129,17 +129,15 @@ type ExLinha = {
   duracao?: string;
   descanso?: string;
   isCustom?: boolean;
-
+  tipoExecucao?: "repeticao" | "duracao";
   exercicioPersonalizadoId?: string | null;
   exercicioTemporarioId?: string | null;
-
   // ✅ snapshot para o card de cima
   titulo?: string;
   descricao?: string;
   nivel?: string | null;
   videoUrl?: string | null;
   videoPosterUrl?: string | null;
-
   customTitulo?: string;
   customDesc?: string;
   customVideoFile?: File | null;
@@ -148,7 +146,7 @@ type ExLinha = {
   customVideoPosterUrl?: string | null;
 };
 
-const opcoesCategorias = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+const opcoesCategorias = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
 const opcoesNiveis = ["Base", "Avancado", "Performance"];
 const opcoesTipoTreino = ["Técnico", "Tático", "Físico", "Mental"];
 
@@ -394,6 +392,13 @@ export default function CriarOuEditarTreino() {
   const [niveisSelecionados, setNiveisSelecionados] = useState<string[]>([]);
   const [linhas, setLinhas] = useState<ExLinha[]>([]);
   const [nivelTreino, setNivelTreino] = useState("Base");
+  const [sessoesTreino, setSessoesTreino] = useState<string[]>([
+    "Aquecimento",
+    "Coletivo",
+    "Treino de finalização",
+  ]);
+  const [sessaoTreino, setSessaoTreino] = useState("Aquecimento");
+  const [sessaoOutro, setSessaoOutro] = useState("");
   const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
   const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<
     ExercicioPersonalizadoItem[]
@@ -415,12 +420,10 @@ export default function CriarOuEditarTreino() {
   }, []);
 
   useEffect(() => {
-    if (tipoCriador === "Admin" && adminLogado?.id) {
+    if (tipoCriador === "Admin" && adminLogado?.id && !criadorId) {
       setCriadorId(adminLogado.id);
-    } else if (tipoCriador !== "Admin") {
-      setCriadorId("");
     }
-  }, [tipoCriador, adminLogado]);
+  }, [tipoCriador, adminLogado, criadorId]);
 
   useEffect(() => {
     if (!capaFile) {
@@ -502,6 +505,20 @@ export default function CriarOuEditarTreino() {
       setTitulo(data.nome || "");
       setDescricao(data.descricao || "");
       setNivelTreino(data.nivel || "Base");
+      const nomeSessao =
+        data?.sessaoTreino?.nome ||
+        data?.sessaoTreinoNome ||
+        "";
+
+      if (nomeSessao) {
+        setSessaoTreino(nomeSessao);
+
+        setSessoesTreino((prev) =>
+          prev.includes(nomeSessao)
+            ? prev
+            : [...prev, nomeSessao]
+        );
+      }
       setProfessorId(data.professorId || "");
       setTipoTreino(data.tipoTreino ? String(data.tipoTreino) : "Técnico");
       setDuracaoMin(typeof data.duracao === "number" ? data.duracao : 60);
@@ -543,22 +560,28 @@ export default function CriarOuEditarTreino() {
           return {
             exercicioId: row.exercicioId ? String(row.exercicioId) : "",
             ordem: Number(row.ordem ?? i + 1),
-
-            repeticoes: repStr,
+            repeticoes: sr.reps || repStr || "",
             series:
               row.series != null && String(row.series).trim() !== ""
                 ? String(row.series).trim()
                 : sr.series || "",
-            reps: repStr || sr.reps || "",
+            reps: sr.reps || repStr || "",
             duracao: row.duracao != null ? String(row.duracao) : "",
             descanso: row.descanso != null ? String(row.descanso) : "",
-
             titulo: String(ex?.nome ?? ""),
-            descricao: ex?.descricao ?? ex?.objetivo ?? "",
+            descricao: row.descricaoExecucao ?? ex?.descricao ?? ex?.objetivo ?? "",
             nivel: ex?.nivel ?? null,
             videoUrl: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
             videoPosterUrl: ex?.videoPosterUrl ?? null,
-
+            sessaoTreino:
+              sessaoTreino === "Outro"
+                ? sessaoOutro.trim()
+                : sessaoTreino,
+            customDesc: row.descricaoExecucao ?? ex?.descricao ?? ex?.objetivo ?? "",
+            tipoExecucao:
+              row.duracao != null && String(row.duracao).trim() !== ""
+                ? "duracao"
+                : "repeticao",
             ...(isCustom
               ? {
                   isCustom: true,
@@ -569,7 +592,7 @@ export default function CriarOuEditarTreino() {
                     ? String(row.exercicioTemporarioId)
                     : null,
                   customTitulo: String(ex?.nome ?? ""),
-                  customDesc: ex?.descricao ?? ex?.objetivo ?? "",
+                  customDesc: row.descricaoExecucao ?? ex?.descricao ?? ex?.objetivo ?? "",
                   customVideoPreviewUrl: normalizeUrl(
                     ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null
                   ),
@@ -955,6 +978,9 @@ export default function CriarOuEditarTreino() {
         repeticoes: "",
         series: "",
         reps: "",
+        duracao: "",
+        descanso: "",
+        tipoExecucao: "repeticao",
         isCustom: true,
         customTitulo: "",
         customDesc: "",
@@ -1005,8 +1031,12 @@ export default function CriarOuEditarTreino() {
           reps: repeticoesStr || sr.reps || "",
           duracao: ex.duracao != null ? String(ex.duracao) : "",
           descanso: ex.descanso != null ? String(ex.descanso) : "",
-          titulo: ex.nome ?? "",
-          descricao: ex.descricao ?? ex.objetivo ?? "",
+          tipoExecucao:
+            ex.duracao != null && String(ex.duracao).trim() !== ""
+              ? "duracao"
+              : "repeticao",
+          titulo: ex.nome ?? "Exercício",
+          descricao: ex?.descricao ?? ex?.objetivo ?? "",
           nivel: ex.nivel ?? null,
           videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
           videoPosterUrl: ex.thumbUrl ?? null,
@@ -1038,24 +1068,19 @@ export default function CriarOuEditarTreino() {
       const novaLinha: ExLinha = {
         exercicioId: "",
         ordem: prev.length + 1,
-
         repeticoes: repeticoesStr,
         series: seriesStr || sr.series || "",
         reps: repeticoesStr || sr.reps || "",
-
         duracao: ex.duracao != null ? String(ex.duracao) : "",
         descanso: ex.descanso != null ? String(ex.descanso) : "",
-
         isCustom: true,
         exercicioPersonalizadoId: String(ex.id),
         exercicioTemporarioId: null,
-
         titulo: ex.nome ?? "",
         descricao: ex.descricao ?? ex.objetivo ?? "",
         nivel: ex.nivel ?? null,
         videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoPosterUrl: ex.videoPosterUrl ?? ex.thumbUrl ?? null,
-
         customTitulo: ex.nome ?? "",
         customDesc: ex.descricao ?? ex.objetivo ?? "",
         customVideoPreviewUrl: normalizeUrl(
@@ -1214,48 +1239,83 @@ export default function CriarOuEditarTreino() {
       }
     }
 
-    const exerciciosPayload = await Promise.all(
-      linhasComVideo.map(async (l, i) => {
-        const ordem = Number(l.ordem ?? i + 1);
-        const repeticoes = String(l.reps ?? l.repeticoes ?? "").trim();
+    const exerciciosPayload = (
+      await Promise.all(
+        linhasComVideo.map(async (l, i) => {
+          const ordem = Number(l.ordem ?? i + 1);
 
-        if (!l.isCustom && l.exercicioId) {
-          return {
-            exercicioId: l.exercicioId,
-            ordem,
-            repeticoes,
-            series: String(l.series ?? "").trim() || null,
-            duracao: String(l.duracao ?? "").trim() || null,
-            descanso: String(l.descanso ?? "").trim() || null,
-          };
-        }
+          const repeticoes =
+            l.tipoExecucao === "repeticao"
+              ? buildRepeticoes(String(l.series ?? ""), String(l.reps ?? ""))
+              : null;
 
-        if (l.isCustom) {
-          const nome = String(l.customTitulo || "").trim();
-          if (!nome) return null;
+          // 1) exercício oficial / catálogo
+          if (!l.isCustom && l.exercicioId) {
+            return {
+              exercicioId: l.exercicioId,
+              ordem,
+              repeticoes,
+              series:
+                l.tipoExecucao === "repeticao"
+                  ? String(l.series ?? "").trim() || null
+                  : null,
+              duracao:
+                l.tipoExecucao === "duracao"
+                  ? String(l.duracao ?? "").trim() || null
+                  : null,
+              descanso: String(l.descanso ?? "").trim() || null,
+              descricao: String(l.descricao ?? "").trim() || null,
+            };
+          }
 
-          const descricao = String(l.customDesc || "").trim() || null;
-          const videoDemonstrativoUrl = String(l.customVideoUrl || "").trim() || null;
-          const videoPosterUrl = String(l.customVideoPosterUrl || "").trim() || null;
+          // 2) personalizado já existente
+          if (l.isCustom && l.exercicioPersonalizadoId && !l.customVideoFile) {
+            return {
+              exercicioPersonalizadoId: l.exercicioPersonalizadoId,
+              ordem,
+              repeticoes,
+              series:
+                l.tipoExecucao === "repeticao"
+                  ? String(l.series ?? "").trim() || null
+                  : null,
+              duracao:
+                l.tipoExecucao === "duracao"
+                  ? String(l.duracao ?? "").trim() || null
+                  : null,
+              descanso: String(l.descanso ?? "").trim() || null,
+              descricao: String(l.customDesc ?? l.descricao ?? "").trim() || null,
+            };
+          }
 
-          return {
-            exercicioPersonalizadoId: l.exercicioPersonalizadoId ?? null,
-            exercicioTemporarioId: l.exercicioTemporarioId ?? null,
-            nome,
-            descricao,
-            videoDemonstrativoUrl,
-            videoPosterUrl,
-            ordem,
-            repeticoes,
-            series: String(l.series ?? "").trim() || null,
-            duracao: String(l.duracao ?? "").trim() || null,
-            descanso: String(l.descanso ?? "").trim() || null,
-          };
-        }
+          // 3) custom novo / temporário
+          if (l.isCustom) {
+            const nome = String(l.customTitulo ?? "").trim();
+            if (!nome) return null;
 
-        return null;
-      })
-    );
+            return {
+              exercicioTemporarioId: l.exercicioTemporarioId ?? null,
+              nome,
+              descricao: String(l.customDesc ?? l.descricao ?? "").trim() || null,
+              videoDemonstrativoUrl: String(l.customVideoUrl ?? "").trim() || null,
+              videoPosterUrl: String(l.customVideoPosterUrl ?? "").trim() || null,
+              ordem,
+              repeticoes,
+              series:
+                l.tipoExecucao === "repeticao"
+                  ? String(l.series ?? "").trim() || null
+                  : null,
+              duracao:
+                l.tipoExecucao === "duracao"
+                  ? String(l.duracao ?? "").trim() || null
+                  : null,
+              descanso: String(l.descanso ?? "").trim() || null,
+            };
+          }
+
+          return null;
+        })
+      )
+    ).filter(Boolean);
 
     const exerciciosFinal = exerciciosPayload.filter(Boolean);
 
@@ -1280,6 +1340,10 @@ export default function CriarOuEditarTreino() {
       nivel: nivelTreino,
       tipoTreino,
       duracao: duracaoMin,
+      sessaoTreino:
+        sessaoTreino === "Outro"
+          ? sessaoOutro.trim()
+          : sessaoTreino,
       tipoUsuario,
       tipoUsuarioId,
       publico: treinoFootera,
@@ -1463,6 +1527,34 @@ export default function CriarOuEditarTreino() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Sessão do Treino
+                  </label>
+
+                  <select
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                    value={sessaoTreino}
+                    onChange={(e) => setSessaoTreino(e.target.value)}
+                  >
+                    {sessoesTreino.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="Outro">Outro</option>
+                  </select>
+
+                  {sessaoTreino === "Outro" && (
+                    <input
+                      className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                      placeholder="Digite o nome da nova sessão"
+                      value={sessaoOutro}
+                      onChange={(e) => setSessaoOutro(e.target.value)}
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -1740,16 +1832,15 @@ export default function CriarOuEditarTreino() {
 
                     const isPersonalizadoExistente = !!l.exercicioPersonalizadoId;
                     const isCustom = !!l.isCustom;
-
                     const tituloExibido =
                       l.customTitulo || l.titulo || ex?.nome || "";
-
+                    
                     const descricaoExibida =
-                      l.customDesc || l.descricao || ex?.descricao || ex?.objetivo || "";
-
+                      l.isCustom
+                        ? (l.customDesc ?? l.descricao ?? ex?.descricao ?? ex?.objetivo ?? "")
+                        : (l.descricao ?? ex?.descricao ?? ex?.objetivo ?? "");
                     const nivelExibido =
                       String(l.nivel || ex?.nivel || "").trim();
-
                     const videoExibido =
                       l.customVideoPreviewUrl ||
                       normalizeUrl(l.videoPosterUrl) ||
@@ -1757,11 +1848,9 @@ export default function CriarOuEditarTreino() {
                       normalizeUrl(getThumbUrlFromEx(ex)) ||
                       normalizeUrl(getVideoUrlFromEx(ex)) ||
                       "";
-
                     const exVideo =
                       l.videoUrl ||
                       getVideoUrlFromEx(ex);
-
                     const exThumb =
                       l.videoPosterUrl ||
                       getThumbUrlFromEx(ex);
@@ -1883,27 +1972,6 @@ export default function CriarOuEditarTreino() {
                                   </div>
                                 )}
 
-                                <div className="mt-1">
-                                  {l.isCustom ? (
-                                    isPersonalizadoExistente ? (
-                                      l.customDesc ? (
-                                        <p className="text-sm text-gray-700">{l.customDesc}</p>
-                                      ) : null
-                                    ) : (
-                                      <textarea
-                                        className="mt-2 min-h-[92px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
-                                        placeholder="Descrição do exercício personalizado"
-                                        value={l.customDesc || ""}
-                                        onChange={(e) =>
-                                          atualizarLinha(idx, { customDesc: e.target.value })
-                                        }
-                                      />
-                                    )
-                                  ) : ex?.descricao ? (
-                                    <p className="text-sm text-gray-700">{descricaoExibida}</p>
-                                  ) : null}
-                                </div>
-
                                 {l.isCustom && !isPersonalizadoExistente && (
                                   <div className="mt-3 flex flex-wrap items-center gap-3">
                                     <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50">
@@ -1939,55 +2007,101 @@ export default function CriarOuEditarTreino() {
                             </div>
 
                             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700">
-                                  Séries
-                                </label>
-                                <input
-                                  className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
-                                  placeholder="ex.: 3"
-                                  value={l.series || ""}
-                                  onChange={(e) =>
-                                    setLinhaSeriesReps(idx, e.target.value, l.reps || "")
-                                  }
-                                />
-                              </div>
+                              <div className="md:col-span-2 flex gap-2 mb-1">
+                                <button
+                                  type="button"
+                                  onClick={() => atualizarLinha(idx, { tipoExecucao: "repeticao", duracao: "" })}
+                                  className={`px-3 py-1 rounded ${
+                                    l.tipoExecucao === "repeticao"
+                                      ? "bg-green-600 text-white"
+                                      : "bg-gray-200 text-gray-700"
+                                  }`}
+                                >
+                                  Série / Repetição
+                                </button>
 
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700">
-                                  Repetições
-                                </label>
-                                <input
-                                  className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
-                                  placeholder="ex.: 12"
-                                  value={l.reps || ""}
-                                  onChange={(e) =>
-                                    setLinhaSeriesReps(idx, l.series || "", e.target.value)
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    atualizarLinha(idx, {
+                                      tipoExecucao: "duracao",
+                                      series: "",
+                                      reps: "",
+                                      repeticoes: "",
+                                    })
                                   }
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700">
+                                  className={`px-3 py-1 rounded ${
+                                    l.tipoExecucao === "duracao"
+                                      ? "bg-green-600 text-white"
+                                      : "bg-gray-200 text-gray-700"
+                                  }`}
+                                >
                                   Duração
-                                </label>
-                                <input
-                                  className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
-                                  placeholder="ex.: 2min"
-                                  value={l.duracao || ""}
-                                  onChange={(e) => atualizarLinha(idx, { duracao: e.target.value })}
-                                />
+                                </button>
                               </div>
 
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700">
-                                  Descanso
-                                </label>
+                              {l.tipoExecucao === "repeticao" ? (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-semibold text-gray-700">Séries</label>
+                                    <input
+                                      className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                      placeholder="ex.: 3"
+                                      value={l.series || ""}
+                                      onChange={(e) =>
+                                        setLinhaSeriesReps(idx, e.target.value, l.reps || "")
+                                      }
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-xs font-semibold text-gray-700">Repetições</label>
+                                    <input
+                                      className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                      placeholder="ex.: 12"
+                                      value={l.reps || ""}
+                                      onChange={(e) =>
+                                        setLinhaSeriesReps(idx, l.series || "", e.target.value)
+                                      }
+                                    />
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="md:col-span-2">
+                                  <label className="block text-xs font-semibold text-gray-700">Duração</label>
+                                  <input
+                                    className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                    placeholder="ex.: 2min"
+                                    value={l.duracao || ""}
+                                    onChange={(e) => atualizarLinha(idx, { duracao: e.target.value })}
+                                  />
+                                </div>
+                              )}
+
+                              <div className={l.tipoExecucao === "duracao" ? "md:col-span-2" : ""}>
+                                <label className="block text-xs font-semibold text-gray-700">Descanso (opcional)</label>
                                 <input
                                   className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
                                   placeholder="ex.: 30seg"
                                   value={l.descanso || ""}
                                   onChange={(e) => atualizarLinha(idx, { descanso: e.target.value })}
+                                />
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <label className="block text-xs font-semibold text-gray-700">Descrição (opcional)</label>
+                                <textarea
+                                  className="mt-1 min-h-[92px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
+                                  placeholder="Descreva instruções, observações ou detalhes do exercício"
+                                  value={l.isCustom ? l.customDesc || "" : l.descricao || ""}
+                                  onChange={(e) =>
+                                    l.isCustom
+                                      ? atualizarLinha(idx, {
+                                          customDesc: e.target.value,
+                                          descricao: e.target.value,
+                                        })
+                                      : atualizarLinha(idx, { descricao: e.target.value })
+                                  }
                                 />
                               </div>
                             </div>

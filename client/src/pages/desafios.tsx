@@ -11,7 +11,7 @@ import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { FLAGS } from "../config.js";
 
-const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
+const TODAS_CATEGORIAS = ["Sub3","Sub5","Sub7","Sub9","Sub11","Sub13","Sub15","Sub16","Livre"] as const;
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
 const authHeaders = () => ({ Authorization: `Bearer ${Storage.token || localStorage.getItem("token") || ""}` });
 

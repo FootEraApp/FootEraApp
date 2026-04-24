@@ -22,12 +22,11 @@ import AgendaTreinos from "../../components/agenda/AgendaTreinos";
 type TurmaMin = {
   id: string;
   nome: string;
-  categoria?: string | null;
+  categoria?: string[] | string | null;
   professorIds?: string[];
   professorNomes?: string[];
   professorNome?: string | null;
   alunosCount?: number;
-
   // ✅ NOVO (vem do backend)
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
@@ -57,6 +56,36 @@ type TurmaAluno = {
 };
 
 type Owner = { tipo: "Clube" | "Escolinha"; id: string; usuarioId?: string };
+
+const CATEGORIAS_TURMA = [
+  "Sub3",
+  "Sub5",
+  "Sub7",
+  "Sub9",
+  "Sub11",
+  "Sub13",
+  "Sub15",
+  "Sub16",
+  "Livre",
+];
+
+function normalizarCategoriasTurma(v: any): string[] {
+  if (Array.isArray(v)) return v.map(String).filter(Boolean);
+  if (typeof v === "string" && v.trim()) return [v.trim()];
+  return [];
+}
+
+function ordenarCategorias(categorias: string[]): string[] {
+  return [...categorias].sort((a, b) => {
+    if (a === "Livre") return 1;
+    if (b === "Livre") return -1;
+
+    const numA = parseInt(a.replace("Sub", ""));
+    const numB = parseInt(b.replace("Sub", ""));
+
+    return numA - numB;
+  });
+}
 
 export default function TurmasManager({
   open,
@@ -139,8 +168,6 @@ export default function TurmasManager({
     .toLowerCase()
     .trim();
 
-  const estouLogadoComoProfessor = tipoUsuarioLogado === "professor";
-
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [deletandoTurma, setDeletandoTurma] = useState(false);
@@ -164,16 +191,18 @@ export default function TurmasManager({
   const [turmaAlunos, setTurmaAlunos] = useState<TurmaAluno[]>([]);
   const [naoVinculadosUsuarioIds, setNaoVinculadosUsuarioIds] = useState<string[]>([]);
   const [novoNome, setNovoNome] = useState("");
-  const [novoCategoria, setNovoCategoria] = useState<
-    "" | "Sub-9" | "Sub-11" | "Sub-13" | "Sub-15" | "Sub-17" | "Sub-20" | "Livre"
-  >("");
+  const [novoCategorias, setNovoCategorias] = useState<string[]>([]);
+  const [editandoInfoTurma, setEditandoInfoTurma] = useState(false);
+  const [editNomeTurma, setEditNomeTurma] = useState("");
+  const [editDescricaoTurma, setEditDescricaoTurma] = useState("");
+  const [editCategoriasTurma, setEditCategoriasTurma] = useState<string[]>([]);
   const [novoProfessores, setNovoProfessores] = useState<string[]>(
     professorId ? [professorId] : []
   );
   const [freqLoading, setFreqLoading] = useState(false);
   const [freqData, setFreqData] = useState<any>(null);
   const [freqYear, setFreqYear] = useState(new Date().getFullYear());
-
+  
   const turmaSelecionada = useMemo(
     () => turmas.find((t) => String(t.id) === String(selecionada)),
     [turmas, selecionada]
@@ -422,7 +451,7 @@ const podeSairDaTurma = useMemo(() => {
       return {
         id: String(t.id),
         nome: String(t.nome ?? "Turma"),
-        categoria: t.categoria ?? null,
+        categoria: normalizarCategoriasTurma(t.categoria),
         professorIds,
         professorNomes,
         professorNome: t.professorNome ?? (professorNomes.length ? professorNomes.join(", ") : null),
@@ -472,12 +501,18 @@ const podeSairDaTurma = useMemo(() => {
 
   const abrirTurma = async (id: string, turmaFromList?: TurmaMin) => {
     setSelecionada(id);
-
     setConfirmLeaveOpen(false);
     setLeaveAware(false);
 
     // ✅ usa a turma recebida (garante professorIds preenchido)
     const turma = turmaFromList ?? turmas.find((t) => t.id === id);
+
+    setEditNomeTurma(turma?.nome || "");
+    setEditCategoriasTurma(
+      ordenarCategorias(normalizarCategoriasTurma(turma?.categoria))
+    );
+    setEditDescricaoTurma((turma as any)?.descricao || "");
+    setEditandoInfoTurma(false);
 
     const idsProf = (turma?.professorIds || []).map(String).filter(Boolean);
     setProfSelecionados(idsProf);
@@ -537,6 +572,43 @@ const podeSairDaTurma = useMemo(() => {
     setNaoVinculadosUsuarioIds(naoVinc);
     setAlunosSelecionados(usuarioIds);
     setDirtyAlunos(false);
+  };
+
+  const salvarInfoTurma = async () => {
+    if (!selecionada) return;
+    if (!editNomeTurma.trim()) return alert("Informe o nome da turma.");
+
+    try {
+      setSalvando(true);
+
+      await axios.put(
+        `${API.BASE_URL}/api/turmas/${selecionada}`,
+        {
+          nome: editNomeTurma.trim(),
+          descricao: editDescricaoTurma.trim() || null,
+          categoria: ordenarCategorias(editCategoriasTurma),
+        },
+        { headers }
+      );
+
+      alert("Dados da turma atualizados!");
+
+      if (owner) {
+        const lista = await carregarTurmas(owner, filtroProf);
+        const turmaAtualizada = lista.find((t) => t.id === selecionada);
+        if (turmaAtualizada) await abrirTurma(selecionada, turmaAtualizada);
+      } else {
+        const lista = await carregarTurmas(undefined, filtroProf);
+        const turmaAtualizada = lista.find((t) => t.id === selecionada);
+        if (turmaAtualizada) await abrirTurma(selecionada, turmaAtualizada);
+      }
+
+      setEditandoInfoTurma(false);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Falha ao atualizar turma.");
+    } finally {
+      setSalvando(false);
+    }
   };
 
   const salvarMembros = async () => {
@@ -648,7 +720,7 @@ const podeSairDaTurma = useMemo(() => {
         ownerTipo: owner.tipo,
         ownerId: owner.id,
         nome: novoNome.trim(),
-        categoria: novoCategoria || undefined,
+        categoria: novoCategorias || undefined,
         professorIds: novoProfessores,
       };
 
@@ -664,7 +736,7 @@ const podeSairDaTurma = useMemo(() => {
       }
 
       setNovoNome("");
-      setNovoCategoria("");
+      setNovoCategorias([]);
 
       await carregarTurmas(owner);
 
@@ -839,7 +911,10 @@ const podeSairDaTurma = useMemo(() => {
                         <div>
                           <div className="text-sm font-medium text-zinc-900">{t.nome}</div>
                           <div className="text-xs text-zinc-500">
-                            {(t.categoria || "—")} · {t.professorNome || "Sem professor"}
+                            {normalizarCategoriasTurma(t.categoria).length
+                              ? ordenarCategorias(normalizarCategoriasTurma(t.categoria)).join(", ")
+                              : "—"}{" "}
+                            · {t.professorNome || "Sem professor"}
                           </div>
                         </div>
                         <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
@@ -862,18 +937,34 @@ const podeSairDaTurma = useMemo(() => {
                     placeholder="Nome da turma"
                     className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                   />
-                  <select
-                    value={novoCategoria}
-                    onChange={(e) => setNovoCategoria(e.target.value as any)}
-                    className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                  >
-                    <option value="">Categoria (opcional)</option>
-                    {["Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-17", "Sub-20", "Livre"].map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mb-2 rounded-lg border border-zinc-200 p-2">
+                    <div className="mb-2 text-xs font-medium text-zinc-700">
+                      Categorias (opcional)
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {CATEGORIAS_TURMA.map((c) => {
+                        const checked = novoCategorias.includes(c);
+
+                        return (
+                          <label key={c} className="flex items-center gap-2 text-sm text-zinc-700">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setNovoCategorias((prev) =>
+                                  prev.includes(c)
+                                    ? prev.filter((x) => x !== c)
+                                    : [...prev, c]
+                                )
+                              }
+                            />
+                            {c}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   <select
                     multiple
@@ -988,6 +1079,17 @@ const podeSairDaTurma = useMemo(() => {
                             </button>
                           ) : null}
 
+                          {souDonoDaTurma ? (
+                            <button
+                              type="button"
+                              onClick={() => setEditandoInfoTurma((v) => !v)}
+                              disabled={salvando || !selecionada}
+                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                            >
+                              Editar turma
+                            </button>
+                          ) : null}
+
                           {podeExcluirTurma ? (
                             <button
                               type="button"
@@ -1016,6 +1118,84 @@ const podeSairDaTurma = useMemo(() => {
                     <div className="p-3">
                       {abaDireita === "membros" ? (
                         <div className="pr-1">
+                          {editandoInfoTurma ? (
+                            <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3">
+                              <div className="mb-3 text-sm font-semibold text-zinc-900">
+                                Editar dados da turma
+                              </div>
+
+                              <label className="block text-xs font-medium text-zinc-700 mb-1">
+                                Nome da turma
+                              </label>
+                              <input
+                                value={editNomeTurma}
+                                onChange={(e) => setEditNomeTurma(e.target.value)}
+                                className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                                placeholder="Nome da turma"
+                              />
+
+                              <label className="block text-xs font-medium text-zinc-700 mb-1">
+                                Descrição da turma
+                              </label>
+                              <textarea
+                                value={editDescricaoTurma}
+                                onChange={(e) => setEditDescricaoTurma(e.target.value)}
+                                className="mb-2 min-h-[80px] w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                                placeholder="Descrição da turma"
+                              />
+
+                              <label className="block text-xs font-medium text-zinc-700 mb-1">
+                                Categoria
+                              </label>
+                              <div className="mb-3 rounded-lg border border-zinc-200 p-2">
+                                <div className="mb-2 text-xs font-medium text-zinc-700">
+                                  Categorias
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  {CATEGORIAS_TURMA.map((c) => {
+                                    const checked = editCategoriasTurma.includes(c);
+
+                                    return (
+                                      <label key={c} className="flex items-center gap-2 text-sm text-zinc-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() =>
+                                            setEditCategoriasTurma((prev) =>
+                                              prev.includes(c)
+                                                ? prev.filter((x) => x !== c)
+                                                : [...prev, c]
+                                            )
+                                          }
+                                        />
+                                        {c}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditandoInfoTurma(false)}
+                                  className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                                >
+                                  Cancelar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={salvarInfoTurma}
+                                  disabled={salvando}
+                                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-70"
+                                >
+                                  {salvando ? "Salvando..." : "Salvar dados"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
                           <div className="rounded-xl border border-zinc-200 bg-white">
                             <div className="border-b border-zinc-100 p-3 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                               <User className="h-4 w-4" /> Professores da turma

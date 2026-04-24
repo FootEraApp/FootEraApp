@@ -11,6 +11,18 @@ function uniqById<T extends { id: string }>(arr: T[]) {
   return Array.from(map.values());
 }
 
+function parseCategoriasTurma(input: any): string[] {
+  if (Array.isArray(input)) {
+    return input.map(String).map((x) => x.trim()).filter(Boolean);
+  }
+
+  if (typeof input === "string" && input.trim()) {
+    return [input.trim()];
+  }
+
+  return [];
+}
+
 export async function getAlunosTurma(req: Request, res: Response) {
   const { id } = req.params;
 
@@ -392,6 +404,7 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
         id: true,
         nome: true,
         categoria: true,
+        descricao: true,
         professores: {
           select: {
             professor: {
@@ -423,6 +436,7 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
       professorNomes: profs.map((p) => p.nome),
       professorNome: profs.map((p) => p.nome).join(", ") || null,
       alunosCount: t._count.membros,
+      descricao: t.descricao ?? null,
     };
     });
 
@@ -490,6 +504,7 @@ export async function listarTurmas(req: Request, res: Response) {
         id: t.id,
         nome: t.nome,
         categoria: t.categoria,
+        descricao: (t as any).descricao ?? null,
         professorIds: profs.map((p) => p.id),
         professorNomes: profs.map((p) => p.nome),
         professorNome: profs.map((p) => p.nome).join(", ") || null,
@@ -557,6 +572,7 @@ export async function listarTurmasComoProfessor(
         id: t.id,
         nome: t.nome,
         categoria: t.categoria ?? null,
+        descricao: (t as any).descricao ?? null,
         professorIds: profs.map((p) => p.id),
         professorNomes: profs.map((p) => p.nome),
         professorNome: profs.map((p) => p.nome).join(", ") || null,
@@ -581,6 +597,7 @@ export async function criarTurma(req: Request, res: Response) {
       ownerTipo,
       ownerId,
       nome,
+      descricao,
       categoria,
       professorId,
       atletaIds,
@@ -595,7 +612,8 @@ export async function criarTurma(req: Request, res: Response) {
 
     const data: any = { nome: String(nome).trim() };
 
-    if (categoria)   data.categoria = String(categoria);
+    data.categoria = parseCategoriasTurma(categoria);
+    if (descricao !== undefined) data.descricao = String(descricao || "").trim() || null;
     if (ownerTipo === "Clube") {
       data.clubeId = String(ownerId);
     }
@@ -666,14 +684,14 @@ export async function updateTurma(req: Request, res: Response) {
     const { id } = req.params;
     const { nome, categoria, descricao, ativo } = req.body as Partial<{
       nome: string;
-      categoria: string;
+      categoria: string | string[];
       descricao: string;
       ativo: boolean;
     }>;
 
     const data: any = {};
     if (nome !== undefined) data.nome = nome;
-    if (categoria !== undefined) data.categoria = categoria;
+    if (categoria !== undefined) data.categoria = parseCategoriasTurma(categoria);
     if (descricao !== undefined) data.descricao = descricao;
     if (ativo !== undefined) data.ativo = Boolean(ativo);
 

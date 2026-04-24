@@ -3,7 +3,7 @@ import { Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
-const CATEGORIA_ORDER: Categoria[] = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+const CATEGORIA_ORDER: Categoria[] = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
 
 function pickMainCategoria(categorias: Categoria[] | null | undefined): Categoria | null {
   if (!categorias || categorias.length === 0) return null;

@@ -32,6 +32,8 @@ export type TreinoCreatePayload = {
   exercicios: (ExercicioDoBanco | ExercicioTemporario)[];
   pontuacao?: number;
   professoresIds?: string[];
+  sessaoTreino?: string | null;
+  sessaoTreinoId?: string | null;
   imagemUrl?: string | null;
 };
 

@@ -3,12 +3,14 @@ import { PrismaClient, Nivel, Categoria } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const TODAS_CATEGORIAS_SEED: Categoria[] = [
+  Categoria.Sub3,
+  Categoria.Sub5,
+  Categoria.Sub7,
   Categoria.Sub9,
   Categoria.Sub11,
   Categoria.Sub13,
   Categoria.Sub15,
-  Categoria.Sub17,
-  Categoria.Sub20,
+  Categoria.Sub16,
   Categoria.Livre,
 ];
 
@@ -19,7 +21,7 @@ async function main() {
         nome: 'Condução Simples (Parte Externa do Pé)',
         descricao: 'Exercício de condução simples utilizando a parte externa do pé. Trabalha o controle de bola em movimento e a coordenação motora.',
         nivel: Nivel.Base,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-externa.mp4'
       },
       {
@@ -27,7 +29,7 @@ async function main() {
         nome: 'Condução Zig-Zag (Parte Externa do Pé)',
         descricao: 'Exercício de condução em zig-zag utilizando a parte externa do pé. Desenvolve agilidade, domínio de bola e coordenação em mudanças de direção.',
         nivel: Nivel.Base,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-zigzag-externa.mp4'
       },
       {
@@ -35,7 +37,7 @@ async function main() {
         nome: 'Condução Zig-Zag (Perna Alternada - Avançado)',
         descricao: 'Condução em zig-zag alternando pernas com foco no controle da bola. Desenvolve técnica, coordenação e domínio em ritmo acelerado.',
         nivel: Nivel.Avancado,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-zigzag-perna-alternada.mp4'
       },
       {
@@ -43,7 +45,7 @@ async function main() {
         nome: 'Condução Zig-Zag Alternado (Performance)',
         descricao: 'Condução em zig-zag alternando os pés em alta intensidade. Trabalha coordenação, velocidade e domínio avançado da bola.',
         nivel: Nivel.Performance,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-zigzag-alternado.mp4'
       },
       {
@@ -51,7 +53,7 @@ async function main() {
         nome: 'Drible - Pedalada (Base)',
         descricao: 'Drible de pedalada focado em enganar o marcador. Exercício de base para desenvolver coordenação e criatividade no ataque.',
         nivel: Nivel.Base,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/drible-pedalar-base.mp4'
       },
       {
@@ -59,7 +61,7 @@ async function main() {
         nome: 'Drible - Pedalada (Avançado)',
         descricao: 'Drible de pedalada em ritmo acelerado para superar adversários. Exercício avançado que melhora coordenação, velocidade e improviso ofensivo.',
         nivel: Nivel.Avancado,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/drible-pedalar-avancado.mp4'
       },
       {
@@ -67,7 +69,7 @@ async function main() {
         nome: 'Drible - Pedalada (Performance)',
         descricao: 'Drible de pedalada em alta intensidade para situações de jogo real. Exercício de performance que aprimora velocidade, improviso e explosão ofensiva.',
         nivel: Nivel.Performance,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/drible-pedalar-performance.mp4'
       },
       {
@@ -75,7 +77,7 @@ async function main() {
         nome: 'Passe Simples (Avançado)',
         descricao: 'Passe simples em alta precisão e velocidade. Exercício avançado que desenvolve tomada de decisão rápida e controle de bola sob pressão.',
         nivel: Nivel.Avancado,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/passe-simples-avancado.mp4'
       },
       {
@@ -83,7 +85,7 @@ async function main() {
         nome: 'Passe Parte Interna (Base)',
         descricao: 'Passe utilizando a parte interna do pé em curta distância. Exercício de base que aprimora fundamentos de precisão e controle de bola.',
         nivel: Nivel.Base,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/passe-parte-interna.mp4'
       },
       {
@@ -91,7 +93,7 @@ async function main() {
         nome: 'Passe no Alto (Base)',
         descricao: 'Passe no alto utilizando precisão em curta e média distância. Exercício de base que desenvolve controle de força e domínio do passe aéreo.',
         nivel: Nivel.Base,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/passe-no-alto.mp4'
       },
       {
@@ -99,7 +101,7 @@ async function main() {
         nome: 'Passe com Deslocamento - Parte Interna (Avançado)',
         descricao: 'Passe com deslocamento utilizando a parte interna do pé. Exercício avançado que aprimora movimentação, precisão e tomada de decisão em ritmo de jogo.',
         nivel: Nivel.Avancado,
-        categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+        categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
         videoDemonstrativoUrl: '/assets/videos/exercicios/passe-deslocamento-interna-avancado.mp4'
       },
       {
@@ -107,7 +109,7 @@ async function main() {
       nome: 'Passe no Alto - Peito do Pé (Base)',
       descricao: 'Passe no alto utilizando o peito do pé para alcançar maior precisão e força. Exercício de base que desenvolve técnica e controle do passe aéreo.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/passe-no-alto-peito.mp4'
     },
     {
@@ -115,7 +117,7 @@ async function main() {
       nome: 'Passe Alto - Peito do Pé com Movimentação (Avançado)',
       descricao: 'Passe alto com o peito do pé associado à movimentação. Exercício avançado que aprimora força, precisão e dinâmica em situações reais de jogo.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/passe-alto-peito-mov.mp4'
     },
     {
@@ -123,7 +125,7 @@ async function main() {
       nome: 'Domínio de Coxa (Base)',
       descricao: 'Domínio de bola com a coxa para controlar passes aéreos. Exercício de base que desenvolve coordenação e fundamentos de recepção.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-coxa-base.mp4'
     },
     {
@@ -131,7 +133,7 @@ async function main() {
       nome: 'Domínio de Coxa (Avançado)',
       descricao: 'Domínio de bola com a coxa em intensidade avançada. Exercício que aprimora tempo de bola, coordenação e controle em situações dinâmicas.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-coxa-avancado.mp4'
     },
     {
@@ -139,7 +141,7 @@ async function main() {
       nome: 'Domínio de Coxa e Devolução (Performance)',
       descricao: 'Domínio de bola com a coxa seguido de devolução rápida. Exercício de performance que treina controle, reação e dinâmica em ritmo de jogo.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-coxa-devolucao.mp4'
     },
     {
@@ -147,7 +149,7 @@ async function main() {
       nome: 'Domínio de Peito (Base)',
       descricao: 'Domínio de bola com o peito para amortecer passes aéreos. Exercício de base que fortalece fundamentos de recepção e controle.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-peito-base.mp4'
     },
     {
@@ -155,7 +157,7 @@ async function main() {
       nome: 'Domínio de Peito (Avançado)',
       descricao: 'Domínio de bola com o peito em ritmo avançado. Exercício que melhora controle aéreo, coordenação e preparo para finalização ou passe rápido.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-peito-avancado.mp4'
     },
     {
@@ -163,7 +165,7 @@ async function main() {
       nome: 'Domínio de Peito (Performance)',
       descricao: 'Domínio de bola com o peito em situações de alta intensidade. Exercício de performance que desenvolve força, tempo de bola e reação rápida para sequência de jogadas.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-peito-performance.mp4'
     },
     {
@@ -171,7 +173,7 @@ async function main() {
       nome: 'Cabeceio (Base)',
       descricao: 'Exercício de cabeceio básico para treinar tempo de bola e direção. Trabalha fundamentos iniciais de jogo aéreo e coordenação.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/cabeceio-base.mp4'
     },
     {
@@ -179,7 +181,7 @@ async function main() {
       nome: 'Cabeceio (Avançado)',
       descricao: 'Exercício de cabeceio avançado com maior intensidade e precisão. Trabalha tempo de impulsão, coordenação e direcionamento ofensivo ou defensivo.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/cabeceio-avancado.mp4'
     },
     {
@@ -187,7 +189,7 @@ async function main() {
       nome: 'Cabeceio Alto (Performance)',
       descricao: 'Exercício de cabeceio alto em situações de jogo real. Trabalha impulsão, força e precisão no domínio do jogo aéreo em alta intensidade.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/cabeceio-alto.mp4'
     },
     {
@@ -195,7 +197,7 @@ async function main() {
       nome: 'Coordenação Motora (Base)',
       descricao: 'Exercício de coordenação motora básica para aprimorar agilidade e controle corporal. Indicado para iniciação esportiva e desenvolvimento dos fundamentos.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-motora-base.mp4'
     },
     {
@@ -203,7 +205,7 @@ async function main() {
       nome: 'Coordenação Motora (Avançado)',
       descricao: 'Exercício de coordenação motora avançada com maior complexidade de movimentos. Desenvolve agilidade, controle corporal e rapidez de reação.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-motora-avancado.mp4'
     },
      {
@@ -211,7 +213,7 @@ async function main() {
       nome: 'Coordenação Motora Estática (Performance)',
       descricao: 'Exercício de coordenação motora estática em alta intensidade. Trabalha equilíbrio, concentração e controle corporal em nível de performance.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-motora-estatica.mp4'
     },
     {
@@ -219,7 +221,7 @@ async function main() {
       nome: 'Coordenação em Movimento (Base)',
       descricao: 'Exercício de coordenação motora em movimento, focado em agilidade e ritmo. Indicado para a base, melhora controle corporal e fundamentos iniciais.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-movimento-base.mp4'
     },
     {
@@ -227,7 +229,7 @@ async function main() {
       nome: 'Coordenação em Movimento (Avançado)',
       descricao: 'Exercício de coordenação motora em movimento avançado. Trabalha velocidade, agilidade e controle corporal em situações mais complexas.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-movimento-avancado.mp4'
     },
     {
@@ -235,7 +237,7 @@ async function main() {
       nome: 'Coordenação em Movimento (Performance)',
       descricao: 'Exercício de coordenação motora em movimento de alta intensidade. Desenvolve velocidade, resistência e precisão em situações de jogo real.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-movimento-performance.mp4'
     },
     {
@@ -243,7 +245,7 @@ async function main() {
       nome: 'Coordenação Lateral (Base)',
       descricao: 'Exercício de coordenação lateral básica para desenvolver agilidade e equilíbrio. Indicado para iniciação esportiva e fundamentos de movimento.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-lateral.mp4'
     },
     {
@@ -251,7 +253,7 @@ async function main() {
       nome: 'Coordenação Lateral com Bola (Avançado)',
       descricao: 'Exercício de coordenação lateral avançada com bola. Desenvolve agilidade, controle corporal e domínio técnico em movimentos rápidos.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-lateral-bola.mp4'
     },
     {
@@ -259,7 +261,7 @@ async function main() {
       nome: 'Coordenação na Escada 1',
       descricao: 'Sequência simples na escada para ritmo de pés e coordenação.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-1.mp4',
     },
     {
@@ -267,7 +269,7 @@ async function main() {
       nome: 'Coordenação na Escada 2',
       descricao: 'Variação in-in-out com entradas e saídas rápidas para controle lateral.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-2.mp4',
     },
     {
@@ -275,7 +277,7 @@ async function main() {
       nome: 'Coordenação na Escada 3',
       descricao: 'Variação diagonal/crossover com trocas rápidas de apoio.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-3.mp4',
     },
     {
@@ -283,7 +285,7 @@ async function main() {
       nome: 'Coordenação na Escada 4',
       descricao: 'Sequência hopscotch (um-dois-um) com saltos rápidos e estabilidade.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-4.mp4',
     },
     {
@@ -291,7 +293,7 @@ async function main() {
       nome: 'Coordenação na Escada 5',
       descricao: 'Padrão Ickey shuffle lateral contínuo para ritmo e controle de tronco.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-5.mp4',
     },
     {
@@ -299,7 +301,7 @@ async function main() {
       nome: 'Coordenação na Escada 6',
       descricao: 'Padrão lateral com pivô de 180° ao final, focando reatividade.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-6.mp4',
     },
     {
@@ -307,7 +309,7 @@ async function main() {
       nome: 'Coordenação na Escada 7',
       descricao: 'Sequência unipodal em alta cadência para equilíbrio e força reativa.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-7.mp4',
     },
     {
@@ -315,7 +317,7 @@ async function main() {
       nome: 'Coordenação na Escada 8',
       descricao: 'Padrão carioquinha/grapevine com cruzados e mobilidade de quadril.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-8.mp4',
     },
     {
@@ -323,7 +325,7 @@ async function main() {
       nome: 'Coordenação na Escada 9',
       descricao: 'Progressão frente-trás (avança dois, recua um) para mudança de direção.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-9.mp4',
     },
     {
@@ -331,7 +333,7 @@ async function main() {
       nome: 'Coordenação na Escada 10',
       descricao: 'Ali shuffle alternando entradas e saídas no mesmo quadrado.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-10.mp4',
     },
     {
@@ -339,7 +341,7 @@ async function main() {
       nome: 'Coordenação na Escada 11',
       descricao: 'Padrão 2-in/2-out à frente, focando rapidez e core estável.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-11.mp4',
     },
     {
@@ -347,7 +349,7 @@ async function main() {
       nome: 'Movimento Zig-Zag',
       descricao: 'Cortes curtos alternando lados em sequência para agilidade.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/movimento-zig-zag.mp4',
     },
     {
@@ -355,7 +357,7 @@ async function main() {
       nome: 'Movimento Zig-Zag para Trás',
       descricao: 'Backpedal em zigue-zague com cortes e desaceleração controlada.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/movimento-zig-zag-para-tras.mp4',
     },
     {
@@ -363,7 +365,7 @@ async function main() {
       nome: 'Salto Unipodal',
       descricao: 'Saltos em um pé com aterrissagem controlada para potência elástica.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal.mp4',
     },
     {
@@ -371,7 +373,7 @@ async function main() {
       nome: 'Salto Unipodal + Coordenação',
       descricao: 'Saltos em um pé integrados a padrão de pés/escada.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: "/assets/videos/exercicios/salto-unipodal-coordenacao.mp4",
     },
     {
@@ -379,7 +381,7 @@ async function main() {
       nome: 'Salto Unipodal + Pliometria',
       descricao: 'Saltos unipodais com estímulos pliométricos (altura/distância).',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal-poliometria.mp4',
     },
     {
@@ -387,7 +389,7 @@ async function main() {
       nome: 'Salto Pliometria + Coordenação',
       descricao: 'Saltos reativos combinados com padrão de pés para ritmo e potência.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: "/assets/videos/exercicios/salto-poliometria-coordenacao.mp4",
     },
     {
@@ -395,7 +397,7 @@ async function main() {
       nome: 'Agachamento',
       descricao: 'Flexão de quadris e joelhos mantendo calcanhares no chão.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento.mp4',
     },
     {
@@ -403,7 +405,7 @@ async function main() {
       nome: 'Agachamento em Isometria',
       descricao: 'Manter o agachamento a ~90° por tempo para força e estabilidade.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-em-isometria.mp4',
     },
     {
@@ -411,7 +413,7 @@ async function main() {
       nome: 'Agachamento Sumo',
       descricao: 'Base afastada, pés abertos e joelhos alinhados para adutores e glúteos.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-sumo.mp4',
     },
     {
@@ -419,7 +421,7 @@ async function main() {
       nome: 'Agachamento Lateral Alternado',
       descricao: 'Desloca o peso lateralmente mantendo quadril para trás.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-lateral-alternado.mp4',
     },
     {
@@ -427,7 +429,7 @@ async function main() {
       nome: 'Agachamento com Deslocamento Lateral',
       descricao: 'Agache enquanto se desloca de lado com tronco erguido.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-com-deslocamento-lateral.mp4',
     },
     {
@@ -435,7 +437,7 @@ async function main() {
       nome: 'Afundo',
       descricao: 'Passo à frente/atrás com tronco erguido e joelho alinhado.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/afundo.mp4',
     },
     {
@@ -443,7 +445,7 @@ async function main() {
       nome: 'Afundo Isométrico',
       descricao: 'Sustentar a posição de afundo com quadril estável.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/afundo-isometrico.mp4',
     },
     {
@@ -451,7 +453,7 @@ async function main() {
       nome: 'Afundo Explosivo',
       descricao: 'Afundo com salto trocando as pernas no ar, aterrissando estável.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/afundo-explosivo.mp4',
     },
     {
@@ -459,7 +461,7 @@ async function main() {
       nome: 'Avanço',
       descricao: 'Walking lunge alternando passos com controle e equilíbrio.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/avanco.mp4',
     },
     {
@@ -467,7 +469,7 @@ async function main() {
       nome: 'Salto Explosivo',
       descricao: 'Saltos verticais a partir do agachamento com aterrissagem controlada.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/salto-explosivo.mp4',
     },
     {
@@ -475,7 +477,7 @@ async function main() {
       nome: 'Suicídio (Shuttle Run)',
       descricao: 'Sprints de ida e volta tocando marcas progressivas.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/suicidio.mp4',
     },
     {
@@ -483,7 +485,7 @@ async function main() {
       nome: 'Mudança de Direção 1',
       descricao: 'Acelera, freia e corta em ângulos curtos com apoio firme.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/mudanca-de-direcao-1.mp4',
     },
     {
@@ -491,7 +493,7 @@ async function main() {
       nome: 'Mudança de Direção 2',
       descricao: 'Cortes de 90°/180° com desaceleração e reaceleração rápidas.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/mudanca-de-direcao-2.mp4',
     },
     {
@@ -499,7 +501,7 @@ async function main() {
       nome: 'Deslocamento Lateral',
       descricao: 'Shuffles laterais com base baixa e apoio na ponta dos pés.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral.mp4',
     },
     {
@@ -507,7 +509,7 @@ async function main() {
       nome: 'Deslocamento Lateral (Voltando)',
       descricao: 'Shuffles de ida e volta com paradas rápidas.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral-voltando.mp4',
     },
     {
@@ -515,7 +517,7 @@ async function main() {
       nome: 'Frente - Costas',
       descricao: 'Alterna corrida à frente e recuo com transições rápidas.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas.mp4',
     },
     {
@@ -523,7 +525,7 @@ async function main() {
       nome: 'Elevação Pélvica',
       descricao: 'Eleve o quadril alinhando ombros-quadris-joelhos contraindo glúteos.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/elevacao-pelvica.mp4',
     },
     {
@@ -531,7 +533,7 @@ async function main() {
       nome: 'Elevação Pélvica Unilateral',
       descricao: 'Eleve o quadril apoiando apenas um pé, mantendo alinhamento.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/elevacao-pelvica-unilateral.mp4',
     },
     {
@@ -539,7 +541,7 @@ async function main() {
       nome: 'Abdominal',
       descricao: 'Flexione o tronco tirando as omoplatas do chão com controle.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/abdominal.mp4',
     },
     {
@@ -547,7 +549,7 @@ async function main() {
       nome: 'Abdominal Remador',
       descricao: 'Estenda e flexione tronco e joelhos em sincronia (remo no solo).',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/adominal-remador.mp4',
     },
     {
@@ -555,7 +557,7 @@ async function main() {
       nome: 'Prancha Isométrica',
       descricao: 'Apoio em antebraços e ponta dos pés com corpo alinhado.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-isometrica.mp4',
     },
     {
@@ -563,7 +565,7 @@ async function main() {
       nome: 'Prancha Lateral Isométrica',
       descricao: 'Apoio lateral elevando o quadril e mantendo alinhamento.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-lateral-isometrica.mp4',
     },
     {
@@ -571,7 +573,7 @@ async function main() {
       nome: 'Prancha Alternada',
       descricao: 'Transições antebraço-mão ou toques no ombro com quadril estável.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-alternada.mp4',
     },
       {
@@ -579,7 +581,7 @@ async function main() {
       nome: 'Coordenação + Salto + Mudança de Direção',
       descricao: 'Sequência que combina escada de agilidade, salto sobre obstáculo e corte rápido para trocar de direção, finalizando com aceleração curta. Trabalha coordenação motora, potência de salto e reatividade nas transições.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-salto-mudanca-direcao.mp4'
     },
     {
@@ -587,7 +589,7 @@ async function main() {
       nome: 'Passe + Movimentação em V',
       descricao: 'Troca de passes com “toca e sai” formando um V, recebendo de frente com primeiro toque orientado para acelerar a próxima ação. Desenvolve criação de ângulo, tempo de desmarque e controle/passe rápido sob pressão.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/passe-movimentacao-em-V.mp4'
     },
     {
@@ -595,7 +597,7 @@ async function main() {
       nome: 'Coordenação + Domínio Orientado 001',
       descricao: 'Sequência com escada/cones para ritmo de pés e troca de apoios, seguida de recepção com primeiro toque orientado para o espaço livre e passe/saída. Desenvolve coordenação fina, orientação corporal e decisão rápida ao receber a bola.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-dominio-orientado-001.mp4'
     },
     {
@@ -603,7 +605,7 @@ async function main() {
       nome: 'Coordenação + Passe Alto 001',
       descricao: 'Combina ritmo de pés em escada/cones com recepção de bola aérea (amortecer no peito ou cabecear suave) e devolução em passe alto dirigido. Desenvolve coordenação, leitura de trajetória e timing de apoio, além do gesto técnico do passe alto com precisão.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-passe-alto-001.mp4'
     },
     {
@@ -611,7 +613,7 @@ async function main() {
       nome: 'Salto Unilateral + Passe Alto + Cabeceio',
       descricao: 'Sequência com salto em um apoio para estabilizar e atacar a bola alta, recebendo passe levantado e finalizando de cabeça ao alvo. Trabalha potência unilateral, equilíbrio, timing de impulsão/cabeceio e aterrissagem segura.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unilateral-passe-alto-cabeceio.mp4'
     },
     {
@@ -619,7 +621,7 @@ async function main() {
       nome: 'Passe Curto + Longo + Domínio Orientado',
       descricao: 'Alterna passe curto para apoio, virada de corpo e passe longo diagonal; recebe e orienta o primeiro toque para o espaço antes de devolver. Melhora leitura de jogo, perfil corporal, qualidade do primeiro toque e variação de distância do passe.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/passe-curto-longo-dominio-orientado.mp4'
     },
     {
@@ -627,7 +629,7 @@ async function main() {
       nome: 'Passe + Domínio Orientado no Quadrante',
       descricao: 'Recepção dentro do quadrante, primeiro toque para sair da zona pressionada e passe de progressão alternando lados. Desenvolve leitura espacial, perfil corporal e precisão/tempo de passe ao mudar rapidamente de corredor.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio-orientado-no-quadrante.mp4'
     },
     {
@@ -635,7 +637,7 @@ async function main() {
       nome: 'Coordenativo Podal',
       descricao: 'Sequência de ritmo de pés com alternância direita–esquerda, toques curtos e variações (dentro/fora, frente/trás) em escada ou cones mantendo cadência alta. Trabalha coordenação neuromuscular, agilidade de tornozelo e precisão de apoios para acelerar mudanças de direção.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-podal.mp4'
     },
     {
@@ -643,7 +645,7 @@ async function main() {
       nome: 'Coordenação + Passe Alto',
       descricao: 'Ritmo de pés em escada/cones seguido de recepção/controle da bola alta e devolução em passe elevado ao alvo. Trabalha coordenação de apoios, leitura de trajetória e gesto técnico do passe alto com precisão e timing.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-passe-alto.mp4'
     },
     {
@@ -651,7 +653,7 @@ async function main() {
       nome: 'Frente–Costas em V + Passe 001',
       descricao: 'Deslocamentos frente–costas formando um V, com variação de ritmo e giro de quadril para receber e tocar de primeira no apoio. Desenvolve coordenação de apoios, aceleração após a mudança de direção e qualidade do passe em movimento.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-001.mp4'
     },
     {
@@ -659,7 +661,7 @@ async function main() {
       nome: 'Frente–Costas em V + Passe Alto + Cabeceio',
       descricao: 'Deslocamentos frente–costas em V para criar tempo/ângulo, seguido de passe levantado e finalização de cabeça ao alvo. Trabalha coordenação de apoios, timing de impulsão/cabeceio e estabilidade na aterrissagem.',
       nivel: Nivel.Performance,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-alto-cabeceio.mp4'
     },
     {
@@ -667,7 +669,7 @@ async function main() {
       nome: 'Frente–Costas em V + Passe + Domínio Orientado',
       descricao: 'Alterna deslocamentos frente–costas em V para criar ângulo; ao receber, orienta o primeiro toque para sair da pressão e devolve com precisão. Desenvolve coordenação de apoios, perfil corporal, leitura espacial e progressão rápida sob pressão.',
       nivel: Nivel.Avancado,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-dominio-orientado.mp4'
     },
     {
@@ -675,7 +677,7 @@ async function main() {
       nome: 'Passe + Domínio',
       descricao: 'Troca de passes curtos com recepção limpa e primeiro toque orientado para preparar a próxima ação. Desenvolve controle de bola, perfil corporal e precisão/tempo do passe sob ritmo.',
       nivel: Nivel.Base,
-      categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+      categorias: [Categoria.Sub3, Categoria.Sub5, Categoria.Sub7, Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub16, Categoria.Livre],
       videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio.mp4'
     },
     {
@@ -2455,8 +2457,21 @@ async function main() {
 
     await prisma.exercicio.upsert({
       where: { codigo: ex.codigo },
-      update: {},
-      create: ex
+      update: {
+        nome: ex.nome,
+        nivel: ex.nivel,
+        categorias: ex.categorias,
+        videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? null,
+        objetivo: ex.descricao ?? null,
+      },
+      create: {
+        codigo: ex.codigo,
+        nome: ex.nome,
+        nivel: ex.nivel,
+        categorias: ex.categorias,
+        videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? null,
+        objetivo: ex.descricao ?? null,
+      }
     });
   }
 

@@ -72,7 +72,7 @@ export async function updateTurma(id: string, payload: Partial<{ nome: string; c
 
 export async function setProfessores(id: string, professorIds: string[]) {
   const { data } = await axios.put(
-    `${API.BASE_URL}/api/turmas/${id}/professores`,
+    `${API.BASE_URL}/api/turmas/${id}/vincular-professor`,
     { professorIds },
     { headers: headers() }
   );
