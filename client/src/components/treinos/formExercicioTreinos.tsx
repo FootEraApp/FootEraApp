@@ -26,12 +26,14 @@ const OPCOES_NIVEL = [
 ];
 
 const OPCOES_FAIXA = [
+  { value: "Sub3", label: "Sub-3" },
+  { value: "Sub5", label: "Sub-5" },
+  { value: "Sub7", label: "Sub-7" },
   { value: "Sub9", label: "Sub-9" },
   { value: "Sub11", label: "Sub-11" },
   { value: "Sub13", label: "Sub-13" },
   { value: "Sub15", label: "Sub-15" },
-  { value: "Sub17", label: "Sub-17" },
-  { value: "Sub20", label: "Sub-20" },
+  { value: "Sub16", label: "Sub-16" },
   { value: "Livre", label: "Livre" },
 ];
 

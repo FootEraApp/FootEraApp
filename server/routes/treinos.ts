@@ -48,6 +48,7 @@ import {
   iniciarTreinoViaMetodologia,
   salvarVideosExecucaoTreino,
   uploadExecucaoVideoTreino,
+  listarSessoesTreino,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -57,6 +58,7 @@ import { uploadToS3 } from "server/middlewares/s3Upload.js";
 const router = Router();
 router.use(authenticateToken);
 
+router.get("/sessoes", listarSessoesTreino);
 router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", getEscalaPorDono);

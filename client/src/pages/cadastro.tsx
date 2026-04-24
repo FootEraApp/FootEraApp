@@ -73,7 +73,7 @@ type ResultadoBusca = {
 };
 type Responsavel = { nome: string; email: string; telefone?: string };
 
-const CATEGORIAS_ATLETA = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
+const CATEGORIAS_ATLETA = ["Sub3","Sub5","Sub7","Sub9","Sub11","Sub13","Sub15","Sub16","Livre"] as const;
 type CategoriaAtleta = typeof CATEGORIAS_ATLETA[number];
 
 const STATUS_CREF = ["Pendente", "Ativo", "Desativo"] as const;

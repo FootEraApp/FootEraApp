@@ -391,6 +391,10 @@ interface TreinoProgramado {
   nome: string;
   descricao?: string;
   nivel: string;
+  tipoTreino?: string | null;
+  sessaoTreinoId?: string | null;
+  sessaoTreino?: { id: string; nome: string } | null;
+  sessaoTreinoNome?: string | null;
   imagemUrl: string | null;
   dataAgendada?: string;
   exercicios: {
@@ -845,12 +849,14 @@ export default function NovoTreino() {
   type NivelTreino = (typeof opcoesNiveis)[number];
   const OPCOES_CATEGORIA = [
     "Todas as categorias",
+    "Sub3",
+    "Sub5",
+    "Sub7",
     "Sub9",
     "Sub11",
     "Sub13",
     "Sub15",
-    "Sub17",
-    "Sub20",
+    "Sub16",
     "Livre",
   ];
 
@@ -910,7 +916,6 @@ export default function NovoTreino() {
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [nivel, setNivel] = useState<NivelTreino>("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
   const [categorias, setCategorias] = useState<string[]>([]);
@@ -946,6 +951,14 @@ export default function NovoTreino() {
   const [horaAgendamentoInput, setHoraAgendamentoInput] = useState<string>("18:00");
   const [meusExercicios, setMeusExercicios] = useState<MeuExercicioItem[]>([]);
   const [loadingMeusExercicios, setLoadingMeusExercicios] = useState(false);
+  const [nivel, setNivel] = useState<NivelTreino>("Base");
+  const [sessoesTreino, setSessoesTreino] = useState<string[]>([
+    "Aquecimento",
+    "Coletivo",
+    "Treino de finalização",
+  ]);
+  const [sessaoTreino, setSessaoTreino] = useState("Aquecimento");
+  const [sessaoOutro, setSessaoOutro] = useState("");
 
   type AbaExercicios = "meus" | "catalogo" | "personalizados";
   const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
@@ -1083,6 +1096,30 @@ export default function NovoTreino() {
         sessionStorage.getItem("tipoUsuarioId") ||
         ""
     ).trim();
+  }, []);
+
+  useEffect(() => {
+    const carregarSessoes = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch(`${API.BASE_URL}/api/treinos/sessoes`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        const data = await res.json().catch(() => ({}));
+        const nomes = Array.isArray(data?.items)
+          ? data.items.map((s: any) => String(s.nome || "").trim()).filter(Boolean)
+          : [];
+
+        setSessoesTreino(
+          Array.from(
+            new Set(["Aquecimento", "Coletivo", "Treino de finalização", ...nomes])
+          )
+        );
+      } catch {}
+    };
+
+    carregarSessoes();
   }, []);
 
   useEffect(() => {
@@ -1327,6 +1364,13 @@ export default function NovoTreino() {
         nome: t.nome ?? t.titulo ?? "(sem nome)",
         descricao: t.descricao ?? t.resumo ?? "",
         nivel: t.nivel ?? t.dificuldade ?? "-",
+        tipoTreino: t.tipoTreino ?? null,
+        sessaoTreinoId: t.sessaoTreinoId ?? null,
+        sessaoTreino: t.sessaoTreino ?? null,
+        sessaoTreinoNome:
+          t.sessaoTreinoNome ??
+          t.sessaoTreino?.nome ??
+          null,
         pontuacao: t.pontuacao ?? null,
         imagemUrl:
           t.imagemUrl ??
@@ -3103,9 +3147,10 @@ export default function NovoTreino() {
       (payload as any).objetivo = (metas ?? "").trim() || null;
       (payload as any).tipoUsuario = tipoUsuarioNorm;            
       (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor || tipoUsuarioId);
-      // ✅ define se o treino é "Footera" (público/parceiro) ou normal
-      // (o backend pode usar "publico" e/ou "parceiro" — mandamos ambos pra garantir)
-      // ✅ segurança extra: se não é parceiro, força false
+      (payload as any).sessaoTreino =
+        sessaoTreino === "Outro"
+          ? sessaoOutro.trim()
+          : sessaoTreino;
       const treinoFooteraFinal = isParceiro ? Boolean(treinoFootera) : false;
       if (!isParceiro && treinoFootera) setTreinoFootera(false);
 
@@ -3643,6 +3688,19 @@ export default function NovoTreino() {
                 <strong>Nível:</strong> {t.nivel}
               </p>
 
+              {(t.sessaoTreinoNome || t.sessaoTreino?.nome) ? (
+                <p className="text-sm">
+                  <strong>Sessão:</strong>{" "}
+                  {t.sessaoTreinoNome || t.sessaoTreino?.nome}
+                </p>
+              ) : null}
+
+              {t.tipoTreino ? (
+                <p className="text-sm">
+                  <strong>Tipo do treino:</strong> {t.tipoTreino}
+                </p>
+              ) : null}
+
               {t.criadores?.length ? (
                 <p className="text-sm mt-1">
                   <strong>Criado por:</strong> {t.criadores.map((c) => `Prof. ${c.nome}`).join(", ")}
@@ -3946,6 +4004,34 @@ export default function NovoTreino() {
                       <option key={n} value={n}>{n}</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Sessão do Treino
+                  </label>
+
+                  <select
+                    className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
+                    value={sessaoTreino}
+                    onChange={(e) => setSessaoTreino(e.target.value)}
+                  >
+                    {sessoesTreino.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="Outro">Outro</option>
+                  </select>
+
+                  {sessaoTreino === "Outro" && (
+                    <input
+                      className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
+                      placeholder="Digite o nome da nova sessão"
+                      value={sessaoOutro}
+                      onChange={(e) => setSessaoOutro(e.target.value)}
+                    />
+                  )}
                 </div>
 
               <div>

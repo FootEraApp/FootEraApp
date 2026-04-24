@@ -707,12 +707,14 @@ const EditarPerfil = () => {
               }}
               className="w-full border px-3 py-2 rounded bg-white min-h-[180px]"
             >
-              <option value="Sub9">Sub9</option>
-              <option value="Sub11">Sub11</option>
-              <option value="Sub13">Sub13</option>
-              <option value="Sub15">Sub15</option>
-              <option value="Sub17">Sub17</option>
-              <option value="Sub20">Sub20</option>
+              <option value="Sub3">Sub-3</option>
+              <option value="Sub5">Sub-5</option>
+              <option value="Sub7">Sub-7</option>
+              <option value="Sub9">Sub-9</option>
+              <option value="Sub11">Sub-11</option>
+              <option value="Sub13">Sub-13</option>
+              <option value="Sub15">Sub-15</option>
+              <option value="Sub16">Sub-16</option>
               <option value="Livre">Livre</option>
             </select>
 

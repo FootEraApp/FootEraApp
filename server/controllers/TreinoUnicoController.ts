@@ -80,6 +80,10 @@ function montarPayloadFromProgramado(tp: any, realizacoes: number) {
     objetivo: tp.objetivo ?? null,
     duracao: tp.duracao ?? null,
     dicas: tp.dicas ?? [],
+    tipoTreino: tp.tipoTreino ?? null,
+    sessaoTreinoId: tp.sessaoTreinoId ?? null,
+    sessaoTreino: tp.sessaoTreino ?? null,
+    sessaoTreinoNome: tp.sessaoTreino?.nome ?? null,
     prazoEnvio: tp.dataAgendada ? tp.dataAgendada.toISOString() : null,
     dataTreino: null,
     dataExpiracao: tp.expiraEm ? tp.expiraEm.toISOString() : null,
@@ -99,6 +103,10 @@ function montarPayloadFromAgendado(ag: any, realizacoes: number) {
     titulo: ag.titulo ?? tp?.nome ?? "Treino",
     descricao: tp?.descricao ?? null,
     nivel: tp?.nivel ?? null,
+    tipoTreino: tp?.tipoTreino ?? null,
+    sessaoTreinoId: tp?.sessaoTreinoId ?? null,
+    sessaoTreino: tp?.sessaoTreino ?? null,
+    sessaoTreinoNome: tp?.sessaoTreino?.nome ?? null,
     objetivo: tp?.objetivo ?? null,
     duracao: tp?.duracao ?? null,
     dicas: tp?.dicas ?? [],
@@ -128,6 +136,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
         include: {
           treinoProgramado: {
             include: {
+              sessaoTreino: true,
               exercicios: {
                 include: {
                   exercicio: {
@@ -181,6 +190,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
     const tp = await prisma.treinoProgramado.findUnique({
       where: { id: programadoId },
       include: {
+        sessaoTreino: true,
         exercicios: {
           include: {
             exercicio: {

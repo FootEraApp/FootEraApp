@@ -146,7 +146,7 @@ type ExLinha = {
   customVideoPosterUrl?: string | null;
 };
 
-const opcoesCategorias = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+const opcoesCategorias = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
 const opcoesNiveis = ["Base", "Avancado", "Performance"];
 const opcoesTipoTreino = ["Técnico", "Tático", "Físico", "Mental"];
 
@@ -392,6 +392,13 @@ export default function CriarOuEditarTreino() {
   const [niveisSelecionados, setNiveisSelecionados] = useState<string[]>([]);
   const [linhas, setLinhas] = useState<ExLinha[]>([]);
   const [nivelTreino, setNivelTreino] = useState("Base");
+  const [sessoesTreino, setSessoesTreino] = useState<string[]>([
+    "Aquecimento",
+    "Coletivo",
+    "Treino de finalização",
+  ]);
+  const [sessaoTreino, setSessaoTreino] = useState("Aquecimento");
+  const [sessaoOutro, setSessaoOutro] = useState("");
   const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
   const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<
     ExercicioPersonalizadoItem[]
@@ -498,6 +505,20 @@ export default function CriarOuEditarTreino() {
       setTitulo(data.nome || "");
       setDescricao(data.descricao || "");
       setNivelTreino(data.nivel || "Base");
+      const nomeSessao =
+        data?.sessaoTreino?.nome ||
+        data?.sessaoTreinoNome ||
+        "";
+
+      if (nomeSessao) {
+        setSessaoTreino(nomeSessao);
+
+        setSessoesTreino((prev) =>
+          prev.includes(nomeSessao)
+            ? prev
+            : [...prev, nomeSessao]
+        );
+      }
       setProfessorId(data.professorId || "");
       setTipoTreino(data.tipoTreino ? String(data.tipoTreino) : "Técnico");
       setDuracaoMin(typeof data.duracao === "number" ? data.duracao : 60);
@@ -552,6 +573,10 @@ export default function CriarOuEditarTreino() {
             nivel: ex?.nivel ?? null,
             videoUrl: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
             videoPosterUrl: ex?.videoPosterUrl ?? null,
+            sessaoTreino:
+              sessaoTreino === "Outro"
+                ? sessaoOutro.trim()
+                : sessaoTreino,
             customDesc: row.descricaoExecucao ?? ex?.descricao ?? ex?.objetivo ?? "",
             tipoExecucao:
               row.duracao != null && String(row.duracao).trim() !== ""
@@ -1315,6 +1340,10 @@ export default function CriarOuEditarTreino() {
       nivel: nivelTreino,
       tipoTreino,
       duracao: duracaoMin,
+      sessaoTreino:
+        sessaoTreino === "Outro"
+          ? sessaoOutro.trim()
+          : sessaoTreino,
       tipoUsuario,
       tipoUsuarioId,
       publico: treinoFootera,
@@ -1498,6 +1527,34 @@ export default function CriarOuEditarTreino() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Sessão do Treino
+                  </label>
+
+                  <select
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                    value={sessaoTreino}
+                    onChange={(e) => setSessaoTreino(e.target.value)}
+                  >
+                    {sessoesTreino.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="Outro">Outro</option>
+                  </select>
+
+                  {sessaoTreino === "Outro" && (
+                    <input
+                      className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                      placeholder="Digite o nome da nova sessão"
+                      value={sessaoOutro}
+                      onChange={(e) => setSessaoOutro(e.target.value)}
+                    />
+                  )}
                 </div>
 
                 <div>

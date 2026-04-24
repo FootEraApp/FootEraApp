@@ -162,10 +162,51 @@ function normTipoTreino(v?: string): TipoTreino | null {
   return null;
 }
 
+const SESSOES_PADRAO_TREINO = [
+  "Aquecimento",
+  "Coletivo",
+  "Treino de finalização",
+];
+
+function normalizarSessaoTreinoNome(nome: string) {
+  return String(nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+async function resolverSessaoTreinoId(sessaoTreino?: any, sessaoTreinoId?: any) {
+  const id = String(sessaoTreinoId ?? "").trim();
+  if (id) {
+    const existe = await prisma.treinoSessao.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    return existe?.id ?? null;
+  }
+
+  const nome = String(sessaoTreino ?? "").trim();
+  if (!nome) return null;
+
+  return (
+    await prisma.treinoSessao.upsert({
+      where: { nomeNormalizado: normalizarSessaoTreinoNome(nome) },
+      update: { nome },
+      create: {
+        nome,
+        nomeNormalizado: normalizarSessaoTreinoNome(nome),
+      },
+      select: { id: true },
+    })
+  ).id;
+}
+
 function normCategoria(v?: string): Categoria {
   const s = String(v || "").replace(/-/g, "").toUpperCase();
-  const ok = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"];
-  return (ok.includes(s) ? s : "Sub13") as Categoria;
+  const ok = ["Sub-3","Sub-5","Sub-7","Sub-9","Sub-11","Sub-13","Sub-15","Sub-16","Livre"];
+  return (ok.includes(s) ? s : "Sub-13") as Categoria;
 }
 
 export const createTreinoProgramado = async (req: Request, res: Response) => {
@@ -198,6 +239,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       atletasIds = [],
       elencoId,
       elencosIds = [],
+      sessaoTreino,
+      sessaoTreinoId,
       criadorProfessorId
     } = req.body as {
       nome?: string; nivel?: string; descricao?: string;
@@ -208,6 +251,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       tipoUsuario?: string; tipoUsuarioId?: string;
       atletasIds?: string[]; elencoId?: string; elencosIds?: string[];
       criadorProfessorId?: string;
+      sessaoTreino?: string;
+      sessaoTreinoId?: string;
     };
 
     if (!nome) {
@@ -341,11 +386,9 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
         const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
         const exercicioIdCatalogo = String(e?.exercicioId ?? "").trim();
-
         // ✅ fallback que muita tela manda como "id"
         const idGenerico = String(e?.id ?? "").trim();
         const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
-
         const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
 
         // 1) Se veio explícito, usa explícito
@@ -543,6 +586,11 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       req.file?.filename ? `/upload/${req.file.filename}` : null;
 
     const imagemFinal = uploadedPath ?? (imagemUrl ? String(imagemUrl) : null);
+    const sessaoTreinoIdFinal = await resolverSessaoTreinoId(
+      sessaoTreino,
+      sessaoTreinoId
+    );
+
     const treinoCriado = await prisma.treinoProgramado.create({
           data: {
             nome,
@@ -559,16 +607,15 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             pontuacao: pontuacao != null ? Number(pontuacao) : null,
             expiraEm: expiraEm ? new Date(expiraEm) : null,
             naoExpira: Boolean(naoExpira),
-            ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
-            ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
-            ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
-            ...(owner.criadorUsuarioId
-              ? { criadorUsuario: { connect: { id: owner.criadorUsuarioId } } }
-              : {}),
+            sessaoTreinoId: sessaoTreinoIdFinal,
+            ...(owner.professorId ? { professorId: owner.professorId } : {}),
+            ...(owner.clubeId ? { clubeId: owner.clubeId } : {}),
+            ...(owner.escolinhaId ? { escolinhaId: owner.escolinhaId } : {}),
+            ...(owner.criadorUsuarioId ? { criadorUsuarioId: owner.criadorUsuarioId } : {}),
             ...(criadorProfessorIdNorm
-              ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
+              ? { criadorProfessorId: criadorProfessorIdNorm }
               : owner.dono === "Professor"
-              ? { criadorProfessor: { connect: { id: owner.professorId! } } }
+              ? { criadorProfessorId: owner.professorId! }
               : {}),
             professores: {
               create: colabProfIds.map((professorId: string) => ({ professorId })),
@@ -580,6 +627,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             criadorUsuario: true,
             clube: true,
             escolinha: true,
+            sessaoTreino: true,
             exercicios: {
               include: {
                 exercicio: true,
@@ -676,6 +724,7 @@ export const getTreinoById = async (req: Request, res: Response) => {
         criadorUsuario: true,
         clube: true,
         escolinha: true,
+        sessaoTreino: true,
         exercicios: {
           include: {
             exercicio: true,
@@ -708,6 +757,8 @@ export async function updateTreino(req: Request, res: Response) {
       duracao, dicas, imagemUrl, metas, pontuacao, expiraEm, naoExpira,
       exercicios = [],
       tipoUsuario, tipoUsuarioId,
+      sessaoTreino,
+      sessaoTreinoId
     } = req.body;
 
     if (!Array.isArray(exercicios) || exercicios.length === 0) {
@@ -971,6 +1022,11 @@ export async function updateTreino(req: Request, res: Response) {
       uploadedPath ? { imagemUrl: uploadedPath }
       : (imagemUrl !== undefined ? { imagemUrl: imagemUrl ? String(imagemUrl) : null } : {});
 
+    const sessaoTreinoIdFinal =
+      sessaoTreino !== undefined || sessaoTreinoId !== undefined
+        ? await resolverSessaoTreinoId(sessaoTreino, sessaoTreinoId)
+        : undefined;
+
     await prisma.$transaction([
       prisma.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } }),
       prisma.treinoProgramado.update({
@@ -999,6 +1055,13 @@ export async function updateTreino(req: Request, res: Response) {
           ...(expiraEm !== undefined ? { expiraEm: expiraEm ? new Date(expiraEm) : null } : {}),
           ...(naoExpira !== undefined ? { naoExpira: Boolean(naoExpira) } : {}),
           ...dataDono,
+          ...(sessaoTreinoIdFinal !== undefined
+            ? {
+                sessaoTreino: sessaoTreinoIdFinal
+                  ? { connect: { id: sessaoTreinoIdFinal } }
+                  : { disconnect: true },
+              }
+            : {}),
           exercicios: { create: itens },
         },
       }),
@@ -1011,6 +1074,7 @@ export async function updateTreino(req: Request, res: Response) {
         Professor: { include: { usuario: true } },
         clube: true,
         escolinha: true,
+        sessaoTreino: true,
         professores: { include: { professor: { include: { usuario: true } } } },
         exercicios: {
           include: {
@@ -1090,6 +1154,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       tipoUsuario,
       tipoUsuarioId,
       onlyMine,
+      sessaoTreinoId,
     } = req.query as Record<string, string | undefined>;
 
     const where: any = {};
@@ -1143,7 +1208,6 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           ...(isProfessor ? [{ professorId: viewerId }] : []),
           ...(isClube ? [{ clubeId: viewerId }] : []),
           ...(isEscolinha ? [{ escolinhaId: viewerId }] : []),
-
           ...(isProfessor ? [{ professores: { some: { professorId: viewerId } } }] : []),
 
           // públicos de parceiro (seu requisito)
@@ -1160,6 +1224,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           Professor: { include: { usuario: true } },
           clube: true,
           escolinha: true,
+          sessaoTreino: true,
           professores: { include: { professor: { include: { usuario: true } } } },
           exercicios: {
             include: {
@@ -1172,7 +1237,6 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       });
 
       const mapped = treinos.map((t) => {
-      const donoId = t.professorId || t.clubeId || t.escolinhaId || "";
 
       const isOwner =
         (viewerTipo === "professor" && t.professorId === viewerId) ||
@@ -1203,6 +1267,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
         Professor: { include: { usuario: true } },
         clube: true,
         escolinha: true,
+        sessaoTreino: true,
         professores: {
           include: { professor: { include: { usuario: true } } },
         },

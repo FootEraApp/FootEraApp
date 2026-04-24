@@ -470,9 +470,22 @@ model TreinoProgramado {
   Professor                Professor?                 @relation(fields: [professorId], references: [id])
   professorId              String?
   MetodologiaEstruturaItem MetodologiaEstruturaItem[]
+  sessaoTreinoId           String?
+  sessaoTreino             TreinoSessao?              @relation(fields: [sessaoTreinoId], references: [id], onDelete: SetNull)
 
+  @@index([sessaoTreinoId])
   @@index([criadorProfessorId])
   @@index([criadorUsuarioId])
+}
+
+model TreinoSessao {
+  id              String   @id @default(uuid())
+  nome            String
+  nomeNormalizado String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  treinos TreinoProgramado[]
 }
 
 model TreinoProgramadoProfessor {
@@ -2027,13 +2040,13 @@ model Consentimento {
 }
 
 model Turma {
-  id          String     @id @default(uuid())
+  id          String      @id @default(uuid())
   nome        String
-  categoria   String?
+  categoria   Categoria[] @default([])
   descricao   String?
-  ativo       Boolean    @default(true)
+  ativo       Boolean     @default(true)
   escolinhaId String?
-  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  escolinha   Escolinha?  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
 
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -2744,12 +2757,14 @@ enum Nivel {
 }
 
 enum Categoria {
+  Sub3
+  Sub5
+  Sub7
   Sub9
   Sub11
   Sub13
   Sub15
-  Sub17
-  Sub20
+  Sub16
   Livre
 }
 
@@ -2987,11 +3002,13 @@ enum EspacoExercicio {
 }
 
 enum FaixaEtariaExercicio {
+  Sub3
+  Sub5
+  Sub7
   Sub9
   Sub11
   Sub13
   Sub15
-  Sub17
-  Sub20
+  Sub16
   Livre
 }

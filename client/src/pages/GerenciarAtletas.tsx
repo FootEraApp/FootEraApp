@@ -19,12 +19,14 @@ import { loadGestorContext, clearGestorContext } from "../utils/gestorSession";
 import Avatar from "../components/shared/Avatar";
 
 export type CategoriaBase =
+  | "Sub-3"
+  | "Sub-5"
+  | "Sub-7"
   | "Sub-9"
   | "Sub-11"
   | "Sub-13"
   | "Sub-15"
-  | "Sub-17"
-  | "Sub-20"
+  | "Sub-16"
   | "Livre";
 
 export type Posicao =
@@ -1246,7 +1248,7 @@ async function salvarAvaliacao() {
             className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] sm:text-sm"
           >
             <option value="">Categoria (todas)</option>
-            {["Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-17", "Sub-20", "Livre"].map((c) => (
+            {["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"].map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>

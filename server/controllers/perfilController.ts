@@ -39,7 +39,7 @@ function normalizarCategorias(input: any): Categoria[] {
 
       if (s.startsWith("sub")) {
         const num = s.replace(/\D/g, "");
-        return `Sub${num}`; // Sub9, Sub20
+        return `Sub${num}`; // Sub9, Sub16
       }
 
       if (s === "livre") return "Livre";
