@@ -102,7 +102,7 @@ type ExercicioMin = {
   repeticoes?: string | null;
   duracao?: string | null;
   descanso?: string | null;
-  origem?: "catalogo" | "personalizado" | "meu" | null;
+  origem?: "catalogo" | "exercicio" | "personalizado" | "meu" | null;
   exercicioPersonalizadoId?: string | null;
 };
 
@@ -999,12 +999,23 @@ export default function CriarOuEditarTreino() {
     const ex = lista.find((e) => String(e.id) === String(exId));
     if (!ex) return;
 
+    const origem = String(ex.origem ?? "").toLowerCase();
+
+    const ehPersonalizado =
+      origem === "personalizado" ||
+      !!ex.exercicioPersonalizadoId;
+
+    const idCatalogo = String(ex.id ?? "").trim();
+    const idPersonalizado = String(ex.exercicioPersonalizadoId ?? ex.id ?? "").trim();
+
     setLinhas((prev) => {
-      const jaExiste = prev.some(
-        (l) =>
-          String(l.exercicioId || "") === String(ex.id) ||
-          String(l.exercicioPersonalizadoId || "") === String(ex.id)
-      );
+      const jaExiste = prev.some((l) => {
+        if (ehPersonalizado) {
+          return String(l.exercicioPersonalizadoId || "") === idPersonalizado;
+        }
+
+        return String(l.exercicioId || "") === idCatalogo;
+      });
 
       if (jaExiste) return prev;
 
@@ -1021,25 +1032,48 @@ export default function CriarOuEditarTreino() {
       return [
         ...prev,
         {
-          exercicioId: String(ex.id),
+          // ✅ se for exercício do BD/tabela Exercicio
+          exercicioId: ehPersonalizado ? "" : idCatalogo,
+
+          // ✅ se for exercício personalizado/tabela ExercicioPersonalizado
+          exercicioPersonalizadoId: ehPersonalizado ? idPersonalizado : null,
+          exercicioTemporarioId: null,
+
           ordem: prev.length + 1,
-          // valor bruto que vai para o submit
           repeticoes: repeticoesStr,
-          // ✅ o input de séries
           series: seriesStr || sr.series || "",
-          // ✅ o input de repetições
           reps: repeticoesStr || sr.reps || "",
           duracao: ex.duracao != null ? String(ex.duracao) : "",
           descanso: ex.descanso != null ? String(ex.descanso) : "",
+
           tipoExecucao:
             ex.duracao != null && String(ex.duracao).trim() !== ""
               ? "duracao"
               : "repeticao",
+
           titulo: ex.nome ?? "Exercício",
           descricao: ex?.descricao ?? ex?.objetivo ?? "",
           nivel: ex.nivel ?? null,
           videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
-          videoPosterUrl: ex.thumbUrl ?? null,
+          videoPosterUrl: ex.thumbUrl ?? ex.videoPosterUrl ?? null,
+
+          // ✅ importante: personalizado existente precisa ir como custom
+          isCustom: ehPersonalizado,
+
+          ...(ehPersonalizado
+            ? {
+                customTitulo: ex.nome ?? "",
+                customDesc: ex?.descricao ?? ex?.objetivo ?? "",
+                customVideoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+                customVideoPreviewUrl: normalizeUrl(
+                  ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null
+                ),
+                customVideoPosterUrl: normalizeUrl(
+                  ex.thumbUrl ?? ex.videoPosterUrl ?? null
+                ),
+                customVideoFile: null,
+              }
+            : {}),
         },
       ];
     });

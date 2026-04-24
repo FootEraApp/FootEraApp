@@ -40,8 +40,8 @@ type ExItemUILocal = {
   descanso?: string | null;
   ordem?: number | null;
   categorias?: string[];
-  tipo?: "catalogo" | "personalizado" | "meus" | "temporario";
-  origem?: "catalogo" | "personalizado" | "meus" | "temporario";
+  tipo?: "catalogo" | "exercicio" | "personalizado" | "meus" | "temporario";
+  origem?: "catalogo" | "exercicio" | "personalizado" | "meus" | "temporario";
   observacao?: string | null;
   exercicio?: any;
   exercicioPersonalizado?: any;
@@ -2698,13 +2698,23 @@ export default function NovoTreino() {
   };
 
   function adicionarExercicioExistente(ex: any) {
+    const origem = String(ex.origem ?? ex.tipo ?? "").toLowerCase();
+
+    const ehPersonalizado =
+      origem === "personalizado" ||
+      !!ex.exercicioPersonalizadoId;
+
     setExerciciosSelecionados((prev) => [
       ...prev,
       {
         idLocal: crypto.randomUUID(),
-        idCatalogo: String(ex.id ?? ""),
-        exercicioId: String(ex.id ?? ""),
-        exercicioPersonalizadoId: null,
+
+        idCatalogo: ehPersonalizado ? null : String(ex.exercicioId ?? ex.id ?? ""),
+        exercicioId: ehPersonalizado ? null : String(ex.exercicioId ?? ex.id ?? ""),
+        exercicioPersonalizadoId: ehPersonalizado
+          ? String(ex.exercicioPersonalizadoId ?? ex.id ?? "")
+          : null,
+
         nome: ex.nome ?? "Exercício",
         descricao: ex.objetivo ?? ex.descricao ?? "",
         objetivo: ex.objetivo ?? null,
@@ -2712,23 +2722,27 @@ export default function NovoTreino() {
         videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoPosterUrl: ex.videoPosterUrl ?? null,
-        // ✅ agora traz os valores já existentes do exercício
+
         series:
           typeof ex.series === "number"
             ? ex.series
             : ex.series != null && String(ex.series).trim() !== ""
             ? Number(ex.series)
             : null,
+
         repeticoes: ex.repeticoes != null ? String(ex.repeticoes) : "",
         duracao: ex.duracao != null ? String(ex.duracao) : "",
         descanso: ex.descanso != null ? String(ex.descanso) : "",
         ordem: prev.length + 1,
+
         categorias: Array.isArray(ex.categorias)
           ? ex.categorias
           : Array.isArray(ex.categoria)
           ? ex.categoria
           : [],
-        origem: "catalogo",
+
+        origem: ehPersonalizado ? "personalizado" : "catalogo",
+        tipo: ehPersonalizado ? "personalizado" : "catalogo",
         tipoExecucao: ex.duracao ? "duracao" : "repeticao",
       },
     ]);
@@ -3187,79 +3201,69 @@ export default function NovoTreino() {
             ? String(posterRaw)
             : null;
 
-        const forcePersonalizado =
-          !!videoFinal || !!posterFinal || !!String(e.exercicioPersonalizadoId ?? "").trim();
+        const seriesFinal =
+          typeof e.series === "number"
+            ? e.series
+            : e.series != null && String(e.series).trim()
+            ? parseInt(String(e.series), 10) || null
+            : null;
 
-        if (e.exercicioId && !forcePersonalizado) {
+        const duracaoFinal =
+          e.duracao != null && String(e.duracao).trim()
+            ? String(e.duracao).trim()
+            : null;
+
+        const descansoFinal =
+          e.descanso != null && String(e.descanso).trim()
+            ? String(e.descanso).trim()
+            : null;
+
+        const descricaoFinal =
+          String(
+            e.descricaoExecucao ??
+            e.descricao ??
+            e.observacao ??
+            e.objetivo ??
+            ""
+          ).trim() || null;
+
+        // Se tem exercicioId (catálogo), sempre envia — independente de ter vídeo/personalizado
+        if (e.exercicioId) {
           return {
-            exercicioId: e.exercicioId ?? null,
-            exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null,
+            exercicioId: String(e.exercicioId),
+            exercicioPersonalizadoId: null,
             exercicioTemporarioId: e.exercicioTemporarioId ?? null,
-            nome:
-              typeof e.nome === "string" && e.nome.trim()
-                ? e.nome.trim()
-                : null,
-            descricao:
-              typeof e.descricao === "string" && e.descricao.trim()
-                ? e.descricao.trim()
-                : null,
-            videoDemonstrativoUrl:
-              (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null,
-            videoPosterUrl: (e as any).videoPosterUrl ?? null,
+            nome: typeof e.nome === "string" && e.nome.trim() ? e.nome.trim() : null,
+            descricao: typeof e.descricao === "string" && e.descricao.trim() ? e.descricao.trim() : null,
+            videoDemonstrativoUrl: null,
+            videoPosterUrl: null,
             repeticoes: repeticoesFinal,
-            series:
-              typeof e.series === "number"
-                ? e.series
-                : e.series != null && String(e.series).trim()
-                ? parseInt(String(e.series), 10) || null
-                : null,
-            duracao:
-              e.duracao != null && String(e.duracao).trim()
-                ? String(e.duracao).trim()
-                : null,
-            descanso:
-              e.descanso != null && String(e.descanso).trim()
-                ? String(e.descanso).trim()
-                : null,
+            series: seriesFinal,
+            duracao: duracaoFinal,
+            descanso: descansoFinal,
             ordem: Number.isFinite(Number(e.ordem)) ? Number(e.ordem) : idx + 1,
             nivel: e.nivel ?? null,
             categorias: Array.isArray(e.categorias) ? e.categorias : [],
           };
         }
 
+        // Exercício personalizado ou novo customizado
         return {
+          exercicioId: null,
           nome: String(e.nome || "").trim(),
           nivel: e.nivel ?? null,
           categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
           repeticoes: repeticoesFinal,
-          series:
-            typeof e.series === "number"
-              ? e.series
-              : e.series != null && String(e.series).trim() !== ""
-              ? parseInt(String(e.series), 10)
-              : null,
-          duracao:
-            e.duracao != null && String(e.duracao).trim() !== ""
-              ? String(e.duracao).trim()
-              : null,
-          descanso:
-            e.descanso != null && String(e.descanso).trim() !== ""
-              ? String(e.descanso).trim()
-              : null,
-          descricao:
-            String(
-              e.descricaoExecucao ??
-              e.descricao ??
-              e.observacao ??
-              e.objetivo ??
-              ""
-            ).trim() || null,
+          series: seriesFinal,
+          duracao: duracaoFinal,
+          descanso: descansoFinal,
+          descricao: descricaoFinal,
           exercicioPersonalizadoId: e.exercicioPersonalizadoId
             ? String(e.exercicioPersonalizadoId)
             : null,
-          videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
-          videoPosterUrl: e.videoPosterUrl ?? null,
+          videoDemonstrativoUrl: videoFinal,
+          videoPosterUrl: posterFinal,
         };
       });
 

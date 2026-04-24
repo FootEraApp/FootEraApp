@@ -704,15 +704,17 @@ export default function MetodologiaUnicaPage() {
       {/* HEADER */}
       <div className="mt-4 rounded-2xl border bg-white p-4 md:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start gap-4">
-          <img
-            src={capaHeader}
-            onError={(e) => {
-              e.currentTarget.onerror = null;
-              e.currentTarget.src = AVATAR_FALLBACK;
-            }}
-            className="h-20 w-20 md:h-24 md:w-24 rounded-2xl border object-cover bg-white"
-            alt={data.titulo}
-          />
+          <div className="w-full md:w-80 shrink-0">
+            <img
+              src={capaHeader}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = AVATAR_FALLBACK;
+              }}
+              className="w-full aspect-[16/9] rounded-2xl border object-cover bg-white"
+              alt={data.titulo}
+            />
+          </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">

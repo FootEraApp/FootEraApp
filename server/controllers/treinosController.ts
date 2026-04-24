@@ -2950,31 +2950,6 @@ export async function getMeusExercicios(
       })),
     ];
 
-    const exerciciosMapeados = exerciciosBancoDoUsuario.map((e) => ({
-      id: String(e.id),
-      nome: e.nome ?? "Exercício",
-      codigo: (e as any).codigo ?? null,
-      descricao: (e as any).objetivo ?? (e as any).descricao ?? null,
-      objetivo: (e as any).objetivo ?? null,
-      nivel: (e as any).nivel ?? null,
-      categorias: Array.isArray((e as any).faixaEtaria)
-        ? (e as any).faixaEtaria
-        : Array.isArray((e as any).categorias)
-        ? (e as any).categorias
-        : [],
-      videoDemonstrativoUrl:
-        (e as any).videoDemonstrativoUrl ??
-        (e as any).videoUrl ??
-        null,
-      videoPosterUrl: (e as any).videoPosterUrl ?? null,
-      criadoPorId: (e as any).criadoPorId ?? null,
-      series: (e as any).series ?? null,
-      repeticoes: (e as any).repeticoes ?? null,
-      duracao: (e as any).duracao ?? null,
-      descanso: (e as any).descanso ?? null,
-      origem: "catalogo" as const,
-    }));
-
     const personalizadosMapeados = exerciciosPersonalizadosDoUsuario.map((p) => ({
       id: String(p.id),
       nome: p.nome ?? "Exercício",
@@ -2999,10 +2974,33 @@ export async function getMeusExercicios(
       exercicioPersonalizadoId: String(p.id),
     }));
 
-    const combinado = [...exerciciosMapeados, ...personalizadosMapeados];
-    const unicos = deduplicarExerciciosPorNome(combinado);
+    const oficiais = await prisma.exercicio.findMany({
+      select: {
+        id: true,
+        nome: true,
+        nomeNormalizado: true,
+      },
+    });
 
-    return res.json(unicos);
+    const nomesOficiais = new Set(
+      oficiais
+        .map((e) => e.nomeNormalizado || normalizarNomeExercicio(e.nome))
+        .filter(Boolean)
+    );
+
+    const personalizadosSemCatalogo = personalizadosMapeados.filter((p: any) => {
+      const nomeNorm = normalizarNomeExercicio(p.nome);
+      return nomeNorm && !nomesOficiais.has(nomeNorm);
+    });
+
+    return res.json(
+      personalizadosSemCatalogo.map((p: any) => ({
+        ...p,
+        origem: "personalizado",
+        exercicioId: null,
+        exercicioPersonalizadoId: String(p.exercicioPersonalizadoId ?? p.id),
+      }))
+    );
   } catch (error) {
     console.error("Erro ao listar meus exercícios:", error);
     return res.status(500).json({ message: "Erro ao listar meus exercícios." });
@@ -4415,16 +4413,8 @@ export async function criarTreinoProgramado(
         const nomeTemp = String(e?.nome ?? "").trim();
         if (!nomeTemp) continue;
 
-        const hasVideo = !!String(e.videoDemonstrativoUrl ?? e.videoUrl ?? "").trim();
-        const hasPoster = !!String(e.videoPosterUrl ?? "").trim();
-        const forcePersonalizado = hasVideo || hasPoster || !!String(e.exercicioPersonalizadoId ?? "").trim();
-
-        // ✅ se bater no BD, salva como oficial (não cria personalizado)
-        let exercicioBancoId: string | null = null;
-
-        if (!forcePersonalizado) {
-          exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
-        }
+        // Sempre verifica catálogo pelo nome antes de criar personalizado
+        const exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
 
         if (exercicioBancoId) {
           const repeticoesFinal = String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "").trim();
@@ -4497,17 +4487,29 @@ export async function criarTreinoProgramado(
             : (typeof e.exercicioPersonalizado?.descricao === "string" && e.exercicioPersonalizado.descricao.trim())
               ? e.exercicioPersonalizado.descricao.trim()
               : null;
-        // ✅ 1) declara pers ANTES e permite null
-        let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null =
-          await tx.exercicioPersonalizado.findFirst({
+        // 1) Se veio exercicioPersonalizadoId, busca por ID diretamente
+        const providedEpId = String(e.exercicioPersonalizadoId ?? "").trim();
+        let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null = null;
+
+        if (providedEpId) {
+          pers = await tx.exercicioPersonalizado.findUnique({
+            where: { id: providedEpId },
+            select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
+          });
+        }
+
+        // 2) Fallback: busca por criador + nome
+        if (!pers) {
+          pers = await tx.exercicioPersonalizado.findFirst({
             where: {
               criadorUsuarioId,
               nome: { equals: nomeTemp, mode: "insensitive" },
             },
             select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
+        }
 
-        // ✅ 2) garante pers (se não existir, cria)
+        // 3) Se não existe, cria novo personalizado
         if (!pers) {
           pers = await tx.exercicioPersonalizado.create({
             data: {
@@ -6626,58 +6628,30 @@ export async function listarExerciciosPersonalizados(
     });
 
     const oficiais = await prisma.exercicio.findMany({
-      select: { nomeNormalizado: true },
-    });
-
-    const oficiaisSet = new Set(
-      oficiais.map((e) => e.nomeNormalizado).filter(Boolean)
-    );
-
-    const exerciciosOficiais = await prisma.exercicio.findMany({
       select: {
+        id: true,
+        nome: true,
         nomeNormalizado: true,
       },
     });
 
     const nomesOficiais = new Set(
-      exerciciosOficiais
-        .map((e) => e.nomeNormalizado)
-        .filter((v): v is string => !!v)
+      oficiais
+        .map((e) => e.nomeNormalizado || normalizarNomeExercicio(e.nome))
+        .filter(Boolean)
     );
 
-    const personalizadosFiltrados = personalizados.filter((p) => {
-      const chave =
-        (p as any).nomeNormalizado ||
-        normalizarNomeExercicio(p.nome ?? "");
-
-      return !nomesOficiais.has(chave);
+    const itensSemDuplicarOficial = itens.filter((item: any) => {
+      const nomeNorm = normalizarNomeExercicio(item.nome);
+      if (nomeNorm && nomesOficiais.has(nomeNorm)) {
+        return false;
+      }
+      return true;
     });
 
-    const out = personalizadosFiltrados.map((p) => ({
-      id: String(p.id),
-      nome: p.nome ?? "Exercício",
-      codigo: (p as any).codigo ?? null,
-      descricao: (p as any).descricao ?? null,
-      objetivo: null,
-      nivel: (p as any).nivel ?? null,
-      categorias: Array.isArray((p as any).categorias)
-        ? (p as any).categorias
-        : [],
-      videoDemonstrativoUrl:
-        (p as any).videoDemonstrativoUrl ??
-        (p as any).videoUrl ??
-        null,
-      videoPosterUrl: (p as any).videoPosterUrl ?? null,
-      criadoPorId: (p as any).criadorUsuarioId ?? null,
-      series: (p as any).series ?? null,
-      repeticoes: (p as any).repeticoes ?? null,
-      duracao: (p as any).duracao ?? null,
-      descanso: (p as any).descanso ?? null,
-      origem: "personalizado" as const,
-      exercicioPersonalizadoId: String(p.id),
-    }));
+    const unicos = deduplicarExerciciosPorNome(itensSemDuplicarOficial);
 
-    return res.json(out);
+    return res.json(unicos);
   } catch (error) {
     console.error("Erro ao listar exercícios personalizados:", error);
     return res.status(500).json({ message: "Erro ao listar exercícios personalizados." });

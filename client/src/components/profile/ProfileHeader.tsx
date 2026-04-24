@@ -1109,7 +1109,11 @@ const alvoUsuarioIdFavorito = isOwnProfile
       body: JSON.stringify({ seguidoUsuarioId: perfilId }),
     });
 
-    if (resp.ok) return true;
+    if (resp.ok) {
+      alert("Solicitação enviada. Aguarde a pessoa aceitar.");
+      return true;
+    }
+
     const body = await readBodySafe(resp);
     return isDuplicado(resp, body);
   };
@@ -1155,13 +1159,48 @@ const alvoUsuarioIdFavorito = isOwnProfile
     return isDuplicado(resp, body);
   };
 
+  const desvincularTreino = async (): Promise<boolean> => {
+    const token = Storage.token;
+    if (!token) return false;
+
+    const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/vinculo`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ usuarioAlvoId: perfilId }),
+    });
+
+    return resp.ok;
+  };
+
   const toggleTreino = async () => {
     if (temVinculoTreino) {
-      alert("Vocês já possuem vínculo de treinamento.");
+      const confirmar = window.confirm(
+        `Tem certeza que deseja desvincular de ${nome}?`
+      );
+
+      if (!confirmar) return;
+
+      const ok = await desvincularTreino();
+
+      if (ok) {
+        setTemVinculoTreino(false);
+        setTreinoJunto(false);
+        setSouSolicitanteTreino(null);
+        localStorage.removeItem(storageKey);
+      } else {
+        alert("Não foi possível desvincular agora.");
+      }
+
       return;
     }
 
     if (treinoJunto && souSolicitanteTreino) {
+      const confirmar = window.confirm("Deseja cancelar a solicitação de treino?");
+      if (!confirmar) return;
+
       const ok = await cancelarSolicitacaoTreino(perfilId);
       if (ok) {
         setTreinoJunto(false);
@@ -1176,7 +1215,14 @@ const alvoUsuarioIdFavorito = isOwnProfile
       return;
     }
 
+    const confirmar = window.confirm(
+      `Tem certeza que deseja criar vínculo de treino com ${nome}?`
+    );
+
+    if (!confirmar) return;
+
     const ok = await solicitarTreino();
+
     if (ok) {
       setTreinoJunto(true);
       setSouSolicitanteTreino(true);

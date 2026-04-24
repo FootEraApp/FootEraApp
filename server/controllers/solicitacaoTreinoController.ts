@@ -1,6 +1,8 @@
 import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
+import { NotificacaoTipo } from "@prisma/client";
+import { recomputeAndEmitBadge } from "./notificacoesController.js";
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -349,6 +351,19 @@ export async function criarSolicitacao(req: Request, res: Response) {
       data: { remetenteId, destinatarioId, status: "pendente" },
     });
 
+    await prisma.notificacao.create({
+      data: {
+        usuarioId: destinatarioId,
+        actorId: remetenteId,
+        tipo: NotificacaoTipo.GENERICA,
+        titulo: "Solicitação de treino",
+        mensagem: "quer treinar junto com você",
+        link: "/notificacoes",
+        lida: false,
+      },
+    });
+
+    await recomputeAndEmitBadge(destinatarioId);
     return res.status(201).json({ ...row, ok: true });
   } catch (error) {
     console.error("Erro ao criar solicitação:", error);
@@ -626,6 +641,20 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
 
     await prisma.solicitacaoTreino.delete({ where: { id } });
 
+    await prisma.notificacao.create({
+      data: {
+        usuarioId: solicitacao.remetenteId,
+        actorId: solicitacao.destinatarioId,
+        tipo: NotificacaoTipo.GENERICA,
+        titulo: "Vínculo aceito",
+        mensagem: "Sua solicitação de treino foi aceita.",
+        link: `/perfil/${solicitacao.destinatarioId}`,
+        lida: false,
+      },
+    });
+
+    await recomputeAndEmitBadge(solicitacao.remetenteId);
+
     return res.json({
       ok: true,
       message: existente
@@ -650,6 +679,21 @@ export async function recusarSolicitacao(req: Request, res: Response) {
     }
 
     await prisma.solicitacaoTreino.delete({ where: { id } });
+
+    await prisma.notificacao.create({
+      data: {
+        usuarioId: solicitacao.remetenteId,
+        actorId: me,
+        tipo: NotificacaoTipo.GENERICA,
+        titulo: "Vínculo recusado",
+        mensagem: "Sua solicitação de treino foi recusada.",
+        link: `/perfil/${me}`,
+        lida: false,
+      },
+    });
+
+    await recomputeAndEmitBadge(solicitacao.remetenteId);
+
     return res.json({ message: "Solicitação recusada com sucesso." });
   } catch (error) {
     console.error("Erro ao recusar solicitação:", error);
@@ -863,5 +907,81 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
   } catch (e) {
     console.error("verificarVinculoTreino erro:", e);
     return res.status(500).json({ error: "Erro ao verificar vínculo." });
+  }
+}
+
+export async function desvincularTreino(req: Request, res: Response) {
+  try {
+    const me: string | undefined = (req as any).user?.id || (req as any).userId;
+    const { usuarioAlvoId } = req.body ?? {};
+
+    if (!me) return res.status(401).json({ message: "Não autenticado." });
+    if (!usuarioAlvoId) return res.status(400).json({ message: "usuarioAlvoId é obrigatório." });
+
+    await prisma.relacaoTreinamento.deleteMany({
+      where: {
+        OR: [
+          { atleta: { usuarioId: me }, professor: { usuarioId: usuarioAlvoId } },
+          { atleta: { usuarioId: usuarioAlvoId }, professor: { usuarioId: me } },
+          { atleta: { usuarioId: me }, clube: { usuarioId: usuarioAlvoId } },
+          { atleta: { usuarioId: usuarioAlvoId }, clube: { usuarioId: me } },
+          { atleta: { usuarioId: me }, escolinha: { usuarioId: usuarioAlvoId } },
+          { atleta: { usuarioId: usuarioAlvoId }, escolinha: { usuarioId: me } },
+        ],
+      },
+    });
+
+    const [uMe, uAlvo] = await Promise.all([
+      prisma.usuario.findUnique({ where: { id: me }, select: { id: true, tipo: true } }),
+      prisma.usuario.findUnique({ where: { id: usuarioAlvoId }, select: { id: true, tipo: true } }),
+    ]);
+
+    const professorMe = await prisma.professor.findUnique({ where: { usuarioId: me }, select: { id: true } });
+    const professorAlvo = await prisma.professor.findUnique({ where: { usuarioId: usuarioAlvoId }, select: { id: true } });
+    const clubeMe = await prisma.clube.findUnique({ where: { usuarioId: me }, select: { id: true } });
+    const clubeAlvo = await prisma.clube.findUnique({ where: { usuarioId: usuarioAlvoId }, select: { id: true } });
+    const escolinhaMe = await prisma.escolinha.findUnique({ where: { usuarioId: me }, select: { id: true } });
+    const escolinhaAlvo = await prisma.escolinha.findUnique({ where: { usuarioId: usuarioAlvoId }, select: { id: true } });
+
+    const professorId = professorMe?.id || professorAlvo?.id || null;
+    const clubeId = clubeMe?.id || clubeAlvo?.id || null;
+    const escolinhaId = escolinhaMe?.id || escolinhaAlvo?.id || null;
+
+    if (professorId && clubeId) {
+      await prisma.professorClube.deleteMany({
+        where: { professorId, clubeId },
+      });
+    }
+
+    if (professorId && escolinhaId) {
+      await prisma.professorEscolinha.deleteMany({
+        where: { professorId, escolinhaId },
+      });
+    }
+
+    if (professorMe?.id && professorAlvo?.id) {
+      const [professorAId, professorBId] =
+        professorMe.id < professorAlvo.id
+          ? [professorMe.id, professorAlvo.id]
+          : [professorAlvo.id, professorMe.id];
+
+      await prisma.professorParceiro.deleteMany({
+        where: { professorAId, professorBId },
+      });
+    }
+
+    await prisma.solicitacaoTreino.deleteMany({
+      where: {
+        OR: [
+          { remetenteId: me, destinatarioId: usuarioAlvoId },
+          { remetenteId: usuarioAlvoId, destinatarioId: me },
+        ],
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error("desvincularTreino", e);
+    return res.status(500).json({ message: "Erro ao desvincular treino." });
   }
 }
