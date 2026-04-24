@@ -2765,6 +2765,8 @@ enum Categoria {
   Sub13
   Sub15
   Sub16
+  Sub17
+  Sub20
   Livre
 }
 
@@ -3010,5 +3012,7 @@ enum FaixaEtariaExercicio {
   Sub13
   Sub15
   Sub16
+  Sub17
+  Sub20
   Livre
 }
