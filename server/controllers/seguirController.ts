@@ -209,7 +209,21 @@ export async function statusSeguidor(req: Request, res: Response) {
     select: { id: true },
   });
 
-  return res.json({ seguindo: !!exists, isFollowing: !!exists });
+  const pendente = await prisma.notificacao.findFirst({
+    where: {
+      usuarioId: seguidoUsuarioId,
+      actorId: seguidorUsuarioId,
+      tipo: NotificacaoTipo.FOLLOW,
+      lida: false,
+    },
+    select: { id: true },
+  });
+
+  return res.json({
+    seguindo: !!exists,
+    isFollowing: !!exists,
+    pendente: !!pendente,
+  });
 }
 
 export async function minhaRede(req: any, res: Response) {
@@ -230,12 +244,33 @@ export async function minhaRede(req: any, res: Response) {
     const seguindo = seguidos.map((s) => s.seguidoUsuario);
     const seguindoSet = new Set(seguindo.map((u) => u.id));
 
+    const pendentes = await prisma.notificacao.findMany({
+      where: {
+        actorId: usuarioId,
+        tipo: NotificacaoTipo.FOLLOW,
+        lida: false,
+      },
+      include: {
+        usuario: {
+          select: { id: true, nome: true, foto: true },
+        },
+      },
+    });
+
+    const seguindoComPendentes = [
+      ...seguindo.map((u) => ({ ...u, isPendente: false })),
+      ...pendentes
+        .map((p) => p.usuario)
+        .filter((u) => !seguindoSet.has(u.id))
+        .map((u) => ({ ...u, isPendente: true })),
+    ];
+
     const seguidoresFmt = seguidores.map((s) => ({
       ...s.seguidorUsuario,
       isSeguindo: seguindoSet.has(s.seguidorUsuario.id),
     }));
 
-    return res.json({ seguindo, seguidores: seguidoresFmt });
+    return res.json({ seguindo: seguindoComPendentes, seguidores: seguidoresFmt });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ message: "Erro ao carregar minha rede" });

@@ -141,6 +141,7 @@ export default function ProfileHeader({
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
   const [ehFavorito, setEhFavorito] = useState(false);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
+  const [followPendente, setFollowPendente] = useState(false);
   const [treinoJunto, setTreinoJunto] = useState<boolean>(false);
   const [souSolicitanteTreino, setSouSolicitanteTreino] = useState<boolean | null>(null);
   const [temVinculoTreino, setTemVinculoTreino] = useState(false);
@@ -194,6 +195,11 @@ export default function ProfileHeader({
     onYes: () => Promise<void> | void;
   } | null>(null);
 
+  function avisarVinculoAlterado() {
+    window.dispatchEvent(new CustomEvent("footera:vinculo-treino-alterado", {
+      detail: { perfilId }
+    }));
+  }
   const podeVerPresenca =
   isOwnProfile || isMe || temVinculoTreino || isMutuoFollow;
 
@@ -1003,9 +1009,17 @@ const alvoUsuarioIdFavorito = isOwnProfile
         const ids = extrairIdsSeguindo(j);
 
         const isSeguindo = ids.includes(String(perfilId).trim());
-
+        
         if (!alive) return;
-        setSeguindo(isSeguindo);
+        const statusResp = await fetch(
+          `${API.BASE_URL}/api/seguidores/status?seguidoUsuarioId=${encodeURIComponent(perfilId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const statusJson = statusResp.ok ? await statusResp.json().catch(() => null) : null;
+
+        setSeguindo(Boolean(statusJson?.seguindo || isSeguindo));
+        setFollowPendente(Boolean(statusJson?.pendente && !statusJson?.seguindo));
 
         if (cacheKey) localStorage.setItem(cacheKey, isSeguindo ? "1" : "0");
       } catch {
@@ -1065,6 +1079,22 @@ const alvoUsuarioIdFavorito = isOwnProfile
   }, [isOwnProfile]);
 
   useEffect(() => {
+    function onVinculoAlterado() {
+      setChecouVinculo(false);
+      setTemVinculoTreino(false);
+      setTreinoJunto(false);
+      setSouSolicitanteTreino(null);
+      localStorage.removeItem(storageKey);
+    }
+
+    window.addEventListener("footera:vinculo-treino-alterado", onVinculoAlterado);
+
+    return () => {
+      window.removeEventListener("footera:vinculo-treino-alterado", onVinculoAlterado);
+    };
+  }, [storageKey]);
+
+  useEffect(() => {
     if (!alvoUsuarioIdFavorito) return;
     const token = Storage.token;
     if (!token) return;
@@ -1111,6 +1141,8 @@ const alvoUsuarioIdFavorito = isOwnProfile
 
     if (resp.ok) {
       alert("Solicitação enviada. Aguarde a pessoa aceitar.");
+      setFollowPendente(true);
+      setSeguindo(false);
       return true;
     }
 
@@ -1122,10 +1154,16 @@ const alvoUsuarioIdFavorito = isOwnProfile
   const cacheKey = me ? `follow_${me}_${perfilId}` : null;
 
   const toggleSeguir = async () => {
+    if (followPendente) {
+      alert("Solicitação já enviada. Aguarde a pessoa aceitar.");
+      return;
+    }
+
     if (seguindo) {
       const ok = await deixarDeSeguir(perfilId);
       if (ok) {
         setSeguindo(false);
+        setFollowPendente(false);
         if (cacheKey) localStorage.setItem(cacheKey, "0");
       }
       return;
@@ -1133,8 +1171,9 @@ const alvoUsuarioIdFavorito = isOwnProfile
 
     const ok = await seguirUsuario();
     if (ok) {
-      setSeguindo(true);
-      if (cacheKey) localStorage.setItem(cacheKey, "1");
+      setSeguindo(false);
+      setFollowPendente(true);
+      if (cacheKey) localStorage.setItem(cacheKey, "0");
     }
   };
 
@@ -1190,6 +1229,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
         setTreinoJunto(false);
         setSouSolicitanteTreino(null);
         localStorage.removeItem(storageKey);
+        avisarVinculoAlterado();
       } else {
         alert("Não foi possível desvincular agora.");
       }
@@ -1206,6 +1246,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
         setTreinoJunto(false);
         setSouSolicitanteTreino(null);
         localStorage.removeItem(storageKey);
+        avisarVinculoAlterado();
       }
       return;
     }
@@ -1227,6 +1268,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
       setTreinoJunto(true);
       setSouSolicitanteTreino(true);
       localStorage.setItem(storageKey, "1");
+      avisarVinculoAlterado();
     }
   };
 
@@ -1541,7 +1583,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
               aria-pressed={!!seguindo}
               onClick={toggleSeguir}
               className={`${btnBase} ${
-                seguindo
+                seguindo || followPendente
                   ? "bg-white/10 text-white border border-white/40"
                   : "bg-green-600 text-green-900"
               } 
@@ -1552,12 +1594,20 @@ const alvoUsuarioIdFavorito = isOwnProfile
                   ? "Carregando..."
                   : seguindo
                   ? "Deixar de seguir"
+                  : followPendente
+                  ? "Solicitação enviada"
                   : "Seguir"
               }
             >
               <UserPlus size={16} />
               <span className="truncate">
-                {seguindo === null ? "..." : seguindo ? "Seguindo" : "Seguir"}
+                {seguindo === null
+                  ? "..."
+                  : seguindo
+                  ? "Seguindo"
+                  : followPendente
+                  ? "Solicitação enviada"
+                  : "Seguir"}
               </span>
             </button>
 

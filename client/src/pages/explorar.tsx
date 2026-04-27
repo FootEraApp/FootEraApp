@@ -188,18 +188,18 @@ const CAT_LABEL: Record<string, string> = {
   Sub16: "Sub-16",
   Livre: "Livre",
 };
-const CATEGORIAS = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
+const CATEGORIAS = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
 
 const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   if (idade == null) return null;
-  if (idade <= 3) return "Sub-3";
-  if (idade <= 5) return "Sub-5";
-  if (idade <= 7) return "Sub-7";
-  if (idade <= 9) return "Sub-9";
-  if (idade <= 11) return "Sub-11";
-  if (idade <= 13) return "Sub-13";
-  if (idade <= 15) return "Sub-15";
-  if (idade <= 16) return "Sub-16";
+  if (idade <= 3) return "Sub3";
+  if (idade <= 5) return "Sub5";
+  if (idade <= 7) return "Sub7";
+  if (idade <= 9) return "Sub9";
+  if (idade <= 11) return "Sub11";
+  if (idade <= 13) return "Sub13";
+  if (idade <= 15) return "Sub15";
+  if (idade <= 16) return "Sub16";
   return "Livre";
 };
 

@@ -309,17 +309,25 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
             ? { atletaId: null, professorId: null, clubeId: ownerId, escolinhaId: null }
             : { atletaId: null, professorId: null, clubeId: null, escolinhaId: ownerId };
 
-        await prisma.conquistaVinculo.create({
-          data: {
+        await prisma.conquistaVinculo.upsert({
+          where: {
+            ownerTipo_ownerId_conquistaId: {
+              ownerTipo,
+              ownerId,
+              conquistaId: c.id,
+            },
+          },
+          update: {},
+          create: {
             ownerTipo,
             ownerId,
             conquistaId: c.id,
+            ...ownerFkData,
             progresso: 0,
             concluida: false,
             conquistadoEm: null,
             refTipo: null,
             refId: null,
-            ...ownerFkData,
           },
         });
       }

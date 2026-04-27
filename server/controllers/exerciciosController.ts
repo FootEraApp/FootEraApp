@@ -48,6 +48,24 @@ function parseNullableInt(value: unknown): number | null {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
+const FAIXAS_ETARIAS_VALIDAS = [
+  "Sub3",
+  "Sub5",
+  "Sub7",
+  "Sub9",
+  "Sub11",
+  "Sub13",
+  "Sub15",
+  "Sub16",
+  "Livre",
+];
+
+function normalizarFaixasEtarias(value: unknown): string[] {
+  return parseArrayField(value)
+    .map((f) => f.replace("-", ""))
+    .filter(Boolean);
+}
+
 // ✅ Limpeza do S3 se precisar remover um vídeo
 async function removePublicFileIfExists(fileUrl?: string | null) {
   if (!fileUrl) return;
@@ -279,16 +297,26 @@ export const criarExercicio = async (req: Request, res: Response) => {
     const exercicioMesmoNome = await prisma.exercicio.findFirst({ where: { nomeNormalizado }, select: { id: true } });
     if (exercicioMesmoNome) return res.status(400).json({ message: "Já existe um exercício com esse nome." });
 
-    const personalizadoMesmoNome = await prisma.exercicioPersonalizado.findFirst({ where: { nomeNormalizado }, select: { id: true } });
-    if (personalizadoMesmoNome) return res.status(400).json({ message: "Já existe um exercício personalizado com esse nome." });
+    const meuPersonalizadoMesmoNome = await prisma.exercicioPersonalizado.findFirst({
+      where: {
+        nomeNormalizado,
+        criadorUsuarioId: userId,
+      },
+      select: { id: true },
+    });
 
+    if (meuPersonalizadoMesmoNome) {
+      return res.status(400).json({
+        message: "Você já possui um exercício personalizado com esse nome.",
+      });
+    }
     if (tipo && !["Tecnico", "Fisico", "Tatico", "Mental"].includes(String(tipo))) {
       return res.status(400).json({ message: "Tipo inválido." });
     }
 
-    const faixasEtarias = parseArrayField(req.body.faixaEtaria);
-    const faixasValidas = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
-
+    const faixasEtarias = normalizarFaixasEtarias(req.body.faixaEtaria);
+    const faixasValidas = FAIXAS_ETARIAS_VALIDAS;
+    
     if (!tipo || !String(tipo).trim()) return res.status(400).json({ message: "Tipo é obrigatório." });
     if (!nivel || !String(nivel).trim()) return res.status(400).json({ message: "Nível é obrigatório." });
     if (!["Base", "Avancado", "Performance"].includes(String(nivel))) return res.status(400).json({ message: "Nível inválido." });
@@ -398,8 +426,8 @@ export const editarExercicio = async (req: Request, res: Response) => {
     if (!tipo || !String(tipo).trim()) return res.status(400).json({ message: "Tipo é obrigatório." });
     if (!nivel || !String(nivel).trim()) return res.status(400).json({ message: "Nível é obrigatório." });
 
-    const faixasEtarias = parseArrayField(req.body.faixaEtaria);
-    const faixasValidas = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
+    const faixasEtarias = normalizarFaixasEtarias(req.body.faixaEtaria);
+    const faixasValidas = FAIXAS_ETARIAS_VALIDAS;
 
     if (faixasEtarias.some((faixa) => !faixasValidas.includes(faixa))) return res.status(400).json({ message: "Faixa etária inválida." });
     if (faixasEtarias.length === 0) return res.status(400).json({ message: "Selecione pelo menos uma faixa etária." });
@@ -415,9 +443,20 @@ export const editarExercicio = async (req: Request, res: Response) => {
     const nomeDuplicadoExercicio = await prisma.exercicio.findFirst({ where: { nomeNormalizado, NOT: { id: idAtual } }, select: { id: true } });
     if (nomeDuplicadoExercicio) return res.status(400).json({ message: "Já existe outro exercício com esse nome." });
 
-    const nomeDuplicadoPersonalizado = await prisma.exercicioPersonalizado.findFirst({ where: { nomeNormalizado, NOT: { id: idAtual } }, select: { id: true } });
-    if (nomeDuplicadoPersonalizado) return res.status(400).json({ message: "Já existe um exercício personalizado com esse nome." });
+    const nomeDuplicadoPersonalizado = await prisma.exercicioPersonalizado.findFirst({
+      where: {
+        nomeNormalizado,
+        criadorUsuarioId: userId,
+        NOT: { id: idAtual },
+      },
+      select: { id: true },
+    });
 
+    if (nomeDuplicadoPersonalizado) {
+      return res.status(400).json({
+        message: "Você já possui um exercício personalizado com esse nome.",
+      });
+    }
     // ✅ Validação de duração LENDO DIRETO DA URL DO S3
     if (novaVideoUrl) {
       try {

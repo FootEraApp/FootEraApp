@@ -19,14 +19,14 @@ import { loadGestorContext, clearGestorContext } from "../utils/gestorSession";
 import Avatar from "../components/shared/Avatar";
 
 export type CategoriaBase =
-  | "Sub-3"
-  | "Sub-5"
-  | "Sub-7"
-  | "Sub-9"
-  | "Sub-11"
-  | "Sub-13"
-  | "Sub-15"
-  | "Sub-16"
+  | "Sub3"
+  | "Sub5"
+  | "Sub7"
+  | "Sub9"
+  | "Sub11"
+  | "Sub13"
+  | "Sub15"
+  | "Sub16"
   | "Livre";
 
 export type Posicao =
@@ -314,18 +314,18 @@ const posicoesMap: Record<string, string> = {
 
 type PosicaoCodigo = keyof typeof posicoesMap;
 
+const labelCategoria = (c?: string | null) =>
+  !c ? "" : c === "Livre" ? "Livre" : c.replace("Sub", "Sub-");
+
 const apiToUiCategoria = (c?: string | null): CategoriaBase | null => {
   if (!c) return null;
   if (c === "Livre") return "Livre";
-  if (c.startsWith("Sub-")) return c as CategoriaBase;
-  if (c.startsWith("Sub"))  return (`Sub-${c.slice(3)}` as CategoriaBase);
-  return null;
+  return c.replace("-", "") as CategoriaBase;
 };
 
 const uiToApiCategoria = (c?: CategoriaBase | ""): string | undefined => {
   if (!c) return undefined;
-  if (c === "Livre") return "Livre";
-  return c.replace("Sub-", "Sub");
+  return c.replace("-", "");
 };
 
 const GerenciarAtletas: React.FC = () => {
@@ -850,6 +850,33 @@ const GerenciarAtletas: React.FC = () => {
     })();
   }, [carreiraOpen, focado?.id, cursorMonth]);
 
+  useEffect(() => {
+    function atualizar() {
+      setAtletas([]);
+      setFocado(null);
+      setDetalheAtivo(false);
+      carregarAtletas();
+    }
+
+    window.addEventListener("focus", atualizar);
+    window.addEventListener("footera:vinculo-treino-alterado", atualizar);
+
+    return () => {
+      window.removeEventListener("focus", atualizar);
+      window.removeEventListener("footera:vinculo-treino-alterado", atualizar);
+    };
+  }, [
+    tipo,
+    usuarioIdEntidade,
+    contextoTipo,
+    contextoTipoUsuarioId,
+    q,
+    categoria,
+    posicaoCodigo,
+    status,
+    ordenacao,
+  ]);
+  
   const chartData = useMemo(() => {
     const bins = [
       { semana: "Semana 1", treinos: 0, desafios: 0 },
@@ -1240,10 +1267,8 @@ async function salvarAvaliacao() {
               className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-400"
             />
           </div>
-        </div>
-        <div className="md:col-span-3">
           <select
-            value={categoria}
+            value={labelCategoria(categoria)}
             onChange={(e) => setCategoria(e.target.value as any)}
             className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] sm:text-sm"
           >
@@ -1417,12 +1442,25 @@ async function salvarAvaliacao() {
                     {filtrados.map((a) => (
                       <div key={a.id} className="p-3">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={getFoto(a.foto)}
-                            alt={nomeCompletoAtleta(a)}
-                            onError={onImgErrorFallback}
-                            className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setLocation(`/perfil/${a.usuarioId}`)}
+                            title="Ver perfil do atleta"
+                            className="shrink-0"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setLocation(`/perfil/${a.usuarioId}`)}
+                              title="Ver perfil do atleta"
+                            >
+                              <img
+                                src={getFoto(a.foto)}
+                                alt={nomeCompletoAtleta(a)}
+                                onError={onImgErrorFallback}
+                                className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow cursor-pointer hover:opacity-80"
+                              />
+                            </button>
+                          </button>
 
                           <div className="min-w-0 flex-1">
                             <div className="font-semibold text-zinc-900 truncate">

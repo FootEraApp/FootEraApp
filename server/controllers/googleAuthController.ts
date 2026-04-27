@@ -3,9 +3,10 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { Nivel, StatusCref, TipoUsuario, AuthProvider } from "@prisma/client";
+import { Nivel, StatusCref, TipoUsuario, AuthProvider, NotificacaoTipo } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { validateGoogleCredential } from "../services/googleTokenService.js";
+import { recomputeAndEmitBadge } from "./notificacoesController.js";
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
@@ -77,6 +78,57 @@ function gerarJwt(usuario: {
     JWT_SECRET,
     { expiresIn: "7d" }
   );
+}
+
+async function criarSolicitacaoVinculoCadastro(params: {
+  remetenteId: string;
+  destinatarioId?: string;
+}) {
+  const remetenteId = String(params.remetenteId || "").trim();
+  const destinatarioId = String(params.destinatarioId || "").trim();
+
+  if (!remetenteId || !destinatarioId || remetenteId === destinatarioId) return;
+
+  const [remetente, destinatario] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: remetenteId }, select: { id: true } }),
+    prisma.usuario.findUnique({ where: { id: destinatarioId }, select: { id: true } }),
+  ]);
+
+  if (!remetente || !destinatario) return;
+
+  const existente = await prisma.solicitacaoTreino.findFirst({
+    where: {
+      status: { in: ["pendente", "ativa"] },
+      OR: [
+        { remetenteId, destinatarioId },
+        { remetenteId: destinatarioId, destinatarioId: remetenteId },
+      ],
+    },
+  });
+
+  if (!existente) {
+    await prisma.solicitacaoTreino.create({
+      data: {
+        remetenteId,
+        destinatarioId,
+        status: "pendente",
+      },
+    });
+  }
+
+  await prisma.notificacao.create({
+    data: {
+      usuarioId: destinatarioId,
+      actorId: remetenteId,
+      tipo: NotificacaoTipo.GENERICA,
+      titulo: "Solicitação de vínculo",
+      mensagem: "quer se vincular/treinar junto com você",
+      link: "/notificacoes",
+      lida: false,
+    },
+  });
+
+  await recomputeAndEmitBadge(destinatarioId);
 }
 
 async function montarRespostaAuth(usuarioId: string) {
@@ -276,6 +328,8 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     dataNascimento,
     responsavel,
     vinculo,
+    headline,
+    siteOuLinkedin,
   } = req.body ?? {};
 
   if (!preCadastroToken || !senha || !tipo || !nomeDeUsuario) {
@@ -490,6 +544,8 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
             emailPublico: emailPublico ?? emailNorm,
             telefonePublico: telefonePublico ?? null,
             colaboracaoClubeId: colaboracaoClubeId || null,
+            headline: headline ?? null,
+            siteOuLinkedin: siteOuLinkedin ?? null,
           },
           select: { id: true },
         });
@@ -552,18 +608,11 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       console.warn("Falha ao criar privacidade padrão:", e);
     }
 
-    if (
-      tipoEnum === TipoUsuario.Atleta &&
-      vinculo?.desejaVinculo &&
-      vinculo?.destinatarioId
-    ) {
+    if (vinculo?.desejaVinculo && vinculo?.destinatarioId) {
       try {
-        await prisma.solicitacaoTreino.create({
-          data: {
-            remetenteId: usuario.id,
-            destinatarioId: String(vinculo.destinatarioId),
-            status: "pendente" as any,
-          },
+        await criarSolicitacaoVinculoCadastro({
+          remetenteId: usuario.id,
+          destinatarioId: vinculo.destinatarioId,
         });
       } catch (e) {
         console.warn("Falha ao criar solicitação de vínculo:", e);

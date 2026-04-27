@@ -539,20 +539,33 @@ async function atletaTemVinculo(atletaId: string) {
 
 function normalizeCategorias(input: any): Categoria[] {
   if (!input) return [];
+
   const arr = Array.isArray(input) ? input : [input];
 
-  const mapOne = (raw: any): string => {
-    const s = String(raw).trim();
-    const m = s.match(/^sub[\s-]?(\d{1,2})$/i);
-    if (m) return `Sub-${m[1]}`;
-    if (/^livre$/i.test(s)) return "Livre";
-    return s;
+  const mapa: Record<string, Categoria> = {
+    sub3: "Sub3" as Categoria,
+    sub5: "Sub5" as Categoria,
+    sub7: "Sub7" as Categoria,
+    sub9: "Sub9" as Categoria,
+    sub11: "Sub11" as Categoria,
+    sub13: "Sub13" as Categoria,
+    sub15: "Sub15" as Categoria,
+    sub16: "Sub16" as Categoria,
+    livre: "Livre" as Categoria,
   };
 
-  const mapped = arr.map(mapOne);
-  const valid = mapped.filter((c) => (Object.values(Categoria) as string[]).includes(c));
-  if (valid.length !== mapped.length) throw new Error("Categoria(s) inválida(s)");
-  return valid as Categoria[];
+  const out = arr.map((raw) => {
+    const key = String(raw || "")
+      .trim()
+      .replace(/-/g, "")
+      .toLowerCase();
+
+    const valor = mapa[key];
+    if (!valor) throw new Error("Categoria(s) inválida(s)");
+    return valor;
+  });
+
+  return Array.from(new Set(out));
 }
 
 function normalizeTipoTreino(input: any): TipoTreino | undefined {

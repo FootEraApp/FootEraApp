@@ -69,7 +69,7 @@ export const MESSAGES = {
 export const FLAGS = {
   DESAFIOS_ENABLED: false,
   LEARNING_ENABLED: true,
-  PAGAMENTOS_ENABLED: false,
+  PAGAMENTOS_ENABLED: true,
   FORMADORES_ENABLED: false,
 } as const;
 

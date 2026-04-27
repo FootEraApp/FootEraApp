@@ -1,12 +1,13 @@
 //server/controllers/cadastroController
 import { Request, Response } from "express";
-import { TipoUsuario, Nivel, StatusCref } from "@prisma/client";
+import { TipoUsuario, Nivel, StatusCref, NotificacaoTipo} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmailVerification } from "../utils/mailer.js";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
+import { recomputeAndEmitBadge } from "./notificacoesController.js";
 
 const FRONTEND_URL = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
 
@@ -389,6 +390,43 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
       results.push(...normOlheiro(olheiros));
     }
 
+    if (!tipo || tipo === "Todos" || tipo === "Atleta") {
+      const atletas = await prisma.atleta.findMany({
+        where: {
+          usuario: {
+            OR: [
+              { nome: { contains: q, mode: "insensitive" } },
+              { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+            ],
+          },
+        },
+        select: {
+          id: true,
+          usuario: {
+            select: {
+              id: true,
+              verified: true,
+              nome: true,
+              email: true,
+              nomeDeUsuario: true,
+              foto: true,
+            },
+          },
+        },
+        take: 20,
+      });
+
+      results.push(
+        ...atletas.map((a) => ({
+          id: a.id,
+          usuarioId: a.usuario?.id,
+          tipo: "Atleta" as const,
+          nome: a.usuario?.nome ?? "",
+          username: a.usuario?.nomeDeUsuario ?? "",
+          fotoUrl: absUrl(a.usuario?.foto),
+        }))
+      );
+    }
     results.sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
     return res.json(results);
   } catch (e) {
@@ -397,11 +435,62 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
   }
 }
 
+async function criarSolicitacaoVinculoCadastro(params: {
+  remetenteId: string;
+  destinatarioId?: string;
+}) {
+  const remetenteId = String(params.remetenteId || "").trim();
+  const destinatarioId = String(params.destinatarioId || "").trim();
+
+  if (!remetenteId || !destinatarioId || remetenteId === destinatarioId) return;
+
+  const [remetente, destinatario] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: remetenteId }, select: { id: true } }),
+    prisma.usuario.findUnique({ where: { id: destinatarioId }, select: { id: true } }),
+  ]);
+
+  if (!remetente || !destinatario) return;
+
+  const existente = await prisma.solicitacaoTreino.findFirst({
+    where: {
+      status: { in: ["pendente", "ativa"] },
+      OR: [
+        { remetenteId, destinatarioId },
+        { remetenteId: destinatarioId, destinatarioId: remetenteId },
+      ],
+    },
+  });
+
+  if (!existente) {
+    await prisma.solicitacaoTreino.create({
+      data: {
+        remetenteId,
+        destinatarioId,
+        status: "pendente",
+      },
+    });
+  }
+
+  await prisma.notificacao.create({
+    data: {
+      usuarioId: destinatarioId,
+      actorId: remetenteId,
+      tipo: NotificacaoTipo.GENERICA,
+      titulo: "Solicitação de vínculo",
+      mensagem: "quer se vincular/treinar junto com você",
+      link: "/notificacoes",
+      lida: false,
+    },
+  });
+
+  await recomputeAndEmitBadge(destinatarioId);
+}
+
 export const cadastrarUsuario = async (req: Request, res: Response) => {
   const {
     nome, email, senha, tipo,
     nomeDeUsuario, cidade, estado, pais, bairro, cpf,
-    idade, categoria, logradouro,
+    idade, categoria, logradouro, vinculo,
     areaFormacao, cref, statusCref,
     nomeClube, cnpjClube, telefone1Clube, telefone2Clube, emailClube, siteOficialClube, sedeClube, logradouroClube, numeroClube,
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
@@ -492,6 +581,55 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
+
+        if (
+          tipo === "ATLETA" &&
+          vinculo?.desejaVinculo &&
+          vinculo?.destinatarioId
+        ) {
+          const destinatarioId = String(vinculo.destinatarioId || "").trim();
+
+          const destinatarioExiste = await prisma.usuario.findUnique({
+            where: { id: destinatarioId },
+            select: { id: true },
+          });
+
+          if (destinatarioExiste) {
+            const existente = await prisma.solicitacaoTreino.findFirst({
+              where: {
+                status: { in: ["pendente", "ativa"] },
+                OR: [
+                  { remetenteId: usuario.id, destinatarioId },
+                  { remetenteId: destinatarioId, destinatarioId: usuario.id },
+                ],
+              },
+            });
+
+            if (!existente) {
+              await prisma.solicitacaoTreino.create({
+                data: {
+                  remetenteId: usuario.id,
+                  destinatarioId,
+                  status: "pendente",
+                },
+              });
+            }
+
+            await prisma.notificacao.create({
+              data: {
+                usuarioId: destinatarioId,
+                actorId: usuario.id,
+                tipo: "GENERICA",
+                titulo: "Solicitação de treino",
+                mensagem: "quer se vincular/treinar junto com você",
+                link: "/notificacoes",
+                lida: false,
+              },
+            });
+
+            await recomputeAndEmitBadge(destinatarioId);
+          }
+        }
 
         await prisma.pontuacaoAtleta.create({ data: { atletaId: atleta.id } });
         tipoUsuarioId = atleta.id;
@@ -677,6 +815,13 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           - d.getFullYear()
           - ((hoje.getMonth() < d.getMonth()
               || (hoje.getMonth() === d.getMonth() && hoje.getDate() < d.getDate())) ? 1 : 0);
+      }
+
+      if (vinculo?.desejaVinculo && vinculo?.destinatarioId) {
+        await criarSolicitacaoVinculoCadastro({
+          remetenteId: usuario.id,
+          destinatarioId: vinculo.destinatarioId,
+        });
       }
 
       const privacidadeDefault =

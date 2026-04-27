@@ -4,14 +4,14 @@ import { Request, Response } from "express";
 
 function categoriaPorIdade(idade?: number | null): string {
   if (idade == null) return "Livre";
-  if (idade <= 3) return "Sub-3";
-  if (idade <= 5) return "Sub-5";
-  if (idade <= 7) return "Sub-7";
-  if (idade <= 9)  return "Sub-9";
-  if (idade <= 11) return "Sub-11";
-  if (idade <= 13) return "Sub-13";
-  if (idade <= 15) return "Sub-15";
-  if (idade <= 16) return "Sub-16";
+  if (idade <= 3) return "Sub3";
+  if (idade <= 5) return "Sub5";
+  if (idade <= 7) return "Sub7";
+  if (idade <= 9) return "Sub9";
+  if (idade <= 11) return "Sub11";
+  if (idade <= 13) return "Sub13";
+  if (idade <= 15) return "Sub15";
+  if (idade <= 16) return "Sub16";
   return "Livre";
 }
 

@@ -146,7 +146,11 @@ type ExLinha = {
   customVideoPosterUrl?: string | null;
 };
 
-const opcoesCategorias = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
+const opcoesCategorias = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
+
+const labelCategoria = (c: string) =>
+  c === "Livre" ? "Livre" : c.replace("Sub", "Sub-");
+
 const opcoesNiveis = ["Base", "Avancado", "Performance"];
 const opcoesTipoTreino = ["Técnico", "Tático", "Físico", "Mental"];
 
@@ -1771,7 +1775,7 @@ export default function CriarOuEditarTreino() {
                     const checked = catsSelecionadas.includes(cat);
                     return (
                       <label
-                        key={cat}
+                        key={labelCategoria(cat)}
                         className={[
                           "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition",
                           checked

@@ -204,9 +204,24 @@ async function resolverSessaoTreinoId(sessaoTreino?: any, sessaoTreinoId?: any) 
 }
 
 function normCategoria(v?: string): Categoria {
-  const s = String(v || "").replace(/-/g, "").toUpperCase();
-  const ok = ["Sub-3","Sub-5","Sub-7","Sub-9","Sub-11","Sub-13","Sub-15","Sub-16","Livre"];
-  return (ok.includes(s) ? s : "Sub-13") as Categoria;
+  const s = String(v || "")
+    .trim()
+    .replace(/-/g, "")
+    .toLowerCase();
+
+  const mapa: Record<string, Categoria> = {
+    sub3: "Sub3" as Categoria,
+    sub5: "Sub5" as Categoria,
+    sub7: "Sub7" as Categoria,
+    sub9: "Sub9" as Categoria,
+    sub11: "Sub11" as Categoria,
+    sub13: "Sub13" as Categoria,
+    sub15: "Sub15" as Categoria,
+    sub16: "Sub16" as Categoria,
+    livre: "Livre" as Categoria,
+  };
+
+  return mapa[s] ?? ("Sub13" as Categoria);
 }
 
 export const createTreinoProgramado = async (req: Request, res: Response) => {

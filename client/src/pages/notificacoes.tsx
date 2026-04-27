@@ -282,6 +282,7 @@ export default function PaginaNotificacoes() {
       }
 
       setSolicitacoes((prev) => prev.filter((s) => s.id !== id));
+      window.dispatchEvent(new Event("footera:vinculo-treino-alterado"));
     } catch (err) {
       console.error("Erro ao responder solicitação:", err);
       alert("Não foi possível processar a solicitação agora.");
