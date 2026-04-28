@@ -74,7 +74,7 @@ interface UsuarioAdmin {
   blockedReason?: string | null;
 }
 
-type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
+type PlanoAssinatura = "FREE" | "PRO" | "LEARNING" | string;
 
 interface AssinaturaDTO {
   id?: string;
@@ -477,6 +477,7 @@ const [assQ, setAssQ] = useState("");
 const [assDebQ, setAssDebQ] = useState("");
 const [assPlano, setAssPlano] = useState<string>("");
 const [assAtivo, setAssAtivo] = useState<string>("");
+const [assTipo, setAssTipo] = useState<string>("");
 const [assPage, setAssPage] = useState(1);
 const assPageSize = 20;
 const [assLoading, setAssLoading] = useState(false);
@@ -932,7 +933,7 @@ useEffect(() => {
   if (aba !== "assinaturas") return;
   void carregarAssinantes(1);
   void carregarAssOverview();
-}, [aba, assPlano, assAtivo, assDebQ]);
+}, [aba, assPlano, assAtivo, assDebQ, assTipo]);
 
 useEffect(() => {
   if (aba !== "feedback") return;
@@ -1133,6 +1134,7 @@ useEffect(() => {
       params.set("pageSize", String(assPageSize));
       if (assDebQ) params.set("q", assDebQ);
       if (assPlano) params.set("plano", assPlano);
+      if (assTipo) params.set("tipo", assTipo);
       if (assAtivo) params.set("ativo", assAtivo);
 
       const r = await fetch(`${API.BASE_URL}/api/admin/assinantes?${params}`, { headers: authHeaders() });
@@ -2958,7 +2960,19 @@ async function confirmarExcluirProfessor() {
                 <option value="">Todos os planos</option>
                 <option value="FREE">FREE</option>
                 <option value="PRO">PRO</option>
-                <option value="ELITE">ELITE</option>
+                <option value="LEARNING">LEARNING</option>
+              </select>
+              <select
+                value={assTipo}
+                onChange={(e) => setAssTipo(e.target.value)}
+                className="border rounded px-3 py-2"
+              >
+                <option value="">Todos os tipos</option>
+                <option value="Atleta">Atleta</option>
+                <option value="Escolinha">Escola/Escolinha</option>
+                <option value="Clube">Clube</option>
+                <option value="Professor">Professor</option>
+                <option value="Olheiro">Olheiro</option>
               </select>
               <select value={assAtivo} onChange={(e) => setAssAtivo(e.target.value)} className="border rounded px-3 py-2">
                 <option value="">Status (todos)</option>
@@ -3030,7 +3044,7 @@ async function confirmarExcluirProfessor() {
                               className="text-blue-600"
                               onClick={async () => {
                                 const atual = a.plano ?? "FREE";
-                                const novo = prompt('Novo plano (FREE | PRO | ELITE):', String(atual))?.toUpperCase().trim();
+                                const novo = prompt('Novo plano (FREE | PRO | LEARNING):', String(atual))?.toUpperCase().trim();
                                 if (!novo) return;
                                 await alterarPlanoAssinatura(u.id, novo);
                                 await carregarAssinantes(assPage);
@@ -3040,7 +3054,7 @@ async function confirmarExcluirProfessor() {
                               Trocar plano
                             </button>
 
-                            {a.ativo ? (
+                            {a.ativo && (
                               <button
                                 className="text-red-600"
                                 onClick={async () => {
@@ -3050,17 +3064,6 @@ async function confirmarExcluirProfessor() {
                                 }}
                               >
                                 Cancelar
-                              </button>
-                            ) : (
-                              <button
-                                className="text-green-700"
-                                onClick={async () => {
-                                  await reativarAssinatura(u.id);
-                                  await carregarAssinantes(assPage);
-                                  await carregarAssOverview();
-                                }}
-                              >
-                                Reativar
                               </button>
                             )}
                           </div>
@@ -3740,7 +3743,7 @@ async function confirmarExcluirProfessor() {
                             className="px-3 py-2 bg-blue-600 text-white rounded"
                             onClick={async () => {
                               const atual = u.assinatura?.plano ?? "FREE";
-                              const novo = prompt('Novo plano (FREE | PRO | ELITE):', String(atual))?.toUpperCase().trim();
+                              const novo = prompt('Novo plano (FREE | PRO | LEARNING):', String(atual))?.toUpperCase().trim();
                               if (!novo) return;
                               await alterarPlanoAssinatura(u.id, novo);
                             }}
@@ -3748,19 +3751,12 @@ async function confirmarExcluirProfessor() {
                             Trocar plano
                           </button>
 
-                          {u.assinatura?.ativo ? (
+                          {u.assinatura?.ativo && (
                             <button
                               className="px-3 py-2 bg-red-600 text-white rounded"
                               onClick={() => cancelarAssinatura(u.id)}
                             >
                               Cancelar assinatura
-                            </button>
-                          ) : (
-                            <button
-                              className="px-3 py-2 bg-green-700 text-white rounded"
-                              onClick={() => reativarAssinatura(u.id)}
-                            >
-                              Reativar assinatura
                             </button>
                           )}
                         </div>

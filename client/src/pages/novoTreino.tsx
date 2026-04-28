@@ -412,7 +412,11 @@ interface TreinoProgramado {
   } | null;
   criadorNome?: string | null;
   criadorTipo?: string | null;
-  criadores?: { id: string; nome: string }[];
+  criadores?: {
+    tipo: "Professor" | "Clube" | "Escolinha";
+    id: string;
+    nome: string;
+  }[];
 }
 
 interface Elenco {
@@ -907,6 +911,7 @@ export default function NovoTreino() {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState([]);
   type AbaTreinosAtleta = "meu_professor" | "footera";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
+  const [buscaTreinoAtleta, setBuscaTreinoAtleta] = useState("");
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
   const [professorVinculadoIds, setProfessorVinculadoIds] = useState<string[]>([]);
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
@@ -3579,21 +3584,41 @@ export default function NovoTreino() {
     );
 
   if (usuario.tipo === "atleta") {
-    const treinosMeuProfessorBrutos =
-      professorVinculadoIds.length === 0
-        ? []
-        : treinosDisponiveis.filter((t) => {
-            const criadoresIds = (t.criadores || []).map((c) => String(c.id));
-            const criadorId = t.criador?.id ? String(t.criador.id) : "";
-            const todos = new Set<string>([...criadoresIds, ...(criadorId ? [criadorId] : [])]);
-            return professorVinculadoIds.some((pid) => todos.has(String(pid)));
-          });
+    const normalizarBusca = (v: string) =>
+      String(v || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
 
-    const treinosMeuProfessor = treinosMeuProfessorBrutos;
+    const termoBusca = normalizarBusca(buscaTreinoAtleta);
+
+    const treinosMeuProfessor = treinosDisponiveis;
+
     const treinosParceirosFootera = treinosFootera;
 
-    const listaAtiva =
-      abaTreinosAtleta === "meu_professor" ? treinosMeuProfessor : treinosParceirosFootera;
+    const listaBase =
+      abaTreinosAtleta === "meu_professor"
+        ? treinosMeuProfessor
+        : treinosParceirosFootera;
+
+    const listaAtiva = termoBusca
+      ? listaBase.filter((t) => {
+          const nomesCriadores = [
+            t.criador?.nome,
+            t.criadorNome,
+            ...(t.criadores || []).map((c) => c.nome),
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          const textoBusca = normalizarBusca(
+            `${t.nome || ""} ${t.descricao || ""} ${nomesCriadores}`
+          );
+
+          return textoBusca.includes(termoBusca);
+        })
+      : listaBase;
 
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
@@ -3621,7 +3646,7 @@ export default function NovoTreino() {
                 : "bg-white text-green-900 border-green-200 hover:bg-green-50",
             ].join(" ")}
           >
-            Meu professor
+            Meus vinculados
           </button>
 
           <button
@@ -3638,18 +3663,31 @@ export default function NovoTreino() {
           </button>
         </div>
 
+        <div className="relative mb-4">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+          <input
+            value={buscaTreinoAtleta}
+            onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
+            placeholder={
+              abaTreinosAtleta === "meu_professor"
+                ? "Pesquisar por treino, professor, clube ou escolinha..."
+                : "Pesquisar por treino ou professor Footera..."
+            }
+            className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
+          />
+        </div>
+
         {listaAtiva.length === 0 ? (
           <div className="text-gray-600 bg-white border rounded-xl p-4">
             {abaTreinosAtleta === "meu_professor" ? (
               <>
-                {professorVinculadoIds.length === 0 ? (
-                  <p>
-                    Você ainda não possui <b>professor vinculado</b>. Assim que houver vínculo,
-                    os treinos dele aparecerão aqui.
-                  </p>
+                {buscaTreinoAtleta.trim() ? (
+                  <p>Nenhum treino encontrado para essa busca.</p>
                 ) : (
                   <p>
-                    Nenhum treino do seu professor está disponível para agendar no momento.
+                    Nenhum treino dos seus professores, clubes ou escolinhas vinculados está
+                    disponível para agendar no momento.
                   </p>
                 )}
               </>
@@ -5427,10 +5465,21 @@ export default function NovoTreino() {
           </div>
         </div>
       )}
-      
-    
-      <BottomNav />
-      
+      <div className="relative mb-4">
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+        <input
+          value={buscaTreinoAtleta}
+          onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
+          placeholder={
+            abaTreinosAtleta === "meu_professor"
+              ? "Pesquisar por treino, professor, clube ou escolinha..."
+              : "Pesquisar por treino ou professor Footera..."
+          }
+          className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
+        />
+      </div>
+      <BottomNav />     
     </div>
   );
 }

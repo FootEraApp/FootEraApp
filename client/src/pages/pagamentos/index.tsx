@@ -498,7 +498,7 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Atleta Pro",
     monthly: 19.9,          // <- mantenha o valor que você já usa no backend
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais"],
+    benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais"],
   },
   ATLETA_LEARNING_1: {
     id: "ATLETA_LEARNING_1",
