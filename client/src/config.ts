@@ -71,6 +71,11 @@ export const FLAGS = {
   LEARNING_ENABLED: true,
   PAGAMENTOS_ENABLED: true,
   FORMADORES_ENABLED: false,
+
+  // Pagamentos
+  PAGAMENTOS_SHOW_LEARNING_PLANS: false,
+  PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS: false,
+  PAGAMENTOS_SHOW_METODOLOGIAS_LEARNING: false,
 } as const;
 
 export default { API, APP, appUrl };

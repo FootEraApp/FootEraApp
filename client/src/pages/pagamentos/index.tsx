@@ -10,7 +10,7 @@ import {
   Layers,
   Receipt,
 } from "lucide-react";
-import { API } from "../../config.js";
+import { API, FLAGS } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { Link } from "wouter";
 
@@ -651,9 +651,9 @@ export default function PagamentosPage() {
 
   const hadPersistRef = useRef(false);
   const isOlheiro = roleSelected === "Olheiro";
-  const allowLearning = !isOlheiro;
-  const allowPlus = !isOlheiro;
-  const allowMetodologias = !isOlheiro;
+  const allowLearning = FLAGS.PAGAMENTOS_SHOW_LEARNING_PLANS && !isOlheiro;
+  const allowPlus = false;
+  const allowMetodologias = FLAGS.PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS && !isOlheiro;
 
   const [periodPro, setPeriodPro] = useState<Periodicidade>("Mensal");
   const [periodLearning, setPeriodLearning] = useState<Periodicidade>("Mensal");
@@ -777,24 +777,22 @@ export default function PagamentosPage() {
       });
     }
 
-    // ✅ metodologias avulsas (mantém como está por enquanto)
-    Object.entries(pickMetods).forEach(([methId, checked]) => {
-      if (!checked) return;
+    if (FLAGS.PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS) {
+      Object.entries(pickMetods).forEach(([methId, checked]) => {
+        if (!checked) return;
 
-      const meth = metodologiasAvulsas.find((x) => x.id === methId);
-      if (!meth) return;
+        const meth = metodologiasAvulsas.find((x) => x.id === methId);
+        if (!meth) return;
 
-      const price = Number(meth.precoAssinaturaMensal ?? 0);
-      const label = `Metodologia Avulsa: ${meth.titulo}`;
-
-      items.push({
-        planoId: meth.planoId || `METODOLOGIA_AVULSA:${meth.id}`,
-        periodicidade: "Mensal",
-        label,
-        price,
-        categoria: "METODOLOGIA_AVULSA",
+        items.push({
+          planoId: meth.planoId || `METODOLOGIA_AVULSA:${meth.id}`,
+          periodicidade: "Mensal",
+          label: `Metodologia Avulsa: ${meth.titulo}`,
+          price: Number(meth.precoAssinaturaMensal ?? 0),
+          categoria: "METODOLOGIA_AVULSA",
+        });
       });
-    });
+    }
 
     return uniqueCart(items);
   }
@@ -937,9 +935,13 @@ export default function PagamentosPage() {
         setApiPlans(json?.plans || []);
 
         await loadMe();
-        const rMet = await fetch(`${API.BASE_URL}/api/billing/metodologias-avulsas`, { headers });
-        const jMet = await rMet.json().catch(() => ({}));
-        setMetodologiasAvulsas(jMet.items || []);
+        if (FLAGS.PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS) {
+          const rMet = await fetch(`${API.BASE_URL}/api/billing/metodologias-avulsas`, { headers });
+          const jMet = await rMet.json().catch(() => ({}));
+          setMetodologiasAvulsas(jMet.items || []);
+        } else {
+          setMetodologiasAvulsas([]);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -1696,16 +1698,21 @@ export default function PagamentosPage() {
             opts.push({ id: "OLHEIRO_PRO", show: true });
           } else if (roleSelected === "Professor") {
             opts.push({ id: planId("Professor", "PRO"), show: true });
-            opts.push({ id: planId("Professor", "LEARNING_1"), show: true });
-            opts.push({ id: planId("Professor", "LEARNING_3"), show: true });
+            if (allowLearning) {
+              opts.push({ id: planId("Professor", "LEARNING_1"), show: true });
+              opts.push({ id: planId("Professor", "LEARNING_3"), show: true });
+            }
           } else if (roleSelected === "Organizações") {
             opts.push({ id: planId("Organizações", "PRO"), show: true });
-            opts.push({ id: planId("Organizações", "LEARNING_3"), show: true });
+            if (allowLearning) {
+              opts.push({ id: planId("Organizações", "LEARNING_3"), show: true });
+            }
           } else {
-            // Atleta
             opts.push({ id: planId("Atleta", "PRO"), show: true });
-            opts.push({ id: planId("Atleta", "LEARNING_1"), show: true });
-            opts.push({ id: planId("Atleta", "LEARNING_3"), show: true });
+            if (allowLearning) {
+              opts.push({ id: planId("Atleta", "LEARNING_1"), show: true });
+              opts.push({ id: planId("Atleta", "LEARNING_3"), show: true });
+            }
           }
 
           return (
@@ -1741,7 +1748,7 @@ export default function PagamentosPage() {
       </section>
 
       {allowMetodologias && (
-      <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
         <div className="flex items-center gap-2 mb-2">
           <Receipt className="w-5 h-5 text-amber-700" />
           <h2 className="font-semibold text-lg">Metodologias avulsas</h2>

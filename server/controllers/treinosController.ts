@@ -2808,8 +2808,33 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
 
     await prisma.treinoAgendado.update({
       where: { id: treinoAgendadoId },
-      data: { status: TreinoAgendadoStatus.CONCLUIDO },
+      data: {
+        status: TreinoAgendadoStatus.CONCLUIDO,
+        finishedAt: new Date(),
+        duracaoSegundos: Number.isFinite(Number(tempoSeg))
+          ? Number(tempoSeg)
+          : duracaoFinal
+            ? duracaoFinal * 60
+            : undefined,
+      },
     });
+
+    if (aprovadoAgora && !jaAprovadaAntes) {
+      await prisma.atividadeRecente.create({
+        data: {
+          usuarioId,
+          tipo: agendado.treinoProgramado?.tipoTreino
+            ? `Treino ${agendado.treinoProgramado.tipoTreino}`
+            : "Treino",
+          titulo: titulo || "Treino concluído",
+          imagemUrl: null,
+          link: `/submissao?treinoAgendadoId=${treinoAgendadoId}`,
+          createdAt: new Date(),
+        },
+      }).catch(() => {});
+
+      await recomputePontuacaoAtleta(atletaId).catch(() => {});
+    }
 
     syncAgendaAtleta(usuarioId, atletaId);
     if (agendado.treinoProgramadoId) syncTreinoProgramado(String(agendado.treinoProgramadoId));
@@ -6358,7 +6383,19 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
 
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
-      include: { atleta: { select: { usuarioId: true } } },
+      include: {
+        atleta: { select: { id: true, usuarioId: true } },
+        treinoProgramado: {
+          select: {
+            id: true,
+            nome: true,
+            pontuacao: true,
+            duracao: true,
+            tipoTreino: true,
+            imagemUrl: true,
+          },
+        },
+      },
     });
 
     if (!ag) {
@@ -6430,6 +6467,69 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       }),
     ]);
 
+    let submissaoFinal: any = null;
+
+    if (updated.atletaId && ag.atleta?.usuarioId) {
+      const pontos = Number(ag.treinoProgramado?.pontuacao ?? 0);
+      const duracaoMinutos = Math.max(
+        1,
+        Math.round(duracao / 60) || Number(ag.treinoProgramado?.duracao ?? 1)
+      );
+
+      const existingSub = await prisma.submissaoTreino.findFirst({
+        where: {
+          atletaId: updated.atletaId,
+          treinoAgendadoId: id,
+        },
+        select: { id: true, aprovado: true },
+        orderBy: { criadoEm: "desc" },
+      });
+
+      submissaoFinal = existingSub
+        ? await prisma.submissaoTreino.update({
+            where: { id: existingSub.id },
+            data: {
+              aprovado: true,
+              pontosCreditados: pontos,
+              pontuacaoSnapshot: pontos,
+              duracaoMinutos,
+              duracaoSegundos: duracao,
+              tipoTreinoSnapshot: ag.treinoProgramado?.tipoTreino ?? undefined,
+              treinoTituloSnapshot: ag.treinoProgramado?.nome ?? ag.titulo ?? "Treino",
+            },
+          })
+        : await prisma.submissaoTreino.create({
+            data: {
+              atletaId: updated.atletaId,
+              usuarioId: ag.atleta.usuarioId,
+              treinoAgendadoId: id,
+              aprovado: true,
+              pontosCreditados: pontos,
+              pontuacaoSnapshot: pontos,
+              duracaoMinutos,
+              duracaoSegundos: duracao,
+              tipoTreinoSnapshot: ag.treinoProgramado?.tipoTreino ?? undefined,
+              treinoTituloSnapshot: ag.treinoProgramado?.nome ?? ag.titulo ?? "Treino",
+            },
+          });
+
+      if (!existingSub?.aprovado) {
+        await prisma.atividadeRecente.create({
+          data: {
+            usuarioId: ag.atleta.usuarioId,
+            tipo: ag.treinoProgramado?.tipoTreino
+              ? `Treino ${ag.treinoProgramado.tipoTreino}`
+              : "Treino",
+            titulo: ag.treinoProgramado?.nome ?? ag.titulo ?? "Treino concluído",
+            imagemUrl: ag.treinoProgramado?.imagemUrl ?? null,
+            createdAt: new Date(),
+          },
+        }).catch(() => {});
+
+        await recomputePontuacaoAtleta(updated.atletaId).catch(() => {});
+      }
+    }
+
     await audit(req, {
       acao: "ALTERAR_AGENDA",
       entidade: "TreinoAgendado",
@@ -6452,6 +6552,7 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       ok: true,
       treino: updated,
       treinoUsuario,
+      submissao: submissaoFinal,
       finishedAt,
       duracaoSegundos: duracao,
     });

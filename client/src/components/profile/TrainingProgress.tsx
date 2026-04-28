@@ -335,22 +335,18 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
       return (Array.isArray(raw) ? raw : []).map((t: any) => {
        
       const submissaoTreinosCount =
-        typeof t?.submissaoTreinos === "number"
-          ? t.submissaoTreinos
-          : typeof t?.submissaoTreinos === "string"
-            ? Number(t.submissaoTreinos)
-            : null;
-
+        Array.isArray(t?.submissoesTreino)
+          ? t.submissoesTreino.length
+          : Number(t?.submissaoTreinos || 0);
+          
       const temSubmissao =
         Boolean(t?.submissao?.feito === true) ||
-        Boolean(
-          typeof t?.submissaoTreinos === "number" && t.submissaoTreinos > 0
-        );
+        Boolean(submissaoTreinosCount && submissaoTreinosCount > 0) ||
         Boolean(t?.submissaoTreinoId || t?.submissaoId) ||
         Boolean(t?.submissaoTreino?.id || t?.submissao?.id) ||
         (Array.isArray(t?.submissoesTreino) && t.submissoesTreino.some((s: any) => s?.id)) ||
         (Array.isArray(t?.submissoes) && t.submissoes.some((s: any) => s?.id));
-
+        
         const dataTreinoWire =
           t?.dataTreino ??
           t?.dataHora ??                
