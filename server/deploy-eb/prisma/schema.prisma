@@ -107,11 +107,13 @@ model Usuario {
   AvaliacaoMetodologia    AvaliacaoMetodologia[]
   treinosCriadosComoAdmin TreinoProgramado[]        @relation("TreinoProgramadoCriadorUsuario")
 
-  metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
-  metodologiasAssinadas MetodologiaAssinante[]
+  metodologiasCriadas        Metodologia[]          @relation("MetodologiaCriador")
+  metodologiasAssinadas      MetodologiaAssinante[]
+  metodologiasAvulsasCriadas MetodologiaAvulsa[]    @relation("MetodologiaAvulsaCriador")
 
-  LoginEvent             LoginEvent[]
-  ExercicioPersonalizado ExercicioPersonalizado[]
+  LoginEvent               LoginEvent[]
+  ExercicioPersonalizado   ExercicioPersonalizado[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -225,6 +227,7 @@ model Professor {
   clubeId                     String?
   Metodologia                 Metodologia[]
   OrganizacaoGestor           OrganizacaoGestor[]
+  MetodologiaAvulsa           MetodologiaAvulsa[]
 
   @@index([organizacaoId])
 }
@@ -421,7 +424,7 @@ model Atleta {
 model TreinoProgramado {
   id           String                @id @default(uuid())
   codigo       String?
-  nome         String                @unique
+  nome         String
   descricao    String?
   nivel        Nivel
   createdAt    DateTime              @default(now())
@@ -451,23 +454,38 @@ model TreinoProgramado {
 
   professores TreinoProgramadoProfessor[]
 
-  clube                    Clube?                      @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha                Escolinha?                  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  clube                    Clube?                           @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha                Escolinha?                       @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   exercicios               TreinoProgramadoExercicio[]
   treinoAgendado           TreinoAgendado[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
   realizados               TreinoRealizado[]
   metodologiaItens         MetodologiaItem[]
+  metodologiaAvulsaItens   MetodologiaAvulsaEstruturaItem[] @relation("TreinoProgramadoMetodologiaAvulsaItens")
+
   EstatisticaTreino        EstatisticaTreino[]
   TreinoProfessorUso       TreinoProfessorUso[]
   TreinoRotinaItem         TreinoRotinaItem[]
   SessaoTreinoTurma        SessaoTreinoTurma[]
-  Professor                Professor?                  @relation(fields: [professorId], references: [id])
+  Professor                Professor?                 @relation(fields: [professorId], references: [id])
   professorId              String?
   MetodologiaEstruturaItem MetodologiaEstruturaItem[]
+  sessaoTreinoId           String?
+  sessaoTreino             TreinoSessao?              @relation(fields: [sessaoTreinoId], references: [id], onDelete: SetNull)
 
+  @@index([sessaoTreinoId])
   @@index([criadorProfessorId])
   @@index([criadorUsuarioId])
+}
+
+model TreinoSessao {
+  id              String   @id @default(uuid())
+  nome            String
+  nomeNormalizado String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  treinos TreinoProgramado[]
 }
 
 model TreinoProgramadoProfessor {
@@ -494,6 +512,7 @@ model TreinoProgramadoExercicio {
   series                   Int?
   duracao                  String?
   descanso                 String?
+  descricaoExecucao        String?
   exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
   exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
   treinoProgramado         TreinoProgramado        @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
@@ -578,7 +597,8 @@ model ExercicioPersonalizado {
 model CertificadoMetodologia {
   id                     String    @id @default(uuid())
   usuarioId              String
-  metodologiaId          String
+  metodologiaId          String?
+  metodologiaAvulsaId    String?
   metodologiaAssinanteId String?
   codigoValidacao        String    @unique
   nomeUsuario            String
@@ -589,10 +609,14 @@ model CertificadoMetodologia {
   imagemUrl              String?
   pdfUrl                 String?
 
-  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  metodologia Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario           Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, metodologiaId])
+  @@unique([usuarioId, metodologiaAvulsaId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
 }
 
 model Metodologia {
@@ -629,11 +653,12 @@ model Metodologia {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens             MetodologiaItem[]
-  assinantes        MetodologiaAssinante[]
-  MetodologiaTreino MetodologiaTreino[]
-  avaliacoes        AvaliacaoMetodologia[]
-  certificados      CertificadoMetodologia[]
+  itens                    MetodologiaItem[]
+  assinantes               MetodologiaAssinante[]
+  MetodologiaTreino        MetodologiaTreino[]
+  avaliacoes               AvaliacaoMetodologia[]
+  certificados             CertificadoMetodologia[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -653,7 +678,6 @@ model MetodologiaEstrutura {
   objetivo  String?
   ordem     Int
 
-  // config de ciclo - usada principalmente para trilha de treino
   duracaoSemanas         Int?
   treinosPorSemana       Int?
   quantidadeMinConclusao Int?
@@ -662,16 +686,17 @@ model MetodologiaEstrutura {
   bonusConsistencia      Int?
   bonusFinal             Int?
   permiteAtraso          Boolean                  @default(true)
-  prazoInicio            DateTime? // NOVO
+  prazoInicio            DateTime?
   prazoFinal             DateTime?
-  percentualPerdaAtraso  Int?                     @default(20) // recomendado
+  percentualPerdaAtraso  Int?                     @default(20)
 
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens      MetodologiaEstruturaItem[]
-  progressos MetodologiaProgressoEstrutura[]
+  itens                    MetodologiaEstruturaItem[]
+  progressos               MetodologiaProgressoEstrutura[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([metodologiaId, ordem])
   @@index([metodologiaId])
@@ -714,8 +739,9 @@ model MetodologiaEstruturaItem {
   obrigatorio Boolean @default(true)
   publicado   Boolean @default(true)
 
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([estruturaId, ordem])
   @@index([estruturaId])
@@ -775,13 +801,55 @@ model MetodologiaItem {
   @@index([semana])
 }
 
-model MetodologiaAssinante {
-  id            String @id @default(uuid())
-  metodologiaId String
-  usuarioId     String
+model MetodologiaItemSubmissao {
+  id String @id @default(uuid())
 
-  metodologia         Metodologia                     @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  usuario             Usuario                         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+
+  estruturaId       String?
+  estruturaAvulsaId String?
+
+  itemId       String?
+  itemAvulsaId String?
+
+  usuarioId String
+
+  tipoItem   String
+  observacao String?
+  arquivoUrl String?
+  mimeType   String?
+  status     String  @default("ENVIADA")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+
+  estrutura       MetodologiaEstrutura?       @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  estruturaAvulsa MetodologiaAvulsaEstrutura? @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+
+  item       MetodologiaEstruturaItem?       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemAvulsa MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([metodologiaId, estruturaId, itemId, usuarioId])
+  @@index([metodologiaAvulsaId, estruturaAvulsaId, itemAvulsaId, usuarioId])
+}
+
+model MetodologiaAssinante {
+  id String @id @default(uuid())
+
+  metodologiaId       String?
+  usuarioId           String
+  metodologiaAvulsaId String?
+
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario           Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
   origem              MetodologiaAssinaturaOrigem     @default(LEARNING)
   expiraEm            DateTime?
   status              MetodologiaAssinaturaStatus     @default(ATIVA)
@@ -797,9 +865,118 @@ model MetodologiaAssinante {
   lastAccessAt DateTime?
 
   @@unique([metodologiaId, usuarioId])
+  @@unique([metodologiaAvulsaId, usuarioId])
   @@index([usuarioId])
   @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
   @@index([status])
+}
+
+model MetodologiaAvulsa {
+  id               String  @id @default(uuid())
+  titulo           String
+  descricao        String?
+  capaUrl          String?
+  ativo            Boolean @default(false)
+  criadorUsuarioId String
+  criadorUsuario   Usuario @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+
+  professorId String?
+  professor   Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+
+  escolinhaId String?
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+
+  publicoAlvo     MetodologiaPublicoAlvo   @default(AMBOS)
+  tipo            MetodologiaTipo
+  estruturaTipo   MetodologiaEstruturaTipo
+  area            MetodologiaArea?
+  geraCertificado Boolean                  @default(false)
+  geraBadge       Boolean                  @default(false)
+
+  precoAssinaturaMensal Decimal @db.Decimal(10, 2)
+
+  mediaAvaliacao Float?
+  totalReviews   Int    @default(0)
+
+  estruturas   MetodologiaAvulsaEstrutura[]
+  assinantes   MetodologiaAssinante[]
+  certificados CertificadoMetodologia[]
+
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  AvaliacaoMetodologia     AvaliacaoMetodologia[]
+
+  @@index([criadorUsuarioId])
+  @@index([ativo])
+}
+
+model MetodologiaAvulsaEstrutura {
+  id                  String            @id @default(uuid())
+  metodologiaAvulsaId String
+  metodologiaAvulsa   MetodologiaAvulsa @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+
+  tipo      MetodologiaEstruturaTipo
+  titulo    String
+  descricao String?
+  objetivo  String?
+  ordem     Int
+
+  duracaoSemanas         Int?
+  treinosPorSemana       Int?
+  quantidadeMinConclusao Int?
+  modoExecucao           MetodologiaModoExecucao?
+  pontosPorItem          Int?
+  bonusConsistencia      Int?
+  bonusFinal             Int?
+  permiteAtraso          Boolean                  @default(true)
+  prazoInicio            DateTime?
+  prazoFinal             DateTime?
+  percentualPerdaAtraso  Int?                     @default(20)
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  itens                    MetodologiaAvulsaEstruturaItem[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  @@unique([metodologiaAvulsaId, ordem])
+  @@index([metodologiaAvulsaId])
+}
+
+model MetodologiaAvulsaEstruturaItem {
+  id                       String                     @id @default(uuid())
+  estruturaId              String
+  estrutura                MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  ordem                    Int
+  titulo                   String
+  descricao                String?
+  tipo                     MetodologiaItemTipo
+
+  videoUrl    String?
+  thumbUrl    String?
+  arquivoUrl  String?
+  materialUrl String?
+  duracaoMin  Int?
+
+  treinoProgramadoId String?
+  treinoProgramado   TreinoProgramado? @relation("TreinoProgramadoMetodologiaAvulsaItens", fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
+
+  pontos      Int?
+  obrigatorio Boolean @default(true)
+  publicado   Boolean @default(true)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([estruturaId, ordem])
+  @@index([estruturaId])
 }
 
 model DesafioOficial {
@@ -983,6 +1160,7 @@ model Escolinha {
   conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
   indicacoes             Indicacao[]
   Metodologia            Metodologia[]
+  MetodologiaAvulsa      MetodologiaAvulsa[]
 }
 
 model Comentario {
@@ -1046,6 +1224,7 @@ model Clube {
   ProfessorClube         ProfessorClube[]
   conquistas             ConquistaVinculo[]       @relation("ConquistaClube")
   Metodologia            Metodologia[]
+  MetodologiaAvulsa      MetodologiaAvulsa[]
 }
 
 model SolicitacaoVinculo {
@@ -1160,18 +1339,23 @@ model AvaliacaoTreino {
 }
 
 model AvaliacaoMetodologia {
-  id            String      @id @default(uuid())
-  metodologiaId String
-  usuarioId     String
-  nota          Int
-  comentario    String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(uuid())
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+  usuarioId           String
+  nota                Int
+  comentario          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  usuario           Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([metodologiaId, usuarioId])
+  @@unique([metodologiaAvulsaId, usuarioId])
   @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
   @@index([usuarioId])
   @@index([createdAt])
 }
@@ -1324,7 +1508,7 @@ model TreinoAgendado {
   id                 String  @id @default(uuid())
   titulo             String
   local              String?
-  atletaId           String
+  atletaId           String?
   treinoProgramadoId String?
 
   dataTreino    DateTime?
@@ -1351,7 +1535,7 @@ model TreinoAgendado {
   finishedAt      DateTime?
   duracaoSegundos Int?
 
-  atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
   submissaoTreinos SubmissaoTreino[]
   avaliacaoTreino  AvaliacaoTreino[]
@@ -1856,13 +2040,13 @@ model Consentimento {
 }
 
 model Turma {
-  id          String     @id @default(uuid())
+  id          String      @id @default(uuid())
   nome        String
-  categoria   String?
+  categoria   Categoria[] @default([])
   descricao   String?
-  ativo       Boolean    @default(true)
+  ativo       Boolean     @default(true)
   escolinhaId String?
-  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  escolinha   Escolinha?  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
 
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -2573,10 +2757,14 @@ enum Nivel {
 }
 
 enum Categoria {
+  Sub3
+  Sub5
+  Sub7
   Sub9
   Sub11
   Sub13
   Sub15
+  Sub16
   Sub17
   Sub20
   Livre
@@ -2816,10 +3004,14 @@ enum EspacoExercicio {
 }
 
 enum FaixaEtariaExercicio {
+  Sub3
+  Sub5
+  Sub7
   Sub9
   Sub11
   Sub13
   Sub15
+  Sub16
   Sub17
   Sub20
   Livre

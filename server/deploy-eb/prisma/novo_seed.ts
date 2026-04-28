@@ -73,7 +73,7 @@ export async function seedAtletas10() {
         posicao: PosicaoCampo.PD, altura: 1.60, peso: 54,
         nacionalidade: "Brasileira", naturalidade: "Guarapari - ES",
         telefone1: "11990000006", seloQualidade: "Bronze",
-        categoria: [Categoria.Sub15], foto: "/assets/usuarios/isadora.jpg",
+        categoria: [Categoria.Livre], foto: "/assets/usuarios/isadora.jpg",
       },
       local: { cidade: "Guarapari", estado: "ES", pais: "Brasil" },
     },
