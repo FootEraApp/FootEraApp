@@ -1873,12 +1873,14 @@ model VinculoFormacao {
   origemId    String
   inicio      DateTime?
   fim         DateTime?
-  documentos  String[]
+  documentos  String[]       @default([])
   observacoes String?
   createdAt   DateTime       @default(now())
 
   atleta            Atleta              @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   DocumentoFormador DocumentoFormador[]
+
+  @@unique([atletaId, origem, origemId])
 }
 
 model TransferenciaFormador {

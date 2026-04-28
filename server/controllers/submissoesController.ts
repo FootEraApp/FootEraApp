@@ -19,7 +19,6 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { logCapabilityDenied } from "server/services/observability.js";
 import { prisma } from "../prisma.js";
 
-
 async function resolveUsuarioIdForActivity(_: string | undefined, atletaId: string) {
   const atleta = await prisma.atleta.findUnique({
     where: { id: atletaId },
@@ -241,6 +240,7 @@ export async function criarSubmissaoTreinoUpload(
         pontuacaoSnapshot: pontosConsiderados,
         repeticoes: repeticoesNum,
         midias: { create: [midia] },
+        tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
       },
       create: {
         treinoAgendadoId,
@@ -254,9 +254,40 @@ export async function criarSubmissaoTreinoUpload(
         pontuacaoSnapshot: pontosConsiderados,
         repeticoes: repeticoesNum,
         midias: { create: [midia] },
+        tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
       },
       select: { id: true, criadoEm: true },
     });
+
+        // marcar treino concluído
+    await prisma.treinoAgendado.update({
+      where: { id: treinoAgendadoId },
+      data: {
+        status: "CONCLUIDO",
+        finishedAt: new Date(),
+      },
+    });
+
+    // criar atividade recente
+    const usuarioId = await resolveUsuarioIdForActivity(undefined, atletaId);
+
+    if (usuarioId && !existing) {
+      await prisma.atividadeRecente.create({
+        data: {
+          usuarioId,
+          tipo: ag.treinoProgramado.tipoTreino
+            ? `Treino ${ag.treinoProgramado.tipoTreino}`
+            : "Treino",
+          titulo: ag.treinoProgramado.nome || "Treino concluído",
+          imagemUrl: ag.treinoProgramado.imagemUrl || assetUrl || null,
+          link: `/submissao?treinoAgendadoId=${treinoAgendadoId}`,
+          createdAt: new Date(),
+        },
+      });
+    }
+
+    // recalcular pontuação total
+    await recomputePontuacaoAtleta(atletaId);
 
     const isFirst = !existing;
     if (isFirst) {
@@ -267,20 +298,6 @@ export async function criarSubmissaoTreinoUpload(
         minutosConsiderados
       ).catch(() => {});
     }
-
-    if (usuarioIdForActivity) {
-      await prisma.atividadeRecente
-        .create({
-          data: {
-            usuarioId: usuarioIdForActivity,
-            tipo: "treino",
-            imagemUrl: assetUrl,
-          },
-        })
-        .catch(() => {});
-    }
-
-    await recomputePontuacaoAtleta(atletaId).catch(() => {});
 
     const atleta = await prisma.atleta.findUnique({
       where: { id: atletaId },

@@ -421,8 +421,8 @@ function PaginaFeed(): JSX.Element {
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
   const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
 
-  const toggleFiltro = (target: "seguindo" | "favoritos") => {
-    setFiltro((atual) => (atual === target ? "todos" : target));
+  const selecionarFiltro = (target: "todos" | "seguindo" | "favoritos") => {
+    setFiltro(target);
   };
 
   const userId = Storage.usuarioId as string | null;
@@ -727,34 +727,45 @@ function PaginaFeed(): JSX.Element {
   };
 
   return (
-  <div className="px-4 pt-0 pb-24 space-y-6">
+    <div className="px-4 pt-0 pb-24 space-y-6">
       <HeaderSliderLite title="Feed de Postagens" start="feed" />
+        <div className="max-w-xl mx-auto flex gap-2 justify-start mb-4 px-1">
+          <button
+            onClick={() => selecionarFiltro("todos")}
+            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
+              ${
+                filtro === "todos"
+                  ? "bg-green-700 text-white border-green-700"
+                  : "bg-white text-green-700 border-green-200"
+              }`}
+          >
+            Ver tudo
+          </button>
 
-<div className="max-w-xl mx-auto flex gap-2 justify-start mb-4 px-1">
-  <button
-    onClick={() => toggleFiltro("seguindo")}
-    className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
-      ${
-        filtro === "seguindo"
-          ? "bg-green-700 text-white border-green-700"
-          : "bg-white text-green-700 border-green-200"
-      }`}
-  >
-    Seguindo
-  </button>
+          <button
+            onClick={() => selecionarFiltro("seguindo")}
+            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
+              ${
+                filtro === "seguindo"
+                  ? "bg-green-700 text-white border-green-700"
+                  : "bg-white text-green-700 border-green-200"
+              }`}
+          >
+            Seguindo
+          </button>
 
-  <button
-    onClick={() => toggleFiltro("favoritos")}
-    className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
-      ${
-        filtro === "favoritos"
-          ? "bg-green-700 text-white border-green-700"
-          : "bg-white text-green-700 border-green-200"
-      }`}
-  >
-    Favoritos
-  </button>
-</div>
+          <button
+            onClick={() => selecionarFiltro("favoritos")}
+            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
+              ${
+                filtro === "favoritos"
+                  ? "bg-green-700 text-white border-green-700"
+                  : "bg-white text-green-700 border-green-200"
+              }`}
+          >
+            Favoritos
+          </button>
+        </div>
 
       {posts.length === 0 && (
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">

@@ -95,18 +95,20 @@ export default function LearningCard({
 
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-4">
-        <img
-          src={capa}
-          onError={(e) => {
-            e.currentTarget.onerror = null;
-            e.currentTarget.src = AVATAR_FALLBACK;
-          }}
-          alt={item?.titulo || "Metodologia"}
-          className="w-20 h-20 rounded-2xl border object-cover bg-white"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
+        <div className="w-full overflow-hidden rounded-2xl border bg-slate-100">
+          <img
+            src={capa}
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = AVATAR_FALLBACK;
+            }}
+            alt={item?.titulo || "Metodologia"}
+            className="w-full aspect-[16/9] object-cover bg-white"
+          />
+        </div>
 
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {item?.publicoAlvo ? (
               <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-slate-50 text-slate-700">

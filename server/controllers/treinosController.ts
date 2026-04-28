@@ -539,20 +539,33 @@ async function atletaTemVinculo(atletaId: string) {
 
 function normalizeCategorias(input: any): Categoria[] {
   if (!input) return [];
+
   const arr = Array.isArray(input) ? input : [input];
 
-  const mapOne = (raw: any): string => {
-    const s = String(raw).trim();
-    const m = s.match(/^sub[\s-]?(\d{1,2})$/i);
-    if (m) return `Sub-${m[1]}`;
-    if (/^livre$/i.test(s)) return "Livre";
-    return s;
+  const mapa: Record<string, Categoria> = {
+    sub3: "Sub3" as Categoria,
+    sub5: "Sub5" as Categoria,
+    sub7: "Sub7" as Categoria,
+    sub9: "Sub9" as Categoria,
+    sub11: "Sub11" as Categoria,
+    sub13: "Sub13" as Categoria,
+    sub15: "Sub15" as Categoria,
+    sub16: "Sub16" as Categoria,
+    livre: "Livre" as Categoria,
   };
 
-  const mapped = arr.map(mapOne);
-  const valid = mapped.filter((c) => (Object.values(Categoria) as string[]).includes(c));
-  if (valid.length !== mapped.length) throw new Error("Categoria(s) inválida(s)");
-  return valid as Categoria[];
+  const out = arr.map((raw) => {
+    const key = String(raw || "")
+      .trim()
+      .replace(/-/g, "")
+      .toLowerCase();
+
+    const valor = mapa[key];
+    if (!valor) throw new Error("Categoria(s) inválida(s)");
+    return valor;
+  });
+
+  return Array.from(new Set(out));
 }
 
 function normalizeTipoTreino(input: any): TipoTreino | undefined {
@@ -2795,8 +2808,33 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
 
     await prisma.treinoAgendado.update({
       where: { id: treinoAgendadoId },
-      data: { status: TreinoAgendadoStatus.CONCLUIDO },
+      data: {
+        status: TreinoAgendadoStatus.CONCLUIDO,
+        finishedAt: new Date(),
+        duracaoSegundos: Number.isFinite(Number(tempoSeg))
+          ? Number(tempoSeg)
+          : duracaoFinal
+            ? duracaoFinal * 60
+            : undefined,
+      },
     });
+
+    if (aprovadoAgora && !jaAprovadaAntes) {
+      await prisma.atividadeRecente.create({
+        data: {
+          usuarioId,
+          tipo: agendado.treinoProgramado?.tipoTreino
+            ? `Treino ${agendado.treinoProgramado.tipoTreino}`
+            : "Treino",
+          titulo: titulo || "Treino concluído",
+          imagemUrl: null,
+          link: `/submissao?treinoAgendadoId=${treinoAgendadoId}`,
+          createdAt: new Date(),
+        },
+      }).catch(() => {});
+
+      await recomputePontuacaoAtleta(atletaId).catch(() => {});
+    }
 
     syncAgendaAtleta(usuarioId, atletaId);
     if (agendado.treinoProgramadoId) syncTreinoProgramado(String(agendado.treinoProgramadoId));
@@ -2950,31 +2988,6 @@ export async function getMeusExercicios(
       })),
     ];
 
-    const exerciciosMapeados = exerciciosBancoDoUsuario.map((e) => ({
-      id: String(e.id),
-      nome: e.nome ?? "Exercício",
-      codigo: (e as any).codigo ?? null,
-      descricao: (e as any).objetivo ?? (e as any).descricao ?? null,
-      objetivo: (e as any).objetivo ?? null,
-      nivel: (e as any).nivel ?? null,
-      categorias: Array.isArray((e as any).faixaEtaria)
-        ? (e as any).faixaEtaria
-        : Array.isArray((e as any).categorias)
-        ? (e as any).categorias
-        : [],
-      videoDemonstrativoUrl:
-        (e as any).videoDemonstrativoUrl ??
-        (e as any).videoUrl ??
-        null,
-      videoPosterUrl: (e as any).videoPosterUrl ?? null,
-      criadoPorId: (e as any).criadoPorId ?? null,
-      series: (e as any).series ?? null,
-      repeticoes: (e as any).repeticoes ?? null,
-      duracao: (e as any).duracao ?? null,
-      descanso: (e as any).descanso ?? null,
-      origem: "catalogo" as const,
-    }));
-
     const personalizadosMapeados = exerciciosPersonalizadosDoUsuario.map((p) => ({
       id: String(p.id),
       nome: p.nome ?? "Exercício",
@@ -2999,10 +3012,33 @@ export async function getMeusExercicios(
       exercicioPersonalizadoId: String(p.id),
     }));
 
-    const combinado = [...exerciciosMapeados, ...personalizadosMapeados];
-    const unicos = deduplicarExerciciosPorNome(combinado);
+    const oficiais = await prisma.exercicio.findMany({
+      select: {
+        id: true,
+        nome: true,
+        nomeNormalizado: true,
+      },
+    });
 
-    return res.json(unicos);
+    const nomesOficiais = new Set(
+      oficiais
+        .map((e) => e.nomeNormalizado || normalizarNomeExercicio(e.nome))
+        .filter(Boolean)
+    );
+
+    const personalizadosSemCatalogo = personalizadosMapeados.filter((p: any) => {
+      const nomeNorm = normalizarNomeExercicio(p.nome);
+      return nomeNorm && !nomesOficiais.has(nomeNorm);
+    });
+
+    return res.json(
+      personalizadosSemCatalogo.map((p: any) => ({
+        ...p,
+        origem: "personalizado",
+        exercicioId: null,
+        exercicioPersonalizadoId: String(p.exercicioPersonalizadoId ?? p.id),
+      }))
+    );
   } catch (error) {
     console.error("Erro ao listar meus exercícios:", error);
     return res.status(500).json({ message: "Erro ao listar meus exercícios." });
@@ -4415,16 +4451,8 @@ export async function criarTreinoProgramado(
         const nomeTemp = String(e?.nome ?? "").trim();
         if (!nomeTemp) continue;
 
-        const hasVideo = !!String(e.videoDemonstrativoUrl ?? e.videoUrl ?? "").trim();
-        const hasPoster = !!String(e.videoPosterUrl ?? "").trim();
-        const forcePersonalizado = hasVideo || hasPoster || !!String(e.exercicioPersonalizadoId ?? "").trim();
-
-        // ✅ se bater no BD, salva como oficial (não cria personalizado)
-        let exercicioBancoId: string | null = null;
-
-        if (!forcePersonalizado) {
-          exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
-        }
+        // Sempre verifica catálogo pelo nome antes de criar personalizado
+        const exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
 
         if (exercicioBancoId) {
           const repeticoesFinal = String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "").trim();
@@ -4497,17 +4525,29 @@ export async function criarTreinoProgramado(
             : (typeof e.exercicioPersonalizado?.descricao === "string" && e.exercicioPersonalizado.descricao.trim())
               ? e.exercicioPersonalizado.descricao.trim()
               : null;
-        // ✅ 1) declara pers ANTES e permite null
-        let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null =
-          await tx.exercicioPersonalizado.findFirst({
+        // 1) Se veio exercicioPersonalizadoId, busca por ID diretamente
+        const providedEpId = String(e.exercicioPersonalizadoId ?? "").trim();
+        let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null = null;
+
+        if (providedEpId) {
+          pers = await tx.exercicioPersonalizado.findUnique({
+            where: { id: providedEpId },
+            select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
+          });
+        }
+
+        // 2) Fallback: busca por criador + nome
+        if (!pers) {
+          pers = await tx.exercicioPersonalizado.findFirst({
             where: {
               criadorUsuarioId,
               nome: { equals: nomeTemp, mode: "insensitive" },
             },
             select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
+        }
 
-        // ✅ 2) garante pers (se não existir, cria)
+        // 3) Se não existe, cria novo personalizado
         if (!pers) {
           pers = await tx.exercicioPersonalizado.create({
             data: {
@@ -6343,7 +6383,19 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
 
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
-      include: { atleta: { select: { usuarioId: true } } },
+      include: {
+        atleta: { select: { id: true, usuarioId: true } },
+        treinoProgramado: {
+          select: {
+            id: true,
+            nome: true,
+            pontuacao: true,
+            duracao: true,
+            tipoTreino: true,
+            imagemUrl: true,
+          },
+        },
+      },
     });
 
     if (!ag) {
@@ -6415,6 +6467,69 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       }),
     ]);
 
+    let submissaoFinal: any = null;
+
+    if (updated.atletaId && ag.atleta?.usuarioId) {
+      const pontos = Number(ag.treinoProgramado?.pontuacao ?? 0);
+      const duracaoMinutos = Math.max(
+        1,
+        Math.round(duracao / 60) || Number(ag.treinoProgramado?.duracao ?? 1)
+      );
+
+      const existingSub = await prisma.submissaoTreino.findFirst({
+        where: {
+          atletaId: updated.atletaId,
+          treinoAgendadoId: id,
+        },
+        select: { id: true, aprovado: true },
+        orderBy: { criadoEm: "desc" },
+      });
+
+      submissaoFinal = existingSub
+        ? await prisma.submissaoTreino.update({
+            where: { id: existingSub.id },
+            data: {
+              aprovado: true,
+              pontosCreditados: pontos,
+              pontuacaoSnapshot: pontos,
+              duracaoMinutos,
+              duracaoSegundos: duracao,
+              tipoTreinoSnapshot: ag.treinoProgramado?.tipoTreino ?? undefined,
+              treinoTituloSnapshot: ag.treinoProgramado?.nome ?? ag.titulo ?? "Treino",
+            },
+          })
+        : await prisma.submissaoTreino.create({
+            data: {
+              atletaId: updated.atletaId,
+              usuarioId: ag.atleta.usuarioId,
+              treinoAgendadoId: id,
+              aprovado: true,
+              pontosCreditados: pontos,
+              pontuacaoSnapshot: pontos,
+              duracaoMinutos,
+              duracaoSegundos: duracao,
+              tipoTreinoSnapshot: ag.treinoProgramado?.tipoTreino ?? undefined,
+              treinoTituloSnapshot: ag.treinoProgramado?.nome ?? ag.titulo ?? "Treino",
+            },
+          });
+
+      if (!existingSub?.aprovado) {
+        await prisma.atividadeRecente.create({
+          data: {
+            usuarioId: ag.atleta.usuarioId,
+            tipo: ag.treinoProgramado?.tipoTreino
+              ? `Treino ${ag.treinoProgramado.tipoTreino}`
+              : "Treino",
+            titulo: ag.treinoProgramado?.nome ?? ag.titulo ?? "Treino concluído",
+            imagemUrl: ag.treinoProgramado?.imagemUrl ?? null,
+            createdAt: new Date(),
+          },
+        }).catch(() => {});
+
+        await recomputePontuacaoAtleta(updated.atletaId).catch(() => {});
+      }
+    }
+
     await audit(req, {
       acao: "ALTERAR_AGENDA",
       entidade: "TreinoAgendado",
@@ -6437,6 +6552,7 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       ok: true,
       treino: updated,
       treinoUsuario,
+      submissao: submissaoFinal,
       finishedAt,
       duracaoSegundos: duracao,
     });
@@ -6626,58 +6742,30 @@ export async function listarExerciciosPersonalizados(
     });
 
     const oficiais = await prisma.exercicio.findMany({
-      select: { nomeNormalizado: true },
-    });
-
-    const oficiaisSet = new Set(
-      oficiais.map((e) => e.nomeNormalizado).filter(Boolean)
-    );
-
-    const exerciciosOficiais = await prisma.exercicio.findMany({
       select: {
+        id: true,
+        nome: true,
         nomeNormalizado: true,
       },
     });
 
     const nomesOficiais = new Set(
-      exerciciosOficiais
-        .map((e) => e.nomeNormalizado)
-        .filter((v): v is string => !!v)
+      oficiais
+        .map((e) => e.nomeNormalizado || normalizarNomeExercicio(e.nome))
+        .filter(Boolean)
     );
 
-    const personalizadosFiltrados = personalizados.filter((p) => {
-      const chave =
-        (p as any).nomeNormalizado ||
-        normalizarNomeExercicio(p.nome ?? "");
-
-      return !nomesOficiais.has(chave);
+    const itensSemDuplicarOficial = itens.filter((item: any) => {
+      const nomeNorm = normalizarNomeExercicio(item.nome);
+      if (nomeNorm && nomesOficiais.has(nomeNorm)) {
+        return false;
+      }
+      return true;
     });
 
-    const out = personalizadosFiltrados.map((p) => ({
-      id: String(p.id),
-      nome: p.nome ?? "Exercício",
-      codigo: (p as any).codigo ?? null,
-      descricao: (p as any).descricao ?? null,
-      objetivo: null,
-      nivel: (p as any).nivel ?? null,
-      categorias: Array.isArray((p as any).categorias)
-        ? (p as any).categorias
-        : [],
-      videoDemonstrativoUrl:
-        (p as any).videoDemonstrativoUrl ??
-        (p as any).videoUrl ??
-        null,
-      videoPosterUrl: (p as any).videoPosterUrl ?? null,
-      criadoPorId: (p as any).criadorUsuarioId ?? null,
-      series: (p as any).series ?? null,
-      repeticoes: (p as any).repeticoes ?? null,
-      duracao: (p as any).duracao ?? null,
-      descanso: (p as any).descanso ?? null,
-      origem: "personalizado" as const,
-      exercicioPersonalizadoId: String(p.id),
-    }));
+    const unicos = deduplicarExerciciosPorNome(itensSemDuplicarOficial);
 
-    return res.json(out);
+    return res.json(unicos);
   } catch (error) {
     console.error("Erro ao listar exercícios personalizados:", error);
     return res.status(500).json({ message: "Erro ao listar exercícios personalizados." });

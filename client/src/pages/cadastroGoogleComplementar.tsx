@@ -1,5 +1,5 @@
 // client/src/pages/cadastroGoogleComplementar.tsx
-import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { API } from "../config.js";
 import logo from "/assets/usuarios/footera-logo.png";
@@ -40,39 +40,67 @@ type CamposProfessor = {
   areaFormacao: string;
   cref?: string;
   statusCref?: StatusCrefUI | undefined;
+  treinaEscolinha: "sim" | "nao" | "";
 };
 
 type CamposClube = {
   nomeClube: string;
   cnpjClube: string;
+  telefone1Clube: string;
+  telefone2Clube: string;
+  emailClube: string;
+  siteOficialClube: string;
+  sedeClube: string;
+  logradouroClube: string;
+  numeroClube: string;
+  complementoClube: string;
+  bairroClube: string;
   cidadeClube: string;
+  estadoClube: string;
+  paisClube: string;
+  cepClube: string;
+  estadio: string;
 };
 
 type CamposEscolinha = {
   nomeEscolinha: string;
   cnpjEscolinha: string;
+  telefone1Escolinha: string;
+  telefone2Escolinha: string;
+  emailEscolinha: string;
+  siteOficialEscolinha: string;
+  sedeEscolinha: string;
+  logradouroEscolinha: string;
+  numeroEscolinha: string;
+  complementoEscolinha: string;
+  bairroEscolinha: string;
   cidadeEscolinha: string;
+  estadoEscolinha: string;
+  paisEscolinha: string;
+  cepEscolinha: string;
 };
 
 type CamposOlheiro = {
   areaAtuacao: string;
   anosExperiencia: number | "";
+  headline: string;
+  siteOuLinkedin: string;
   telefonePublico: string;
   emailPublico: string;
   descricao: string;
-  colaboracaoClubeId?: string;
 };
 
 type CamposVinculo = {
   desejaVinculo: boolean;
-  tipoAlvo: "Professor" | "Escolinha" | "Clube" | "";
+  tipoAlvo: "Atleta" | "Professor" | "Escolinha" | "Clube" | "";
   alvoBusca: string;
   destinatarioId: string;
 };
 
 type ResultadoBusca = {
   id: string;
-  tipo: "Professor" | "Escolinha" | "Clube";
+  usuarioId: string;
+  tipo: "Atleta" | "Professor" | "Escolinha" | "Clube";
   nome: string;
   username: string;
   fotoUrl: string | null;
@@ -101,6 +129,14 @@ type GoogleProfile = {
 };
 
 const PLACEHOLDER_AVATAR = logo;
+
+function getTiposVinculoDisponiveis(tipo: TipoPerfil) {
+  if (tipo === "Atleta") return ["Escolinha", "Professor", "Clube"];
+  if (tipo === "Professor") return ["Atleta", "Escolinha", "Clube", "Professor"];
+  if (tipo === "Clube") return ["Atleta", "Professor", "Escolinha"];
+  if (tipo === "Escolinha") return ["Atleta", "Professor", "Clube"];
+  return [];
+}
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   let t: any;
@@ -169,6 +205,60 @@ function getGooglePreCadastroData() {
   }
 }
 
+const Input = ({
+    label,
+    value,
+    onChange,
+    placeholder,
+    type = "text",
+  }: {
+    label: string;
+    value: string | number;
+    onChange: (v: string) => void;
+    placeholder?: string;
+    type?: string;
+  }) => (
+    <div>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <input
+        type={type}
+        className="w-full border rounded px-3 py-2"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+);
+
+function AccordionInfo({
+  aberto,
+  setAberto,
+  children,
+}: {
+  aberto: boolean;
+  setAberto: (v: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-4 border rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setAberto(!aberto)}
+        className="w-full flex items-center justify-between px-5 py-4 font-semibold text-left"
+      >
+        Informações adicionais (opcional)
+        {aberto ? <ChevronUp /> : <ChevronDown />}
+      </button>
+
+      {aberto && (
+        <div className="border-t p-5 space-y-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CadastroGoogleComplementar() {
   const [, navigate] = useLocation();
 
@@ -198,33 +288,65 @@ export default function CadastroGoogleComplementar() {
   const [etapa, setEtapa] = useState<Etapa>(1);
   const [finalizandoCadastro, setFinalizandoCadastro] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
+  const [infoAdicionalProfessorAberto, setInfoAdicionalProfessorAberto] = useState(false);
+  const [infoAdicionalAtletaAberto, setInfoAdicionalAtletaAberto] = useState(false);
+  const [infoAdicionalClubeAberto, setInfoAdicionalClubeAberto] = useState(false);
+  const [infoAdicionalEscolinhaAberto, setInfoAdicionalEscolinhaAberto] = useState(false);
+  const [infoAdicionalOlheiroAberto, setInfoAdicionalOlheiroAberto] = useState(false);
 
   const [atleta, setAtleta] = useState<CamposAtleta>({ categoria: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({
     areaFormacao: "",
     statusCref: undefined,
     cref: "",
+    treinaEscolinha: "",
   });
 
   const [clube, setClube] = useState<CamposClube>({
     nomeClube: "",
     cnpjClube: "",
     cidadeClube: "",
+    telefone1Clube: "",
+    telefone2Clube: "",
+    emailClube: "",
+    siteOficialClube: "",
+    sedeClube: "",
+    logradouroClube: "",
+    numeroClube: "",
+    complementoClube: "",
+    bairroClube: "",
+    estadoClube: "",
+    paisClube: "",
+    cepClube: "",
+    estadio: "",
   });
 
   const [escolinha, setEscolinha] = useState<CamposEscolinha>({
     nomeEscolinha: "",
     cnpjEscolinha: "",
     cidadeEscolinha: "",
+    telefone1Escolinha: "",
+    telefone2Escolinha: "",
+    emailEscolinha: "",
+    siteOficialEscolinha: "",
+    sedeEscolinha: "",
+    logradouroEscolinha: "",
+    numeroEscolinha: "",
+    complementoEscolinha: "",
+    bairroEscolinha: "",
+    estadoEscolinha: "",
+    paisEscolinha: "",
+    cepEscolinha: "",
   });
 
   const [olheiro, setOlheiro] = useState<CamposOlheiro>({
     areaAtuacao: "",
     anosExperiencia: "",
+    headline: "",
+    siteOuLinkedin: "",
     telefonePublico: "",
     emailPublico: googleProfile?.email || "",
     descricao: "",
-    colaboracaoClubeId: "",
   });
 
   const [vinculo, setVinculo] = useState<CamposVinculo>({
@@ -339,7 +461,7 @@ export default function CadastroGoogleComplementar() {
           if (r.ok) {
             const j = await r.json();
             const arr: ResultadoBusca[] = (Array.isArray(j) ? j : []).filter(
-              (x) => x?.id && x?.nome
+              (x) => x?.id && x?.usuarioId && x?.nome
             );
             setResultadosBusca(arr);
           }
@@ -353,7 +475,7 @@ export default function CadastroGoogleComplementar() {
   useEffect(() => {
     if (
       etapa === 3 &&
-      tipoPerfil === "Atleta" &&
+      getTiposVinculoDisponiveis(tipoPerfil).length > 0 &&
       vinculo.desejaVinculo &&
       vinculo.tipoAlvo &&
       vinculo.alvoBusca.length >= 2
@@ -372,7 +494,7 @@ export default function CadastroGoogleComplementar() {
   ]);
 
   const selectedAlvo: ResultadoBusca | null = useMemo(
-    () => resultadosBusca.find((r) => r.id === vinculo.destinatarioId) || null,
+    () => resultadosBusca.find((r) => r.usuarioId === vinculo.destinatarioId) || null,
     [resultadosBusca, vinculo.destinatarioId]
   );
 
@@ -426,13 +548,6 @@ export default function CadastroGoogleComplementar() {
       }
     }
 
-    if (tipoPerfil === "Professor") {
-      if (!professor.areaFormacao.trim()) {
-        setErro("Informe a área de formação.");
-        return false;
-      }
-    }
-
     if (tipoPerfil === "Clube") {
       if (!clube.nomeClube.trim()) {
         setErro("Informe o nome do clube.");
@@ -456,10 +571,6 @@ export default function CadastroGoogleComplementar() {
     }
 
     if (tipoPerfil === "Olheiro") {
-      if (!olheiro.areaAtuacao.trim()) {
-        setErro("Informe a área de atuação do olheiro.");
-        return false;
-      }
       if (
         olheiro.anosExperiencia !== "" &&
         Number.isNaN(Number(olheiro.anosExperiencia))
@@ -524,7 +635,13 @@ export default function CadastroGoogleComplementar() {
       }
 
       if (tipoPerfil === "Professor") {
-        payload.areaFormacao = professor.areaFormacao;
+        payload.treinaEscolinha = professor.treinaEscolinha || "nao";
+
+        const areaFormacaoLimpa = (professor.areaFormacao || "").trim();
+        if (areaFormacaoLimpa) {
+          payload.areaFormacao = areaFormacaoLimpa;
+        }
+
         if ((professor.cref || "").trim()) {
           payload.cref = (professor.cref || "").trim();
           payload.statusCref = professor.statusCref || "Pendente";
@@ -532,15 +649,44 @@ export default function CadastroGoogleComplementar() {
       }
 
       if (tipoPerfil === "Clube") {
-        payload.nomeClube = clube.nomeClube;
-        payload.cnpjClube = clube.cnpjClube || undefined;
-        payload.cidadeClube = clube.cidadeClube || undefined;
+        Object.assign(payload, {
+          nomeClube: clube.nomeClube.trim(),
+          cnpjClube: clube.cnpjClube || undefined,
+          telefone1Clube: clube.telefone1Clube || undefined,
+          telefone2Clube: clube.telefone2Clube || undefined,
+          emailClube: clube.emailClube || undefined,
+          siteOficialClube: clube.siteOficialClube || undefined,
+          sedeClube: clube.sedeClube || undefined,
+          logradouroClube: clube.logradouroClube || undefined,
+          numeroClube: clube.numeroClube || undefined,
+          complementoClube: clube.complementoClube || undefined,
+          bairroClube: clube.bairroClube || undefined,
+          cidadeClube: clube.cidadeClube || cidade || undefined,
+          estadoClube: clube.estadoClube || estado || undefined,
+          paisClube: clube.paisClube || pais || undefined,
+          cepClube: clube.cepClube || undefined,
+          estadio: clube.estadio || undefined,
+        });
       }
 
       if (tipoPerfil === "Escolinha") {
-        payload.nomeEscolinha = escolinha.nomeEscolinha;
-        payload.cnpjEscolinha = escolinha.cnpjEscolinha || undefined;
-        payload.cidadeEscolinha = escolinha.cidadeEscolinha || undefined;
+        Object.assign(payload, {
+          nomeEscolinha: escolinha.nomeEscolinha.trim(),
+          cnpjEscolinha: escolinha.cnpjEscolinha || undefined,
+          telefone1Escolinha: escolinha.telefone1Escolinha || undefined,
+          telefone2Escolinha: escolinha.telefone2Escolinha || undefined,
+          emailEscolinha: escolinha.emailEscolinha || undefined,
+          siteOficialEscolinha: escolinha.siteOficialEscolinha || undefined,
+          sedeEscolinha: escolinha.sedeEscolinha || undefined,
+          logradouroEscolinha: escolinha.logradouroEscolinha || undefined,
+          numeroEscolinha: escolinha.numeroEscolinha || undefined,
+          complementoEscolinha: escolinha.complementoEscolinha || undefined,
+          bairroEscolinha: escolinha.bairroEscolinha || undefined,
+          cidadeEscolinha: escolinha.cidadeEscolinha || cidade || undefined,
+          estadoEscolinha: escolinha.estadoEscolinha || estado || undefined,
+          paisEscolinha: escolinha.paisEscolinha || pais || undefined,
+          cepEscolinha: escolinha.cepEscolinha || undefined,
+        });
       }
 
       if (tipoPerfil === "Olheiro") {
@@ -552,7 +698,8 @@ export default function CadastroGoogleComplementar() {
         payload.telefonePublico = olheiro.telefonePublico || undefined;
         payload.emailPublico = olheiro.emailPublico || undefined;
         payload.descricao = olheiro.descricao || undefined;
-        payload.colaboracaoClubeId = olheiro.colaboracaoClubeId || undefined;
+        payload.headline = olheiro.headline || undefined;
+        payload.siteOuLinkedin = olheiro.siteOuLinkedin || undefined;
       }
 
       if (idade !== null && idade < 18) {
@@ -563,7 +710,11 @@ export default function CadastroGoogleComplementar() {
         };
       }
 
-      if (tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.destinatarioId) {
+      if (
+        getTiposVinculoDisponiveis(tipoPerfil).length > 0 &&
+        vinculo.desejaVinculo &&
+        vinculo.destinatarioId
+      ) {
         payload.vinculo = {
           desejaVinculo: true,
           destinatarioId: vinculo.destinatarioId,
@@ -639,6 +790,58 @@ export default function CadastroGoogleComplementar() {
       setFinalizandoCadastro(false);
     }
   }
+
+  const CamposEnderecoOpcional = () => (
+    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="sm:col-span-2">
+        <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
+        <input
+          className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
+          placeholder="00000-000"
+          inputMode="numeric"
+          value={cep}
+          onChange={(e) => setCep(maskCEP(e.target.value))}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
+        <input
+          className="w-full border rounded px-3 py-2"
+          value={cidade}
+          onChange={(e) => setCidade(e.target.value)}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">UF (opcional)</label>
+        <input
+          className="w-full border rounded px-3 py-2 uppercase"
+          maxLength={2}
+          value={estado}
+          onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
+        <input
+          className="w-full border rounded px-3 py-2"
+          value={bairro}
+          onChange={(e) => setBairro(e.target.value)}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">País (opcional)</label>
+        <input
+          className="w-full border rounded px-3 py-2"
+          value={pais}
+          onChange={(e) => setPais(e.target.value)}
+        />
+      </div>
+    </div>
+  );
 
   const Step = ({ n, label }: { n: Etapa; label: string }) => {
     const active = etapa === n;
@@ -1034,182 +1237,203 @@ export default function CadastroGoogleComplementar() {
                       </select>
                     </div>
                   </div>
+                  <AccordionInfo
+                    aberto={infoAdicionalAtletaAberto}
+                    setAberto={setInfoAdicionalAtletaAberto}
+                  >
+                    <CamposEnderecoOpcional />
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Professor" && (
                 <>
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">Área de Formação*</label>
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      value={professor.areaFormacao}
-                      onChange={(e) =>
-                        setProfessor((p) => ({ ...p, areaFormacao: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <AccordionInfo
+                    aberto={infoAdicionalProfessorAberto}
+                    setAberto={setInfoAdicionalProfessorAberto}
+                  >
                     <div>
-                      <label className="block text-sm font-medium mb-1">CREF (opcional)</label>
-                      <input
-                        className="w-full border rounded px-3 py-2"
-                        value={professor.cref || ""}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setProfessor((p) => ({
-                            ...p,
-                            cref: v,
-                            statusCref: v.trim() ? p.statusCref ?? "Pendente" : undefined,
-                          }));
-                        }}
-                      />
+                      <label className="block text-sm font-medium mb-1">
+                        Você dá aula em alguma escolinha cadastrada?
+                      </label>
+                      <div className="flex gap-4">
+                        <label><input type="radio" className="mr-2" checked={professor.treinaEscolinha === "sim"} onChange={() => setProfessor((p) => ({ ...p, treinaEscolinha: "sim" }))} />Sim</label>
+                        <label><input type="radio" className="mr-2" checked={professor.treinaEscolinha === "nao"} onChange={() => setProfessor((p) => ({ ...p, treinaEscolinha: "nao" }))} />Não, independente</label>
+                      </div>
                     </div>
 
-                    <div className="sm:col-span-2">
+                    <Input label="Área de Formação" value={professor.areaFormacao} onChange={(v) => setProfessor((p) => ({ ...p, areaFormacao: v }))} />
+                    <Input label="CREF" value={professor.cref || ""} onChange={(v) => setProfessor((p) => ({ ...p, cref: v, statusCref: v.trim() ? p.statusCref ?? "Pendente" : undefined }))} />
+
+                    <div>
                       <label className="block text-sm font-medium mb-1">Status do CREF</label>
                       <select
                         className="w-full border rounded px-3 py-2"
                         value={professor.statusCref ?? "Pendente"}
                         disabled={!String(professor.cref || "").trim()}
-                        onChange={(e) =>
-                          setProfessor((p) => ({
-                            ...p,
-                            statusCref: e.target.value as StatusCrefUI,
-                          }))
-                        }
+                        onChange={(e) => setProfessor((p) => ({ ...p, statusCref: e.target.value as StatusCrefUI }))}
                       >
-                        {STATUS_CREF.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
+                        {STATUS_CREF.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
-                  </div>
+
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
+                        <input
+                          className={`w-full border rounded px-3 py-2 ${
+                            cep && !CEP_RE.test(cep) ? "border-red-400" : ""
+                          }`}
+                          placeholder="00000-000"
+                          inputMode="numeric"
+                          value={cep}
+                          onChange={(e) => setCep(maskCEP(e.target.value))}
+                        />
+                        {cep && (
+                          <p
+                            className={`text-xs mt-1 ${
+                              cepStatus === "loading"
+                                ? "text-gray-500"
+                                : cepStatus === "ok"
+                                ? "text-green-700"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {cepStatus === "loading"
+                              ? "Buscando endereço…"
+                              : cepStatus === "ok"
+                              ? "Endereço localizado pelo CEP."
+                              : cepStatus === "invalid"
+                              ? "CEP inválido."
+                              : "CEP não encontrado."}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          value={cidade}
+                          onChange={(e) => setCidade(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">UF (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2 uppercase"
+                          maxLength={2}
+                          value={estado}
+                          onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          value={bairro}
+                          onChange={(e) => setBairro(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">País (opcional)</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          value={pais}
+                          onChange={(e) => setPais(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Clube" && (
                 <>
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">Nome do Clube*</label>
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      value={clube.nomeClube}
-                      onChange={(e) =>
-                        setClube((p) => ({ ...p, nomeClube: e.target.value }))
-                      }
-                    />
-                  </div>
+                  <Input
+                    label="Nome do Clube*"
+                    value={clube.nomeClube}
+                    onChange={(v) => setClube((p) => ({ ...p, nomeClube: v }))}
+                  />
 
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">CNPJ (opcional)</label>
-                    <input
-                      className={`w-full border rounded px-3 py-2 ${
-                        clube.cnpjClube && !validarCNPJ(clube.cnpjClube)
-                          ? "border-red-400"
-                          : ""
-                      }`}
-                      value={clube.cnpjClube}
-                      onChange={(e) =>
-                        setClube((p) => ({ ...p, cnpjClube: e.target.value }))
-                      }
-                    />
-                  </div>
+                  <AccordionInfo
+                    aberto={infoAdicionalClubeAberto}
+                    setAberto={setInfoAdicionalClubeAberto}
+                  >
+                    <Input label="CNPJ" value={clube.cnpjClube} placeholder="00.000.000/0000-00" onChange={(v) => setClube((p) => ({ ...p, cnpjClube: v }))} />
+                    <Input label="Telefone 1" value={clube.telefone1Clube} onChange={(v) => setClube((p) => ({ ...p, telefone1Clube: v }))} />
+                    <Input label="Telefone 2" value={clube.telefone2Clube} onChange={(v) => setClube((p) => ({ ...p, telefone2Clube: v }))} />
+                    <Input label="E-mail" value={clube.emailClube} onChange={(v) => setClube((p) => ({ ...p, emailClube: v }))} />
+                    <Input label="Site oficial" value={clube.siteOficialClube} placeholder="https://..." onChange={(v) => setClube((p) => ({ ...p, siteOficialClube: v }))} />
+                    <Input label="Sede" value={clube.sedeClube} onChange={(v) => setClube((p) => ({ ...p, sedeClube: v }))} />
+                    <Input label="Logradouro" value={clube.logradouroClube} onChange={(v) => setClube((p) => ({ ...p, logradouroClube: v }))} />
+                    <Input label="Número" value={clube.numeroClube} onChange={(v) => setClube((p) => ({ ...p, numeroClube: v }))} />
+                    <Input label="Complemento" value={clube.complementoClube} onChange={(v) => setClube((p) => ({ ...p, complementoClube: v }))} />
+                    <Input label="Bairro" value={clube.bairroClube} onChange={(v) => setClube((p) => ({ ...p, bairroClube: v }))} />
+                    <Input label="Cidade" value={clube.cidadeClube} onChange={(v) => setClube((p) => ({ ...p, cidadeClube: v }))} />
+                    <Input label="UF" value={clube.estadoClube} onChange={(v) => setClube((p) => ({ ...p, estadoClube: v.toUpperCase().slice(0, 2) }))} />
+                    <Input label="País" value={clube.paisClube} onChange={(v) => setClube((p) => ({ ...p, paisClube: v }))} />
+                    <Input label="CEP" value={clube.cepClube} placeholder="00000-000" onChange={(v) => setClube((p) => ({ ...p, cepClube: maskCEP(v) }))} />
+                    <Input label="Estádio" value={clube.estadio} onChange={(v) => setClube((p) => ({ ...p, estadio: v }))} />
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Escolinha" && (
                 <>
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">Nome da Escolinha*</label>
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      value={escolinha.nomeEscolinha}
-                      onChange={(e) =>
-                        setEscolinha((p) => ({ ...p, nomeEscolinha: e.target.value }))
-                      }
-                    />
-                  </div>
+                  <Input
+                    label="Nome da Escolinha*"
+                    value={escolinha.nomeEscolinha}
+                    onChange={(v) => setEscolinha((p) => ({ ...p, nomeEscolinha: v }))}
+                  />
 
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">CNPJ (opcional)</label>
-                    <input
-                      className={`w-full border rounded px-3 py-2 ${
-                        escolinha.cnpjEscolinha && !validarCNPJ(escolinha.cnpjEscolinha)
-                          ? "border-red-400"
-                          : ""
-                      }`}
-                      value={escolinha.cnpjEscolinha}
-                      onChange={(e) =>
-                        setEscolinha((p) => ({ ...p, cnpjEscolinha: e.target.value }))
-                      }
-                    />
-                  </div>
+                  <AccordionInfo
+                    aberto={infoAdicionalEscolinhaAberto}
+                    setAberto={setInfoAdicionalEscolinhaAberto}
+                  >
+                    <Input label="CNPJ" value={escolinha.cnpjEscolinha} placeholder="00.000.000/0000-00" onChange={(v) => setEscolinha((p) => ({ ...p, cnpjEscolinha: v }))} />
+                    <Input label="Telefone 1" value={escolinha.telefone1Escolinha} onChange={(v) => setEscolinha((p) => ({ ...p, telefone1Escolinha: v }))} />
+                    <Input label="Telefone 2" value={escolinha.telefone2Escolinha} onChange={(v) => setEscolinha((p) => ({ ...p, telefone2Escolinha: v }))} />
+                    <Input label="E-mail" value={escolinha.emailEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, emailEscolinha: v }))} />
+                    <Input label="Site oficial" value={escolinha.siteOficialEscolinha} placeholder="https://..." onChange={(v) => setEscolinha((p) => ({ ...p, siteOficialEscolinha: v }))} />
+                    <Input label="Sede" value={escolinha.sedeEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, sedeEscolinha: v }))} />
+                    <Input label="Logradouro" value={escolinha.logradouroEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, logradouroEscolinha: v }))} />
+                    <Input label="Número" value={escolinha.numeroEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, numeroEscolinha: v }))} />
+                    <Input label="Complemento" value={escolinha.complementoEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, complementoEscolinha: v }))} />
+                    <Input label="Bairro" value={escolinha.bairroEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, bairroEscolinha: v }))} />
+                    <Input label="Cidade" value={escolinha.cidadeEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, cidadeEscolinha: v }))} />
+                    <Input label="UF" value={escolinha.estadoEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, estadoEscolinha: v.toUpperCase().slice(0, 2) }))} />
+                    <Input label="País" value={escolinha.paisEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, paisEscolinha: v }))} />
+                    <Input label="CEP" value={escolinha.cepEscolinha} placeholder="00000-000" onChange={(v) => setEscolinha((p) => ({ ...p, cepEscolinha: maskCEP(v) }))} />
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Olheiro" && (
                 <>
-                  <div className="mt-2 grid grid-cols-1 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Área de Atuação*</label>
-                      <input
-                        className="w-full border rounded px-3 py-2"
-                        value={olheiro.areaAtuacao}
-                        onChange={(e) =>
-                          setOlheiro((p) => ({ ...p, areaAtuacao: e.target.value }))
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Anos de Experiência</label>
-                      <input
-                        type="number"
-                        className="w-full border rounded px-3 py-2"
-                        value={olheiro.anosExperiencia}
-                        onChange={(e) =>
-                          setOlheiro((p) => ({
-                            ...p,
-                            anosExperiencia: e.target.value ? Number(e.target.value) : "",
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Telefone público</label>
-                      <input
-                        className={`w-full border rounded px-3 py-2 ${
-                          olheiro.telefonePublico && !PHONE_RE.test(olheiro.telefonePublico)
-                            ? "border-red-400"
-                            : ""
-                        }`}
-                        value={olheiro.telefonePublico}
-                        onChange={(e) =>
-                          setOlheiro((p) => ({ ...p, telefonePublico: e.target.value }))
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">E-mail público</label>
-                      <input
-                        type="email"
-                        className={`w-full border rounded px-3 py-2 ${
-                          olheiro.emailPublico && !EMAIL_RE.test(olheiro.emailPublico)
-                            ? "border-red-400"
-                            : ""
-                        }`}
-                        value={olheiro.emailPublico}
-                        onChange={(e) =>
-                          setOlheiro((p) => ({ ...p, emailPublico: e.target.value }))
-                        }
-                      />
-                    </div>
+                  <AccordionInfo
+                    aberto={infoAdicionalOlheiroAberto}
+                    setAberto={setInfoAdicionalOlheiroAberto}
+                  >
+                    <Input label="Área de Atuação" value={olheiro.areaAtuacao} placeholder="Ex: Base, Profissional, Captação SP" onChange={(v) => setOlheiro((p) => ({ ...p, areaAtuacao: v }))} />
+                    <Input
+                      label="Anos de Experiência"
+                      value={olheiro.anosExperiencia}
+                      type="number"
+                      onChange={(v) =>
+                        setOlheiro((prev) => ({
+                          ...prev,
+                          anosExperiencia: v === "" ? "" : Number(v),
+                        }))
+                      }
+                    />
+                    <Input label="Headline" value={olheiro.headline} placeholder="Ex: Scout focado em categorias de base" onChange={(v) => setOlheiro((p) => ({ ...p, headline: v }))} />
+                    <Input label="Site ou LinkedIn" value={olheiro.siteOuLinkedin} placeholder="https://..." onChange={(v) => setOlheiro((p) => ({ ...p, siteOuLinkedin: v }))} />
+                    <Input label="Telefone público" value={olheiro.telefonePublico} placeholder="(00) 00000-0000" onChange={(v) => setOlheiro((p) => ({ ...p, telefonePublico: v }))} />
+                    <Input label="E-mail público" value={olheiro.emailPublico} placeholder="seuemail@exemplo.com" onChange={(v) => setOlheiro((p) => ({ ...p, emailPublico: v }))} />
 
                     <div>
                       <label className="block text-sm font-medium mb-1">Descrição</label>
@@ -1217,96 +1441,15 @@ export default function CadastroGoogleComplementar() {
                         className="w-full border rounded px-3 py-2"
                         rows={3}
                         value={olheiro.descricao}
-                        onChange={(e) =>
-                          setOlheiro((p) => ({ ...p, descricao: e.target.value }))
-                        }
+                        placeholder="Fale um pouco sobre seu trabalho como olheiro..."
+                        onChange={(e) => setOlheiro((p) => ({ ...p, descricao: e.target.value }))}
                       />
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Colaboração com Clube (ID opcional)</label>
-                      <input
-                        className="w-full border rounded px-3 py-2"
-                        value={olheiro.colaboracaoClubeId || ""}
-                        onChange={(e) =>
-                          setOlheiro((p) => ({ ...p, colaboracaoClubeId: e.target.value }))
-                        }
-                      />
-                    </div>
-                  </div>
+                    <CamposEnderecoOpcional />
+                    
+                  </AccordionInfo>
                 </>
               )}
-
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
-                  <input
-                    className={`w-full border rounded px-3 py-2 ${
-                      cep && !CEP_RE.test(cep) ? "border-red-400" : ""
-                    }`}
-                    placeholder="00000-000"
-                    inputMode="numeric"
-                    value={cep}
-                    onChange={(e) => setCep(maskCEP(e.target.value))}
-                  />
-                  {cep && (
-                    <p
-                      className={`text-xs mt-1 ${
-                        cepStatus === "loading"
-                          ? "text-gray-500"
-                          : cepStatus === "ok"
-                          ? "text-green-700"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {cepStatus === "loading"
-                        ? "Buscando endereço…"
-                        : cepStatus === "ok"
-                        ? "Endereço localizado pelo CEP."
-                        : cepStatus === "invalid"
-                        ? "CEP inválido."
-                        : "CEP não encontrado."}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    value={cidade}
-                    onChange={(e) => setCidade(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">UF (opcional)</label>
-                  <input
-                    className="w-full border rounded px-3 py-2 uppercase"
-                    maxLength={2}
-                    value={estado}
-                    onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    value={bairro}
-                    onChange={(e) => setBairro(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">País (opcional)</label>
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    value={pais}
-                    onChange={(e) => setPais(e.target.value)}
-                  />
-                </div>
-              </div>
 
               {erro && <p className="text-sm text-red-600 mt-3">{erro}</p>}
 
@@ -1334,7 +1477,7 @@ export default function CadastroGoogleComplementar() {
               <h2 className="text-xl font-semibold mb-1">Complementar</h2>
               <p className="text-sm text-green-600 mb-4">Revise e finalize seu cadastro</p>
 
-              {tipoPerfil === "Atleta" && (
+              {getTiposVinculoDisponiveis(tipoPerfil).length > 0 && (
                 <div className="border rounded-md p-3 mb-4">
                   <label className="flex items-center text-sm">
                     <input
@@ -1345,7 +1488,7 @@ export default function CadastroGoogleComplementar() {
                         setVinculo((p) => ({ ...p, desejaVinculo: e.target.checked }))
                       }
                     />
-                    Desejo solicitar vínculo com uma Escolinha, Professor ou Clube agora
+                    Desejo solicitar vínculo com algum tipo de usuario agora
                   </label>
 
                   {vinculo.desejaVinculo && (
@@ -1398,7 +1541,11 @@ export default function CadastroGoogleComplementar() {
                                         : "border-gray-200"
                                     }`}
                                     onClick={() =>
-                                      setVinculo((p) => ({ ...p, destinatarioId: u.id }))
+                                      setVinculo((p) => ({
+                                        ...p,
+                                        destinatarioId: u.usuarioId,
+                                        alvoBusca: u.nome,
+                                      }))
                                     }
                                   >
                                     <div className="flex items-center gap-3">
@@ -1463,10 +1610,6 @@ export default function CadastroGoogleComplementar() {
                 <div><span className="font-medium">Email:</span> {email}</div>
                 <div><span className="font-medium">Username:</span> @{nomeDeUsuario}</div>
 
-                {PRECISA_NASCIMENTO(tipoPerfil) && (
-                  <div><span className="font-medium">Nascimento:</span> {dataNascimento || "-"}</div>
-                )}
-
                 <div className="mt-2">
                   <span className="font-medium">Localização:</span>{" "}
                   {`${bairro ? bairro + ", " : ""}${cidade || "-"}`}{" "}
@@ -1486,6 +1629,7 @@ export default function CadastroGoogleComplementar() {
                     <div><span className="font-medium">Idade:</span> {idade ?? "-"}</div>
                     <div><span className="font-medium">Categoria:</span> {atleta.categoria || "-"}</div>
                   </div>
+                  
                 )}
 
                 {tipoPerfil === "Professor" && (

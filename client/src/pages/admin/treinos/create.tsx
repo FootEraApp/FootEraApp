@@ -102,7 +102,7 @@ type ExercicioMin = {
   repeticoes?: string | null;
   duracao?: string | null;
   descanso?: string | null;
-  origem?: "catalogo" | "personalizado" | "meu" | null;
+  origem?: "catalogo" | "exercicio" | "personalizado" | "meu" | null;
   exercicioPersonalizadoId?: string | null;
 };
 
@@ -146,7 +146,11 @@ type ExLinha = {
   customVideoPosterUrl?: string | null;
 };
 
-const opcoesCategorias = ["Sub-3", "Sub-5", "Sub-7", "Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-16", "Livre"];
+const opcoesCategorias = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
+
+const labelCategoria = (c: string) =>
+  c === "Livre" ? "Livre" : c.replace("Sub", "Sub-");
+
 const opcoesNiveis = ["Base", "Avancado", "Performance"];
 const opcoesTipoTreino = ["Técnico", "Tático", "Físico", "Mental"];
 
@@ -999,12 +1003,23 @@ export default function CriarOuEditarTreino() {
     const ex = lista.find((e) => String(e.id) === String(exId));
     if (!ex) return;
 
+    const origem = String(ex.origem ?? "").toLowerCase();
+
+    const ehPersonalizado =
+      origem === "personalizado" ||
+      !!ex.exercicioPersonalizadoId;
+
+    const idCatalogo = String(ex.id ?? "").trim();
+    const idPersonalizado = String(ex.exercicioPersonalizadoId ?? ex.id ?? "").trim();
+
     setLinhas((prev) => {
-      const jaExiste = prev.some(
-        (l) =>
-          String(l.exercicioId || "") === String(ex.id) ||
-          String(l.exercicioPersonalizadoId || "") === String(ex.id)
-      );
+      const jaExiste = prev.some((l) => {
+        if (ehPersonalizado) {
+          return String(l.exercicioPersonalizadoId || "") === idPersonalizado;
+        }
+
+        return String(l.exercicioId || "") === idCatalogo;
+      });
 
       if (jaExiste) return prev;
 
@@ -1021,25 +1036,48 @@ export default function CriarOuEditarTreino() {
       return [
         ...prev,
         {
-          exercicioId: String(ex.id),
+          // ✅ se for exercício do BD/tabela Exercicio
+          exercicioId: ehPersonalizado ? "" : idCatalogo,
+
+          // ✅ se for exercício personalizado/tabela ExercicioPersonalizado
+          exercicioPersonalizadoId: ehPersonalizado ? idPersonalizado : null,
+          exercicioTemporarioId: null,
+
           ordem: prev.length + 1,
-          // valor bruto que vai para o submit
           repeticoes: repeticoesStr,
-          // ✅ o input de séries
           series: seriesStr || sr.series || "",
-          // ✅ o input de repetições
           reps: repeticoesStr || sr.reps || "",
           duracao: ex.duracao != null ? String(ex.duracao) : "",
           descanso: ex.descanso != null ? String(ex.descanso) : "",
+
           tipoExecucao:
             ex.duracao != null && String(ex.duracao).trim() !== ""
               ? "duracao"
               : "repeticao",
+
           titulo: ex.nome ?? "Exercício",
           descricao: ex?.descricao ?? ex?.objetivo ?? "",
           nivel: ex.nivel ?? null,
           videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
-          videoPosterUrl: ex.thumbUrl ?? null,
+          videoPosterUrl: ex.thumbUrl ?? ex.videoPosterUrl ?? null,
+
+          // ✅ importante: personalizado existente precisa ir como custom
+          isCustom: ehPersonalizado,
+
+          ...(ehPersonalizado
+            ? {
+                customTitulo: ex.nome ?? "",
+                customDesc: ex?.descricao ?? ex?.objetivo ?? "",
+                customVideoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+                customVideoPreviewUrl: normalizeUrl(
+                  ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null
+                ),
+                customVideoPosterUrl: normalizeUrl(
+                  ex.thumbUrl ?? ex.videoPosterUrl ?? null
+                ),
+                customVideoFile: null,
+              }
+            : {}),
         },
       ];
     });
@@ -1737,7 +1775,7 @@ export default function CriarOuEditarTreino() {
                     const checked = catsSelecionadas.includes(cat);
                     return (
                       <label
-                        key={cat}
+                        key={labelCategoria(cat)}
                         className={[
                           "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition",
                           checked

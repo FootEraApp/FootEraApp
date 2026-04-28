@@ -6,7 +6,7 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import TrainingProgress from "../profile/TrainingProgress.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import { Link } from "wouter";
-import { Trophy } from "lucide-react";
+import { Trophy, Pencil } from "lucide-react";
 
 interface Perfil {
   tipo: string;
@@ -285,7 +285,22 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
            {aba === "perfil" && (
             <>
              <div className="bg-transparent border rounded-xl shadow-sm p-4 mt-4">
-              <div className="text-green-900 text-xl font-semibold mb-3">Informações do Atleta</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-green-900 text-xl font-semibold">
+                  Informações do Atleta
+                </div>
+
+                {isOwnProfile && (
+                  <Link
+                    href="/perfil/editar"
+                    className="inline-flex items-center justify-center rounded-full border border-green-200 bg-white p-2 text-green-800 hover:bg-green-50"
+                    title="Editar perfil"
+                    aria-label="Editar perfil"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                )}
+              </div>
                 <ul className="text-sm text-green-900/90 space-y-2">
                   <li>
                     <b>Nome:</b> {perfil.usuario?.nome}

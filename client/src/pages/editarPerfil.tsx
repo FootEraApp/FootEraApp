@@ -80,7 +80,10 @@ const EditarPerfil = () => {
   const [clubeSelId, setClubeSelId] = useState<string | null>(null);
   const [escolinhaSelId, setEscolinhaSelId] = useState<string | null>(null);
   const [professorSelIds, setProfessorSelIds] = useState<string[]>([]);
-
+  const [buscaClubeVinculo, setBuscaClubeVinculo] = useState("");
+  const [buscaEscolinhaVinculo, setBuscaEscolinhaVinculo] = useState("");
+  const [buscaProfessorVinculo, setBuscaProfessorVinculo] = useState("");
+  
   function onlyDigits(v: string) {
     return (v || "").replace(/\D/g, "");
   }
@@ -365,6 +368,20 @@ const EditarPerfil = () => {
   const isEscolinha = tipoRender === "escola" || tipoRender === "escolinha";
 
   const mostrarCepUsuario = true;
+  const clubesFiltrados = listaClubes.filter((op) =>
+    op.nome.toLowerCase().includes(buscaClubeVinculo.toLowerCase())
+  );
+
+  const escolinhasFiltradas = listaEscolinhas.filter((op) =>
+    op.nome.toLowerCase().includes(buscaEscolinhaVinculo.toLowerCase())
+  );
+
+  const professoresFiltrados = listaProfessores.filter((op) =>
+    op.nome.toLowerCase().includes(buscaProfessorVinculo.toLowerCase())
+  );
+
+  const clubeSelecionado = listaClubes.find((op) => op.id === clubeSelId) || null;
+  const escolinhaSelecionada = listaEscolinhas.find((op) => op.id === escolinhaSelId) || null;
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -463,40 +480,108 @@ const EditarPerfil = () => {
 
             <div className="mb-4">
               <label className="block text-sm font-medium">Escolinha</label>
-              <select
-                className="w-full border px-3 py-2 rounded"
-                value={escolinhaSelId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEscolinhaSelId(v === "" ? null : v);
-                }}
-              >
-                <option value="">Nenhuma</option>
-                {listaEscolinhas.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.nome}
-                  </option>
-                ))}
-              </select>
+
+              {escolinhaSelecionada && (
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setEscolinhaSelId(null)}
+                    className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                    title="Remover"
+                  >
+                    {escolinhaSelecionada.nome} <span className="ml-1 text-gray-500">×</span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                className="w-full border px-3 py-2 rounded mb-2"
+                placeholder="Pesquisar escolinha pelo nome..."
+                value={buscaEscolinhaVinculo}
+                onChange={(e) => setBuscaEscolinhaVinculo(e.target.value)}
+              />
+
+              <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
+                {escolinhasFiltradas.length === 0 ? (
+                  <div className="text-sm text-gray-500">Nenhuma escolinha encontrada.</div>
+                ) : (
+                  escolinhasFiltradas.map((op) => {
+                    const checked = escolinhaSelId === op.id;
+
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="escolinhaVinculo"
+                          checked={checked}
+                          onChange={() => setEscolinhaSelId(op.id)}
+                        />
+                        <span className="text-sm">{op.nome}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Você pode selecionar apenas uma escolinha.
+              </p>
             </div>
 
             <div className="mb-4">
               <label className="block text-sm font-medium">Clube</label>
-              <select
-                className="w-full border px-3 py-2 rounded"
-                value={clubeSelId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setClubeSelId(v === "" ? null : v);
-                }}
-              >
-                <option value="">Nenhum</option>
-                {listaClubes.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.nome}
-                  </option>
-                ))}
-              </select>
+
+              {clubeSelecionado && (
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setClubeSelId(null)}
+                    className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                    title="Remover"
+                  >
+                    {clubeSelecionado.nome} <span className="ml-1 text-gray-500">×</span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                className="w-full border px-3 py-2 rounded mb-2"
+                placeholder="Pesquisar clube pelo nome..."
+                value={buscaClubeVinculo}
+                onChange={(e) => setBuscaClubeVinculo(e.target.value)}
+              />
+
+              <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
+                {clubesFiltrados.length === 0 ? (
+                  <div className="text-sm text-gray-500">Nenhum clube encontrado.</div>
+                ) : (
+                  clubesFiltrados.map((op) => {
+                    const checked = clubeSelId === op.id;
+
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="clubeVinculo"
+                          checked={checked}
+                          onChange={() => setClubeSelId(op.id)}
+                        />
+                        <span className="text-sm">{op.nome}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Você pode selecionar apenas um clube.
+              </p>
             </div>
 
             <div className="mb-4">
@@ -523,11 +608,18 @@ const EditarPerfil = () => {
                 </div>
               )}
 
+              <input
+                className="w-full border px-3 py-2 rounded mb-2"
+                placeholder="Pesquisar professor pelo nome..."
+                value={buscaProfessorVinculo}
+                onChange={(e) => setBuscaProfessorVinculo(e.target.value)}
+              />
+
               <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
-                {listaProfessores.length === 0 ? (
+                {professoresFiltrados.length === 0 ? (
                   <div className="text-sm text-gray-500">Nenhum professor disponível.</div>
                 ) : (
-                  listaProfessores.map((op) => {
+                  professoresFiltrados.map((op) => {
                     const checked = professorSelIds.includes(op.id);
                     return (
                       <label

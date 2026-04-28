@@ -22,15 +22,21 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
   const tipo = String(tipoRaw || "").trim().toLowerCase();
 
   if (tipo === "atleta") {
-    return ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3"];
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3"]
+      : ["ATLETA_PRO"];
   }
 
   if (tipo === "professor") {
-    return ["PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3"];
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3"]
+      : ["PROFESSOR_PRO"];
   }
 
   if (tipo === "clube" || tipo === "escolinha") {
-    return ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"];
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"]
+      : ["ORGANIZACOES_PRO"];
   }
 
   if (tipo === "olheiro") {
@@ -38,13 +44,14 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
   }
 
   if (tipo === "admin") {
-    // admin pode tudo (pra testes/dev)
-    return [
-      "ATLETA_PRO","ATLETA_LEARNING_1","ATLETA_LEARNING_3",
-      "PROFESSOR_PRO","PROFESSOR_LEARNING_1","PROFESSOR_LEARNING_3",
-      "ORGANIZACOES_PRO","ORGANIZACOES_LEARNING_3",
-      "OLHEIRO_PRO"
-    ];
+    return BILLING_SHOW_LEARNING_PLANS
+      ? [
+          "ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3",
+          "PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3",
+          "ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3",
+          "OLHEIRO_PRO",
+        ]
+      : ["ATLETA_PRO", "PROFESSOR_PRO", "ORGANIZACOES_PRO", "OLHEIRO_PRO"];
   }
 
   return [];
@@ -53,7 +60,25 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
 function assertPlanoPermitido(tipoUsuario: string, planoId: string) {
   const planoNorm = normalizePlanoId(planoId);
 
-  if (isMetodologiaAvulsa(planoNorm) || isMetodologiaLearning(planoNorm)) return;
+  if (isMetodologiaAvulsa(planoNorm)) {
+    if (!BILLING_SHOW_METODOLOGIAS_AVULSAS) {
+      const err: any = new Error("Assinatura de metodologia avulsa indisponível no momento.");
+      err.statusCode = 403;
+      err.code = "METODOLOGIA_AVULSA_DISABLED";
+      throw err;
+    }
+    return;
+  }
+
+  if (isMetodologiaLearning(planoNorm)) {
+    if (!BILLING_SHOW_METODOLOGIAS_LEARNING) {
+      const err: any = new Error("Assinatura de metodologia learning indisponível no momento.");
+      err.statusCode = 403;
+      err.code = "METODOLOGIA_LEARNING_DISABLED";
+      throw err;
+    }
+    return;
+  }
 
   const allowed = allowedPlanIdsByTipo(tipoUsuario);
   if (!allowed.includes(planoNorm)) {
@@ -90,6 +115,15 @@ if (HAS_MERCADO_PAGO) {
     "[billing] SDK do MercadoPago não expõe .configure(); rodando em modo fake."
   );
 }
+
+const BILLING_SHOW_LEARNING_PLANS =
+  process.env.BILLING_SHOW_LEARNING_PLANS === "true";
+
+const BILLING_SHOW_METODOLOGIAS_AVULSAS =
+  process.env.BILLING_SHOW_METODOLOGIAS_AVULSAS === "true";
+
+const BILLING_SHOW_METODOLOGIAS_LEARNING =
+  process.env.BILLING_SHOW_METODOLOGIAS_LEARNING === "true";
 
 type Pagador = {
   nome: string;
@@ -2020,12 +2054,14 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
 
 export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Response) {
   try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+    if (!BILLING_SHOW_METODOLOGIAS_AVULSAS) {
+      return res.json({ items: [] });
+    }
 
     const metodologias = await prisma.metodologiaAvulsa.findMany({
-      where: { ativo: true },
-      orderBy: { criadoEm: "desc" },
+      where: {
+        ativo: true,
+      },
       include: {
         estruturas: {
           include: {
@@ -2033,14 +2069,20 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
           },
         },
       },
+      orderBy: {
+        criadoEm: "desc",
+      },
     });
 
     const items = metodologias.map((m) => {
-      const itens = m.estruturas.flatMap((e) => e.itens || []);
+      const estruturas = m.estruturas || [];
+      const itens = estruturas.flatMap((e) => e.itens || []);
+
       const videoCount = itens.filter((i) => i.tipo === "VIDEO" || i.tipo === "AULA").length;
       const treinoCount = itens.filter((i) => i.tipo === "TREINO").length;
       const somaPontos = itens.reduce((acc, i) => acc + Number(i.pontos || 0), 0);
-      const totalSemanas = m.estruturas.reduce(
+
+      const totalSemanas = estruturas.reduce(
         (acc, e) => Math.max(acc, Number(e.duracaoSemanas || 0)),
         0
       );
@@ -2055,7 +2097,7 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
         totalSemanas,
         videoCount,
         treinoCount,
-        precoAssinaturaMensal: Number(m.precoAssinaturaMensal),
+        precoAssinaturaMensal: Number(m.precoAssinaturaMensal ?? 0),
         pontosTotal: somaPontos,
         planoId: `METODOLOGIA_AVULSA:${m.id}`,
         _count: {

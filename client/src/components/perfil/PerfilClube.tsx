@@ -234,6 +234,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
   const [vinculadosPreview, setVinculadosPreview] = useState<AtletaItem[]>([]);
+  const [refreshVinculosKey, setRefreshVinculosKey] = useState(0);
   const [observadoEdits, setObservadoEdits] = useState<
     Record<string, { notaInterna: string; alertarMudancas: boolean }>
   >({});
@@ -466,7 +467,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     return () => {
       cancel = true;
     };
-  }, [token, clubeId]); // ✅ dependências corretas
+  }, [token, clubeId, refreshVinculosKey]); // ✅ dependências corretas
 
   useEffect(() => {
     setAtividades(null);
@@ -630,14 +631,14 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     }
 
     if (aba === "atletas") {
-      if (subAba === "vinculados" && vinculados == null) fetchVinculados();
+      if (subAba === "vinculados") fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
       if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
     }
     return () => {
       cancel.v = true;
     };
-  }, [aba, subAba, token, clubeId, vinculados, observados, solicitacoes]);
+  }, [aba, subAba, token, clubeId, refreshVinculosKey]);
 
   async function loadProfessores() {
     if (!token) return;
@@ -794,6 +795,23 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, token, clubeId]);
+
+  useEffect(() => {
+    function atualizarVinculos() {
+      setVinculados(null);
+      setVinculadosPreview([]);
+      setAtletasHeaderCount(null);
+      setRefreshVinculosKey((k) => k + 1);
+    }
+
+    window.addEventListener("focus", atualizarVinculos);
+    window.addEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+
+    return () => {
+      window.removeEventListener("focus", atualizarVinculos);
+      window.removeEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+    };
+  }, []);
 
   async function salvarObservado(atletaId: string) {
     if (!token || !clubeId) return;

@@ -1376,9 +1376,148 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         if (!atletaRow) return res.status(404).json({ error: "Atleta não encontrado." });
 
         await prisma.$transaction(async (tx: any) => {
-          await tx.atleta.update({ where: { usuarioId: id }, data });
-          // Lógica de relações (RelacaoTreinamento) simplificada para o exemplo
-          // Aqui você pode manter os `tx.relacaoTreinamento.deleteMany` e `create` originais
+          await tx.atleta.update({
+            where: { usuarioId: id },
+            data: {
+              ...data,
+              clubeId: undefined,
+              escolinhaId: undefined,
+            },
+          });
+
+          const atuais = await tx.relacaoTreinamento.findMany({
+            where: {
+              atletaId: atletaRow.id,
+              ativo: true,
+              encerradoEm: null,
+            },
+            select: {
+              id: true,
+              professorId: true,
+              clubeId: true,
+              escolinhaId: true,
+            },
+          });
+
+          const atuaisProfessorIds = atuais.map((r: any) => r.professorId).filter(Boolean);
+          const atualClubeId = atuais.find((r: any) => r.clubeId)?.clubeId ?? null;
+          const atualEscolinhaId = atuais.find((r: any) => r.escolinhaId)?.escolinhaId ?? null;
+
+          const professorIdsRemover = atuaisProfessorIds.filter(
+            (profId: string) => !professorIds.includes(profId)
+          );
+
+          if (professorIdsRemover.length > 0) {
+            await tx.relacaoTreinamento.updateMany({
+              where: {
+                atletaId: atletaRow.id,
+                professorId: { in: professorIdsRemover },
+                ativo: true,
+                encerradoEm: null,
+              },
+              data: {
+                ativo: false,
+                encerradoEm: new Date(),
+              },
+            });
+          }
+
+          if (limparClube && atualClubeId) {
+            await tx.relacaoTreinamento.updateMany({
+              where: {
+                atletaId: atletaRow.id,
+                clubeId: atualClubeId,
+                ativo: true,
+                encerradoEm: null,
+              },
+              data: {
+                ativo: false,
+                encerradoEm: new Date(),
+              },
+            });
+
+            await tx.atleta.update({
+              where: { id: atletaRow.id },
+              data: { clubeId: null },
+            });
+          }
+
+          if (limparEscolinha && atualEscolinhaId) {
+            await tx.relacaoTreinamento.updateMany({
+              where: {
+                atletaId: atletaRow.id,
+                escolinhaId: atualEscolinhaId,
+                ativo: true,
+                encerradoEm: null,
+              },
+              data: {
+                ativo: false,
+                encerradoEm: new Date(),
+              },
+            });
+
+            await tx.atleta.update({
+              where: { id: atletaRow.id },
+              data: { escolinhaId: null },
+            });
+          }
+
+          async function criarSolicitacaoSeNaoExiste(destinatarioUsuarioId: string) {
+            const existe = await tx.solicitacaoTreino.findFirst({
+              where: {
+                remetenteId: id,
+                destinatarioId: destinatarioUsuarioId,
+                status: {
+                  in: ["pendente", "ativa"]
+                }
+              }
+            });
+
+            if (!existe) {
+              await tx.solicitacaoTreino.create({
+                data: {
+                  remetenteId: id,
+                  destinatarioId: destinatarioUsuarioId,
+                  status: "pendente"
+                }
+              });
+            }
+          }
+
+          for (const professorId of professorIds) {
+            if (atuaisProfessorIds.includes(professorId)) continue;
+
+            const prof = await tx.professor.findUnique({
+              where: { id: professorId },
+              select: { usuarioId: true },
+            });
+
+            if (prof?.usuarioId) {
+              await criarSolicitacaoSeNaoExiste(prof.usuarioId);
+            }
+          }
+
+          if (!limparClube && clubeId && clubeId !== atualClubeId) {
+            const clube = await tx.clube.findUnique({
+              where: { id: clubeId },
+              select: { usuarioId: true },
+            });
+
+            if (clube?.usuarioId) {
+              await criarSolicitacaoSeNaoExiste(clube.usuarioId);
+            }
+          }
+
+          if (!limparEscolinha && escolinhaId && escolinhaId !== atualEscolinhaId) {
+            const escolinha = await tx.escolinha.findUnique({
+              where: { id: escolinhaId },
+              select: { usuarioId: true },
+            });
+
+            if (escolinha?.usuarioId) {
+              await criarSolicitacaoSeNaoExiste(escolinha.usuarioId);
+            }
+          }
         });
         break;
       }
@@ -1459,7 +1598,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
 
-    return res.status(200).json({ message: "Perfil atualizado com sucesso." });
+    return res.status(200).json({ message: "Perfil atualizado com sucesso. Solicitações enviadas." });
   } catch (error) {
     console.error("Erro ao atualizar perfil:", error);
     return res.status(500).json({ error: "Erro interno ao atualizar perfil." });

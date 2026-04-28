@@ -445,7 +445,7 @@ export default function FormExercicioTreinos({
       <form onSubmit={handleSubmit} className="space-y-5 px-5 py-5">
         <div>
           <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-            Nome do exercício
+            Nome do exercício*
           </label>
           <input
             value={nome}
@@ -457,7 +457,7 @@ export default function FormExercicioTreinos({
 
         <div>
           <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-            Objetivo
+            Objetivo/Descrição (opcional)
           </label>
           <textarea
             value={objetivo}
@@ -471,7 +471,7 @@ export default function FormExercicioTreinos({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-              Tipo
+              Tipo*
             </label>
             <select
               value={tipo}
@@ -489,7 +489,7 @@ export default function FormExercicioTreinos({
 
           <div>
             <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-              Nível
+              Nível*
             </label>
             <select
               value={nivel}
@@ -508,7 +508,7 @@ export default function FormExercicioTreinos({
 
         <div>
           <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-            Faixa etária
+            Faixa etária*
           </label>
 
           <div className="flex flex-wrap gap-3">

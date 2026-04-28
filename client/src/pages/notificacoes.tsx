@@ -282,6 +282,7 @@ export default function PaginaNotificacoes() {
       }
 
       setSolicitacoes((prev) => prev.filter((s) => s.id !== id));
+      window.dispatchEvent(new Event("footera:vinculo-treino-alterado"));
     } catch (err) {
       console.error("Erro ao responder solicitação:", err);
       alert("Não foi possível processar a solicitação agora.");
@@ -381,7 +382,7 @@ export default function PaginaNotificacoes() {
                       {!!data && <p className="text-xs text-gray-500 mt-0.5">{data}</p>}
 
                       <p className="text-sm text-gray-700 mt-2">
-                        {actorLabel} começou a te seguir
+                        {actorLabel} quer te seguir
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -398,22 +399,53 @@ export default function PaginaNotificacoes() {
                         <button
                           className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
                           onClick={async () => {
-                            await seguirDeVolta(actorId);
-                            await marcarComoLida(n.id);
+                            const token = Storage.token;
+                            if (!token) return;
+
+                            await fetch(`${API.BASE_URL}/api/seguidores/aceitar`, {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                notificacaoId: n.id,
+                                seguidorUsuarioId: actorId,
+                              }),
+                            });
+
+                            setNotificacoes((prev) => prev.filter((x) => x.id !== n.id));
+
+                            if (confirm("Deseja seguir essa pessoa de volta?")) {
+                              await seguirDeVolta(actorId);
+                            }
                           }}
                         >
-                          Seguir de volta
+                          Aceitar
                         </button>
 
                         <button
                           className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
                           onClick={async () => {
-                            if (!confirm("Remover essa pessoa dos seus seguidores?")) return;
-                            await removerSeguidor(actorId);
-                            await marcarComoLida(n.id);
+                            const token = Storage.token;
+                            if (!token) return;
+
+                            await fetch(`${API.BASE_URL}/api/seguidores/recusar`, {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                notificacaoId: n.id,
+                                seguidorUsuarioId: actorId,
+                              }),
+                            });
+
+                            setNotificacoes((prev) => prev.filter((x) => x.id !== n.id));
                           }}
                         >
-                          Remover seguidor
+                          Recusar
                         </button>
                       </div>
                     </div>
