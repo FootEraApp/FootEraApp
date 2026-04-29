@@ -6,7 +6,13 @@ import { getUserFlags } from "../services/flags.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET não configurado no ambiente.");
+  }
+  return secret;
+})();
 
 export async function logout(req: any, res: any) {
   const userId = req.userId;
@@ -164,7 +170,7 @@ export async function login(req: Request, res: Response) {
       {
         id: usuario.id,
         tipo: usuario.tipo,
-        tokenVersion: usuario.tokenVersion ?? 0, 
+        tokenVersion: usuario.tokenVersion ?? 0,
       },
       JWT_SECRET,
       { expiresIn: "7d" }

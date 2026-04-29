@@ -686,6 +686,15 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     type AtividadeComTs = AtividadeUI & { ts: number };
 
     const itensRaw: AtividadeComTs[] = [
+      ...atividadesDb.map((a): AtividadeComTs => ({
+        id: `ar-${a.id}`,
+        tipo: a.tipo ?? "Atividade",
+        titulo: a.titulo ?? "Atividade",
+        createdAt: a.createdAt.toISOString(),
+        imagemUrl: a.imagemUrl ?? null,
+        link: a.link ?? null,
+        ts: +a.createdAt,
+      })),
       ...treinosLivres.map((t: any): AtividadeComTs => ({
         id: `tl-${t.id}`,
         tipo: "Treino Livre",

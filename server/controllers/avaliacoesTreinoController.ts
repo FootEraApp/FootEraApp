@@ -4,7 +4,6 @@ import { z } from "zod";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
-
 const schema = z.object({
   treinoAgendadoId: z.string().min(1),
   submissaoTreinoId: z.string().min(1).optional().nullable(),
@@ -13,6 +12,7 @@ const schema = z.object({
   concluiu: z.boolean().optional().default(true),
   teveDificuldade: z.boolean().optional().default(false),
   dificuldadeMotivo: z.string().optional().nullable(),
+  sentimento: z.enum(["ruim", "medio", "otimo"]).optional().nullable(),
   motivoNaoConcluiu: z.enum(["TEMPO", "LESAO", "OBSERVACAO"]).optional().nullable(),
 });
 
@@ -103,6 +103,7 @@ export async function criarAvaliacaoTreino(req: AuthenticatedRequest, res: Respo
       autorUsuarioId: usuario.id,
       nota: body.nota,
       concluiu: body.concluiu,
+      sentimento: body.sentimento ?? null,
       teveDificuldade: body.teveDificuldade,
       dificuldadeMotivo: body.teveDificuldade ? (body.dificuldadeMotivo ?? null) : null,
       motivoNaoConcluiu: body.concluiu ? null : (body.motivoNaoConcluiu ?? null),
@@ -166,6 +167,7 @@ export async function criarAvaliacaoTreino(req: AuthenticatedRequest, res: Respo
         nota: body.nota,
         concluiu: body.concluiu,
         teveDificuldade: body.teveDificuldade,
+        sentimento: body.sentimento ?? null,
         dificuldadeMotivo: body.teveDificuldade ? (body.dificuldadeMotivo ?? null) : null,
         motivoNaoConcluiu: body.concluiu ? null : (body.motivoNaoConcluiu ?? null),
         ...(criarComentario

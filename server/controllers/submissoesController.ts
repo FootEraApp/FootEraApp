@@ -72,12 +72,6 @@ export async function criarSubmissaoTreinoUpload(
       return res.status(400).json({ error: "Informe treinoAgendadoId." });
     }
 
-    if (!file) {
-      return res
-        .status(400)
-        .json({ error: "Envie um arquivo de imagem/vídeo do treino." });
-    }
-
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: { treinoProgramado: true, atleta: true },
@@ -89,17 +83,19 @@ export async function criarSubmissaoTreinoUpload(
 
     const atletaId = atletaIdBody || ag.atletaId || null;
 
-    const assetUrl = `/uploads/${file.filename}`;
-    const isVideo = !!file.mimetype?.startsWith("video");
+    const assetUrl = file ? `/uploads/${file.filename}` : null;
+    const isVideo = !!file?.mimetype?.startsWith("video");
 
-    const midia = {
-      url: assetUrl,
-      tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
-      dataEnvio: new Date(),
-      descricao: "",
-      titulo: "",
-      storageClass: StorageClass.HOT,
-    };
+    const midia = file
+      ? {
+          url: assetUrl!,
+          tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
+          dataEnvio: new Date(),
+          descricao: "",
+          titulo: "",
+          storageClass: StorageClass.HOT,
+        }
+      : null;
 
     const tempoSegNum =
       tempoSeg != null
@@ -239,7 +235,7 @@ export async function criarSubmissaoTreinoUpload(
         pontosCreditados: pontosConsiderados,
         pontuacaoSnapshot: pontosConsiderados,
         repeticoes: repeticoesNum,
-        midias: { create: [midia] },
+        ...(midia ? { midias: { create: [midia] } } : {}),
         tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
       },
       create: {
@@ -253,7 +249,7 @@ export async function criarSubmissaoTreinoUpload(
         pontosCreditados: pontosConsiderados,
         pontuacaoSnapshot: pontosConsiderados,
         repeticoes: repeticoesNum,
-        midias: { create: [midia] },
+        ...(midia ? { midias: { create: [midia] } } : {}),
         tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
       },
       select: { id: true, criadoEm: true },
@@ -444,14 +440,9 @@ export async function criarSubmissaoDesafioUpload(
     }
     const tentativaNumero = Math.min(2, tentativas + 1);
 
-       const uploadedUrl = file ? `/uploads/${file.filename}` : undefined;
+    const uploadedUrl = file ? `/uploads/${file.filename}` : undefined;
     const finalVideoUrl =
       (uploadedUrl ?? (rawVideoUrl && String(rawVideoUrl).trim())) || null;
-    if (!finalVideoUrl) {
-      return res
-        .status(400)
-        .json({ message: "Envie um vídeo (arquivo ou videoUrl)." });
-    }
 
     const isVideo = file ? file.mimetype?.startsWith("video") : true;
 
@@ -468,7 +459,7 @@ export async function criarSubmissaoDesafioUpload(
       data: {
         atletaId,
         desafioId,
-        videoUrl: finalVideoUrl,
+        videoUrl: finalVideoUrl ?? "",
         observacao,
         aprovado: false,
         tempoMs: tempoMsNum,

@@ -149,6 +149,76 @@ function whereAtletasVinculados(ownerTipo: ConquistaOwnerTipo, ownerId: string) 
   return {};
 }
 
+async function syncTemplatesMetodologiasComBadge() {
+  const publicoTodos = [
+    ConquistaOwnerTipo.Atleta,
+    ConquistaOwnerTipo.Professor,
+    ConquistaOwnerTipo.Escolinha,
+    ConquistaOwnerTipo.Clube,
+  ];
+
+  const [learning, avulsas] = await Promise.all([
+    prisma.metodologia.findMany({
+      where: { geraBadge: true },
+      select: { id: true, titulo: true, descricao: true, ativo: true },
+    }),
+    prisma.metodologiaAvulsa.findMany({
+      where: { geraBadge: true },
+      select: { id: true, titulo: true, descricao: true, ativo: true },
+    }),
+  ]);
+
+  for (const m of learning) {
+    await prisma.conquista.upsert({
+      where: { codigo: `metodologia_learning_${m.id}` },
+      update: {
+        titulo: `Metodologia: ${m.titulo}`,
+        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
+        tipo: "METODOLOGIA" as any,
+        icon: "🎓",
+        ativo: true,
+        publico: publicoTodos,
+      },
+      create: {
+        codigo: `metodologia_learning_${m.id}`,
+        titulo: `Metodologia: ${m.titulo}`,
+        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
+        tipo: "METODOLOGIA" as any,
+        icon: "🎓",
+        pontos: 0,
+        meta: 1,
+        ativo: true,
+        publico: publicoTodos,
+      },
+    });
+  }
+
+  for (const m of avulsas) {
+    await prisma.conquista.upsert({
+      where: { codigo: `metodologia_avulsa_${m.id}` },
+      update: {
+        titulo: `Metodologia: ${m.titulo}`,
+        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
+        tipo: "METODOLOGIA" as any,
+        icon: "🎓",
+        ativo: true,
+        publico: publicoTodos,
+      },
+      create: {
+        codigo: `metodologia_avulsa_${m.id}`,
+        titulo: `Metodologia: ${m.titulo}`,
+        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
+        tipo: "METODOLOGIA" as any,
+        icon: "🎓",
+        pontos: 0,
+        meta: 1,
+        ativo: true,
+        publico: publicoTodos,
+      },
+    });
+  }
+}
+
 export async function syncConquistasDoUsuario(usuarioId: string) {
   const user = await prisma.usuario.findUnique({
     where: { id: usuarioId },
@@ -273,6 +343,12 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     console.error("Falha ao syncTemplatesMetodologiasProfissionais:", e);
   }
 
+  try {
+    await syncTemplatesMetodologiasComBadge();
+  } catch (e) {
+    console.error("Falha ao syncTemplatesMetodologiasComBadge:", e);
+  }
+
   const catalogo = await prisma.conquista.findMany({
     where: { ativo: true, publico: { has: ownerTipo } },
     select: { id: true, codigo: true, tipo: true, meta: true },
@@ -290,8 +366,35 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     const codigo = String(c.codigo || "");
 
     if (tipo === "METODOLOGIA" || codigo.startsWith("metodologia_")) {
-      // cria vínculo "travado" para aparecer em preto e branco,
-      // mas sem mexer se já foi conquistada
+      const isAvulsa = codigo.startsWith("metodologia_avulsa_");
+      const refId = codigo
+        .replace("metodologia_learning_", "")
+        .replace("metodologia_avulsa_", "");
+
+      const assinaturaConcluida = await prisma.metodologiaAssinante.findFirst({
+        where: {
+          usuarioId,
+          ...(isAvulsa
+            ? { metodologiaAvulsaId: refId }
+            : { metodologiaId: refId }),
+          OR: [
+            { status: "CONCLUIDA" as any },
+            { concluiuEm: { not: null } },
+          ],
+        },
+        select: { id: true, concluiuEm: true },
+      });
+
+      const concluida = !!assinaturaConcluida;
+      const ownerFkData =
+        ownerTipo === ConquistaOwnerTipo.Atleta
+          ? { atletaId: ownerId, professorId: null, clubeId: null, escolinhaId: null }
+          : ownerTipo === ConquistaOwnerTipo.Professor
+          ? { atletaId: null, professorId: ownerId, clubeId: null, escolinhaId: null }
+          : ownerTipo === ConquistaOwnerTipo.Clube
+          ? { atletaId: null, professorId: null, clubeId: ownerId, escolinhaId: null }
+          : { atletaId: null, professorId: null, clubeId: null, escolinhaId: ownerId };
+
       const existing = await prisma.conquistaVinculo.findUnique({
         where: {
           ownerTipo_ownerId_conquistaId: { ownerTipo, ownerId, conquistaId: c.id },
@@ -299,38 +402,34 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
         select: { concluida: true },
       });
 
-      if (!existing) {
-        const ownerFkData =
-          ownerTipo === ConquistaOwnerTipo.Atleta
-            ? { atletaId: ownerId, professorId: null, clubeId: null, escolinhaId: null }
-            : ownerTipo === ConquistaOwnerTipo.Professor
-            ? { atletaId: null, professorId: ownerId, clubeId: null, escolinhaId: null }
-            : ownerTipo === ConquistaOwnerTipo.Clube
-            ? { atletaId: null, professorId: null, clubeId: ownerId, escolinhaId: null }
-            : { atletaId: null, professorId: null, clubeId: null, escolinhaId: ownerId };
-
-        await prisma.conquistaVinculo.upsert({
-          where: {
-            ownerTipo_ownerId_conquistaId: {
-              ownerTipo,
-              ownerId,
-              conquistaId: c.id,
-            },
-          },
-          update: {},
-          create: {
-            ownerTipo,
-            ownerId,
-            conquistaId: c.id,
-            ...ownerFkData,
-            progresso: 0,
-            concluida: false,
-            conquistadoEm: null,
-            refTipo: null,
-            refId: null,
-          },
-        });
-      }
+      await prisma.conquistaVinculo.upsert({
+        where: {
+          ownerTipo_ownerId_conquistaId: { ownerTipo, ownerId, conquistaId: c.id },
+        },
+        create: {
+          ownerTipo,
+          ownerId,
+          conquistaId: c.id,
+          ...ownerFkData,
+          progresso: concluida ? 100 : 0,
+          concluida,
+          conquistadoEm: concluida
+            ? assinaturaConcluida?.concluiuEm ?? new Date()
+            : null,
+          refTipo: concluida ? (isAvulsa ? "MetodologiaAvulsa" : "Metodologia") : null,
+          refId: concluida ? refId : null,
+        },
+        update: {
+          ...ownerFkData,
+          progresso: concluida ? 100 : 0,
+          concluida,
+          ...(concluida && !existing?.concluida
+            ? { conquistadoEm: assinaturaConcluida?.concluiuEm ?? new Date() }
+            : {}),
+          refTipo: concluida ? (isAvulsa ? "MetodologiaAvulsa" : "Metodologia") : null,
+          refId: concluida ? refId : null,
+        },
+      });
 
       continue;
     }

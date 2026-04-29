@@ -561,9 +561,7 @@ export default function MetodologiaUnicaPage() {
     ? Math.round((totalConcluidos / totalItens) * 100) 
     : 0;
   const metodologiaCompleta = pct >= 100;
-  const jaAvaliou =
-    !!data?.viewer?.minhaAvaliacao &&
-    typeof data.viewer.minhaAvaliacao.nota === "number";
+  const jaAvaliou = !!data?.viewer?.minhaAvaliacao;
 
   async function assinarMetodologia() {
     if (!data || !id) return;
@@ -846,14 +844,18 @@ export default function MetodologiaUnicaPage() {
                       return;
                     }
 
-                    const partes: string[] = ["Metodologia concluída com sucesso!"];
+                    const pontos = Number(data.pontosTotal || 0);
 
-                    if (data.geraBadge) {
-                      partes.push("Sua badge/conquista será disponibilizada.");
-                    }
+                    const partes: string[] = [
+                      `Você concluiu a metodologia e ganhou ${pontos} pontos!`,
+                    ];
 
-                    if (data.geraCertificado) {
-                      partes.push("Seu certificado será disponibilizado.");
+                    if (data.geraBadge && data.geraCertificado) {
+                      partes.push("Você também ganhou uma badge e um certificado.");
+                    } else if (data.geraBadge) {
+                      partes.push("Você também ganhou uma badge.");
+                    } else if (data.geraCertificado) {
+                      partes.push("Você também ganhou um certificado.");
                     }
 
                     alert(partes.join(" "));
@@ -873,11 +875,11 @@ export default function MetodologiaUnicaPage() {
                     : "bg-green-800 hover:bg-green-900"
                 }`}
               >
-                {!metodologiaCompleta
-                  ? "Finalizar metodologia"
-                  : jaAvaliou
-                    ? "Metodologia concluída"
-                    : "Concluir metodologia"}
+                {jaAvaliou
+                  ? "Metodologia já avaliada"
+                  : metodologiaCompleta
+                    ? "Finalizar metodologia"
+                    : "Conclua todos os itens"}
               </button>
 
               {!metodologiaCompleta && (

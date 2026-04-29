@@ -398,7 +398,7 @@ function roundToDot90Ceil(value: number) {
 
 const PLANS = [
   // ATLETA
-  { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: null, benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais"] },
+  { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: null, benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais", "Quantidade ilimitada de treinos agendados por semana"] },
   { id: "ATLETA_LEARNING_1", title: "Atleta Learning 1", monthly: 44.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher 1 metodologia por mês"] },
   { id: "ATLETA_LEARNING_3", title: "Atleta Learning 3", monthly: 64.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"] },
   

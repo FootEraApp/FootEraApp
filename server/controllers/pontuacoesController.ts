@@ -185,6 +185,61 @@ const desafiosConcluidos = await prisma.submissaoDesafio.findMany({
   orderBy: { createdAt: "desc" },
 });
 
+const metodologiasConcluidas = await prisma.metodologiaAssinante.findMany({
+  where: {
+    usuarioId,
+    concluiuEm: { not: null },
+  },
+  include: {
+    metodologia: {
+      include: {
+        estruturas: {
+          include: {
+            itens: {
+              include: {
+                treinoProgramado: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    metodologiaAvulsa: {
+      include: {
+        estruturas: {
+          include: {
+            itens: true,
+          },
+        },
+      },
+    },
+  },
+  orderBy: { concluiuEm: "desc" },
+});
+
+const pontosMetodologia = (m: any): number => {
+  const progresso = m?.progresso || {};
+  const pontosGanhos = Math.max(
+    Number(m?.pontosGanhos || 0),
+    Number((progresso as any)?.pontosGanhos || 0)
+  );
+
+  if (pontosGanhos > 0) return pontosGanhos;
+
+  const origem = m.metodologia || m.metodologiaAvulsa;
+  const itens = (origem?.estruturas || []).flatMap((e: any) => e.itens || []);
+
+  return itens.reduce((acc: number, it: any) => {
+    const tipo = String(it?.tipo || "").toUpperCase();
+
+    if (tipo === "TREINO") {
+      return acc + Number(it?.treinoProgramado?.pontuacao || it?.pontos || 0);
+    }
+
+    return acc + Number(it?.pontos || 0);
+  }, 0);
+};
+
 const pontosDesafio = (s: typeof desafiosConcluidos[number]): number => {
   const d: any = s.desafio;
   const byDeclared = pickNumber(
@@ -217,6 +272,20 @@ for (const s of desafiosConcluidos) {
     titulo: s.desafio?.titulo ?? s.desafio?.titulo ?? "Desafio",
     data: s.createdAt,           
     pontuacao: pontosDesafio(s),
+  });
+}
+
+for (const m of metodologiasConcluidas) {
+  const origem = m.metodologia || m.metodologiaAvulsa;
+  if (!origem) continue;
+
+  historico.push({
+    tipo: "Metodologia",
+    status: "Concluída",
+    titulo: origem.titulo || "Metodologia",
+    data: m.concluiuEm,
+    pontuacao: pontosMetodologia(m),
+    imagemUrl: origem.capaUrl ?? null,
   });
 }
 

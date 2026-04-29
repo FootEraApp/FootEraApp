@@ -45,18 +45,18 @@ const WINDOW_BY_KEY: Record<UsageKey, Window> = {
 
 const LIMITS = {
   FREE: {
-    treinos_semana: 3,
+    treinos_semana: 5,
     desafios_mes: 2,
     treinos_salvos_total: 5,
     planos_ativos_total: 5,
     templates_total: 10,
     perfis_vistos_dia: 20,
     listas_salvas_total: 2,
-    atletas_vinculados_total: 600,
+    atletas_vinculados_total: 100,
     assentos_coach_total: 30,
     turmas_total: 30,
-    agendamentos_mes: 20000,
-    treinos_programados_mes: 5,
+    agendamentos_mes: 100,
+    treinos_programados_mes: 10,
   },
   PRO: {
     treinos_semana: Infinity,
@@ -72,7 +72,7 @@ const LIMITS = {
     agendamentos_mes: 20000,
     treinos_programados_mes: Infinity,
   },
-  ORG: {
+  LEARNING: {
     treinos_semana: Infinity,
     desafios_mes: Infinity,
     treinos_salvos_total: Infinity,
@@ -114,13 +114,13 @@ const WINDOW_LABEL: Record<Window, string> = {
 
 
 export function planLimitFor(
-  userPlan: "FREE" | "PRO" | "ORG" | string | null | undefined,
+  userPlan: "FREE" | "PRO" | "LEARNING" | string | null | undefined,
   key: UsageKey
 ) {
   const raw = String(userPlan ?? "FREE").trim().toUpperCase();
 
   const plan =
-    raw === "ORG" || raw.includes("ORG") ? "ORG" :
+    raw.includes("LEARNING") ? "LEARNING" :
     raw === "PRO" || raw.includes("PRO") ? "PRO" :
     "FREE";
 
@@ -354,7 +354,7 @@ export function denyUsage(
 }
 
 export async function touchFairUse(orgId: string, key: UsageKey) {
-  const limit = (LIMITS.ORG as any)[key] ?? (LIMITS.PRO as any)[key] ?? Infinity;
+  const limit = (LIMITS.LEARNING as any)[key] ?? (LIMITS.PRO as any)[key] ?? Infinity;
   const win = WINDOW_BY_KEY[key];
   if (!Number.isFinite(limit)) return { used: 0, limit: Infinity, warn: false };
 

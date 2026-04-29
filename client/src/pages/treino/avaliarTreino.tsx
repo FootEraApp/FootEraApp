@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Star as StarIcon, ArrowLeft, Volleyball } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
@@ -52,12 +52,6 @@ function Stars({
 export default function AvaliarTreino() {
   const [, navigate] = useLocation();
 
-  const [location] = useLocation();
-
-  const params = useMemo(() => {
-    const q = location.split("?")[1] ?? "";
-    return new URLSearchParams(q);
-  }, [location]);
   const treinoAgendadoId = useMemo(() => {
     const p = new URLSearchParams(window.location.search);
     return p.get("treinoAgendadoId") || "";
@@ -76,14 +70,9 @@ export default function AvaliarTreino() {
   const [titulo, setTitulo] = useState<string>(tituloParam || "Treino");
   const [nota, setNota] = useState<number>(0);
   const [comentario, setComentario] = useState<string>("");
-  const [concluiu, setConcluiu] = useState<boolean>(true);
-  const [teveDificuldade, setTeveDificuldade] = useState<boolean>(false);
-  const [dificuldadeMotivo, setDificuldadeMotivo] = useState<string>("");
-  const [motivoNaoConcluiu, setMotivoNaoConcluiu] = useState<
-    "TEMPO" | "LESAO" | "OUTRO" | ""
-  >("");
   const [enviando, setEnviando] = useState(false);
-  const [motivoOutroTexto, setMotivoOutroTexto] = useState<string>("");
+  const [sentimento, setSentimento] = useState<"ruim" | "medio" | "otimo" | "">("");
+  const podeEnviar = nota > 0 && sentimento !== "" && !enviando;
 
   useEffect(() => {
     if (tituloParam) setTitulo(tituloParam);
@@ -178,30 +167,28 @@ export default function AvaliarTreino() {
         return;
       }
 
+      if (nota <= 0) {
+        alert("Escolha uma nota com estrelas.");
+        return;
+      }
+
+      if (!sentimento) {
+        alert("Escolha como foi o treino.");
+        return;
+      }
       setEnviando(true);
 
       const payload = {
         treinoAgendadoId,
         submissaoTreinoId: submissaoTreinoId || null,
         nota, 
-        comentario: (
-        [
-            comentario.trim(),
-            !concluiu && motivoNaoConcluiu === "OUTRO" && motivoOutroTexto.trim()
-              ? `Motivo (Outro): ${motivoOutroTexto.trim()}`
-              : "",
-          ]
-            .filter(Boolean)
-            .join("\n")
-            .trim() || null
-        ),
-        concluiu,
-        teveDificuldade,
-        dificuldadeMotivo: teveDificuldade ? (dificuldadeMotivo.trim() || null) : null,
-        motivoNaoConcluiu: concluiu ? null : (motivoNaoConcluiu || null),
-        motivoNaoConcluiuOutro: !concluiu && motivoNaoConcluiu === "OUTRO"
-          ? (motivoOutroTexto.trim() || null)
-          : null,
+        sentimento,
+        comentario: comentario.trim() || null,
+        concluiu: true,
+        teveDificuldade: false,
+        dificuldadeMotivo: null,
+        motivoNaoConcluiu: null,
+        motivoNaoConcluiuOutro: null
       };
 
       const r = await fetch(`${API.BASE_URL}/api/treinos/avaliacoes`, {
@@ -260,10 +247,10 @@ export default function AvaliarTreino() {
           </div>
 
           <div className="border rounded-xl p-4 bg-neutral-50">
-            <div className="text-base font-bold mb-2">Como você avalia esse treino?</div>
+            <div className="text-base font-bold mb-2">Como você avalia esse treino?*</div>
             <Stars value={nota} onChange={setNota} />
 
-            <div className="mt-5 text-base font-bold">Comentário</div>
+            <div className="mt-5 text-base font-bold">Comentário (opcional)</div>
             <textarea
               value={comentario}
               onChange={(e) => setComentario(e.target.value)}
@@ -271,116 +258,41 @@ export default function AvaliarTreino() {
               className="mt-2 w-full min-h-[96px] rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-green-200"
             />
 
-            <div className="mt-6">
-              <div className="text-base font-bold mb-2">
-                Como foi o ciclo de treino?
+            <div className="mt-4">
+              <div className="text-base font-bold mb-3">
+                Como foi o treino?*
               </div>
 
-              <label className="flex items-center gap-2 mb-2">
-                <input
-                  type="radio"
-                  checked={concluiu === true}
-                  onChange={() => {
-                    setConcluiu(true);
-                    setMotivoNaoConcluiu("");
-                    setMotivoOutroTexto("");
-                  }}
-                />
-                <span>Concluí o treino</span>
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={concluiu === false}
-                  onChange={() => setConcluiu(false)}
-                />
-                <span>Não concluí o treino</span>
-              </label>
-
-              {!concluiu && (
-                <div className="mt-3 pl-1">
-                  <div className="text-sm font-semibold mb-2">
-                    Por que não concluiu?
-                  </div>
-
-                  <label className="flex items-center gap-2 mb-2">
-                    <input
-                      type="radio"
-                      checked={motivoNaoConcluiu === "TEMPO"}
-                      onChange={() => { setMotivoNaoConcluiu("TEMPO"); setMotivoOutroTexto(""); }}
-                    />
-                    <span>Tempo</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 mb-2">
-                    <input
-                      type="radio"
-                      checked={motivoNaoConcluiu === "LESAO"}
-                      onChange={() => { setMotivoNaoConcluiu("LESAO"); setMotivoOutroTexto(""); }}
-                    />
-                    <span>Lesão</span>
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      checked={motivoNaoConcluiu === "OUTRO"}
-                      onChange={() => setMotivoNaoConcluiu("OUTRO")}
-                    />
-                    <span>Outro</span>
-                  </label>
-
-                  {motivoNaoConcluiu === "OUTRO" && (
-                    <textarea
-                      value={motivoOutroTexto}
-                      onChange={(e) => setMotivoOutroTexto(e.target.value)}
-                      placeholder="Escreva o motivo..."
-                      className="mt-3 w-full min-h-[90px] rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-green-200"
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <div className="text-base font-bold mb-2">
-                Teve alguma dificuldade?
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { key: "ruim", emoji: "😞", label: "Ruim" },
+                  { key: "medio", emoji: "😐", label: "Médio" },
+                  { key: "otimo", emoji: "😄", label: "Ótimo" },
+                ].map((op) => (
+                  <button
+                    key={op.key}
+                    type="button"
+                    onClick={() => setSentimento(op.key as any)}
+                    className={`rounded-xl border p-4 text-center transition ${
+                      sentimento === op.key
+                        ? "border-green-800 bg-green-50"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <div className="text-4xl">{op.emoji}</div>
+                    <div className="mt-2 text-sm font-semibold">{op.label}</div>
+                  </button>
+                ))}
               </div>
-
-              <label className="flex items-center gap-2 mb-2">
-                <input
-                  type="radio"
-                  checked={teveDificuldade === false}
-                  onChange={() => setTeveDificuldade(false)}
-                />
-                <span>Não</span>
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={teveDificuldade === true}
-                  onChange={() => setTeveDificuldade(true)}
-                />
-                <span>Sim</span>
-              </label>
-
-              {teveDificuldade && (
-                <input
-                  value={dificuldadeMotivo}
-                  onChange={(e) => setDificuldadeMotivo(e.target.value)}
-                  placeholder="Por quê?"
-                  className="mt-3 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-green-200"
-                />
-              )}
             </div>
 
             <button
-              disabled={enviando}
+              disabled={!podeEnviar}
               onClick={enviar}
               className={`mt-7 w-full h-12 rounded-xl text-white font-semibold ${
-                enviando ? "bg-gray-300" : "bg-green-800 hover:bg-green-900"
+                podeEnviar
+                  ? "bg-green-800 hover:bg-green-900"
+                  : "bg-gray-300 cursor-not-allowed"
               }`}
             >
               {enviando ? "Enviando..." : "Enviar"}

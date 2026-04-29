@@ -1,7 +1,7 @@
 // server/controllers/metodologiasController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
-import { startOfMonth, addMonths, addYears } from "date-fns";
+import { startOfMonth, addMonths } from "date-fns";
 import {
   MetodologiaAssinaturaStatus,
   MetodologiaAssinaturaOrigem,
@@ -12,6 +12,7 @@ import {
   MetodologiaModoExecucao,
   MetodologiaItemTipo,
   MetodologiaProgressoStatus,
+  SentimentoAvaliacao,
 } from "@prisma/client";
 import {
   ensureConquistaTemplateMetodologia,
@@ -222,10 +223,13 @@ async function recalcularStatusMetodologiaAssinante(metodologiaId: string, usuar
 
   const concluiuTudo = todasEstruturas > 0 && totalConcluidos >= todasEstruturas;
 
+  const pontosGanhosFinal = Number(payload.pontosGanhos ?? 0);
+
   const updated = await prisma.metodologiaAssinante.update({
     where: { id: assinatura.id },
     data: {
       progresso: payload,
+      pontosGanhos: pontosGanhosFinal,
       status: concluiuTudo ? MetodologiaAssinaturaStatus.CONCLUIDA : assinatura.status,
       concluiuEm: concluiuTudo ? (assinatura.concluiuEm ?? new Date()) : assinatura.concluiuEm,
     },
@@ -236,6 +240,8 @@ async function recalcularStatusMetodologiaAssinante(metodologiaId: string, usuar
       where: { id: metodologiaId },
       select: {
         id: true,
+        titulo: true,
+        capaUrl: true,
         geraBadge: true,
         geraCertificado: true,
       },
@@ -251,14 +257,31 @@ async function recalcularStatusMetodologiaAssinante(metodologiaId: string, usuar
         metodologiaId,
       }).catch(() => null);
     }
+    if (!assinatura.concluiuEm) {
+      await prisma.atividadeRecente.create({
+        data: {
+          usuarioId,
+          tipo: "Metodologia",
+          titulo: `Metodologia concluída: ${metodologia?.titulo || "Metodologia"}`,
+          imagemUrl: metodologia?.capaUrl ?? null,
+          link: `/learning/${metodologiaId}`,
+        },
+      }).catch(() => null);
+    }
   }
   return updated;
 }
 
 function assinaturaDaAcesso(a: any) {
   if (!a) return false;
-  if (a.status !== MetodologiaAssinaturaStatus.ATIVA) return false;
-  if (a.expiraEm && new Date(a.expiraEm) <= new Date()) return false; // expirou
+
+  const statusOk =
+    a.status === MetodologiaAssinaturaStatus.ATIVA ||
+    a.status === MetodologiaAssinaturaStatus.CONCLUIDA;
+
+  if (!statusOk) return false;
+  if (a.expiraEm && new Date(a.expiraEm) <= new Date()) return false;
+
   return true;
 }
 
@@ -862,7 +885,12 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
     const rows = await prisma.metodologiaAssinante.findMany({
       where: {
         usuarioId: userId,
-        status: MetodologiaAssinaturaStatus.ATIVA,
+        status: {
+          in: [
+            MetodologiaAssinaturaStatus.ATIVA,
+            MetodologiaAssinaturaStatus.CONCLUIDA,
+          ],
+        },
       },
       orderBy: { iniciouEm: "desc" },
       include: {
@@ -1495,11 +1523,6 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       ])
     );
 
-    const podeAvaliar =
-      !!assinatura &&
-      (assinatura.status === MetodologiaAssinaturaStatus.CONCLUIDA ||
-        !!assinatura.concluiuEm);
-
     const minhaAvaliacao =
       userId
         ? await prisma.avaliacaoMetodologia.findUnique({
@@ -1510,8 +1533,10 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
               },
             },
             select: {
+              id: true,
               nota: true,
               comentario: true,
+              sentimento: true,
               updatedAt: true,
             },
           })
@@ -1669,8 +1694,10 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         podeAvaliar: !!userId && acessoFinal && !minhaAvaliacao,
         minhaAvaliacao: minhaAvaliacao
           ? {
+              id: minhaAvaliacao.id,
               nota: minhaAvaliacao.nota,
               comentario: minhaAvaliacao.comentario,
+              sentimento: minhaAvaliacao.sentimento,
               updatedAt: minhaAvaliacao.updatedAt.toISOString(),
             }
           : null,
@@ -1870,7 +1897,19 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
       return res.status(401).json({ message: "Não autenticado." });
     }
 
-    const { metodologiaId, nota, comentario, origem } = req.body || {};
+    const { metodologiaId, nota, comentario, origem, sentimento } = req.body || {};
+    
+    const parseSentimento = (valor: any): SentimentoAvaliacao | null => {
+      const raw = String(valor || "").trim();
+
+      if (raw === SentimentoAvaliacao.ruim) return SentimentoAvaliacao.ruim;
+      if (raw === SentimentoAvaliacao.medio) return SentimentoAvaliacao.medio;
+      if (raw === SentimentoAvaliacao.otimo) return SentimentoAvaliacao.otimo;
+
+      return null;
+    };
+
+    const sentimentoFinal = parseSentimento(sentimento);
     const origemFinal = String(origem || "LEARNING").toUpperCase().trim();
     const isAvulsa = origemFinal === "AVULSA";
     const isAdmin = await isAdminUser(userId);
@@ -1946,6 +1985,7 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
         nota: number;
         comentario: string | null;
         updatedAt: Date;
+        sentimento: string | null;
       };
 
       if (isAvulsa) {
@@ -1963,12 +2003,14 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
               data: {
                 nota: Math.round(n),
                 comentario: asNullableString(comentario),
+                sentimento: sentimentoFinal,
               },
               select: {
                 id: true,
                 nota: true,
                 comentario: true,
                 updatedAt: true,
+                sentimento: true,
               },
             })
           : await tx.avaliacaoMetodologia.create({
@@ -1978,12 +2020,14 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
                 metodologiaAvulsaId: metodologiaId,
                 nota: Math.round(n),
                 comentario: asNullableString(comentario),
+                sentimento: sentimentoFinal,
               },
               select: {
                 id: true,
                 nota: true,
                 comentario: true,
                 updatedAt: true,
+                sentimento: true,
               },
             });
       } else {
@@ -2000,16 +2044,19 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
             usuarioId: userId,
             nota: Math.round(n),
             comentario: asNullableString(comentario),
+            sentimento: sentimentoFinal,
           },
           update: {
             nota: Math.round(n),
             comentario: asNullableString(comentario),
+            sentimento: sentimentoFinal,
           },
           select: {
             id: true,
             nota: true,
             comentario: true,
             updatedAt: true,
+            sentimento: true,
           },
         });
       }
@@ -2053,6 +2100,7 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
         nota: result.review.nota,
         comentario: result.review.comentario,
         updatedAt: result.review.updatedAt,
+        sentimento: result.review.sentimento,
       },
       mediaAvaliacao: result.media,
       totalReviews: result.total,
@@ -3453,6 +3501,7 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
         where: { id: assinatura.id },
         data: {
           progresso: payload,
+          pontosGanhos: Number(payload.pontosGanhos ?? 0),
           status: concluiuTudo
             ? (MetodologiaAssinaturaStatus.CONCLUIDA as any)
             : assinaturaAtualizada?.status,
@@ -3461,6 +3510,26 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
             : assinaturaAtualizada?.concluiuEm,
         },
       });
+
+      if (concluiuTudo) {
+        const avulsa = await prisma.metodologiaAvulsa.findUnique({
+          where: { id: metodologiaId },
+          select: {
+            titulo: true,
+            capaUrl: true,
+          },
+        });
+
+        await prisma.atividadeRecente.create({
+          data: {
+            usuarioId: userId,
+            tipo: "Metodologia",
+            titulo: `Metodologia concluída: ${avulsa?.titulo || "Metodologia"}`,
+            imagemUrl: avulsa?.capaUrl ?? null,
+            link: `/learning/${metodologiaId}?origem=avulsa`,
+          },
+        }).catch(() => null);
+      }
     }
 
     return res.json({
@@ -4089,19 +4158,24 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
       new Set<string>([...concluidosAssinaturaIds, ...concluidosSubmissoesIds])
     );
 
-    const minhaAvaliacao = userId
-      ? await prisma.avaliacaoMetodologia.findFirst({
-          where: {
-            usuarioId: userId,
-            metodologiaAvulsaId: id,
-          },
-          select: {
-            nota: true,
-            comentario: true,
-            updatedAt: true,
-          },
-        })
-      : null;
+    const minhaAvaliacao =
+      userId
+        ? await prisma.avaliacaoMetodologia.findUnique({
+            where: {
+              metodologiaAvulsaId_usuarioId: {
+                metodologiaAvulsaId: id,
+                usuarioId: userId,
+              },
+            },
+            select: {
+              id: true,
+              nota: true,
+              comentario: true,
+              sentimento: true,
+              updatedAt: true,
+            },
+          })
+        : null;
 
     const estruturas = (item.estruturas || []).map((estrutura: any) => {
       const { inicio, fim } = calcularDatasExecucao(estrutura, assinatura);
@@ -4217,6 +4291,7 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
               nota: minhaAvaliacao.nota,
               comentario: minhaAvaliacao.comentario,
               updatedAt: minhaAvaliacao.updatedAt.toISOString(),
+              sentimento: minhaAvaliacao.sentimento,
             }
           : null,
         progresso: {
@@ -5478,6 +5553,7 @@ export async function criarSubmissaoMetodologiaItem(req: Request, res: Response)
         where: { id: assinaturaCompleta.id },
         data: {
           progresso: progressoAssinaturaAtual,
+          pontosGanhos: Number(progressoAssinaturaAtual.pontosGanhos ?? 0),
         },
       });
 
