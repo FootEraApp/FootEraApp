@@ -164,9 +164,23 @@ export default function MeusExerciciosTab() {
   function handleUsarNoTreino(item: ExercicioItem) {
     const atuais = JSON.parse(
       sessionStorage.getItem("treino_exercicios_preselecionados") || "[]"
-    ) as ExercicioItem[];
+    ) as any[];
 
-    const semDuplicar = [...atuais.filter((x) => x.id !== item.id), item];
+    const origem = String((item as any).origem || "personalizado");
+
+    const itemParaTreino = {
+      ...item,
+      origem,
+      tipo: origem,
+      exercicioId: origem === "exercicio" ? item.id : null,
+      idCatalogo: origem === "exercicio" ? item.id : null,
+      exercicioPersonalizadoId: origem === "personalizado" ? item.id : null,
+    };
+
+    const semDuplicar = [
+      ...atuais.filter((x) => String(x.id) !== String(item.id)),
+      itemParaTreino,
+    ];
 
     sessionStorage.setItem(
       "treino_exercicios_preselecionados",

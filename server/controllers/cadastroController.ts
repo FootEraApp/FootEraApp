@@ -520,6 +520,25 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       ? new Date(dataNascimento)
       : null;
 
+    let idadeCalcInicial: number | null = null;
+
+    if (dataNascFinal) {
+      const hoje = new Date();
+      idadeCalcInicial =
+        hoje.getFullYear() -
+        dataNascFinal.getFullYear() -
+        (hoje.getMonth() < dataNascFinal.getMonth() ||
+        (hoje.getMonth() === dataNascFinal.getMonth() &&
+          hoje.getDate() < dataNascFinal.getDate())
+          ? 1
+          : 0);
+    }
+
+    const precisaResponsavel =
+      tipoEnum === TipoUsuario.Atleta &&
+      idadeCalcInicial !== null &&
+      idadeCalcInicial < 12;
+
     const emailNorm = String(email).trim().toLowerCase();
     const usernameFinal = String(nomeDeUsuario).trim().toLowerCase();
     // ✅ nome agora é opcional: se não vier, usa o username como nome
@@ -546,9 +565,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         logradouro: logradouro ?? null,
         cpf:    cpf ?? null,
         dataNascimento: dataNascFinal,
-        responsavelNome: responsavel?.nome ?? null,
-        responsavelEmail: responsavel?.email ?? null,
-        responsavelTelefone: responsavel?.telefone ?? null,
+        responsavelNome: precisaResponsavel ? responsavel?.nome ?? null : null,
+        responsavelEmail: precisaResponsavel ? responsavel?.email ?? null : null,
+        responsavelTelefone: precisaResponsavel ? responsavel?.telefone ?? null : null,
       },
       select: { id: true, tipo: true, nome: true, email: true },
     });
@@ -856,13 +875,13 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         const h = new Date();
         idadeCalc = h.getFullYear() - d.getFullYear() - (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate()) ? 1 : 0);
       }
-      const isMenor = idadeCalc !== null && idadeCalc < 18;
-      const destino = isMenor && usr?.responsavelEmail ? usr.responsavelEmail : usr!.email;
+      const isMenor12 = idadeCalc !== null && idadeCalc < 12;
+      const destino = isMenor12 && usr?.responsavelEmail ? usr.responsavelEmail : usr!.email;
 
       await issueEmailVerification({
         userId: usuario.id,
         emailDestino: destino!,
-        isResponsavel: Boolean(isMenor),
+        isResponsavel: Boolean(isMenor12),
         nome: usuario.nome,
         username: usernameFinal,
         tipo: String(usuario.tipo),

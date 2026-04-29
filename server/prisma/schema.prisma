@@ -582,8 +582,21 @@ model ExercicioPersonalizado {
   categorias            Categoria[] @default([])
   videoDemonstrativoUrl String?
   videoPosterUrl        String?
-  criadorUsuarioId      String
-  criadorUsuario        Usuario     @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+
+  tipo                 TipoExercicio?
+  modoExecucao         ModoExecucaoExercicio?
+  series               Int?
+  repeticoes           String?
+  duracao              String?
+  descanso             String?
+  tags                 String[]               @default([])
+  quantidadeAtletas    String?
+  materiaisNecessarios String?
+  espacoNecessario     EspacoExercicio?
+  favorito             Boolean                @default(false)
+
+  criadorUsuarioId String
+  criadorUsuario   Usuario @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt

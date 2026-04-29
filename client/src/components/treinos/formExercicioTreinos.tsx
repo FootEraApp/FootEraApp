@@ -182,10 +182,6 @@ export default function FormExercicioTreinos({
       setRepeticoes("");
     }
 
-    if (modoExecucao === "SeriesRepeticoes") {
-      setDuracao("");
-    }
-
     if (modoExecucao === "LivreOrientativo") {
       setSeries("");
       setRepeticoes("");
@@ -367,6 +363,8 @@ export default function FormExercicioTreinos({
       formData.append("codigo", codigoFinal);
       formData.append("nome", nome.trim());
       formData.append("objetivo", objetivo.trim());
+      formData.append("descricao", objetivo.trim());
+      formData.append("categorias", JSON.stringify(faixasEtarias));
       formData.append("tipo", tipo);
       formData.append("nivel", nivel);
       formData.append("faixaEtaria", JSON.stringify(faixasEtarias));
@@ -379,7 +377,7 @@ export default function FormExercicioTreinos({
       } else if (modoExecucao === "SeriesRepeticoes") {
         formData.append("series", series.trim());
         formData.append("repeticoes", repeticoes.trim());
-        formData.append("duracao", "");
+        formData.append("duracao", duracao.trim());
         formData.append("descanso", descanso.trim());
       } else if (modoExecucao === "LivreOrientativo") {
         formData.append("duracao", duracao.trim());
@@ -398,16 +396,17 @@ export default function FormExercicioTreinos({
 
       if (video) formData.append("video", video);
 
-      const res = await fetch(
-        `${API.BASE_URL}/api/exercicios${exercicioId ? `/${exercicioId}` : ""}`,
-        {
-          method: exercicioId ? "PUT" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const endpoint = exercicioId
+        ? `${API.BASE_URL}/api/exercicios/${exercicioId}`
+        : `${API.BASE_URL}/api/exercicios/personalizados`;
+
+      const res = await fetch(endpoint, {
+        method: exercicioId ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
       const json = await res.json().catch(() => ({}));
 
@@ -608,7 +607,7 @@ export default function FormExercicioTreinos({
           )}
 
           {modoExecucao === "SeriesRepeticoes" && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
                   Séries
@@ -630,6 +629,18 @@ export default function FormExercicioTreinos({
                   onChange={(e) => setRepeticoes(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
                   placeholder="Ex: 10, 12, 15"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
+                  Duração / observação
+                </label>
+                <input
+                  value={duracao}
+                  onChange={(e) => setDuracao(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
+                  placeholder="Ex: 2min, até errar, por lado..."
                 />
               </div>
 

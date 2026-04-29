@@ -374,6 +374,7 @@ export default function CadastroGoogleComplementar() {
   const usernameValido = USER_RE.test(nomeDeUsuario.trim());
   const senhaForte = PASS_RE.test(senha);
   const confirmarOk = confirmarSenha === senha && confirmarSenha.length > 0;
+  const precisaResponsavel = tipoPerfil === "Atleta" && idade !== null && idade < 12;
 
   useEffect(() => {
     if (!preCadastroToken || !googleProfile?.email) {
@@ -588,7 +589,7 @@ export default function CadastroGoogleComplementar() {
       }
     }
 
-    if (idade !== null && idade < 18) {
+    if (precisaResponsavel) {
       if (!responsavel.nome.trim()) {
         setErro("Informe o nome do responsável.");
         return false;
@@ -702,7 +703,7 @@ export default function CadastroGoogleComplementar() {
         payload.siteOuLinkedin = olheiro.siteOuLinkedin || undefined;
       }
 
-      if (idade !== null && idade < 18) {
+      if (precisaResponsavel) {
         payload.responsavel = {
           nome: responsavel.nome,
           email: responsavel.email,
@@ -1162,7 +1163,7 @@ export default function CadastroGoogleComplementar() {
                       <input className="w-full border rounded px-3 py-2 bg-gray-100" value={idade ?? ""} readOnly />
                     </div>
 
-                    {idade !== null && idade < 18 && (
+                    {precisaResponsavel && (
                       <div className="border rounded-md p-3 mt-3 sm:col-span-2">
                         <p className="text-sm font-medium mb-2">Dados do responsável (obrigatório)</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1616,7 +1617,7 @@ export default function CadastroGoogleComplementar() {
                   {estado ? `- ${estado}` : ""} {pais ? `• ${pais}` : ""}
                 </div>
 
-                {idade !== null && idade < 18 && (
+                {precisaResponsavel && (
                   <div className="mt-2">
                     <div><span className="font-medium">Responsável:</span> {responsavel.nome || "-"}</div>
                     <div><span className="font-medium">Email Resp.:</span> {responsavel.email || "-"}</div>

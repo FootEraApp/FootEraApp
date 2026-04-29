@@ -2947,6 +2947,20 @@ export async function getMeusExercicios(
       ]);
 
     const itens = [
+      ...exerciciosPersonalizadosDoUsuario.map((x) => ({
+        id: String(x.id),
+        origem: "personalizado" as const,
+        nome: x.nome ?? "Exercício",
+        objetivo: (x as any).descricao ?? null,
+        descricao: (x as any).descricao ?? null,
+        nivel: (x as any).nivel ?? null,
+        categorias: Array.isArray((x as any).categorias)
+          ? (x as any).categorias
+          : [],
+        videoDemonstrativoUrl: (x as any).videoDemonstrativoUrl ?? null,
+        videoPosterUrl: (x as any).videoPosterUrl ?? null,
+      })),
+
       ...exerciciosBancoDoUsuario.map((x) => ({
         id: String(x.id),
         origem: "exercicio" as const,
@@ -2954,37 +2968,18 @@ export async function getMeusExercicios(
         objetivo: (x as any).objetivo ?? null,
         descricao: (x as any).descricao ?? null,
         nivel: (x as any).nivel ?? null,
-        categorias: Array.isArray((x as any).categoria)
-          ? (x as any).categoria
-          : Array.isArray((x as any).categorias)
-          ? (x as any).categorias
+        categorias: Array.isArray((x as any).faixaEtaria)
+          ? (x as any).faixaEtaria
           : [],
         videoDemonstrativoUrl:
           (x as any).videoDemonstrativoUrl ??
           (x as any).videoUrl ??
           null,
         videoPosterUrl: (x as any).videoPosterUrl ?? null,
-        // ✅ adicionar
         series: (x as any).series ?? null,
         repeticoes: (x as any).repeticoes ?? null,
         duracao: (x as any).duracao ?? null,
         descanso: (x as any).descanso ?? null,
-      })),
-
-      ...exerciciosPersonalizadosDoUsuario.map((x) => ({
-        id: String(x.id),
-        origem: "personalizado" as const,
-        nome: x.nome ?? "Exercício",
-        objetivo: (x as any).objetivo ?? null,
-        descricao: (x as any).descricao ?? null,
-        nivel: (x as any).nivel ?? null,
-        categorias: Array.isArray((x as any).categorias)
-          ? (x as any).categorias
-          : Array.isArray((x as any).categoria)
-          ? (x as any).categoria
-          : [],
-        videoDemonstrativoUrl: (x as any).videoDemonstrativoUrl ?? null,
-        videoPosterUrl: (x as any).videoPosterUrl ?? null,
       })),
     ];
 

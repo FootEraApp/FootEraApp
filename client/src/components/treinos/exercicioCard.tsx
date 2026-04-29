@@ -111,7 +111,8 @@ function temMaisInformacoes(item: ExercicioItem) {
   return !!(
     item.quantidadeAtletas?.trim() ||
     item.materiaisNecessarios?.trim() ||
-    item.espacoNecessario?.trim()
+    item.espacoNecessario?.trim() ||
+    (Array.isArray(item.tags) && item.tags.length > 0)
   );
 }
 
@@ -223,6 +224,13 @@ export default function ExercicioCard({
                         <span className="font-semibold text-[#173D34]">Espaço:</span>{" "}
                         {item.espacoNecessario || "-"}
                       </div>
+
+                      {Array.isArray(item.tags) && item.tags.length > 0 ? (
+                        <div>
+                          <span className="font-semibold text-[#173D34]">Tags:</span>{" "}
+                          {item.tags.join(", ")}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}

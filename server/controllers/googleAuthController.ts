@@ -392,6 +392,12 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
 
     const dataNascFinal =
       precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+    const idadeCalcInicial = dataNascFinal ? calcularIdade(dataNascFinal) : null;
+
+    const precisaResponsavel =
+      tipoEnum === TipoUsuario.Atleta &&
+      idadeCalcInicial !== null &&
+      idadeCalcInicial < 12;
 
     const usuario = await prisma.usuario.create({
       data: {
@@ -406,9 +412,9 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         cep: cep ?? null,
         cpf: cpf ?? null,
         dataNascimento: dataNascFinal,
-        responsavelNome: responsavel?.nome ?? null,
-        responsavelEmail: responsavel?.email ?? null,
-        responsavelTelefone: responsavel?.telefone ?? null,
+        responsavelNome: precisaResponsavel ? responsavel?.nome ?? null : null,
+        responsavelEmail: precisaResponsavel ? responsavel?.email ?? null : null,
+        responsavelTelefone: precisaResponsavel ? responsavel?.telefone ?? null : null,
 
         googleSub: pre.googleSub,
         googleEmail: pre.email,

@@ -143,20 +143,23 @@ function mapPersonalizadoToCardResponse(exercicio: any, usadoEmTreinos = 0) {
     codigo: exercicio.codigo ?? null,
     nome: exercicio.nome,
     objetivo: exercicio.descricao ?? null,
+    descricao: exercicio.descricao ?? null,
     nivel: exercicio.nivel ?? null,
-    tipo: null,
+    tipo: exercicio.tipo ?? null,
     faixaEtaria: Array.isArray(exercicio.categorias) ? exercicio.categorias : [],
-    modoExecucao: null,
-    series: null,
-    repeticoes: null,
-    duracao: null,
-    descanso: null,
-    tags: [],
-    quantidadeAtletas: null,
-    materiaisNecessarios: null,
-    espacoNecessario: null,
+    categorias: Array.isArray(exercicio.categorias) ? exercicio.categorias : [],
+    modoExecucao: exercicio.modoExecucao ?? null,
+    series: exercicio.series ?? null,
+    repeticoes: exercicio.repeticoes ?? null,
+    duracao: exercicio.duracao ?? null,
+    descanso: exercicio.descanso ?? null,
+    tags: Array.isArray(exercicio.tags) ? exercicio.tags : [],
+    quantidadeAtletas: exercicio.quantidadeAtletas ?? null,
+    materiaisNecessarios: exercicio.materiaisNecessarios ?? null,
+    espacoNecessario: exercicio.espacoNecessario ?? null,
     videoDemonstrativoUrl: exercicio.videoDemonstrativoUrl ?? null,
-    favorito: false,
+    videoPosterUrl: exercicio.videoPosterUrl ?? null,
+    favorito: Boolean(exercicio.favorito),
     criadoPorId: exercicio.criadorUsuarioId ?? null,
     usadoEmTreinos,
     origem: "personalizado",
@@ -383,12 +386,97 @@ export const editarExercicio = async (req: Request, res: Response) => {
 
     let exercicioAtual = await prisma.exercicio.findUnique({ where: { id } });
 
+    const personalizadoAtual = await prisma.exercicioPersonalizado.findUnique({
+      where: { id },
+    });
+
+    if (personalizadoAtual) {
+      if (personalizadoAtual.criadorUsuarioId !== userId) {
+        return res.status(403).json({ message: "Você não pode editar esse exercício." });
+      }
+
+      const videoFile = req.file as any;
+      const novaVideoUrl = videoFile ? videoFile.location : null;
+
+      const {
+        nome,
+        objetivo,
+        descricao,
+        nivel,
+        tipo,
+        faixaEtaria,
+        categorias,
+        modoExecucao,
+        series,
+        repeticoes,
+        duracao,
+        descanso,
+        materiaisNecessarios,
+        quantidadeAtletas,
+        espacoNecessario,
+        tags,
+        removerVideo,
+      } = req.body;
+
+      if (!nome || !String(nome).trim()) {
+        return res.status(400).json({ message: "Nome é obrigatório." });
+      }
+
+      const nomeNormalizado = normalizarNomeExercicio(String(nome));
+
+      const nomeDuplicado = await prisma.exercicioPersonalizado.findFirst({
+        where: {
+          nomeNormalizado,
+          criadorUsuarioId: userId,
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+
+      if (nomeDuplicado) {
+        return res.status(400).json({
+          message: "Você já possui outro exercício personalizado com esse nome.",
+        });
+      }
+
+      const faixasFinal = parseArrayField(categorias ?? faixaEtaria);
+      const deveRemoverVideo = String(removerVideo) === "true";
+
+      if ((novaVideoUrl || deveRemoverVideo) && personalizadoAtual.videoDemonstrativoUrl) {
+        await removePublicFileIfExists(personalizadoAtual.videoDemonstrativoUrl);
+      }
+
+      const atualizado = await prisma.exercicioPersonalizado.update({
+        where: { id },
+        data: {
+          nome: String(nome).trim(),
+          nomeNormalizado,
+          descricao: parseNullableString(descricao ?? objetivo),
+          nivel: parseNullableString(nivel) as any,
+          categorias: faixasFinal as any,
+          ...(novaVideoUrl
+            ? { videoDemonstrativoUrl: novaVideoUrl }
+            : deveRemoverVideo
+              ? { videoDemonstrativoUrl: null }
+              : {}),
+          tipo: parseNullableString(tipo) as any,
+          modoExecucao: parseNullableString(modoExecucao) as any,
+          series: parseNullableInt(series),
+          repeticoes: parseNullableString(repeticoes),
+          duracao: parseNullableString(duracao),
+          descanso: parseNullableString(descanso),
+          tags: parseArrayField(tags),
+          quantidadeAtletas: parseNullableString(quantidadeAtletas),
+          materiaisNecessarios: parseNullableString(materiaisNecessarios),
+          espacoNecessario: parseNullableString(espacoNecessario) as any,
+        } as any,
+      });
+
+      return res.json(mapPersonalizadoToCardResponse(atualizado, 0));
+    }
+
     if (!exercicioAtual) {
-      const personalizado = await prisma.exercicioPersonalizado.findUnique({ where: { id } });
-      if (!personalizado) return res.status(404).json({ message: "Exercício não encontrado." });
-      if (personalizado.criadorUsuarioId !== userId) return res.status(403).json({ message: "Você não pode editar esse exercício." });
-      exercicioAtual = await migrarPersonalizadoParaExercicio(personalizado, userId);
-      if (!exercicioAtual) return res.status(500).json({ message: "Erro ao migrar exercício." });
+      return res.status(404).json({ message: "Exercício não encontrado." });
     }
 
     if ((exercicioAtual as any).criadoPorId && (exercicioAtual as any).criadoPorId !== userId) {
@@ -566,7 +654,11 @@ export const listarMeusExercicios = async (req: Request, res: Response) => {
     if (faixaEtaria && faixaEtaria !== "Todos") wherePersonalizado.categorias = { has: faixaEtaria };
     if (nivel && nivel !== "Todos") wherePersonalizado.nivel = nivel;
 
-    const personalizados = favorito === true || (tipo && tipo !== "Todos") ? [] : await prisma.exercicioPersonalizado.findMany({
+    if (tipo && tipo !== "Todos") wherePersonalizado.tipo = tipo;
+
+    if (favorito !== undefined) wherePersonalizado.favorito = favorito;
+
+    const personalizados = await prisma.exercicioPersonalizado.findMany({
       where: wherePersonalizado,
       orderBy: [{ atualizadoEm: "desc" }, { nome: "asc" }],
     });
@@ -584,7 +676,7 @@ export const listarMeusExercicios = async (req: Request, res: Response) => {
       if (!chave) continue;
       const existente = map.get(chave);
       if (!existente) { map.set(chave, item); continue; }
-      if (existente.origem === "personalizado" && item.origem !== "personalizado") map.set(chave, item);
+      if (item.origem === "personalizado") map.set(chave, item);
     }
 
     res.json(Array.from(map.values()));
@@ -672,30 +764,30 @@ export const duplicarExercicio = async (req: Request, res: Response) => {
     const nomeUnico = await gerarNomeUnicoParaExercicio(`${personalizado.nome} (Cópia)`);
     const codigoUnico = await gerarCodigoUnicoParaExercicio(personalizado.nome);
 
-    const duplicado = await prisma.exercicio.create({
+    const duplicado = await prisma.exercicioPersonalizado.create({
       data: {
-        codigo: codigoUnico,
         nome: nomeUnico,
-        objetivo: personalizado.descricao ?? null,
-        nivel: (personalizado.nivel ?? "Base") as any,
+        nomeNormalizado: normalizarNomeExercicio(nomeUnico),
+        descricao: personalizado.descricao ?? null,
+        nivel: personalizado.nivel ?? "Base",
+        categorias: Array.isArray(personalizado.categorias) ? personalizado.categorias : [],
         videoDemonstrativoUrl: personalizado.videoDemonstrativoUrl ?? null,
-        criadoPorId: userId,
-        favorito: false,
-        tipo: null,
-        faixaEtaria: { set: Array.isArray(personalizado.categorias) ? personalizado.categorias : [] },
-        modoExecucao: null,
-        series: null,
-        repeticoes: null,
-        duracao: null,
-        descanso: null,
-        tags: [],
-        quantidadeAtletas: null,
-        materiaisNecessarios: null,
-        espacoNecessario: null,
+        videoPosterUrl: personalizado.videoPosterUrl ?? null,
+        criadorUsuarioId: userId,
+        tipo: (personalizado as any).tipo ?? null,
+        modoExecucao: (personalizado as any).modoExecucao ?? null,
+        series: (personalizado as any).series ?? null,
+        repeticoes: (personalizado as any).repeticoes ?? null,
+        duracao: (personalizado as any).duracao ?? null,
+        descanso: (personalizado as any).descanso ?? null,
+        tags: Array.isArray((personalizado as any).tags) ? (personalizado as any).tags : [],
+        quantidadeAtletas: (personalizado as any).quantidadeAtletas ?? null,
+        materiaisNecessarios: (personalizado as any).materiaisNecessarios ?? null,
+        espacoNecessario: (personalizado as any).espacoNecessario ?? null,
       } as any,
     });
 
-    return res.status(201).json(toCardResponse(duplicado, 0));
+    return res.status(201).json(mapPersonalizadoToCardResponse(duplicado, 0));
   } catch (error) {
     console.error("Erro ao duplicar exercício:", error);
     res.status(500).json({ message: "Erro ao duplicar exercício." });
@@ -712,9 +804,26 @@ export const favoritarExercicio = async (req: Request, res: Response) => {
 
     if (!exercicio) {
       const personalizado = await prisma.exercicioPersonalizado.findUnique({ where: { id } });
-      if (!personalizado) return res.status(404).json({ message: "Exercício não encontrado." });
-      if (personalizado.criadorUsuarioId !== userId) return res.status(403).json({ message: "Você não pode favoritar esse exercício." });
-      exercicio = await migrarPersonalizadoParaExercicio(personalizado, userId);
+
+      if (!personalizado) {
+        return res.status(404).json({ message: "Exercício não encontrado." });
+      }
+
+      if (personalizado.criadorUsuarioId !== userId) {
+        return res.status(403).json({ message: "Você não pode favoritar esse exercício." });
+      }
+
+      const novoFavorito =
+        typeof req.body?.favorito === "boolean"
+          ? req.body.favorito
+          : !Boolean((personalizado as any).favorito);
+
+      const atualizado = await prisma.exercicioPersonalizado.update({
+        where: { id },
+        data: { favorito: novoFavorito } as any,
+      });
+
+      return res.json(mapPersonalizadoToCardResponse(atualizado, 0));
     }
 
     if ((exercicio as any).criadoPorId && (exercicio as any).criadoPorId !== userId) {
@@ -762,5 +871,100 @@ export const excluirExercicio = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Erro ao excluir exercício:", error);
     res.status(500).json({ message: "Erro ao excluir exercício." });
+  }
+};
+
+export const criarExercicioPersonalizado = async (req: Request, res: Response) => {
+  try {
+    const userId = getAuthUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const videoFile = req.file as any;
+    const videoDemonstrativoUrl = videoFile ? videoFile.location : null;
+
+    const {
+      nome,
+      descricao,
+      objetivo,
+      nivel,
+      categorias,
+      faixaEtaria,
+      videoUrl,
+      videoPosterUrl,
+      tipo,
+      modoExecucao,
+      series,
+      repeticoes,
+      duracao,
+      descanso,
+      tags,
+      quantidadeAtletas,
+      materiaisNecessarios,
+      espacoNecessario,
+      favorito
+    } = req.body;
+
+    if (!nome || !String(nome).trim()) {
+      return res.status(400).json({ message: "Nome é obrigatório." });
+    }
+
+    const nomeFinal = String(nome).trim();
+    const nomeNormalizado = normalizarNomeExercicio(nomeFinal);
+
+    const existente = await prisma.exercicioPersonalizado.findFirst({
+      where: {
+        criadorUsuarioId: userId,
+        nomeNormalizado,
+      },
+      select: { id: true },
+    });
+
+    if (existente) {
+      return res.status(400).json({
+        message: "Você já possui um exercício personalizado com esse nome.",
+      });
+    }
+
+    const categoriasFinal = parseArrayField(categorias ?? faixaEtaria);
+
+    const criado = await prisma.exercicioPersonalizado.create({
+      data: {
+        nome: nomeFinal,
+        nomeNormalizado,
+        descricao: parseNullableString(descricao ?? objetivo),
+        nivel: parseNullableString(nivel) ?? "Base",
+        categorias: categoriasFinal,
+        videoDemonstrativoUrl:
+          videoDemonstrativoUrl ??
+          parseNullableString(videoUrl) ??
+          null,
+        videoPosterUrl: parseNullableString(videoPosterUrl),
+        criadorUsuarioId: userId,
+        tipo: parseNullableString(tipo) as any,
+        modoExecucao: parseNullableString(modoExecucao) as any,
+        series: parseNullableInt(series),
+        repeticoes: parseNullableString(repeticoes),
+        duracao: parseNullableString(duracao),
+        descanso: parseNullableString(descanso),
+        tags: parseArrayField(tags),
+        quantidadeAtletas: parseNullableString(quantidadeAtletas),
+        materiaisNecessarios: parseNullableString(materiaisNecessarios),
+        espacoNecessario: parseNullableString(espacoNecessario) as any,
+        favorito: false,
+      } as any,
+    });
+
+    return res.status(201).json({
+      ...criado,
+      origem: "personalizado",
+    });
+  } catch (error) {
+    console.error("Erro ao criar exercício personalizado:", error);
+    return res.status(500).json({
+      message: "Erro ao criar exercício personalizado.",
+    });
   }
 };
