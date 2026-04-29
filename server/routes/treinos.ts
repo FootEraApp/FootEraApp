@@ -83,12 +83,16 @@ router.post(
 router.post("/agendados/:id/iniciar", iniciarTreino);
 router.delete("/agendados/:id", excluirTreinoAgendado);
 router.post("/agendados/:id/complete", concluirTreino);
+
 router.get("/agendados", getTreinosAgendados);
+
 router.put("/agendados/:id", atualizarAgendamento);
+
 router.post("/agendados",
   requireCapability("agendamento:pessoal"),
   agendarTreino
 );
+
 router.get(
   "/programados/stats",
   authenticateToken,

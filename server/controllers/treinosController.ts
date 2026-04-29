@@ -2292,7 +2292,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
     })();
 
     const inicioMes = startOfMonth(monthStart);
-    const inicioProximoMes = addMonths(inicioMes, 1);
+    const inicioProximoMes = addMonths(inicioMes, 2);
 
     const apenasFuturos = String(req.query.apenasFuturos || "") === "1";
     const apenasComSubmissao = String(req.query.apenasComSubmissao || "") === "1";

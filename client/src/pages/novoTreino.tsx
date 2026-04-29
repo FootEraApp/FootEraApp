@@ -898,6 +898,11 @@ export default function NovoTreino() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [isFreePlan, setIsFreePlan] = useState(false);
+
+  const [isAtletaPro, setIsAtletaPro] = useState(true);
+  const [assinaturaChecada, setAssinaturaChecada] = useState(false);
+  const [carregandoAssinatura, setCarregandoAssinatura] = useState(false);
+
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
@@ -1077,6 +1082,62 @@ export default function NovoTreino() {
       );
     } catch {
       return false;
+    }
+  }
+
+  async function checarAssinaturaAtletaPro() {
+    const tipo = String(
+      (Storage as any).tipoSalvo ??
+        localStorage.getItem("tipoUsuario") ??
+        sessionStorage.getItem("tipoUsuario") ??
+        ""
+    ).trim().toLowerCase();
+
+    if (tipo !== "atleta") {
+      setIsAtletaPro(true);
+      setAssinaturaChecada(true);
+      return true;
+    }
+
+    const token = getToken();
+
+    const userId =
+      (Storage as any).usuarioId ||
+      localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      "";
+
+    if (!token || !userId) {
+      setIsAtletaPro(false);
+      setAssinaturaChecada(true);
+      return false;
+    }
+
+    try {
+      setCarregandoAssinatura(true);
+
+      const res = await axios.get(
+        `${API.BASE_URL}/api/usuarios/${encodeURIComponent(userId)}/assinatura`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const ok = Boolean(res.data?.isPro);
+
+      setIsAtletaPro(ok);
+      setAssinaturaChecada(true);
+
+      return ok;
+    } catch (e) {
+      console.warn("[NovoTreino] erro ao checar assinatura:", e);
+
+      setIsAtletaPro(false);
+      setAssinaturaChecada(true);
+
+      return false;
+    } finally {
+      setCarregandoAssinatura(false);
     }
   }
 
@@ -3626,7 +3687,13 @@ export default function NovoTreino() {
 
           <button
             type="button"
-            onClick={() => setAbaTreinosAtleta("footera")}
+            onClick={async () => {
+              setAbaTreinosAtleta("footera");
+
+              if (!assinaturaChecada) {
+                await checarAssinaturaAtletaPro();
+              }
+            }}
             className={[
               "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
               abaTreinosAtleta === "footera"
@@ -3638,7 +3705,34 @@ export default function NovoTreino() {
           </button>
         </div>
 
-        {listaAtiva.length === 0 ? (
+    {abaTreinosAtleta === "footera" && carregandoAssinatura ? (
+      <div className="bg-white border rounded-xl p-5 text-center text-gray-700">
+        Verificando sua assinatura...
+      </div>
+    ) : abaTreinosAtleta === "footera" && assinaturaChecada && !isAtletaPro ? (
+      <div className="bg-white border border-amber-200 rounded-xl p-5 text-center shadow-sm">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+          <CalendarIcon className="h-6 w-6" />
+        </div>
+
+        <h3 className="text-lg font-bold text-green-900 mb-2">
+          Treinos FootEra disponíveis apenas para assinantes
+        </h3>
+
+        <p className="text-sm text-gray-700 mb-4">
+          Você ainda não possui assinatura ativa. Por enquanto, você pode agendar apenas
+          os treinos dos seus professores, clubes ou escolinhas vinculados.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setAbaTreinosAtleta("meu_professor")}
+          className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+        >
+          Voltar para meus treinos
+        </button>
+      </div>
+    ) : listaAtiva.length === 0 ? (
           <div className="text-gray-600 bg-white border rounded-xl p-4">
             {abaTreinosAtleta === "meu_professor" ? (
               <>

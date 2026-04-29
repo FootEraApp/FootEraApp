@@ -983,21 +983,39 @@ function abrirMidiaExercicioDireto(
         return;
       }
 
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const agora = new Date();
 
-      if (r.status === 401) {
-        console.warn(
-          "[TREINOS] 401 ao buscar treinos agendados – provavelmente token inválido/expirado"
-        );
+      const monthAtual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+
+      const proximo = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+      const monthProximo = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, "0")}`;
+
+      const [resAtual, resProximo] = await Promise.all([
+        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthProximo}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (resAtual.status === 401 || resProximo.status === 401) {
+        console.warn("[TREINOS] 401 ao buscar treinos agendados");
         return;
       }
 
-      if (!r.ok) throw new Error("Falha ao buscar treinos agendados");
+      if (!resAtual.ok || !resProximo.ok) {
+        throw new Error("Falha ao buscar treinos agendados");
+      }
 
-      const js = await r.json();
-      const listaRaw: any[] = Array.isArray(js) ? js : js.items ?? [];
+      const jsAtual = await resAtual.json();
+      const jsProximo = await resProximo.json();
+
+      const listaRaw: any[] = [
+        ...(Array.isArray(jsAtual) ? jsAtual : jsAtual.items ?? []),
+        ...(Array.isArray(jsProximo) ? jsProximo : jsProximo.items ?? []),
+      ];
+
       const listaAdaptada: TreinoAgendado[] = listaRaw.map((item) => {
         const tp = item.treinoProgramado ?? null;
 
