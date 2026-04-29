@@ -40,6 +40,7 @@ export async function listar(req: AdminReq, res: Response) {
     const {
       q = "",
       plano = "",
+      tipo = "",
       ativo = "",
       page = "1",
       pageSize = "20",
@@ -49,28 +50,42 @@ export async function listar(req: AdminReq, res: Response) {
     const ps = Math.min(100, Math.max(1, Number(pageSize) || 20));
 
     const where: any = {};
-    if (plano) where.plano = String(plano);
+
+    if (plano) {
+      where.plano = {
+        contains: String(plano).toUpperCase(),
+        mode: "insensitive",
+      };
+    }
 
     const ativoBool = parseBool(ativo);
     if (typeof ativoBool === "boolean") where.ativo = ativoBool;
 
-    const userFilter =
-      q.trim() !== ""
-        ? {
-            usuario: {
-              OR: [
-                { nome: { contains: q as string, mode: "insensitive" } },
-                {
-                  nomeDeUsuario: {
-                    contains: q as string,
-                    mode: "insensitive",
-                  },
-                },
-                { email: { contains: q as string, mode: "insensitive" } },
-              ],
-            },
-          }
-        : {};
+    const userFilter: any = {};
+
+    const andUsuario: any[] = [];
+
+    if (q.trim() !== "") {
+      andUsuario.push({
+        OR: [
+          { nome: { contains: q, mode: "insensitive" } },
+          { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    if (tipo.trim() !== "") {
+      andUsuario.push({
+        tipo: String(tipo),
+      });
+    }
+
+    if (andUsuario.length > 0) {
+      userFilter.usuario = {
+        AND: andUsuario,
+      };
+    }
 
     const [total, items] = await Promise.all([
       prisma.assinatura.count({ where: { AND: [where, userFilter] } }),

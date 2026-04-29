@@ -8,7 +8,9 @@ interface Activity {
   id: string;
   tipo: string;
   imagemUrl?: string | null;
-  nome: string;
+  nome?: string;
+  titulo?: string;
+  createdAt?: string;
 }
 
 type VideoItem = {
@@ -113,8 +115,9 @@ export default function ActivityGrid({
   }, [perfilUsuarioId, headers]);
 
   const cards: ActivityCard[] = useMemo(() => {
-    const base: ActivityCard[] = (activities || []).map((a) => ({
+    const base: ActivityCard[] = (activities || []).map((a: any) => ({
       ...a,
+      nome: a.nome ?? a.titulo ?? "Atividade",
       video: null,
     }));
 
@@ -153,7 +156,7 @@ export default function ActivityGrid({
             } else if (card.imagemUrl && card.imagemUrl.trim()) {
               thumbCandidate = card.imagemUrl;
             } else {
-              thumbCandidate = guessTreinoImage(card.nome);
+              thumbCandidate = guessTreinoImage(card.nome ?? "");
             }
 
             const thumb = publicImgUrl(thumbCandidate) || AVATAR_FALLBACK;

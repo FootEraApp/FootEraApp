@@ -22,6 +22,34 @@ function normPlano(p: string) {
   return String(p || "").trim().toUpperCase();
 }
 
+async function resolverPlanoAdmin(usuarioId: string, planoRaw: string) {
+  const plano = normPlano(planoRaw);
+
+  if (plano === "FREE") return "FREE";
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { tipo: true },
+  });
+
+  const tipo = String(usuario?.tipo || "").toLowerCase();
+
+  if (plano === "PRO") {
+    if (tipo === "atleta") return "ATLETA_PRO";
+    if (tipo === "professor") return "PROFESSOR_PRO";
+    if (tipo === "clube" || tipo === "escolinha") return "ORGANIZACOES_PRO";
+    if (tipo === "olheiro") return "OLHEIRO_PRO";
+  }
+
+  if (plano === "LEARNING") {
+    if (tipo === "atleta") return "ATLETA_LEARNING_1";
+    if (tipo === "professor") return "PROFESSOR_LEARNING_1";
+    if (tipo === "clube" || tipo === "escolinha") return "ORGANIZACOES_LEARNING_3";
+  }
+
+  return plano;
+}
+
 function addMonths(d: Date, months: number) {
   const dt = new Date(d.getTime());
   dt.setMonth(dt.getMonth() + months);
@@ -65,37 +93,74 @@ export async function getByUsuario(req: AuthenticatedRequest, res: Response) {
 export async function updatePlano(req: AuthenticatedRequest, res: Response) {
   try {
     assertAdmin(req);
+
     const { usuarioId } = req.params;
-    const { plano, periodicidade, status, ativo } = req.body || {};
+    const { plano, periodicidade } = req.body || {};
 
-    if (!plano) return res.status(400).send("Informe o plano (ex: ATLETA_PRO, METH_TECNICA).");
+    if (!plano) {
+      return res.status(400).send("Informe o plano: FREE, PRO ou LEARNING.");
+    }
 
-    const planoNorm = normPlano(plano);
+    const planoFinal = await resolverPlanoAdmin(usuarioId, plano);
     const per: Periodicidade = (periodicidade as Periodicidade) || "Mensal";
 
     const now = new Date();
     const months = per === "Mensal" ? 1 : 12;
     const renovaEm = addMonths(now, months);
 
+    await (prisma as any).assinatura.updateMany({
+      where: { usuarioId, ativo: true },
+      data: {
+        ativo: false,
+        canceledAt: now,
+        status: "BLOQUEADA",
+        bloqueadoEm: now,
+      } as any,
+    });
+
+    if (planoFinal === "FREE") {
+      return res.json({
+        id: null,
+        usuarioId,
+        plano: "FREE",
+        periodicidade: per,
+        status: "FREE",
+        startsAt: now.toISOString(),
+        renovaEm: null,
+        canceledAt: now.toISOString(),
+        ativo: false,
+      });
+    }
+
     const updated = await (prisma as any).assinatura.upsert({
-      where: { usuarioId_plano: { usuarioId, plano: planoNorm } },
+      where: {
+        usuarioId_plano: {
+          usuarioId,
+          plano: planoFinal,
+        },
+      },
       update: {
         periodicidade: per,
-        status: status ?? undefined,
-        ativo: typeof ativo === "boolean" ? ativo : undefined,
+        status: "ATIVA",
+        ativo: true,
         startsAt: now,
         renovaEm,
-        canceledAt: typeof ativo === "boolean" && ativo === false ? now : null,
+        canceledAt: null,
+        bloqueadoEm: null,
+        trialStartsAt: null,
+        trialEndsAt: null,
+        lembreteEnviado: false,
       } as any,
       create: {
         usuarioId,
-        plano: planoNorm,
+        plano: planoFinal,
         periodicidade: per,
         startsAt: now,
         renovaEm,
-        ativo: typeof ativo === "boolean" ? ativo : true,
-        status: status ?? "ATIVA",
+        ativo: true,
+        status: "ATIVA",
         canceledAt: null,
+        bloqueadoEm: null,
         lembreteEnviado: false,
       } as any,
     });

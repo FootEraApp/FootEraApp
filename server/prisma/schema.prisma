@@ -1300,35 +1300,27 @@ model SubmissaoTreino {
 }
 
 model AvaliacaoTreino {
-  id String @id @default(uuid())
-
-  atletaId         String
-  treinoAgendadoId String
-
+  id                String               @id @default(uuid())
+  atletaId          String
+  treinoAgendadoId  String
   submissaoTreinoId String
-
-  autorTipo AvaliacaoAutorTipo
-  autorId   String
-
-  autorUsuarioId String?
-
-  nota              Int     @default(0)
-  concluiu          Boolean @default(true)
-  teveDificuldade   Boolean @default(false)
+  autorTipo         AvaliacaoAutorTipo
+  autorId           String
+  autorUsuarioId    String?
+  nota              Int                  @default(0)
+  concluiu          Boolean              @default(true)
+  teveDificuldade   Boolean              @default(false)
   dificuldadeMotivo String?
   motivoNaoConcluiu String?
+  sentimento        SentimentoAvaliacao?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  atleta         Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  treinoAgendado TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
-
-  submissaoTreino SubmissaoTreino @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
-
-  autorUsuario Usuario? @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
-
-  comentarios AvaliacaoTreinoComentario[]
+  atleta          Atleta                      @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoAgendado  TreinoAgendado              @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
+  submissaoTreino SubmissaoTreino             @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  autorUsuario    Usuario?                    @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
+  comentarios     AvaliacaoTreinoComentario[]
 
   @@unique([submissaoTreinoId, autorTipo, autorId])
   @@index([submissaoTreinoId])
@@ -1339,18 +1331,18 @@ model AvaliacaoTreino {
 }
 
 model AvaliacaoMetodologia {
-  id                  String   @id @default(uuid())
+  id                  String               @id @default(uuid())
   metodologiaId       String?
   metodologiaAvulsaId String?
   usuarioId           String
   nota                Int
   comentario          String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
-  usuario           Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  sentimento          SentimentoAvaliacao?
+  metodologia         Metodologia?         @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa   MetodologiaAvulsa?   @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  usuario             Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([metodologiaId, usuarioId])
   @@unique([metodologiaAvulsaId, usuarioId])
@@ -1873,14 +1865,12 @@ model VinculoFormacao {
   origemId    String
   inicio      DateTime?
   fim         DateTime?
-  documentos  String[]       @default([])
+  documentos  String[]
   observacoes String?
   createdAt   DateTime       @default(now())
 
   atleta            Atleta              @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   DocumentoFormador DocumentoFormador[]
-
-  @@unique([atletaId, origem, origemId])
 }
 
 model TransferenciaFormador {
@@ -2632,6 +2622,12 @@ model LoginEvent {
 
   @@index([usuarioId, createdAt])
   @@index([createdAt])
+}
+
+enum SentimentoAvaliacao {
+  ruim
+  medio
+  otimo
 }
 
 enum AccountStatus {

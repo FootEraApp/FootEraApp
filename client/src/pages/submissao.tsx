@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
-import { set } from "date-fns";
 
 const Storage = {
   get token() {
@@ -58,6 +57,7 @@ export default function PaginaSubmissao() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arquivoInputRef = useRef<HTMLInputElement | null>(null);
   const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
   const [treinoIsRecording, setTreinoIsRecording] = useState(false);
   const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
@@ -597,6 +597,19 @@ export default function PaginaSubmissao() {
     }
   };
 
+  function removerArquivoSelecionado() {
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+
+    setArquivo(null);
+    setPreview(null);
+
+    if (arquivoInputRef.current) {
+      arquivoInputRef.current.value = "";
+    }
+  }
+
   async function startRecordingTreino() {
     setTreinoRecError(null);
     try {
@@ -752,18 +765,15 @@ export default function PaginaSubmissao() {
 
     try {
       const formData = new FormData();
-      formData.append("observacao", observacao);
+      if (observacao.trim()) {
+        formData.append("observacao", observacao.trim());
+      }
 
       let url = "";
 
       if (isDesafio) {
         if (!desafioId) {
           alert("Desafio inválido.");
-          return;
-        }
-
-        if (!arquivo) {
-          alert("Selecione um vídeo, foto ou PDF do desafio antes de enviar.");
           return;
         }
 
@@ -777,27 +787,17 @@ export default function PaginaSubmissao() {
           tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
         if (seg != null) formData.append("tempoSeg", String(seg));
 
-        formData.append("arquivo", arquivo);
+        if (arquivo) {
+          formData.append("arquivo", arquivo);
+        }
         url = `${API.BASE_URL}/api/submissoes/desafio`;
       } else if (isTreino) {
-        if (treinoMode === "live") {
-          if (!treinoRecordedBlob) {
-            alert("Grave um vídeo do treino antes de enviar.");
-            return;
-          }
-
-          formData.append(
-            "arquivo",
-            treinoRecordedBlob,
-            `treino-${treinoAgendadoId ?? sessaoId ?? "livre"}-${Date.now()}.webm`
-          );
-        } else {
-          if (!arquivo) {
-            alert("Selecione uma imagem ou vídeo do treino.");
-            return;
-          }
-
+        if (arquivo) {
           formData.append("arquivo", arquivo);
+        } else {
+          if (arquivo) {
+            formData.append("arquivo", arquivo);
+          }
         }
 
         const seg =
@@ -1026,28 +1026,6 @@ export default function PaginaSubmissao() {
           </div>
         )}
 
-        {!isSecureContext && (
-          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded">
-            Para acessar a câmera, abra esta página via <strong>HTTPS</strong>{" "}
-            (ou em <code>localhost</code> durante o desenvolvimento).
-          </div>
-        )}
-
-        <label className="block text-sm font-medium mb-1 text-gray-700">
-          Comentário
-        </label>
-        <textarea
-          value={observacao}
-          onChange={(e) => setObservacao(e.target.value)}
-          className="w-full border p-3 mb-4 rounded-md shadow-sm"
-          rows={4}
-          placeholder={
-            isDesafio
-              ? "Comente sua execução do desafio..."
-              : "Comente seu treino..."
-          }
-        />
-
         {isTreino && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1077,41 +1055,17 @@ export default function PaginaSubmissao() {
             </div>
 
             <div className="mt-6">
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => setTreinoMode("upload")}
-                  className={`px-3 py-2 rounded border ${
-                    treinoMode === "upload"
-                      ? "bg-green-100 border-green-600 text-green-800"
-                      : "bg-white border-gray-300"
-                  }`}
-                >
-                  Upload
-                </button>
-                <button
-                  onClick={() => setTreinoMode("live")}
-                  className={`px-3 py-2 rounded border ${
-                    treinoMode === "live"
-                      ? "bg-green-100 border-green-600 text-green-800"
-                      : "bg-white border-gray-300"
-                  }`}
-                >
-                  Gravar ao vivo (sem limite)
-                </button>
-              </div>
-
               {treinoMode === "upload" ? (
                 <>
                   <label className="block text-sm font-medium mb-1">
-                    Enviar Vídeo, PDF, ou Foto *
+                    Enviar Vídeo, PDF, ou Foto (opcional)
                   </label>
                   <input
+                    ref={arquivoInputRef}
                     type="file"
                     name="arquivo"
                     data-testid="submissao-file"
                     accept="video/*,image/*,application/pdf,.pdf"
-                    // @ts-ignore
-                    capture={modeParam === "camera" ? "environment" : undefined}
                     onChange={handleArquivoInput}
                   />
 
@@ -1139,7 +1093,15 @@ export default function PaginaSubmissao() {
                           Arquivo selecionado: <strong>{arquivo.name}</strong>
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={removerArquivoSelecionado}
+                        className="mt-3 rounded-md border border-red-500 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Remover arquivo selecionado
+                      </button>
                     </div>
+                    
                   )}
                 </>
               ) : (
@@ -1223,12 +1185,14 @@ export default function PaginaSubmissao() {
         {isDesafio && (
           <div className="mt-6">
             <label className="block text-sm font-medium mb-1">
-              Enviar vídeo, foto ou PDF *
+              Enviar vídeo, foto ou PDF (opcional)
             </label>
 
             <input
+              ref={arquivoInputRef}
               type="file"
               name="arquivo"
+              data-testid="submissao-file"
               accept="video/*,image/*,application/pdf,.pdf"
               onChange={handleArquivoInput}
               className="block w-full"
@@ -1258,6 +1222,13 @@ export default function PaginaSubmissao() {
                     Arquivo selecionado: <strong>{arquivo.name}</strong>
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={removerArquivoSelecionado}
+                  className="mt-3 rounded-md border border-red-500 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                >
+                  Remover arquivo selecionado
+                </button>
               </div>
             )}
 
@@ -1270,13 +1241,14 @@ export default function PaginaSubmissao() {
         )}
 
         <button
+          type="button"
+          disabled={enviando}
           onClick={handleEnviar}
-          className="w-full mt-6 bg-green-800 hover:bg-green-700 text-white py-2 rounded font-semibold disabled:opacity-60"
-          disabled={
-            enviando ||
-            (isDesafio && !arquivo) ||
-            (isTreino && treinoMode === "upload" && !arquivo && !treinoRecordedBlob)
-          }
+          className={`w-full rounded-md py-3 font-bold text-white mt-4 ${
+            enviando
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-700 hover:bg-green-800"
+          }`}
         >
           {enviando ? "Enviando..." : "Enviar Submissão"}
         </button>
