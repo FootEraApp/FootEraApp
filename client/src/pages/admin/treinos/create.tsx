@@ -229,6 +229,12 @@ function coerceCategorias(ex: ExercicioMin): string[] {
   return [];
 }
 
+function temVideoExercicio(ex: ExercicioMin | ExercicioPersonalizadoItem) {
+  return Boolean(
+    String((ex as any).videoDemonstrativoUrl || (ex as any).videoUrl || "").trim()
+  );
+}
+
 function getVideoUrlFromEx(ex: ExercicioMin | null | undefined) {
   if (!ex) return "";
   return String((ex as any).videoDemonstrativoUrl || ex.videoUrl || "").trim();
@@ -392,6 +398,7 @@ export default function CriarOuEditarTreino() {
   const [capaPreviewUrl, setCapaPreviewUrl] = useState<string>("");
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<ExercicioMin[]>([]);
   const [exSearch, setExSearch] = useState("");
+  const [filtroVideo, setFiltroVideo] = useState<"" | "com" | "sem">("");
   const [catsSelecionadas, setCatsSelecionadas] = useState<string[]>([]);
   const [niveisSelecionados, setNiveisSelecionados] = useState<string[]>([]);
   const [linhas, setLinhas] = useState<ExLinha[]>([]);
@@ -407,7 +414,6 @@ export default function CriarOuEditarTreino() {
   const [exerciciosPersonalizados, setExerciciosPersonalizados] = useState<
     ExercicioPersonalizadoItem[]
   >([]);
-  const [loadingPersonalizados, setLoadingPersonalizados] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoSrc, setVideoSrc] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -745,10 +751,7 @@ export default function CriarOuEditarTreino() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (abaExercicios !== "personalizados") return;
-    fetchExerciciosPersonalizados();
-  }, [abaExercicios]);
+  // dados de exerciciosPersonalizados já carregados no useEffect inicial via loadExerciciosPersonalizados
 
   const exerciciosSelecionadosSet = useMemo(() => {
     return new Set(
@@ -832,6 +835,9 @@ export default function CriarOuEditarTreino() {
         if (!ok) return false;
       }
 
+      if (filtroVideo === "com" && !temVideoExercicio(ex)) return false;
+      if (filtroVideo === "sem" && temVideoExercicio(ex)) return false;
+
       return true;
     });
   }, [
@@ -839,6 +845,7 @@ export default function CriarOuEditarTreino() {
     exSearch,
     niveisSelecionados,
     catsSelecionadas,
+    filtroVideo
   ]);
 
   const meusExerciciosFiltrados = useMemo(() => {
@@ -863,9 +870,12 @@ export default function CriarOuEditarTreino() {
         if (!ok) return false;
       }
 
+      if (filtroVideo === "com" && !temVideoExercicio(ex)) return false;
+      if (filtroVideo === "sem" && temVideoExercicio(ex)) return false;
+
       return true;
     });
-  }, [meusExercicios, exSearch, niveisSelecionados, catsSelecionadas]);
+  }, [meusExercicios, exSearch, niveisSelecionados, catsSelecionadas, filtroVideo]);
 
   const exerciciosFiltrados = useMemo(() => {
     const q = exSearch.trim().toLowerCase();
@@ -889,9 +899,23 @@ export default function CriarOuEditarTreino() {
         if (!ok) return false;
       }
 
+      if (filtroVideo === "com" && !temVideoExercicio(ex)) return false;
+      if (filtroVideo === "sem" && temVideoExercicio(ex)) return false;
+
       return true;
     });
-  }, [exerciciosDisponiveis, exSearch, niveisSelecionados, catsSelecionadas]);
+  }, [exerciciosDisponiveis, exSearch, niveisSelecionados, catsSelecionadas, filtroVideo]);
+
+  const exerciciosDaAbaAtual = useMemo(() => {
+    if (abaExercicios === "meus") return meusExerciciosFiltrados;
+    if (abaExercicios === "personalizados") return exerciciosPersonalizadosFiltrados;
+    return exerciciosFiltrados;
+  }, [
+    abaExercicios,
+    meusExerciciosFiltrados,
+    exerciciosPersonalizadosFiltrados,
+    exerciciosFiltrados,
+  ]);
 
   function revokeIfBlob(url?: string | null) {
     if (!url || !url.startsWith("blob:")) return;
@@ -901,49 +925,6 @@ export default function CriarOuEditarTreino() {
       } catch {}
     }, 3000);
   }
-
-  const fetchExerciciosPersonalizados = async () => {
-    const token = getToken();
-
-    if (!token) {
-      setExerciciosPersonalizados([]);
-      return;
-    }
-
-    try {
-      setLoadingPersonalizados(true);
-
-      const res = await fetch(`${API.BASE_URL}/api/treinos/exercicios/personalizados`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json().catch(() => []);
-      if (!res.ok) {
-        throw new Error(data?.message || "Erro ao carregar exercícios personalizados");
-      }
-
-      const arr = Array.isArray(data) ? data : data?.items ?? [];
-
-      setExerciciosPersonalizados(
-        (Array.isArray(arr) ? arr : []).map((x: any) => ({
-          id: String(x.id),
-          nome: String(x.nome ?? "Exercício"),
-          descricao: x.descricao ?? null,
-          nivel: x.nivel ?? null,
-          categorias: Array.isArray(x.categorias) ? x.categorias : [],
-          videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? null,
-          videoPosterUrl: x.videoPosterUrl ?? null,
-        }))
-      );
-    } catch (e) {
-      console.error(e);
-      setExerciciosPersonalizados([]);
-    } finally {
-      setLoadingPersonalizados(false);
-    }
-  };
 
   const limparProgresso = () => {
     if (!confirm("Tem certeza que deseja limpar o progresso deste formulário?")) return;
@@ -1863,9 +1844,11 @@ export default function CriarOuEditarTreino() {
                             (e) => String(e.id) === String(l.exercicioId)
                           )
                         : l.exercicioPersonalizadoId
-                        ? exerciciosPersonalizados.find(
+                        ? (meusExercicios.find(
                             (e) => String(e.id) === String(l.exercicioPersonalizadoId)
-                          )
+                          ) ?? exerciciosPersonalizados.find(
+                            (e) => String(e.id) === String(l.exercicioPersonalizadoId)
+                          ) as unknown as ExercicioMin)
                         : null;
 
                     const isPersonalizadoExistente = !!l.exercicioPersonalizadoId;
@@ -2163,7 +2146,7 @@ export default function CriarOuEditarTreino() {
             </Card>
 
             <Card title="Exercícios Disponíveis">
-              <div className="mb-4 flex items-center gap-2">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setAbaExercicios("meus")}
@@ -2202,6 +2185,61 @@ export default function CriarOuEditarTreino() {
                 >
                   Personalizados
                 </button>
+              </div>
+
+              <div className="mb-4 flex w-full flex-col gap-3">
+                <input
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-700"
+                  placeholder={
+                    abaExercicios === "meus"
+                      ? "Buscar meus exercícios..."
+                      : abaExercicios === "catalogo"
+                      ? "Buscar exercícios do banco..."
+                      : "Buscar personalizados..."
+                  }
+                  value={exSearch}
+                  onChange={(e) => setExSearch(e.target.value)}
+                />
+
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-700"
+                  value={catsSelecionadas[0] || ""}
+                  onChange={(e) => setCatsSelecionadas(e.target.value ? [e.target.value] : [])}
+                >
+                  <option value="">Todas as categorias</option>
+                  {opcoesCategorias.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {labelCategoria(cat)}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-700"
+                  value={niveisSelecionados[0] || ""}
+                  onChange={(e) => setNiveisSelecionados(e.target.value ? [e.target.value] : [])}
+                >
+                  <option value="">Todos os níveis</option>
+                  {opcoesNiveis.map((nivel) => (
+                    <option key={nivel} value={nivel}>
+                      {nivel === "Avancado" ? "Avançado" : nivel}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-700"
+                  value={filtroVideo}
+                  onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
+                >
+                  <option value="">Com/sem vídeo</option>
+                  <option value="com">Somente com vídeo</option>
+                  <option value="sem">Somente sem vídeo</option>
+                </select>
+              </div>
+
+              <div className="mb-4 text-sm text-gray-600">
+                {exerciciosDaAbaAtual.length} resultado(s)
               </div>
 
               {abaExercicios === "meus" && (
@@ -2304,105 +2342,7 @@ export default function CriarOuEditarTreino() {
               )}
               {abaExercicios === "catalogo" ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                  <div className="lg:col-span-3">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div className="flex-1">
-                        <div className="relative">
-                          <input
-                            className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-10 text-gray-900 outline-none focus:border-green-600"
-                            placeholder="Buscar por nome, nível ou descrição..."
-                            value={exSearch}
-                            onChange={(e) => setExSearch(e.target.value)}
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                            ⌕
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-gray-600">
-                        {exerciciosFiltrados.length} resultado(s)
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                    <div className="mb-2 text-sm font-bold text-gray-900">Categorias</div>
-                    <div className="max-h-48 overflow-auto pr-2">
-                      {opcoesCategorias.map((cat) => {
-                        const checked = catsSelecionadas.includes(cat);
-                        return (
-                          <label
-                            key={cat}
-                            className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setCatsSelecionadas((prev) =>
-                                    prev.includes(cat) ? prev : [...prev, cat]
-                                  );
-                                } else {
-                                  setCatsSelecionadas((prev) => prev.filter((x) => x !== cat));
-                                }
-                              }}
-                            />
-                            {cat}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                    <div className="mb-2 text-sm font-bold text-gray-900">Níveis</div>
-                    <div className="max-h-48 overflow-auto pr-2">
-                      {opcoesNiveis.map((n) => {
-                        const checked = niveisSelecionados.includes(n);
-                        return (
-                          <label
-                            key={n}
-                            className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNiveisSelecionados((prev) =>
-                                    prev.includes(n) ? prev : [...prev, n]
-                                  );
-                                } else {
-                                  setNiveisSelecionados((prev) => prev.filter((x) => x !== n));
-                                }
-                              }}
-                            />
-                            {n}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-2 text-xs text-gray-600">
-                      Você pode combinar vários níveis (ex.: Base + Avancado).
-                    </p>
-                  </div>
-
-                  <div className="flex items-start justify-end lg:col-span-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCatsSelecionadas([]);
-                        setNiveisSelecionados([]);
-                        setExSearch("");
-                      }}
-                      className="text-sm font-semibold text-gray-600 underline hover:text-gray-800"
-                    >
-                      Limpar filtros
-                    </button>
-                  </div>
-
+                  
                   <div className="lg:col-span-3">
                     <div className="max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
                       {exerciciosFiltrados.length === 0 ? (
@@ -2511,7 +2451,7 @@ export default function CriarOuEditarTreino() {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : abaExercicios === "personalizados" ? (
                 <>
                    <div className="space-y-4">
                     {loadingExerciciosPersonalizados ? (
@@ -2595,7 +2535,7 @@ export default function CriarOuEditarTreino() {
                     )}
                   </div>
                 </>
-              )}
+              ) : null}
           </Card>
 
             <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">

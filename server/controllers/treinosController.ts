@@ -2920,118 +2920,38 @@ export async function getMeusExercicios(
 ) {
   try {
     const userId = getUserId(req);
-
     if (!userId) {
       return res.status(401).json({ message: "Não autenticado." });
     }
 
-    const [exerciciosBancoDoUsuario, exerciciosPersonalizadosDoUsuario] =
-      await Promise.all([
-        prisma.exercicio.findMany({
-          where: {
-            criadoPorId: userId,
-          },
-          orderBy: [{ nome: "asc" }],
-        }),
-
-        prisma.exercicioPersonalizado.findMany({
-          where: {
-            criadorUsuarioId: userId,
-          },
-          orderBy: [
-            { atualizadoEm: "desc" },
-            { nome: "asc" },
-          ],
-          take: 500,
-        }),
-      ]);
-
-    const itens = [
-      ...exerciciosPersonalizadosDoUsuario.map((x) => ({
-        id: String(x.id),
-        origem: "personalizado" as const,
-        nome: x.nome ?? "Exercício",
-        objetivo: (x as any).descricao ?? null,
-        descricao: (x as any).descricao ?? null,
-        nivel: (x as any).nivel ?? null,
-        categorias: Array.isArray((x as any).categorias)
-          ? (x as any).categorias
-          : [],
-        videoDemonstrativoUrl: (x as any).videoDemonstrativoUrl ?? null,
-        videoPosterUrl: (x as any).videoPosterUrl ?? null,
-      })),
-
-      ...exerciciosBancoDoUsuario.map((x) => ({
-        id: String(x.id),
-        origem: "exercicio" as const,
-        nome: x.nome ?? "Exercício",
-        objetivo: (x as any).objetivo ?? null,
-        descricao: (x as any).descricao ?? null,
-        nivel: (x as any).nivel ?? null,
-        categorias: Array.isArray((x as any).faixaEtaria)
-          ? (x as any).faixaEtaria
-          : [],
-        videoDemonstrativoUrl:
-          (x as any).videoDemonstrativoUrl ??
-          (x as any).videoUrl ??
-          null,
-        videoPosterUrl: (x as any).videoPosterUrl ?? null,
-        series: (x as any).series ?? null,
-        repeticoes: (x as any).repeticoes ?? null,
-        duracao: (x as any).duracao ?? null,
-        descanso: (x as any).descanso ?? null,
-      })),
-    ];
-
-    const personalizadosMapeados = exerciciosPersonalizadosDoUsuario.map((p) => ({
-      id: String(p.id),
-      nome: p.nome ?? "Exercício",
-      codigo: (p as any).codigo ?? null,
-      descricao: (p as any).descricao ?? null,
-      objetivo: null,
-      nivel: (p as any).nivel ?? null,
-      categorias: Array.isArray((p as any).categorias)
-        ? (p as any).categorias
-        : [],
-      videoDemonstrativoUrl:
-        (p as any).videoDemonstrativoUrl ??
-        (p as any).videoUrl ??
-        null,
-      videoPosterUrl: (p as any).videoPosterUrl ?? null,
-      criadoPorId: (p as any).criadorUsuarioId ?? null,
-      series: (p as any).series ?? null,
-      repeticoes: (p as any).repeticoes ?? null,
-      duracao: (p as any).duracao ?? null,
-      descanso: (p as any).descanso ?? null,
-      origem: "personalizado" as const,
-      exercicioPersonalizadoId: String(p.id),
-    }));
-
-    const oficiais = await prisma.exercicio.findMany({
-      select: {
-        id: true,
-        nome: true,
-        nomeNormalizado: true,
+    const personalizados = await prisma.exercicioPersonalizado.findMany({
+      where: {
+        criadorUsuarioId: userId,
       },
-    });
-
-    const nomesOficiais = new Set(
-      oficiais
-        .map((e) => e.nomeNormalizado || normalizarNomeExercicio(e.nome))
-        .filter(Boolean)
-    );
-
-    const personalizadosSemCatalogo = personalizadosMapeados.filter((p: any) => {
-      const nomeNorm = normalizarNomeExercicio(p.nome);
-      return nomeNorm && !nomesOficiais.has(nomeNorm);
+      orderBy: [{ atualizadoEm: "desc" }, { nome: "asc" }],
+      take: 500,
     });
 
     return res.json(
-      personalizadosSemCatalogo.map((p: any) => ({
-        ...p,
+      personalizados.map((p: any) => ({
+        id: String(p.id),
+        nome: p.nome ?? "Exercício",
+        codigo: p.codigo ?? null,
+        descricao: p.descricao ?? null,
+        objetivo: p.descricao ?? null,
+        nivel: p.nivel ?? null,
+        categorias: Array.isArray(p.categorias) ? p.categorias : [],
+        videoDemonstrativoUrl: p.videoDemonstrativoUrl ?? null,
+        videoPosterUrl: p.videoPosterUrl ?? null,
+        thumbUrl: p.videoPosterUrl ?? null,
+        series: p.series ?? null,
+        repeticoes: p.repeticoes ?? null,
+        duracao: p.duracao ?? null,
+        descanso: p.descanso ?? null,
         origem: "personalizado",
         exercicioId: null,
-        exercicioPersonalizadoId: String(p.exercicioPersonalizadoId ?? p.id),
+        criadorUsuarioId: p.criadorUsuarioId ?? null,
+        exercicioPersonalizadoId: String(p.id),
       }))
     );
   } catch (error) {
@@ -6716,51 +6636,30 @@ export async function listarExerciciosPersonalizados(
           not: userId,
         },
       },
-      orderBy: [
-        { atualizadoEm: "desc" },
-        { nome: "asc" },
-      ],
+      orderBy: [{ atualizadoEm: "desc" }, { nome: "asc" }],
       take: 500,
     });
 
-    const personalizados = await prisma.exercicioPersonalizado.findMany({
-      where: {
-        ...(userId
-          ? {
-              NOT: {
-                criadorUsuarioId: userId,
-              },
-            }
-          : {}),
-      },
-      orderBy: { nome: "asc" },
-    });
-
-    const oficiais = await prisma.exercicio.findMany({
-      select: {
-        id: true,
-        nome: true,
-        nomeNormalizado: true,
-      },
-    });
-
-    const nomesOficiais = new Set(
-      oficiais
-        .map((e) => e.nomeNormalizado || normalizarNomeExercicio(e.nome))
-        .filter(Boolean)
+    return res.json(
+      itens.map((p: any) => ({
+        id: String(p.id),
+        nome: p.nome ?? "Exercício",
+        codigo: p.codigo ?? null,
+        descricao: p.descricao ?? null,
+        objetivo: p.descricao ?? null,
+        nivel: p.nivel ?? null,
+        categorias: Array.isArray(p.categorias) ? p.categorias : [],
+        videoDemonstrativoUrl: p.videoDemonstrativoUrl ?? null,
+        videoPosterUrl: p.videoPosterUrl ?? null,
+        thumbUrl: p.videoPosterUrl ?? null,
+        series: p.series ?? null,
+        repeticoes: p.repeticoes ?? null,
+        duracao: p.duracao ?? null,
+        descanso: p.descanso ?? null,
+        origem: "personalizado",
+        exercicioPersonalizadoId: String(p.id),
+      }))
     );
-
-    const itensSemDuplicarOficial = itens.filter((item: any) => {
-      const nomeNorm = normalizarNomeExercicio(item.nome);
-      if (nomeNorm && nomesOficiais.has(nomeNorm)) {
-        return false;
-      }
-      return true;
-    });
-
-    const unicos = deduplicarExerciciosPorNome(itensSemDuplicarOficial);
-
-    return res.json(unicos);
   } catch (error) {
     console.error("Erro ao listar exercícios personalizados:", error);
     return res.status(500).json({ message: "Erro ao listar exercícios personalizados." });
@@ -7024,9 +6923,6 @@ export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res:
       return res.status(401).json({ message: "Usuário não autenticado." });
     }
 
-    console.log("[salvarVideosExecucaoTreino] id recebido:", id);
-    console.log("[salvarVideosExecucaoTreino] updates:", updates?.length ?? 0);
-
     const treinoAgendado = await prisma.treinoAgendado.findUnique({
       where: { id },
       include: {
@@ -7039,7 +6935,6 @@ export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res:
     });
 
     if (!treinoAgendado) {
-      console.log("[salvarVideosExecucaoTreino] treinoAgendado não encontrado para id:", id);
       return res.status(404).json({ message: "Treino agendado não encontrado." });
     }
 
