@@ -22,6 +22,7 @@ import AgendaTreinos from "../../components/agenda/AgendaTreinos";
 type TurmaMin = {
   id: string;
   nome: string;
+  descricao?: string | null;
   categoria?: string[] | string | null;
   professorIds?: string[];
   professorNomes?: string[];
@@ -191,6 +192,7 @@ export default function TurmasManager({
   const [turmaAlunos, setTurmaAlunos] = useState<TurmaAluno[]>([]);
   const [naoVinculadosUsuarioIds, setNaoVinculadosUsuarioIds] = useState<string[]>([]);
   const [novoNome, setNovoNome] = useState("");
+  const [novoDescricao, setNovoDescricao] = useState("");
   const [novoCategorias, setNovoCategorias] = useState<string[]>([]);
   const [editandoInfoTurma, setEditandoInfoTurma] = useState(false);
   const [editNomeTurma, setEditNomeTurma] = useState("");
@@ -208,39 +210,43 @@ export default function TurmasManager({
     [turmas, selecionada]
   );
 
-  const souDonoDaTurma = useMemo(() => {
+  const podeGerenciarTurma = useMemo(() => {
     if (!turmaSelecionada) return false;
 
-    // ✅ Dono = organização (clube/escolinha) quando abriu com owner
-    if (turmaSelecionada.ownerId && owner?.id) {
-      return String(owner.id) === String(turmaSelecionada.ownerId);
+    const professorIds = (turmaSelecionada.professorIds ?? []).map((x) =>
+      String(x).trim()
+    );
+
+    // Professor pode editar/excluir qualquer turma onde ele esteja vinculado
+    if (!owner && meuProfessorId) {
+      return professorIds.includes(String(meuProfessorId).trim());
     }
 
-    // ✅ Dono = professor criador quando não tem ownerId
-    if (!turmaSelecionada.ownerId && meuProfessorId) {
-      return String(turmaSelecionada.criadoPorProfessorId || "") === String(meuProfessorId);
+    // Clube/Escolinha pode editar/excluir qualquer turma que pertence a ele
+    if (owner?.id && turmaSelecionada.ownerId) {
+      return String(owner.id).trim() === String(turmaSelecionada.ownerId).trim();
     }
 
     return false;
   }, [turmaSelecionada, owner?.id, meuProfessorId]);
 
-  const podeExcluirTurma = souDonoDaTurma; // (ou admin, se você tiver flag)
+  const podeExcluirTurma = podeGerenciarTurma; // (ou admin, se você tiver flag)
 
-const podeSairDaTurma = useMemo(() => {
-  if (!meuProfessorId) return false;
-  if (!turmaSelecionada) return false;
+  const podeSairDaTurma = useMemo(() => {
+    if (!meuProfessorId) return false;
+    if (!turmaSelecionada) return false;
 
-  const ids = (turmaSelecionada.professorIds ?? []).map((x) => String(x).trim());
-  const match = ids.includes(String(meuProfessorId).trim());
+    const ids = (turmaSelecionada.professorIds ?? []).map((x) => String(x).trim());
+    const match = ids.includes(String(meuProfessorId).trim());
 
-  // ✅ regra normal
-  if (tipoUsuarioLogado === "professor") return match && !souDonoDaTurma;
+    // ✅ regra normal
+    if (tipoUsuarioLogado === "professor") return match && !podeGerenciarTurma;
 
-  // ✅ fallback: se o tipo veio vazio, mas match é true, libera
-  if (!tipoUsuarioLogado) return match && !souDonoDaTurma;
+    // ✅ fallback: se o tipo veio vazio, mas match é true, libera
+    if (!tipoUsuarioLogado) return match && !podeGerenciarTurma;
 
-  return false;
-}, [meuProfessorId, turmaSelecionada, tipoUsuarioLogado, souDonoDaTurma]);
+    return false;
+  }, [meuProfessorId, turmaSelecionada, tipoUsuarioLogado, podeGerenciarTurma]);
 
   function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
     const m = String(mesZeroBased + 1).padStart(2, "0");
@@ -451,6 +457,7 @@ const podeSairDaTurma = useMemo(() => {
       return {
         id: String(t.id),
         nome: String(t.nome ?? "Turma"),
+        descricao: t.descricao ? String(t.descricao) : null,
         categoria: normalizarCategoriasTurma(t.categoria),
         professorIds,
         professorNomes,
@@ -616,6 +623,8 @@ const podeSairDaTurma = useMemo(() => {
     setSalvando(true);
 
     try {
+      let totalAlunosAtualizado = alunosSelecionados.length;
+
       if (dirtyProf) {
         await axios.put(
           `${API.BASE_URL}/api/turmas/${selecionada}/vincular-professor`,
@@ -630,13 +639,58 @@ const podeSairDaTurma = useMemo(() => {
           { usuarioIds: alunosSelecionados },
           { headers }
         );
-        alert(`Turma atualizada! (${r.data?.total ?? alunosSelecionados.length} aluno(s))`);
-      } else {
-        alert("Turma atualizada!");
+
+        totalAlunosAtualizado = Number(r.data?.total ?? alunosSelecionados.length);
       }
 
-      if (owner) await carregarTurmas(owner);
-      await abrirTurma(selecionada);
+      // atualiza o contador visual imediatamente
+      setTurmas((prev) =>
+        prev.map((t) =>
+          String(t.id) === String(selecionada)
+            ? {
+                ...t,
+                alunosCount: totalAlunosAtualizado,
+                professorIds: profSelecionados,
+                professorNomes: t.professorNomes?.filter((_, idx) =>
+                  profSelecionados.includes(String(t.professorIds?.[idx] ?? ""))
+                ),
+                professorNome:
+                  t.professorNomes
+                    ?.filter((_, idx) =>
+                      profSelecionados.includes(String(t.professorIds?.[idx] ?? ""))
+                    )
+                    .join(", ") || null,
+              }
+            : t
+        )
+      );
+
+      const lista = await carregarTurmas(owner, filtroProf);
+      const turmaAtualizada = lista.find((t) => String(t.id) === String(selecionada));
+
+      // se a turma ainda aparece para esse usuário, reabre com dados novos
+      if (turmaAtualizada) {
+        await abrirTurma(selecionada, turmaAtualizada);
+      } else {
+        // se removeu o próprio professor, ela some da lista
+        setSelecionada("");
+        setProfSelecionados([]);
+        setAlunosSelecionados([]);
+
+        const primeira = lista[0];
+        if (primeira) {
+          await abrirTurma(primeira.id, primeira);
+        }
+      }
+
+      setDirtyProf(false);
+      setDirtyAlunos(false);
+
+      alert(
+        dirtyAlunos
+          ? `Turma atualizada! (${totalAlunosAtualizado} aluno(s))`
+          : "Turma atualizada!"
+      );
     } catch (e: any) {
       alert(e?.response?.data?.message || e?.message || "Falha ao salvar turma");
     } finally {
@@ -711,40 +765,53 @@ const podeSairDaTurma = useMemo(() => {
   };
 
   const criarTurma = async () => {
-    if (!owner) return;
     if (!novoNome.trim()) return alert("Dê um nome para a turma");
+
+    const professoresDaNovaTurma = owner
+      ? novoProfessores
+      : meuProfessorId
+        ? [meuProfessorId]
+        : [];
+
+    if (!owner && professoresDaNovaTurma.length === 0) {
+      return alert("Não foi possível identificar o professor logado.");
+    }
+
     setSalvando(true);
 
     try {
-      const payload = {
-        ownerTipo: owner.tipo,
-        ownerId: owner.id,
+      const payload: any = {
         nome: novoNome.trim(),
+        descricao: novoDescricao.trim() || null,
         categoria: novoCategorias || undefined,
-        professorIds: novoProfessores,
+        professorIds: professoresDaNovaTurma,
       };
+
+      if (owner) {
+        payload.ownerTipo = owner.tipo;
+        payload.ownerId = owner.id;
+      }
 
       const res = await axios.post(`${API.BASE_URL}/api/turmas`, payload, { headers });
       const novaId = String(res.data?.id || "");
 
-      if (novaId && novoProfessores.length) {
+      if (novaId && professoresDaNovaTurma.length) {
         await axios.put(
           `${API.BASE_URL}/api/turmas/${novaId}/vincular-professor`,
-          { professorIds: novoProfessores },
+          { professorIds: professoresDaNovaTurma },
           { headers }
         );
       }
 
       setNovoNome("");
+      setNovoDescricao("");
       setNovoCategorias([]);
 
-      await carregarTurmas(owner);
-
+      const lista = await carregarTurmas(owner, filtroProf);
       setSelecionada(novaId);
 
-      if (novaId) {
-        await abrirTurma(novaId);
-      }
+      const turmaNova = lista.find((t) => t.id === novaId);
+      if (novaId) await abrirTurma(novaId, turmaNova);
 
       alert("Turma criada!");
     } catch (e: any) {
@@ -910,7 +977,14 @@ const podeSairDaTurma = useMemo(() => {
                       >
                         <div>
                           <div className="text-sm font-medium text-zinc-900">{t.nome}</div>
-                          <div className="text-xs text-zinc-500">
+
+                          {t.descricao ? (
+                            <div className="mt-0.5 line-clamp-2 text-xs text-zinc-600">
+                              <p>Descrição: {t.descricao}</p>
+                            </div>
+                          ) : null}
+
+                          <div className="mt-2 text-xs text-zinc-500">
                             {normalizarCategoriasTurma(t.categoria).length
                               ? ordenarCategorias(normalizarCategoriasTurma(t.categoria)).join(", ")
                               : "—"}{" "}
@@ -926,7 +1000,7 @@ const podeSairDaTurma = useMemo(() => {
                 )}
               </div>
 
-              {owner ? (
+              {owner || tipoUsuarioLogado === "professor" || meuProfessorId ? (
                 <div className="rounded-xl border border-zinc-200 bg-white p-3">
                   <div className="mb-2 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                     <Plus className="h-4 w-4" /> Criar nova turma
@@ -936,6 +1010,12 @@ const podeSairDaTurma = useMemo(() => {
                     onChange={(e) => setNovoNome(e.target.value)}
                     placeholder="Nome da turma"
                     className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                  />
+                  <textarea
+                    value={novoDescricao}
+                    onChange={(e) => setNovoDescricao(e.target.value)}
+                    placeholder="Descrição da turma"
+                    className="mb-2 min-h-[80px] w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                   />
                   <div className="mb-2 rounded-lg border border-zinc-200 p-2">
                     <div className="mb-2 text-xs font-medium text-zinc-700">
@@ -966,25 +1046,33 @@ const podeSairDaTurma = useMemo(() => {
                     </div>
                   </div>
 
-                  <select
-                    multiple
-                    value={novoProfessores}
-                    onChange={(e) =>
-                      setNovoProfessores(Array.from(e.target.selectedOptions).map((o) => o.value))
-                    }
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                    style={{ minHeight: 120 }}
-                  >
-                    {profs.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nome}
-                      </option>
-                    ))}
-                  </select>
+                  {owner ? (
+                    <>
+                      <select
+                        multiple
+                        value={novoProfessores}
+                        onChange={(e) =>
+                          setNovoProfessores(Array.from(e.target.selectedOptions).map((o) => o.value))
+                        }
+                        className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                        style={{ minHeight: 120 }}
+                      >
+                        {profs.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome}
+                          </option>
+                        ))}
+                      </select>
 
-                  <div className="mt-1 text-xs text-zinc-500">
-                    Dica: segure Ctrl (Windows) / Cmd (Mac) para selecionar vários.
-                  </div>
+                      <div className="mt-1 text-xs text-zinc-500">
+                        Dica: segure Ctrl (Windows) / Cmd (Mac) para selecionar vários.
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                      Esta turma será criada para o professor logado.
+                    </div>
+                  )}
 
                   <button
                     onClick={criarTurma}
@@ -1079,7 +1167,7 @@ const podeSairDaTurma = useMemo(() => {
                             </button>
                           ) : null}
 
-                          {souDonoDaTurma ? (
+                          {podeGerenciarTurma ? (
                             <button
                               type="button"
                               onClick={() => setEditandoInfoTurma((v) => !v)}
