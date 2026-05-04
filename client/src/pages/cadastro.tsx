@@ -225,6 +225,172 @@ function AccordionInfo({
   );
 }
 
+const isOrganizacao = (tipo: TipoPerfil) =>
+  tipo === "Escolinha" || tipo === "Clube";
+
+const PERFIS_PESSOA: TipoPerfil[] = ["Atleta", "Professor", "Olheiro"];
+const PERFIS_ORGANIZACAO: TipoPerfil[] = ["Escolinha", "Clube"];
+
+const perfilVisual: Record<TipoPerfil, { titulo: string; subtitulo: string; emoji: string }> = {
+  Atleta: {
+    titulo: "Atleta",
+    subtitulo: "Para jogadores",
+    emoji: "⚽",
+  },
+  Professor: {
+    titulo: "Profissional",
+    subtitulo: "Professor ou treinador",
+    emoji: "🎯",
+  },
+  Olheiro: {
+    titulo: "Scout",
+    subtitulo: "Avaliação de talentos, olheiros",
+    emoji: "🔭",
+  },
+  Escolinha: {
+    titulo: "Escolinha",
+    subtitulo: "Formação de atletas",
+    emoji: "🏟️",
+  },
+  Clube: {
+    titulo: "Clube",
+    subtitulo: "Clube profissional",
+    emoji: "🛡️",
+  },
+};
+
+function CheckBadge() {
+  return (
+    <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-green-800 text-[11px] text-white">
+      ✓
+    </span>
+  );
+}
+
+function TipoContaCard({
+  ativo,
+  emoji,
+  titulo,
+  subtitulo,
+  onClick,
+}: {
+  ativo: boolean;
+  emoji: string;
+  titulo: string;
+  subtitulo: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative flex flex-1 items-center gap-3 rounded-xl border p-4 text-left transition",
+        ativo
+          ? "border-green-800 bg-green-50 shadow-sm"
+          : "border-gray-200 bg-white hover:border-green-300",
+      ].join(" ")}
+    >
+      {ativo && <CheckBadge />}
+
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100 text-2xl">
+        {emoji}
+      </span>
+
+      <span>
+        <strong className="block text-sm text-green-950">{titulo}</strong>
+        <span className="block text-xs text-gray-500">{subtitulo}</span>
+      </span>
+    </button>
+  );
+}
+
+function PerfilCard({
+  tipo,
+  ativo,
+  onClick,
+}: {
+  tipo: TipoPerfil;
+  ativo: boolean;
+  onClick: () => void;
+}) {
+  const item = perfilVisual[tipo];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative rounded-xl border p-3 text-center transition",
+        ativo
+          ? "border-green-800 bg-green-50 shadow-sm"
+          : "border-gray-200 bg-white hover:border-green-300",
+      ].join(" ")}
+    >
+      {ativo && <CheckBadge />}
+
+      <div className="mb-2 text-3xl">{item.emoji}</div>
+      <strong className="block text-xs text-green-950">{item.titulo}</strong>
+      <span className="mt-1 block text-[10px] text-gray-500">{item.subtitulo}</span>
+    </button>
+  );
+}
+
+function MinimalInput({
+  label,
+  icon,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  readOnly = false,
+  error = false,
+  right,
+  autoComplete,
+}: {
+  label: string;
+  icon: string;
+  value: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  readOnly?: boolean;
+  error?: boolean;
+  right?: ReactNode;
+  autoComplete?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-green-950 mb-1">
+        {label}
+      </label>
+
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+          {icon}
+        </span>
+
+        <input
+          type={type}
+          readOnly={readOnly}
+          autoComplete={autoComplete}
+          className={[
+            "w-full rounded-lg border bg-white py-2.5 pl-10 pr-10 text-sm outline-none transition",
+            "placeholder:text-gray-400 focus:border-green-800 focus:ring-2 focus:ring-green-100",
+            readOnly ? "bg-gray-100 text-gray-600" : "",
+            error ? "border-red-400" : "border-gray-300",
+          ].join(" ")}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange?.(e.target.value)}
+        />
+
+        {right}
+      </div>
+    </div>
+  );
+}
+
 export default function Cadastro() {
   const [_, navigate] = useLocation();
 
@@ -290,6 +456,19 @@ export default function Cadastro() {
   const usernameValido = USER_RE.test(nomeDeUsuario.trim());
   const senhaForte = PASS_RE.test(senha);
   const confirmarOk = confirmarSenha === senha && confirmarSenha.length > 0;
+
+  const DATA_MINIMA_NASCIMENTO = "1900-01-01";
+
+  function hojeISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function dataNascimentoValida(iso: string) {
+    if (!iso) return false;
+    if (iso < DATA_MINIMA_NASCIMENTO) return false;
+    if (iso > hojeISO()) return false;
+    return true;
+  }
 
   function calcIdade(iso: string) {
     if (!iso) return null;
@@ -366,8 +545,9 @@ export default function Cadastro() {
   const podeIrParaEtapa3 = () => {
     if (PRECISA_NASCIMENTO(tipoPerfil)) {
       if (!dataNascimento) return setErro("Informe a data de nascimento."), false;
-      const nasc = new Date(dataNascimento);
-      if (nasc > new Date()) return setErro("Data de nascimento no futuro."), false;
+      if (!dataNascimentoValida(dataNascimento)) {
+        return setErro("A data de nascimento deve estar entre 01/01/1900 e hoje."), false;
+      }
     }
 
     if (tipoPerfil === "Atleta") {
@@ -863,128 +1043,164 @@ export default function Cadastro() {
           </div>
           {etapa === 1 && (
             <div>
-              <h2 className="text-xl font-semibold mb-1">Criar conta</h2>
-              <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo</p>
+              <h2 className="text-2xl font-semibold mb-1">Criar conta</h2>
+                <p className="text-sm text-green-600 mb-6">Preencha os dados para criar sua conta.</p>
 
-              <label className="block mb-2 font-medium">Tipo de Perfil</label>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {(["Atleta", "Escolinha", "Clube", "Professor", "Olheiro"] as TipoPerfil[]).map((t) => (
-                  <label className="flex items-center text-sm" key={t}>
-                    <input
-                      type="radio"
-                      name="tipo"
-                      className="mr-2"
-                      value={t}
-                      checked={tipoPerfil === t}
-                      onChange={(e) => setTipoPerfil(e.target.value as TipoPerfil)}
-                    />
-                    {t === "Escolinha"
-                      ? "Escolinha de Futebol"
-                      : t === "Clube"
-                      ? "Clube Profissional"
-                      : t === "Professor"
-                      ? "Profissional do Futebol"
-                      : t === "Olheiro"
-                      ? "Olheiro (Scout)"
-                      : t}
-                  </label>
-                ))}
-              </div>
-
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Nome de usuário*</label>
-                <input
-                  className={`w-full border rounded px-3 py-2 ${nomeDeUsuario && !usernameValido ? "border-red-400" : ""}`}
-                  value={nomeDeUsuario}
-                  onChange={(e) => setNomeDeUsuario(e.target.value)}
-                />
-                {nomeDeUsuario && (
-                  <p className={`text-xs mt-1 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!usernameValido
-                      ? "Use 3–20 caracteres (letras, números, . e _)."
-                      : userDisp === null
-                      ? "Verificando..."
-                      : userDisp
-                      ? "Disponível"
-                      : "Indisponível"}
+                <div className="mb-5">
+                  <h3 className="font-bold text-green-950 mb-1">
+                    Como você quer entrar na FootEra?
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Escolha a opção que melhor te descreve.
                   </p>
-                )}
-              </div>
 
-              <div className="mt-3">
-                <label className="block text-sm font-medium mb-1">Email*</label>
-                <input
-                  type="email"
-                  className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                {email && (
-                  <p className={`text-xs mt-1 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!emailValido
-                      ? "Formato de e-mail inválido."
-                      : emailDisp === null
-                      ? "Verificando..."
-                      : emailDisp
-                      ? "Disponível"
-                      : "Já cadastrado"}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Senha*</label>
-                  <div className="relative">
-                    <input
-                      type={mostrarSenha ? "text" : "password"}
-                      autoComplete="new-password"
-                      className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`}
-                      value={senha}
-                      onChange={(e) => setSenha(e.target.value)}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <TipoContaCard
+                      ativo={!isOrganizacao(tipoPerfil)}
+                      emoji="👤"
+                      titulo="Pessoa"
+                      subtitulo="Para indivíduos"
+                      onClick={() => setTipoPerfil("Atleta")}
                     />
-                    <button
-                      type="button"
-                      aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
-                      onClick={() => setMostrarSenha((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
-                    >
-                      {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
+
+                    <TipoContaCard
+                      ativo={isOrganizacao(tipoPerfil)}
+                      emoji="🏢"
+                      titulo="Organização"
+                      subtitulo="Para equipes, clubes ou instituições"
+                      onClick={() => setTipoPerfil("Escolinha")}
+                    />
                   </div>
+                </div>
+
+                <div className="mb-6">
+                  <h3 className="font-bold text-green-950 mb-1">
+                    {isOrganizacao(tipoPerfil)
+                      ? "Que tipo de organização você representa?"
+                      : "Qual é o seu perfil principal?"}
+                  </h3>
+
+                  <p className="text-xs text-gray-500 mb-3">
+                    Selecione a categoria que melhor se aplica.
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {(isOrganizacao(tipoPerfil) ? PERFIS_ORGANIZACAO : PERFIS_PESSOA).map((tipo) => (
+                      <PerfilCard
+                        key={tipo}
+                        tipo={tipo}
+                        ativo={tipoPerfil === tipo}
+                        onClick={() => setTipoPerfil(tipo)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+              <div className="mt-6 border-t pt-4">
+                <h3 className="font-bold text-green-950">Dados da conta</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Preencha seus dados para criar sua conta.
+                </p>
+
+                <div className="space-y-3">
+                  <MinimalInput
+                    label="Nome de usuário*"
+                    icon="👤"
+                    value={nomeDeUsuario}
+                    placeholder="Ex.: joaosilva10"
+                    error={!!nomeDeUsuario && !usernameValido}
+                    onChange={(v) => setNomeDeUsuario(v)}
+                  />
+
+                  {nomeDeUsuario && (
+                    <p className={`text-xs -mt-2 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
+                      {!usernameValido
+                        ? "Use 3–20 caracteres (letras, números, . e _)."
+                        : userDisp === null
+                        ? "Verificando..."
+                        : userDisp
+                        ? "Disponível"
+                        : "Indisponível"}
+                    </p>
+                  )}
+
+                  <MinimalInput
+                    label="E-mail*"
+                    icon="✉️"
+                    type="email"
+                    value={email}
+                    placeholder="exemplo@email.com"
+                    error={!!email && !emailValido}
+                    onChange={(v) => setEmail(v)}
+                  />
+
+                  {email && (
+                    <p className={`text-xs -mt-2 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
+                      {!emailValido
+                        ? "Formato de e-mail inválido."
+                        : emailDisp === null
+                        ? "Verificando..."
+                        : emailDisp
+                        ? "Disponível"
+                        : "Já cadastrado"}
+                    </p>
+                  )}
+
+                  <MinimalInput
+                    label="Senha*"
+                    icon="🔒"
+                    type={mostrarSenha ? "text" : "password"}
+                    value={senha}
+                    placeholder="Mínimo de 8 caracteres"
+                    autoComplete="new-password"
+                    error={!!senha && !senhaForte}
+                    onChange={(v) => setSenha(v)}
+                    right={
+                      <button
+                        type="button"
+                        aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                        onClick={() => setMostrarSenha((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                  />
+
                   {senha && (
-                    <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>
+                    <p className={`text-xs -mt-2 ${senhaForte ? "text-green-700" : "text-red-600"}`}>
                       Mín. 8 caracteres com letra e número.
                     </p>
                   )}
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Confirmar Senha*</label>
-                  <div className="relative">
-                    <input
-                      type={mostrarConfirmar ? "text" : "password"}
-                      autoComplete="new-password"
-                      className={`w-full border rounded px-3 py-2 pr-10 ${confirmarSenha && !confirmarOk ? "border-red-400" : ""}`}
-                      value={confirmarSenha}
-                      onChange={(e) => setConfirmarSenha(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"}
-                      onClick={() => setMostrarConfirmar((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
-                    >
-                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
+                  <MinimalInput
+                    label="Confirmar senha*"
+                    icon="🔒"
+                    type={mostrarConfirmar ? "text" : "password"}
+                    value={confirmarSenha}
+                    placeholder="Repita sua senha"
+                    autoComplete="new-password"
+                    error={!!confirmarSenha && !confirmarOk}
+                    onChange={(v) => setConfirmarSenha(v)}
+                    right={
+                      <button
+                        type="button"
+                        aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"}
+                        onClick={() => setMostrarConfirmar((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                  />
+
                   {confirmarSenha && (
-                    <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>
+                    <p className={`text-xs -mt-2 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>
                       {confirmarOk ? "OK" : "Senhas não coincidem."}
                     </p>
                   )}
                 </div>
-              </div>
+              </div>              
 
               {["Atleta", "Professor", "Olheiro"].includes(tipoPerfil) && (
                 <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden">
@@ -1158,11 +1374,36 @@ export default function Cadastro() {
                   <label className="block text-sm font-medium mb-1">Data de nascimento*</label>
                   <input
                     type="date"
-                    className={`w-full border rounded px-3 py-2 ${erro && !dataNascimento ? "border-red-400" : ""}`}
+                    min={DATA_MINIMA_NASCIMENTO}
+                    max={hojeISO()}
                     value={dataNascimento}
-                    onChange={(e) => setDataNascimento(e.target.value)}
+                    onChange={(e) => {
+                      setDataNascimento(e.target.value);
+
+                      if (erro === "A data de nascimento deve estar entre 01/01/1900 e hoje.") {
+                        setErro("");
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!dataNascimento) return;
+
+                      if (!dataNascimentoValida(dataNascimento)) {
+                        setErro("A data de nascimento deve estar entre 01/01/1900 e hoje.");
+                      }
+                    }}
+                    className={`w-full border rounded px-3 py-2 ${
+                      dataNascimento && !dataNascimentoValida(dataNascimento) ? "border-red-400" : ""
+                    }`}
                   />
-                  {idade !== null && <p className="text-xs text-gray-500 mt-1">Idade estimada: {idade} anos</p>}
+                  {dataNascimento && !dataNascimentoValida(dataNascimento) ? (
+                    <p className="mt-1 text-xs text-red-600">
+                      A data de nascimento deve estar entre 01/01/1900 e hoje.
+                    </p>
+                  ) : idade !== null ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Idade estimada: {idade} anos
+                    </p>
+                  ) : null}
                 </div>
               )}
 
