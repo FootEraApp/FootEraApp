@@ -61,19 +61,23 @@ type PontuacaoDetalhe = {
 };
 
 type ExercicioSelecionadoUI = {
-  exercicioId?: string;     
-  id?: string;             
+  exercicioId?: string | null;
+  idCatalogo?: string | null;
+  exercicioPersonalizadoId?: string | null;
+  exercicioTemporarioId?: string | null;
+  id?: string | null;
+  nome?: string | null;
+  descricao?: string | null;
+  videoUrl?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
   ordem?: number | null;
   repeticoes?: string | number | null;
-  series?: number | null;
+  series?: string | number | null;
+  duracao?: string | null;
+  descanso?: string | null;
+  tipoExecucao?: "repeticao" | "duracao";
 };
-
-function toRepeticoesStr(v: any): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "string") return v.trim();
-  if (typeof v === "number") return String(v);
-  return String(v);
-}
 
 function exercicioTemExecucaoValida(ex: ExItemUILocal) {
   if (ex.tipoExecucao === "duracao") {
@@ -349,8 +353,8 @@ function calcularPontuacaoTreino(
 
   const dur = Number.isFinite(Number(duracaoMin)) ? Number(duracaoMin) : 0;
   const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
-
   const total = ptsEx + ptsNivel + ptsTipo + ptsDur;
+
   return {
     total,
     nivel: ptsNivel,
@@ -369,15 +373,17 @@ interface Exercicio {
   id: string;
   nome: string;
   repeticoes?: string;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
   videoDemonstrativoUrl?: string;
   objetivo?: string | null;
   descricao?: string | null;
   nivel?: string;
-  categorias?: string[];      
-  duracaoMinutos?: number | null; 
-  tipoTreino?: string | null; 
-}
-
+  categorias?: string[];
+  duracaoMinutos?: number | null;
+  tipoTreino?: string | null;
+}   
 
 interface AtletaVinculado {
   id: string;
@@ -442,6 +448,10 @@ type MeuExercicioItem = {
   categorias?: string[];
   videoDemonstrativoUrl?: string | null;
   videoPosterUrl?: string | null;
+  series?: number | null;
+  repeticoes?: string | null;
+  duracao?: string | null;
+  descanso?: string | null;
 };
 
 const SAVE_KEY = "novoTreinoState";
@@ -969,6 +979,171 @@ export default function NovoTreino() {
   ]);
   const [sessaoTreino, setSessaoTreino] = useState("Aquecimento");
   const [sessaoOutro, setSessaoOutro] = useState("");
+  const sessaoTreinoFinal =
+    sessaoTreino === "Outro" ? sessaoOutro.trim() : sessaoTreino.trim();
+
+  const etapa1Valida =
+    nome.trim() !== "" &&
+    Number(duracao) > 0 &&
+    tipoTreino.trim() !== "" &&
+    nivel.trim() !== "" &&
+    sessaoTreinoFinal !== "";
+
+  const etapa2Valida = exerciciosSelecionados.some((ex) =>
+    String(ex.nome || ex.exercicioId || ex.idCatalogo || ex.exercicioPersonalizadoId || "").trim() !== ""
+  );
+  
+  const veioDeUsarNoTreinoRef = useRef(false);
+
+  useEffect(() => {
+
+    const raw = sessionStorage.getItem("treino_exercicios_preselecionados");
+    if (!raw) return;
+
+    veioDeUsarNoTreinoRef.current = true;
+
+    sessionStorage.removeItem(SAVE_KEY);
+    sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+    const tituloTemp = "Novo treino";
+    setNome((atual) => atual.trim() ? atual : tituloTemp);
+
+    try {
+      const lista = JSON.parse(raw);
+      const arr = Array.isArray(lista) ? lista : [lista];
+
+      const novos: ExItemUILocal[] = arr
+        .map((item: any, index: number): ExItemUILocal => {
+          const origemRaw = String(item.origem || item.tipo || "personalizado").toLowerCase();
+
+          const origemNormalizada: ExItemUILocal["origem"] =
+            origemRaw === "exercicio" || origemRaw === "catalogo"
+              ? "catalogo"
+              : origemRaw === "temporario"
+              ? "temporario"
+              : "personalizado";
+
+          const isCatalogo = origemNormalizada === "catalogo";
+          const isTemporario = origemNormalizada === "temporario";
+          const isPersonalizado = origemNormalizada === "personalizado";
+
+          const duracaoItem =
+            item.duracao != null && String(item.duracao).trim() !== ""
+              ? String(item.duracao).trim()
+              : "";
+
+          const seriesItem =
+            item.series != null && String(item.series).trim() !== ""
+              ? item.series
+              : null;
+
+          const repeticoesItem =
+            item.repeticoes != null && String(item.repeticoes).trim() !== ""
+              ? item.repeticoes
+              : "";
+
+          const descansoItem =
+            item.descanso != null && String(item.descanso).trim() !== ""
+              ? String(item.descanso).trim()
+              : "";
+
+          const tipoExecucao: ExItemUILocal["tipoExecucao"] =
+            duracaoItem ? "duracao" : "repeticao";
+
+          return {
+            idLocal: String(crypto.randomUUID()),
+            id: null,
+            nome: String(item.nome || "Exercício").trim(),
+            descricao: item.descricao ?? item.objetivo ?? null,
+            objetivo: item.objetivo ?? item.descricao ?? null,
+            nivel: item.nivel ?? null,
+            categorias: Array.isArray(item.categorias) ? item.categorias : [],
+            videoUrl: item.videoDemonstrativoUrl || item.videoUrl || null,
+            videoDemonstrativoUrl: item.videoDemonstrativoUrl || item.videoUrl || null,
+            videoPosterUrl: item.videoPosterUrl || null,
+            series: seriesItem,
+            repeticoes: repeticoesItem,
+            duracao: duracaoItem,
+            descanso: descansoItem,
+            ordem: index + 1,
+            tipoExecucao,
+
+            exercicioId: isCatalogo
+              ? String(item.idCatalogo || item.exercicioId || item.id || "")
+              : null,
+
+            idCatalogo: isCatalogo
+              ? String(item.idCatalogo || item.exercicioId || item.id || "")
+              : null,
+
+            exercicioPersonalizadoId: isPersonalizado
+              ? String(item.exercicioPersonalizadoId || item.id || "")
+              : null,
+
+            exercicioTemporarioId: isTemporario
+              ? String(item.exercicioTemporarioId || item.id || "")
+              : null,
+
+            origem: origemNormalizada,
+            tipo: origemNormalizada,
+          };
+        })
+        .filter((x) =>
+          String(
+            x.nome ||
+              x.exercicioId ||
+              x.idCatalogo ||
+              x.exercicioPersonalizadoId ||
+              x.exercicioTemporarioId ||
+              ""
+          ).trim() !== ""
+        );
+
+      setExerciciosSelecionados((prev) => {
+        const chave = (e: ExItemUILocal) =>
+          String(
+            e.exercicioId ||
+              e.idCatalogo ||
+              e.exercicioPersonalizadoId ||
+              e.exercicioTemporarioId ||
+              e.nome ||
+              ""
+          );
+
+        const ids = new Set(prev.map(chave));
+
+        const filtrados = novos.filter((n) => !ids.has(chave(n)));
+
+        return [...prev, ...filtrados].map((e, idx) => ({
+          ...e,
+          ordem: idx + 1,
+        }));
+      });
+
+      setEtapa(2);
+      setCompletedUntil((prev) => Math.max(prev, 2));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(novos));
+
+      sessionStorage.removeItem("treino_exercicios_preselecionados");
+    } catch (e) {
+      console.error("Erro ao carregar exercícios:", e);
+    }
+  }, []);
+
+  function irParaEtapa(destino: number) {
+    if (destino >= 2 && !etapa1Valida) {
+      alert("Preencha título, duração, tipo do treino, nível e sessão do treino.");
+      return;
+    }
+
+    if (destino >= 3 && !etapa2Valida) {
+      alert("Selecione pelo menos um exercício para continuar.");
+      return;
+    }
+
+    setEtapa(destino);
+    setCompletedUntil((prev) => Math.max(prev, destino));
+  }
 
   type AbaExercicios = "meus" | "catalogo" | "personalizados";
   const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
@@ -1282,10 +1457,14 @@ export default function NovoTreino() {
 
   useEffect(() => {
     try {
+      if (veioDeUsarNoTreinoRef.current) return;
+
+      const temPreSelecionado = sessionStorage.getItem("treino_exercicios_preselecionados");
+      if (temPreSelecionado) return;
+
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) setExerciciosSelecionados(JSON.parse(raw));
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [DRAFT_KEY]);
 
   const gruposProfessoresFiltrados = useMemo(() => {
@@ -1895,7 +2074,7 @@ export default function NovoTreino() {
       const shouldRestore =
         sessionStorage.getItem(RESTORE_FLAG_KEY) === "1";
 
-      if (shouldRestore) {
+      if (shouldRestore && !veioDeUsarNoTreinoRef.current) {
         const saved = safeParse<any>(sessionStorage.getItem(SAVE_KEY), null);
         if (saved) {
           setEtapa(saved.etapa ?? 1);
@@ -1956,7 +2135,7 @@ export default function NovoTreino() {
     setIniciado(true);
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     if (!isEditing) return;
     if (!iniciado) return;
     if (carregouEdicaoRef.current) return;
@@ -2518,10 +2697,6 @@ export default function NovoTreino() {
   }, [professorLogadoId]);
 
   const [completedUntil, setCompletedUntil] = useState<number>(1);
-  const goTo = (n: number) => {
-    setEtapa(n);
-    setCompletedUntil((prev) => Math.max(prev, n));
-  };
 
   function normalizaNome(n?: string) {
     return (n || "").trim().toLowerCase();
@@ -3301,8 +3476,8 @@ export default function NovoTreino() {
             exercicioTemporarioId: e.exercicioTemporarioId ?? null,
             nome: typeof e.nome === "string" && e.nome.trim() ? e.nome.trim() : null,
             descricao: typeof e.descricao === "string" && e.descricao.trim() ? e.descricao.trim() : null,
-            videoDemonstrativoUrl: null,
-            videoPosterUrl: null,
+            videoDemonstrativoUrl: videoFinal,
+            videoPosterUrl: posterFinal,
             repeticoes: repeticoesFinal,
             series: seriesFinal,
             duracao: duracaoFinal,
@@ -3729,20 +3904,22 @@ export default function NovoTreino() {
             Professores Footera
           </button>
         </div>
-          <div className="relative mb-4">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
+            <div className="relative mb-4">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
-            <input
-              value={buscaTreinoAtleta}
-              onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
-              placeholder={
-                abaTreinosAtleta === "meu_professor"
-                  ? "Pesquisar por treino, professor, clube ou escolinha..."
-                  : "Pesquisar por treino ou professor Footera..."
-              }
-              className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
-            />
-          </div>
+              <input
+                value={buscaTreinoAtleta}
+                onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
+                placeholder={
+                  abaTreinosAtleta === "meu_professor"
+                    ? "Pesquisar por treino, professor, clube ou escolinha..."
+                    : "Pesquisar por treino ou professor Footera..."
+                }
+                className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
+              />
+            </div>
+          )}
 
           {abaTreinosAtleta === "footera" && carregandoAssinatura ? (
             <div className="bg-white border rounded-xl p-5 text-center text-gray-700">
@@ -4068,7 +4245,7 @@ export default function NovoTreino() {
             )}
 
             <label className="block text-sm text-gray-700 mb-1">
-              Título do Treino
+              Título do Treino*
             </label>
             <input
               className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -4078,7 +4255,7 @@ export default function NovoTreino() {
             />
 
             <label className="block text-sm text-gray-700 mb-1">
-              Descrição
+              Descrição (opcional)
             </label>
             <textarea
               className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -4090,7 +4267,7 @@ export default function NovoTreino() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
-                  Tipo do Treino
+                  Tipo do Treino*
                 </label>
                 <select
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -4108,7 +4285,7 @@ export default function NovoTreino() {
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
-                  Duração do Treino (minutos)
+                  Duração do Treino (minutos)*
                 </label>
                 <input
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -4124,7 +4301,7 @@ export default function NovoTreino() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm text-gray-700 mb-1">
-                    Nível do Treino
+                    Nível do Treino*
                   </label>
 
                   <select
@@ -4143,7 +4320,7 @@ export default function NovoTreino() {
 
                 <div>
                   <label className="block text-sm text-gray-700 mb-1">
-                    Sessão do Treino
+                    Sessão do Treino*
                   </label>
 
                   <select
@@ -4171,7 +4348,7 @@ export default function NovoTreino() {
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
-                  Professores realizadores (colaboradores)
+                  Professores realizadores (colaboradores) (opcional)
                 </label>
 
                 <div className="border rounded p-2">
@@ -5430,7 +5607,7 @@ export default function NovoTreino() {
               type="button"
               onClick={() => {
                 if (etapa === 1) navigate("/treinos");
-                else goTo(etapa - 1);
+                else irParaEtapa(etapa - 1);
               }}
               className="px-3 sm:px-4 py-2 rounded-xl bg-gray-200 text-gray-900 shrink-0"
             >
@@ -5440,7 +5617,12 @@ export default function NovoTreino() {
             <div className="flex-1 min-w-0">
               <div className="overflow-x-auto">
                 <div className="min-w-max">
-                  <Stepper steps={steps} current={etapa} onJump={goTo} completedUntil={completedUntil} />
+                  <Stepper
+                    steps={steps}
+                    current={etapa}
+                    onJump={irParaEtapa}
+                    completedUntil={completedUntil}
+                  />
                 </div>
               </div>
             </div>
@@ -5448,7 +5630,7 @@ export default function NovoTreino() {
             {etapa < 3 ? (
               <button
                 type="button"
-                onClick={() => goTo(etapa + 1)}
+                onClick={() => irParaEtapa(etapa + 1)}
                 className="px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0"
               >
                 Próximo
@@ -5558,20 +5740,22 @@ export default function NovoTreino() {
           </div>
         </div>
       )}
-      <div className="relative mb-4">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
+        <div className="relative mb-4">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
-        <input
-          value={buscaTreinoAtleta}
-          onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
-          placeholder={
-            abaTreinosAtleta === "meu_professor"
-              ? "Pesquisar por treino, professor, clube ou escolinha..."
-              : "Pesquisar por treino ou professor Footera..."
-          }
-          className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
-        />
-      </div>
+          <input
+            value={buscaTreinoAtleta}
+            onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
+            placeholder={
+              abaTreinosAtleta === "meu_professor"
+                ? "Pesquisar por treino, professor, clube ou escolinha..."
+                : "Pesquisar por treino ou professor Footera..."
+            }
+            className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
+          />
+        </div>
+      )}
       <BottomNav />     
     </div>
   );

@@ -1204,7 +1204,6 @@ export async function treinosPublicosProfessoresParceiros(
           return {
             id: String(row.id),
             ordem: row.ordem ?? null,
-            repeticoes: row.repeticoes ?? null,
             exercicio: row.exercicio ?? null,
             exercicioPersonalizado: row.exercicioPersonalizado ?? null,
             exercicioTemporario: row.exercicioTemporario ?? null,
@@ -1213,6 +1212,10 @@ export async function treinosPublicosProfessoresParceiros(
             videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
             videoPosterUrl: base?.videoPosterUrl ?? null,
             nivel: base?.nivel ?? null,
+            series: (base as any)?.series ?? row.series ?? null,
+            repeticoes: (base as any)?.repeticoes ?? row.repeticoes ?? null,
+            duracao: (base as any)?.duracao ?? row.duracao ?? null,
+            descanso: (base as any)?.descanso ?? row.descanso ?? null,
           };
         }),
       };
@@ -1521,7 +1524,6 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
           return {
             id: String(row.id),
             ordem: row.ordem ?? null,
-            repeticoes: row.repeticoes ?? null,
             // mantém as 3 possibilidades pro front (igual treinos-instrutores/treinos-unicos)
             exercicio: row.exercicio ?? null,
             exercicioPersonalizado: row.exercicioPersonalizado ?? null,
@@ -1532,6 +1534,10 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
             videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
             videoPosterUrl: base?.videoPosterUrl ?? null,
             nivel: base?.nivel ?? null,
+            series: (base as any)?.series ?? row.series ?? null,
+            repeticoes: (base as any)?.repeticoes ?? row.repeticoes ?? null,
+            duracao: (base as any)?.duracao ?? row.duracao ?? null,
+            descanso: (base as any)?.descanso ?? row.descanso ?? null,
           };
         }),
       };
@@ -1570,6 +1576,10 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
                 objetivo: true,
                 videoDemonstrativoUrl: true,
                 nivel: true,
+                series: true,
+                repeticoes: true,
+                duracao: true,
+                descanso: true,
               },
             },
 
@@ -1592,6 +1602,10 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
                 videoDemonstrativoUrl: true,
                 videoPosterUrl: true,
                 nivel: true,
+                series: true,
+                repeticoes: true,
+                duracao: true,
+                descanso: true,
               },
             },
           },
@@ -1636,6 +1650,10 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
                 nome: exBase.nome,
                 descricao: (exBase as any).descricao ?? (exBase as any).objetivo ?? null,
                 nivel: (exBase as any).nivel ?? null,
+                series: (exBase as any).series ?? null,
+                repeticoes: (exBase as any).repeticoes ?? null,
+                duracao: (exBase as any).duracao ?? null,
+                descanso: (exBase as any).descanso ?? null,
                 videoDemonstrativoUrl: (exBase as any).videoDemonstrativoUrl ?? null,
               }
             : null,
@@ -4332,7 +4350,39 @@ export async function criarTreinoProgramado(
               },
             });
           }
-              
+          
+          const dadosExecucaoBase = {
+            series:
+              Number.isFinite(Number(e.series)) && Number(e.series) > 0
+                ? Number(e.series)
+                : null,
+            repeticoes:
+              e.repeticoes != null && String(e.repeticoes).trim() !== ""
+                ? String(e.repeticoes).trim()
+                : null,
+            duracao:
+              e.duracao != null && String(e.duracao).trim() !== ""
+                ? String(e.duracao).trim()
+                : null,
+            descanso:
+              e.descanso != null && String(e.descanso).trim() !== ""
+                ? String(e.descanso).trim()
+                : null,
+          };
+
+          if (e.exercicioId) {
+            await tx.exercicio.update({
+              where: { id: String(e.exercicioId) },
+              data: dadosExecucaoBase,
+            });
+          }
+
+          if (e.exercicioPersonalizadoId) {
+            await tx.exercicioPersonalizado.update({
+              where: { id: String(e.exercicioPersonalizadoId) },
+              data: dadosExecucaoBase,
+            });
+          }
           // 2. cria o vínculo no treino
           await tx.treinoProgramadoExercicio.create({
             data: {
@@ -4344,17 +4394,6 @@ export async function criarTreinoProgramado(
               duracao: duracaoFinal,
               descanso: descansoFinal,
               descricaoExecucao: descricaoSalvar,
-            },
-          });
-
-          await tx.exercicio.update({
-            where: { id: exercicioId },
-            data: {
-              repeticoes: repeticoesFinal || null,
-              series: seriesFinal,
-              duracao: duracaoFinal,
-              descanso: descansoFinal,
-              objetivo: descricaoSalvar,
             },
           });
         }
@@ -4462,6 +4501,25 @@ export async function criarTreinoProgramado(
           });
         }
 
+        const repeticoesPersonalizado = String(
+          e.repeticoes ?? e.repeticoesStr ?? e.reps ?? ""
+        ).trim();
+
+        const seriesPersonalizado =
+          Number.isFinite(Number(e.series)) && Number(e.series) > 0
+            ? Number(e.series)
+            : null;
+
+        const duracaoPersonalizado =
+          e.duracao != null && String(e.duracao).trim() !== ""
+            ? String(e.duracao).trim()
+            : null;
+
+        const descansoPersonalizado =
+          e.descanso != null && String(e.descanso).trim() !== ""
+            ? String(e.descanso).trim()
+            : null;
+
         // 3) Se não existe, cria novo personalizado
         if (!pers) {
           pers = await tx.exercicioPersonalizado.create({
@@ -4474,6 +4532,10 @@ export async function criarTreinoProgramado(
               videoPosterUrl: e.videoPosterUrl ?? null,
               videoDemonstrativoUrl:
                 e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado ?? null,
+              repeticoes: repeticoesPersonalizado || null,
+              series: seriesPersonalizado,
+              duracao: duracaoPersonalizado,
+              descanso: descansoPersonalizado,
             },
             select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
@@ -4482,6 +4544,17 @@ export async function criarTreinoProgramado(
         // ✅ 3) “narrow” pro TS parar de reclamar de null
         if (!pers) throw new Error("Falha ao criar ExercicioPersonalizado.");
 
+        await tx.exercicioPersonalizado.update({
+          where: { id: pers.id },
+          data: {
+            descricao: descricaoFinal,
+            repeticoes: repeticoesPersonalizado || null,
+            series: seriesPersonalizado,
+            duracao: duracaoPersonalizado,
+            descanso: descansoPersonalizado,
+          },
+        });
+        
         if (
           typeof e.descricao === "string" &&
           e.descricao.trim() &&
@@ -4491,6 +4564,22 @@ export async function criarTreinoProgramado(
             where: { id: pers.id },
             data: {
               descricao: e.descricao.trim(),
+              series:
+                Number.isFinite(Number(e.series)) && Number(e.series) > 0
+                  ? Number(e.series)
+                  : null,
+              repeticoes:
+                e.repeticoes != null && String(e.repeticoes).trim() !== ""
+                  ? String(e.repeticoes).trim()
+                  : null,
+              duracao:
+                e.duracao != null && String(e.duracao).trim() !== ""
+                  ? String(e.duracao).trim()
+                  : null,
+              descanso:
+                e.descanso != null && String(e.descanso).trim() !== ""
+                  ? String(e.descanso).trim()
+                  : null,
             },
           });
         }
@@ -5091,19 +5180,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
           const novoPoster = ex?.videoPosterUrl ? String(ex.videoPosterUrl) : null;
 
-          await tx.exercicioPersonalizado.update({
-            where: { id: persId },
-            data: {
-              descricao: descricaoSalvar,
-              ...((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo
-                ? { videoDemonstrativoUrl: novoVideo }
-                : {}),
-              ...((!pers.videoPosterUrl || pers.videoPosterUrl === "") && novoPoster
-                ? { videoPosterUrl: novoPoster }
-                : {}),
-            },
-          });
-
           const repeticoesFinal = String(
             ex?.repeticoes ?? ex?.repeticao ?? ex?.reps ?? ""
           ).trim();
@@ -5122,6 +5198,23 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
             ex?.descanso != null && String(ex.descanso).trim() !== ""
               ? String(ex.descanso).trim()
               : null;
+              
+          await tx.exercicioPersonalizado.update({
+            where: { id: persId },
+            data: {
+              descricao: descricaoSalvar,
+              repeticoes: repeticoesFinal || null,
+              series: seriesFinal,
+              duracao: duracaoFinal,
+              descanso: descansoFinal,
+              ...((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo
+                ? { videoDemonstrativoUrl: novoVideo }
+                : {}),
+              ...((!pers.videoPosterUrl || pers.videoPosterUrl === "") && novoPoster
+                ? { videoPosterUrl: novoPoster }
+                : {}),
+            },
+          });
 
           await tx.treinoProgramadoExercicio.create({
             data: {

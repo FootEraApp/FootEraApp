@@ -1344,7 +1344,34 @@ export async function salvarVideosExecucaoSessao(
 
     await prisma.$transaction(async (tx) => {
       for (const item of updates) {
-        if (!item.entityId || !item.uploadedUrl) continue;
+        if (!item.uploadedUrl) continue;
+
+        let kind = item.kind;
+        let entityId = item.entityId;
+
+        if (item.exerciseRowId) {
+          const row = await tx.sessaoTreinoTurmaExercicio.findUnique({
+            where: { id: item.exerciseRowId },
+            select: {
+              exercicioId: true,
+              exercicioTemporarioId: true,
+              exercicioPersonalizadoId: true,
+            },
+          });
+
+          if (row?.exercicioId) {
+            kind = "catalogo";
+            entityId = row.exercicioId;
+          } else if (row?.exercicioTemporarioId) {
+            kind = "temporario";
+            entityId = row.exercicioTemporarioId;
+          } else if (row?.exercicioPersonalizadoId) {
+            kind = "personalizado";
+            entityId = row.exercicioPersonalizadoId;
+          }
+        }
+
+        if (!entityId) continue;
 
         if (item.saveMode === "SESSION_ONLY") {
           await tx.midia.create({
@@ -1379,14 +1406,14 @@ export async function salvarVideosExecucaoSessao(
             continue;
           }
 
-          if (item.kind === "catalogo") {
+          if (kind === "catalogo") {
             const atual = await tx.exercicio.findUnique({
-              where: { id: item.entityId },
+              where: { id: entityId },
               select: { videoDemonstrativoUrl: true },
             });
 
             await tx.exercicio.update({
-              where: { id: item.entityId },
+              where: { id: entityId },
               data: {
                 videoDemonstrativoUrl: item.uploadedUrl,
               },
@@ -1403,14 +1430,14 @@ export async function salvarVideosExecucaoSessao(
             continue;
           }
 
-          if (item.kind === "temporario") {
+          if (kind === "temporario") {
             const atual = await tx.exercicioTemporario.findUnique({
-              where: { id: item.entityId },
+              where: { id: entityId },
               select: { videoDemonstrativoUrl: true },
             });
 
             await tx.exercicioTemporario.update({
-              where: { id: item.entityId },
+              where: { id: entityId },
               data: {
                 videoDemonstrativoUrl: item.uploadedUrl,
               },
@@ -1427,14 +1454,14 @@ export async function salvarVideosExecucaoSessao(
             continue;
           }
 
-          if (item.kind === "personalizado") {
+          if (kind === "personalizado") {
             const atual = await tx.exercicioPersonalizado.findUnique({
-              where: { id: item.entityId },
+              where: { id: entityId },
               select: { videoDemonstrativoUrl: true },
             });
 
             await tx.exercicioPersonalizado.update({
-              where: { id: item.entityId },
+              where: { id: entityId },
               data: {
                 videoDemonstrativoUrl: item.uploadedUrl,
               },

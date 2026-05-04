@@ -573,7 +573,6 @@ export async function criarSubmissaoTreinoSessaoUpload(
     const file = (req as any).file as Express.Multer.File | undefined;
 
     if (!sessaoId) return res.status(400).json({ error: "Informe sessaoId." });
-    if (!file) return res.status(400).json({ error: "Envie um arquivo (imagem/vídeo)." });
 
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
       where: { id: sessaoId },
@@ -702,8 +701,23 @@ export async function criarSubmissaoTreinoSessaoUpload(
       minutosConsiderados = Math.max(1, Math.round(minutosProgramados / 2));
     }
 
-    const assetUrl = `/uploads/${file.filename}`;
-    const isVideo = !!file.mimetype?.startsWith("video");
+    const assetUrl = file ? `/uploads/${file.filename}` : null;
+    const isVideo = !!file?.mimetype?.startsWith("video");
+
+    const midiaCreate = assetUrl
+      ? {
+          create: [
+            {
+              url: assetUrl,
+              tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
+              dataEnvio: new Date(),
+              descricao: "",
+              titulo: "",
+              storageClass: StorageClass.HOT,
+            },
+          ],
+        }
+      : undefined;
 
     const existentes = await prisma.submissaoTreino.findMany({
       where: { treinoAgendadoId: { in: Array.from(agendadoByAtleta.values()) } },
@@ -728,18 +742,7 @@ export async function criarSubmissaoTreinoSessaoUpload(
             duracaoSegundos: tempoRealSeg ?? undefined,
             duracaoMinutos: minutosReais ?? undefined,
             repeticoes: repeticoesNum,
-            midias: {
-              create: [
-                {
-                  url: assetUrl,
-                  tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
-                  dataEnvio: new Date(),
-                  descricao: "",
-                  titulo: "",
-                  storageClass: StorageClass.HOT,
-                },
-              ],
-            },
+            ...(midiaCreate ? { midias: midiaCreate } : {}),
           },
           create: {
             atletaId,
@@ -751,18 +754,7 @@ export async function criarSubmissaoTreinoSessaoUpload(
             duracaoSegundos: tempoRealSeg ?? undefined,
             duracaoMinutos: minutosReais ?? undefined,
             repeticoes: repeticoesNum,
-            midias: {
-              create: [
-                {
-                  url: assetUrl,
-                  tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
-                  dataEnvio: new Date(),
-                  descricao: "",
-                  titulo: "",
-                  storageClass: StorageClass.HOT,
-                },
-              ],
-            },
+            ...(midiaCreate ? { midias: midiaCreate } : {}),
           },
           select: { id: true, atletaId: true, treinoAgendadoId: true, criadoEm: true },
         });
