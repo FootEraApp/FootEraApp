@@ -829,8 +829,8 @@ return (
 
 
     <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center relative">
-      <Link
-        href="/perfil"
+      <Link 
+        href={new URLSearchParams(window.location.search).get("returnTo") || "/perfil"}
         aria-label="Voltar para perfil"
         className="inline-flex h-10 w-10 items-center justify-center
           rounded-full bg-white/10 text-white
@@ -1123,7 +1123,8 @@ return (
 
             alert("Perfil atualizado com sucesso!");
             Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
-            window.location.href = "/perfil";
+            const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+            window.location.href = returnTo || "/perfil";
 
           } catch (err: any) {
             console.error("[EditarPerfil] Erro ao salvar:", err);

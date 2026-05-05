@@ -145,6 +145,11 @@ function avatarSrc(raw?: string | null) {
   return v && String(v).trim() ? v : AVATAR_FALLBACK;
 }
 
+function irParaPerfilUsuario(usuarioId?: string | null) {
+  if (!usuarioId) return;
+  window.location.href = `/perfil/${usuarioId}`;
+}
+
 function onAvatarError(e: React.SyntheticEvent<HTMLImageElement>) {
   const img = e.currentTarget;
   if (img.src.includes("footera-logo-fundo-verde.png")) return;
@@ -2039,13 +2044,29 @@ async function confirmarExcluirProfessor() {
                       <tr key={u.id} className="border-t">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                           <img
-                              src={foto}
-                              onError={onAvatarError}
-                              className="w-8 h-8 rounded-full object-cover border"
+                           <button
+                              type="button"
+                              onClick={() => irParaPerfilUsuario(u.id)}
+                              className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
+                              title="Abrir perfil do usuário"
+                           >
+                            <img
+                                src={foto}
+                                onError={onAvatarError}
+                                className="w-8 h-8 rounded-full object-cover border"
+                                alt={nome}
                             />
+                           </button>
+
                             <div className="font-medium flex items-center gap-2">
-                              {nome}
+                              <button
+                                type="button"
+                                onClick={() => irParaPerfilUsuario(u.id)}
+                                className="hover:underline text-left"
+                                title="Abrir perfil do usuário"
+                              >
+                                {nome}
+                              </button>
                               <label className="flex items-center gap-2">
                                 <input
                                   type="checkbox"
@@ -2402,6 +2423,7 @@ async function confirmarExcluirProfessor() {
                 const cref = p.cref ?? p.usuario?.cref ?? "—";
                 const area = p.areaFormacao ?? p.formacao ?? "—";
                 const foto = avatarSrc(p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null);
+                const professorUsuarioId = p.usuarioId ?? p.usuario?.id ?? null;
 
                 const qualificacoes = Array.isArray(p.qualificacoes) ? p.qualificacoes : [];
                 const certificacoes = Array.isArray(p.certificacoes) ? p.certificacoes : [];
@@ -2415,14 +2437,30 @@ async function confirmarExcluirProfessor() {
                     className="bg-white p-4 rounded shadow flex justify-between items-center"
                   >
                     <div className="flex items-start gap-3">
-                      <img
-                        src={foto}
-                        onError={onAvatarError}
-                        className="w-12 h-12 rounded-full object-cover border"
-                        alt="Foto do professor"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => irParaPerfilUsuario(professorUsuarioId)}
+                        disabled={!professorUsuarioId}
+                        className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-green-700 disabled:cursor-not-allowed"
+                        title={professorUsuarioId ? "Abrir perfil do professor" : "Usuário do professor não encontrado"}
+                      >
+                        <img
+                          src={foto}
+                          onError={onAvatarError}
+                          className="w-12 h-12 rounded-full object-cover border"
+                          alt={nome}
+                        />
+                      </button>
                       <div>
-                        <strong>{nome}</strong>
+                        <button
+                          type="button"
+                          onClick={() => irParaPerfilUsuario(professorUsuarioId)}
+                          disabled={!professorUsuarioId}
+                          className="font-semibold hover:underline text-left disabled:hover:no-underline disabled:cursor-not-allowed"
+                          title={professorUsuarioId ? "Abrir perfil do professor" : "Usuário do professor não encontrado"}
+                        >
+                          {nome}
+                        </button>
 
                         <div className="text-sm text-gray-700 mt-1">
                           <span className="font-medium">CREF:</span> {cref}
@@ -3010,11 +3048,18 @@ async function confirmarExcluirProfessor() {
                       <tr key={a.id} className="border-t">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <img
-                              src={foto}
-                              onError={onAvatarError}
-                              className="w-8 h-8 rounded-full object-cover border"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => irParaPerfilUsuario(a.usuario.id)}
+                              className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
+                            >
+                              <img
+                                src={avatarSrc(a.usuario.foto)}
+                                onError={onAvatarError}
+                                className="w-8 h-8 rounded-full object-cover border"
+                                alt={a.usuario.nome ?? "Usuário"}
+                              />
+                            </button>
                             <div>
                               <div className="font-medium">{nome}</div>
                               <div className="text-xs text-gray-600">{u.email ?? "—"}</div>
@@ -3215,9 +3260,14 @@ async function confirmarExcluirProfessor() {
                         <td className="px-3 py-2">
                           {u ? (
                             <>
-                              <div className="font-medium">
+                              <button
+                                type="button"
+                                onClick={() => irParaPerfilUsuario(u.id)}
+                                className="font-medium hover:underline text-left"
+                                title="Abrir perfil do usuário"
+                              >
                                 {nome}
-                              </div>
+                              </button>
                               <div className="text-xs text-gray-600">
                                 {u.email ?? "—"}{" "}
                                 {u.tipo ? `(${u.tipo})` : ""}
@@ -3691,13 +3741,27 @@ async function confirmarExcluirProfessor() {
                   return (
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={avatarSrc(userSelecionado?.foto)}
-                          onError={onAvatarError}
-                          className="w-14 h-14 rounded-full object-cover border"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => irParaPerfilUsuario(userSelecionado.id)}
+                          className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
+                          title="Abrir perfil do usuário"
+                        >
+                          <img
+                            src={avatarSrc(userSelecionado.foto)}
+                            onError={onAvatarError}
+                            className="w-12 h-12 rounded-full object-cover border"
+                            alt={userSelecionado.nome ?? "Usuário"}
+                          />
+                        </button>
                         <div>
-                          <div className="font-semibold text-base">{u.nome ?? u.nomeDeUsuario}</div>
+                          <button
+                            type="button"
+                            onClick={() => irParaPerfilUsuario(userSelecionado.id)}
+                            className="font-semibold hover:underline text-left"
+                          >
+                            {userSelecionado.nome ?? userSelecionado.nomeDeUsuario ?? "Usuário"}
+                          </button>
                           <div className="text-sm text-gray-600">{u.email ?? "-"}</div>
                           <div className="text-xs text-gray-500">Tipo: {u.tipo ?? "-"} • Criado: {formatDate(u.criadoEm)}</div>
                         </div>

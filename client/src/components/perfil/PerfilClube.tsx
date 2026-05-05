@@ -219,7 +219,15 @@ async function fetchPontuacaoTotalByUsuarioId(
   }
 }
 
-export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
+export default function PerfilClube({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+}) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
@@ -912,6 +920,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         perfilTipoIdProp={data.clube.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
+        hasCreator={hasCreator}
+        creatorUsuarioId={creatorUsuarioId}
       />
 
       <div className="mt-4 grid grid-cols-6 gap-2">
@@ -968,6 +978,15 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                   <b>Email:</b> {emailDoPerfil}
                 </li>
               ) : null}
+              {data.clube.descricao?.trim() ? (
+                <p className="text-sm text-green-900/90 whitespace-pre-wrap">
+                  <b>Descrição:</b> {data.clube.descricao}
+                </p>
+              ) : (
+                <p className="text-sm text-green-900/70">
+                  Sem descrição cadastrada.
+                </p>
+              )}
 
               {data.clube.estadio && (
                 <li>
@@ -1006,21 +1025,6 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                 </li>
               )}
             </ul>
-          </div>
-
-          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-green-900 mb-2">
-              Sobre o Clube
-            </h3>
-            {data.clube.descricao?.trim() ? (
-              <p className="text-sm text-green-900/90 whitespace-pre-wrap">
-                {data.clube.descricao}
-              </p>
-            ) : (
-              <p className="text-sm text-green-900/70">
-                Sem descrição cadastrada.
-              </p>
-            )}
           </div>
 
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">

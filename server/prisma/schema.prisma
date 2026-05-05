@@ -107,6 +107,8 @@ model Usuario {
   AvaliacaoMetodologia    AvaliacaoMetodologia[]
   treinosCriadosComoAdmin TreinoProgramado[]        @relation("TreinoProgramadoCriadorUsuario")
 
+  creator                    Creator?
+  comprasCreator             CreatorVenda[]         @relation("CreatorVendaComprador")
   metodologiasCriadas        Metodologia[]          @relation("MetodologiaCriador")
   metodologiasAssinadas      MetodologiaAssinante[]
   metodologiasAvulsasCriadas MetodologiaAvulsa[]    @relation("MetodologiaAvulsaCriador")
@@ -196,6 +198,7 @@ model Professor {
   statusCref          StatusCref?
   qualificacoes       String[]
   certificacoes       String[]
+  descricao           String?
   email               String?              @db.VarChar(191)
   observacoes         AtletaObservado[]    @relation("ObservacaoProfessor")
   usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -652,6 +655,7 @@ model Metodologia {
   geraCertificado  Boolean                  @default(false)
   geraBadge        Boolean                  @default(false)
   estruturas       MetodologiaEstrutura[]
+  vendasCreator    CreatorVenda[]
 
   professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
   clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -915,12 +919,12 @@ model MetodologiaAvulsa {
   mediaAvaliacao Float?
   totalReviews   Int    @default(0)
 
-  estruturas   MetodologiaAvulsaEstrutura[]
-  assinantes   MetodologiaAssinante[]
-  certificados CertificadoMetodologia[]
-
-  criadoEm                 DateTime                   @default(now())
-  atualizadoEm             DateTime                   @updatedAt
+  estruturas               MetodologiaAvulsaEstrutura[]
+  assinantes               MetodologiaAssinante[]
+  certificados             CertificadoMetodologia[]
+  vendasCreator            CreatorVenda[]
+  criadoEm                 DateTime                     @default(now())
+  atualizadoEm             DateTime                     @updatedAt
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
   AvaliacaoMetodologia     AvaliacaoMetodologia[]
 
@@ -1174,6 +1178,8 @@ model Escolinha {
   indicacoes             Indicacao[]
   Metodologia            Metodologia[]
   MetodologiaAvulsa      MetodologiaAvulsa[]
+  descricao              String?
+  categorias             Categoria[]
 }
 
 model Comentario {
@@ -2637,6 +2643,99 @@ model LoginEvent {
   @@index([createdAt])
 }
 
+model Creator {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nomePublico  String?
+  headline     String?
+  bio          String?
+  nicho        String?
+  avatarUrl    String?
+  bannerUrl    String?
+  siteUrl      String?
+  instagramUrl String?
+  youtubeUrl   String?
+
+  tipo               CreatorTipo @default(PESSOA_FISICA)
+  ativo              Boolean     @default(true)
+  verificado         Boolean     @default(false)
+  instituicaoOficial Boolean     @default(false)
+  views              Int         @default(0)
+  comissaoFootera    Decimal     @default(0.15) @db.Decimal(5, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendas CreatorVenda[]
+
+  @@index([usuarioId])
+  @@index([ativo])
+  @@index([tipo])
+}
+
+model CreatorVenda {
+  id String @id @default(uuid())
+
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  compradorId String?
+  comprador   Usuario? @relation("CreatorVendaComprador", fields: [compradorId], references: [id], onDelete: SetNull)
+
+  metodologiaId String?
+  metodologia   Metodologia? @relation(fields: [metodologiaId], references: [id], onDelete: SetNull)
+
+  metodologiaAvulsaId String?
+  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: SetNull)
+
+  valorBruto        Decimal @db.Decimal(10, 2)
+  percentualFootera Decimal @default(0.15) @db.Decimal(5, 4)
+  valorFootera      Decimal @db.Decimal(10, 2)
+  valorCreator      Decimal @db.Decimal(10, 2)
+
+  status CreatorVendaStatus @default(PENDENTE)
+
+  provider    String?
+  providerRef String?
+  meta        Json?
+
+  criadoEm  DateTime  @default(now())
+  pagoEm    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@unique([provider, providerRef])
+  @@index([creatorId])
+  @@index([compradorId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
+  @@index([status])
+}
+
+model CreatorUsoLearning {
+  id            String   @id @default(uuid())
+  creatorId     String
+  usuarioId     String?
+  metodologiaId String?
+  itemId        String?
+  pontosUso     Decimal  @default(1.0)
+  tipoUso       String
+  createdAt     DateTime @default(now())
+}
+
+enum CreatorTipo {
+  PESSOA_FISICA
+  INSTITUCIONAL
+}
+
+enum CreatorVendaStatus {
+  PENDENTE
+  CONFIRMADA
+  CANCELADA
+  REEMBOLSADA
+}
+
 enum SentimentoAvaliacao {
   ruim
   medio
@@ -2786,8 +2885,10 @@ enum TipoUsuario {
   Professor
   Clube
   Escolinha
+  Escola
   Admin
   Olheiro
+  Learning
 }
 
 enum TipoMidia {

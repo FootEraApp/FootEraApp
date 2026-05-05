@@ -138,6 +138,7 @@ import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js
 import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
 import { processExpiringSubscriptions } from "./controllers/billingController.js";
 import googleAuthRoutes from "./routes/googleAuth.js";
+import creatorRoutes from "./routes/creator.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -362,6 +363,7 @@ app.use("/api/sessoes-turma", sessoesTurmaRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api/metodologias", metodologiasRoutes);
+app.use("/api/creator", creatorRoutes);
 app.use("/api/permissoes", permissoesRoutes);
 app.use("/api/dashboard", authenticateToken, dashboardOrganizacaoRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);

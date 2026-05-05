@@ -5,7 +5,8 @@ import {
   MetodoPagamento,
   Periodicidade,
   PagamentoStatus,
-  NotificacaoTipo
+  NotificacaoTipo,
+  CreatorVendaStatus
 } from "@prisma/client";
 import QRCode from "qrcode";
 import * as mercadopagoModule from "mercadopago";
@@ -444,6 +445,74 @@ function extractMetodologiaId(planoId: string) {
     .replace(/^METODOLOGIA_AVULSA:/i, "")
     .replace(/^METODOLOGIA:/i, "")
     .trim();
+}
+
+async function registrarCreatorVendaTx(args: {
+  tx: Prisma.TransactionClient;
+  compradorId: string;
+  metodologiaAvulsaId?: string | null;
+  metodologiaId?: string | null;
+  valorBruto: number;
+  provider?: string | null;
+  providerRef?: string | null;
+}) {
+  const { tx, compradorId, metodologiaAvulsaId, metodologiaId, valorBruto } = args;
+
+  const conteudo = metodologiaAvulsaId
+    ? await tx.metodologiaAvulsa.findUnique({
+        where: { id: metodologiaAvulsaId },
+        select: { id: true, criadorUsuarioId: true },
+      })
+    : metodologiaId
+      ? await tx.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true, criadorUsuarioId: true },
+        })
+      : null;
+
+  if (!conteudo?.criadorUsuarioId) return null;
+
+  const creator = await tx.creator.findUnique({
+    where: { usuarioId: conteudo.criadorUsuarioId },
+    select: { id: true, comissaoFootera: true },
+  });
+
+  if (!creator) return null;
+
+  const percentualFootera = Number(creator.comissaoFootera ?? 0.15);
+  const valorFootera = Number((valorBruto * percentualFootera).toFixed(2));
+  const valorCreator = Number((valorBruto - valorFootera).toFixed(2));
+
+  return tx.creatorVenda.upsert({
+    where: {
+      provider_providerRef: {
+        provider: args.provider ?? "FOOTERA_BILLING",
+        providerRef: args.providerRef ?? `${compradorId}:${metodologiaAvulsaId ?? metodologiaId}`,
+      },
+    },
+    update: {
+      status: CreatorVendaStatus.CONFIRMADA,
+      valorBruto,
+      percentualFootera,
+      valorFootera,
+      valorCreator,
+      pagoEm: new Date(),
+    },
+    create: {
+      creatorId: creator.id,
+      compradorId,
+      metodologiaId: metodologiaId ?? null,
+      metodologiaAvulsaId: metodologiaAvulsaId ?? null,
+      valorBruto,
+      percentualFootera,
+      valorFootera,
+      valorCreator,
+      status: CreatorVendaStatus.CONFIRMADA,
+      pagoEm: new Date(),
+      provider: args.provider ?? "FOOTERA_BILLING",
+      providerRef: args.providerRef ?? `${compradorId}:${metodologiaAvulsaId ?? metodologiaId}`,
+    },
+  });
 }
 
 function findPlan(planoId: string) {
@@ -1255,6 +1324,17 @@ async function approvePaymentAndProvision(
             status: "ATIVA",
             iniciouEm: now,
           },
+        });
+
+        const valorBruto = await priceFor(pid, it.periodicidade);
+
+        await registrarCreatorVendaTx({
+          tx,
+          compradorId: pg.usuarioId,
+          metodologiaAvulsaId,
+          valorBruto,
+          provider: "PAGAMENTO",
+          providerRef: pg.id,
         });
 
         continue;
