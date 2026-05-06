@@ -41,7 +41,7 @@ async function findCreatorByUsuarioId(usuarioId: string) {
 function resolverTipoCreator(tipoUsuario?: string | null) {
   const tipo = normalizarTipoUsuario(tipoUsuario);
 
-  if (["clube", "escolinha", "escola"].includes(tipo)) {
+  if (["clube", "escolinha", "escola", "federacao", "marca"].includes(tipo)) {
     return CreatorTipo.INSTITUCIONAL;
   }
 
@@ -57,7 +57,15 @@ function normalizarTipoUsuario(tipoUsuario?: string | null) {
 
 function podeSerCreator(tipoUsuario?: string | null) {
   const tipo = normalizarTipoUsuario(tipoUsuario);
-return ["professor", "olheiro", "clube", "escolinha", "escola"].includes(tipo);
+
+  return [
+    "professor",
+    "olheiro",
+    "clube",
+    "escolinha",
+    "federacao",
+    "marca",
+  ].includes(tipo);
 }
 
 export const ativarCreator = async (req: Request, res: Response) => {

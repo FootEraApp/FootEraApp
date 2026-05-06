@@ -115,6 +115,8 @@ type DadosExplorar = {
   clubes: ClubeItem[];
   escolas: EscolaItem[];
   eventos: EventoItem[];
+  federacoes?: EscolaItem[]; // para futura implementação
+  marcas?: ClubeItem[]; // para futura implementação
 };
 
 type Filtros = {
@@ -377,6 +379,8 @@ function Explorar() {
     clubes: [],
     escolas: [],
     eventos: [], 
+    federacoes: [],
+    marcas: [],
   });
 
   const [showFilters, setShowFilters] = useState(false);

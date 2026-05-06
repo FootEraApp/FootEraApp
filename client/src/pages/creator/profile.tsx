@@ -73,6 +73,7 @@ export default function CreatorProfile() {
   const [badgeCount, setBadgeCount] = useState(0);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
   const [followPendente, setFollowPendente] = useState(false);
+  const [eventos, setEventos] = useState<any[]>([]);
 
   const usuarioId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -191,7 +192,16 @@ export default function CreatorProfile() {
         setSeguindo(false);
         setFollowPendente(false);
         });
-    }, [usuarioId, meuId]);
+  }, [usuarioId, meuId]);
+
+  useEffect(() => {
+    if (!usuarioId) return;
+
+    fetch(`${API}/api/eventos?creatorUsuarioId=${usuarioId}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((j) => setEventos(Array.isArray(j) ? j : []))
+      .catch(() => setEventos([]));
+  }, [usuarioId]);
 
   if (loading) {
     return (
@@ -572,33 +582,67 @@ export default function CreatorProfile() {
 
         {aba === "eventos" && (
           <section className="bg-white rounded-2xl border p-5 shadow-sm">
-            <h2 className="font-bold text-emerald-950 mb-2">Próximos eventos</h2>
-            <p className="text-slate-500 text-sm mb-4">
-            Eventos e lives do Creator aparecerão aqui.
-            </p>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-emerald-950 mb-1">
+                  Próximos eventos
+                </h2>
+                <p className="text-slate-500 text-sm">
+                  Aulas ao vivo, webinars, lives e eventos publicados por este Creator.
+                </p>
+              </div>
 
-            {institucional && (
-            <button
-                onClick={() => {
-                const clubeId = creator.perfilOriginal?.clube?.id;
-                const escolinhaId = creator.perfilOriginal?.escolinha?.id;
+              {isOwnCreator && (
+                <button
+                  onClick={() => {
+                    window.location.href = "/creator/eventos/novo";
+                  }}
+                  className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-bold"
+                >
+                  + Criar evento
+                </button>
+              )}
+            </div>
 
-                if (clubeId) {
-                    window.location.href = `/eventos/clubes/${clubeId}/novo`;
-                    return;
-                }
+            {eventos.length === 0 ? (
+              <p className="text-slate-500 text-sm">
+                Nenhum evento publicado ainda.
+              </p>
+            ) : (
+              <div className="grid gap-3">
+                {eventos.map((ev) => (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => {
+                      window.location.href = `/eventos/${ev.id}`;
+                    }}
+                    className="text-left rounded-xl border p-4 hover:bg-slate-50"
+                  >
+                    <div className="flex justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-emerald-950">
+                          {ev.titulo}
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          {ev.tipoLabel || ev.tipo} •{" "}
+                          {new Date(ev.dataEvento).toLocaleString()}
+                        </p>
+                      </div>
 
-                if (escolinhaId) {
-                    window.location.href = `/eventos/escolas/${escolinhaId}/novo`;
-                    return;
-                }
+                      <span className="text-xs bg-emerald-100 text-emerald-800 rounded-full px-2 py-1 h-fit">
+                        {ev.status}
+                      </span>
+                    </div>
 
-                alert("Não foi possível identificar a organização deste Creator.");
-                }}
-                className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-bold"
-            >
-                + Criar evento
-            </button>
+                    {ev.descricao && (
+                      <p className="text-sm text-slate-600 mt-2 line-clamp-2">
+                        {ev.descricao}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </section>
         )}

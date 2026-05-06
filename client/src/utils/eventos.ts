@@ -11,6 +11,9 @@ export const EVENTO_TIPOS = [
   { value: "SHOWCASE", label: "Showcase" },
   { value: "WORKSHOP", label: "Workshop" },
   { value: "PALESTRA", label: "Palestra" },
+  { value: "AULA_AO_VIVO", label: "Aula ao vivo" },
+  { value: "WEBINAR", label: "Webinar" },
+  { value: "LIVE", label: "Live" },
 ] as const;
 
 export type EventoTipo = (typeof EVENTO_TIPOS)[number]["value"];

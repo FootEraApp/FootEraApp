@@ -25,14 +25,28 @@ function ChevronUp(props: SvgProps) {
   );
 }
 
-type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Olheiro";
+type TipoPerfil =
+  | "Atleta"
+  | "Professor"
+  | "Olheiro"
+  | "Learning"
+  | "Escolinha"
+  | "Escola"
+  | "Clube"
+  | "Federacao"
+  | "Marca";
+
 type Etapa = 1 | 2 | 3;
 const mapTipo = {
   Atleta: "ATLETA",
   Professor: "PROFESSOR",
   Escolinha: "ESCOLINHA",
+  Escola: "ESCOLA",
   Clube: "CLUBE",
   Olheiro: "OLHEIRO",
+  Federacao: "FEDERACAO",
+  Marca: "MARCA",
+  Learning: "LEARNING",
 } as const;
 
 const PRECISA_NASCIMENTO = (t: TipoPerfil) =>
@@ -226,10 +240,23 @@ function AccordionInfo({
 }
 
 const isOrganizacao = (tipo: TipoPerfil) =>
-  tipo === "Escolinha" || tipo === "Clube";
+  ["Escolinha", "Escola", "Clube", "Federacao", "Marca"].includes(tipo);
 
-const PERFIS_PESSOA: TipoPerfil[] = ["Atleta", "Professor", "Olheiro"];
-const PERFIS_ORGANIZACAO: TipoPerfil[] = ["Escolinha", "Clube"];
+const isLearning = (tipo: TipoPerfil) => tipo === "Learning";
+
+const PERFIS_PESSOA: TipoPerfil[] = [
+  "Atleta",
+  "Professor",
+  "Olheiro",
+  "Learning",
+];
+
+const PERFIS_ORGANIZACAO: TipoPerfil[] = [
+  "Escolinha",
+  "Clube",
+  "Federacao",
+  "Marca",
+];
 
 const perfilVisual: Record<TipoPerfil, { titulo: string; subtitulo: string; emoji: string }> = {
   Atleta: {
@@ -256,6 +283,26 @@ const perfilVisual: Record<TipoPerfil, { titulo: string; subtitulo: string; emoj
     titulo: "Clube",
     subtitulo: "Clube profissional",
     emoji: "🛡️",
+  },
+  Learning: {
+    titulo: "Learning",
+    subtitulo: "Ver cursos, lives e webinars",
+    emoji: "🎓",
+  },
+  Federacao: {
+    titulo: "Federação",
+    subtitulo: "Canal oficial e eventos",
+    emoji: "🏅",
+  },
+  Marca: {
+    titulo: "Marca",
+    subtitulo: "Parceira e patrocinadora",
+    emoji: "👕",
+  },
+  Escola: {
+    titulo: "Escola",
+    subtitulo: "Instituição de ensino",
+    emoji: "🏫",
   },
 };
 
@@ -573,6 +620,7 @@ export default function Cadastro() {
         return false;
       }
     }
+
     if (tipoPerfil === "Escolinha") {
       if (!escolinha.nomeEscolinha.trim()) {
         setErro("Informe o nome da escolinha.");
@@ -587,6 +635,23 @@ export default function Cadastro() {
         return false;
       }
     }
+
+    if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
+      if (!nome.trim()) {
+        setErro(
+          tipoPerfil === "Federacao"
+            ? "Informe o nome da federação."
+            : "Informe o nome da marca."
+        );
+        return false;
+      }
+
+      if (clube.cnpjClube && !validarCNPJ(clube.cnpjClube)) {
+        setErro("CNPJ inválido.");
+        return false;
+      }
+    }
+
     if (tipoPerfil === "Olheiro") {
       if (olheiro.anosExperiencia !== "" && Number.isNaN(Number(olheiro.anosExperiencia))) {
         return setErro("Anos de experiência inválido."), false;
@@ -692,6 +757,28 @@ export default function Cadastro() {
           estadoEscolinha: escolinha.estadoEscolinha || estado || undefined,
           paisEscolinha: escolinha.paisEscolinha || pais || undefined,
           cepEscolinha: escolinha.cepEscolinha || undefined,
+        });
+      }
+
+      if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
+        Object.assign(payload, {
+          nomeOrganizacao: nome.trim() || undefined,
+
+          nomeClube: nome.trim() || undefined,
+          cnpjClube: clube.cnpjClube || undefined,
+          telefone1Clube: clube.telefone1Clube || undefined,
+          telefone2Clube: clube.telefone2Clube || undefined,
+          emailClube: clube.emailClube || email.trim() || undefined,
+          siteOficialClube: clube.siteOficialClube || undefined,
+          sedeClube: clube.sedeClube || undefined,
+          logradouroClube: clube.logradouroClube || undefined,
+          numeroClube: clube.numeroClube || undefined,
+          complementoClube: clube.complementoClube || undefined,
+          bairroClube: clube.bairroClube || bairro || undefined,
+          cidadeClube: clube.cidadeClube || cidade || undefined,
+          estadoClube: clube.estadoClube || estado || undefined,
+          paisClube: clube.paisClube || pais || undefined,
+          cepClube: clube.cepClube || cep || undefined,
         });
       }
 
@@ -1340,7 +1427,16 @@ export default function Cadastro() {
               {erro && <p className="text-sm text-red-600 mb-2">{erro}</p>}
 
               <div className="flex justify-end">
-                <button onClick={() => { if (podeIrParaEtapa2()) setEtapa(2); }} className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded">Próximo</button>
+                <button onClick={() => {
+                  if (!podeIrParaEtapa2()) return;
+
+                  if (tipoPerfil === "Learning") {
+                    handleFinalizar();
+                    return;
+                  }
+
+                  setEtapa(2);
+                }} className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded">Próximo</button>
               </div>
 
               <div className="mt-4">

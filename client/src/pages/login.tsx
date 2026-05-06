@@ -209,6 +209,9 @@ export default function PaginaLogin() {
           escolinha: "escolinha",
           escola: "escola",
           olheiro: "olheiro",
+          learning: "learning",
+          federacao: "federacao",
+          marca: "marca",
         };
 
         const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
@@ -229,7 +232,15 @@ export default function PaginaLogin() {
         const plano = String(usuario.plano ?? data.plano ?? "FREE");
         store.setItem("plano", plano);
 
-        navigate(isAdmin ? "/admin" : "/feed");
+        if (isAdmin) {
+          navigate("/admin");
+        } else if (rawTipo === "learning") {
+          navigate("/learning");
+        } else if (rawTipo === "marca" || rawTipo === "federacao") {
+          navigate(`/creator/profile?id=${usuarioId}`);
+        } else {
+          navigate("/feed");
+        }
       } catch (err: any) {
         console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
 

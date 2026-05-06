@@ -54,6 +54,9 @@ model Usuario {
   blockedAt                 DateTime?
   blockedReason             String?
   reactivatedAt             DateTime?
+  learningProfile           LearningProfile?
+  federacao                 Federacao?
+  marca                     Marca?
 
   amigosDe                Amigo[]                   @relation("AmigoUsuario")
   amigos                  Amigo[]                   @relation("UsuarioAmigo")
@@ -682,6 +685,10 @@ model Metodologia {
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   aulasAoVivo AulaAoVivo[]
+  Federacao   Federacao?   @relation(fields: [federacaoId], references: [id])
+  federacaoId String?
+  Marca       Marca?       @relation(fields: [marcaId], references: [id])
+  marcaId     String?
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -929,18 +936,22 @@ model MetodologiaAvulsa {
   mediaAvaliacao Float?
   totalReviews   Int    @default(0)
 
-  estruturas               MetodologiaAvulsaEstrutura[]
-  assinantes               MetodologiaAssinante[]
-  certificados             CertificadoMetodologia[]
+  estruturas   MetodologiaAvulsaEstrutura[]
+  assinantes   MetodologiaAssinante[]
+  certificados CertificadoMetodologia[]
 
   aulasAoVivo AulaAoVivo[]
 
-  vendasCreator            CreatorVenda[]
-  
-  criadoEm                 DateTime                     @default(now())
-  atualizadoEm             DateTime                     @updatedAt
+  vendasCreator CreatorVenda[]
+
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
   AvaliacaoMetodologia     AvaliacaoMetodologia[]
+  Federacao                Federacao?                 @relation(fields: [federacaoId], references: [id])
+  federacaoId              String?
+  Marca                    Marca?                     @relation(fields: [marcaId], references: [id])
+  marcaId                  String?
 
   @@index([criadorUsuarioId])
   @@index([ativo])
@@ -1892,28 +1903,35 @@ model AtletaElenco {
 }
 
 model Evento {
-  id              String       @id @default(uuid())
-  clubeId         String?
-  escolinhaId     String?
-  titulo          String
-  tipo            EventoTipo   @default(PENEIRA)
-  descricao       String?
-  dataEvento      DateTime
-  inscricaoInicio DateTime?
-  inscricaoFim    DateTime?
-  local           String?
-  cidade          String?
-  estado          String?
-  pais            String?
-  endereco        String?
-  vagas           Int?
-  valorInscricao  Decimal?     @db.Decimal(10, 2)
-  linkInscricao   String?
-  requisitos      String[]
-  status          EventoStatus @default(ABERTO)
-  criadoEm        DateTime     @default(now())
-  atualizadoEm    DateTime     @updatedAt
+  id               String       @id @default(uuid())
+  clubeId          String?
+  escolinhaId      String?
+  titulo           String
+  tipo             EventoTipo   @default(PENEIRA)
+  descricao        String?
+  dataEvento       DateTime
+  inscricaoInicio  DateTime?
+  inscricaoFim     DateTime?
+  local            String?
+  cidade           String?
+  estado           String?
+  pais             String?
+  endereco         String?
+  vagas            Int?
+  valorInscricao   Decimal?     @db.Decimal(10, 2)
+  linkInscricao    String?
+  requisitos       String[]
+  status           EventoStatus @default(ABERTO)
+  criadoEm         DateTime     @default(now())
+  atualizadoEm     DateTime     @updatedAt
+  creatorUsuarioId String?
+  creatorTipo      String?
 
+  federacaoId String?
+  federacao   Federacao? @relation(fields: [federacaoId], references: [id])
+
+  marcaId          String?
+  marca            Marca?             @relation(fields: [marcaId], references: [id])
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   inscricoes       InscricaoEvento[]
@@ -2840,6 +2858,68 @@ model CreatorUsoLearning {
   createdAt     DateTime @default(now())
 }
 
+model LearningProfile {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  criadoEm  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Federacao {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  cnpj        String?
+  email       String?
+  telefone1   String?
+  telefone2   String?
+  siteOficial String?
+  sede        String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  descricao   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos           Evento[]
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
+model Marca {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  cnpj        String?
+  email       String?
+  telefone1   String?
+  telefone2   String?
+  siteOficial String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  descricao   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos           Evento[]
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
 enum CreatorTipo {
   PESSOA_FISICA
   INSTITUCIONAL
@@ -3005,6 +3085,8 @@ enum TipoUsuario {
   Admin
   Olheiro
   Learning
+  Federacao
+  Marca
 }
 
 enum TipoMidia {

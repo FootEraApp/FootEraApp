@@ -87,6 +87,9 @@ export async function login(req: Request, res: Response) {
         escolinha: { select: { id: true } },
         olheiro: { select: { id: true } },
         administrador: { select: { id: true } },
+        learningProfile: { select: { id: true } },
+        federacao: { select: { id: true } },
+        marca: { select: { id: true } },
       },
     });
 
@@ -155,6 +158,9 @@ export async function login(req: Request, res: Response) {
       usuario.escolinha?.id ??
       usuario.olheiro?.id ??
       usuario.administrador?.id ??
+      usuario.learningProfile?.id ??
+      usuario.federacao?.id ??
+      usuario.marca?.id ??
       null;
 
     await prisma.loginEvent.create({

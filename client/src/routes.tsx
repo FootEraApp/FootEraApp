@@ -69,6 +69,8 @@ import FooteraContentLab from "./pages/landingPageContentLab.js";
 import TreinoMetodologiaPage from "./pages/treino/treino-metodologia.js";
 import CreatorProfile from "./pages/creator/profile.js";
 import CreatorDashboard from "./pages/creator/dashboard.js";
+import CreatorEventosPage from "./pages/creator/eventos.js";
+import CreatorNovoEventoPage from "./pages/creator/eventos-novo.js";
 
 export function AppRoutes() {
   return (
@@ -224,13 +226,20 @@ export function AppRoutes() {
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
       <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
+      
       <Route path="/creator/profile">
         <Private><CreatorProfile /></Private>
       </Route>
-
       <Route path="/creator/dashboard">
         <Private><CreatorDashboard /></Private>
       </Route>
+      <Route path="/creator/eventos/novo">
+        <Private><CreatorNovoEventoPage /></Private>
+      </Route>
+      <Route path="/creator/eventos">
+        <Private><CreatorEventosPage /></Private>
+      </Route>
+
       <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>

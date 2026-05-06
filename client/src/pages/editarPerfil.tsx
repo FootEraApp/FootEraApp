@@ -66,7 +66,11 @@ const EditarPerfil = () => {
     | "escolinha"
     | "clube"
     | "admin"
-    | "olheiro";
+    | "olheiro"
+    | "federacao"
+    | "marca"
+    | "learning"
+    ;
   const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -366,6 +370,10 @@ const EditarPerfil = () => {
   const isProfessor = tipoRender === "professor";
   const isClube = tipoRender === "clube";
   const isEscolinha = tipoRender === "escola" || tipoRender === "escolinha";
+  const isFederacao = tipoRender === "federacao";
+  const isMarca = tipoRender === "marca";
+  const isLearning = tipoRender === "learning";
+  const isOrganizacaoInstitucional = isClube || isEscolinha || isFederacao || isMarca;
 
   const mostrarCepUsuario = true;
   const clubesFiltrados = listaClubes.filter((op) =>
@@ -1094,7 +1102,11 @@ return (
             formData.append("tipo", JSON.stringify(tipo));
             formData.append(
               "tipoUsuario",
-              String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola")
+              String(tipoUsuarioOriginal)
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/^escolinha$/, "escola")
             );
 
             // 5. Única requisição PUT para o Perfil

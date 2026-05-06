@@ -11,8 +11,20 @@ import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import PerfilFederacao from "../components/perfil/PerfilFederacao.js";
+import PerfilMarca from "../components/perfil/PerfilMarca.js";
+import PerfilLearning from "../components/perfil/PerfilLearning.js";
 
-type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Escola" | "escola" | "escolinha";
+type TipoPerfil =
+  | "Atleta"
+  | "Professor"
+  | "Clube"
+  | "Escolinha"
+  | "Escola"
+  | "Federacao"
+  | "Marca"
+  | "Learning";
+
 interface PerfilMinimo {
   tipo: TipoPerfil;
   usuario: { id: string };
@@ -136,6 +148,15 @@ export default function PerfilUnico() {
       )}
       {["escolinha", "escola"].includes(tipoNormalizado) && (
         <PerfilEscola idDaUrl={id} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipoNormalizado === "federacao" && (
+        <PerfilFederacao idDaUrl={id} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipoNormalizado === "marca" && (
+        <PerfilMarca idDaUrl={id} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipoNormalizado === "learning" && (
+        <PerfilLearning idDaUrl={id} />
       )}
 
       <BottomNav />

@@ -55,6 +55,18 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
       : ["ATLETA_PRO", "PROFESSOR_PRO", "ORGANIZACOES_PRO", "OLHEIRO_PRO"];
   }
 
+  if (tipo === "learning") {
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["ATLETA_LEARNING_1", "ATLETA_LEARNING_3"]
+      : [];
+  }
+
+  if (tipo === "federacao" || tipo === "marca") {
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"]
+      : ["ORGANIZACOES_PRO"];
+  }
+
   return [];
 }
 

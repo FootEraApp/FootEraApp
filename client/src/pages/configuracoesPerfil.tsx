@@ -62,7 +62,8 @@ export default function ConfiguracoesPerfil() {
     sessionStorage.getItem("usuarioTipoRaw") ||
     "";
 
-  const isAtleta = String(tipoUsuario).toLowerCase() === "atleta";
+  const tipoNorm = String(tipoUsuario).toLowerCase();
+  const bloqueiaCreator = tipoNorm === "atleta" || tipoNorm === "learning";
 
   function getToken() {
     return (
@@ -466,7 +467,7 @@ export default function ConfiguracoesPerfil() {
           )}
         </div>
 
-        {!isAtleta && (
+        {!bloqueiaCreator && (
           <div className="flex justify-between py-2 items-start border-t">
             <div>
               <p className="font-semibold">🎓 Creator</p>

@@ -52,8 +52,9 @@ export default function CreatorDashboard() {
     sessionStorage.getItem("usuarioTipoRaw") ||
     "";
 
-  const isAtleta = String(tipoUsuario).toLowerCase() === "atleta";
-
+  const tipoNorm = String(tipoUsuario).toLowerCase();
+  const bloqueiaCreator = tipoNorm === "atleta" || tipoNorm === "learning";
+  
   const carregar = async () => {
     setLoading(true);
 
@@ -109,7 +110,7 @@ export default function CreatorDashboard() {
     carregar();
   }, []);
 
-  if (isAtleta) {
+  if (bloqueiaCreator) {
     return (
         <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
         <div className="max-w-lg bg-white rounded-2xl border shadow-sm p-6 text-center">
@@ -193,6 +194,16 @@ export default function CreatorDashboard() {
             >
                 Ver perfil público
             </a>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/creator/eventos";
+              }}
+              className="w-full rounded-xl border border-white/30 bg-white/10 px-4 py-3 text-left font-bold text-white"
+            >
+              Gerenciar eventos, lives e webinars
+            </button>
           </div>
         </div>
       </header>

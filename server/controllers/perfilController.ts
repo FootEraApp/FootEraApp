@@ -319,7 +319,14 @@ function mapGrupoToHistorico(p: any) {
 }
 
 async function resolveByUsuarioOrEntity(opts: {
-  entity: "professor" | "clube" | "escolinha" | "olheiro";
+  entity:
+    | "professor"
+    | "clube"
+    | "escolinha"
+    | "olheiro"
+    | "federacao"
+    | "marca"
+    | "learning";
   usuarioOrEntityId: string;
   select: any;
 }): Promise<any> {
@@ -350,6 +357,48 @@ async function resolveByUsuarioOrEntity(opts: {
     let row = await prisma.olheiro.findFirst({ where: { usuarioId: usuarioOrEntityId }, select });
     if (row) return row;
     row = await prisma.olheiro.findUnique({ where: { id: usuarioOrEntityId }, select });
+    return row;
+  }
+
+  if (entity === "federacao") {
+  let row = await prisma.federacao.findFirst({
+    where: { usuarioId: usuarioOrEntityId },
+    select,
+  });
+  if (row) return row;
+
+  row = await prisma.federacao.findUnique({
+    where: { id: usuarioOrEntityId },
+    select,
+  });
+  return row;
+  }
+
+  if (entity === "marca") {
+    let row = await prisma.marca.findFirst({
+      where: { usuarioId: usuarioOrEntityId },
+      select,
+    });
+    if (row) return row;
+
+    row = await prisma.marca.findUnique({
+      where: { id: usuarioOrEntityId },
+      select,
+    });
+    return row;
+  }
+
+  if (entity === "learning") {
+    let row = await prisma.learningProfile.findFirst({
+      where: { usuarioId: usuarioOrEntityId },
+      select,
+    });
+    if (row) return row;
+
+    row = await prisma.learningProfile.findUnique({
+      where: { id: usuarioOrEntityId },
+      select,
+    });
     return row;
   }
 
@@ -953,7 +1002,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     }
 
     let dadosEspecificos: any = null;
-    let tipoPerfil: "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro" | null = null;
+    let tipoPerfil: "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro" | "Federacao" | "Marca" | "Learning" | null = null;
     let vinculos: any = null;
 
     const atleta = await prisma.atleta.findUnique({
@@ -1092,6 +1141,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         };
         tipoPerfil = "Clube";
       }
+
     const olheiro = await prisma.olheiro.findUnique({
       where: { usuarioId: id },
       select: {
@@ -1145,6 +1195,51 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         };
         tipoPerfil = "Olheiro";
       }
+    }
+
+    const federacao = await prisma.federacao.findFirst({
+      where: { OR: [{ usuarioId: id }, { id }] },
+      select: { id: true, usuarioId: true, usuario: { select: { id: true } } },
+    });
+
+    if (federacao) {
+      return res.json({
+        tipo: "Federacao",
+        tipoUsuario: "Federacao",
+        tipoUsuarioId: federacao.id,
+        usuario: { id: federacao.usuarioId },
+        federacaoId: federacao.id,
+      });
+    }
+
+    const marca = await prisma.marca.findFirst({
+      where: { OR: [{ usuarioId: id }, { id }] },
+      select: { id: true, usuarioId: true, usuario: { select: { id: true } } },
+    });
+
+    if (marca) {
+      return res.json({
+        tipo: "Marca",
+        tipoUsuario: "Marca",
+        tipoUsuarioId: marca.id,
+        usuario: { id: marca.usuarioId },
+        marcaId: marca.id,
+      });
+    }
+
+    const learning = await prisma.learningProfile.findFirst({
+      where: { OR: [{ usuarioId: id }, { id }] },
+      select: { id: true, usuarioId: true, usuario: { select: { id: true } } },
+    });
+
+    if (learning) {
+      return res.json({
+        tipo: "Learning",
+        tipoUsuario: "Learning",
+        tipoUsuarioId: learning.id,
+        usuario: { id: learning.usuarioId },
+        learningProfileId: learning.id,
+      });
     }
 
   const usuarioPayload: any = {
@@ -1608,6 +1703,90 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         });
       break;
 
+      case "federacao": {
+        const federacao = await prisma.federacao.findUnique({
+          where: { usuarioId: id },
+          select: { id: true },
+        });
+
+        if (!federacao) {
+          return res.status(404).json({ error: "Federação não encontrada." });
+        }
+
+        await prisma.federacao.update({
+          where: { usuarioId: id },
+          data: {
+            nome: tipo.nome ?? usuario.nome,
+            cnpj: tipo.cnpj ?? null,
+            telefone1: tipo.telefone1 ?? null,
+            telefone2: tipo.telefone2 ?? null,
+            email: tipo.email ?? usuario.email,
+            siteOficial: tipo.siteOficial ?? null,
+            sede: tipo.sede ?? null,
+            cidade: tipo.cidade ?? usuario.cidade ?? null,
+            estado: tipo.estado ?? usuario.estado ?? null,
+            pais: tipo.pais ?? usuario.pais ?? null,
+            cep: tipo.cep ? String(tipo.cep).replace(/\D/g, "") : null,
+            descricao: tipo.descricao ?? null,
+            logo: fotoFinal,
+          },
+        });
+
+        await prisma.creator.updateMany({
+          where: { usuarioId: id },
+          data: {
+            nomePublico: tipo.nome ?? usuario.nome,
+            avatarUrl: fotoFinal,
+          },
+        });
+
+        break;
+      }
+
+      case "marca": {
+        const marca = await prisma.marca.findUnique({
+          where: { usuarioId: id },
+          select: { id: true },
+        });
+
+        if (!marca) {
+          return res.status(404).json({ error: "Marca não encontrada." });
+        }
+
+        await prisma.marca.update({
+          where: { usuarioId: id },
+          data: {
+            nome: tipo.nome ?? usuario.nome,
+            cnpj: tipo.cnpj ?? null,
+            telefone1: tipo.telefone1 ?? null,
+            telefone2: tipo.telefone2 ?? null,
+            email: tipo.email ?? usuario.email,
+            siteOficial: tipo.siteOficial ?? null,
+            cidade: tipo.cidade ?? usuario.cidade ?? null,
+            estado: tipo.estado ?? usuario.estado ?? null,
+            pais: tipo.pais ?? usuario.pais ?? null,
+            cep: tipo.cep ? String(tipo.cep).replace(/\D/g, "") : null,
+            descricao: tipo.descricao ?? null,
+            logo: fotoFinal,
+          },
+        });
+
+        await prisma.creator.updateMany({
+          where: { usuarioId: id },
+          data: {
+            nomePublico: tipo.nome ?? usuario.nome,
+            avatarUrl: fotoFinal,
+          },
+        });
+
+        break;
+      }
+
+      case "learning": {
+        // Learning não tem tabela grande para editar.
+        // Só atualiza Usuario, que já foi atualizado antes do switch.
+        break;
+      }
       default:
         return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
@@ -2303,4 +2482,186 @@ export const getUltimasSubmissoesDesafioVideosMe = async (req: AuthenticatedRequ
   if (!id) return res.status(401).json({ error: "Sem autenticação" });
   (req as any).params = { id };
   return getUltimasSubmissoesDesafioVideos(req as any, res);
+};
+
+export const getPerfilFederacao = async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || "").trim();
+
+    const federacao = await resolveByUsuarioOrEntity({
+      entity: "federacao",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        nome: true,
+        cnpj: true,
+        email: true,
+        telefone1: true,
+        telefone2: true,
+        siteOficial: true,
+        sede: true,
+        cidade: true,
+        estado: true,
+        pais: true,
+        cep: true,
+        logo: true,
+        descricao: true,
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            foto: true,
+            nomeDeUsuario: true,
+            verified: true,
+            cidade: true,
+            estado: true,
+          },
+        },
+        _count: {
+          select: {
+            eventos: true,
+            Metodologia: true,
+            MetodologiaAvulsa: true,
+          },
+        },
+      },
+    });
+
+    if (!federacao) {
+      return res.status(404).json({ message: "Federação não encontrada." });
+    }
+
+    return res.json({
+      tipo: "Federacao",
+      usuario: federacao.usuario,
+      federacao,
+      metricas: {
+        eventos: federacao._count?.eventos ?? 0,
+        conteudos:
+          (federacao._count?.Metodologia ?? 0) +
+          (federacao._count?.MetodologiaAvulsa ?? 0),
+        campanhas: 0,
+      },
+    });
+  } catch (e) {
+    console.error("getPerfilFederacao error:", e);
+    return res.status(500).json({ message: "Erro ao carregar federação." });
+  }
+};
+
+export const getPerfilMarca = async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || "").trim();
+
+    const marca = await resolveByUsuarioOrEntity({
+      entity: "marca",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        nome: true,
+        cnpj: true,
+        email: true,
+        telefone1: true,
+        telefone2: true,
+        siteOficial: true,
+        cidade: true,
+        estado: true,
+        pais: true,
+        cep: true,
+        logo: true,
+        descricao: true,
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            foto: true,
+            nomeDeUsuario: true,
+            verified: true,
+            cidade: true,
+            estado: true,
+          },
+        },
+        _count: {
+          select: {
+            eventos: true,
+            Metodologia: true,
+            MetodologiaAvulsa: true,
+          },
+        },
+      },
+    });
+
+    if (!marca) {
+      return res.status(404).json({ message: "Marca não encontrada." });
+    }
+
+    return res.json({
+      tipo: "Marca",
+      usuario: marca.usuario,
+      marca,
+      metricas: {
+        eventos: marca._count?.eventos ?? 0,
+        conteudos:
+          (marca._count?.Metodologia ?? 0) +
+          (marca._count?.MetodologiaAvulsa ?? 0),
+        campanhas: 0,
+      },
+    });
+  } catch (e) {
+    console.error("getPerfilMarca error:", e);
+    return res.status(500).json({ message: "Erro ao carregar marca." });
+  }
+};
+
+export const getPerfilLearning = async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id || "").trim();
+
+    const learning = await resolveByUsuarioOrEntity({
+      entity: "learning",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            foto: true,
+            nomeDeUsuario: true,
+            verified: true,
+          },
+        },
+      },
+    });
+
+    if (!learning) {
+      return res.status(404).json({ message: "Perfil Learning não encontrado." });
+    }
+
+    const assinaturas = await prisma.metodologiaAssinante.findMany({
+      where: { usuarioId: learning.usuarioId },
+      take: 20,
+      orderBy: { iniciouEm: "desc" },
+      include: {
+        metodologia: true,
+        metodologiaAvulsa: true,
+      },
+    });
+
+    return res.json({
+      tipo: "Learning",
+      usuario: learning.usuario,
+      learning,
+      conteudos: assinaturas,
+    });
+  } catch (e) {
+    console.error("getPerfilLearning error:", e);
+    return res.status(500).json({ message: "Erro ao carregar Learning." });
+  }
 };

@@ -359,6 +359,148 @@ export async function explorar(req: Request, res: Response) {
       }),
     }));
 
+    const federacoesRaw = await prisma.federacao.findMany({
+  include: {
+    usuario: {
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        email: true,
+        verified: true,
+        foto: true,
+        cidade: true,
+        estado: true,
+        assinatura: {
+          select: {
+            plano: true,
+            status: true,
+            trialEndsAt: true,
+            renovaEm: true,
+            startsAt: true,
+          },
+        },
+      },
+    },
+  },
+  where: termo
+    ? {
+        OR: [
+          { nome: { contains: termo, mode: "insensitive" } },
+          {
+            usuario: {
+              nome: { contains: termo, mode: "insensitive" },
+            },
+          },
+        ],
+      }
+    : {},
+  orderBy: { nome: "asc" },
+  take: 100,
+});
+
+const federacoes = federacoesRaw.map((f) => ({
+  ...f,
+  isPro: calcIsPro(getAssinaturaAtual(f.usuario?.assinatura)),
+  perfilVerificado: calcularPerfilVerificado({
+    usuario: f.usuario
+      ? {
+          verified: f.usuario.verified,
+          nome: f.usuario.nome ?? f.nome ?? null,
+          nomeDeUsuario: f.usuario.nomeDeUsuario,
+          email: f.usuario.email ?? null,
+          foto: f.logo ?? f.usuario.foto ?? null,
+        }
+      : null,
+    tipo: "clube",
+    clube: {
+      nome: f.nome ?? null,
+      cnpj: null,
+      email: f.usuario?.email ?? null,
+      telefone1: null,
+      siteOficial: f.siteOficial ?? null,
+      sede: null,
+      cidade: f.cidade ?? null,
+      estado: f.estado ?? null,
+      bairro: null,
+      pais: null,
+      cep: null,
+      logo: f.logo ?? null,
+    },
+  }),
+}));
+
+const marcasRaw = await prisma.marca.findMany({
+  include: {
+    usuario: {
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        email: true,
+        verified: true,
+        foto: true,
+        cidade: true,
+        estado: true,
+        assinatura: {
+          select: {
+            plano: true,
+            status: true,
+            trialEndsAt: true,
+            renovaEm: true,
+            startsAt: true,
+          },
+        },
+      },
+    },
+  },
+  where: termo
+    ? {
+        OR: [
+          { nome: { contains: termo, mode: "insensitive" } },
+          {
+            usuario: {
+              nome: { contains: termo, mode: "insensitive" },
+            },
+          },
+        ],
+      }
+    : {},
+  orderBy: { nome: "asc" },
+  take: 100,
+});
+
+const marcas = marcasRaw.map((m) => ({
+  ...m,
+  isPro: calcIsPro(getAssinaturaAtual(m.usuario?.assinatura)),
+    perfilVerificado: calcularPerfilVerificado({
+    usuario: m.usuario
+      ? {
+          verified: m.usuario.verified,
+          nome: m.usuario.nome ?? m.nome ?? null,
+          nomeDeUsuario: m.usuario.nomeDeUsuario,
+          email: m.usuario.email ?? null,
+          foto: m.logo ?? m.usuario.foto ?? null,
+        }
+      : null,
+    tipo: "clube",
+    clube: {
+      nome: m.nome ?? null,
+      cnpj: null,
+      email: m.usuario?.email ?? null,
+      telefone1: null,
+      siteOficial: m.siteOficial ?? null,
+      sede: null,
+      cidade: m.cidade ?? null,
+      estado: m.estado ?? null,
+      bairro: null,
+      pais: null,
+      cep: null,
+      logo: m.logo ?? null,
+    },
+  }),
+}));
+
     const escolasRaw = await prisma.escolinha.findMany({
       include: {
         usuario: {
@@ -589,6 +731,8 @@ export async function explorar(req: Request, res: Response) {
       professores,
       olheiros,
       eventos,
+      federacoes,
+      marcas,
     });
   } catch (error) {
     console.error("Erro em /api/explorar:", error);
@@ -602,7 +746,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
   try {
     const termo = q ? String(q).trim() : "";
 
-    const [atletas, clubes, escolas, professores, olheiros] = await Promise.all([
+    const [atletas, clubes, escolas, professores, olheiros, federacoes, marcas] = await Promise.all([
       prisma.atleta.findMany({
         where: termo
           ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
@@ -714,9 +858,17 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         },
         take: 50,
       }),
+      prisma.federacao.findMany({
+        where: termo ? { nome: { contains: termo, mode: "insensitive" } } : {},
+        take: 50,
+      }),
+      prisma.marca.findMany({
+        where: termo ? { nome: { contains: termo, mode: "insensitive" } } : {},
+        take: 50,
+      }),
     ]);
 
-    res.json({ atletas, clubes, escolas, professores, olheiros });
+    res.json({ atletas, clubes, escolas, professores, olheiros, federacoes, marcas });
   } catch (error) {
     console.error("Erro em /api/explorar/buscar:", error);
     res.status(500).json({ error: "Erro ao buscar dados" });
