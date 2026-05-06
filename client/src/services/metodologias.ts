@@ -5,7 +5,14 @@ import { API } from "../config.js";
 export type LearningMetodoTipo = "TRILHAS_TREINO" | "CURSO_FORMACAO";
 export type LearningEstruturaTipo = "TRILHA" | "MODULO";
 export type LearningModoExecucao = "LIVRE" | "PRAZO_SUGERIDO" | "DESAFIO_FECHADO";
-export type LearningItemTipo = "TREINO" | "VIDEO" | "AULA" | "MATERIAL" | "DESAFIO";
+export type LearningItemTipo =
+  | "TREINO"
+  | "VIDEO"
+  | "AULA"
+  | "AULA_AO_VIVO"
+  | "MATERIAL"
+  | "DESAFIO";
+
 export type LearningPermissaoCriacao = {
   podeCriar: boolean;
   ehProfessorParceiro?: boolean;
@@ -57,6 +64,17 @@ export type LearningEstruturaInput = {
   percentualPerdaAtraso?: number | null;
   permiteAtraso?: boolean;
   ativo?: boolean;
+
+  aulaAoVivo?: {
+  id?: string;
+  titulo?: string | null;
+  descricao?: string | null;
+  dataInicio?: string | null;
+  dataFim?: string | null;
+  chatAtivo?: boolean;
+  gravacaoAtiva?: boolean;
+  status?: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
+  };
 };
 
 export type LearningEstruturaItemInput = {

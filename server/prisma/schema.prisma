@@ -115,6 +115,10 @@ model Usuario {
   ExercicioPersonalizado   ExercicioPersonalizado[]
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
+  aulasAoVivoCriadas            AulaAoVivo[]         @relation("AulaAoVivoCriador")
+  aulasAoVivoMensagens          AulaAoVivoMensagem[] @relation("AulaAoVivoMensagemUsuario")
+  aulasAoVivoMensagensDeletadas AulaAoVivoMensagem[] @relation("AulaAoVivoMensagemDeletadaPor")
+
   @@index([deletedAt])
   @@index([deleteScheduledAt])
 }
@@ -673,6 +677,8 @@ model Metodologia {
   certificados             CertificadoMetodologia[]
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
+  aulasAoVivo AulaAoVivo[]
+
   @@index([criadorUsuarioId])
   @@index([professorId])
   @@index([clubeId])
@@ -710,6 +716,8 @@ model MetodologiaEstrutura {
   itens                    MetodologiaEstruturaItem[]
   progressos               MetodologiaProgressoEstrutura[]
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  aulasAoVivo AulaAoVivo[]
 
   @@unique([metodologiaId, ordem])
   @@index([metodologiaId])
@@ -755,6 +763,8 @@ model MetodologiaEstruturaItem {
   criadoEm                 DateTime                   @default(now())
   atualizadoEm             DateTime                   @updatedAt
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  aulaAoVivo AulaAoVivo?
 
   @@unique([estruturaId, ordem])
   @@index([estruturaId])
@@ -919,6 +929,8 @@ model MetodologiaAvulsa {
   assinantes   MetodologiaAssinante[]
   certificados CertificadoMetodologia[]
 
+  aulasAoVivo AulaAoVivo[]
+
   criadoEm                 DateTime                   @default(now())
   atualizadoEm             DateTime                   @updatedAt
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
@@ -958,6 +970,8 @@ model MetodologiaAvulsaEstrutura {
   itens                    MetodologiaAvulsaEstruturaItem[]
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
+  aulasAoVivo AulaAoVivo[]
+
   @@unique([metodologiaAvulsaId, ordem])
   @@index([metodologiaAvulsaId])
 }
@@ -988,8 +1002,108 @@ model MetodologiaAvulsaEstruturaItem {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
+  aulaAoVivo AulaAoVivo?
+
   @@unique([estruturaId, ordem])
   @@index([estruturaId])
+}
+
+model AulaAoVivo {
+  id String @id @default(uuid())
+
+  titulo    String
+  descricao String?
+
+  status AulaAoVivoStatus @default(AGENDADA)
+
+  dataInicio DateTime
+  dataFim    DateTime?
+
+  iniciouEm   DateTime?
+  finalizouEm DateTime?
+  cancelouEm  DateTime?
+
+  // Dados da live
+  urlStream      String?
+  streamKey      String?
+  provedorStream String?
+
+  // Dados do replay depois que a live acabar
+  videoGravadoUrl String?
+  thumbUrl        String?
+  duracaoMin      Int?
+
+  // Controles
+  chatAtivo        Boolean @default(true)
+  gravacaoAtiva    Boolean @default(true)
+  replayDisponivel Boolean @default(false)
+
+  // Métricas simples
+  totalMensagens     Int @default(0)
+  totalParticipantes Int @default(0)
+
+  // Quem criou/agendou a aula
+  criadorUsuarioId String?
+  criadorUsuario   Usuario? @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
+
+  // Learning normal
+  metodologiaId String?
+  metodologia   Metodologia? @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+
+  estruturaId String?
+  estrutura   MetodologiaEstrutura? @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+
+  itemId String?                   @unique
+  item   MetodologiaEstruturaItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Metodologia Avulsa
+  metodologiaAvulsaId String?
+  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+
+  estruturaAvulsaId String?
+  estruturaAvulsa   MetodologiaAvulsaEstrutura? @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+
+  itemAvulsaId String?                         @unique
+  itemAvulsa   MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+
+  mensagens AulaAoVivoMensagem[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([status])
+  @@index([dataInicio])
+  @@index([criadorUsuarioId])
+  @@index([metodologiaId])
+  @@index([estruturaId])
+  @@index([metodologiaAvulsaId])
+  @@index([estruturaAvulsaId])
+}
+
+model AulaAoVivoMensagem {
+  id String @id @default(uuid())
+
+  aulaAoVivoId String
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+
+  usuarioId String
+  usuario   Usuario @relation("AulaAoVivoMensagemUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  mensagem String
+  tipo     TipoMensagemLive @default(TEXTO)
+
+  // Para moderação: melhor ocultar do que apagar direto
+  deletada      Boolean   @default(false)
+  deletadaEm    DateTime?
+  deletadaPorId String?
+  deletadaPor   Usuario?  @relation("AulaAoVivoMensagemDeletadaPor", fields: [deletadaPorId], references: [id], onDelete: SetNull)
+
+  criadoEm DateTime @default(now())
+
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+  @@index([deletadaPorId])
+  @@index([criadoEm])
 }
 
 model DesafioOficial {
@@ -2928,6 +3042,7 @@ enum ConquistaTipo {
 enum MetodologiaConteudoTipo {
   TREINO
   VIDEO
+  AULA_AO_VIVO
 }
 
 enum MetodologiaAssinaturaStatus {
@@ -2958,6 +3073,7 @@ enum MetodologiaItemTipo {
   TREINO
   VIDEO
   AULA
+  AULA_AO_VIVO
   MATERIAL
   DESAFIO
 }
@@ -3026,4 +3142,17 @@ enum FaixaEtariaExercicio {
   Sub17
   Sub20
   Livre
+}
+
+enum AulaAoVivoStatus {
+  AGENDADA
+  AO_VIVO
+  FINALIZADA
+  CANCELADA
+}
+
+enum TipoMensagemLive {
+  TEXTO
+  SISTEMA
+  ALERTA
 }

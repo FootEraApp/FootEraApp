@@ -11,6 +11,8 @@ import {
   Dumbbell,
   FileText,
   Trophy,
+  Radio,
+  Calendar,
 } from "lucide-react";
 import {
   createMetodologiaCompleta,
@@ -83,6 +85,16 @@ type LocalItem = LearningEstruturaItemInput & {
   videoModalOpen?: boolean;
   materialFileName?: string | null;
   materialPreviewUrl?: string | null;
+
+  aulaAoVivo?: {
+    id?: string;
+    dataInicio: string;
+    dataFim?: string;
+    chatAtivo: boolean;
+    gravacaoAtiva: boolean;
+    replayDisponivel?: boolean;
+    status?: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
+  };
 };
 
 type LocalEstrutura = LearningEstruturaInput & {
@@ -142,7 +154,8 @@ const ITEM_TYPES_TRILHA: { value: LearningItemTipo; label: string; icon: React.R
 ];
 
 const ITEM_TYPES_MODULO: { value: LearningItemTipo; label: string; icon: React.ReactNode }[] = [
-  { value: "AULA", label: "Aula", icon: <Video className="w-4 h-4" /> },
+  { value: "AULA", label: "Aula gravada", icon: <Video className="w-4 h-4" /> },
+  { value: "AULA_AO_VIVO", label: "Aula ao vivo", icon: <Radio className="w-4 h-4" /> },
   { value: "VIDEO", label: "Vídeo", icon: <Video className="w-4 h-4" /> },
   { value: "MATERIAL", label: "Material", icon: <FileText className="w-4 h-4" /> },
   { value: "DESAFIO", label: "Desafio", icon: <Trophy className="w-4 h-4" /> },
@@ -170,6 +183,7 @@ function calcularPontuacaoItem(item: Partial<LocalItem>) {
       return item.treinoSelecionado?.pontuacao ?? item.pontos ?? null;
     case "VIDEO":
     case "AULA":
+    case "AULA_AO_VIVO":
       return calcularPontuacaoVideoOuAula(item.duracaoMin);
     case "MATERIAL":
       return 10;
@@ -306,6 +320,12 @@ function normalizeTreinoSelecionavel(t: any): TreinoSelecionavel {
 }
 
 function emptyItem(tipo: LearningItemTipo = "VIDEO"): LocalItem {
+  const agora = new Date();
+  agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+
+  const umaHoraDepois = new Date(agora);
+  umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
+
   return {
     localId: uid("item"),
     titulo: "",
@@ -326,6 +346,18 @@ function emptyItem(tipo: LearningItemTipo = "VIDEO"): LocalItem {
     videoModalOpen: false,
     materialFileName: null,
     materialPreviewUrl: null,
+
+    aulaAoVivo:
+      tipo === "AULA_AO_VIVO"
+        ? {
+            dataInicio: agora.toISOString().slice(0, 16),
+            dataFim: umaHoraDepois.toISOString().slice(0, 16),
+            chatAtivo: true,
+            gravacaoAtiva: true,
+            replayDisponivel: false,
+            status: "AGENDADA",
+          }
+        : undefined,
   };
 }
 
@@ -1248,6 +1280,26 @@ export default function LearningCreatePage() {
           return false;
         }
 
+        if (item.tipo === "AULA_AO_VIVO") {
+          if (!item.aulaAoVivo?.dataInicio) {
+            alert(`A aula ao vivo "${item.titulo}" precisa ter data e horário de início.`);
+            return false;
+          }
+
+          const inicio = new Date(item.aulaAoVivo.dataInicio);
+          const fim = item.aulaAoVivo.dataFim ? new Date(item.aulaAoVivo.dataFim) : null;
+
+          if (Number.isNaN(inicio.getTime())) {
+            alert(`A data de início da aula ao vivo "${item.titulo}" é inválida.`);
+            return false;
+          }
+
+          if (fim && fim <= inicio) {
+            alert(`A data final da aula ao vivo "${item.titulo}" precisa ser maior que a data de início.`);
+            return false;
+          }
+        }
+
         if (item.tipo === "MATERIAL" && !item.arquivoUrl?.trim() && !item.materialUrl?.trim()) {
           alert(`O item "${item.titulo}" precisa ter arquivo ou link do material.`);
           return false;
@@ -1374,18 +1426,31 @@ export default function LearningCreatePage() {
             titulo: item.titulo.trim(),
             descricao: item.descricao?.trim() || null,
             ordem: j + 1,
-            videoUrl: item.videoUrl?.trim() || null,
+            videoUrl: item.tipo === "AULA_AO_VIVO" ? null : item.videoUrl?.trim() || null,
             thumbUrl: item.thumbUrl?.trim() || null,
             arquivoUrl: item.arquivoUrl?.trim() || null,
             materialUrl: item.materialUrl?.trim() || null,
             treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
             pontos: calcularPontuacaoItem(item),
             duracaoMin:
-              item.tipo === "VIDEO" || item.tipo === "AULA"
+              item.tipo === "VIDEO" || item.tipo === "AULA" || item.tipo === "AULA_AO_VIVO"
                 ? (item.duracaoMin ? Number(item.duracaoMin) : null)
                 : null,
             obrigatorio: item.obrigatorio ?? true,
             publicado: item.publicado ?? true,
+            aulaAoVivo:
+              item.tipo === "AULA_AO_VIVO"
+                ? {
+                    id: item.aulaAoVivo?.id || undefined,
+                    titulo: item.titulo.trim(),
+                    descricao: item.descricao?.trim() || null,
+                    dataInicio: item.aulaAoVivo?.dataInicio || null,
+                    dataFim: item.aulaAoVivo?.dataFim || null,
+                    chatAtivo: item.aulaAoVivo?.chatAtivo !== false,
+                    gravacaoAtiva: item.aulaAoVivo?.gravacaoAtiva !== false,
+                    status: item.aulaAoVivo?.status || "AGENDADA",
+                  }
+                : undefined,
           })),
         })),
       };
@@ -2334,11 +2399,40 @@ export default function LearningCreatePage() {
                               </label>
                               <select
                                 value={item.tipo}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  const novoTipo = e.target.value as LearningItemTipo;
+
+                                  if (novoTipo === "AULA_AO_VIVO") {
+                                    const agora = new Date();
+                                    agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+
+                                    const umaHoraDepois = new Date(agora);
+                                    umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
+
+                                    updateItem(estrutura.localId, item.localId, {
+                                      tipo: novoTipo,
+                                      videoUrl: "",
+                                      arquivoUrl: "",
+                                      materialUrl: "",
+                                      treinoProgramadoId: "",
+                                      aulaAoVivo: {
+                                        dataInicio: agora.toISOString().slice(0, 16),
+                                        dataFim: umaHoraDepois.toISOString().slice(0, 16),
+                                        chatAtivo: true,
+                                        gravacaoAtiva: true,
+                                        replayDisponivel: false,
+                                        status: "AGENDADA",
+                                      },
+                                    });
+
+                                    return;
+                                  }
+
                                   updateItem(estrutura.localId, item.localId, {
-                                    tipo: e.target.value as LearningItemTipo,
-                                  })
-                                }
+                                    tipo: novoTipo,
+                                    aulaAoVivo: undefined,
+                                  });
+                                }}
                                 className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none"
                               >
                                 {itemTypeOptions.map((opt) => (
@@ -2348,6 +2442,127 @@ export default function LearningCreatePage() {
                                 ))}
                               </select>
                             </div>
+
+                            {item.tipo === "AULA_AO_VIVO" && (
+                              <div className="md:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="flex items-start gap-3 mb-4">
+                                  <div className="h-10 w-10 rounded-xl bg-[#216c43] text-white flex items-center justify-center">
+                                    <Radio className="w-5 h-5" />
+                                  </div>
+
+                                  <div>
+                                    <div className="text-base font-bold text-[#193b2e]">
+                                      Aula ao vivo
+                                    </div>
+                                    <div className="text-sm text-slate-600">
+                                      Agende a transmissão. Depois de salvar, o dono da metodologia poderá iniciar a live no estúdio.
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                      Data e horário de início*
+                                    </label>
+                                    <input
+                                      type="datetime-local"
+                                      value={item.aulaAoVivo?.dataInicio || ""}
+                                      onChange={(e) =>
+                                        updateItem(estrutura.localId, item.localId, {
+                                          aulaAoVivo: {
+                                            ...(item.aulaAoVivo || {
+                                              dataInicio: "",
+                                              dataFim: "",
+                                              chatAtivo: true,
+                                              gravacaoAtiva: true,
+                                              replayDisponivel: false,
+                                              status: "AGENDADA",
+                                            }),
+                                            dataInicio: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none bg-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                      Data e horário de término previsto
+                                    </label>
+                                    <input
+                                      type="datetime-local"
+                                      value={item.aulaAoVivo?.dataFim || ""}
+                                      onChange={(e) =>
+                                        updateItem(estrutura.localId, item.localId, {
+                                          aulaAoVivo: {
+                                            ...(item.aulaAoVivo || {
+                                              dataInicio: "",
+                                              dataFim: "",
+                                              chatAtivo: true,
+                                              gravacaoAtiva: true,
+                                              replayDisponivel: false,
+                                              status: "AGENDADA",
+                                            }),
+                                            dataFim: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none bg-white"
+                                    />
+                                  </div>
+
+                                  <div className="md:col-span-2 flex flex-wrap gap-4">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.aulaAoVivo?.chatAtivo !== false}
+                                        onChange={(e) =>
+                                          updateItem(estrutura.localId, item.localId, {
+                                            aulaAoVivo: {
+                                              ...(item.aulaAoVivo || {
+                                                dataInicio: "",
+                                                dataFim: "",
+                                                chatAtivo: true,
+                                                gravacaoAtiva: true,
+                                                replayDisponivel: false,
+                                                status: "AGENDADA",
+                                              }),
+                                              chatAtivo: e.target.checked,
+                                            },
+                                          })
+                                        }
+                                      />
+                                      Chat ativo
+                                    </label>
+
+                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.aulaAoVivo?.gravacaoAtiva !== false}
+                                        onChange={(e) =>
+                                          updateItem(estrutura.localId, item.localId, {
+                                            aulaAoVivo: {
+                                              ...(item.aulaAoVivo || {
+                                                dataInicio: "",
+                                                dataFim: "",
+                                                chatAtivo: true,
+                                                gravacaoAtiva: true,
+                                                replayDisponivel: false,
+                                                status: "AGENDADA",
+                                              }),
+                                              gravacaoAtiva: e.target.checked,
+                                            },
+                                          })
+                                        }
+                                      />
+                                      Gravar replay automaticamente
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {item.tipo !== "TREINO" ? (
                               <>
