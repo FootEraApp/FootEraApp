@@ -1562,6 +1562,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             pais: usuario.pais ?? null,
             cep: cepDigits || null,
             logo: fotoFinal,
+            descricao: tipo.descricao ?? null,
             categorias: Array.isArray(tipo.categorias) ? { set: normalizarCategorias(tipo.categorias), } : undefined,
           },
         });
@@ -1599,6 +1600,10 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             pais: usuario.pais ?? null,
             cep: cepDigits || null,
             logo: fotoFinal,
+            descricao: tipo.descricao ?? null,
+            categorias: Array.isArray(tipo.categorias)
+              ? { set: normalizarCategorias(tipo.categorias) }
+              : undefined,
           },
         });
       break;
@@ -2069,6 +2074,8 @@ export async function getPerfilEscola(req: Request, res: Response) {
         cep: true,
         logo: true,
         dataCriacao: true,
+        descricao: true,
+        categorias: true,
       },
     });
 
@@ -2103,6 +2110,8 @@ export async function getPerfilEscola(req: Request, res: Response) {
         cep: escola.cep,
         logo: logoOuFoto,
         dataCriacao: escola.dataCriacao,
+        descricao: (escola as any).descricao ?? null,
+        categorias: (escola as any).categorias ?? [],
       },
       metrics: {
         atletas: atletasCount,

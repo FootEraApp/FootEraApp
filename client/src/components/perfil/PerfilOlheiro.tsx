@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  Activity, PlusCircle, ChevronRight, Save, Loader2, X
+  Activity, PlusCircle, ChevronRight, Save, Loader2, X,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
@@ -130,7 +130,15 @@ function withAvatarFallback(foto?: string | null) {
   return valor || AVATAR_FALLBACK;
 }
 
-export default function PerfilOlheiro({ idDaUrl }: Props) {
+export default function PerfilOlheiro({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+}) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -162,6 +170,8 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
+  const [creatorUsuarioIdLocal, setCreatorUsuarioIdLocal] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -394,11 +404,44 @@ async function salvarNota(atletaId: string) {
   }
 }
 
-
   useEffect(() => {
     if (clubeQuery) buscarClubes(clubeQuery);
     else { setDestinos([]); setDestinoSel(null); }
   }, [clubeQuery]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const usuarioIdParaChecar =
+      data?.usuario?.id ||
+      data?.olheiro?.usuarioId ||
+      (!isOwn ? idDaUrl : Storage.usuarioId) ||
+      "";
+
+    if (!usuarioIdParaChecar) return;
+
+    let cancel = false;
+
+    fetch(`${API.BASE_URL}/api/creator/profile/${usuarioIdParaChecar}`, {
+      headers,
+    })
+      .then((r) => {
+        if (!cancel) {
+          setCreatorAtivoLocal(r.ok);
+          setCreatorUsuarioIdLocal(r.ok ? usuarioIdParaChecar : null);
+        }
+      })
+      .catch(() => {
+        if (!cancel) {
+          setCreatorAtivoLocal(false);
+          setCreatorUsuarioIdLocal(null);
+        }
+      });
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, data?.usuario?.id, data?.olheiro?.usuarioId, idDaUrl, isOwn]);
 
   async function enviarIndicacao() {
     setFeedback(null);
@@ -449,7 +492,14 @@ async function salvarNota(atletaId: string) {
     data.olheiro.usuarioId ||
     "";
 
+  const mostrarCreator =
+    Boolean(hasCreator && creatorUsuarioId) ||
+    Boolean(creatorAtivoLocal && creatorUsuarioIdLocal);
 
+  const creatorLinkUsuarioId =
+    creatorUsuarioId ||
+    creatorUsuarioIdLocal ||
+    perfilUsuarioId;
 
   const clubeColab = data.olheiro.colaboracaoClube || null;
 
@@ -490,6 +540,8 @@ async function salvarNota(atletaId: string) {
         perfilTipoIdProp={data.olheiro.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
+        hasCreator={mostrarCreator}
+        creatorUsuarioId={creatorLinkUsuarioId}
       />
       {clubeColab && (
         <div className="px-4 mt-2">

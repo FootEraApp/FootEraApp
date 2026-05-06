@@ -338,14 +338,31 @@ async function getPermissaoCriacaoMetodologia(userId: string) {
       id: true,
       tipo: true,
       parceiro: true,
+      creator: {
+        select: {
+          id: true,
+          ativo: true,
+        },
+      },
     },
   });
 
   const tipo = String(usuario?.tipo || "").toLowerCase().trim();
 
-  const tiposPermitidos = ["professor", "clube", "escolinha", "admin"];
-  const podeCriar = tiposPermitidos.includes(tipo);
+  const tiposPermitidos = [
+    "professor",
+    "clube",
+    "escolinha",
+    "admin",
+    "profissional",
+    "federação",
+    "federacao",
+    "marca",
+  ];
 
+  const temCreatorAtivo = usuario?.creator?.ativo === true;
+  const podeCriar = tiposPermitidos.includes(tipo) || temCreatorAtivo;
+  
   return {
     podeCriar,
     ehProfessorParceiro: tipo === "professor" ? usuario?.parceiro === true : false,
@@ -353,7 +370,7 @@ async function getPermissaoCriacaoMetodologia(userId: string) {
     planoPrincipal: null,
     motivoBloqueio: podeCriar
       ? null
-      : "Apenas professor, clube, escolinha ou admin podem criar metodologias.",
+      : "Apenas perfis autorizados ou usuários com Creator ativo podem criar metodologias.",
     planosPermitidos: [],
   };
 }

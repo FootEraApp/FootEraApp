@@ -12,6 +12,7 @@ import {
   Eye,
   UserPlus,
   Share2,
+  Crown,
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "../ui/button.js";
@@ -46,6 +47,8 @@ interface ProfileHeaderProps {
   conquistasCount?: number;
   isVerified?: boolean;
   isPro?: boolean;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
 }
 
 function pickAtletaId(payload: any, perfilId: string): string | null {
@@ -132,6 +135,8 @@ export default function ProfileHeader({
   conquistasCount = 0,
   isVerified = false,
   isPro = false,
+  hasCreator = false,
+  creatorUsuarioId = null,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -1619,6 +1624,19 @@ const alvoUsuarioIdFavorito = isOwnProfile
               <span className="truncate">Enviar mensagem</span>
             </button>
 
+            {hasCreator && creatorUsuarioId && (
+              <Link href={`/creator/profile?id=${creatorUsuarioId}`}>
+                <button
+                  type="button"
+                  className={`${btnBase} bg-white/10 text-white border border-white/40 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+                  title="Ver página Creator"
+                >
+                  <Crown size={16} />
+                  <span className="truncate">Creator</span>
+                </button>
+              </Link>
+            )}
+            
             {mostrarTreinarJuntos && (
               <button
                 disabled={treinoDisabled}

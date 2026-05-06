@@ -513,15 +513,33 @@ export default function TreinosInstrutores({
   }
 
   function getExerciseEntityInfo(ex: ExercicioSessaoDetalhe) {
-    if (ex.exercicioId) {
-      return { kind: "catalogo" as const, entityId: ex.exercicioId };
+    const catalogoId =
+      ex.exercicioId ||
+      ex.exercicio?.id ||
+      null;
+
+    if (catalogoId) {
+      return { kind: "catalogo" as const, entityId: String(catalogoId) };
     }
-    if (ex.exercicioTemporarioId) {
-      return { kind: "temporario" as const, entityId: ex.exercicioTemporarioId };
+
+    const temporarioId =
+      ex.exercicioTemporarioId ||
+      ex.exercicioTemporario?.id ||
+      null;
+
+    if (temporarioId) {
+      return { kind: "temporario" as const, entityId: String(temporarioId) };
     }
-    if (ex.exercicioPersonalizadoId) {
-      return { kind: "personalizado" as const, entityId: ex.exercicioPersonalizadoId };
+
+    const personalizadoId =
+      ex.exercicioPersonalizadoId ||
+      ex.exercicioPersonalizado?.id ||
+      null;
+
+    if (personalizadoId) {
+      return { kind: "personalizado" as const, entityId: String(personalizadoId) };
     }
+
     return null;
   }
 
@@ -969,10 +987,11 @@ export default function TreinosInstrutores({
     if (!cameraModal.exercicio || !cameraModal.recordedBlob || !cameraModal.sessaoId) return;
 
     const entity = getExerciseEntityInfo(cameraModal.exercicio);
-    if (!entity) {
-      alert("Não foi possível identificar o exercício.");
-      return;
-    }
+
+    const entityFallback = entity ?? {
+      kind: "catalogo" as const,
+      entityId: "",
+    };
 
     try {
       const uploaded = await uploadExerciseExecutionVideo(cameraModal.recordedBlob);
@@ -990,8 +1009,8 @@ export default function TreinosInstrutores({
         [key]: {
           sessaoId: cameraModal.sessaoId!,
           exerciseRowId: cameraModal.exercicio!.id,
-          kind: entity.kind,
-          entityId: entity.entityId,
+          kind: entityFallback.kind,
+          entityId: entityFallback.entityId,
           existingUrl,
           uploadedUrl: uploaded.url,
           selectedUrl:
@@ -1049,10 +1068,19 @@ export default function TreinosInstrutores({
         URL.revokeObjectURL(cameraModal.previewUrl);
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: true,
-      });
+      let stream: MediaStream;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: true,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+      }
 
       setCameraModal({
         open: true,
@@ -1138,10 +1166,8 @@ export default function TreinosInstrutores({
 
   function getSupportedMimeType() {
     const candidates = [
-      "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
       "video/webm",
-      "video/mp4",
     ];
 
     for (const type of candidates) {
@@ -1156,13 +1182,25 @@ export default function TreinosInstrutores({
   function iniciarGravacao() {
     if (!cameraModal.mediaStream) return;
 
+    if (cameraModal.previewUrl) {
+      URL.revokeObjectURL(cameraModal.previewUrl);
+    }
+
     recordedChunksRef.current = [];
 
     const mimeType = getSupportedMimeType();
 
-    const recorder = mimeType
-      ? new MediaRecorder(cameraModal.mediaStream, { mimeType })
-      : new MediaRecorder(cameraModal.mediaStream);
+    let recorder: MediaRecorder;
+
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(cameraModal.mediaStream, { mimeType })
+        : new MediaRecorder(cameraModal.mediaStream);
+    } catch (e) {
+      console.error(e);
+      alert("Não foi possível iniciar a gravação.");
+      return;
+    }
 
     recorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
@@ -1171,8 +1209,17 @@ export default function TreinosInstrutores({
     };
 
     recorder.onstop = () => {
-      const finalMimeType = mimeType || "video/webm";
-      const blob = new Blob(recordedChunksRef.current, { type: finalMimeType });
+      const finalMimeType = recorder.mimeType || mimeType || "video/webm";
+
+      const blob = new Blob(recordedChunksRef.current, {
+        type: finalMimeType,
+      });
+
+      if (!blob.size) {
+        alert("O vídeo gravado ficou vazio. Tente gravar novamente.");
+        return;
+      }
+
       const previewUrl = URL.createObjectURL(blob);
 
       setCameraModal((prev) => ({
@@ -1184,10 +1231,22 @@ export default function TreinosInstrutores({
 
       setRecordingStartedAt(null);
       setRecordingNow(Date.now());
+
+      setTimeout(() => {
+        const v = document.querySelector<HTMLVideoElement>(
+          `video[src="${previewUrl}"]`
+        );
+
+        if (v) {
+          v.load();
+          v.currentTime = 0;
+        }
+      }, 100);
     };
 
     mediaRecorderRef.current = recorder;
-    recorder.start();
+
+    recorder.start(1000);
 
     setRecordingStartedAt(Date.now());
     setRecordingNow(Date.now());
@@ -1201,9 +1260,16 @@ export default function TreinosInstrutores({
   }
 
   function pararGravacao() {
-    if (!mediaRecorderRef.current) return;
-    if (mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+
+    if (recorder.state === "recording") {
+      recorder.requestData();
+      setTimeout(() => {
+        if (recorder.state !== "inactive") {
+          recorder.stop();
+        }
+      }, 150);
     }
   }
 
@@ -3633,10 +3699,18 @@ async function salvarProgressoSessao(sessaoId: string) {
               ) : (
                   <div className="rounded-2xl overflow-hidden bg-black">
                     <video
+                      key={cameraModal.previewUrl}
                       src={cameraModal.previewUrl}
                       controls
                       playsInline
+                      preload="auto"
                       className="w-full max-h-[420px] object-contain bg-black"
+                      onLoadedMetadata={(e) => {
+                        e.currentTarget.currentTime = 0;
+                      }}
+                      onCanPlay={(e) => {
+                        e.currentTarget.pause();
+                      }}
                     />
                   </div>
                 )}

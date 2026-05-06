@@ -187,7 +187,7 @@ export default function MeusExerciciosTab() {
       JSON.stringify(semDuplicar)
     );
 
-    window.location.href = "/treinos?aba=treino";
+    window.location.href = "/treinos/novo";
   }
 
   const totalTexto = useMemo(() => {

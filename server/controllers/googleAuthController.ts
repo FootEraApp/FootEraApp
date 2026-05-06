@@ -338,6 +338,21 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     });
   }
 
+  function dataNascimentoPermitida(valor?: string | null) {
+    if (!valor) return false;
+
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return false;
+
+    const min = new Date("1900-01-01T00:00:00.000Z");
+    const hoje = new Date();
+
+    data.setHours(0, 0, 0, 0);
+    hoje.setHours(23, 59, 59, 999);
+
+    return data >= min && data <= hoje;
+  }
+
   try {
     const pre = await prisma.googlePreCadastro.findUnique({
       where: { token: String(preCadastroToken) },
@@ -389,6 +404,12 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       tipoEnum === TipoUsuario.Atleta ||
       tipoEnum === TipoUsuario.Olheiro ||
       tipoEnum === TipoUsuario.Professor;
+
+    if (precisaNascimento && !dataNascimentoPermitida(dataNascimento)) {
+      return res.status(400).json({
+        error: "A data de nascimento deve estar entre 01/01/1900 e hoje.",
+      });
+    }
 
     const dataNascFinal =
       precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;

@@ -220,7 +220,15 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-export default function PerfilProfessor({ idDaUrl }: Props) {
+export default function PerfilProfessor({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+}) {
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -892,6 +900,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         ]}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
+        hasCreator={hasCreator}
+        creatorUsuarioId={creatorUsuarioId}
       />
 
       <div className="mt-4 px-4">

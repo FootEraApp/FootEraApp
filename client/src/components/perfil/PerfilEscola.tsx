@@ -20,7 +20,7 @@ import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js"; 
 
-type Props = { idDaUrl?: string };
+type Props = { idDaUrl?: string; hasCreator?: boolean; creatorUsuarioId?: string | null };
 type UsuarioMin = {
   id: string;
   nome: string;
@@ -185,7 +185,7 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-export default function PerfilEscola({ idDaUrl }: Props) {
+export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuarioId = null }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -866,6 +866,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         perfilTipoIdProp={data.escolinha.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
+        hasCreator={hasCreator}
+        creatorUsuarioId={creatorUsuarioId}
       />
 
       <div className="mt-4 px-3 sm:px-4">

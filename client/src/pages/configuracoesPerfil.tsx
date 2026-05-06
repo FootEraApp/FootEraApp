@@ -55,6 +55,15 @@ export default function ConfiguracoesPerfil() {
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
+  const tipoUsuario =
+    localStorage.getItem("tipoUsuario") ||
+    sessionStorage.getItem("tipoUsuario") ||
+    localStorage.getItem("usuarioTipoRaw") ||
+    sessionStorage.getItem("usuarioTipoRaw") ||
+    "";
+
+  const isAtleta = String(tipoUsuario).toLowerCase() === "atleta";
+
   function getToken() {
     return (
       localStorage.getItem("token") ||
@@ -456,6 +465,21 @@ export default function ConfiguracoesPerfil() {
             </button>
           )}
         </div>
+
+        {!isAtleta && (
+          <div className="flex justify-between py-2 items-start border-t">
+            <div>
+              <p className="font-semibold">🎓 Creator</p>
+              <p className="text-sm text-gray-600">
+                Acesse seu painel de cursos, vendas e metodologias
+              </p>
+            </div>
+
+            <Link href="/creator/dashboard" className="text-green-800 font-semibold">
+              Acessar
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* ===== Tutorial ===== */}

@@ -38,7 +38,15 @@ type CertificadoResumo = {
   codigoValidacao: string;
   pdfUrl?: string | null;
 };
-export default function PerfilAtleta({ idDaUrl }: Props) {
+export default function PerfilAtleta({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+}) {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -253,6 +261,8 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           isVerified={perfil?.perfilVerificado}
           isPro={perfil?.isPro}
           conquistasCount={conquistasCount}
+          hasCreator={hasCreator}
+          creatorUsuarioId={creatorUsuarioId}
         />
           {isIndependente && (
             <div className="bg-yellow-100 border border-yellow-300 rounded p-4 my-4 text-sm text-yellow-900">
