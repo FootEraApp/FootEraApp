@@ -45,17 +45,27 @@ export default function PerfilMarca({
 
   const usuario = data.usuario ?? entidade.usuario ?? {};
   const usuarioId = usuario.id ?? entidade.usuarioId;
+  const isFederacao = tipoPerfil === "federacao";
+
+  const subtituloPerfil =
+    entidade.cidade && entidade.estado
+      ? `${entidade.cidade} - ${entidade.estado}`
+      : isFederacao
+      ? "Federação oficial"
+      : "Marca parceira";
+
+  const tipoPerfilHeader = isFederacao ? "Federacao" : "Marca";
 
   return (
     <div className="pb-24">
       <ProfileHeader
         perfilId={usuarioId}
-        nome={entidade.nome ?? usuario.nome ?? "Marca"}
-        time={entidade.cidade && entidade.estado ? `${entidade.cidade} - ${entidade.estado}` : "Marca parceira"}
+        nome={entidade.nome ?? usuario.nome ?? (isFederacao ? "Federação" : "Marca")}
+        time={subtituloPerfil}
         avatar={entidade.logo ?? usuario.foto}
         foto={entidade.logo ?? usuario.foto}
         isOwnProfile={isOwn}
-        perfilTipoProp="Marca"
+        perfilTipoProp={tipoPerfilHeader}
         perfilTipoIdProp={entidade.id}
         isVerified={usuario.verified ?? false}
         hasCreator={hasCreator}
@@ -63,12 +73,12 @@ export default function PerfilMarca({
         kpis={[
           { label: "Eventos", value: Number(data.metricas?.eventos ?? 0) },
           { label: "Conteúdos", value: Number(data.metricas?.conteudos ?? 0) },
-          { label: "Campanhas", value: Number(data.metricas?.campanhas ?? 0) },
+          { label: "Conquistas", value: Number(data.metricas?.conquistasCertificados ?? data.metricas?.conquistas ?? 0) },
         ]}
       />
 
       <div className="max-w-3xl mx-auto px-4 mt-5">
-        <div className="grid grid-cols-4 gap-2 mb-4">
+        <div className="mt-4 grid grid-cols-4 gap-2">
           {[
             ["perfil", "Perfil"],
             ["eventos", "Eventos"],
@@ -78,8 +88,10 @@ export default function PerfilMarca({
             <button
               key={key}
               onClick={() => setAba(key as any)}
-              className={`rounded-xl py-3 font-bold ${
-                aba === key ? "bg-green-100 text-green-900" : "bg-white text-green-900"
+              className={`py-2 rounded-lg text-sm font-medium ${
+                aba === key
+                  ? "bg-green-100 text-green-900"
+                  : "bg-white/70 text-green-900 hover:bg-white"
               }`}
             >
               {label}
@@ -88,33 +100,133 @@ export default function PerfilMarca({
         </div>
 
         {aba === "perfil" && (
-          <section className="bg-white rounded-2xl border p-5">
-            <h2 className="text-xl font-bold text-green-900 mb-4">
-                {tipoPerfil === "federacao" ? "Informações da Federação" : "Informações da Marca"}
+          <section className="bg-transparent border rounded-xl shadow-sm p-4 mt-4">
+            <h2 className="text-green-900 text-xl font-semibold mb-3">
+              {isFederacao ? "Informações da Federação" : "Informações da Marca"}
             </h2>
 
-            <p><b>Nome:</b> {entidade.nome}</p>
-            {entidade.cnpj && <p><b>CNPJ:</b> {entidade.cnpj}</p>}
-            {entidade.email && <p><b>Email:</b> {entidade.email}</p>}
-            {entidade.siteOficial && <p><b>Site:</b> {entidade.siteOficial}</p>}
-            {(entidade.cidade || entidade.estado) && (
-            <p><b>Localização:</b> {entidade.cidade} {entidade.estado}</p>
-            )}
-            {entidade.descricao && <p className="mt-3">{entidade.descricao}</p>}
+            <ul className="text-sm text-green-900/90 space-y-2">
+              <li>
+                <b>Nome:</b> {entidade.nome || usuario.nome || "Não informado"}
+              </li>
+
+              {entidade.email || usuario.email ? (
+                <li>
+                  <b>Email:</b> {entidade.email || usuario.email}
+                </li>
+              ) : null}
+
+              {entidade.cnpj ? (
+                <li>
+                  <b>CNPJ:</b> {entidade.cnpj}
+                </li>
+              ) : null}
+
+              {entidade.telefone1 ? (
+                <li>
+                  <b>Telefone 1:</b> {entidade.telefone1}
+                </li>
+              ) : null}
+
+              {entidade.telefone2 ? (
+                <li>
+                  <b>Telefone 2:</b> {entidade.telefone2}
+                </li>
+              ) : null}
+
+              {entidade.siteOficial ? (
+                <li>
+                  <b>Site oficial:</b>{" "}
+                  <a
+                    href={
+                      String(entidade.siteOficial).startsWith("http")
+                        ? entidade.siteOficial
+                        : `https://${entidade.siteOficial}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-green-800 underline"
+                  >
+                    {entidade.siteOficial}
+                  </a>
+                </li>
+              ) : null}
+
+              {entidade.sede ? (
+                <li>
+                  <b>Sede:</b> {entidade.sede}
+                </li>
+              ) : null}
+
+              {(entidade.cidade || entidade.estado || entidade.pais) && (
+                <li>
+                  <b>Localização:</b>{" "}
+                  {[entidade.cidade, entidade.estado, entidade.pais]
+                    .filter(Boolean)
+                    .join(" - ")}
+                </li>
+              )}
+
+              {entidade.descricao ? (
+                <li>
+                  <b>Descrição:</b> {entidade.descricao}
+                </li>
+              ) : null}
+            </ul>
           </section>
         )}
 
         {aba === "eventos" && (
-          <section className="bg-white rounded-2xl border p-5">
-            <h2 className="text-xl font-bold text-green-900 mb-2">Eventos e ativações</h2>
-            <p className="text-green-900/70">Eventos, webinars e campanhas patrocinadas da marca.</p>
+          <section className="bg-transparent border rounded-xl shadow-sm p-4 mt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-green-900 text-xl font-semibold mb-2">
+                  {isFederacao ? "Eventos oficiais" : "Eventos e ativações"}
+                </h2>
+
+                <p className="text-sm text-green-900/80">
+                  {isFederacao
+                    ? "Crie eventos, seletivas, webinars e ativações oficiais da federação."
+                    : "Crie eventos, webinars e campanhas patrocinadas da marca."}
+                </p>
+              </div>
+
+              {isOwn && (
+                <a
+                  href="/creator/eventos"
+                  className="shrink-0 rounded-lg bg-green-800 px-3 py-2 text-xs font-semibold text-white hover:bg-green-900"
+                >
+                  Criar evento
+                </a>
+              )}
+            </div>
           </section>
         )}
 
         {aba === "conteudos" && (
-          <section className="bg-white rounded-2xl border p-5">
-            <h2 className="text-xl font-bold text-green-900 mb-2">Conteúdos</h2>
-            <p className="text-green-900/70">Conteúdos publicados pela marca no Learning.</p>
+          <section className="bg-transparent border rounded-xl shadow-sm p-4 mt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-green-900 text-xl font-semibold mb-2">
+                  {isFederacao ? "Conteúdos oficiais" : "Conteúdos"}
+                </h2>
+
+                <p className="text-sm text-green-900/80">
+                  {isFederacao
+                    ? "Publique cursos, metodologias e materiais oficiais da federação no Learning."
+                    : "Publique conteúdos, cursos e metodologias da marca no Learning."}
+                </p>
+              </div>
+
+              {isOwn && (
+                <a
+                  href="/learning"
+                  className="shrink-0 rounded-lg bg-green-800 px-3 py-2 text-xs font-semibold text-white hover:bg-green-900"
+                >
+                  Criar conteúdo
+                </a>
+              )}
+            </div>
           </section>
         )}
 

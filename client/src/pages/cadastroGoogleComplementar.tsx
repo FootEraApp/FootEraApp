@@ -792,7 +792,7 @@ export default function CadastroGoogleComplementar() {
     }
 
     if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
-      if (!nome.trim()) {
+      if (!clube.nomeClube.trim()) {
         setErro(
           tipoPerfil === "Federacao"
             ? "Informe o nome da federação."
@@ -941,9 +941,9 @@ export default function CadastroGoogleComplementar() {
 
       if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
         Object.assign(payload, {
-          nomeOrganizacao: nome.trim() || undefined,
+          nomeOrganizacao: clube.nomeClube.trim() || undefined,
 
-          nomeClube: nome.trim() || undefined,
+          nomeClube: clube.nomeClube.trim() || undefined,
           cnpjClube: clube.cnpjClube || undefined,
           telefone1Clube: clube.telefone1Clube || undefined,
           telefone2Clube: clube.telefone2Clube || undefined,
@@ -1039,11 +1039,21 @@ export default function CadastroGoogleComplementar() {
 
       sessionStorage.setItem("plano", String(data?.usuario?.plano ?? data?.plano ?? "FREE"));
 
-      setSucesso("Cadastro com Google finalizado com sucesso! Redirecionando...");
+      if (tipoPerfil === "Learning") {
+        setSucesso("Cadastro Learning com o Google realizado com sucesso! Verifique seu e-mail para confirmar a conta.");
+      } else {
+        setSucesso("Cadastro com Google realizado com sucesso! Redirecionando...");
+      }
+
       setTimeout(() => {
         navigate(rawTipo === "admin" ? "/admin" : "/feed");
       }, 1200);
     } catch (err: any) {
+      setErro(
+        tipoPerfil === "Learning"
+          ? "Ocorreu um erro ao realizar cadastro Learning."
+          : err?.response?.data?.error || err?.response?.data?.message || "Erro ao realizar cadastro."
+      );
       setErro(err?.message || "Falha ao finalizar cadastro com Google.");
     } finally {
       setFinalizandoCadastro(false);
@@ -1417,6 +1427,7 @@ export default function CadastroGoogleComplementar() {
 
               <div className="flex justify-end">
                 <button
+                  disabled={finalizandoCadastro}
                   onClick={() => {
                     if (!podeIrParaEtapa2()) return;
 
@@ -1427,9 +1438,13 @@ export default function CadastroGoogleComplementar() {
 
                     setEtapa(2);
                   }}
-                  className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded"
+                  className="bg-green-900 hover:bg-green-800 disabled:opacity-60 text-white px-4 py-2 rounded"
                 >
-                  Próximo
+                  {finalizandoCadastro
+                    ? "Concluindo cadastro..."
+                    : tipoPerfil === "Learning"
+                    ? "Concluir cadastro Learning"
+                    : "Próximo"}
                 </button>
               </div>
             </div>
@@ -1702,6 +1717,189 @@ export default function CadastroGoogleComplementar() {
                     <Input label="País" value={clube.paisClube} onChange={(v) => setClube((p) => ({ ...p, paisClube: v }))} />
                     <Input label="CEP" value={clube.cepClube} placeholder="00000-000" onChange={(v) => setClube((p) => ({ ...p, cepClube: maskCEP(v) }))} />
                     <Input label="Estádio" value={clube.estadio} onChange={(v) => setClube((p) => ({ ...p, estadio: v }))} />
+                  </AccordionInfo>
+                </>
+              )}
+
+              {(tipoPerfil === "Federacao" || tipoPerfil === "Marca") && (
+                <>
+                  <Input
+                    label={tipoPerfil === "Federacao" ? "Nome da Federação*" : "Nome da Marca*"}
+                    value={clube.nomeClube}
+                    onChange={(v) =>
+                      setClube((prev) => ({
+                        ...prev,
+                        nomeClube: v,
+                      }))
+                    }
+                  />
+
+                  <AccordionInfo
+                    aberto={infoAdicionalClubeAberto}
+                    setAberto={setInfoAdicionalClubeAberto}
+                  >
+                    <Input
+                      label="CNPJ"
+                      value={clube.cnpjClube}
+                      placeholder="00.000.000/0000-00"
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          cnpjClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Telefone 1"
+                      value={clube.telefone1Clube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          telefone1Clube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Telefone 2"
+                      value={clube.telefone2Clube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          telefone2Clube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="E-mail"
+                      value={clube.emailClube}
+                      placeholder={email || "contato@exemplo.com"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          emailClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Site oficial"
+                      value={clube.siteOficialClube}
+                      placeholder="https://..."
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          siteOficialClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Sede"
+                      value={clube.sedeClube}
+                      placeholder="Ex.: São Paulo, SP"
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          sedeClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="CEP"
+                      value={clube.cepClube}
+                      placeholder="00000-000"
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          cepClube: maskCEP(v),
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Logradouro"
+                      value={clube.logradouroClube}
+                      placeholder="Rua, avenida..."
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          logradouroClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Número"
+                      value={clube.numeroClube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          numeroClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Complemento"
+                      value={clube.complementoClube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          complementoClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Bairro"
+                      value={clube.bairroClube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          bairroClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Cidade"
+                      value={clube.cidadeClube}
+                      placeholder={cidade || "Ex.: São Paulo"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          cidadeClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Estado"
+                      value={clube.estadoClube}
+                      placeholder={estado || "Ex.: SP"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          estadoClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="País"
+                      value={clube.paisClube}
+                      placeholder={pais || "Brasil"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          paisClube: v,
+                        }))
+                      }
+                    />
                   </AccordionInfo>
                 </>
               )}

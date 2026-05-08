@@ -10,7 +10,11 @@ type Tipo =
   | "escolinha"
   | "clube"
   | "professor"
-  | "olheiro";
+  | "olheiro"
+  | "federacao"
+  | "marca"
+  | "learning"
+   ;
 
 interface UsuarioLogadoLegacy {
   tipo: Tipo;
@@ -34,6 +38,9 @@ function detectarTipo(): Tipo | null {
         escolinha: "escolinha",
         escola: "escola",
         olheiro: "olheiro",
+        federacao: "federacao",
+        marca: "marca",
+        learning: "learning",
       };
       if (map[raw]) return map[raw];
     }
@@ -57,10 +64,34 @@ export default function Treinos() {
     setTipo(t);
   }, []);
 
-  if (!tipo) {
+    if (!tipo) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 text-gray-700">
         Carregando treinos...
+      </div>
+    );
+  }
+
+  if (tipo === "learning") {
+    return (
+      <div className="min-h-screen bg-[#f5f2e8] flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl border p-6 max-w-md text-center shadow-sm">
+          <h1 className="text-2xl font-extrabold text-green-900">
+            Treinos disponíveis para perfis esportivos
+          </h1>
+
+          <p className="text-green-900/70 mt-2">
+            Sua conta Learning foi criada para acessar cursos, lives e metodologias.
+            Para usar treinos, escolha um perfil como atleta, professor, clube ou escolinha.
+          </p>
+
+          <button
+            onClick={() => (window.location.href = "/perfil/mudar-tipo")}
+            className="mt-5 rounded-xl bg-green-700 px-4 py-3 text-white font-bold"
+          >
+            Mudar tipo de perfil
+          </button>
+        </div>
       </div>
     );
   }

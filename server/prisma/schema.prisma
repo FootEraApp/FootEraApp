@@ -312,23 +312,24 @@ model Amigo {
 }
 
 model Olheiro {
-  id                     String   @id @default(uuid())
-  usuarioId              String   @unique
+  id                     String    @id @default(uuid())
+  usuarioId              String    @unique
   fotoUrl                String?
   headline               String?
   descricao              String?
   areaAtuacao            String?
-  anosExperiencia        Int      @default(0)
+  anosExperiencia        Int       @default(0)
   emailPublico           String?
   telefonePublico        String?
   siteOuLinkedin         String?
   colaboracaoClubeId     String?
   colaboracaoProfessorId String?
   colaboracaoEscolinhaId String?
-  reputacaoScore         Int      @default(0)
-  totalIndicacoes        Int      @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  dataNascimento         DateTime?
+  reputacaoScore         Int       @default(0)
+  totalIndicacoes        Int       @default(0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   AtletaObservado AtletaObservado[]
   Indicacao       Indicacao[]
@@ -2736,10 +2737,17 @@ model ConquistaVinculo {
   ownerTipo   ConquistaOwnerTipo
   ownerId     String
 
-  atletaId    String?
-  professorId String?
-  clubeId     String?
-  escolinhaId String?
+  atletaId          String?
+  professorId       String?
+  clubeId           String?
+  escolinhaId       String?
+  learningProfileId String?
+  marcaId           String?
+  federacaoId       String?
+
+  learningProfile LearningProfile? @relation(fields: [learningProfileId], references: [id], onDelete: SetNull)
+  marca           Marca?           @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+  federacao       Federacao?       @relation(fields: [federacaoId], references: [id], onDelete: SetNull)
 
   conquistadoEm DateTime?
   progresso     Int       @default(0)
@@ -2859,12 +2867,18 @@ model CreatorUsoLearning {
 }
 
 model LearningProfile {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id        String @id @default(uuid())
+  usuarioId String @unique
+
+  bio        String?
+  objetivo   String?
+  interesses String[] @default([])
 
   criadoEm  DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  usuario    Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  conquistas ConquistaVinculo[]
 }
 
 model Federacao {
@@ -2890,6 +2904,7 @@ model Federacao {
   updatedAt DateTime @updatedAt
 
   eventos           Evento[]
+  conquistas        ConquistaVinculo[]
   Metodologia       Metodologia[]
   MetodologiaAvulsa MetodologiaAvulsa[]
 }
@@ -2911,6 +2926,7 @@ model Marca {
   cep         String?
   logo        String?
   descricao   String?
+  conquistas  ConquistaVinculo[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3212,6 +3228,9 @@ enum ConquistaOwnerTipo {
   Professor
   Clube
   Escolinha
+  Learning
+  Marca
+  Federacao
 }
 
 enum ConquistaTipo {

@@ -71,6 +71,7 @@ import CreatorProfile from "./pages/creator/profile.js";
 import CreatorDashboard from "./pages/creator/dashboard.js";
 import CreatorEventosPage from "./pages/creator/eventos.js";
 import CreatorNovoEventoPage from "./pages/creator/eventos-novo.js";
+import MudarTipoPerfilPage from "./pages/perfil/mudarTipo.js";
 
 export function AppRoutes() {
   return (
@@ -139,6 +140,9 @@ export function AppRoutes() {
         {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
       </Route>
 
+      <Route path="/perfil/mudar-tipo">
+        <Private><MudarTipoPerfilPage /></Private>
+      </Route>
       <Route path="/perfil/conquistas"><PaginaConquistas /></Route>
       <Route path="/perfil/GerenciarAtletas"><PaginaGerenciarAtleta /></Route>
       <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>

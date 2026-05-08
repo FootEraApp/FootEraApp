@@ -99,7 +99,10 @@ interface UsuarioLogado {
     | "escolinha"
     | "clube"
     | "professor"
-    | "olheiro";
+    | "olheiro"
+    | "federacao"
+    | "marca"
+    | "learning";
   usuarioId: string;
   tipoUsuarioId: string;
 }

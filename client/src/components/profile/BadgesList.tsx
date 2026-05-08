@@ -92,9 +92,17 @@ function groupLabelFromTipo(tipo?: string | null): string {
 }
 
 function entityLabelFromOwnerTipo(ownerTipo?: string | null): string {
-  const t = String(ownerTipo || "");
-  if (!t) return "Atleta";
-  return t[0].toUpperCase() + t.slice(1).toLowerCase();
+  const t = String(ownerTipo || "").toLowerCase();
+
+  if (t === "learning") return "Learning";
+  if (t === "marca") return "Marca";
+  if (t === "federacao") return "Federação";
+  if (t === "atleta") return "Atleta";
+  if (t === "professor") return "Professor";
+  if (t === "clube") return "Clube";
+  if (t === "escolinha") return "Escolinha";
+
+  return "Perfil";
 }
 
 function BadgeIcon({

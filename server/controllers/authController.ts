@@ -76,8 +76,8 @@ export async function login(req: Request, res: Response) {
     const usuario = await prisma.usuario.findFirst({
       where: {
         OR: [
-          { nomeDeUsuario: userKey },       // mantém case como está
-          { email: lowerKey },              // email normalizado
+          { nomeDeUsuario: lowerKey },
+          { email: lowerKey },
         ],
       },
       include: {

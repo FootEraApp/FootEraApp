@@ -234,8 +234,6 @@ export default function PaginaLogin() {
 
         if (isAdmin) {
           navigate("/admin");
-        } else if (rawTipo === "learning") {
-          navigate("/learning");
         } else if (rawTipo === "marca" || rawTipo === "federacao") {
           navigate(`/creator/profile?id=${usuarioId}`);
         } else {

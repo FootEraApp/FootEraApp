@@ -115,12 +115,22 @@ function entityLabelFromOwnerTipo(ownerTipo?: string | null): string {
   return t[0].toUpperCase() + t.slice(1).toLowerCase();
 }
 
-function entityFromTipoUsuario(tipo: string): "Atleta" | "Professor" | "Escolinha" | "Clube" | null {
-  const t = String(tipo || "").toLowerCase();
+function entityFromTipoUsuario(
+  tipo: string
+): "Atleta" | "Professor" | "Escolinha" | "Clube" | "Learning" | "Marca" | "Federacao" | null {
+  const t = String(tipo || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
   if (t === "atleta") return "Atleta";
   if (t === "professor") return "Professor";
-  if (t === "escolinha") return "Escolinha";
+  if (t === "escolinha" || t === "escola") return "Escolinha";
   if (t === "clube") return "Clube";
+  if (t === "learning") return "Learning";
+  if (t === "marca") return "Marca";
+  if (t === "federacao") return "Federacao";
+
   return null;
 }
 

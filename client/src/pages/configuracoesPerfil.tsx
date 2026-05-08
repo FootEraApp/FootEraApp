@@ -467,6 +467,20 @@ export default function ConfiguracoesPerfil() {
           )}
         </div>
 
+        {tipoNorm === "learning" && (
+          <div className="flex justify-between py-3 items-start border-t">
+            <div>
+              <p className="font-semibold">🔄 Mudar tipo de perfil</p>
+              <p className="text-sm text-gray-600">
+                Transforme sua conta Learning em atleta, professor, scout ou organização.
+              </p>
+            </div>
+
+            <Link href="/perfil/mudar-tipo" className="text-green-800 font-semibold">
+              Alterar
+            </Link>
+          </div>
+        )}
         {!bloqueiaCreator && (
           <div className="flex justify-between py-2 items-start border-t">
             <div>

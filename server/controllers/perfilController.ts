@@ -68,26 +68,64 @@ function withDefaultImg(v: any) {
   return s ? s : DEFAULT_AVATAR;
 }
 
-async function ensureSolicitacaoVinculo(
-  tx: any,
-  params: { atletaId: string; entidadeId: string; tipoEntidade: "clube" | "escolinha" | "professor" }
-) {
-  const { atletaId, entidadeId, tipoEntidade } = params;
+function normalizarTipoUsuario(tipo?: string | null) {
+  return String(tipo || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
-  const existente = await tx.solicitacaoVinculo.findFirst({
-    where: { atletaId, entidadeId, tipoEntidade },
-  });
+function inicioDoDia(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
-  if (!existente) {
-    await tx.solicitacaoVinculo.create({
-      data: {
-        atletaId,
-        entidadeId,
-        tipoEntidade,
-        status: "pendente",
-      },
-    });
+function calcularIdadePorDataNascimento(dataNascimento: Date) {
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - dataNascimento.getFullYear();
+
+  const mesAtual = hoje.getMonth();
+  const diaAtual = hoje.getDate();
+  const mesNasc = dataNascimento.getMonth();
+  const diaNasc = dataNascimento.getDate();
+
+  if (mesAtual < mesNasc || (mesAtual === mesNasc && diaAtual < diaNasc)) {
+    idade--;
   }
+
+  return idade;
+}
+
+function parseDataNascimentoObrigatoria(raw: any) {
+  const valor = String(raw || "").trim();
+
+  if (!valor) {
+    const err: any = new Error("Data de nascimento é obrigatória.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const data = new Date(`${valor}T00:00:00`);
+
+  if (Number.isNaN(data.getTime())) {
+    const err: any = new Error("Data de nascimento inválida.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const min = new Date("1900-01-01T00:00:00");
+  const hoje = inicioDoDia(new Date());
+
+  if (data < min || data > hoje) {
+    const err: any = new Error("A data de nascimento deve estar entre 1900 e a data de hoje.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return {
+    dataNascimento: data,
+    idade: calcularIdadePorDataNascimento(data),
+  };
 }
 
 function pickId(raw: any): string | undefined {
@@ -1197,49 +1235,120 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       }
     }
 
-    const federacao = await prisma.federacao.findFirst({
-      where: { OR: [{ usuarioId: id }, { id }] },
-      select: { id: true, usuarioId: true, usuario: { select: { id: true } } },
-    });
-
-    if (federacao) {
-      return res.json({
-        tipo: "Federacao",
-        tipoUsuario: "Federacao",
-        tipoUsuarioId: federacao.id,
-        usuario: { id: federacao.usuarioId },
-        federacaoId: federacao.id,
+    if (!tipoPerfil) {
+      const federacao = await prisma.federacao.findFirst({
+        where: { OR: [{ usuarioId: id }, { id }] },
+        select: {
+          id: true,
+          usuarioId: true,
+          nome: true,
+          email: true,
+          cnpj: true,
+          telefone1: true,
+          telefone2: true,
+          siteOficial: true,
+          sede: true,
+          cidade: true,
+          estado: true,
+          pais: true,
+          cep: true,
+          logo: true,
+          descricao: true,
+        },
       });
+
+      if (federacao) {
+        dadosEspecificos = {
+          id: federacao.id,
+          nome: federacao.nome,
+          email: federacao.email,
+          cnpj: federacao.cnpj,
+          telefone1: federacao.telefone1,
+          telefone2: federacao.telefone2,
+          siteOficial: federacao.siteOficial,
+          sede: federacao.sede,
+          cidade: federacao.cidade,
+          estado: federacao.estado,
+          pais: federacao.pais,
+          cep: federacao.cep,
+          logo: federacao.logo,
+          descricao: federacao.descricao,
+        };
+
+        tipoPerfil = "Federacao";
+      }
     }
 
-    const marca = await prisma.marca.findFirst({
-      where: { OR: [{ usuarioId: id }, { id }] },
-      select: { id: true, usuarioId: true, usuario: { select: { id: true } } },
-    });
-
-    if (marca) {
-      return res.json({
-        tipo: "Marca",
-        tipoUsuario: "Marca",
-        tipoUsuarioId: marca.id,
-        usuario: { id: marca.usuarioId },
-        marcaId: marca.id,
+    if (!tipoPerfil) {
+      const marca = await prisma.marca.findFirst({
+        where: { OR: [{ usuarioId: id }, { id }] },
+        select: {
+          id: true,
+          usuarioId: true,
+          nome: true,
+          email: true,
+          cnpj: true,
+          telefone1: true,
+          telefone2: true,
+          siteOficial: true,
+          cidade: true,
+          estado: true,
+          pais: true,
+          cep: true,
+          logo: true,
+          descricao: true,
+        },
       });
+
+      if (marca) {
+        dadosEspecificos = {
+          id: marca.id,
+          nome: marca.nome,
+          email: marca.email,
+          cnpj: marca.cnpj,
+          telefone1: marca.telefone1,
+          telefone2: marca.telefone2,
+          siteOficial: marca.siteOficial,
+          cidade: marca.cidade,
+          estado: marca.estado,
+          pais: marca.pais,
+          cep: marca.cep,
+          logo: marca.logo,
+          descricao: marca.descricao,
+        };
+
+        tipoPerfil = "Marca";
+      }
     }
 
-    const learning = await prisma.learningProfile.findFirst({
-      where: { OR: [{ usuarioId: id }, { id }] },
-      select: { id: true, usuarioId: true, usuario: { select: { id: true } } },
-    });
-
-    if (learning) {
-      return res.json({
-        tipo: "Learning",
-        tipoUsuario: "Learning",
-        tipoUsuarioId: learning.id,
-        usuario: { id: learning.usuarioId },
-        learningProfileId: learning.id,
+    if (!tipoPerfil) {
+      const learning = await prisma.learningProfile.findFirst({
+        where: { OR: [{ usuarioId: id }, { id }] },
+        select: {
+          id: true,
+          usuarioId: true,
+          bio: true,
+          objetivo: true,
+          interesses: true,
+          criadoEm: true,
+          updatedAt: true,
+        },
       });
+
+      if (learning) {
+        dadosEspecificos = {
+          id: learning.id,
+          learningProfileId: learning.id,
+          usuarioId: learning.usuarioId,
+          bio: learning.bio ?? null,
+          objetivo: learning.objetivo ?? null,
+          interesses: Array.isArray(learning.interesses) ? learning.interesses : [],
+          criadoEm: learning.criadoEm,
+          updatedAt: learning.updatedAt,
+        };
+
+        tipoPerfil = "Learning";
+      }
     }
 
   const usuarioPayload: any = {
@@ -1261,13 +1370,15 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
   }
 
   const fotoBase =
-  absUrl(usuario.foto) ||
-  (tipoPerfil === "Clube" ? absUrl((clube as any)?.logo) : null) ||
-  (tipoPerfil === "Escolinha" ? absUrl((escolinha as any)?.logo) : null) ||
-  (tipoPerfil === "Professor" ? absUrl((professor as any)?.fotoUrl) : null) ||
-  (tipoPerfil === "Atleta" ? absUrl((atleta as any)?.foto) : null) ||
-  (tipoPerfil === "Olheiro" ? absUrl((olheiro as any)?.fotoUrl) : null) ||
-  null;
+    absUrl(usuario.foto) ||
+    (tipoPerfil === "Clube" ? absUrl((clube as any)?.logo) : null) ||
+    (tipoPerfil === "Escolinha" ? absUrl((escolinha as any)?.logo) : null) ||
+    (tipoPerfil === "Professor" ? absUrl((professor as any)?.fotoUrl) : null) ||
+    (tipoPerfil === "Atleta" ? absUrl((atleta as any)?.foto) : null) ||
+    (tipoPerfil === "Olheiro" ? absUrl((olheiro as any)?.fotoUrl) : null) ||
+    (tipoPerfil === "Federacao" ? absUrl((dadosEspecificos as any)?.logo) : null) ||
+    (tipoPerfil === "Marca" ? absUrl((dadosEspecificos as any)?.logo) : null) ||
+    null;
 
   const perfilVerificado = calcularPerfilVerificado({
     usuario: {
@@ -1385,8 +1496,12 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       }
     }
 
-    if (!usuario || !tipoUsuario || !tipo) {
+    if (!usuario || !tipoUsuario) {
       return res.status(400).json({ error: "Dados incompletos." });
+    }
+
+    if (!tipo || typeof tipo !== "object") {
+      tipo = {};
     }
 
     // 3. Gerenciamento de Foto (S3)
@@ -1703,90 +1818,107 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         });
       break;
 
-      case "federacao": {
-        const federacao = await prisma.federacao.findUnique({
-          where: { usuarioId: id },
-          select: { id: true },
-        });
+      case "learning": {
+        const interesses =
+          Array.isArray(tipo.interesses)
+            ? tipo.interesses
+            : typeof tipo.interesses === "string"
+            ? tipo.interesses
+                .split(",")
+                .map((i: string) => i.trim())
+                .filter(Boolean)
+            : [];
 
-        if (!federacao) {
-          return res.status(404).json({ error: "Federação não encontrada." });
-        }
-
-        await prisma.federacao.update({
+        await prisma.learningProfile.upsert({
           where: { usuarioId: id },
-          data: {
-            nome: tipo.nome ?? usuario.nome,
-            cnpj: tipo.cnpj ?? null,
-            telefone1: tipo.telefone1 ?? null,
-            telefone2: tipo.telefone2 ?? null,
-            email: tipo.email ?? usuario.email,
-            siteOficial: tipo.siteOficial ?? null,
-            sede: tipo.sede ?? null,
-            cidade: tipo.cidade ?? usuario.cidade ?? null,
-            estado: tipo.estado ?? usuario.estado ?? null,
-            pais: tipo.pais ?? usuario.pais ?? null,
-            cep: tipo.cep ? String(tipo.cep).replace(/\D/g, "") : null,
-            descricao: tipo.descricao ?? null,
-            logo: fotoFinal,
+          create: {
+            usuarioId: id,
+            bio: tipo.bio ?? null,
+            objetivo: tipo.objetivo ?? null,
+            interesses,
           },
-        });
-
-        await prisma.creator.updateMany({
-          where: { usuarioId: id },
-          data: {
-            nomePublico: tipo.nome ?? usuario.nome,
-            avatarUrl: fotoFinal,
+          update: {
+            bio: tipo.bio ?? null,
+            objetivo: tipo.objetivo ?? null,
+            interesses,
           },
         });
 
         break;
+      }
+
+      case "federacao": {
+          await prisma.federacao.upsert({
+            where: { usuarioId: id },
+            create: {
+              usuarioId: id,
+              nome: tipo.nome || usuario.nome || "Federação",
+              email: usuario.email,
+              cnpj: tipo.cnpj || null,
+              telefone1: tipo.telefone1 || null,
+              telefone2: tipo.telefone2 || null,
+              siteOficial: tipo.siteOficial || null,
+              sede: tipo.sede || null,
+              cidade: tipo.cidade || usuario.cidade || null,
+              estado: tipo.estado || usuario.estado || null,
+              pais: tipo.pais || usuario.pais || null,
+              cep: tipo.cep || usuario.cep || null,
+              logo: tipo.logo || fotoFinal || null,
+              descricao: tipo.descricao || null,
+            } as any,
+            update: {
+              nome: tipo.nome || usuario.nome || undefined,
+              cnpj: tipo.cnpj || null,
+              telefone1: tipo.telefone1 || null,
+              telefone2: tipo.telefone2 || null,
+              siteOficial: tipo.siteOficial || null,
+              sede: tipo.sede || null,
+              cidade: tipo.cidade || usuario.cidade || null,
+              estado: tipo.estado || usuario.estado || null,
+              pais: tipo.pais || usuario.pais || null,
+              cep: tipo.cep || usuario.cep || null,
+              logo: tipo.logo || fotoFinal || null,
+              descricao: tipo.descricao || null,
+            } as any,
+          });
+
+          break;
       }
 
       case "marca": {
-        const marca = await prisma.marca.findUnique({
-          where: { usuarioId: id },
-          select: { id: true },
+        await prisma.marca.upsert({
+            where: { usuarioId: id },
+            create: {
+              usuarioId: id,
+              nome: tipo.nome || usuario.nome || "Marca",
+              email: usuario.email,
+              cnpj: tipo.cnpj || null,
+              telefone1: tipo.telefone1 || null,
+              telefone2: tipo.telefone2 || null,
+              siteOficial: tipo.siteOficial || null,
+              cidade: tipo.cidade || usuario.cidade || null,
+              estado: tipo.estado || usuario.estado || null,
+              pais: tipo.pais || usuario.pais || null,
+              cep: tipo.cep || usuario.cep || null,
+              logo: tipo.logo || fotoFinal || null,
+              descricao: tipo.descricao || null,
+            } as any,
+            update: {
+              nome: tipo.nome || usuario.nome || undefined,
+              cnpj: tipo.cnpj || null,
+              telefone1: tipo.telefone1 || null,
+              telefone2: tipo.telefone2 || null,
+              siteOficial: tipo.siteOficial || null,
+              cidade: tipo.cidade || usuario.cidade || null,
+              estado: tipo.estado || usuario.estado || null,
+              pais: tipo.pais || usuario.pais || null,
+              cep: tipo.cep || usuario.cep || null,
+              logo: tipo.logo || fotoFinal || null,
+              descricao: tipo.descricao || null,
+            } as any,
         });
-
-        if (!marca) {
-          return res.status(404).json({ error: "Marca não encontrada." });
-        }
-
-        await prisma.marca.update({
-          where: { usuarioId: id },
-          data: {
-            nome: tipo.nome ?? usuario.nome,
-            cnpj: tipo.cnpj ?? null,
-            telefone1: tipo.telefone1 ?? null,
-            telefone2: tipo.telefone2 ?? null,
-            email: tipo.email ?? usuario.email,
-            siteOficial: tipo.siteOficial ?? null,
-            cidade: tipo.cidade ?? usuario.cidade ?? null,
-            estado: tipo.estado ?? usuario.estado ?? null,
-            pais: tipo.pais ?? usuario.pais ?? null,
-            cep: tipo.cep ? String(tipo.cep).replace(/\D/g, "") : null,
-            descricao: tipo.descricao ?? null,
-            logo: fotoFinal,
-          },
-        });
-
-        await prisma.creator.updateMany({
-          where: { usuarioId: id },
-          data: {
-            nomePublico: tipo.nome ?? usuario.nome,
-            avatarUrl: fotoFinal,
-          },
-        });
-
         break;
-      }
-
-      case "learning": {
-        // Learning não tem tabela grande para editar.
-        // Só atualiza Usuario, que já foi atualizado antes do switch.
-        break;
-      }
+     }
       default:
         return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
@@ -2533,6 +2665,21 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Federação não encontrada." });
     }
 
+    const [conquistasCount, certificadosCount] = await Promise.all([
+      prisma.conquistaVinculo.count({
+        where: {
+          ownerTipo: "Federacao" as any,
+          ownerId: federacao.id,
+          concluida: true,
+        },
+      }),
+      (prisma as any).certificadoMetodologia.count({
+        where: {
+          usuarioId: federacao.usuarioId,
+        },
+      }),
+    ]);
+
     return res.json({
       tipo: "Federacao",
       usuario: federacao.usuario,
@@ -2542,7 +2689,9 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
         conteudos:
           (federacao._count?.Metodologia ?? 0) +
           (federacao._count?.MetodologiaAvulsa ?? 0),
-        campanhas: 0,
+        conquistas: conquistasCount,
+        certificados: certificadosCount,
+        conquistasCertificados: conquistasCount + certificadosCount,
       },
     });
   } catch (e) {
@@ -2599,6 +2748,21 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Marca não encontrada." });
     }
 
+    const [conquistasCount, certificadosCount] = await Promise.all([
+      prisma.conquistaVinculo.count({
+        where: {
+          ownerTipo: "Marca" as any,
+          ownerId: marca.id,
+          concluida: true,
+        },
+      }),
+      (prisma as any).certificadoMetodologia.count({
+        where: {
+          usuarioId: marca.usuarioId,
+        },
+      }),
+    ]);
+
     return res.json({
       tipo: "Marca",
       usuario: marca.usuario,
@@ -2608,7 +2772,9 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
         conteudos:
           (marca._count?.Metodologia ?? 0) +
           (marca._count?.MetodologiaAvulsa ?? 0),
-        campanhas: 0,
+        conquistas: conquistasCount,
+        certificados: certificadosCount,
+        conquistasCertificados: conquistasCount + certificadosCount,
       },
     });
   } catch (e) {
@@ -2627,6 +2793,11 @@ export const getPerfilLearning = async (req: Request, res: Response) => {
       select: {
         id: true,
         usuarioId: true,
+        bio: true,
+        objetivo: true,
+        interesses: true,
+        criadoEm: true,
+        updatedAt: true,
         usuario: {
           select: {
             id: true,
@@ -2635,6 +2806,11 @@ export const getPerfilLearning = async (req: Request, res: Response) => {
             foto: true,
             nomeDeUsuario: true,
             verified: true,
+            cep: true,
+            cidade: true,
+            estado: true,
+            pais: true,
+            logradouro: true,
           },
         },
       },
@@ -2654,14 +2830,294 @@ export const getPerfilLearning = async (req: Request, res: Response) => {
       },
     });
 
+    const totalSeguidores = await prisma.seguidor.count({
+      where: {
+        seguidoUsuarioId: learning.usuarioId,
+      },
+    });
+
+    const conteudos = assinaturas.map((a: any) => {
+      const item = a.metodologia ?? a.metodologiaAvulsa ?? null;
+
+      const progressoRaw =
+        typeof a.progresso === "object" && a.progresso !== null
+          ? a.progresso
+          : {};
+
+      const progressoPercentual =
+        Number((progressoRaw as any)?.percentual) ||
+        Number((progressoRaw as any)?.progressoPercentual) ||
+        Number(a.progressoPercentual) ||
+        0;
+
+      return {
+        id: a.id,
+        assinaturaId: a.id,
+        metodologiaId: a.metodologiaId ?? null,
+        metodologiaAvulsaId: a.metodologiaAvulsaId ?? null,
+        origem: a.origem ?? null,
+        status: a.status ?? null,
+        iniciouEm: a.iniciouEm ?? null,
+        concluiuEm: a.concluiuEm ?? null,
+        titulo: item?.titulo ?? item?.nome ?? "Curso",
+        nome: item?.nome ?? item?.titulo ?? "Curso",
+        imagemUrl: item?.imagemUrl ?? item?.capaUrl ?? item?.thumbUrl ?? null,
+        progresso: progressoPercentual,
+        progressoPercentual,
+        assinatura: {
+          status: a.status ?? null,
+        },
+      };
+    });
+
+    const finalizados = conteudos.filter((c: any) => {
+      const status = String(c.status || "").toUpperCase();
+      const progresso = Number(c.progressoPercentual || c.progresso || 0);
+
+      return status === "CONCLUIDA" || status === "CONCLUÍDA" || progresso >= 100;
+    });
+
+    const emAndamento = conteudos.filter((c: any) => {
+      const status = String(c.status || "").toUpperCase();
+      const progresso = Number(c.progressoPercentual || c.progresso || 0);
+
+      return status !== "CONCLUIDA" && status !== "CONCLUÍDA" && progresso < 100;
+    });
+
     return res.json({
       tipo: "Learning",
       usuario: learning.usuario,
-      learning,
-      conteudos: assinaturas,
+      learning: {
+        id: learning.id,
+        usuarioId: learning.usuarioId,
+        bio: learning.bio ?? null,
+        objetivo: learning.objetivo ?? null,
+        interesses: Array.isArray(learning.interesses) ? learning.interesses : [],
+        criadoEm: learning.criadoEm,
+        updatedAt: learning.updatedAt,
+      },
+      dadosEspecificos: {
+        id: learning.id,
+        learningProfileId: learning.id,
+        usuarioId: learning.usuarioId,
+        bio: learning.bio ?? null,
+        objetivo: learning.objetivo ?? null,
+        interesses: Array.isArray(learning.interesses) ? learning.interesses : [],
+        criadoEm: learning.criadoEm,
+        updatedAt: learning.updatedAt,
+      },
+      conteudos,
+      metricas: {
+        cursos: conteudos.length,
+        learnings: finalizados.length,
+        emAndamento: emAndamento.length,
+        finalizados: finalizados.length,
+        certificados: finalizados.length,
+        conquistas: 0,
+        seguidores: totalSeguidores,
+        progresso:
+          conteudos.length > 0
+            ? Math.round(
+                conteudos.reduce(
+                  (acc: number, c: any) =>
+                    acc + Number(c.progressoPercentual || c.progresso || 0),
+                  0
+                ) / conteudos.length
+              )
+            : 0,
+      }
     });
   } catch (e) {
     console.error("getPerfilLearning error:", e);
     return res.status(500).json({ message: "Erro ao carregar Learning." });
+  }
+};
+
+export const upgradeLearningProfile = async (req: any, res: Response) => {
+  try {
+    const usuarioId = req.userId || req.user?.id;
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        nomeDeUsuario: true,
+        tipo: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    if (usuario.tipo !== "Learning") {
+      return res.status(400).json({
+        message: "Apenas contas Learning podem mudar o tipo por este fluxo.",
+      });
+    }
+
+    const novoTipo = String(req.body?.tipo || "").toUpperCase();
+
+    if (!["ATLETA", "PROFESSOR", "OLHEIRO", "CLUBE", "ESCOLINHA", "FEDERACAO", "MARCA"].includes(novoTipo)) {
+      return res.status(400).json({ message: "Tipo de perfil inválido." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (novoTipo === "ATLETA") {
+        const nascimento = parseDataNascimentoObrigatoria(req.body.dataNascimento);
+
+        const categoriasNormalizadas = normalizarCategorias(req.body.categoria);
+
+        await tx.atleta.create({
+          data: {
+            usuarioId,
+            nome: req.body.nome || usuario.nome,
+            dataNascimento: nascimento.dataNascimento,
+            idade: nascimento.idade,
+            categoria: categoriasNormalizadas,
+            posicao: req.body.posicao || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Atleta" as any },
+        });
+      }
+
+      if (novoTipo === "PROFESSOR") {
+        const nascimento = parseDataNascimentoObrigatoria(req.body.dataNascimento);
+
+        await tx.professor.create({
+          data: {
+            usuarioId,
+            nome: req.body.nome || usuario.nome,
+            email: usuario.email,
+            dataNascimento: nascimento.dataNascimento,
+            areaFormacao: req.body.areaFormacao || null,
+            cref: req.body.cref || null,
+            statusCref: req.body.statusCref || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Professor" as any },
+        });
+      }
+
+      if (novoTipo === "OLHEIRO") {
+        const nascimento = parseDataNascimentoObrigatoria(req.body.dataNascimento);
+
+        await tx.olheiro.create({
+          data: {
+            usuarioId,
+            nome: req.body.nome || usuario.nome,
+            email: usuario.email,
+            dataNascimento: nascimento.dataNascimento,
+            areaAtuacao: req.body.areaAtuacao || null,
+            anosExperiencia: req.body.anosExperiencia
+              ? Number(req.body.anosExperiencia)
+              : null,
+            descricao: req.body.descricao || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Olheiro" as any },
+        });
+      }
+
+      if (novoTipo === "CLUBE") {
+        await tx.clube.create({
+          data: {
+            usuarioId,
+            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
+            email: usuario.email,
+            cnpj: req.body.cnpj || null,
+            cidade: req.body.cidade || null,
+            estado: req.body.estado || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Clube" as any },
+        });
+      }
+
+      if (novoTipo === "ESCOLINHA") {
+        await tx.escolinha.create({
+          data: {
+            usuarioId,
+            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
+            email: usuario.email,
+            cnpj: req.body.cnpj || null,
+            cidade: req.body.cidade || null,
+            estado: req.body.estado || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Escolinha" as any },
+        });
+      }
+
+      if (novoTipo === "FEDERACAO") {
+        await tx.federacao.create({
+          data: {
+            usuarioId,
+            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
+            email: usuario.email,
+            cnpj: req.body.cnpj || null,
+            cidade: req.body.cidade || null,
+            estado: req.body.estado || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Federacao" as any },
+        });
+      }
+
+      if (novoTipo === "MARCA") {
+        await tx.marca.create({
+          data: {
+            usuarioId,
+            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
+            email: usuario.email,
+            cnpj: req.body.cnpj || null,
+            cidade: req.body.cidade || null,
+            estado: req.body.estado || null,
+          } as any,
+        });
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: { tipo: "Marca" as any },
+        });
+      }
+    });
+
+    return res.json({
+      ok: true,
+      message: "Tipo de perfil atualizado com sucesso.",
+      tipo: novoTipo,
+    });
+  } catch (e: any) {
+    console.error("upgradeLearningProfile error:", e);
+
+    return res.status(e?.statusCode || 500).json({
+      message: e?.message || "Erro ao mudar tipo de perfil.",
+    });
   }
 };

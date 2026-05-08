@@ -6,7 +6,8 @@ import {
   getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta,
   getPerfilProfessor, getPerfilClube, getPerfilEscola, getPerfilOlheiro, 
   getUltimasSubmissoesDesafioVideosMe, getUltimasSubmissoesDesafioVideos,
-  getPontuacaoPerfil, getPerfilFederacao, getPerfilMarca, getPerfilLearning
+  getPontuacaoPerfil, getPerfilFederacao, getPerfilMarca, getPerfilLearning,
+  upgradeLearningProfile
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import multer from "multer";
@@ -59,7 +60,7 @@ router.get("/learning/me", authenticateToken, (req, res) => {
   (req as any).params = { id: req.userId };
   getPerfilLearning(req as any, res);
 });
-
+router.put("/learning/upgrade", authenticateToken, upgradeLearningProfile);
 router.get("/learning/:id", authenticateToken, getPerfilLearning);
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);

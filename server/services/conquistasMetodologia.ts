@@ -188,7 +188,10 @@ export async function syncTemplatesMetodologiasProfissionais(): Promise<void> {
 
 function publicoConquistaFromPublicoAlvo(publicoAlvo: MetodologiaPublicoAlvo): ConquistaOwnerTipo[] {
   if (publicoAlvo === MetodologiaPublicoAlvo.ATLETAS) {
-    return [ConquistaOwnerTipo.Atleta];
+    return [
+      ConquistaOwnerTipo.Atleta,
+      ConquistaOwnerTipo.Learning,
+    ];
   }
 
   if (publicoAlvo === MetodologiaPublicoAlvo.PROFISSIONAIS) {
@@ -196,14 +199,19 @@ function publicoConquistaFromPublicoAlvo(publicoAlvo: MetodologiaPublicoAlvo): C
       ConquistaOwnerTipo.Professor,
       ConquistaOwnerTipo.Clube,
       ConquistaOwnerTipo.Escolinha,
+      ConquistaOwnerTipo.Marca,
+      ConquistaOwnerTipo.Federacao,
     ];
   }
 
   return [
     ConquistaOwnerTipo.Atleta,
+    ConquistaOwnerTipo.Learning,
     ConquistaOwnerTipo.Professor,
     ConquistaOwnerTipo.Clube,
     ConquistaOwnerTipo.Escolinha,
+    ConquistaOwnerTipo.Marca,
+    ConquistaOwnerTipo.Federacao,
   ];
 }
 
@@ -289,6 +297,69 @@ async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
     };
   }
 
+  if (u.tipo === TipoUsuario.Learning) {
+    const learning = await prisma.learningProfile.findUnique({
+      where: { usuarioId },
+      select: { id: true },
+    });
+
+    if (!learning?.id) return null;
+
+    return {
+      ownerTipo: ConquistaOwnerTipo.Learning,
+      ownerId: learning.id,
+      atletaId: null,
+      professorId: null,
+      clubeId: null,
+      escolinhaId: null,
+      learningProfileId: learning.id,
+      marcaId: null,
+      federacaoId: null,
+    } as any;
+  }
+
+  if (u.tipo === TipoUsuario.Marca) {
+    const marca = await prisma.marca.findUnique({
+      where: { usuarioId },
+      select: { id: true },
+    });
+
+    if (!marca?.id) return null;
+
+    return {
+      ownerTipo: ConquistaOwnerTipo.Marca,
+      ownerId: marca.id,
+      atletaId: null,
+      professorId: null,
+      clubeId: null,
+      escolinhaId: null,
+      learningProfileId: null,
+      marcaId: marca.id,
+      federacaoId: null,
+    } as any;
+  }
+
+  if (u.tipo === TipoUsuario.Federacao) {
+    const federacao = await prisma.federacao.findUnique({
+      where: { usuarioId },
+      select: { id: true },
+    });
+
+    if (!federacao?.id) return null;
+
+    return {
+      ownerTipo: ConquistaOwnerTipo.Federacao,
+      ownerId: federacao.id,
+      atletaId: null,
+      professorId: null,
+      clubeId: null,
+      escolinhaId: null,
+      learningProfileId: null,
+      marcaId: null,
+      federacaoId: federacao.id,
+    } as any;
+  }
+
   return null;
 }
 
@@ -318,6 +389,9 @@ export async function unlockConquistaMetodologia(usuarioId: string, metodologiaI
       professorId: owner.professorId ?? null,
       clubeId: owner.clubeId ?? null,
       escolinhaId: owner.escolinhaId ?? null,
+      learningProfileId: (owner as any).learningProfileId ?? null,
+      marcaId: (owner as any).marcaId ?? null,
+      federacaoId: (owner as any).federacaoId ?? null,
 
       refTipo: "METODOLOGIA",
       refId: metodologiaId,
@@ -362,12 +436,18 @@ export async function unlockConquistaMetodologiaAvulsa(
       conquistaId: conquista.id,
       ownerTipo: owner.ownerTipo,
       ownerId: owner.ownerId,
+
       atletaId: owner.atletaId ?? null,
       professorId: owner.professorId ?? null,
       clubeId: owner.clubeId ?? null,
       escolinhaId: owner.escolinhaId ?? null,
+      learningProfileId: (owner as any).learningProfileId ?? null,
+      marcaId: (owner as any).marcaId ?? null,
+      federacaoId: (owner as any).federacaoId ?? null,
+
       refTipo: "METODOLOGIA_AVULSA",
       refId: metodologiaAvulsaId,
+
       progresso: 100,
       concluida: true,
       conquistadoEm: new Date(),

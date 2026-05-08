@@ -179,18 +179,6 @@ export default function CreatorNovoEventoPage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-semibold">Data e hora*</label>
-            <input
-              type="datetime-local"
-              className="w-full border rounded px-3 py-2"
-              value={form.dataEvento}
-              min={minDateTime}
-              max={maxDateTime}
-              onChange={(e) => set("dataEvento", e.target.value)}
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-semibold">Início inscrições</label>
@@ -218,7 +206,19 @@ export default function CreatorNovoEventoPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold">Descrição</label>
+            <label className="block text-sm font-semibold">Data e hora do evento*</label>
+            <input
+              type="datetime-local"
+              className="w-full border rounded px-3 py-2"
+              value={form.dataEvento}
+              min={minDateTime}
+              max={maxDateTime}
+              onChange={(e) => set("dataEvento", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold">Descrição (opcional)</label>
             <textarea
               className="w-full border rounded px-3 py-2"
               rows={4}

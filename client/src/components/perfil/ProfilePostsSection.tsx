@@ -441,8 +441,8 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   const FALLBACK_AVATAR = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 -mt-2 pb-10">
-      <div className="pt-2 pb-2">
+    <div className="max-w-3xl mx-auto px-4 mt-4 pb-10">
+      <div className="pt-3 pb-2">
         <h2 className="text-green-900 font-bold text-lg px-4 mb-2">
           Minhas postagens
         </h2>
@@ -490,7 +490,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             return (
               <div
                 key={post.id}
-                className="bg-white rounded-2xl shadow-md p-4 space-y-3"
+                className="bg-stone-50 rounded-2xl shadow-md p-4 space-y-3"
               >
                <div className="flex items-center gap-2">
                 <img
