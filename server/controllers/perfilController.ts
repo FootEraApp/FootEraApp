@@ -1291,6 +1291,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
           telefone1: true,
           telefone2: true,
           siteOficial: true,
+          sede: true,
           cidade: true,
           estado: true,
           pais: true,
@@ -1314,6 +1315,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
           pais: marca.pais,
           cep: marca.cep,
           logo: marca.logo,
+          sede: marca.sede,
           descricao: marca.descricao,
         };
 
@@ -1765,6 +1767,8 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             telefone2: tipo.telefone2 ?? null,
             email: tipo.email,
             siteOficial: tipo.siteOficial,
+            sede: tipo.sede ?? null,
+            estadio: tipo.estadio ?? null,
             cnpj: tipo.cnpj ?? null,
             logradouro: usuario.logradouro ?? null,
             cidade: usuario.cidade ?? null,
@@ -1773,7 +1777,9 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             cep: cepDigits || null,
             logo: fotoFinal,
             descricao: tipo.descricao ?? null,
-            categorias: Array.isArray(tipo.categorias) ? { set: normalizarCategorias(tipo.categorias), } : undefined,
+            categorias: Array.isArray(tipo.categorias)
+              ? { set: normalizarCategorias(tipo.categorias) }
+              : undefined,
           },
         });
         break;
@@ -1803,6 +1809,8 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             telefone1: tipo.telefone1,
             telefone2: tipo.telefone2 ?? null,
             email: tipo.email,
+            siteOficial: tipo.siteOficial,
+            sede: tipo.sede ?? null,
             cnpj: tipo.cnpj ?? null,
             logradouro: usuario.logradouro ?? null,
             cidade: usuario.cidade ?? null,
@@ -1853,7 +1861,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             create: {
               usuarioId: id,
               nome: tipo.nome || usuario.nome || "Federação",
-              email: usuario.email,
+              email: tipo.email || usuario.email || null,
               cnpj: tipo.cnpj || null,
               telefone1: tipo.telefone1 || null,
               telefone2: tipo.telefone2 || null,
@@ -1862,7 +1870,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
               cidade: tipo.cidade || usuario.cidade || null,
               estado: tipo.estado || usuario.estado || null,
               pais: tipo.pais || usuario.pais || null,
-              cep: tipo.cep || usuario.cep || null,
+              cep: tipo.cep || cepDigits || null,
               logo: tipo.logo || fotoFinal || null,
               descricao: tipo.descricao || null,
             } as any,
@@ -1876,7 +1884,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
               cidade: tipo.cidade || usuario.cidade || null,
               estado: tipo.estado || usuario.estado || null,
               pais: tipo.pais || usuario.pais || null,
-              cep: tipo.cep || usuario.cep || null,
+              cep: tipo.cep || cepDigits || null,
               logo: tipo.logo || fotoFinal || null,
               descricao: tipo.descricao || null,
             } as any,
@@ -1891,7 +1899,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             create: {
               usuarioId: id,
               nome: tipo.nome || usuario.nome || "Marca",
-              email: usuario.email,
+              email: tipo.email || usuario.email || null,
               cnpj: tipo.cnpj || null,
               telefone1: tipo.telefone1 || null,
               telefone2: tipo.telefone2 || null,
@@ -1899,20 +1907,22 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
               cidade: tipo.cidade || usuario.cidade || null,
               estado: tipo.estado || usuario.estado || null,
               pais: tipo.pais || usuario.pais || null,
-              cep: tipo.cep || usuario.cep || null,
+              cep: tipo.cep || cepDigits || null,
               logo: tipo.logo || fotoFinal || null,
               descricao: tipo.descricao || null,
+              sede: tipo.sede || null,
             } as any,
             update: {
               nome: tipo.nome || usuario.nome || undefined,
               cnpj: tipo.cnpj || null,
+              sede: tipo.sede || null,
               telefone1: tipo.telefone1 || null,
               telefone2: tipo.telefone2 || null,
               siteOficial: tipo.siteOficial || null,
               cidade: tipo.cidade || usuario.cidade || null,
               estado: tipo.estado || usuario.estado || null,
               pais: tipo.pais || usuario.pais || null,
-              cep: tipo.cep || usuario.cep || null,
+              cep: tipo.cep || cepDigits || null,
               logo: tipo.logo || fotoFinal || null,
               descricao: tipo.descricao || null,
             } as any,
@@ -2647,8 +2657,11 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
             foto: true,
             nomeDeUsuario: true,
             verified: true,
-            cidade: true,
+            cep: true,
+            pais: true,
             estado: true,
+            cidade: true,
+            logradouro: true,
           },
         },
         _count: {
@@ -2720,6 +2733,7 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
         estado: true,
         pais: true,
         cep: true,
+        sede: true,
         logo: true,
         descricao: true,
         usuario: {
@@ -2730,8 +2744,11 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
             foto: true,
             nomeDeUsuario: true,
             verified: true,
-            cidade: true,
+            cep: true,
+            pais: true,
             estado: true,
+            cidade: true,
+            logradouro: true,
           },
         },
         _count: {
@@ -2741,7 +2758,7 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
             MetodologiaAvulsa: true,
           },
         },
-      },
+      }
     });
 
     if (!marca) {

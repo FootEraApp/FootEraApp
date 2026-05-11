@@ -524,12 +524,15 @@ const EditarPerfil = () => {
       return (
         <>
           <div className="mb-4">
-            <label className="block text-sm font-medium">Nome</label>
+            <label className="block text-sm font-medium">
+              {isFederacao ? "Nome da Federação" : "Nome da Marca"}
+            </label>
             <input
               name="tipo_nome"
               value={dadosTipo?.nome || ""}
               onChange={handleChange}
               className="w-full border px-3 py-2 rounded"
+              placeholder={isFederacao ? "Ex: Federação Capixaba" : "Ex: Marca FootEra"}
             />
           </div>
 
@@ -545,6 +548,41 @@ const EditarPerfil = () => {
                 });
               }}
               className="w-full border px-3 py-2 rounded"
+              placeholder="00.000.000/0000-00"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Telefone 1</label>
+            <input
+              name="tipo_telefone1"
+              value={dadosTipo?.telefone1 || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Ex: (27) 99999-9999"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Telefone 2</label>
+            <input
+              name="tipo_telefone2"
+              value={dadosTipo?.telefone2 || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">E-mail público</label>
+            <input
+              type="email"
+              name="tipo_email"
+              value={dadosTipo?.email || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="contato@exemplo.com"
             />
           </div>
 
@@ -560,12 +598,27 @@ const EditarPerfil = () => {
           </div>
 
           <div className="mb-4">
+            <label className="block text-sm font-medium">Sede</label>
+            <input
+              name="tipo_sede"
+              value={dadosTipo?.sede || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder={
+                isFederacao
+                  ? "Ex: Sede administrativa em Vitória - ES"
+                  : "Ex: Unidade matriz em Vila Velha - ES"
+              }
+            />
+          </div>
+
+          <div className="mb-4">
             <label className="block text-sm font-medium">Descrição</label>
             <textarea
               name="tipo_descricao"
               value={dadosTipo?.descricao || ""}
               onChange={handleChange}
-              className="w-full border px-3 py-2 rounded min-h-[100px]"
+              className="w-full border px-3 py-2 rounded min-h-[110px]"
               placeholder={
                 isFederacao
                   ? "Descreva a federação, atuação, região, modalidades e objetivos."
@@ -787,15 +840,26 @@ const EditarPerfil = () => {
       case "escolinha":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Nome da Escolinha", "nome")}
             {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
-            {renderInput("Email", "email")}
-            {renderInput("Site Oficial", "siteOficial")}
+            {renderInput("E-mail público", "email", "email")}
+            {renderInput("Site oficial", "siteOficial")}
+            {renderInput("Sede", "sede")}
+            {renderInput("Categorias", "categorias")}
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Descrição</label>
+              <textarea
+                name="tipo_descricao"
+                value={dadosTipo.descricao ?? ""}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded min-h-[110px]"
+                placeholder="Descreva a escolinha, estrutura, categorias e metodologia."
+              />
+            </div>
           </>
         );
-
       case "olheiro":
         return (
           <>
@@ -879,59 +943,28 @@ const EditarPerfil = () => {
       case "clube":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Nome do Clube", "nome")}
             {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
-            {renderInput("Email", "email")}
-            {renderInput("Site Oficial", "siteOficial")}
+            {renderInput("E-mail público", "email", "email")}
+            {renderInput("Site oficial", "siteOficial")}
+            {renderInput("Sede", "sede")}
             {renderInput("Estádio", "estadio")}
-
+            {renderInput("Categorias", "categorias")}
             <div className="mb-4">
               <label className="block text-sm font-medium">Descrição</label>
               <textarea
                 name="tipo_descricao"
-                value={dadosTipo["descricao"] ?? ""}
+                value={dadosTipo.descricao ?? ""}
                 onChange={handleChange}
-                className="w-full border px-3 py-2 rounded"
-                rows={4}
-                placeholder="Fale sobre o clube, história, missão, etc."
+                className="w-full border px-3 py-2 rounded min-h-[110px]"
+                placeholder="Descreva o clube, história, estrutura e objetivos."
               />
             </div>
-
-           <div className="mb-4">
-            <label className="block text-sm font-medium">Categorias de Base</label>
-
-            <select
-              multiple
-              value={Array.isArray(dadosTipo.categorias) ? dadosTipo.categorias : []}
-              onChange={(e) => {
-                const values = Array.from(e.target.selectedOptions).map((o) => o.value);
-                setDadosTipo((prev: any) => ({
-                  ...prev,
-                  categorias: values,
-                }));
-              }}
-              className="w-full border px-3 py-2 rounded bg-white min-h-[180px]"
-            >
-              <option value="Sub3">Sub-3</option>
-              <option value="Sub5">Sub-5</option>
-              <option value="Sub7">Sub-7</option>
-              <option value="Sub9">Sub-9</option>
-              <option value="Sub11">Sub-11</option>
-              <option value="Sub13">Sub-13</option>
-              <option value="Sub15">Sub-15</option>
-              <option value="Sub16">Sub-16</option>
-              <option value="Livre">Livre</option>
-            </select>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Segure Ctrl (ou Cmd no Mac) para selecionar mais de uma categoria.
-            </p>
-          </div>
           </>
         );
-    }
+      }
   };
 
 const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";

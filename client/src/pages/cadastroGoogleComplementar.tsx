@@ -490,6 +490,10 @@ export default function CadastroGoogleComplementar() {
   const preData = useMemo(() => getGooglePreCadastroData(), []);
   const preCadastroToken = preData?.preCadastroToken || "";
   const googleProfile: GoogleProfile | null = preData?.googleProfile || null;
+  const googlePictureUrl =
+    typeof googleProfile?.picture === "string" && googleProfile.picture.trim()
+      ? googleProfile.picture.trim()
+      : PLACEHOLDER_AVATAR;
 
   const [tipoPerfil, setTipoPerfil] = useState<TipoPerfil>("Atleta");
   const [nome, setNome] = useState(googleProfile?.name || "");
@@ -1007,6 +1011,9 @@ export default function CadastroGoogleComplementar() {
         escolinha: "escolinha",
         escola: "escola",
         olheiro: "olheiro",
+        federacao: "federacao",
+        marca: "marca",
+        learning: "learning",
       };
 
       sessionStorage.removeItem("google_pre_cadastro");
@@ -1046,7 +1053,7 @@ export default function CadastroGoogleComplementar() {
       }
 
       setTimeout(() => {
-        navigate(rawTipo === "admin" ? "/admin" : "/feed");
+        navigate(rawTipo === "admin" ? "/admin" : "/perfil");
       }, 1200);
     } catch (err: any) {
       setErro(
@@ -1222,11 +1229,22 @@ export default function CadastroGoogleComplementar() {
 
               <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-center gap-3">
                 <img
-                  src={googleProfile?.picture || PLACEHOLDER_AVATAR}
+                  src={googlePictureUrl}
                   alt="Foto da conta Google"
+                  referrerPolicy="no-referrer"
+                  loading="eager"
                   className="h-14 w-14 rounded-full border object-cover bg-white"
                   onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                    e.currentTarget.src = PLACEHOLDER_AVATAR;
+                    const img = e.currentTarget;
+
+                    console.warn("[Google Complementar] Falha ao carregar foto Google:", {
+                      src: img.src,
+                      googlePicture: googleProfile?.picture,
+                    });
+
+                    if (img.src !== PLACEHOLDER_AVATAR) {
+                      img.src = PLACEHOLDER_AVATAR;
+                    }
                   }}
                 />
 

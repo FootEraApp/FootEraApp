@@ -46,6 +46,30 @@ export default function PerfilMarca({
   const usuario = data.usuario ?? entidade.usuario ?? {};
   const usuarioId = usuario.id ?? entidade.usuarioId;
   const isFederacao = tipoPerfil === "federacao";
+  const nomeInfo = entidade.nome || usuario.nome || "Não informado";
+const emailInfo = entidade.email || usuario.email || "";
+const cnpjInfo = entidade.cnpj || "";
+const telefone1Info = entidade.telefone1 || "";
+const telefone2Info = entidade.telefone2 || "";
+const siteInfo = entidade.siteOficial || "";
+const sedeInfo = entidade.sede || "";
+const cepInfo = entidade.cep || usuario.cep || "";
+const logradouroInfo = entidade.logradouro || usuario.logradouro || "";
+const cidadeInfo = entidade.cidade || usuario.cidade || "";
+const estadoInfo = entidade.estado || usuario.estado || "";
+const paisInfo = entidade.pais || usuario.pais || "";
+const descricaoInfo = entidade.descricao || "";
+
+const localizacaoInfo = [cidadeInfo, estadoInfo, paisInfo]
+  .filter(Boolean)
+  .join(" - ");
+
+const enderecoInfo = [
+  logradouroInfo,
+  localizacaoInfo,
+]
+  .filter(Boolean)
+  .join(" • ");
 
   const subtituloPerfil =
     entidade.cidade && entidade.estado
@@ -107,69 +131,66 @@ export default function PerfilMarca({
 
             <ul className="text-sm text-green-900/90 space-y-2">
               <li>
-                <b>Nome:</b> {entidade.nome || usuario.nome || "Não informado"}
+                <b>Nome:</b> {nomeInfo}
               </li>
 
-              {entidade.email || usuario.email ? (
+              {emailInfo ? (
                 <li>
-                  <b>Email:</b> {entidade.email || usuario.email}
+                  <b>Email:</b> {emailInfo}
                 </li>
               ) : null}
 
-              {entidade.cnpj ? (
+              {cnpjInfo ? (
                 <li>
-                  <b>CNPJ:</b> {entidade.cnpj}
+                  <b>CNPJ:</b> {cnpjInfo}
                 </li>
               ) : null}
 
-              {entidade.telefone1 ? (
+              {telefone1Info ? (
                 <li>
-                  <b>Telefone 1:</b> {entidade.telefone1}
+                  <b>Telefone 1:</b> {telefone1Info}
                 </li>
               ) : null}
 
-              {entidade.telefone2 ? (
+              {telefone2Info ? (
                 <li>
-                  <b>Telefone 2:</b> {entidade.telefone2}
+                  <b>Telefone 2:</b> {telefone2Info}
                 </li>
               ) : null}
 
-              {entidade.siteOficial ? (
+              {siteInfo ? (
                 <li>
                   <b>Site oficial:</b>{" "}
                   <a
                     href={
-                      String(entidade.siteOficial).startsWith("http")
-                        ? entidade.siteOficial
-                        : `https://${entidade.siteOficial}`
+                      String(siteInfo).startsWith("http")
+                        ? siteInfo
+                        : `https://${siteInfo}`
                     }
                     target="_blank"
                     rel="noreferrer"
                     className="text-green-800 underline"
                   >
-                    {entidade.siteOficial}
+                    {siteInfo}
                   </a>
                 </li>
               ) : null}
 
-              {entidade.sede ? (
+              {sedeInfo ? (
                 <li>
-                  <b>Sede:</b> {entidade.sede}
+                  <b>Sede:</b> {sedeInfo}
                 </li>
               ) : null}
 
-              {(entidade.cidade || entidade.estado || entidade.pais) && (
+              {enderecoInfo ? (
                 <li>
-                  <b>Localização:</b>{" "}
-                  {[entidade.cidade, entidade.estado, entidade.pais]
-                    .filter(Boolean)
-                    .join(" - ")}
+                  <b>Endereço:</b> {enderecoInfo}
                 </li>
-              )}
+              ) : null}
 
-              {entidade.descricao ? (
+              {descricaoInfo ? (
                 <li>
-                  <b>Descrição:</b> {entidade.descricao}
+                  <b>Descrição:</b> {descricaoInfo}
                 </li>
               ) : null}
             </ul>

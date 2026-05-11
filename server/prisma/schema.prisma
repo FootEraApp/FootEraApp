@@ -2924,6 +2924,7 @@ model Marca {
   estado      String?
   pais        String?
   cep         String?
+  sede        String?
   logo        String?
   descricao   String?
   conquistas  ConquistaVinculo[]

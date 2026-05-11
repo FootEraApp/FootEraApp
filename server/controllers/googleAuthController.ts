@@ -637,6 +637,7 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
             pais: paisClube || paisEscolinha || pais || null,
             cep: cepClube || cepEscolinha || null,
             descricao: descricao ?? null,
+            logo: pre.foto ?? null,
           },
           select: { id: true },
         });
@@ -677,6 +678,7 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
             pais: paisClube || paisEscolinha || pais || null,
             cep: cepClube || cepEscolinha || null,
             descricao: descricao ?? null,
+            logo: pre.foto ?? null,
           },
           select: { id: true },
         });

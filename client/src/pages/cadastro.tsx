@@ -1014,10 +1014,8 @@ export default function Cadastro() {
 
       if (rawTipo === "admin") {
         navigate("/admin");
-      } else if (rawTipo === "marca" || rawTipo === "federacao") {
-        navigate(`/creator/profile?id=${usuarioId}`);
       } else {
-        navigate("/feed");
+        navigate("/perfil");
       }
     } catch (err: any) {
       console.error("Erro no cadastro/login com Google:", err.response?.data || err.message);
