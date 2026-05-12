@@ -929,16 +929,16 @@ model MetodologiaAvulsa {
   mediaAvaliacao Float?
   totalReviews   Int    @default(0)
 
-  estruturas               MetodologiaAvulsaEstrutura[]
-  assinantes               MetodologiaAssinante[]
-  certificados             CertificadoMetodologia[]
+  estruturas   MetodologiaAvulsaEstrutura[]
+  assinantes   MetodologiaAssinante[]
+  certificados CertificadoMetodologia[]
 
   aulasAoVivo AulaAoVivo[]
 
-  vendasCreator            CreatorVenda[]
-  
-  criadoEm                 DateTime                     @default(now())
-  atualizadoEm             DateTime                     @updatedAt
+  vendasCreator CreatorVenda[]
+
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
   AvaliacaoMetodologia     AvaliacaoMetodologia[]
 
@@ -1034,6 +1034,17 @@ model AulaAoVivo {
   streamKey      String?
   provedorStream String?
 
+  // Amazon IVS
+  ivsChannelArn     String?
+  ivsStreamKeyArn   String?
+  ivsIngestEndpoint String?
+
+  // NOVOS CAMPOS PARA GRAVAÇÃO IVS/S3
+  ivsRecordingConfigurationArn String?
+  ivsRecordingS3Prefix         String?
+  ivsRecordingStatus           String?
+  ivsRecordingId               String?
+
   // Dados do replay depois que a live acabar
   videoGravadoUrl String?
   thumbUrl        String?
@@ -1084,6 +1095,7 @@ model AulaAoVivo {
   @@index([estruturaId])
   @@index([metodologiaAvulsaId])
   @@index([estruturaAvulsaId])
+  @@index([ivsRecordingId])
 }
 
 model AulaAoVivoMensagem {

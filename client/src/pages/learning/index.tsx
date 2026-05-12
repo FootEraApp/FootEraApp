@@ -1,7 +1,16 @@
 // client/src/pages/learning/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation} from "wouter";
-import { Pencil, Trash2 } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Radio,
+  CalendarClock,
+  Users,
+  PlayCircle,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import {
   listMetodologiasVisiveis,
   listMinhasMetodologiasAssinadas,
@@ -12,12 +21,37 @@ import {
 } from "../../services/metodologias.js";
 import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningCard from "../../components/learning/LearningCard.js";
+import { API } from "@/config.js";
 
 type TabKey = "explorar" | "minhas" | "criar";
 
 type LearningCriadasResponse = {
   items: any[];
   permissaoCriacao?: LearningPermissaoCriacao;
+};
+
+type AulaAoVivoResumo = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+  status: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
+  dataInicio: string;
+  dataFim?: string | null;
+  chatAtivo?: boolean;
+  gravacaoAtiva?: boolean;
+  replayDisponivel?: boolean;
+  totalParticipantes?: number | null;
+  totalMensagens?: number | null;
+  metodologia?: {
+    id: string;
+    titulo: string;
+    capaUrl?: string | null;
+  } | null;
+  metodologiaAvulsa?: {
+    id: string;
+    titulo: string;
+    capaUrl?: string | null;
+  } | null;
 };
 
 const FALLBACK_PERMISSAO_CRIACAO: LearningPermissaoCriacao = {
@@ -34,6 +68,81 @@ const FALLBACK_CRIADAS_RESPONSE: LearningCriadasResponse = {
   items: [],
   permissaoCriacao: FALLBACK_PERMISSAO_CRIACAO,
 };
+
+function getToken() {
+  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
+
+async function listMinhasAulasAoVivo(): Promise<{ items: AulaAoVivoResumo[] }> {
+  const token = getToken();
+
+  const res = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/minhas`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json?.message || "Erro ao carregar aulas ao vivo.");
+  }
+
+  return {
+    items: Array.isArray(json?.items) ? json.items : [],
+  };
+}
+
+function formatarDataHoraLive(value?: string | null) {
+  if (!value) return "Sem data definida";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data inválida";
+
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getLiveStatusInfo(status?: string) {
+  const s = String(status || "").toUpperCase();
+
+  if (s === "AO_VIVO") {
+    return {
+      label: "Ao vivo agora",
+      className: "bg-red-50 text-red-700 border-red-200",
+      icon: <Radio className="w-4 h-4" />,
+      buttonLabel: "Voltar para live",
+    };
+  }
+
+  if (s === "FINALIZADA") {
+    return {
+      label: "Finalizada",
+      className: "bg-slate-100 text-slate-700 border-slate-200",
+      icon: <CheckCircle2 className="w-4 h-4" />,
+      buttonLabel: "Ver detalhes",
+    };
+  }
+
+  if (s === "CANCELADA") {
+    return {
+      label: "Cancelada",
+      className: "bg-red-50 text-red-700 border-red-200",
+      icon: <XCircle className="w-4 h-4" />,
+      buttonLabel: "Ver detalhes",
+    };
+  }
+
+  return {
+    label: "Agendada",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+    icon: <CalendarClock className="w-4 h-4" />,
+    buttonLabel: "Preparar transmissão",
+  };
+}
 
 function TabButton({
   active,
@@ -61,6 +170,9 @@ export default function LearningPage() {
   const [explorar, setExplorar] = useState<any[]>([]);
   const [assinadas, setAssinadas] = useState<any[]>([]);
   const [criadas, setCriadas] = useState<any[]>([]);
+
+  const [livesCriadas, setLivesCriadas] = useState<AulaAoVivoResumo[]>([]);
+
   const [filtroPublico, setFiltroPublico] = useState<
     "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
   >("TODOS");
@@ -149,9 +261,12 @@ export default function LearningPage() {
           isAtleta
             ? Promise.resolve(FALLBACK_CRIADAS_RESPONSE)
             : listMinhasMetodologiasCriadas(),
+          isAtleta
+            ? Promise.resolve({ items: [] })
+            : listMinhasAulasAoVivo(),
         ] as const;
 
-        const [visiveisRes, assinadasRes, criadasRes] = await Promise.allSettled(promises);
+        const [visiveisRes, assinadasRes, criadasRes, livesRes] = await Promise.allSettled(promises);
 
         if (!mounted) return;
 
@@ -163,6 +278,9 @@ export default function LearningPage() {
         );
         setCriadas(
           criadasRes.status === "fulfilled" ? criadasRes.value?.items || [] : []
+        );
+        setLivesCriadas(
+          livesRes.status === "fulfilled" ? livesRes.value?.items || [] : []
         );
         if (!isAtleta) {
           setPermissaoCriacao(
@@ -507,7 +625,140 @@ export default function LearningPage() {
                   )}
               </div>
               </div>
-              <div>        
+              <div>
+                {!isAtleta && (
+                  <div className="mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-3">
+                      <div>
+                        <div className="text-base font-bold text-[#193b2e]">
+                          Próximas aulas ao vivo
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          Acompanhe e inicie as transmissões programadas nas suas metodologias.
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-slate-500">
+                        {livesCriadas.length} {livesCriadas.length === 1 ? "live encontrada" : "lives encontradas"}
+                      </div>
+                    </div>
+
+                    {livesCriadas.length ? (
+                      <div className="space-y-3">
+                        {livesCriadas.map((aula) => {
+                          const statusInfo = getLiveStatusInfo(aula.status);
+                          const metodologiaTitulo =
+                            aula.metodologia?.titulo ||
+                            aula.metodologiaAvulsa?.titulo ||
+                            "Metodologia";
+
+                          const capa =
+                            aula.metodologia?.capaUrl ||
+                            aula.metodologiaAvulsa?.capaUrl ||
+                            "/assets/usuarios/footera-logo.png";
+
+                          return (
+                            <div
+                              key={`live_${aula.id}`}
+                              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                            >
+                              <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+                                <div className="flex gap-4 min-w-0">
+                                  <div className="h-20 w-20 rounded-2xl overflow-hidden bg-[#073b25] border border-slate-200 shrink-0">
+                                    <img
+                                      src={capa}
+                                      alt={metodologiaTitulo}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.src = "/assets/usuarios/footera-logo.png";
+                                      }}
+                                    />
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                      <span
+                                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${statusInfo.className}`}
+                                      >
+                                        {statusInfo.icon}
+                                        {statusInfo.label}
+                                      </span>
+
+                                      {aula.gravacaoAtiva ? (
+                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                                          <PlayCircle className="w-4 h-4" />
+                                          Gravação ativa
+                                        </span>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="text-lg font-extrabold text-slate-900 truncate">
+                                      {aula.titulo}
+                                    </div>
+
+                                    <div className="text-sm text-slate-500 truncate">
+                                      {metodologiaTitulo}
+                                    </div>
+
+                                    <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-600">
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <CalendarClock className="w-4 h-4 text-[#216c43]" />
+                                        {formatarDataHoraLive(aula.dataInicio)}
+                                      </span>
+
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <Users className="w-4 h-4 text-[#216c43]" />
+                                        {aula.totalParticipantes || 0} participantes
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/learning/live-studio?aulaId=${aula.id}`)}
+                                    className={`inline-flex h-11 px-4 rounded-xl font-semibold items-center justify-center ${
+                                      aula.status === "AO_VIVO"
+                                        ? "bg-red-600 text-white"
+                                        : "bg-[#216c43] text-white"
+                                    }`}
+                                  >
+                                    {statusInfo.buttonLabel}
+                                  </button>
+
+                                  {(aula.metodologia?.id || aula.metodologiaAvulsa?.id) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (aula.metodologiaAvulsa?.id) {
+                                          navigate(`/learning/${aula.metodologiaAvulsa.id}?origem=avulsa`);
+                                          return;
+                                        }
+
+                                        if (aula.metodologia?.id) {
+                                          navigate(`/learning/${aula.metodologia.id}`);
+                                        }
+                                      }}
+                                      className="inline-flex h-11 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold items-center justify-center"
+                                    >
+                                      Ver metodologia
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                        Você ainda não possui aulas ao vivo programadas.
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {!isAtleta && (
                   <div>
                     <div className="text-base font-bold text-[#193b2e] mb-3">Criadas • Learning</div>

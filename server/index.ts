@@ -139,6 +139,7 @@ import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
 import { processExpiringSubscriptions } from "./controllers/billingController.js";
 import googleAuthRoutes from "./routes/googleAuth.js";
 import creatorRoutes from "./routes/creator.js";
+import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -330,6 +331,8 @@ app.use("/api/treino-unico", authenticateToken, treinoUnicoRoutes);
 app.use("/api/treinosprogramados", authenticateToken, treinoProgramadoRoutes);
 
 //app.use("/api/upload/metodologias", metodologiasUploadRoutes);
+
+app.use("/api/aulas-ao-vivo", aulasAoVivoRoutes);
 
 app.use("/api/upload", authenticateToken, uploadRoutes);
 app.use("/api/vinculo", authenticateToken, vinculoRoutes);

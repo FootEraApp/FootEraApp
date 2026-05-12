@@ -69,6 +69,8 @@ import FooteraContentLab from "./pages/landingPageContentLab.js";
 import TreinoMetodologiaPage from "./pages/treino/treino-metodologia.js";
 import CreatorProfile from "./pages/creator/profile.js";
 import CreatorDashboard from "./pages/creator/dashboard.js";
+import LearningLiveStudioPage from "./pages/learning/live-studio.js";
+import LearningLivePage from "./pages/learning/live.js";
 
 export function AppRoutes() {
   return (
@@ -247,6 +249,15 @@ export function AppRoutes() {
           <Route path="/learning/create">
             <Private><LearningCreatePage /></Private>
           </Route>
+
+          <Route path="/learning/live-studio">
+            <Private>< LearningLiveStudioPage/></Private>
+          </Route>
+
+          <Route path="/learning/live">
+            <Private><LearningLivePage /></Private>
+          </Route>
+
           <Route path="/learning/avaliar">
             <Private><AvaliarMetodologia /></Private>
           </Route>

@@ -130,7 +130,11 @@ function calcularPontuacaoItemBackend(params: {
     return treinoPontuacao ?? 0;
   }
 
-  if (tipo === MetodologiaItemTipo.VIDEO || tipo === MetodologiaItemTipo.AULA) {
+  if (
+    tipo === MetodologiaItemTipo.VIDEO ||
+    tipo === MetodologiaItemTipo.AULA ||
+    tipo === MetodologiaItemTipo.AULA_AO_VIVO
+  ) {
     return calcularPontuacaoVideoOuAula(duracaoMin);
   }
 
@@ -143,6 +147,109 @@ function calcularPontuacaoItemBackend(params: {
   }
 
   return 0;
+}
+
+function parseDataAulaAoVivo(value: any, label: string) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) {
+    throw new Error(`${label} é obrigatória para aula ao vivo.`);
+  }
+
+  const date = new Date(raw);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${label} inválida para aula ao vivo.`);
+  }
+
+  return date;
+}
+
+async function criarAulaAoVivoParaItem(params: {
+  tx: any;
+  userId: string;
+  itemPayload: any;
+  itemCriadoId: string;
+  tituloItem: string;
+  descricaoItem: string | null;
+  duracaoMin: number | null;
+  thumbUrl: string | null;
+
+  metodologiaId?: string | null;
+  estruturaId?: string | null;
+
+  metodologiaAvulsaId?: string | null;
+  estruturaAvulsaId?: string | null;
+}) {
+  const {
+    tx,
+    userId,
+    itemPayload,
+    itemCriadoId,
+    tituloItem,
+    descricaoItem,
+    duracaoMin,
+    thumbUrl,
+    metodologiaId,
+    estruturaId,
+    metodologiaAvulsaId,
+    estruturaAvulsaId,
+  } = params;
+
+  const aulaPayload = itemPayload?.aulaAoVivo || {};
+
+  const dataInicio = parseDataAulaAoVivo(
+    aulaPayload.dataInicio,
+    `A aula ao vivo "${tituloItem}" precisa ter data de início`
+  );
+
+  const dataFim = aulaPayload.dataFim ? new Date(aulaPayload.dataFim) : null;
+
+  if (dataFim && Number.isNaN(dataFim.getTime())) {
+    throw new Error(`A data final da aula ao vivo "${tituloItem}" é inválida.`);
+  }
+
+  if (dataFim && dataFim <= dataInicio) {
+    throw new Error(`A data final da aula ao vivo "${tituloItem}" precisa ser maior que a data de início.`);
+  }
+
+  const baseData: any = {
+    titulo: asNullableString(aulaPayload.titulo) || tituloItem,
+    descricao:
+      asNullableString(aulaPayload.descricao) ||
+      descricaoItem ||
+      null,
+
+    dataInicio,
+    dataFim,
+
+    status: "AGENDADA",
+
+    chatAtivo: aulaPayload.chatAtivo !== false,
+    gravacaoAtiva: aulaPayload.gravacaoAtiva !== false,
+    replayDisponivel: false,
+
+    duracaoMin,
+    thumbUrl,
+
+    criadorUsuarioId: userId,
+  };
+
+  if (metodologiaId && estruturaId) {
+    baseData.metodologiaId = metodologiaId;
+    baseData.estruturaId = estruturaId;
+    baseData.itemId = itemCriadoId;
+  }
+
+  if (metodologiaAvulsaId && estruturaAvulsaId) {
+    baseData.metodologiaAvulsaId = metodologiaAvulsaId;
+    baseData.estruturaAvulsaId = estruturaAvulsaId;
+    baseData.itemAvulsaId = itemCriadoId;
+  }
+
+  return tx.aulaAoVivo.create({
+    data: baseData,
+  });
 }
 
 async function validarMetodologiaDoCriador(metodologiaId: string, userId: string) {
@@ -2878,7 +2985,9 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
         const treinoProgramadoId = asNullableString(item?.treinoProgramadoId);
         const duracaoMinInformada = asNullableNumber(item?.duracaoMin);
         const duracaoMin =
-          tipo === MetodologiaItemTipo.VIDEO || tipo === MetodologiaItemTipo.AULA
+          tipo === MetodologiaItemTipo.VIDEO ||
+          tipo === MetodologiaItemTipo.AULA ||
+          tipo === MetodologiaItemTipo.AULA_AO_VIVO
             ? duracaoMinInformada
             : null;
 
@@ -2969,7 +3078,7 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
             titulo,
             descricao,
             tipo,
-            videoUrl,
+            videoUrl: tipo === MetodologiaItemTipo.AULA_AO_VIVO ? null : videoUrl,
             thumbUrl,
             arquivoUrl,
             materialUrl,
@@ -2994,8 +3103,25 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
                 tipoTreino: true,
               },
             },
+            aulaAoVivo: true,
           },
         });
+
+        if (tipo === MetodologiaItemTipo.AULA_AO_VIVO) {
+          await criarAulaAoVivoParaItem({
+            tx,
+            userId,
+            itemPayload: item,
+            itemCriadoId: novo.id,
+            tituloItem: titulo,
+            descricaoItem: descricao,
+            duracaoMin,
+            thumbUrl,
+
+            metodologiaId,
+            estruturaId,
+          });
+        }
 
         // mantém compatibilidade com tabela legado MetodologiaTreino
         if (tipo === MetodologiaItemTipo.TREINO && treinoProgramadoId) {
@@ -3774,7 +3900,9 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
           }
 
           const duracaoMinFinal =
-            tipo === MetodologiaItemTipo.VIDEO || tipo === MetodologiaItemTipo.AULA
+            tipo === MetodologiaItemTipo.VIDEO ||
+            tipo === MetodologiaItemTipo.AULA ||
+            tipo === MetodologiaItemTipo.AULA_AO_VIVO
               ? asNullableNumber(item?.duracaoMin)
               : null;
 
@@ -3799,14 +3927,17 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
             treinoPontuacao,
           });
 
-          await tx.metodologiaEstruturaItem.create({
+          const novoItem = await tx.metodologiaEstruturaItem.create({
             data: {
               estruturaId: novaEstrutura.id,
               tipo,
               titulo: tituloItem,
               descricao: asNullableString(item?.descricao),
               ordem: j + 1,
-              videoUrl: asNullableString(item?.videoUrl),
+              videoUrl:
+                tipo === MetodologiaItemTipo.AULA_AO_VIVO
+                  ? null
+                  : asNullableString(item?.videoUrl),
               thumbUrl: asNullableString(item?.thumbUrl),
               arquivoUrl: asNullableString(item?.arquivoUrl),
               materialUrl: asNullableString(item?.materialUrl),
@@ -3817,6 +3948,22 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
               publicado: asBool(item?.publicado, true),
             },
           });
+
+          if (tipo === MetodologiaItemTipo.AULA_AO_VIVO) {
+            await criarAulaAoVivoParaItem({
+              tx,
+              userId,
+              itemPayload: item,
+              itemCriadoId: novoItem.id,
+              tituloItem,
+              descricaoItem: asNullableString(item?.descricao),
+              duracaoMin: duracaoMinFinal,
+              thumbUrl: asNullableString(item?.thumbUrl),
+
+              metodologiaId: metodologia.id,
+              estruturaId: novaEstrutura.id,
+            });
+          }
         }
       }
 
@@ -3903,51 +4050,162 @@ export async function createMetodologiaAvulsaCompleta(req: Request, res: Respons
           precoAssinaturaMensal: preco,
           criadorUsuarioId: userId,
           ativo: false,
-          estruturas: {
-            create: (Array.isArray(estruturas) ? estruturas : []).map((estrutura: any, i: number) => ({
-              titulo: String(estrutura?.titulo ?? "").trim(),
-              descricao: asNullableString(estrutura?.descricao),
-              objetivo: asNullableString(estrutura?.objetivo),
-              tipo: estruturaTipo,
-              ordem: i + 1,
-              duracaoSemanas: asNullableNumber(estrutura?.duracaoSemanas),
-              treinosPorSemana: asNullableNumber(estrutura?.treinosPorSemana),
-              quantidadeMinConclusao: asNullableNumber(estrutura?.quantidadeMinConclusao),
-              modoExecucao: estrutura?.modoExecucao ?? null,
-              pontosPorItem: estruturaTipo === "TRILHA" ? 5 : null,
-              bonusConsistencia: estruturaTipo === "TRILHA" ? 10 : null,
-              bonusFinal: estruturaTipo === "TRILHA" ? 15 : null,
-              prazoInicio: estrutura?.prazoInicio ? new Date(estrutura.prazoInicio) : null,
-              prazoFinal: estrutura?.prazoFinal ? new Date(estrutura.prazoFinal) : null,
-              percentualPerdaAtraso: asNullableNumber(estrutura?.percentualPerdaAtraso),
-              permiteAtraso: asBool(estrutura?.permiteAtraso, true),
-              ativo: asBool(estrutura?.ativo, true),
-              itens: {
-                create: (Array.isArray(estrutura?.itens) ? estrutura.itens : []).map((item: any, j: number) => ({
-                  tipo: item?.tipo,
-                  titulo: String(item?.titulo ?? "").trim(),
-                  descricao: asNullableString(item?.descricao),
-                  ordem: j + 1,
-                  videoUrl: asNullableString(item?.videoUrl),
-                  thumbUrl: asNullableString(item?.thumbUrl),
-                  arquivoUrl: asNullableString(item?.arquivoUrl),
-                  materialUrl: asNullableString(item?.materialUrl),
-                  treinoProgramadoId: asNullableString(item?.treinoProgramadoId),
-                  pontos: asNullableNumber(item?.pontos),
-                  duracaoMin: asNullableNumber(item?.duracaoMin),
-                  obrigatorio: asBool(item?.obrigatorio, true),
-                  publicado: asBool(item?.publicado, true),
-                })),
-              },
-            })),
-          },
-        },
-        include: {
-          estruturas: { include: { itens: true } },
         },
       });
 
-      return criada;
+      const estruturasPayload = Array.isArray(estruturas) ? estruturas : [];
+
+      for (let i = 0; i < estruturasPayload.length; i++) {
+        const estrutura = estruturasPayload[i];
+        const tituloEstrutura = String(estrutura?.titulo ?? "").trim();
+
+        if (!tituloEstrutura) {
+          throw new Error(`A estrutura ${i + 1} precisa ter título.`);
+        }
+
+        const novaEstrutura = await tx.metodologiaAvulsaEstrutura.create({
+          data: {
+            metodologiaAvulsaId: criada.id,
+            titulo: tituloEstrutura,
+            descricao: asNullableString(estrutura?.descricao),
+            objetivo: asNullableString(estrutura?.objetivo),
+            tipo: estruturaTipo,
+            ordem: i + 1,
+            duracaoSemanas: asNullableNumber(estrutura?.duracaoSemanas),
+            treinosPorSemana: asNullableNumber(estrutura?.treinosPorSemana),
+            quantidadeMinConclusao: asNullableNumber(estrutura?.quantidadeMinConclusao),
+            modoExecucao: estrutura?.modoExecucao ?? null,
+            pontosPorItem: estruturaTipo === "TRILHA" ? 5 : null,
+            bonusConsistencia: estruturaTipo === "TRILHA" ? 10 : null,
+            bonusFinal: estruturaTipo === "TRILHA" ? 15 : null,
+            prazoInicio: estrutura?.prazoInicio ? new Date(estrutura.prazoInicio) : null,
+            prazoFinal: estrutura?.prazoFinal ? new Date(estrutura.prazoFinal) : null,
+            percentualPerdaAtraso: asNullableNumber(estrutura?.percentualPerdaAtraso),
+            permiteAtraso: asBool(estrutura?.permiteAtraso, true),
+            ativo: asBool(estrutura?.ativo, true),
+          },
+        });
+
+        const itensPayload = Array.isArray(estrutura?.itens) ? estrutura.itens : [];
+
+        for (let j = 0; j < itensPayload.length; j++) {
+          const itemPayload = itensPayload[j];
+          const tipoItem = itemPayload?.tipo as MetodologiaItemTipo;
+          const tituloItem = String(itemPayload?.titulo ?? "").trim();
+          const treinoProgramadoId = asNullableString(itemPayload?.treinoProgramadoId);
+
+          if (!tituloItem) {
+            throw new Error(`O item ${j + 1} da estrutura "${tituloEstrutura}" precisa ter título.`);
+          }
+
+          if (!isValidEnumValue(MetodologiaItemTipo, tipoItem)) {
+            throw new Error(`Tipo de item inválido para "${tituloItem}".`);
+          }
+
+          if (
+            (tipoItem === MetodologiaItemTipo.VIDEO || tipoItem === MetodologiaItemTipo.AULA) &&
+            !String(itemPayload?.videoUrl || "").trim()
+          ) {
+            throw new Error(`O item "${tituloItem}" precisa ter vídeo.`);
+          }
+
+          if (
+            tipoItem === MetodologiaItemTipo.MATERIAL &&
+            !String(itemPayload?.arquivoUrl || itemPayload?.materialUrl || "").trim()
+          ) {
+            throw new Error(`O item "${tituloItem}" precisa ter arquivo ou link do material.`);
+          }
+
+          if (tipoItem === MetodologiaItemTipo.TREINO && !treinoProgramadoId) {
+            throw new Error(`O item "${tituloItem}" precisa ter treino selecionado.`);
+          }
+
+          let treinoPontuacao: number | null = null;
+
+          if (treinoProgramadoId) {
+            const treino = await tx.treinoProgramado.findUnique({
+              where: { id: treinoProgramadoId },
+              select: { id: true, pontuacao: true },
+            });
+
+            if (!treino) {
+              throw new Error(`Treino não encontrado para o item "${tituloItem}".`);
+            }
+
+            treinoPontuacao = treino.pontuacao ?? 0;
+          }
+
+          const duracaoMinFinal =
+            tipoItem === MetodologiaItemTipo.VIDEO ||
+            tipoItem === MetodologiaItemTipo.AULA ||
+            tipoItem === MetodologiaItemTipo.AULA_AO_VIVO
+              ? asNullableNumber(itemPayload?.duracaoMin)
+              : null;
+
+          const pontosFinais = calcularPontuacaoItemBackend({
+            tipo: tipoItem,
+            duracaoMin: duracaoMinFinal,
+            treinoPontuacao,
+          });
+
+          const novoItem = await tx.metodologiaAvulsaEstruturaItem.create({
+            data: {
+              estruturaId: novaEstrutura.id,
+              tipo: tipoItem,
+              titulo: tituloItem,
+              descricao: asNullableString(itemPayload?.descricao),
+              ordem: j + 1,
+              videoUrl:
+                tipoItem === MetodologiaItemTipo.AULA_AO_VIVO
+                  ? null
+                  : asNullableString(itemPayload?.videoUrl),
+              thumbUrl: asNullableString(itemPayload?.thumbUrl),
+              arquivoUrl: asNullableString(itemPayload?.arquivoUrl),
+              materialUrl: asNullableString(itemPayload?.materialUrl),
+              treinoProgramadoId,
+              pontos: pontosFinais,
+              duracaoMin: duracaoMinFinal,
+              obrigatorio: asBool(itemPayload?.obrigatorio, true),
+              publicado: asBool(itemPayload?.publicado, true),
+            },
+          });
+
+          if (tipoItem === MetodologiaItemTipo.AULA_AO_VIVO) {
+            await criarAulaAoVivoParaItem({
+              tx,
+              userId,
+              itemPayload,
+              itemCriadoId: novoItem.id,
+              tituloItem,
+              descricaoItem: asNullableString(itemPayload?.descricao),
+              duracaoMin: duracaoMinFinal,
+              thumbUrl: asNullableString(itemPayload?.thumbUrl),
+
+              metodologiaAvulsaId: criada.id,
+              estruturaAvulsaId: novaEstrutura.id,
+            });
+          }
+        }
+      }
+
+      const completa = await tx.metodologiaAvulsa.findUnique({
+        where: { id: criada.id },
+        include: {
+          estruturas: {
+            orderBy: { ordem: "asc" },
+            include: {
+              itens: {
+                orderBy: { ordem: "asc" },
+                include: {
+                  aulaAoVivo: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return completa;
     });
 
     return res.status(201).json({ item });
