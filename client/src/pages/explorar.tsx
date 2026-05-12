@@ -38,9 +38,12 @@ function onAvatarError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
 type UsuarioBasic = {
   id: string;
   nome: string;
+  nomeDeUsuario?: string | null;
+  email?: string | null;
+  verified?: boolean | null;
   foto?: string | null;
-  cidade?: string | null;   // ✅
-  estado?: string | null;   // ✅
+  cidade?: string | null;
+  estado?: string | null;
   assinatura?: { status?: string | null; plano?: string | null } | null;
 };
 
@@ -108,6 +111,22 @@ type OlheiroItem = {
   escolinhaId?: string | null;
 };
 
+type OutroItem = {
+  id: string;
+  usuarioId?: string;
+  nome?: string;
+  cidade?: string | null;
+  estado?: string | null;
+  logo?: string | null;
+  foto?: string | null;
+  descricao?: string | null;
+  siteOficial?: string | null;
+  usuario?: UsuarioBasic;
+  perfilVerificado?: boolean;
+  isPro?: boolean;
+  tipoOutro: "Learning" | "Marca" | "Federacao";
+};
+
 type DadosExplorar = {
   atletas: AtletaItem[];
   professores: ProfessorItem[];
@@ -115,6 +134,9 @@ type DadosExplorar = {
   clubes: ClubeItem[];
   escolas: EscolaItem[];
   eventos: EventoItem[];
+  federacoes: OutroItem[];
+  marcas: OutroItem[];
+  learning: OutroItem[];
 };
 
 type Filtros = {
@@ -140,13 +162,19 @@ type FiltrosOrgs = {
   temSite?: boolean | null;
 };
 
+type FiltrosOutros = {
+  tipo?: "Todos" | "Learning" | "Marca" | "Federacao";
+  estado?: string;
+  cidade?: string;
+};
+
 type RankItem = {
   atletaId: string;
   total: number;
   usuario: { id: string; nome: string; foto?: string | null };
 };
 
-type AbaExplorar = "atletas" | "escolas" | "clubes" | "profissionais" | "eventos";
+type AbaExplorar = "atletas" | "escolas" | "clubes" | "profissionais" | "outros" | "eventos";
 
 type EventoItem = {
   id: string;
@@ -377,6 +405,9 @@ function Explorar() {
     clubes: [],
     escolas: [],
     eventos: [], 
+    federacoes: [],
+    learning: [],
+    marcas: [],
   });
 
   const [showFilters, setShowFilters] = useState(false);
@@ -393,8 +424,22 @@ function Explorar() {
 
   const [filtrosOrgs, setFiltrosOrgs] = useState<FiltrosOrgs>({ temSite: null });
   const [draftOrgs, setDraftOrgs] = useState<FiltrosOrgs>({ temSite: null });
+  const [filtrosOutros, setFiltrosOutros] = useState<FiltrosOutros>({
+    tipo: "Todos",
+    cidade: "",
+    estado: "",
+  });
+
+  const [draftOutros, setDraftOutros] = useState<FiltrosOutros>({
+    tipo: "Todos",
+    cidade: "",
+    estado: "",
+  });
   const updateDraft = (patch: Partial<Filtros>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
+  };
+  const updateDraftOutros = (patch: Partial<FiltrosOutros>) => {
+    setDraftOutros((prev) => ({ ...prev, ...patch }));
   };
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
   const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
@@ -406,6 +451,7 @@ function Explorar() {
   const [showCountEscolas, setShowCountEscolas] = useState(BATCH);
   const [showCountClubes, setShowCountClubes] = useState(BATCH);
   const [showCountProfs, setShowCountProfs] = useState(BATCH);
+  const [showCountOutros, setShowCountOutros] = useState(BATCH);
   const [selectedEvento, setSelectedEvento] = useState<EventoItem | null>(null);
   const [showEventoModal, setShowEventoModal] = useState(false);
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
@@ -690,10 +736,68 @@ function Explorar() {
     return sortProThenName(base, (p) => (p as any)?.usuario?.nome ?? "");
   }, [profissionais, busca, JSON.stringify(filtrosProf)]);
 
+  const outrosFiltrados = useMemo(() => {
+    const todos = [
+      ...(dados.learning || []),
+      ...(dados.marcas || []),
+      ...(dados.federacoes || []),
+    ];
+
+    const f = filtrosOutros;
+    const q = normText(busca);
+
+    const filtrados = todos.filter((item) => {
+      const nome =
+        item.nome ??
+        item.usuario?.nome ??
+        item.usuario?.nomeDeUsuario ??
+        "";
+
+      const cidade = item.cidade ?? item.usuario?.cidade ?? "";
+      const estado = item.estado ?? item.usuario?.estado ?? "";
+      const tipo = item.tipoOutro;
+
+      if (f.tipo && f.tipo !== "Todos" && tipo !== f.tipo) {
+        return false;
+      }
+
+      if (f.estado && !includesText(estado, f.estado)) {
+        return false;
+      }
+
+      if (f.cidade && !includesText(cidade, f.cidade)) {
+        return false;
+      }
+
+      if (q) {
+        const bag = normText([nome, cidade, estado, tipo].join(" "));
+        if (!bag.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    return sortProThenName(
+      filtrados,
+      (x) => x.nome ?? x.usuario?.nome ?? x.usuario?.nomeDeUsuario ?? ""
+    );
+  }, [
+    dados.learning,
+    dados.marcas,
+    dados.federacoes,
+    busca,
+    JSON.stringify(filtrosOutros),
+  ]);
+
   useEffect(() => setShowCountAtletas(BATCH), [busca, filtrosKey, dados.atletas.length]);
   useEffect(() => setShowCountEscolas(BATCH), [busca, escolasFiltradas.length]);
   useEffect(() => setShowCountClubes(BATCH), [busca, clubesFiltrados.length]);
   useEffect(() => setShowCountProfs(BATCH), [busca, profissionaisFiltrados.length]);
+  useEffect(() => setShowCountOutros(BATCH), [
+    busca,
+    outrosFiltrados.length,
+    JSON.stringify(filtrosOutros),
+  ]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -712,6 +816,8 @@ function Explorar() {
           setShowCountClubes((c) => Math.min(c + BATCH, clubesFiltrados.length));
         } else if (aba === "profissionais") {
           setShowCountProfs((c) => Math.min(c + BATCH, profissionaisFiltrados.length));
+        } else if (aba === "outros") {
+          setShowCountOutros((c) => Math.min(c + BATCH, outrosFiltrados.length));
         }
       },
       { root: null, rootMargin: "400px", threshold: 0 }
@@ -725,6 +831,7 @@ function Explorar() {
     escolasFiltradas.length,
     clubesFiltrados.length,
     profissionaisFiltrados.length,
+    outrosFiltrados.length,
     dados.escolas.length,
     dados.clubes.length,
     dados.professores.length,
@@ -835,10 +942,48 @@ function Explorar() {
             }))
           ),
           eventos: (data.eventos || []) as EventoItem[],
+          federacoes: filtrarEu<OutroItem>(
+            (data.federacoes || []).map((f: any) => ({
+              ...f,
+              tipoOutro: "Federacao",
+              nome: f.nome ?? f.usuario?.nome ?? "",
+              usuarioId: f.usuarioId ?? f.usuario?.id,
+              logo: f.logo ?? f.usuario?.foto ?? null,
+              cidade: f.cidade ?? f.usuario?.cidade ?? null,
+              estado: f.estado ?? f.usuario?.estado ?? null,
+              usuario: f.usuario ?? undefined,
+            }))
+          ),
+
+          marcas: filtrarEu<OutroItem>(
+            (data.marcas || []).map((m: any) => ({
+              ...m,
+              tipoOutro: "Marca",
+              nome: m.nome ?? m.usuario?.nome ?? "",
+              usuarioId: m.usuarioId ?? m.usuario?.id,
+              logo: m.logo ?? m.usuario?.foto ?? null,
+              cidade: m.cidade ?? m.usuario?.cidade ?? null,
+              estado: m.estado ?? m.usuario?.estado ?? null,
+              usuario: m.usuario ?? undefined,
+            }))
+          ),
+
+          learning: filtrarEu<OutroItem>(
+            (data.learning || []).map((l: any) => ({
+              ...l,
+              tipoOutro: "Learning",
+              nome: l.usuario?.nome ?? l.usuario?.nomeDeUsuario ?? "Learning",
+              usuarioId: l.usuarioId ?? l.usuario?.id,
+              logo: l.usuario?.foto ?? null,
+              cidade: l.usuario?.cidade ?? null,
+              estado: l.usuario?.estado ?? null,
+              usuario: l.usuario ?? undefined,
+            }))
+          ),
         });
       })
       .catch(() => {
-        setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [], eventos: [] });
+        setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [], eventos: [], federacoes: [], marcas: [], learning: [] });
       })
       .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrarEu]);
@@ -847,6 +992,7 @@ function Explorar() {
     if (aba === "atletas") setDraft(filtros);
     else if (aba === "profissionais") setDraftProf(filtrosProf);
     else if (aba === "escolas" || aba === "clubes") setDraftOrgs(filtrosOrgs);
+    else if (aba === "outros") setDraftOutros(filtrosOutros);
 
     setShowFilters(true);
   };
@@ -855,21 +1001,48 @@ function Explorar() {
     if (aba === "atletas") setFiltros(draft);
     else if (aba === "profissionais") setFiltrosProf(draftProf);
     else if (aba === "escolas" || aba === "clubes") setFiltrosOrgs(draftOrgs);
+    else if (aba === "outros") setFiltrosOutros(draftOutros);
 
     setShowFilters(false);
   };
 
   const limparFiltros = () => {
     if (aba === "atletas") {
-      const base: Filtros = { independente: null, pontuacaoMin: null, pontuacaoMax: null, posicoes: [] };
-      setDraft(base); setFiltros(base);
+      const base: Filtros = {
+        independente: null,
+        pontuacaoMin: null,
+        pontuacaoMax: null,
+        posicoes: [],
+      };
+      setDraft(base);
+      setFiltros(base);
     } else if (aba === "profissionais") {
-      const base: FiltrosProfissionais = { papel: "Ambos", vinculo: "Qualquer", cidade: "", estado: "" };
-      setDraftProf(base); setFiltrosProf(base);
+      const base: FiltrosProfissionais = {
+        papel: "Ambos",
+        vinculo: "Qualquer",
+        cidade: "",
+        estado: "",
+      };
+      setDraftProf(base);
+      setFiltrosProf(base);
     } else if (aba === "escolas" || aba === "clubes") {
-      const base: FiltrosOrgs = { cidade: "", estado: "", temSite: null };
-      setDraftOrgs(base); setFiltrosOrgs(base);
+      const base: FiltrosOrgs = {
+        cidade: "",
+        estado: "",
+        temSite: null,
+      };
+      setDraftOrgs(base);
+      setFiltrosOrgs(base);
+    } else if (aba === "outros") {
+      const base: FiltrosOutros = {
+        tipo: "Todos",
+        cidade: "",
+        estado: "",
+      };
+      setDraftOutros(base);
+      setFiltrosOutros(base);
     }
+
     setShowFilters(false);
   };
 
@@ -910,8 +1083,16 @@ function Explorar() {
       return (filtrosOrgs.estado ? 1 : 0) + (filtrosOrgs.cidade ? 1 : 0);
     }
 
+    if (aba === "outros") {
+      return (
+        (filtrosOutros.tipo && filtrosOutros.tipo !== "Todos" ? 1 : 0) +
+        (filtrosOutros.estado ? 1 : 0) +
+        (filtrosOutros.cidade ? 1 : 0)
+      );
+    }
+
     return 0;
-  }, [aba, filtros, filtrosProf, filtrosOrgs]);
+  }, [aba, filtros, filtrosProf, filtrosOrgs, filtrosOutros]);
 
   const rawLogoOrg = selectedEvento?.clube?.logo || (selectedEvento as any)?.escolinha?.logo || null;
 
@@ -988,6 +1169,14 @@ function Explorar() {
               >
                 Profissionais
               </Tab>
+              <Tab
+                active={aba === "outros"}
+                onClick={() => setAba("outros")}
+                icon={<Users className="w-4 h-4" />}
+                className="min-w-[100px]" 
+              >
+                Outros
+              </Tab>
               {ENABLE_EVENTOS_TAB && (
                 <Tab
                   active={aba === "eventos"}
@@ -1004,21 +1193,29 @@ function Explorar() {
 
           <div
             className={`hidden sm:grid sm:gap-2 ${
-              ENABLE_EVENTOS_TAB ? "sm:grid-cols-5" : "sm:grid-cols-4"
+              ENABLE_EVENTOS_TAB ? "sm:grid-cols-6" : "sm:grid-cols-5"
             }`}
           >
             <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
               Atletas
             </Tab>
+
             <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />}>
               Escolas
             </Tab>
+
             <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />}>
               Clubes
             </Tab>
+
             <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
               Profissionais
             </Tab>
+
+            <Tab active={aba === "outros"} onClick={() => setAba("outros")} icon={<Users className="h-4 w-4" />}>
+              Outros
+            </Tab>
+
             {ENABLE_EVENTOS_TAB && (
               <Tab active={aba === "eventos"} onClick={() => setAba("eventos")} icon={<CalendarClock className="h-4 w-4" />}>
                 Eventos
@@ -1354,6 +1551,69 @@ function Explorar() {
                       </select>
                     </div>
                   )}
+                </>
+              )}
+
+              {aba === "outros" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Tipo
+                    </label>
+
+                    <select
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={draftOutros.tipo ?? "Todos"}
+                      onChange={(e) =>
+                        updateDraftOutros({
+                          tipo: e.target.value as FiltrosOutros["tipo"],
+                        })
+                      }
+                    >
+                      <option value="Todos">Todos</option>
+                      <option value="Learning">Learning</option>
+                      <option value="Marca">Marca</option>
+                      <option value="Federacao">Federação</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Estado
+                      </label>
+
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: SP"
+                        value={draftOutros.estado ?? ""}
+                        onChange={(e) =>
+                          updateDraftOutros({
+                            estado: e.target.value || undefined,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Cidade
+                      </label>
+
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: São Paulo"
+                        value={draftOutros.cidade ?? ""}
+                        onChange={(e) =>
+                          updateDraftOutros({
+                            cidade: e.target.value || undefined,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -1752,6 +2012,110 @@ function Explorar() {
               <p className="text-center text-gray-600">Nenhum profissional encontrado</p>
             )}
 
+          </>
+        )}
+
+        {aba === "outros" && (
+          <>
+            <h2 className="text-base sm:text-lg font-bold my-4">
+              Outros perfis
+            </h2>
+
+            {outrosFiltrados.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                {outrosFiltrados.slice(0, showCountOutros).map((item) => {
+                  const rawFoto = item.logo ?? item.foto ?? item.usuario?.foto;
+                  const uid = item.usuario?.id ?? item.usuarioId ?? item.id;
+
+                  const nome =
+                    item.nome ??
+                    item.usuario?.nome ??
+                    item.usuario?.nomeDeUsuario ??
+                    "Perfil";
+
+                  const cidade = item.cidade ?? item.usuario?.cidade ?? "";
+                  const estado = item.estado ?? item.usuario?.estado ?? "";
+
+                  const labelTipo =
+                    item.tipoOutro === "Federacao"
+                      ? "Federação"
+                      : item.tipoOutro === "Marca"
+                      ? "Marca"
+                      : "Learning";
+
+                  const pillTone =
+                    item.tipoOutro === "Learning"
+                      ? "sky"
+                      : item.tipoOutro === "Marca"
+                      ? "amber"
+                      : "emerald";
+
+                  return (
+                    <Link href={`/perfil/${uid}`} key={`${item.tipoOutro}-${item.id}`}>
+                      <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
+                        <div className="relative">
+                          <img
+                            src={avatarSrc(rawFoto)}
+                            onError={onAvatarError}
+                            alt="Foto do usuário"
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                          />
+
+                          {shouldShowProBadgeOnAvatar(item) && (
+                            <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
+                              PRO
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
+                          {nome}
+                        </p>
+
+                        {shouldShowVerified(item) && (
+                          <Pill tone="emerald" className="mt-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Verificado
+                          </Pill>
+                        )}
+
+                        {(cidade || estado) && (
+                          <p className="mt-1 text-xs text-gray-600 flex items-center gap-1 text-center">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {[cidade, estado].filter(Boolean).join(", ")}
+                          </p>
+                        )}
+
+                        <Pill tone={pillTone as any} className="mt-2">
+                          {labelTipo}
+                        </Pill>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600 mt-2">
+                Nenhum perfil encontrado em Outros.
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-col items-center">
+              {showCountOutros < outrosFiltrados.length && (
+                <button
+                  onClick={() =>
+                    setShowCountOutros((c) =>
+                      Math.min(c + BATCH, outrosFiltrados.length)
+                    )
+                  }
+                  className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
+                >
+                  Carregar mais
+                </button>
+              )}
+
+              <div ref={sentinelRef} className="h-1 w-full" />
+            </div>
           </>
         )}
 

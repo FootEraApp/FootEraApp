@@ -52,8 +52,9 @@ export default function CreatorDashboard() {
     sessionStorage.getItem("usuarioTipoRaw") ||
     "";
 
-  const isAtleta = String(tipoUsuario).toLowerCase() === "atleta";
-
+  const tipoNorm = String(tipoUsuario).toLowerCase();
+  const bloqueiaCreator = tipoNorm === "atleta" || tipoNorm === "learning";
+  
   const carregar = async () => {
     setLoading(true);
 
@@ -109,7 +110,7 @@ export default function CreatorDashboard() {
     carregar();
   }, []);
 
-  if (isAtleta) {
+  if (bloqueiaCreator) {
     return (
         <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
         <div className="max-w-lg bg-white rounded-2xl border shadow-sm p-6 text-center">
@@ -187,12 +188,24 @@ export default function CreatorDashboard() {
               </p>
             </div>
 
-            <a
+            <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[320px]">
+              <a
                 href={`/creator/profile?id=${creator.usuarioId}`}
-                className="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-sm font-bold hover:bg-white/15"
-            >
+                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm font-bold hover:bg-white/15 text-left flex items-center justify-start"
+              >
                 Ver perfil público
-            </a>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = "/creator/eventos";
+                }}
+                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm font-bold hover:bg-white/15 text-left flex items-center justify-start"
+              >
+                Gerenciar eventos, lives e webinars
+              </button>
+            </div>
           </div>
         </div>
       </header>

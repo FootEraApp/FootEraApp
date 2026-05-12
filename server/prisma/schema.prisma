@@ -54,6 +54,9 @@ model Usuario {
   blockedAt                 DateTime?
   blockedReason             String?
   reactivatedAt             DateTime?
+  learningProfile           LearningProfile?
+  federacao                 Federacao?
+  marca                     Marca?
 
   amigosDe                Amigo[]                   @relation("AmigoUsuario")
   amigos                  Amigo[]                   @relation("UsuarioAmigo")
@@ -309,23 +312,24 @@ model Amigo {
 }
 
 model Olheiro {
-  id                     String   @id @default(uuid())
-  usuarioId              String   @unique
+  id                     String    @id @default(uuid())
+  usuarioId              String    @unique
   fotoUrl                String?
   headline               String?
   descricao              String?
   areaAtuacao            String?
-  anosExperiencia        Int      @default(0)
+  anosExperiencia        Int       @default(0)
   emailPublico           String?
   telefonePublico        String?
   siteOuLinkedin         String?
   colaboracaoClubeId     String?
   colaboracaoProfessorId String?
   colaboracaoEscolinhaId String?
-  reputacaoScore         Int      @default(0)
-  totalIndicacoes        Int      @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  dataNascimento         DateTime?
+  reputacaoScore         Int       @default(0)
+  totalIndicacoes        Int       @default(0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   AtletaObservado AtletaObservado[]
   Indicacao       Indicacao[]
@@ -682,6 +686,10 @@ model Metodologia {
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   aulasAoVivo AulaAoVivo[]
+  Federacao   Federacao?   @relation(fields: [federacaoId], references: [id])
+  federacaoId String?
+  Marca       Marca?       @relation(fields: [marcaId], references: [id])
+  marcaId     String?
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -941,6 +949,10 @@ model MetodologiaAvulsa {
   atualizadoEm             DateTime                   @updatedAt
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
   AvaliacaoMetodologia     AvaliacaoMetodologia[]
+  Federacao                Federacao?                 @relation(fields: [federacaoId], references: [id])
+  federacaoId              String?
+  Marca                    Marca?                     @relation(fields: [marcaId], references: [id])
+  marcaId                  String?
 
   @@index([criadorUsuarioId])
   @@index([ativo])
@@ -1904,28 +1916,35 @@ model AtletaElenco {
 }
 
 model Evento {
-  id              String       @id @default(uuid())
-  clubeId         String?
-  escolinhaId     String?
-  titulo          String
-  tipo            EventoTipo   @default(PENEIRA)
-  descricao       String?
-  dataEvento      DateTime
-  inscricaoInicio DateTime?
-  inscricaoFim    DateTime?
-  local           String?
-  cidade          String?
-  estado          String?
-  pais            String?
-  endereco        String?
-  vagas           Int?
-  valorInscricao  Decimal?     @db.Decimal(10, 2)
-  linkInscricao   String?
-  requisitos      String[]
-  status          EventoStatus @default(ABERTO)
-  criadoEm        DateTime     @default(now())
-  atualizadoEm    DateTime     @updatedAt
+  id               String       @id @default(uuid())
+  clubeId          String?
+  escolinhaId      String?
+  titulo           String
+  tipo             EventoTipo   @default(PENEIRA)
+  descricao        String?
+  dataEvento       DateTime
+  inscricaoInicio  DateTime?
+  inscricaoFim     DateTime?
+  local            String?
+  cidade           String?
+  estado           String?
+  pais             String?
+  endereco         String?
+  vagas            Int?
+  valorInscricao   Decimal?     @db.Decimal(10, 2)
+  linkInscricao    String?
+  requisitos       String[]
+  status           EventoStatus @default(ABERTO)
+  criadoEm         DateTime     @default(now())
+  atualizadoEm     DateTime     @updatedAt
+  creatorUsuarioId String?
+  creatorTipo      String?
 
+  federacaoId String?
+  federacao   Federacao? @relation(fields: [federacaoId], references: [id])
+
+  marcaId          String?
+  marca            Marca?             @relation(fields: [marcaId], references: [id])
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   inscricoes       InscricaoEvento[]
@@ -2730,10 +2749,17 @@ model ConquistaVinculo {
   ownerTipo   ConquistaOwnerTipo
   ownerId     String
 
-  atletaId    String?
-  professorId String?
-  clubeId     String?
-  escolinhaId String?
+  atletaId          String?
+  professorId       String?
+  clubeId           String?
+  escolinhaId       String?
+  learningProfileId String?
+  marcaId           String?
+  federacaoId       String?
+
+  learningProfile LearningProfile? @relation(fields: [learningProfileId], references: [id], onDelete: SetNull)
+  marca           Marca?           @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+  federacao       Federacao?       @relation(fields: [federacaoId], references: [id], onDelete: SetNull)
 
   conquistadoEm DateTime?
   progresso     Int       @default(0)
@@ -2850,6 +2876,77 @@ model CreatorUsoLearning {
   pontosUso     Decimal  @default(1.0)
   tipoUso       String
   createdAt     DateTime @default(now())
+}
+
+model LearningProfile {
+  id        String @id @default(uuid())
+  usuarioId String @unique
+
+  bio        String?
+  objetivo   String?
+  interesses String[] @default([])
+
+  criadoEm  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuario    Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  conquistas ConquistaVinculo[]
+}
+
+model Federacao {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  cnpj        String?
+  email       String?
+  telefone1   String?
+  telefone2   String?
+  siteOficial String?
+  sede        String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  descricao   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos           Evento[]
+  conquistas        ConquistaVinculo[]
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
+model Marca {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  cnpj        String?
+  email       String?
+  telefone1   String?
+  telefone2   String?
+  siteOficial String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  sede        String?
+  logo        String?
+  descricao   String?
+  conquistas  ConquistaVinculo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos           Evento[]
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
 }
 
 enum CreatorTipo {
@@ -3017,6 +3114,8 @@ enum TipoUsuario {
   Admin
   Olheiro
   Learning
+  Federacao
+  Marca
 }
 
 enum TipoMidia {
@@ -3142,6 +3241,9 @@ enum ConquistaOwnerTipo {
   Professor
   Clube
   Escolinha
+  Learning
+  Marca
+  Federacao
 }
 
 enum ConquistaTipo {

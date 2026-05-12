@@ -466,6 +466,35 @@ function normalizeTipo(raw?: unknown) {
   return String(raw ?? "").trim().toLowerCase();
 }
 
+function normalizarTipoPagamento(tipo?: string | null) {
+  return String(tipo || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function rolePagamentoPorTipo(tipoRaw?: string | null) {
+  const tipo = normalizarTipoPagamento(tipoRaw);
+
+  if (tipo === "learning" || tipo === "atleta") return "Atleta";
+
+  if (
+    tipo === "marca" ||
+    tipo === "federacao" ||
+    tipo === "clube" ||
+    tipo === "escolinha" ||
+    tipo === "escola"
+  ) {
+    return "Organizacao";
+  }
+
+  if (tipo === "professor") return "Professor";
+  if (tipo === "olheiro") return "Olheiro";
+
+  return "Atleta";
+}
+
 type MainTier = "PRO" | "LEARNING_1" | "LEARNING_3"; 
 
 function planId(role: RoleUI, tier: MainTier) {
@@ -895,6 +924,8 @@ export default function PagamentosPage() {
     );
 
     setTipoBackend(data.tipoUsuario ?? null)
+    const roleByBackend = rolePagamentoPorTipo(data.tipoUsuario ?? null);
+    setRoleSelected(roleByBackend as any);
     setAssinaturaSingle(data.assinatura || null);
     setAssinaturas(dedup);
     setPagamentos(data.pagamentos || []);

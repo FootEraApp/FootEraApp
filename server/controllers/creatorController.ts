@@ -41,7 +41,7 @@ async function findCreatorByUsuarioId(usuarioId: string) {
 function resolverTipoCreator(tipoUsuario?: string | null) {
   const tipo = normalizarTipoUsuario(tipoUsuario);
 
-  if (["clube", "escolinha", "escola"].includes(tipo)) {
+  if (["clube", "escolinha", "escola", "federacao", "marca"].includes(tipo)) {
     return CreatorTipo.INSTITUCIONAL;
   }
 
@@ -57,7 +57,15 @@ function normalizarTipoUsuario(tipoUsuario?: string | null) {
 
 function podeSerCreator(tipoUsuario?: string | null) {
   const tipo = normalizarTipoUsuario(tipoUsuario);
-return ["professor", "olheiro", "clube", "escolinha", "escola"].includes(tipo);
+
+  return [
+    "professor",
+    "olheiro",
+    "clube",
+    "escolinha",
+    "federacao",
+    "marca",
+  ].includes(tipo);
 }
 
 export const ativarCreator = async (req: Request, res: Response) => {
@@ -192,18 +200,32 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
       include: {
         usuario: {
           select: {
-              id: true,
-              nome: true,
-              nomeDeUsuario: true,
-              email: true,
-              foto: true,
-              verified: true,
-              tipo: true,
-              clube: true,
-              professor: true,
-              escolinha: true,
-              atleta: true,
-        },
+            id: true,
+            nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            foto: true,
+            verified: true,
+            tipo: true,
+
+            // campos que existem no Usuario
+            cep: true,
+            pais: true,
+            estado: true,
+            cidade: true,
+            logradouro: true,
+            cpf: true,
+
+            // relações/perfis originais
+            clube: true,
+            professor: true,
+            escolinha: true,
+            atleta: true,
+            marca: true,
+            federacao: true,
+            olheiro: true,
+            learningProfile: true,
+          },
         },
       },
     });
@@ -315,7 +337,16 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         instituicaoOficial: creator.instituicaoOficial,
         initials: initials(creator.nomePublico ?? creator.usuario.nome),
         usuario: creator.usuario,
-        perfilOriginal: creator.usuario,
+        perfilOriginal: {
+          ...creator.usuario,
+          tipo: creator.usuario.tipo,
+          marca: creator.usuario.marca ?? null,
+          federacao: creator.usuario.federacao ?? null,
+          clube: creator.usuario.clube ?? null,
+          escolinha: creator.usuario.escolinha ?? null,
+          professor: creator.usuario.professor ?? null,
+          atleta: creator.usuario.atleta ?? null,
+        },
     },
       metricas: {
         seguidores,

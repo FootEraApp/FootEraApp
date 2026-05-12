@@ -19,10 +19,18 @@ function isLegacyPlano(planoId: string | null | undefined) {
   return String(planoId || "").toUpperCase() === "ATLETA_METODO_1";
 }
 
-function allowedPlanIdsByTipo(tipoRaw: string) {
-  const tipo = String(tipoRaw || "").trim().toLowerCase();
+function normalizeTipoBilling(tipoRaw: string | null | undefined) {
+  return String(tipoRaw || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
-  if (tipo === "atleta") {
+function allowedPlanIdsByTipo(tipoRaw: string) {
+  const tipo = normalizeTipoBilling(tipoRaw);
+
+  if (tipo === "atleta" || tipo === "learning") {
     return BILLING_SHOW_LEARNING_PLANS
       ? ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3"]
       : ["ATLETA_PRO"];
@@ -34,7 +42,13 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
       : ["PROFESSOR_PRO"];
   }
 
-  if (tipo === "clube" || tipo === "escolinha") {
+  if (
+    tipo === "clube" ||
+    tipo === "escolinha" ||
+    tipo === "escola" ||
+    tipo === "federacao" ||
+    tipo === "marca"
+  ) {
     return BILLING_SHOW_LEARNING_PLANS
       ? ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"]
       : ["ORGANIZACOES_PRO"];
@@ -47,9 +61,14 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
   if (tipo === "admin") {
     return BILLING_SHOW_LEARNING_PLANS
       ? [
-          "ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3",
-          "PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3",
-          "ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3",
+          "ATLETA_PRO",
+          "ATLETA_LEARNING_1",
+          "ATLETA_LEARNING_3",
+          "PROFESSOR_PRO",
+          "PROFESSOR_LEARNING_1",
+          "PROFESSOR_LEARNING_3",
+          "ORGANIZACOES_PRO",
+          "ORGANIZACOES_LEARNING_3",
           "OLHEIRO_PRO",
         ]
       : ["ATLETA_PRO", "PROFESSOR_PRO", "ORGANIZACOES_PRO", "OLHEIRO_PRO"];

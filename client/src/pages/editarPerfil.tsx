@@ -66,7 +66,11 @@ const EditarPerfil = () => {
     | "escolinha"
     | "clube"
     | "admin"
-    | "olheiro";
+    | "olheiro"
+    | "federacao"
+    | "marca"
+    | "learning"
+    ;
   const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -115,14 +119,35 @@ const EditarPerfil = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!res?.data?.usuario || !res?.data?.dadosEspecificos) {
+        if (!res?.data?.usuario) {
           setErro("Perfil não encontrado ou resposta inválida do servidor.");
           return;
         }
 
         const u = res.data.usuario || {};
-        const dadosEsp: any = { ...(res.data.dadosEspecificos || {}) };
-        
+        const tipoSrv = res.data?.tipo ?? res.data?.tipoUsuario ?? tipoUsuarioOriginal ?? "";
+        const tipoNorm = String(tipoSrv || "").toLowerCase();
+
+        const dadosEsp: any = {
+          ...(res.data.dadosEspecificos || {}),
+        };
+
+        if (!dadosEsp.id && res.data?.tipoUsuarioId) {
+          dadosEsp.id = res.data.tipoUsuarioId;
+        }
+
+        if (tipoNorm === "learning" && !dadosEsp.id && res.data?.learningProfileId) {
+          dadosEsp.id = res.data.learningProfileId;
+        }
+
+        if (tipoNorm === "marca" && !dadosEsp.id && res.data?.marcaId) {
+          dadosEsp.id = res.data.marcaId;
+        }
+
+        if (tipoNorm === "federacao" && !dadosEsp.id && res.data?.federacaoId) {
+          dadosEsp.id = res.data.federacaoId;
+        }
+
         if (!Array.isArray(dadosEsp.categorias)) {
           dadosEsp.categorias = dadosEsp.categorias ? [dadosEsp.categorias] : [];
         }
@@ -212,7 +237,6 @@ const EditarPerfil = () => {
 
         setDadosTipo(dadosEsp);
 
-        const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? "";
         const t = String(tipoSrv).toLowerCase();
         setTipoRender((t === "escolinha" ? "escola" : (t as TipoRender)));
       } catch (err: any) {
@@ -237,38 +261,40 @@ const EditarPerfil = () => {
   useEffect(() => {
     const cepDigits = onlyDigits(String(dadosUsuario?.cep ?? ""));
 
-    // só busca quando tiver exatamente 8 números
     if (cepDigits.length !== 8) return;
 
     let cancel = false;
 
-    (async () => {
+    const timer = window.setTimeout(async () => {
       try {
-        const { data } = await axios.get(`https://viacep.com.br/ws/${cepDigits}/json/`);
+        const { data } = await axios.get(
+          `https://viacep.com.br/ws/${cepDigits}/json/`
+        );
 
         if (cancel) return;
 
         if (!data || data.erro) {
-          // opcional: você pode avisar, mas eu recomendo só não preencher
+          console.warn("[EditarPerfil] CEP não encontrado:", cepDigits);
           return;
         }
 
         setDadosUsuario((prev: any) => ({
           ...prev,
           cep: cepDigits,
-          logradouro: prev?.logradouro || data.logradouro || "",
-          cidade: prev?.cidade || data.localidade || "",
-          estado: prev?.estado || data.uf || "",
-          pais: prev?.pais || "Brasil",
+          logradouro: data.logradouro || "",
+          bairro: data.bairro || prev?.bairro || "",
+          cidade: data.localidade || "",
+          estado: data.uf || "",
+          pais: "Brasil",
         }));
       } catch (e) {
-        // opcional: log
         console.warn("[EditarPerfil] ViaCEP falhou", e);
       }
-    })();
+    }, 350);
 
     return () => {
       cancel = true;
+      window.clearTimeout(timer);
     };
   }, [dadosUsuario?.cep]);
 
@@ -353,19 +379,23 @@ const EditarPerfil = () => {
   if (erro) {
     return <div className="text-center text-red-600 mt-10">{erro}</div>;
   }
-  if (!dadosUsuario || !dadosTipo) {
+  if (!dadosUsuario) {
     return (
       <div className="text-center text-red-600 mt-10">
         Erro ao carregar o perfil.
       </div>
     );
   }
-
+  const dadosTipoSeguro = dadosTipo || {};
   const isAtleta = tipoRender === "atleta";
   const isOlheiro = tipoRender === "olheiro";
   const isProfessor = tipoRender === "professor";
   const isClube = tipoRender === "clube";
   const isEscolinha = tipoRender === "escola" || tipoRender === "escolinha";
+  const isFederacao = tipoRender === "federacao";
+  const isMarca = tipoRender === "marca";
+  const isLearning = tipoRender === "learning";
+  const isOrganizacaoInstitucional = isClube || isEscolinha || isFederacao || isMarca;
 
   const mostrarCepUsuario = true;
   const clubesFiltrados = listaClubes.filter((op) =>
@@ -461,6 +491,144 @@ const EditarPerfil = () => {
         </div>
       );
     };
+
+    if (isLearning) {
+      return (
+        <>
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Bio</label>
+            <textarea
+              name="tipo_bio"
+              value={dadosTipo?.bio || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded min-h-[90px]"
+              placeholder="Conte um pouco sobre você, seus interesses e seu momento na FootEra."
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Objetivo</label>
+            <input
+              name="tipo_objetivo"
+              value={dadosTipo?.objetivo || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Ex: aprender mais, evoluir como atleta, estudar metodologias..."
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (isFederacao || isMarca) {
+      return (
+        <>
+          <div className="mb-4">
+            <label className="block text-sm font-medium">
+              {isFederacao ? "Nome da Federação" : "Nome da Marca"}
+            </label>
+            <input
+              name="tipo_nome"
+              value={dadosTipo?.nome || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder={isFederacao ? "Ex: Federação Capixaba" : "Ex: Marca FootEra"}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">CNPJ</label>
+            <input
+              name="tipo_cnpj"
+              value={formatCnpj(String(dadosTipo?.cnpj ?? ""))}
+              onChange={(e) => {
+                setDadosTipo({
+                  ...dadosTipo,
+                  cnpj: onlyCnpj(e.target.value),
+                });
+              }}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="00.000.000/0000-00"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Telefone 1</label>
+            <input
+              name="tipo_telefone1"
+              value={dadosTipo?.telefone1 || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Ex: (27) 99999-9999"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Telefone 2</label>
+            <input
+              name="tipo_telefone2"
+              value={dadosTipo?.telefone2 || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">E-mail público</label>
+            <input
+              type="email"
+              name="tipo_email"
+              value={dadosTipo?.email || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="contato@exemplo.com"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Site oficial</label>
+            <input
+              name="tipo_siteOficial"
+              value={dadosTipo?.siteOficial || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="https://..."
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Sede</label>
+            <input
+              name="tipo_sede"
+              value={dadosTipo?.sede || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder={
+                isFederacao
+                  ? "Ex: Sede administrativa em Vitória - ES"
+                  : "Ex: Unidade matriz em Vila Velha - ES"
+              }
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Descrição</label>
+            <textarea
+              name="tipo_descricao"
+              value={dadosTipo?.descricao || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded min-h-[110px]"
+              placeholder={
+                isFederacao
+                  ? "Descreva a federação, atuação, região, modalidades e objetivos."
+                  : "Descreva a marca, atuação, produtos, serviços ou conteúdos."
+              }
+            />
+          </div>
+        </>
+      );
+    }
 
     switch (tipoRender) {
       case "atleta":
@@ -672,15 +840,26 @@ const EditarPerfil = () => {
       case "escolinha":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Nome da Escolinha", "nome")}
             {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
-            {renderInput("Email", "email")}
-            {renderInput("Site Oficial", "siteOficial")}
+            {renderInput("E-mail público", "email", "email")}
+            {renderInput("Site oficial", "siteOficial")}
+            {renderInput("Sede", "sede")}
+            {renderInput("Categorias", "categorias")}
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Descrição</label>
+              <textarea
+                name="tipo_descricao"
+                value={dadosTipo.descricao ?? ""}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded min-h-[110px]"
+                placeholder="Descreva a escolinha, estrutura, categorias e metodologia."
+              />
+            </div>
           </>
         );
-
       case "olheiro":
         return (
           <>
@@ -764,59 +943,28 @@ const EditarPerfil = () => {
       case "clube":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Nome do Clube", "nome")}
             {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
-            {renderInput("Email", "email")}
-            {renderInput("Site Oficial", "siteOficial")}
+            {renderInput("E-mail público", "email", "email")}
+            {renderInput("Site oficial", "siteOficial")}
+            {renderInput("Sede", "sede")}
             {renderInput("Estádio", "estadio")}
-
+            {renderInput("Categorias", "categorias")}
             <div className="mb-4">
               <label className="block text-sm font-medium">Descrição</label>
               <textarea
                 name="tipo_descricao"
-                value={dadosTipo["descricao"] ?? ""}
+                value={dadosTipo.descricao ?? ""}
                 onChange={handleChange}
-                className="w-full border px-3 py-2 rounded"
-                rows={4}
-                placeholder="Fale sobre o clube, história, missão, etc."
+                className="w-full border px-3 py-2 rounded min-h-[110px]"
+                placeholder="Descreva o clube, história, estrutura e objetivos."
               />
             </div>
-
-           <div className="mb-4">
-            <label className="block text-sm font-medium">Categorias de Base</label>
-
-            <select
-              multiple
-              value={Array.isArray(dadosTipo.categorias) ? dadosTipo.categorias : []}
-              onChange={(e) => {
-                const values = Array.from(e.target.selectedOptions).map((o) => o.value);
-                setDadosTipo((prev: any) => ({
-                  ...prev,
-                  categorias: values,
-                }));
-              }}
-              className="w-full border px-3 py-2 rounded bg-white min-h-[180px]"
-            >
-              <option value="Sub3">Sub-3</option>
-              <option value="Sub5">Sub-5</option>
-              <option value="Sub7">Sub-7</option>
-              <option value="Sub9">Sub-9</option>
-              <option value="Sub11">Sub-11</option>
-              <option value="Sub13">Sub-13</option>
-              <option value="Sub15">Sub-15</option>
-              <option value="Sub16">Sub-16</option>
-              <option value="Livre">Livre</option>
-            </select>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Segure Ctrl (ou Cmd no Mac) para selecionar mais de uma categoria.
-            </p>
-          </div>
           </>
         );
-    }
+      }
   };
 
 const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
@@ -941,7 +1089,7 @@ return (
           <label className="block text-sm font-medium">CEP</label>
           <input
             name="cep"
-            value={dadosUsuario.cep || ""}
+            value={String(dadosUsuario.cep || "").replace(/^(\d{5})(\d)/, "$1-$2")}
             onChange={(e) => {
               const digits = onlyDigits(e.target.value).slice(0, 8);
               setDadosUsuario((prev: any) => ({ ...prev, cep: digits }));
@@ -1094,7 +1242,11 @@ return (
             formData.append("tipo", JSON.stringify(tipo));
             formData.append(
               "tipoUsuario",
-              String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola")
+              String(tipoUsuarioOriginal)
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/^escolinha$/, "escola")
             );
 
             // 5. Única requisição PUT para o Perfil

@@ -62,7 +62,8 @@ export default function ConfiguracoesPerfil() {
     sessionStorage.getItem("usuarioTipoRaw") ||
     "";
 
-  const isAtleta = String(tipoUsuario).toLowerCase() === "atleta";
+  const tipoNorm = String(tipoUsuario).toLowerCase();
+  const bloqueiaCreator = tipoNorm === "atleta" || tipoNorm === "learning";
 
   function getToken() {
     return (
@@ -466,7 +467,21 @@ export default function ConfiguracoesPerfil() {
           )}
         </div>
 
-        {!isAtleta && (
+        {tipoNorm === "learning" && (
+          <div className="flex justify-between py-3 items-start border-t">
+            <div>
+              <p className="font-semibold">🔄 Mudar tipo de perfil</p>
+              <p className="text-sm text-gray-600">
+                Transforme sua conta Learning em atleta, professor, scout ou organização.
+              </p>
+            </div>
+
+            <Link href="/perfil/mudar-tipo" className="text-green-800 font-semibold">
+              Alterar
+            </Link>
+          </div>
+        )}
+        {!bloqueiaCreator && (
           <div className="flex justify-between py-2 items-start border-t">
             <div>
               <p className="font-semibold">🎓 Creator</p>

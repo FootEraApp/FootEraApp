@@ -71,6 +71,9 @@ import CreatorProfile from "./pages/creator/profile.js";
 import CreatorDashboard from "./pages/creator/dashboard.js";
 import LearningLiveStudioPage from "./pages/learning/live-studio.js";
 import LearningLivePage from "./pages/learning/live.js";
+import CreatorEventosPage from "./pages/creator/eventos.js";
+import CreatorNovoEventoPage from "./pages/creator/eventos-novo.js";
+import MudarTipoPerfilPage from "./pages/perfil/mudarTipo.js";
 
 export function AppRoutes() {
   return (
@@ -139,6 +142,9 @@ export function AppRoutes() {
         {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
       </Route>
 
+      <Route path="/perfil/mudar-tipo">
+        <Private><MudarTipoPerfilPage /></Private>
+      </Route>
       <Route path="/perfil/conquistas"><PaginaConquistas /></Route>
       <Route path="/perfil/GerenciarAtletas"><PaginaGerenciarAtleta /></Route>
       <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>
@@ -226,13 +232,20 @@ export function AppRoutes() {
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
       <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
+      
       <Route path="/creator/profile">
         <Private><CreatorProfile /></Private>
       </Route>
-
       <Route path="/creator/dashboard">
         <Private><CreatorDashboard /></Private>
       </Route>
+      <Route path="/creator/eventos/novo">
+        <Private><CreatorNovoEventoPage /></Private>
+      </Route>
+      <Route path="/creator/eventos">
+        <Private><CreatorEventosPage /></Private>
+      </Route>
+
       <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>

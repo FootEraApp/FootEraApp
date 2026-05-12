@@ -496,7 +496,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
     nomeEscolinha, cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha, siteOficialEscolinha, sedeEscolinha,
     logradouroEscolinha, numeroEscolinha, complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
-    areaAtuacao, anosExperiencia,
+    areaAtuacao, anosExperiencia, nomeOrganizacao,
     telefonePublico, emailPublico, descricao, colaboracaoClubeId, colaboracaoProfessorId,
     colaboracaoEscolinhaId, dataNascimento, responsavel, siteOuLinkedin, headline
   } = req.body ?? {};
@@ -843,6 +843,97 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = admin.id;
         break;
       }
+      case TipoUsuario.Learning: {
+        const learning = await prisma.learningProfile.create({
+          data: {
+            usuarioId: usuario.id,
+          },
+          select: { id: true },
+        });
+
+        tipoUsuarioId = learning.id;
+        break;
+      }
+
+      case TipoUsuario.Federacao: {
+        const federacao = await prisma.federacao.create({
+          data: {
+            usuarioId: usuario.id,
+            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal, 
+            cnpj: cnpjClube || cnpjEscolinha || null,
+            telefone1: telefone1Clube || telefone1Escolinha || null,
+            telefone2: telefone2Clube || telefone2Escolinha || null,
+            email: emailClube || emailEscolinha || emailNorm,
+            siteOficial: siteOficialClube || siteOficialEscolinha || null,
+            sede: sedeClube || sedeEscolinha || null,
+            cidade: cidadeClube || cidadeEscolinha || cidade || null,
+            estado: estadoClube || estadoEscolinha || estado || null,
+            pais: paisClube || paisEscolinha || pais || null,
+            cep: cepClube || cepEscolinha || null,
+            descricao: descricao ?? null,
+          },
+          select: { id: true },
+        });
+
+        await prisma.creator.upsert({
+          where: { usuarioId: usuario.id },
+          update: {
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+          },
+          create: {
+            usuarioId: usuario.id,
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+            nomePublico: nomeOrganizacao || usuario.nome,
+            headline: "Canal oficial FootEra",
+          },
+        });
+
+        tipoUsuarioId = federacao.id;
+        break;
+      }
+
+      case TipoUsuario.Marca: {
+        const marca = await prisma.marca.create({
+          data: {
+            usuarioId: usuario.id,
+            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
+            cnpj: cnpjClube || cnpjEscolinha || null,
+            telefone1: telefone1Clube || telefone1Escolinha || null,
+            telefone2: telefone2Clube || telefone2Escolinha || null,
+            email: emailClube || emailEscolinha || emailNorm,
+            siteOficial: siteOficialClube || siteOficialEscolinha || null,
+            cidade: cidadeClube || cidadeEscolinha || cidade || null,
+            estado: estadoClube || estadoEscolinha || estado || null,
+            pais: paisClube || paisEscolinha || pais || null,
+            cep: cepClube || cepEscolinha || null,
+            descricao: descricao ?? null,
+          },
+          select: { id: true },
+        });
+
+        await prisma.creator.upsert({
+          where: { usuarioId: usuario.id },
+          update: {
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+          },
+          create: {
+            usuarioId: usuario.id,
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+            nomePublico: nomeOrganizacao || usuario.nome,
+            headline: "Canal oficial FootEra",
+          },
+        });
+        tipoUsuarioId = marca.id;
+        break;
+      }
     }
 
     try {
@@ -1031,6 +1122,15 @@ function stringParaTipoUsuario(v: any): TipoUsuario | null {
   if (s === "escolinha") return TipoUsuario.Escolinha;
   if (s === "admin") return TipoUsuario.Admin;
   if (s === "olheiro") return TipoUsuario.Olheiro;
+  switch (s) {
+    case "learning":
+      return TipoUsuario.Learning;
+    case "federacao":
+    case "federação":
+      return TipoUsuario.Federacao;
+    case "marca":
+      return TipoUsuario.Marca;
+  }
   return null;
 }
 

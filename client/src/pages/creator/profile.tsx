@@ -73,6 +73,7 @@ export default function CreatorProfile() {
   const [badgeCount, setBadgeCount] = useState(0);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
   const [followPendente, setFollowPendente] = useState(false);
+  const [eventos, setEventos] = useState<any[]>([]);
 
   const usuarioId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -191,7 +192,16 @@ export default function CreatorProfile() {
         setSeguindo(false);
         setFollowPendente(false);
         });
-    }, [usuarioId, meuId]);
+  }, [usuarioId, meuId]);
+
+  useEffect(() => {
+    if (!usuarioId) return;
+
+    fetch(`${API}/api/eventos?creatorUsuarioId=${usuarioId}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((j) => setEventos(Array.isArray(j) ? j : []))
+      .catch(() => setEventos([]));
+  }, [usuarioId]);
 
   if (loading) {
     return (
@@ -224,6 +234,149 @@ export default function CreatorProfile() {
     : 0;
   const creatorReturnUrl = `/creator/profile?id=${creator.usuarioId}`;
   const isOwnCreator = meuId === creator.usuarioId;
+  const perfilOriginal = creator.perfilOriginal || {};
+
+  const entidadeOriginal =
+    perfilOriginal.marca ||
+    perfilOriginal.federacao ||
+    perfilOriginal.clube ||
+    perfilOriginal.escolinha ||
+    perfilOriginal.escola ||
+    perfilOriginal.professor ||
+    perfilOriginal.olheiro ||
+    perfilOriginal.learning ||
+    perfilOriginal.atleta ||
+    {};
+
+  const tipoPerfilOriginal = String(
+    perfilOriginal.tipo ||
+      entidadeOriginal.tipo ||
+      tipoOriginal ||
+      ""
+  ).toLowerCase();
+
+  const labelTipoOriginal =
+    tipoPerfilOriginal === "marca"
+      ? "Marca"
+      : tipoPerfilOriginal === "federacao"
+      ? "Federação"
+      : tipoPerfilOriginal === "clube"
+      ? "Clube"
+      : tipoPerfilOriginal === "escolinha" || tipoPerfilOriginal === "escola"
+      ? "Escolinha"
+      : tipoPerfilOriginal === "professor"
+      ? "Professor"
+      : tipoPerfilOriginal === "olheiro"
+      ? "Scout"
+      : tipoPerfilOriginal === "learning"
+      ? "Learning"
+      : tipoPerfilOriginal === "atleta"
+      ? "Atleta"
+      : institucional
+      ? "Institucional"
+      : "Creator";
+
+  const nomeSobre =
+    entidadeOriginal.nome ||
+    perfilOriginal.nome ||
+    creator.nomePublico;
+
+  const emailSobre =
+    entidadeOriginal.email ||
+    perfilOriginal.email ||
+    perfilOriginal.usuario?.email ||
+    "";
+
+  const cnpjSobre =
+    entidadeOriginal.cnpj ||
+    perfilOriginal.cnpj ||
+    "";
+
+  const siteSobre =
+    entidadeOriginal.siteOficial ||
+    entidadeOriginal.site ||
+    entidadeOriginal.siteOuLinkedin ||
+    perfilOriginal.siteOficial ||
+    perfilOriginal.site ||
+    "";
+
+  const sedeSobre =
+    entidadeOriginal.sede ||
+    perfilOriginal.sede ||
+    "";
+
+  const descricaoSobre =
+    entidadeOriginal.descricao ||
+    perfilOriginal.descricao ||
+    creator.bio ||
+    "";
+
+  const telefone1Sobre =
+    entidadeOriginal.telefone1 ||
+    entidadeOriginal.telefonePublico ||
+    perfilOriginal.telefone1 ||
+    perfilOriginal.telefonePublico ||
+    "";
+
+  const telefone2Sobre =
+    entidadeOriginal.telefone2 ||
+    perfilOriginal.telefone2 ||
+    "";
+
+  const cepSobre =
+    entidadeOriginal.cep ||
+    perfilOriginal.cep ||
+    perfilOriginal.usuario?.cep ||
+    "";
+
+  const logradouroSobre =
+    entidadeOriginal.logradouro ||
+    perfilOriginal.logradouro ||
+    perfilOriginal.usuario?.logradouro ||
+    "";
+
+  const bairroSobre =
+    entidadeOriginal.bairro ||
+    perfilOriginal.bairro ||
+    perfilOriginal.usuario?.bairro ||
+    "";
+
+  const cidadeSobre =
+    entidadeOriginal.cidade ||
+    perfilOriginal.cidade ||
+    perfilOriginal.usuario?.cidade ||
+    "";
+
+  const estadoSobre =
+    entidadeOriginal.estado ||
+    perfilOriginal.estado ||
+    perfilOriginal.usuario?.estado ||
+    "";
+
+  const paisSobre =
+    entidadeOriginal.pais ||
+    perfilOriginal.pais ||
+    perfilOriginal.usuario?.pais ||
+    "";
+
+  const localizacaoSobre = [cidadeSobre, estadoSobre, paisSobre]
+    .filter(Boolean)
+    .join(", ");
+
+  const enderecoCompletoSobre = [
+    logradouroSobre,
+    bairroSobre,
+    localizacaoSobre,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
+  const categoriasSobre =
+    Array.isArray(entidadeOriginal.categorias)
+      ? entidadeOriginal.categorias
+      : Array.isArray(perfilOriginal.categorias)
+      ? perfilOriginal.categorias
+      : [];
   const tabs = institucional
   ? [
       ["visao", "Visão Geral"],
@@ -572,33 +725,67 @@ export default function CreatorProfile() {
 
         {aba === "eventos" && (
           <section className="bg-white rounded-2xl border p-5 shadow-sm">
-            <h2 className="font-bold text-emerald-950 mb-2">Próximos eventos</h2>
-            <p className="text-slate-500 text-sm mb-4">
-            Eventos e lives do Creator aparecerão aqui.
-            </p>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-emerald-950 mb-1">
+                  Próximos eventos
+                </h2>
+                <p className="text-slate-500 text-sm">
+                  Aulas ao vivo, webinars, lives e eventos publicados por este Creator.
+                </p>
+              </div>
 
-            {institucional && (
-            <button
-                onClick={() => {
-                const clubeId = creator.perfilOriginal?.clube?.id;
-                const escolinhaId = creator.perfilOriginal?.escolinha?.id;
+              {isOwnCreator && (
+                <button
+                  onClick={() => {
+                    window.location.href = "/creator/eventos/novo";
+                  }}
+                  className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-bold"
+                >
+                  + Criar evento
+                </button>
+              )}
+            </div>
 
-                if (clubeId) {
-                    window.location.href = `/eventos/clubes/${clubeId}/novo`;
-                    return;
-                }
+            {eventos.length === 0 ? (
+              <p className="text-slate-500 text-sm">
+                Nenhum evento publicado ainda.
+              </p>
+            ) : (
+              <div className="grid gap-3">
+                {eventos.map((ev) => (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => {
+                      window.location.href = `/eventos/${ev.id}`;
+                    }}
+                    className="text-left rounded-xl border p-4 hover:bg-slate-50"
+                  >
+                    <div className="flex justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-emerald-950">
+                          {ev.titulo}
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          {ev.tipoLabel || ev.tipo} •{" "}
+                          {new Date(ev.dataEvento).toLocaleString()}
+                        </p>
+                      </div>
 
-                if (escolinhaId) {
-                    window.location.href = `/eventos/escolas/${escolinhaId}/novo`;
-                    return;
-                }
+                      <span className="text-xs bg-emerald-100 text-emerald-800 rounded-full px-2 py-1 h-fit">
+                        {ev.status}
+                      </span>
+                    </div>
 
-                alert("Não foi possível identificar a organização deste Creator.");
-                }}
-                className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-bold"
-            >
-                + Criar evento
-            </button>
+                    {ev.descricao && (
+                      <p className="text-sm text-slate-600 mt-2 line-clamp-2">
+                        {ev.descricao}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </section>
         )}
@@ -610,83 +797,102 @@ export default function CreatorProfile() {
         )}
 
         {aba === "sobre" && (
-            <section className="bg-white rounded-2xl border p-5 shadow-sm">
-                <h2 className="font-bold text-emerald-950 mb-4">Sobre</h2>
-
-                <div className="space-y-2 text-sm text-slate-700">
-                <p>
-                    <strong>Nome:</strong> {creator.nomePublico}
+          <section className="bg-white rounded-2xl border p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-emerald-950 text-lg">
+                  Sobre
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Informações públicas do perfil {labelTipoOriginal}.
                 </p>
+              </div>
 
-                {creator.perfilOriginal?.clube?.descricao && (
-                    <p>
-                        <strong>Descrição do clube:</strong>{" "}
-                        {creator.perfilOriginal.clube.descricao}
-                    </p>
-                )}
+              {isOwnCreator && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = `/perfil/editar?returnTo=${encodeURIComponent(
+                      creatorReturnUrl
+                    )}`;
+                  }}
+                  className="rounded-xl border px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"
+                >
+                  Editar dados
+                </button>
+              )}
+            </div>
 
-                {creator.perfilOriginal?.escolinha?.descricao && (
-                    <p>
-                        <strong>Descrição da escolinha:</strong>{" "}
-                        {creator.perfilOriginal.escolinha.descricao}
-                    </p>
-                )}
+            <div className="grid gap-3 text-sm text-slate-700">
+              <InfoLine label="Tipo de perfil" value={labelTipoOriginal} />
+              <InfoLine label="Nome" value={nomeSobre} />
+              <InfoLine label="Email" value={emailSobre} />
 
-                {creator.bio && (
-                    <p>
-                    <strong>Bio:</strong> {creator.bio}
-                    </p>
-                )}
+              {cnpjSobre && <InfoLine label="CNPJ" value={cnpjSobre} />}
 
-                {creator.nicho && (
-                    <p>
-                    <strong>Nicho:</strong> {creator.nicho}
-                    </p>
-                )}
+              {telefone1Sobre && (
+                <InfoLine label="Telefone 1" value={telefone1Sobre} />
+              )}
 
-                {creator.perfilOriginal?.email && (
-                    <p>
-                    <strong>Email:</strong> {creator.perfilOriginal.email}
-                    </p>
-                )}
+              {telefone2Sobre && (
+                <InfoLine label="Telefone 2" value={telefone2Sobre} />
+              )}
 
-                {creator.perfilOriginal?.clube?.cidade && (
-                    <p>
-                    <strong>Localização:</strong>{" "}
-                    {creator.perfilOriginal.clube.cidade}
-                    {creator.perfilOriginal.clube.estado
-                        ? `, ${creator.perfilOriginal.clube.estado}`
-                        : ""}
-                    {creator.perfilOriginal.clube.pais
-                        ? `, ${creator.perfilOriginal.clube.pais}`
-                        : ""}
-                    </p>
-                )}
-
-                {creator.perfilOriginal?.clube?.siteOficial && (
-                    <p>
-                    <strong>Site:</strong> {creator.perfilOriginal.clube.siteOficial}
-                    </p>
-                )}
-
-                {Array.isArray(creator.perfilOriginal?.clube?.categorias) &&
-                creator.perfilOriginal.clube.categorias.length > 0 && (
-                    <p>
-                    <strong>Categorias:</strong>{" "}
-                    {creator.perfilOriginal.clube.categorias.join(", ")}
-                    </p>
-                )}
-
-                {Array.isArray(creator.perfilOriginal?.escolinha?.categorias) &&
-                creator.perfilOriginal.escolinha.categorias.length > 0 && (
-                    <p>
-                    <strong>Categorias:</strong>{" "}
-                    {creator.perfilOriginal.escolinha.categorias.join(", ")}
-                    </p>
-                )}
+              {siteSobre && (
+                <div className="rounded-xl bg-[#f5f7f3] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Site oficial
+                  </p>
+                  <a
+                    href={
+                      String(siteSobre).startsWith("http")
+                        ? siteSobre
+                        : `https://${siteSobre}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block font-semibold text-emerald-800 underline break-all"
+                  >
+                    {siteSobre}
+                  </a>
                 </div>
-            </section>
-            )}
+              )}
+
+              {sedeSobre && <InfoLine label="Sede" value={sedeSobre} />}
+
+              {enderecoCompletoSobre && (
+                <InfoLine label="Endereço" value={enderecoCompletoSobre} />
+              )}
+
+              {categoriasSobre.length > 0 && (
+                <InfoLine
+                  label="Categorias"
+                  value={categoriasSobre.join(", ")}
+                />
+              )}
+
+              {creator.nicho && <InfoLine label="Nicho" value={creator.nicho} />}
+              {creator.headline && (
+                <InfoLine label="Headline" value={creator.headline} />
+              )}
+
+              {descricaoSobre && (
+                <InfoLine label="Descrição" value={descricaoSobre} />
+              )}
+
+              {!emailSobre &&
+                !cnpjSobre &&
+                !siteSobre &&
+                !sedeSobre &&
+                !localizacaoSobre &&
+                !descricaoSobre && (
+                  <p className="text-slate-500">
+                    Este Creator ainda não completou as informações públicas do perfil.
+                  </p>
+                )}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
@@ -718,5 +924,20 @@ function BadgeCount({ count }: { count: number }) {
     <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
       {count > 99 ? "99+" : count}
     </span>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value?: any }) {
+  if (value === null || value === undefined || value === "") return null;
+
+  return (
+    <div className="rounded-xl bg-[#f5f7f3] p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 font-semibold text-slate-700 break-words whitespace-pre-line">
+        {value}
+      </p>
+    </div>
   );
 }
