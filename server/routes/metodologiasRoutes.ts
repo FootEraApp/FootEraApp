@@ -30,6 +30,7 @@ import {
   deleteMetodologiaAvulsa,
   migrarMetodologiaAvulsaParaLearning,
   migrarMetodologiaParaAvulsa,
+  deleteMetodologiaAvulsaEstruturaItens,
   criarSubmissaoMetodologiaItem,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js";
@@ -69,6 +70,11 @@ router.post(
   authenticateToken,
   requireMetodologiaCreateAccess,
   createMetodologiaAvulsaCompleta
+);
+router.delete(
+  "/metodologias-avulsas/:metodologiaAvulsaId/estruturas/:estruturaId/itens",
+  authenticateToken,
+  deleteMetodologiaAvulsaEstruturaItens
 );
 router.post(
   "/metodologias-avulsas",

@@ -140,6 +140,7 @@ import { processExpiringSubscriptions } from "./controllers/billingController.js
 import googleAuthRoutes from "./routes/googleAuth.js";
 import creatorRoutes from "./routes/creator.js";
 import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
+import learningEventosRoutes from "./routes/learningEventos.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -368,6 +369,7 @@ app.use("/api/status", statusRoutes);
 app.use("/api/metodologias", metodologiasRoutes);
 app.use("/api/creator", creatorRoutes);
 app.use("/api/permissoes", permissoesRoutes);
+app.use("/api/learning/eventos", learningEventosRoutes);
 app.use("/api/dashboard", authenticateToken, dashboardOrganizacaoRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);

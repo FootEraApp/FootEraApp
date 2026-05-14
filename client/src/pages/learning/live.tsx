@@ -412,6 +412,35 @@ useEffect(() => {
       }
 
       const item = json?.item || json?.aula || json;
+
+      const acessoRes = await fetch(
+        `${API.BASE_URL}/api/learning/eventos/aulas/${aulaId}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+
+      const acessoJson = await acessoRes.json().catch(() => ({}));
+      const acessoItem = acessoJson?.item || acessoJson?.evento || acessoJson;
+
+      if (
+        acessoRes.ok &&
+        acessoItem?.acesso &&
+        !acessoItem.acesso.temAcesso &&
+        !acessoItem.acesso.isOwner &&
+        !acessoItem.acesso.isConvidadoFootEra
+      ) {
+        const texto = String(item?.titulo || item?.descricao || "").toLowerCase();
+        const isCopa = texto.includes("copa");
+
+        if (isCopa) {
+          navigate(`/learning/evento/sala-copa?aulaId=${encodeURIComponent(aulaId)}`);
+        } else {
+          navigate(`/learning/evento/${encodeURIComponent(aulaId)}`);
+        }
+
+        return;
+      }
       setAula(item);
     } catch (e: any) {
       setPageError(e?.message || "Erro ao carregar aula ao vivo.");

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   CreditCard,
+  Radio,
   Gift,
   Landmark,
   QrCode,
@@ -82,6 +83,25 @@ type MetodologiaAvulsa = {
   precoAssinaturaMensal: number;
   pontosTotal?: number | null;
   publicoAlvo?: "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string | null;
+  planoId: string;
+};
+
+type AulaAoVivoPaga = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+  dataInicio: string;
+  dataFim?: string | null;
+  inscricaoInicio?: string | null;
+  inscricaoFim?: string | null;
+  precoAcesso: number;
+  acessoPago: boolean;
+  status: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
+  totalParticipantes?: number | null;
+  criadorUsuario?: {
+    id: string;
+    nome?: string | null;
+  } | null;
   planoId: string;
 };
 
@@ -598,7 +618,13 @@ type CartItem = {
   periodicidade: Periodicidade;
   label: string;
   price: number;
-  categoria: "PRO" | "LEARNING" | "PLUS" | "METODOLOGIA" | "METODOLOGIA_AVULSA";
+  categoria:
+    | "PRO"
+    | "LEARNING"
+    | "PLUS"
+    | "METODOLOGIA"
+    | "METODOLOGIA_AVULSA"
+    | "AULA_AO_VIVO";
 };
 
 function uniqueCart(items: CartItem[]) {
@@ -654,6 +680,9 @@ export default function PagamentosPage() {
   const [roleSelected, setRoleSelected] = useState<RoleUI>(roleUI);
   const [metodologiasAvulsas, setMetodologiasAvulsas] = useState<MetodologiaAvulsa[]>([]);
   const [buscaMetod, setBuscaMetod] = useState("");
+  const [aulasAoVivoPagas, setAulasAoVivoPagas] = useState<AulaAoVivoPaga[]>([]);
+  const [pickAulasAoVivo, setPickAulasAoVivo] = useState<Record<string, boolean>>({});
+  const [buscaAulaAoVivo, setBuscaAulaAoVivo] = useState("");
   const [filtroNivelMetod, setFiltroNivelMetod] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
   const [filtroConteudoMetod, setFiltroConteudoMetod] = useState<"TODOS" | "VIDEOS" | "TREINOS" | "AMBOS">("TODOS");
   const [filtroPublicoMetod, setFiltroPublicoMetod] = useState<
@@ -708,6 +737,11 @@ export default function PagamentosPage() {
     () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }),
     [token]
   );
+
+  const redirectAfterPayment = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("redirect") || "";
+  }, []);
 
   useEffect(() => {
     if (!billingState?.precisaEscolherPagamento) return;
@@ -823,6 +857,21 @@ export default function PagamentosPage() {
       });
     }
 
+    Object.entries(pickAulasAoVivo).forEach(([aulaId, checked]) => {
+      if (!checked) return;
+
+      const aula = aulasAoVivoPagas.find((x) => x.id === aulaId);
+      if (!aula) return;
+
+      items.push({
+        planoId: aula.planoId || `AULA_AO_VIVO:${aula.id}`,
+        periodicidade: "Mensal",
+        label: `Evento ao vivo: ${aula.titulo}`,
+        price: Number(aula.precoAcesso ?? 0),
+        categoria: "AULA_AO_VIVO",
+      });
+    });
+
     return uniqueCart(items);
   }
 
@@ -836,6 +885,8 @@ export default function PagamentosPage() {
       periodPro, periodLearning, periodPlus,
       apiPlans,
       metodologiasAvulsas, // ✅ ESSENCIAL
+      aulasAoVivoPagas, // ✅ ESSENCIAL
+      pickAulasAoVivo, // ✅ ESSENCIAL
     ]
   );
 
@@ -973,6 +1024,13 @@ export default function PagamentosPage() {
         } else {
           setMetodologiasAvulsas([]);
         }
+        const rAulas = await fetch(`${API.BASE_URL}/api/billing/aulas-ao-vivo`, {
+          headers,
+        });
+
+        const jAulas = await rAulas.json().catch(() => ({}));
+        setAulasAoVivoPagas(jAulas.items || []);
+
       } catch (e) {
         console.error(e);
       } finally {
@@ -1225,6 +1283,12 @@ export default function PagamentosPage() {
           setPolling(false);
           await loadMe();
           localStorage.removeItem(LS_KEY);
+
+          if (redirectAfterPayment) {
+            window.location.href = redirectAfterPayment;
+            return;
+          }
+
           return;
         }
 
@@ -1890,6 +1954,109 @@ export default function PagamentosPage() {
         </div>
       </section>
       )}
+
+      <div className="rounded-2xl border bg-white p-5 mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Radio className="w-5 h-5 text-green-700" />
+          <h2 className="font-semibold text-lg">Eventos ao vivo</h2>
+        </div>
+
+        <p className="text-sm text-gray-700 mb-4">
+          Pague por <b>aula ao vivo única</b>. Você compra o acesso a um evento específico,
+          sem assinar uma metodologia inteira.
+        </p>
+
+        <input
+          value={buscaAulaAoVivo}
+          onChange={(e) => setBuscaAulaAoVivo(e.target.value)}
+          placeholder="Buscar evento ao vivo..."
+          className="w-full rounded-lg border px-3 py-2 mb-3"
+        />
+
+        <div className="grid gap-3">
+          {aulasAoVivoPagas
+            .filter((aula) => {
+              const q = buscaAulaAoVivo.trim().toLowerCase();
+              if (!q) return true;
+
+              return (
+                aula.titulo.toLowerCase().includes(q) ||
+                String(aula.descricao || "").toLowerCase().includes(q)
+              );
+            })
+            .map((aula) => {
+              const checked = !!pickAulasAoVivo[aula.id];
+              const data = new Date(aula.dataInicio);
+
+              return (
+                <label
+                  key={aula.id}
+                  className={`rounded-xl border p-4 cursor-pointer ${
+                    checked ? "border-green-600 bg-green-50" : "border-gray-200"
+                  }`}
+                >
+                  <div className="flex gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        setPickAulasAoVivo((prev) => ({
+                          ...prev,
+                          [aula.id]: e.target.checked,
+                        }))
+                      }
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-green-950">{aula.titulo}</div>
+
+                      {aula.descricao ? (
+                        <div className="text-sm text-gray-600 line-clamp-2">
+                          {aula.descricao}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-2 text-sm text-gray-700">
+                        <b>Data:</b>{" "}
+                        {Number.isNaN(data.getTime())
+                          ? "Data em breve"
+                          : data.toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                      </div>
+
+                      <div className="text-sm text-gray-700">
+                        <b>Status:</b> {aula.status}
+                      </div>
+
+                      <div className="mt-2 font-bold text-green-950">
+                        Acesso único:{" "}
+                        {Number(aula.precoAcesso || 0).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </div>
+
+                      <div className="text-xs text-gray-500 mt-1">
+                        ID: {aula.id}
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+
+          {aulasAoVivoPagas.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-4 text-sm text-gray-500">
+              Nenhum evento ao vivo pago disponível no momento.
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
         <div className="flex items-center gap-2 mb-2">

@@ -144,6 +144,44 @@ function getLiveStatusInfo(status?: string) {
   };
 }
 
+function normalizarTexto(value: any) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getEventoPublicoUrl(aula: AulaAoVivoResumo) {
+  const texto = normalizarTexto(
+    [
+      aula?.titulo,
+      aula?.descricao,
+      aula?.metodologia?.titulo,
+      aula?.metodologiaAvulsa?.titulo,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  const deveUsarSalaCopa =
+    texto.includes("sala copa") ||
+    texto.includes("copa") ||
+    texto.includes("copa do mundo") ||
+    texto.includes("mundial");
+
+  if (!deveUsarSalaCopa) {
+    return `/learning/evento/${aula.id}`;
+  }
+
+  const origem = aula?.metodologiaAvulsa?.id ? "avulsa" : "learning";
+  const metodologiaId =
+    aula?.metodologiaAvulsa?.id ||
+    aula?.metodologia?.id ||
+    "";
+
+  return `/learning/evento/sala-copa?aulaId=${aula.id}&origem=${origem}&metodologiaId=${metodologiaId}`;
+}
+
 function TabButton({
   active,
   children,
@@ -657,6 +695,8 @@ export default function LearningPage() {
                             aula.metodologiaAvulsa?.capaUrl ||
                             "/assets/usuarios/footera-logo.png";
 
+                          const eventoUrl = getEventoPublicoUrl(aula);
+                            
                           return (
                             <div
                               key={`live_${aula.id}`}
@@ -725,6 +765,14 @@ export default function LearningPage() {
                                     }`}
                                   >
                                     {statusInfo.buttonLabel}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(eventoUrl)}
+                                    className="inline-flex h-11 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold items-center justify-center"
+                                  >
+                                    Ver página do evento
                                   </button>
 
                                   {(aula.metodologia?.id || aula.metodologiaAvulsa?.id) ? (

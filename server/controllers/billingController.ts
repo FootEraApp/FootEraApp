@@ -100,6 +100,10 @@ function assertPlanoPermitido(tipoUsuario: string, planoId: string) {
     return;
   }
 
+  if (isAulaAoVivo(planoNorm)) {
+    return;
+  }
+
   const allowed = allowedPlanIdsByTipo(tipoUsuario);
   if (!allowed.includes(planoNorm)) {
     const err: any = new Error("Plano não permitido para este tipo de usuário.");
@@ -448,6 +452,11 @@ function normalizePlanoId(planoId: string) {
     return `METODOLOGIA:${id}`;
   }
 
+  if (raw.toUpperCase().startsWith("AULA_AO_VIVO:")) {
+    const id = raw.split(":").slice(1).join(":").trim();
+    return `AULA_AO_VIVO:${id}`;
+  }
+
   return raw.toUpperCase();
 }
 
@@ -457,6 +466,16 @@ function isMetodologiaAvulsa(planoId: string) {
 
 function isMetodologiaLearning(planoId: string) {
   return String(planoId || "").toUpperCase().startsWith("METODOLOGIA:");
+}
+
+function isAulaAoVivo(planoId: string) {
+  return String(planoId || "").toUpperCase().startsWith("AULA_AO_VIVO:");
+}
+
+function extractAulaAoVivoId(planoId: string) {
+  return String(planoId || "")
+    .replace(/^AULA_AO_VIVO:/i, "")
+    .trim();
 }
 
 function extractMetodologiaId(planoId: string) {
@@ -546,6 +565,31 @@ async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<
     const mid = extractMetodologiaId(id);
     const { valorFinal } = await computeMetodologiaAvulsaPricing(mid);
     return Number(valorFinal);
+  }
+
+  if (isAulaAoVivo(id)) {
+    const aulaId = extractAulaAoVivoId(id);
+
+    const aula = await prisma.aulaAoVivo.findUnique({
+      where: { id: aulaId },
+      select: {
+        id: true,
+        titulo: true,
+        precoAcesso: true,
+        acessoPago: true,
+        status: true,
+      },
+    });
+
+    if (!aula) throw new Error("Aula ao vivo não encontrada.");
+
+    const valor = Number(aula.precoAcesso || 0);
+
+    if (!aula.acessoPago || valor <= 0) {
+      return 0;
+    }
+
+    return valor;
   }
 
   const p = findPlan(id);
@@ -1031,9 +1075,17 @@ export async function applyCoupon(req: Request, res: Response) {
     for (const it of items) {
       assertPlanoPermitido(usuarioTipo, it.planoId);
 
-      if (!isMetodologiaAvulsa(it.planoId)) {
+      if (
+        !isMetodologiaAvulsa(it.planoId) &&
+        !isMetodologiaLearning(it.planoId) &&
+        !isAulaAoVivo(it.planoId)
+      ) {
         const plan = findPlan(it.planoId);
-        if (!plan) return res.status(400).json({ message: `Plano inválido: ${it.planoId}` });
+        if (!plan) {
+          return res.status(400).json({
+            message: `Plano inválido: ${it.planoId}`,
+          });
+        }
       }
 
       if (!["Mensal", "Anual"].includes(it.periodicidade as any)) {
@@ -1390,6 +1442,38 @@ async function approvePaymentAndProvision(
         continue;
       }
 
+      if (isAulaAoVivo(pid)) {
+        const aulaAoVivoId = extractAulaAoVivoId(pid);
+        const valorPago = await priceFor(pid, it.periodicidade);
+
+        await (tx as any).aulaAoVivoAcesso.upsert({
+          where: {
+            aulaAoVivoId_usuarioId: {
+              aulaAoVivoId,
+              usuarioId: pg.usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVO",
+            origem: "PAGAMENTO",
+            valorPago,
+            pagoEm: now,
+            expiraEm: null,
+          },
+          create: {
+            aulaAoVivoId,
+            usuarioId: pg.usuarioId,
+            status: "ATIVO",
+            origem: "PAGAMENTO",
+            valorPago,
+            pagoEm: now,
+            expiraEm: null,
+          },
+        });
+
+        continue;
+      }
+
       await upsertSubscriptionTx(tx as any, pg.usuarioId, pid, it.periodicidade);
     }
 
@@ -1423,11 +1507,17 @@ export async function startCheckout(req: Request, res: Response) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    if (isMetodologiaAvulsa(planoNorm)) {
-      // avulsa usa o valor salvo em precoAssinaturaMensal
+    if (
+      isMetodologiaAvulsa(planoNorm) ||
+      isMetodologiaLearning(planoNorm) ||
+      isAulaAoVivo(planoNorm)
+    ) {
+      // produto especial: metodologia, metodologia avulsa ou aula ao vivo única
     } else {
       const plan = findPlan(planoNorm);
-      if (!plan) return res.status(400).json({ message: "Plano inválido" });
+      if (!plan) {
+        return res.status(400).json({ message: "Plano inválido" });
+      }
     }
     try {
       validateMetodoAndFields(metodoFinal, pagador, cartao);
@@ -1711,9 +1801,17 @@ export async function startCheckoutBundle(req: Request, res: Response) {
     for (const it of normalizedItems) {
       assertPlanoPermitido(tipo, it.planoId);
 
-      if (!isMetodologiaAvulsa(it.planoId)) {
+      if (
+        !isMetodologiaAvulsa(it.planoId) &&
+        !isMetodologiaLearning(it.planoId) &&
+        !isAulaAoVivo(it.planoId)
+      ) {
         const plan = findPlan(it.planoId);
-        if (!plan) return res.status(400).json({ message: `Plano inválido: ${it.planoId}` });
+        if (!plan) {
+          return res.status(400).json({
+            message: `Plano inválido: ${it.planoId}`,
+          });
+        }
       }
 
       if (!["Mensal", "Anual"].includes(it.periodicidade as any)) {
@@ -2405,3 +2503,58 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
     return res.status(500).json({ message: "Erro ao verificar assinaturas expirando" });
   }
 }
+
+export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Response) {
+  try {
+    const items = await prisma.aulaAoVivo.findMany({
+      where: {
+        metodologiaId: null,
+        metodologiaAvulsaId: null,
+        acessoPago: true,
+        precoAcesso: {
+          gt: 0,
+        },
+        status: {
+          in: ["AGENDADA", "AO_VIVO", "FINALIZADA"],
+        },
+      },
+      orderBy: {
+        dataInicio: "asc",
+      },
+      select: {
+        id: true,
+        titulo: true,
+        descricao: true,
+        dataInicio: true,
+        dataFim: true,
+        inscricaoInicio: true,
+        inscricaoFim: true,
+        precoAcesso: true,
+        acessoPago: true,
+        status: true,
+        totalParticipantes: true,
+        criadorUsuario: {
+          select: {
+            id: true,
+            nome: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      items: items.map((aula: any) => ({
+        ...aula,
+        precoAcesso: Number(aula.precoAcesso || 0),
+        planoId: `AULA_AO_VIVO:${aula.id}`,
+      })),
+    });
+  } catch (e: any) {
+    console.error("Erro em getAulasAoVivoPagas:", e);
+    return res.status(500).json({
+      message: "Erro ao listar eventos ao vivo pagos.",
+      detail: e?.message,
+    });
+  }
+}
+

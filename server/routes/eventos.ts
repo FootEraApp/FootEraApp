@@ -14,6 +14,9 @@ r.get("/atleta", ctrl.auth, ctrl.eventosDoAtleta);
 r.get("/creator/me", ctrl.auth, ctrl.listarMeusEventosCreator);
 r.post("/creator", ctrl.auth, ctrl.criarEventoCreator);
 
+r.get("/creator/:id", ctrl.auth, ctrl.getEventoCreatorById);
+r.put("/creator/:id", ctrl.auth, ctrl.atualizarEventoCreator);
+r.delete("/creator/:id", ctrl.auth, ctrl.deletarEventoCreator);
 r.get("/clubes/:clubeId", ctrl.listarDoClube);
 r.get("/escolas/:escolinhaId", ctrl.listarDaEscolinha);
 

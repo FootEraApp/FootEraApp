@@ -154,3 +154,96 @@ ${aviso}`;
     text,
   });
 }
+
+export async function sendLiveEventAccessEmail(opts: {
+  to: string;
+  nome?: string | null;
+  tituloEvento: string;
+  dataInicio?: Date | string | null;
+  linkEvento: string;
+  linkLive?: string;
+}) {
+  const transporter = await createTransport();
+
+  const PUBLIC_WEB_BASE = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
+  const LOGO_URL = `${PUBLIC_WEB_BASE}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+  const dataTexto = opts.dataInicio
+    ? new Date(opts.dataInicio).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Data em breve";
+
+  const nome = opts.nome || "Participante";
+
+  const html = `
+  <div style="font-family:Inter,Arial,sans-serif;max-width:580px;margin:0 auto;padding:22px;color:#0b2f22">
+    <img src="${LOGO_URL}" alt="FootEra" style="height:48px;margin-bottom:12px"/>
+    
+    <h2 style="margin:8px 0 4px;color:#063f2a">Inscrição confirmada</h2>
+    
+    <p style="font-size:15px;line-height:1.6;margin:8px 0 16px">
+      Olá, <b>${nome}</b>! Seu acesso ao evento <b>${opts.tituloEvento}</b> foi iniciado.
+    </p>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:14px;margin:16px 0">
+      <p style="margin:0;font-size:14px;color:#14532d">
+        <b>Data do evento:</b><br/>
+        ${dataTexto}
+      </p>
+    </div>
+
+    <a href="${opts.linkEvento}" style="display:inline-block;background:#064e3b;color:#fff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:700">
+      Acessar página do evento
+    </a>
+
+    ${
+      opts.linkLive
+        ? `<p style="margin-top:14px;font-size:13px;color:#555">
+            Link direto da live/replay: <br/>
+            <span style="word-break:break-all">${opts.linkLive}</span>
+          </p>`
+        : ""
+    }
+
+    <p style="margin-top:18px;color:#555;font-size:13px;line-height:1.5">
+      Se o evento ainda não começou, a página mostrará o horário de início. Depois da transmissão, o replay poderá ficar disponível no mesmo acesso.
+    </p>
+
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+
+    <p style="color:#777;font-size:12px">
+      Se o botão não funcionar, copie e cole este link:<br/>
+      <span style="word-break:break-all;color:#444">${opts.linkEvento}</span>
+    </p>
+  </div>`;
+
+  const text = `Olá, ${nome}!
+
+Sua inscrição/acesso ao evento "${opts.tituloEvento}" foi iniciado.
+
+Data do evento: ${dataTexto}
+
+Acesse a página do evento:
+${opts.linkEvento}
+
+${opts.linkLive ? `Link direto da live/replay: ${opts.linkLive}` : ""}
+
+FootEra`;
+
+  const info = await transporter.sendMail({
+    from: getFrom(),
+    to: opts.to,
+    replyTo: getReplyTo(),
+    subject: `Acesso ao evento: ${opts.tituloEvento}`,
+    html,
+    text,
+  });
+
+  const preview = (nodemailer as any).getTestMessageUrl?.(info);
+  if (preview) console.log("[live-event-access] preview email:", preview);
+}

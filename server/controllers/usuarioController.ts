@@ -290,3 +290,44 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
 };
+
+export const buscarUsuarios = async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || "").trim();
+
+    if (q.length < 2) {
+      return res.json({ items: [] });
+    }
+
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        OR: [
+          { nome: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        email: true,
+        tipo: true,
+        foto: true,
+      },
+      take: 10,
+      orderBy: {
+        nome: "asc",
+      },
+    });
+
+    return res.json({
+      items: usuarios,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar usuários:", error);
+    return res.status(500).json({
+      message: "Erro interno ao buscar usuários.",
+    });
+  }
+};

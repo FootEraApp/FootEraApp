@@ -17,6 +17,7 @@ import {
   startTrial,
   getMetodologiasAvulsas,
   resetMetodologiasAvulsasDev,
+  getAulasAoVivoPagas,
 } from "../controllers/billingController.js";
 
 const router = Router();
@@ -41,5 +42,6 @@ router.post("/renew", renewSubscription);
 router.post("/switch-plan", switchPlan);
 router.get("/metodologias-avulsas", getMetodologiasAvulsas);
 router.post("/metodologias-avulsas/reset-dev", resetMetodologiasAvulsasDev);
+router.get("/aulas-ao-vivo", getAulasAoVivoPagas);
 
 export default router;
