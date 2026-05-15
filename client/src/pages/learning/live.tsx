@@ -28,7 +28,7 @@ type AulaAoVivoDetalhe = {
   dataFim?: string | null;
   iniciouEm?: string | null;
   finalizouEm?: string | null;
-
+  
   urlStream?: string | null;
   videoGravadoUrl?: string | null;
   thumbUrl?: string | null;
@@ -59,6 +59,35 @@ type AulaAoVivoDetalhe = {
       foto?: string | null;
     } | null;
   } | null;
+
+  estrutura?: {
+    id: string;
+    titulo?: string | null;
+  } | null;
+
+  estruturaAvulsa?: {
+    id: string;
+    titulo?: string | null;
+  } | null;
+
+  item?: {
+    id: string;
+    titulo?: string | null;
+    tipo?: string | null;
+  } | null;
+
+  itemAvulsa?: {
+    id: string;
+    titulo?: string | null;
+    tipo?: string | null;
+  } | null;
+
+  metodologiaId?: string | null;
+  metodologiaAvulsaId?: string | null;
+  estruturaId?: string | null;
+  estruturaAvulsaId?: string | null;
+  itemId?: string | null;
+  itemAvulsaId?: string | null;
 };
 
 type ChatMessage = {
@@ -195,6 +224,7 @@ export default function LearningLivePage() {
   const [, navigate] = useLocation();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const progressoMarcadoRef = useRef(false);
 
   const [aulaId] = useState(() => getAulaIdFromUrl());
   const [aula, setAula] = useState<AulaAoVivoDetalhe | null>(null);
@@ -290,109 +320,171 @@ export default function LearningLivePage() {
     return () => window.clearInterval(interval);
   }, [aulaId]);
 
-useEffect(() => {
-  if (!streamAtual || !videoRef.current) return;
+  useEffect(() => {
+    if (!streamAtual || !videoRef.current) return;
 
-  let player: any = null;
-  let cancelled = false;
+    let player: any = null;
+    let cancelled = false;
 
-  async function prepararPlayerIvs() {
-    try {
-      setPlayerLoading(true);
-      setPlayerError(null);
-
-      const video = videoRef.current;
-      if (!video) return;
-
-      console.log("[IVS PLAYER] Preparando player com URL:", streamAtual);
-
-      const IVSPlayer = await carregarScriptIvsPlayer();
-
-      if (cancelled) return;
-
-      if (IVSPlayer.isPlayerSupported && !IVSPlayer.isPlayerSupported) {
-        throw new Error("Seu navegador não suporta o Amazon IVS Player.");
-      }
-
-      player = IVSPlayer.create();
-
-      const PlayerState = IVSPlayer.PlayerState;
-      const PlayerEventType = IVSPlayer.PlayerEventType;
-
-      player.attachHTMLVideoElement(video);
-
-      player.addEventListener(PlayerState.READY, () => {
-        console.log("[IVS PLAYER] READY");
-      });
-
-      player.addEventListener(PlayerState.PLAYING, () => {
-        console.log("[IVS PLAYER] PLAYING");
-        setPlayerLoading(false);
-        setPlayerError(null);
-      });
-
-      player.addEventListener(PlayerState.BUFFERING, () => {
-        console.log("[IVS PLAYER] BUFFERING");
+    async function prepararPlayerIvs() {
+      try {
         setPlayerLoading(true);
-      });
+        setPlayerError(null);
 
-      player.addEventListener(PlayerState.ENDED, () => {
-        console.log("[IVS PLAYER] ENDED");
+        const video = videoRef.current;
+        if (!video) return;
+
+        console.log("[IVS PLAYER] Preparando player com URL:", streamAtual);
+
+        const IVSPlayer = await carregarScriptIvsPlayer();
+
+        if (cancelled) return;
+
+        if (IVSPlayer.isPlayerSupported && !IVSPlayer.isPlayerSupported) {
+          throw new Error("Seu navegador não suporta o Amazon IVS Player.");
+        }
+
+        player = IVSPlayer.create();
+
+        const PlayerState = IVSPlayer.PlayerState;
+        const PlayerEventType = IVSPlayer.PlayerEventType;
+
+        player.attachHTMLVideoElement(video);
+
+        player.addEventListener(PlayerState.READY, () => {
+          console.log("[IVS PLAYER] READY");
+        });
+
+        player.addEventListener(PlayerState.PLAYING, () => {
+          console.log("[IVS PLAYER] PLAYING");
+          setPlayerLoading(false);
+          setPlayerError(null);
+        });
+
+        player.addEventListener(PlayerState.BUFFERING, () => {
+          console.log("[IVS PLAYER] BUFFERING");
+          setPlayerLoading(true);
+        });
+
+        player.addEventListener(PlayerState.ENDED, () => {
+          console.log("[IVS PLAYER] ENDED");
+          setPlayerLoading(false);
+        });
+
+        player.addEventListener(PlayerEventType.ERROR, (err: any) => {
+          console.error("[IVS PLAYER] ERROR:", err);
+          setPlayerLoading(false);
+          setPlayerError("Erro ao reproduzir a transmissão. Tente recarregar a página.");
+        });
+
+        player.setAutoplay?.(true);
+        player.setVolume?.(0);
+
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true;
+
+        player.load(streamAtual);
+
+        try {
+          await player.play();
+          console.log("[IVS PLAYER] play chamado com sucesso.");
+        } catch (err) {
+          console.warn("[IVS PLAYER] autoplay bloqueado:", err);
+          setPlayerLoading(false);
+          setPlayerError("Clique no botão de play para iniciar a transmissão.");
+        }
+
+        window.setTimeout(() => {
+          try {
+            console.log("[IVS PLAYER] version:", player.getVersion?.());
+            console.log("[IVS PLAYER] state:", player.getState?.());
+            console.log("[IVS PLAYER] liveLatency:", player.getLiveLatency?.());
+            console.log("[IVS PLAYER] sessionId:", player.getSessionId?.());
+          } catch {}
+        }, 5000);
+      } catch (e: any) {
+        console.error("[IVS PLAYER] Falha:", e);
+        setPlayerError(e?.message || "Erro ao carregar player da live.");
         setPlayerLoading(false);
-      });
+      }
+    }
 
-      player.addEventListener(PlayerEventType.ERROR, (err: any) => {
-        console.error("[IVS PLAYER] ERROR:", err);
-        setPlayerLoading(false);
-        setPlayerError("Erro ao reproduzir a transmissão. Tente recarregar a página.");
-      });
+    prepararPlayerIvs();
 
-      player.setAutoplay?.(true);
-      player.setVolume?.(0);
-
-      video.muted = true;
-      video.autoplay = true;
-      video.playsInline = true;
-
-      player.load(streamAtual);
+    return () => {
+      cancelled = true;
 
       try {
-        await player.play();
-        console.log("[IVS PLAYER] play chamado com sucesso.");
-      } catch (err) {
-        console.warn("[IVS PLAYER] autoplay bloqueado:", err);
-        setPlayerLoading(false);
-        setPlayerError("Clique no botão de play para iniciar a transmissão.");
-      }
+        player?.pause?.();
+        player?.delete?.();
+      } catch {}
 
-      window.setTimeout(() => {
-        try {
-          console.log("[IVS PLAYER] version:", player.getVersion?.());
-          console.log("[IVS PLAYER] state:", player.getState?.());
-          console.log("[IVS PLAYER] liveLatency:", player.getLiveLatency?.());
-          console.log("[IVS PLAYER] sessionId:", player.getSessionId?.());
-        } catch {}
-      }, 5000);
-    } catch (e: any) {
-      console.error("[IVS PLAYER] Falha:", e);
-      setPlayerError(e?.message || "Erro ao carregar player da live.");
-      setPlayerLoading(false);
-    }
-  }
+      player = null;
+    };
+  }, [streamAtual]);
 
-  prepararPlayerIvs();
+  async function marcarAulaAoVivoComoConcluida(aulaAtual: AulaAoVivoDetalhe) {
+    if (progressoMarcadoRef.current) return;
 
-  return () => {
-    cancelled = true;
+    const token = getToken();
+    if (!token) return;
+
+    const metodologiaId =
+      aulaAtual.metodologia?.id || aulaAtual.metodologiaId || "";
+
+    const metodologiaAvulsaId =
+      aulaAtual.metodologiaAvulsa?.id || aulaAtual.metodologiaAvulsaId || "";
+
+    const estruturaId =
+      aulaAtual.estrutura?.id || aulaAtual.estruturaId || "";
+
+    const estruturaAvulsaId =
+      aulaAtual.estruturaAvulsa?.id || aulaAtual.estruturaAvulsaId || "";
+
+    const itemId =
+      aulaAtual.item?.id || aulaAtual.itemId || "";
+
+    const itemAvulsaId =
+      aulaAtual.itemAvulsa?.id || aulaAtual.itemAvulsaId || "";
+
+    const isAvulsa = Boolean(metodologiaAvulsaId && estruturaAvulsaId && itemAvulsaId);
+    const isLearning = Boolean(metodologiaId && estruturaId && itemId);
+
+    if (!isAvulsa && !isLearning) return;
 
     try {
-      player?.pause?.();
-      player?.delete?.();
-    } catch {}
+      progressoMarcadoRef.current = true;
 
-    player = null;
-  };
-}, [streamAtual]);
+      const url = isAvulsa
+        ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaAvulsaId}/estruturas/${estruturaAvulsaId}/concluir-item`
+        : `${API.BASE_URL}/api/metodologias/${metodologiaId}/estruturas/${estruturaId}/concluir-item`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itemId: isAvulsa ? itemAvulsaId : itemId,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        progressoMarcadoRef.current = false;
+        console.warn("[LIVE] Não foi possível concluir aula ao vivo:", json);
+        return;
+      }
+
+      console.log("[LIVE] Aula ao vivo marcada como concluída.");
+    } catch (err) {
+      progressoMarcadoRef.current = false;
+      console.warn("[LIVE] Erro ao marcar progresso da aula ao vivo:", err);
+    }
+  }
 
   async function carregarAula(showLoading = true) {
     try {
@@ -442,6 +534,16 @@ useEffect(() => {
         return;
       }
       setAula(item);
+
+      const podeMarcarProgresso =
+        item?.status === "AO_VIVO" ||
+        (item?.status === "FINALIZADA" && item?.replayDisponivel);
+
+      if (podeMarcarProgresso) {
+        window.setTimeout(() => {
+          marcarAulaAoVivoComoConcluida(item);
+        }, 15000);
+      }
     } catch (e: any) {
       setPageError(e?.message || "Erro ao carregar aula ao vivo.");
     } finally {
@@ -515,6 +617,26 @@ useEffect(() => {
     } finally {
       setSendingMessage(false);
     }
+  }
+
+  function voltarParaOrigem() {
+    const metodologiaAvulsaId =
+      aula?.metodologiaAvulsa?.id || aula?.metodologiaAvulsaId || "";
+
+    const metodologiaId =
+      aula?.metodologia?.id || aula?.metodologiaId || "";
+
+    if (metodologiaAvulsaId) {
+      navigate(`/learning/${metodologiaAvulsaId}?origem=avulsa`);
+      return;
+    }
+
+    if (metodologiaId) {
+      navigate(`/learning/${metodologiaId}`);
+      return;
+    }
+
+    navigate("/learning");
   }
 
   function renderPlayerContent() {
@@ -692,7 +814,7 @@ useEffect(() => {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate("/learning")}
+              onClick={voltarParaOrigem}
               className="h-11 w-11 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center"
             >
               <ArrowLeft className="w-5 h-5" />

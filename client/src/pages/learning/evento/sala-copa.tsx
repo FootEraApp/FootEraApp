@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   User,
   UserPlus,
+  Eye,
+  EyeOff,
   Users,
 } from "lucide-react";
 import { API } from "@/config.js";
@@ -179,8 +181,8 @@ export default function SalaCopaEventoPage() {
     receberEmail: true,
   });
 
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [etapa, setEtapa] = useState<EtapaAcesso>("FORMULARIO");
-
   const [loading, setLoading] = useState(false);
   const [carregandoEvento, setCarregandoEvento] = useState(true);
   const [erro, setErro] = useState("");
@@ -646,7 +648,22 @@ export default function SalaCopaEventoPage() {
                         value={form.senha}
                         onChange={(v) => set("senha", v)}
                         placeholder="Crie uma senha"
-                        type="password"
+                        type={mostrarSenha ? "text" : "password"}
+                        rightSlot={
+                          <button
+                            type="button"
+                            onClick={() => setMostrarSenha((prev) => !prev)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-green-800"
+                            aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                            title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                          >
+                            {mostrarSenha ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        }
                       />
                     ) : null}
 
@@ -918,6 +935,7 @@ function InputField({
   onChange,
   placeholder,
   type = "text",
+  rightSlot,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -925,6 +943,7 @@ function InputField({
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  rightSlot?: React.ReactNode;
 }) {
   return (
     <label className="block">
@@ -938,6 +957,7 @@ function InputField({
           placeholder={placeholder}
           className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
         />
+        {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
       </div>
     </label>
   );

@@ -32,6 +32,7 @@ import {
   migrarMetodologiaParaAvulsa,
   deleteMetodologiaAvulsaEstruturaItens,
   criarSubmissaoMetodologiaItem,
+  listEventosAoVivoVisiveis,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js";
 import { uploadToS3 } from "../middlewares/s3Upload.js";
@@ -54,6 +55,7 @@ router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
+router.get("/eventos-ao-vivo/visiveis", authenticateToken, listEventosAoVivoVisiveis);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
 
 // criação completa normal

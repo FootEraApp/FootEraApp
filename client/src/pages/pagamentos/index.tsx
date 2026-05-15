@@ -506,7 +506,7 @@ function rolePagamentoPorTipo(tipoRaw?: string | null) {
     tipo === "escolinha" ||
     tipo === "escola"
   ) {
-    return "Organizacao";
+    return "Organizações";
   }
 
   if (tipo === "professor") return "Professor";
@@ -647,6 +647,7 @@ type PersistState = {
   pickLearning: boolean;
   pickPlus: boolean;
   pickMetods: Record<string, boolean>;
+  pickAulasAoVivo: Record<string, boolean>;
   cupomInput: string;
   method: MetodoPagamento;
   selectedMain: string | null;
@@ -708,6 +709,7 @@ export default function PagamentosPage() {
   const [hydrated, setHydrated] = useState(false);
 
   const hadPersistRef = useRef(false);
+  const appliedUrlPlanRef = useRef(false);
   const isOlheiro = roleSelected === "Olheiro";
   const allowLearning = FLAGS.PAGAMENTOS_SHOW_LEARNING_PLANS && !isOlheiro;
   const allowPlus = false;
@@ -741,6 +743,12 @@ export default function PagamentosPage() {
   const redirectAfterPayment = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("redirect") || "";
+  }, []);
+
+  const planoIdFromUrl = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("planoId") || params.get("planId") || "";
+    return decodeURIComponent(raw).trim();
   }, []);
 
   useEffect(() => {
@@ -780,11 +788,16 @@ export default function PagamentosPage() {
     setCupomPreview(null);
   }, [
     cupomInput,
-    pickPro, pickLearning, pickPlus,
-    periodPro, periodLearning, periodPlus,
+    pickPro,
+    pickLearning,
+    pickPlus,
+    periodPro,
+    periodLearning,
+    periodPlus,
     pickMetods,
+    pickAulasAoVivo,
     roleSelected,
-    selectedMain, // ✅ recomendado
+    selectedMain,
   ]);
 
   function findApiPlan(planoId: string) {
@@ -999,6 +1012,7 @@ export default function PagamentosPage() {
         setPickLearning(saved.pickLearning);
         setPickPlus(saved.pickPlus);
         setPickMetods(saved.pickMetods || {});
+        setPickAulasAoVivo(saved.pickAulasAoVivo || {});
         setCupomInput(saved.cupomInput || "");
         setMethod(saved.method || "PIX");
         setSelectedMain(saved.selectedMain ?? null);
@@ -1008,6 +1022,7 @@ export default function PagamentosPage() {
         setPickPlus(false);
         setSelectedMain(null);
         setPickMetods({});
+        setPickAulasAoVivo({});
       }
       setHydrated(true);
 
@@ -1042,6 +1057,111 @@ export default function PagamentosPage() {
 
   useEffect(() => {
     if (!hydrated) return;
+    if (loading) return;
+    if (appliedUrlPlanRef.current) return;
+    if (!planoIdFromUrl) return;
+
+    const plano = planoIdFromUrl.trim();
+
+    appliedUrlPlanRef.current = true;
+
+    // Limpa seleções antigas para a URL mandar no que deve estar selecionado
+    setSelectedMain(null);
+    setPickPro(false);
+    setPickLearning(false);
+    setPickPlus(false);
+    setPickMetods({});
+    setPickAulasAoVivo({});
+    setCupomPreview(null);
+
+    if (plano.startsWith("METODOLOGIA_AVULSA:")) {
+      const metodologiaId = plano.replace("METODOLOGIA_AVULSA:", "").trim();
+
+      if (metodologiaId) {
+        setPickMetods({ [metodologiaId]: true });
+        setBuscaMetod("");
+
+        setFiltroNivelMetod("TODOS");
+        setFiltroConteudoMetod("TODOS");
+        setFiltroPublicoMetod("TODOS");
+
+        setOpenPagamentoModal(true);
+      }
+
+      setTimeout(() => {
+        document
+          .getElementById(`metodologia-avulsa-${metodologiaId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 250);
+
+      return;
+    }
+
+    // Caso 2: aula ao vivo avulsa
+    // Exemplo: /pagamentos?planoId=AULA_AO_VIVO:46fa5483...
+    if (plano.startsWith("AULA_AO_VIVO:")) {
+      const aulaId = plano.replace("AULA_AO_VIVO:", "").trim();
+
+      if (aulaId) {
+        setPickAulasAoVivo({ [aulaId]: true });
+        setBuscaAulaAoVivo("");
+        setOpenPagamentoModal(true);
+      }
+
+      setTimeout(() => {
+        document
+          .getElementById(`aula-ao-vivo-${aulaId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 250);
+
+      return;
+    }
+
+    // Caso 3: metodologia Learning normal
+    // Exemplo: /pagamentos?planoId=METODOLOGIA:abc...
+    // Aqui você não seleciona uma metodologia avulsa. Você seleciona um plano Learning.
+    if (plano.startsWith("METODOLOGIA:")) {
+      const preferredLearningPlan =
+        roleSelected === "Professor"
+          ? "PROFESSOR_LEARNING_1"
+          : roleSelected === "Organizações"
+            ? "ORGANIZACOES_LEARNING_3"
+            : "ATLETA_LEARNING_1";
+
+      setSelectedMain(preferredLearningPlan);
+      setPickLearning(true);
+      setOpenPagamentoModal(true);
+
+      setTimeout(() => {
+        document
+          .getElementById(`plano-principal-${preferredLearningPlan}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 250);
+
+      return;
+    }
+
+    // Caso 4: plano comum vindo direto na URL
+    // Exemplo: /pagamentos?planoId=ATLETA_PRO
+    setSelectedMain(plano);
+    setOpenPagamentoModal(true);
+
+    setTimeout(() => {
+      document
+        .getElementById(`plano-principal-${plano}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 250);
+  }, [
+    hydrated,
+    loading,
+    planoIdFromUrl,
+    roleSelected,
+    metodologiasAvulsas,
+    aulasAoVivoPagas,
+  ]);
+
+  useEffect(() => {
+    if (!hydrated) return;
 
     writePersist({
       roleSelected,
@@ -1052,6 +1172,7 @@ export default function PagamentosPage() {
       pickLearning,
       pickPlus,
       pickMetods,
+      pickAulasAoVivo,
       cupomInput,
       method,
       selectedMain,
@@ -1066,6 +1187,7 @@ export default function PagamentosPage() {
     pickLearning,
     pickPlus,
     pickMetods,
+    pickAulasAoVivo,
     cupomInput,
     method,
     selectedMain,
@@ -1230,17 +1352,26 @@ export default function PagamentosPage() {
       return;
     }
 
-    const principal = cart.find((c) => c.categoria !== "METODOLOGIA");
-    if (!principal) {
-      alert("Selecione um plano principal (Pro/Learning/Plus) para iniciar o mês grátis.");
+    if (cart.length === 0) {
+      alert("Selecione um item para usar o mês grátis.");
       return;
     }
+
+    if (cart.length > 1) {
+      alert("O mês grátis só pode ser usado com 1 item no carrinho.");
+      return;
+    }
+
+    const item = cart[0];
 
     try {
       const r = await fetch(`${API.BASE_URL}/api/billing/start-trial`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ planoId: principal.planoId, periodicidade: principal.periodicidade }),
+        body: JSON.stringify({
+          planoId: item.planoId,
+          periodicidade: item.periodicidade,
+        }),
       });
 
       const data = await r.json().catch(() => ({}));
@@ -1252,6 +1383,10 @@ export default function PagamentosPage() {
 
       alert("🎉 Mês grátis iniciado com sucesso!");
       await loadMe();
+
+      if (redirectAfterPayment) {
+        window.location.href = redirectAfterPayment;
+      }
     } catch (e) {
       console.error(e);
       alert("Erro ao iniciar mês grátis");
@@ -1649,7 +1784,7 @@ export default function PagamentosPage() {
                 </button>
 
                 <p className="text-xs text-gray-500 mt-2">
-                  Recomendado usar o trial em um plano principal (Pro/Learning/Plus).
+                  O mês grátis vale para 1 item do carrinho: plano, metodologia avulsa ou evento ao vivo.
                 </p>
               </div>
             )}
@@ -1819,7 +1954,11 @@ export default function PagamentosPage() {
                 const benefits = p?.benefits ?? [];
 
                 return (
-                  <label key={id} className="rounded-lg border p-3 cursor-pointer hover:bg-gray-50 flex gap-3">
+                  <label
+                    key={id}
+                    id={`plano-principal-${id}`}
+                    className="rounded-lg border p-3 cursor-pointer hover:bg-gray-50 flex gap-3"
+                  >
                     <input
                       type="checkbox"
                       checked={selectedMain === id}
@@ -1901,7 +2040,11 @@ export default function PagamentosPage() {
             const preco = Number(m.precoAssinaturaMensal ?? 0);
 
             return (
-              <label key={m.id} className="rounded-lg border p-3 flex gap-3 cursor-pointer hover:bg-gray-50">
+              <label
+                key={m.id}
+                id={`metodologia-avulsa-${m.id}`}
+                className="rounded-lg border p-3 cursor-pointer hover:bg-gray-50 flex gap-3"
+              >
                 <input
                   type="checkbox"
                   checked={!!pickMetods[m.id]}
@@ -1955,7 +2098,7 @@ export default function PagamentosPage() {
       </section>
       )}
 
-      <div className="rounded-2xl border bg-white p-5 mt-4">
+      <div className="rounded-2xl border bg-white p-5 mt-4 mb-6">
         <div className="flex items-center gap-2 mb-2">
           <Radio className="w-5 h-5 text-green-700" />
           <h2 className="font-semibold text-lg">Eventos ao vivo</h2>
@@ -1991,9 +2134,8 @@ export default function PagamentosPage() {
               return (
                 <label
                   key={aula.id}
-                  className={`rounded-xl border p-4 cursor-pointer ${
-                    checked ? "border-green-600 bg-green-50" : "border-gray-200"
-                  }`}
+                  id={`aula-ao-vivo-${aula.id}`}
+                  className="rounded-lg border p-3 cursor-pointer hover:bg-gray-50 flex gap-3"
                 >
                   <div className="flex gap-3">
                     <input
@@ -2104,12 +2246,21 @@ export default function PagamentosPage() {
                   <button
                     onClick={startTrial}
                     className="px-3 py-2 rounded-lg border border-green-800 text-green-900 font-semibold hover:bg-green-50 disabled:opacity-60"
-                    disabled={polling || !trialDisponivel}
-                    title="Inicia o mês grátis (1x por conta) em um plano principal (Pro/Learning/Plus)"
+                    disabled={polling || !trialDisponivel || cart.length !== 1}
+                    title={
+                      cart.length !== 1
+                        ? "O mês grátis só pode ser usado com 1 item no carrinho."
+                        : "Inicia o mês grátis 1x por conta para o item selecionado."
+                    }
                   >
                     🎁 Usar mês grátis
                   </button>
                 )}
+                {!trialJaUsado && cart.length > 1 ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Para usar o mês grátis, deixe apenas 1 item no carrinho.
+                  </p>
+                ) : null}
             </div>
           </div>
         )}

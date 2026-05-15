@@ -33,6 +33,22 @@ type MetodologiaEstruturaItem = {
     objetivo?: string | null;
     tipoTreino?: string | null;
   } | null;
+  aulaAoVivo?: {
+    id: string;
+    titulo: string;
+    descricao: string;
+    status: string;
+    dataInicio: string;
+    dataFim: string;
+    inscricaoInicio: string;
+    inscricaoFim: string;
+    thumbUrl: string;
+    replayDisponivel: boolean;
+    metodologiaId: string;
+    metodologiaAvulsaId: string;
+    itemId: string;
+    itemAvulsaId: string;
+  } | null;
   obrigatorio?: boolean;
   publicado?: boolean;
 };
@@ -136,6 +152,35 @@ function formatDateBR(raw?: string | null) {
   if (Number.isNaN(d.getTime())) return null;
 
   return d.toLocaleDateString("pt-BR");
+}
+
+function formatDateTimeBR(raw?: string | null) {
+  if (!raw) return null;
+
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function isSalaCopaText(value?: string | null) {
+  const texto = String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return (
+    texto.includes("sala copa") ||
+    texto.includes("copa") ||
+    texto.includes("copa do mundo") ||
+    texto.includes("mundial")
+  );
 }
 
 function Stars({ value }: { value: number }) {
@@ -679,6 +724,34 @@ export default function MetodologiaUnicaPage() {
     return !data?.viewer?.temAcesso;
   }
 
+  function getAulaEventoHref(it: MetodologiaEstruturaItem) {
+    const aulaId = it.aulaAoVivo?.id;
+    if (!aulaId) return "";
+
+    const texto = [
+      it.titulo,
+      it.descricao,
+      it.aulaAoVivo?.titulo,
+      it.aulaAoVivo?.descricao,
+      data?.titulo,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const origem = isAvulsa ? "avulsa" : "learning";
+
+    if (isSalaCopaText(texto)) {
+      return (
+        `/learning/evento/sala-copa` +
+        `?aulaId=${encodeURIComponent(aulaId)}` +
+        `&origem=${encodeURIComponent(origem)}` +
+        `&metodologiaId=${encodeURIComponent(data?.id || "")}`
+      );
+    }
+
+    return `/learning/evento/${encodeURIComponent(aulaId)}`;
+  }
+
   if (loading) return <div className="p-6">Carregando metodologia...</div>;
   if (!data) return <div className="p-6">Metodologia não encontrada.</div>;
 
@@ -957,10 +1030,12 @@ export default function MetodologiaUnicaPage() {
             <div className="mt-3 space-y-3">
               {estrutura.itens.map((it) => {
                 const tipoUpper = String(it.tipo || "").toUpperCase();
+                const isAulaAoVivo = tipoUpper === "AULA_AO_VIVO";
                 const isVideo = tipoUpper === "VIDEO" || tipoUpper === "AULA";
                 const isMaterial = tipoUpper === "MATERIAL";
                 const isTreino = tipoUpper === "TREINO";
                 const isDesafio = tipoUpper === "DESAFIO";
+                const aulaHref = isAulaAoVivo ? getAulaEventoHref(it) : "";
                 const concluido = concluIds.has(it.id);
                 const locked = !adminPreview && !data.viewer.temAcesso;
                 const thumbRaw = isVideo
@@ -1001,6 +1076,19 @@ export default function MetodologiaUnicaPage() {
                           {it.descricao ? (
                             <div className="text-sm text-gray-600 line-clamp-2">{it.descricao}</div>
                           ) : null}
+
+                          {isAulaAoVivo && it.aulaAoVivo?.dataInicio ? (
+                            <div className="mt-1 text-xs text-green-900/70">
+                              <span className="font-semibold">Ao vivo:</span>{" "}
+                              {formatDateTimeBR(it.aulaAoVivo.dataInicio)}
+                              {it.aulaAoVivo.dataFim ? (
+                                <>
+                                  {" "}
+                                  até {formatDateTimeBR(it.aulaAoVivo.dataFim)}
+                                </>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -1026,6 +1114,19 @@ export default function MetodologiaUnicaPage() {
                         </div>
 
                         <div className="flex gap-2">
+                          {isAulaAoVivo && (
+                            <button
+                              disabled={locked || !aulaHref}
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              onClick={() => {
+                                if (locked || !aulaHref) return;
+                                navigate(aulaHref);
+                              }}
+                            >
+                              Ver aula
+                            </button>
+                          )}
+
                           {isVideo && (
                             <button
                               disabled={locked}

@@ -1838,6 +1838,227 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
   }
 }
 
+export async function listEventosAoVivoVisiveis(req: Request, res: Response) {
+  try {
+    const aulas = await prisma.aulaAoVivo.findMany({
+      where: {
+        status: {
+          not: "CANCELADA",
+        },
+        OR: [
+          // Evento avulso criado direto em /creator/eventos/novo
+          {
+            metodologiaId: null,
+            metodologiaAvulsaId: null,
+          },
+
+          // Aula dentro de metodologia Learning publicada
+          {
+            metodologia: {
+              ativo: true,
+            },
+          },
+
+          // Aula dentro de metodologia avulsa publicada
+          {
+            metodologiaAvulsa: {
+              ativo: true,
+            },
+          },
+        ],
+      },
+      orderBy: {
+        dataInicio: "asc",
+      },
+      include: {
+        criadorUsuario: {
+          select: {
+            id: true,
+            nome: true,
+            foto: true,
+            tipo: true,
+            nomeDeUsuario: true,
+          },
+        },
+        metodologia: {
+          select: {
+            id: true,
+            titulo: true,
+            descricao: true,
+            capaUrl: true,
+            publicoAlvo: true,
+            ativo: true,
+            criadorUsuario: {
+              select: {
+                id: true,
+                nome: true,
+                foto: true,
+              },
+            },
+          },
+        },
+        metodologiaAvulsa: {
+          select: {
+            id: true,
+            titulo: true,
+            descricao: true,
+            capaUrl: true,
+            publicoAlvo: true,
+            ativo: true,
+            precoAssinaturaMensal: true,
+            criadorUsuario: {
+              select: {
+                id: true,
+                nome: true,
+                foto: true,
+              },
+            },
+          },
+        },
+        convidados: {
+          orderBy: {
+            ordem: "asc",
+          },
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                foto: true,
+                tipo: true,
+                nomeDeUsuario: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const items = aulas.map((aula: any) => {
+      const isAvulsa = !!aula.metodologiaAvulsaId;
+      const isLearning = !!aula.metodologiaId;
+      const isEventoAvulso = !isAvulsa && !isLearning;
+
+      const origemTipo = isAvulsa
+        ? "AVULSA"
+        : isLearning
+          ? "LEARNING"
+          : "EVENTO_AVULSO";
+
+      const metodologiaTitulo =
+        aula.metodologiaAvulsa?.titulo ||
+        aula.metodologia?.titulo ||
+        null;
+
+      const metodologiaId =
+        aula.metodologiaAvulsa?.id ||
+        aula.metodologia?.id ||
+        null;
+
+      const capaUrl =
+        aula.thumbUrl ||
+        aula.metodologiaAvulsa?.capaUrl ||
+        aula.metodologia?.capaUrl ||
+        null;
+
+      const criadorNome =
+        aula.criadorUsuario?.nome ||
+        aula.metodologiaAvulsa?.criadorUsuario?.nome ||
+        aula.metodologia?.criadorUsuario?.nome ||
+        "Creator FootEra";
+
+      const precoNumero =
+        origemTipo === "EVENTO_AVULSO"
+          ? Number(aula.precoAcesso ?? 0)
+          : origemTipo === "AVULSA"
+            ? Number(aula.metodologiaAvulsa?.precoAssinaturaMensal ?? 0)
+            : 0;
+
+      const preco =
+        origemTipo === "LEARNING"
+          ? null
+          : Number.isFinite(precoNumero)
+            ? precoNumero
+            : 0;
+
+      const precoFormatado = `R$ ${precoNumero.toFixed(2).replace(".", ",")}`;
+
+      const precoLabel =
+        origemTipo === "EVENTO_AVULSO"
+          ? precoNumero > 0
+            ? `Acesso único: ${precoFormatado}`
+            : "Evento gratuito"
+          : origemTipo === "AVULSA"
+            ? precoNumero > 0
+              ? `Metodologia avulsa: ${precoFormatado}/mês`
+              : "Metodologia avulsa"
+            : "Disponível via plano Learning";
+
+      const origemLabel =
+        origemTipo === "EVENTO_AVULSO"
+          ? "Evento avulso"
+          : origemTipo === "AVULSA"
+            ? "Premium / Avulsa"
+            : "Metodologia Learning";
+
+      return {
+        id: aula.id,
+        titulo: aula.titulo,
+        descricao: aula.descricao,
+        status: aula.status,
+        dataInicio: aula.dataInicio,
+        dataFim: aula.dataFim,
+        inscricaoInicio: aula.inscricaoInicio,
+        inscricaoFim: aula.inscricaoFim,
+        thumbUrl: capaUrl,
+        chatAtivo: aula.chatAtivo,
+        gravacaoAtiva: aula.gravacaoAtiva,
+        replayDisponivel: aula.replayDisponivel,
+
+        origemTipo,
+        origemLabel,
+        preco,
+        precoLabel,
+
+        criadorUsuario: aula.criadorUsuario,
+        criadorNome,
+
+        metodologiaId,
+        metodologiaTitulo,
+        metodologia:
+          aula.metodologiaId && aula.metodologia
+            ? {
+                id: aula.metodologia.id,
+                titulo: aula.metodologia.titulo,
+                capaUrl: aula.metodologia.capaUrl,
+                publicoAlvo: aula.metodologia.publicoAlvo,
+              }
+            : null,
+        metodologiaAvulsa:
+          aula.metodologiaAvulsaId && aula.metodologiaAvulsa
+            ? {
+                id: aula.metodologiaAvulsa.id,
+                titulo: aula.metodologiaAvulsa.titulo,
+                capaUrl: aula.metodologiaAvulsa.capaUrl,
+                publicoAlvo: aula.metodologiaAvulsa.publicoAlvo,
+                precoAssinaturaMensal: aula.metodologiaAvulsa.precoAssinaturaMensal,
+              }
+            : null,
+
+        convidados: aula.convidados || [],
+        totalParticipantes: 0,
+      };
+    });
+
+    return res.json({ items });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao listar eventos ao vivo visíveis.",
+      detail: e?.message,
+    });
+  }
+}
+
 type MetodologiaItemPreparado = {
   metodologiaId: string;
   semana: number;
@@ -2096,6 +2317,24 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
                     tipoTreino: true,
                   },
                 },
+                aulaAoVivo: {
+                  select: {
+                    id: true,
+                    titulo: true,
+                    descricao: true,
+                    status: true,
+                    dataInicio: true,
+                    dataFim: true,
+                    inscricaoInicio: true,
+                    inscricaoFim: true,
+                    thumbUrl: true,
+                    replayDisponivel: true,
+                    metodologiaId: true,
+                    metodologiaAvulsaId: true,
+                    itemId: true,
+                    itemAvulsaId: true,
+                  },
+                },
               },
             },
           },
@@ -2288,6 +2527,24 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
                 tipoTreino: item.treinoProgramado.tipoTreino,
               }
             : null,
+            aulaAoVivo: item.aulaAoVivo
+              ? {
+                  id: item.aulaAoVivo.id,
+                  titulo: item.aulaAoVivo.titulo,
+                  descricao: item.aulaAoVivo.descricao,
+                  status: item.aulaAoVivo.status,
+                  dataInicio: item.aulaAoVivo.dataInicio,
+                  dataFim: item.aulaAoVivo.dataFim,
+                  inscricaoInicio: item.aulaAoVivo.inscricaoInicio,
+                  inscricaoFim: item.aulaAoVivo.inscricaoFim,
+                  thumbUrl: item.aulaAoVivo.thumbUrl,
+                  replayDisponivel: item.aulaAoVivo.replayDisponivel,
+                  metodologiaId: item.aulaAoVivo.metodologiaId,
+                  metodologiaAvulsaId: item.aulaAoVivo.metodologiaAvulsaId,
+                  itemId: item.aulaAoVivo.itemId,
+                  itemAvulsaId: item.aulaAoVivo.itemAvulsaId,
+                }
+              : null,
           publicado: item.publicado,
           obrigatorio: item.obrigatorio,
         })),
@@ -4903,6 +5160,24 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
                     tipoTreino: true,
                   },
                 },
+                aulaAoVivo: {
+                  select: {
+                    id: true,
+                    titulo: true,
+                    descricao: true,
+                    status: true,
+                    dataInicio: true,
+                    dataFim: true,
+                    inscricaoInicio: true,
+                    inscricaoFim: true,
+                    thumbUrl: true,
+                    replayDisponivel: true,
+                    metodologiaId: true,
+                    metodologiaAvulsaId: true,
+                    itemId: true,
+                    itemAvulsaId: true,
+                  },
+                },
               },
             },
           },
@@ -5022,6 +5297,24 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
                 duracao: it.treinoProgramado.duracao,
                 objetivo: it.treinoProgramado.objetivo,
                 tipoTreino: it.treinoProgramado.tipoTreino,
+              }
+            : null,
+          aulaAoVivo: it.aulaAoVivo
+            ? {
+                id: it.aulaAoVivo.id,
+                titulo: it.aulaAoVivo.titulo,
+                descricao: it.aulaAoVivo.descricao,
+                status: it.aulaAoVivo.status,
+                dataInicio: it.aulaAoVivo.dataInicio,
+                dataFim: it.aulaAoVivo.dataFim,
+                inscricaoInicio: it.aulaAoVivo.inscricaoInicio,
+                inscricaoFim: it.aulaAoVivo.inscricaoFim,
+                thumbUrl: it.aulaAoVivo.thumbUrl,
+                replayDisponivel: it.aulaAoVivo.replayDisponivel,
+                metodologiaId: it.aulaAoVivo.metodologiaId,
+                metodologiaAvulsaId: it.aulaAoVivo.metodologiaAvulsaId,
+                itemId: it.aulaAoVivo.itemId,
+                itemAvulsaId: it.aulaAoVivo.itemAvulsaId,
               }
             : null,
           publicado: it.publicado,

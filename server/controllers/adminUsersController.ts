@@ -2,16 +2,28 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
 function normalizaTipo(raw: string) {
-  const t = raw?.toLowerCase();
+  const t = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
   const map: Record<string, string> = {
     atleta: "Atleta",
+    learning: "Learning",
     escola: "Escolinha",
     escolinha: "Escolinha",
     clube: "Clube",
+    marca: "Marca",
+    federacao: "Federacao",
+    federação: "Federacao",
     professor: "Professor",
     admin: "Admin",
+    administrador: "Admin",
     olheiro: "Olheiro",
+    scout: "Olheiro",
   };
+
   return map[t] || "";
 }
 
@@ -22,6 +34,8 @@ function resolveFoto(u: any): string | null {
     u.professor?.fotoUrl ??
     u.clube?.logo ??
     u.escolinha?.logo ??
+    u.marca?.logo ??
+    u.federacao?.logo ??
     u.olheiro?.fotoUrl ??
     null
   );
@@ -60,6 +74,8 @@ export async function listAdminUsers(req: Request, res: Response) {
           professor: { select: { fotoUrl: true } },
           clube: { select: { logo: true } },
           escolinha: { select: { logo: true } },
+          marca: { select: { logo: true } },
+          federacao: { select: { logo: true } },
           olheiro: { select: { fotoUrl: true } },
         },
       }),
@@ -115,7 +131,10 @@ export async function getAdminUserDetail(req: Request, res: Response) {
       professor: { select: { id: true, fotoUrl: true } },
       clube: { select: { id: true, logo: true } },
       escolinha: { select: { id: true, logo: true } },
+      marca: { select: { id: true, logo: true } },
+      federacao: { select: { id: true, logo: true } },
       olheiro: { select: { id: true, fotoUrl: true } },
+      learningProfile: { select: { id: true } },
       _count: {
         select: { postagens: true, comentarios: true, seguidores: true },
       },
@@ -267,6 +286,9 @@ async function totalVinculadosDoUsuario(u: { id: string; tipo: string }) {
     if (!esc) return 0;
     return prisma.atleta.count({ where: { escolinhaId: esc.id } });
   }
+  if (u.tipo === "Marca") return 0;
+  if (u.tipo === "Federacao") return 0;
+  if (u.tipo === "Learning") return 0;
   return 0;
 }
 

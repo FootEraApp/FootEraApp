@@ -38,7 +38,18 @@ interface Treinos {
   submissoesaprovados?: number;
 }
 
-type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin" | "olheiro";
+type UsuarioTipo =
+  | ""
+  | "atleta"
+  | "learning"
+  | "escola"
+  | "clube"
+  | "marca"
+  | "federacao"
+  | "professor"
+  | "admin"
+  | "olheiro";
+  
 type StatusConta =
   | "ATIVO"
   | "BLOQUEADO"
@@ -49,8 +60,11 @@ type StatusConta =
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
   atleta: "Atleta",
+  learning: "Learning",
   escola: "Escolinha",
   clube: "Clube",
+  marca: "Marca",
+  federacao: "Federacao",
   professor: "Professor",
   admin: "Admin",
   olheiro: "Olheiro",
@@ -1993,8 +2007,11 @@ async function confirmarExcluirProfessor() {
               >
                 <option value="">Todos os tipos</option>
                 <option value="atleta">Atletas</option>
+                <option value="learning">Learning</option>
                 <option value="escola">Escolas</option>
                 <option value="clube">Clubes</option>
+                <option value="marca">Marcas</option>
+                <option value="federacao">Federações</option>
                 <option value="professor">Professores</option>
                 <option value="admin">Administrador</option>
                 <option value="olheiro">Olheiro</option>
@@ -3007,8 +3024,11 @@ async function confirmarExcluirProfessor() {
               >
                 <option value="">Todos os tipos</option>
                 <option value="Atleta">Atleta</option>
+                <option value="Learning">Learning</option>
                 <option value="Escolinha">Escola/Escolinha</option>
                 <option value="Clube">Clube</option>
+                <option value="Marca">Marca</option>
+                <option value="Federacao">Federação</option>
                 <option value="Professor">Professor</option>
                 <option value="Olheiro">Olheiro</option>
               </select>
