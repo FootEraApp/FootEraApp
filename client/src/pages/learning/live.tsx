@@ -1,5 +1,5 @@
 // client/src/pages/learning/live.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -39,6 +39,7 @@ type AulaAoVivoDetalhe = {
 
   totalMensagens?: number;
   totalParticipantes?: number;
+  totalOnline?: number;
 
   metodologia?: {
     id: string;
@@ -321,6 +322,31 @@ export default function LearningLivePage() {
   }, [aulaId]);
 
   useEffect(() => {
+    if (!aulaId) return;
+
+    registrarPresenca(false);
+
+    const interval = window.setInterval(() => {
+      registrarPresenca(false);
+    }, 12000);
+
+    return () => {
+      window.clearInterval(interval);
+
+      const token = getToken();
+      if (!token) return;
+
+      fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/presenca/sair`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        keepalive: true,
+      }).catch(() => null);
+    };
+  }, [aulaId]);
+
+  useEffect(() => {
     if (!streamAtual || !videoRef.current) return;
 
     let player: any = null;
@@ -483,6 +509,48 @@ export default function LearningLivePage() {
     } catch (err) {
       progressoMarcadoRef.current = false;
       console.warn("[LIVE] Erro ao marcar progresso da aula ao vivo:", err);
+    }
+  }
+
+  async function registrarPresenca(showError = false) {
+    if (!aulaId) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/presenca`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(json?.message || "Erro ao registrar presença.");
+      }
+
+      setAula((prev) =>
+        prev
+          ? {
+              ...prev,
+              totalOnline:
+                typeof json?.totalOnline === "number"
+                  ? json.totalOnline
+                  : prev.totalOnline,
+              totalParticipantes:
+                typeof json?.totalParticipantes === "number"
+                  ? json.totalParticipantes
+                  : prev.totalParticipantes,
+            }
+          : prev
+      );
+    } catch (e: any) {
+      if (showError) {
+        console.warn("[LIVE] Falha ao registrar presença:", e?.message || e);
+      }
     }
   }
 
@@ -844,7 +912,7 @@ export default function LearningLivePage() {
 
             <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold inline-flex items-center gap-2">
               <Users className="w-4 h-4" />
-              {aula?.totalParticipantes ?? 0} online
+              {aula?.totalOnline ?? 0} online
             </span>
           </div>
         </div>
@@ -931,7 +999,7 @@ export default function LearningLivePage() {
 
                   <span className="rounded-lg bg-black/55 px-3 py-1.5 text-xs font-bold text-white inline-flex items-center gap-1.5">
                     <Users className="w-4 h-4" />
-                    {aula?.totalParticipantes ?? 0}
+                    {aula?.totalOnline ?? 0}
                   </span>
                 </div>
               </div>

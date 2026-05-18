@@ -1,5 +1,5 @@
 // client/src/pages/learning/live-studio.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -43,6 +43,7 @@ type AulaAoVivoDetalhe = {
   replayDisponivel: boolean;
   totalMensagens?: number;
   totalParticipantes?: number;
+  totalOnline?: number;
   metodologia?: {
     id: string;
     titulo: string;
@@ -286,7 +287,7 @@ const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
     aula?.metodologiaAvulsa?.titulo ||
     "FootEra Learning";
 
-  const viewerCount = aula?.totalParticipantes ?? 0;
+  const viewerCount = aula?.totalOnline ?? 0;
 
   const liveBadge = useMemo(() => {
     if (!aula) return null;
@@ -336,6 +337,31 @@ const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
   }, [aulaId]);
 
   useEffect(() => {
+    if (!aulaId) return;
+
+    registrarPresenca(false);
+
+    const interval = window.setInterval(() => {
+      registrarPresenca(false);
+    }, 12000);
+
+    return () => {
+      window.clearInterval(interval);
+
+      const token = getToken();
+      if (!token) return;
+
+      fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/presenca/sair`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        keepalive: true,
+      }).catch(() => null);
+    };
+  }, [aulaId]);
+
+  useEffect(() => {
     if (liveMicGainRef.current) {
       liveMicGainRef.current.gain.value = micInputVolume / 100;
     }
@@ -363,19 +389,61 @@ const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-useEffect(() => {
-  if (previewRef.current && cameraStream) {
-    previewRef.current.srcObject = cameraStream;
-    previewRef.current.play().catch(() => null);
-  }
-}, [cameraStream]);
+  useEffect(() => {
+    if (previewRef.current && cameraStream) {
+      previewRef.current.srcObject = cameraStream;
+      previewRef.current.play().catch(() => null);
+    }
+  }, [cameraStream]);
 
-useEffect(() => {
-  if (screenPreviewRef.current && screenStream) {
-    screenPreviewRef.current.srcObject = screenStream;
-    screenPreviewRef.current.play().catch(() => null);
+  useEffect(() => {
+    if (screenPreviewRef.current && screenStream) {
+      screenPreviewRef.current.srcObject = screenStream;
+      screenPreviewRef.current.play().catch(() => null);
+    }
+  }, [screenStream]);
+
+  async function registrarPresenca(showError = false) {
+    if (!aulaId) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/presenca`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(json?.message || "Erro ao registrar presença.");
+      }
+
+      setAula((prev) =>
+        prev
+          ? {
+              ...prev,
+              totalOnline:
+                typeof json?.totalOnline === "number"
+                  ? json.totalOnline
+                  : prev.totalOnline,
+              totalParticipantes:
+                typeof json?.totalParticipantes === "number"
+                  ? json.totalParticipantes
+                  : prev.totalParticipantes,
+            }
+          : prev
+      );
+    } catch (e: any) {
+      if (showError) {
+        console.warn("[LIVE STUDIO] Falha ao registrar presença:", e?.message || e);
+      }
+    }
   }
-}, [screenStream]);
 
   async function carregarAula(showLoading = true) {
     try {
@@ -2361,6 +2429,11 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
                   <span className="font-bold text-slate-800 text-right">
                     {aula?.dataFim ? formatarDataHora(aula.dataFim) : "Não definido"}
                   </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span>Participantes</span>
+                  <strong>{aula?.totalParticipantes ?? 0}</strong>
                 </div>
 
                 <div className="flex justify-between gap-4">
