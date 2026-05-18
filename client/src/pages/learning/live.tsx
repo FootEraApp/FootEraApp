@@ -572,7 +572,12 @@ useEffect(() => {
           muted
           playsInline
           poster={aula?.thumbUrl || capaUrl || undefined}
-          className="absolute inset-0 h-full w-full bg-black object-contain"
+          // Adicione o "!" aqui -> !object-cover
+          className="absolute inset-0 h-full w-full bg-black !object-cover"
+          style={{
+            objectFit: "cover",
+            objectPosition: "center",
+          }}
         />
 
         {playerLoading ? (

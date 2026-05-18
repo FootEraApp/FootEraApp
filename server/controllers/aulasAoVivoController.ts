@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import {
   IvsClient,
   CreateChannelCommand,
+  CreateStreamKeyCommand,
 } from "@aws-sdk/client-ivs";
 
 import { prisma } from "../lib/prisma.js";
@@ -196,11 +197,28 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
     const result = await ivs.send(command);
 
     const channel = result.channel;
-    const streamKey = result.streamKey;
 
-    if (!channel?.ingestEndpoint || !channel?.playbackUrl || !streamKey?.value) {
+    if (!channel?.arn || !channel?.ingestEndpoint || !channel?.playbackUrl) {
       return res.status(500).json({
-        message: "A AWS IVS não retornou todos os dados necessários da transmissão.",
+        message: "A AWS IVS não retornou todos os dados necessários do canal.",
+      });
+    }
+
+    let streamKey = result.streamKey;
+
+    if (!streamKey?.value) {
+      const streamKeyResult = await ivs.send(
+        new CreateStreamKeyCommand({
+          channelArn: channel.arn,
+        })
+      );
+
+      streamKey = streamKeyResult.streamKey;
+    }
+
+    if (!streamKey?.value) {
+      return res.status(500).json({
+        message: "A AWS IVS não retornou a stream key da transmissão.",
       });
     }
 

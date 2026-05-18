@@ -141,6 +141,50 @@ const VIDEO_FULL_HD = {
   height: 720,
 };
 
+const CAMERA_PIP_POSITION = {
+  index: 1,
+  x: 930,
+  y: 36,
+  width: 300,
+  height: 169,
+};
+
+function getCoverVideoPosition(track?: MediaStreamTrack) {
+  const settings = track?.getSettings?.();
+
+  const sourceWidth = Number(settings?.width || 1280);
+  const sourceHeight = Number(settings?.height || 720);
+
+  const canvasWidth = 1280;
+  const canvasHeight = 720;
+
+  const sourceRatio = sourceWidth / sourceHeight;
+  const canvasRatio = canvasWidth / canvasHeight;
+
+  let width = canvasWidth;
+  let height = canvasHeight;
+  let x = 0;
+  let y = 0;
+
+  if (sourceRatio > canvasRatio) {
+    height = canvasHeight;
+    width = Math.round(canvasHeight * sourceRatio);
+    x = Math.round((canvasWidth - width) / 2);
+  } else {
+    width = canvasWidth;
+    height = Math.round(canvasWidth / sourceRatio);
+    y = Math.round((canvasHeight - height) / 2);
+  }
+
+  return {
+    index: 0,
+    x,
+    y,
+    width,
+    height,
+  };
+}
+
 export default function LearningLiveStudioPage() {
   const [, navigate] = useLocation();
 
@@ -152,6 +196,23 @@ export default function LearningLiveStudioPage() {
   const screenStreamRef = useRef<MediaStream | null>(null);
 
   const placeholderStreamRef = useRef<MediaStream | null>(null);
+  const screenCanvasStreamRef = useRef<MediaStream | null>(null);
+
+  const programCanvasStreamRef = useRef<MediaStream | null>(null);
+  const programAnimationFrameRef = useRef<number | null>(null);
+
+  const micTestStreamRef = useRef<MediaStream | null>(null);
+  const micTestAudioContextRef = useRef<AudioContext | null>(null);
+  const micTestAnimationFrameRef = useRef<number | null>(null);
+
+  const micTestSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micTestGainRef = useRef<GainNode | null>(null);
+
+  const liveMicAudioContextRef = useRef<AudioContext | null>(null);
+  const liveMicSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const liveMicGainRef = useRef<GainNode | null>(null);
+  const liveMicDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const liveMicProcessedStreamRef = useRef<MediaStream | null>(null);
 
   const [aulaId] = useState(() => getAulaIdFromUrl());
   const [aula, setAula] = useState<AulaAoVivoDetalhe | null>(null);
@@ -190,6 +251,17 @@ export default function LearningLiveStudioPage() {
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
 
   const [switchingDevice, setSwitchingDevice] = useState(false);
+
+  const [micTestOpen, setMicTestOpen] = useState(false);
+  const [micTestLevel, setMicTestLevel] = useState(0);
+  const [micTestSelectedId, setMicTestSelectedId] = useState("");
+  const [micTestError, setMicTestError] = useState<string | null>(null);
+  const [micTestStarting, setMicTestStarting] = useState(false);
+
+  const [micTestListening, setMicTestListening] = useState(false);
+
+  const [micInputVolume, setMicInputVolume] = useState(70);
+  const [micMonitorVolume, setMicMonitorVolume] = useState(45);
 
   const isLive = aula?.status === "AO_VIVO";
   const isFinished = aula?.status === "FINALIZADA";
@@ -264,6 +336,18 @@ const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
   }, [aulaId]);
 
   useEffect(() => {
+    if (liveMicGainRef.current) {
+      liveMicGainRef.current.gain.value = micInputVolume / 100;
+    }
+  }, [micInputVolume]);
+
+  useEffect(() => {
+    if (micTestGainRef.current && micTestListening) {
+      micTestGainRef.current.gain.value = micMonitorVolume / 100;
+    }
+  }, [micMonitorVolume, micTestListening]);
+
+  useEffect(() => {
     inicializarDispositivos();
 
     return () => {
@@ -271,6 +355,10 @@ const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
       pararStream(micStreamRef.current);
       pararStream(screenStreamRef.current);
       pararStream(placeholderStreamRef.current);
+      pararStream(screenCanvasStreamRef.current);
+      pararProgramCanvasStream();
+      pararAudioLiveProcessado();
+      fecharTesteMicrofone();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -433,6 +521,258 @@ function criarPlaceholderVideoStream(texto = "Sem câmera") {
   placeholderStreamRef.current = stream;
 
   return stream;
+}
+
+function pararProgramCanvasStream() {
+  if (programAnimationFrameRef.current) {
+    cancelAnimationFrame(programAnimationFrameRef.current);
+    programAnimationFrameRef.current = null;
+  }
+
+  pararStream(programCanvasStreamRef.current);
+  programCanvasStreamRef.current = null;
+}
+
+function criarVideoFonte(stream: MediaStream) {
+  const video = document.createElement("video");
+
+  video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+
+  video.play().catch(() => null);
+
+  return video;
+}
+
+function desenharCover(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) {
+  const videoWidth = video.videoWidth || 1280;
+  const videoHeight = video.videoHeight || 720;
+
+  const scale = Math.max(width / videoWidth, height / videoHeight);
+
+  const drawWidth = videoWidth * scale;
+  const drawHeight = videoHeight * scale;
+
+  const dx = x + (width - drawWidth) / 2;
+  const dy = y + (height - drawHeight) / 2;
+
+  ctx.drawImage(video, dx, dy, drawWidth, drawHeight);
+}
+
+function desenharRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function criarProgramaIvsStream(
+  telaStream?: MediaStream | null,
+  cameraRealStream?: MediaStream | null
+) {
+  pararProgramCanvasStream();
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1280;
+  canvas.height = 720;
+
+  const ctx = canvas.getContext("2d");
+
+  const telaVideo =
+    telaStream?.getVideoTracks().length ? criarVideoFonte(telaStream) : null;
+
+  const cameraVideo =
+    cameraRealStream?.getVideoTracks().length ? criarVideoFonte(cameraRealStream) : null;
+
+  function desenhar() {
+    if (!ctx) return;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (telaVideo) {
+      // Tela compartilhada vira o foco principal e cobre tudo.
+      desenharCover(ctx, telaVideo, 0, 0, 1280, 720);
+    } else if (cameraVideo) {
+      // Se não tiver tela, câmera real ocupa tudo.
+      desenharCover(ctx, cameraVideo, 0, 0, 1280, 720);
+    } else {
+      // Se não tiver câmera real nem tela, manda banner limpo.
+      ctx.fillStyle = "#0b4a2f";
+      ctx.fillRect(0, 0, 1280, 720);
+
+      ctx.fillStyle = "#f5f2e8";
+      ctx.textAlign = "center";
+      ctx.font = "bold 54px Arial";
+      ctx.fillText("FootEra Learning", 640, 330);
+
+      ctx.font = "30px Arial";
+      ctx.fillText("Transmissão sem câmera ativa", 640, 385);
+    }
+
+    // Câmera só aparece no canto se for câmera real.
+    // Placeholder NÃO entra aqui.
+    if (telaVideo && cameraVideo) {
+      const pipX = 930;
+      const pipY = 36;
+      const pipW = 300;
+      const pipH = 169;
+      const radius = 18;
+
+      ctx.save();
+
+      desenharRoundedRect(ctx, pipX, pipY, pipW, pipH, radius);
+      ctx.clip();
+
+      ctx.fillStyle = "#000";
+      ctx.fillRect(pipX, pipY, pipW, pipH);
+
+      desenharCover(ctx, cameraVideo, pipX, pipY, pipW, pipH);
+
+      ctx.restore();
+
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      desenharRoundedRect(ctx, pipX, pipY, pipW, pipH, radius);
+      ctx.stroke();
+    }
+
+    programAnimationFrameRef.current = requestAnimationFrame(desenhar);
+  }
+
+  desenhar();
+
+  const stream = canvas.captureStream(30);
+  programCanvasStreamRef.current = stream;
+
+  return stream;
+}
+
+async function atualizarProgramaIvs(client = broadcastClient) {
+  if (!client) return;
+
+  try {
+    try {
+      client.removeVideoInputDevice?.("screen");
+    } catch {}
+
+    try {
+      client.removeVideoInputDevice?.("camera");
+    } catch {}
+
+    try {
+      client.removeVideoInputDevice?.("program");
+    } catch {}
+
+    const telaAtual = screenStreamRef.current;
+
+    const cameraReal =
+      cameraEnabled && !usandoPlaceholderCamera
+        ? cameraStreamRef.current
+        : null;
+
+    const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
+
+    const dimensao = client.getCanvasDimensions?.() || { width: 1280, height: 720 };
+    await client.addVideoInputDevice(
+      programaStream,
+      "program",
+      {
+        index: 0,
+        x: 0,
+        y: 0,
+        width: dimensao.width,
+        height: dimensao.height,
+      }
+    );
+
+    console.log("[IVS] Programa atualizado: tela principal + câmera real opcional.");
+  } catch (e) {
+    console.error("[IVS] Erro ao atualizar programa:", e);
+  }
+}
+
+function criarScreenCoverStream(sourceStream: MediaStream) {
+  pararStream(screenCanvasStreamRef.current);
+
+  const video = document.createElement("video");
+  video.srcObject = sourceStream;
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1280;
+  canvas.height = 720;
+
+  const ctx = canvas.getContext("2d");
+
+  let animationFrame = 0;
+
+  function desenharCover() {
+    if (!ctx) return;
+
+    const videoWidth = video.videoWidth || 1280;
+    const videoHeight = video.videoHeight || 720;
+
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+
+    const scale = Math.max(
+      canvasWidth / videoWidth,
+      canvasHeight / videoHeight
+    );
+
+    const drawWidth = videoWidth * scale;
+    const drawHeight = videoHeight * scale;
+
+    const dx = (canvasWidth - drawWidth) / 2;
+    const dy = (canvasHeight - drawHeight) / 2;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    ctx.drawImage(video, dx, dy, drawWidth, drawHeight);
+
+    animationFrame = requestAnimationFrame(desenharCover);
+  }
+
+  video.onloadedmetadata = async () => {
+    await video.play().catch(() => null);
+    desenharCover();
+  };
+
+  sourceStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+    cancelAnimationFrame(animationFrame);
+  });
+
+  const canvasStream = canvas.captureStream(30);
+  screenCanvasStreamRef.current = canvasStream;
+
+  return canvasStream;
 }
 
 async function inicializarDispositivos() {
@@ -652,22 +992,13 @@ async function trocarCameraDuranteLive(cameraId: string) {
     setUsandoPlaceholderCamera(true);
   }
 
-  try {
-    broadcastClient.removeVideoInputDevice?.("camera");
-  } catch (e) {
-    console.warn("[IVS] Falha ao remover câmera antiga:", e);
-  }
-
-  await broadcastClient.addVideoInputDevice(
-    novoVideoStream,
-    "camera",
-    getMainVideoPosition()
-  );
 
   pararStream(cameraStreamRef.current);
 
   setCameraStream(novoVideoStream);
   cameraStreamRef.current = novoVideoStream;
+
+  await atualizarProgramaIvs(broadcastClient);
 
   if (previewRef.current) {
     previewRef.current.srcObject = novoVideoStream;
@@ -695,7 +1026,9 @@ async function trocarMicrofoneDuranteLive(micId: string) {
     console.warn("[IVS] Falha ao remover microfone antigo:", e);
   }
 
-  await broadcastClient.addAudioInputDevice(novoAudioStream, "microphone");
+  const audioProcessado = criarAudioLiveComVolume(novoAudioStream);
+
+  await broadcastClient.addAudioInputDevice(audioProcessado, "microphone");
 
   pararStream(micStreamRef.current);
 
@@ -797,6 +1130,254 @@ async function trocarDispositivo(
     stream.getTracks().forEach((track) => track.stop());
   }
 
+function pararAudioLiveProcessado() {
+  pararStream(liveMicProcessedStreamRef.current);
+  liveMicProcessedStreamRef.current = null;
+
+  if (liveMicGainRef.current) {
+    try {
+      liveMicGainRef.current.disconnect();
+    } catch {}
+    liveMicGainRef.current = null;
+  }
+
+  if (liveMicSourceRef.current) {
+    try {
+      liveMicSourceRef.current.disconnect();
+    } catch {}
+    liveMicSourceRef.current = null;
+  }
+
+  if (liveMicAudioContextRef.current) {
+    liveMicAudioContextRef.current.close().catch(() => null);
+    liveMicAudioContextRef.current = null;
+  }
+
+  liveMicDestinationRef.current = null;
+}
+
+function criarAudioLiveComVolume(stream: MediaStream) {
+  pararAudioLiveProcessado();
+
+  const AudioContextClass =
+    window.AudioContext || (window as any).webkitAudioContext;
+
+  if (!AudioContextClass) {
+    return stream;
+  }
+
+  const audioContext = new AudioContextClass();
+  const source = audioContext.createMediaStreamSource(stream);
+  const gain = audioContext.createGain();
+  const destination = audioContext.createMediaStreamDestination();
+
+  gain.gain.value = micInputVolume / 100;
+
+  source.connect(gain);
+  gain.connect(destination);
+
+  liveMicAudioContextRef.current = audioContext;
+  liveMicSourceRef.current = source;
+  liveMicGainRef.current = gain;
+  liveMicDestinationRef.current = destination;
+  liveMicProcessedStreamRef.current = destination.stream;
+
+  return destination.stream;
+}
+
+  function pararMonitoramentoMicrofone() {
+    if (micTestAnimationFrameRef.current) {
+      cancelAnimationFrame(micTestAnimationFrameRef.current);
+      micTestAnimationFrameRef.current = null;
+    }
+
+    if (micTestGainRef.current) {
+      try {
+        micTestGainRef.current.disconnect();
+      } catch {}
+      micTestGainRef.current = null;
+    }
+
+    if (micTestSourceRef.current) {
+      try {
+        micTestSourceRef.current.disconnect();
+      } catch {}
+      micTestSourceRef.current = null;
+    }
+
+    if (micTestAudioContextRef.current) {
+      micTestAudioContextRef.current.close().catch(() => null);
+      micTestAudioContextRef.current = null;
+    }
+
+    pararStream(micTestStreamRef.current);
+    micTestStreamRef.current = null;
+
+    setMicTestListening(false);
+    setMicTestLevel(0);
+  }
+
+async function iniciarMonitoramentoMicrofone(micId?: string) {
+  try {
+    setMicTestStarting(true);
+    setMicTestError(null);
+
+    pararMonitoramentoMicrofone();
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Seu navegador não permite testar microfone nesta página.");
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: false,
+      audio: micId
+        ? {
+            deviceId: { exact: micId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+    });
+
+    micTestStreamRef.current = stream;
+
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
+
+    if (!AudioContextClass) {
+      throw new Error("Seu navegador não suporta monitoramento de áudio.");
+    }
+
+    const audioContext = new AudioContextClass();
+    micTestAudioContextRef.current = audioContext;
+
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    const gain = audioContext.createGain();
+
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.75;
+
+    // Começa mutado para não dar retorno automaticamente.
+    gain.gain.value = 0;
+
+    source.connect(analyser);
+    source.connect(gain);
+    gain.connect(audioContext.destination);
+
+    micTestSourceRef.current = source;
+    micTestGainRef.current = gain;
+    setMicTestListening(false);
+
+    const dataArray = new Uint8Array(analyser.fftSize);
+
+    function atualizarVolume() {
+      analyser.getByteTimeDomainData(dataArray);
+
+      let soma = 0;
+
+      for (let i = 0; i < dataArray.length; i++) {
+        const valor = (dataArray[i] - 128) / 128;
+        soma += valor * valor;
+      }
+
+      const rms = Math.sqrt(soma / dataArray.length);
+
+      const volume = Math.min(100, Math.round(rms * 320));
+
+      setMicTestLevel(volume);
+
+      micTestAnimationFrameRef.current = requestAnimationFrame(atualizarVolume);
+    }
+
+    atualizarVolume();
+  } catch (e: any) {
+    console.error("[MIC TEST] Erro ao testar microfone:", e);
+
+    let mensagem = "Não foi possível testar o microfone selecionado.";
+
+    if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
+      mensagem =
+        "Permissão negada para o microfone. Clique no cadeado do navegador e permita o uso do microfone.";
+    }
+
+    if (e?.name === "NotFoundError" || e?.name === "DevicesNotFoundError") {
+      mensagem =
+        "Nenhum microfone foi encontrado. Conecte um microfone e tente novamente.";
+    }
+
+    if (e?.name === "NotReadableError" || e?.name === "TrackStartError") {
+      mensagem =
+        "O microfone está sendo usado por outro aplicativo. Feche Discord, OBS, Teams ou outro app e tente novamente.";
+    }
+
+    setMicTestError(mensagem);
+    setMicTestLevel(0);
+  } finally {
+    setMicTestStarting(false);
+  }
+}
+
+async function abrirTesteMicrofone() {
+  const idInicial = selectedMicId || microphones[0]?.deviceId || "";
+
+  setMicTestSelectedId(idInicial);
+  setMicTestOpen(true);
+
+  await iniciarMonitoramentoMicrofone(idInicial);
+}
+
+function fecharTesteMicrofone() {
+  pararMonitoramentoMicrofone();
+  setMicTestOpen(false);
+  setMicTestError(null);
+}
+
+async function trocarMicrofoneDoTeste(micId: string) {
+  setMicTestSelectedId(micId);
+  setMicTestListening(false);
+  await iniciarMonitoramentoMicrofone(micId);
+}
+
+async function toggleEscutarMicrofoneTeste() {
+  try {
+    if (!micTestAudioContextRef.current || !micTestGainRef.current) {
+      await iniciarMonitoramentoMicrofone(micTestSelectedId);
+    }
+
+    if (micTestAudioContextRef.current?.state === "suspended") {
+      await micTestAudioContextRef.current.resume();
+    }
+
+    const next = !micTestListening;
+
+    if (micTestGainRef.current) {
+      // Volume baixo para evitar microfonia. Use fone de ouvido.
+      micTestGainRef.current.gain.value = next ? micMonitorVolume / 100 : 0;
+    }
+
+    setMicTestListening(next);
+  } catch (e) {
+    console.error("[MIC TEST] Erro ao alternar escuta do microfone:", e);
+    setMicTestError("Não foi possível reproduzir o áudio do microfone.");
+  }
+}
+
+async function aplicarMicrofoneTestado() {
+  if (!micTestSelectedId) return;
+
+  setSelectedMicId(micTestSelectedId);
+
+  await trocarDispositivo(selectedCameraId, micTestSelectedId, "microfone");
+
+  fecharTesteMicrofone();
+}
+
 async function toggleCamera() {
   const next = !cameraEnabled;
 
@@ -834,15 +1415,7 @@ async function toggleCamera() {
     }
 
     if (broadcastClient) {
-      try {
-        broadcastClient.removeVideoInputDevice?.("camera");
-      } catch {}
-
-      await broadcastClient.addVideoInputDevice(
-        novoVideoStream,
-        "camera",
-        getMainVideoPosition()
-      );
+      await atualizarProgramaIvs(broadcastClient);
     }
   } catch (e) {
     console.warn("[LIVE] Não foi possível ligar câmera real. Mantendo placeholder:", e);
@@ -854,23 +1427,16 @@ async function toggleCamera() {
 
     setCameraStream(placeholder);
     cameraStreamRef.current = placeholder;
+
+    if (broadcastClient) {
+      await atualizarProgramaIvs(broadcastClient);
+    }
+
     setCameraEnabled(false);
 
     if (previewRef.current) {
       previewRef.current.srcObject = placeholder;
       await previewRef.current.play().catch(() => null);
-    }
-
-    if (broadcastClient) {
-      try {
-        broadcastClient.removeVideoInputDevice?.("camera");
-      } catch {}
-
-      await broadcastClient.addVideoInputDevice(
-        placeholder,
-        "camera",
-        getMainVideoPosition()
-      );
     }
   }
 }
@@ -885,44 +1451,45 @@ async function toggleCamera() {
     });
 
     setMicEnabled(next);
+
+    if (next) {
+      fecharTesteMicrofone();
+    }
   }
 
   async function toggleScreenShare() {
     if (screenEnabled) {
-      if (broadcastClient) {
-        try {
-          broadcastClient.removeVideoInputDevice?.("screen");
-
-          if (cameraStreamRef.current?.getVideoTracks().length) {
-            try {
-              broadcastClient.removeVideoInputDevice?.("camera");
-            } catch {}
-
-            await broadcastClient.addVideoInputDevice(cameraStreamRef.current, "camera", {
-              index: 0,
-              x: 0,
-              y: 0,
-              width: 1280,
-              height: 720,
-            });
-          }
-
-          console.log("[IVS] Tela removida durante a live; câmera voltou como principal.");
-        } catch (e: any) {
-          console.error("[IVS] Falha ao remover tela durante a live:", e);
-        }
-      }
+      pararStream(screenCanvasStreamRef.current);
+      screenCanvasStreamRef.current = null;
 
       pararStream(screenStreamRef.current);
       setScreenStream(null);
       screenStreamRef.current = null;
       setScreenEnabled(false);
+
+      if (broadcastClient) {
+        try {
+          await atualizarProgramaIvs(broadcastClient);
+          console.log("[IVS] Tela removida; programa atualizado.");
+        } catch (e: any) {
+          console.error("[IVS] Falha ao atualizar programa após remover tela:", e);
+        }
+      }
+
       return;
+    }
+  
+    if (broadcastClient) {
+      await atualizarProgramaIvs(broadcastClient);
     }
 
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 },
+        },
         audio: false,
       });
 
@@ -936,42 +1503,14 @@ async function toggleCamera() {
       screenStreamRef.current = stream;
       setScreenEnabled(true);
 
+      if (broadcastClient) {
+        await atualizarProgramaIvs(broadcastClient);
+      }
+
       if (screenPreviewRef.current) {
         screenPreviewRef.current.srcObject = stream;
       }
 
-      if (broadcastClient) {
-        try {
-          broadcastClient.removeVideoInputDevice?.("screen");
-
-          await broadcastClient.addVideoInputDevice(stream, "screen", {
-            index: 0,
-            x: 0,
-            y: 0,
-            width: 1280,
-            height: 720,
-          });
-
-          if (cameraStreamRef.current?.getVideoTracks().length) {
-            try {
-              broadcastClient.removeVideoInputDevice?.("camera");
-            } catch {}
-
-            await broadcastClient.addVideoInputDevice(cameraStreamRef.current, "camera", {
-              index: 1,
-              x: 920,
-              y: 30,
-              width: 320,
-              height: 180,
-            });
-          }
-
-          console.log("[IVS] Tela adicionada durante a live.");
-        } catch (e: any) {
-          console.error("[IVS] Falha ao adicionar tela durante a live:", e);
-          setBroadcastError(e?.message || "Falha ao compartilhar tela durante a live.");
-        }
-      }
     } catch {
       // usuário cancelou
     }
@@ -1123,48 +1662,52 @@ async function criarBroadcastClient(config: BroadcastConfig) {
   });
 
   if (micStream?.getAudioTracks().length) {
-    await client.addAudioInputDevice(micStream, "microphone");
-    console.log("[IVS] áudio adicionado");
+    const audioProcessado = criarAudioLiveComVolume(micStream);
+
+    await client.addAudioInputDevice(audioProcessado, "microphone");
+
+    console.log("[IVS] áudio adicionado com volume:", micInputVolume);
   }
 
-  if (screenStream?.getVideoTracks().length) {
-    await client.addVideoInputDevice(screenStream, "screen", {
-      index: 0,
-      x: 0,
-      y: 0,
-      width: 1280,
-      height: 720,
-    });
+  const telaAtual = screenStreamRef.current;
 
-    console.log("[IVS] tela adicionada como vídeo principal");
+  const cameraReal =
+    cameraEnabled && !usandoPlaceholderCamera
+      ? cameraStreamRef.current
+      : null;
 
-    if (cameraStream?.getVideoTracks().length && cameraEnabled) {
-      await client.addVideoInputDevice(cameraStream, "camera", {
-        index: 1,
-        x: 920,
-        y: 30,
-        width: 320,
-        height: 180,
-      });
+  const temTela = !!telaAtual?.getVideoTracks().length;
+  const temCameraReal = !!cameraReal?.getVideoTracks().length;
+  const temCameraQualquer = !!cameraStreamRef.current?.getVideoTracks().length;
 
-      console.log("[IVS] câmera adicionada como PiP");
-    }
-  } else if (cameraStream?.getVideoTracks().length) {
-    await client.addVideoInputDevice(cameraStream, "camera", {
-      index: 0,
-      x: 0,
-      y: 0,
-      width: 1280,
-      height: 720,
-    });
-
-    console.log("[IVS] câmera adicionada como vídeo principal");
-  } else {
+  if (!temTela && !temCameraReal && !temCameraQualquer) {
     throw new Error("Nenhuma fonte de vídeo ativa para transmitir.");
   }
 
+  const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
+
+  const dimensao = client.getCanvasDimensions?.() || { width: 1280, height: 720 };
+  await client.addVideoInputDevice(
+    programaStream,
+    "program",
+    {
+      index: 0,
+      x: 0,
+      y: 0,
+      width: dimensao.width,
+      height: dimensao.height,
+    }
+  );
+
+  console.log("[IVS] Programa adicionado como único vídeo principal.", {
+    temTela,
+    temCameraReal,
+    usandoPlaceholderCamera,
+  });
+
   console.log("[IVS] devices no client:", {
-    videoDevice: client.getVideoInputDevice?.("camera"),
+    programDevice: client.getVideoInputDevice?.("program"),
+    cameraDevice: client.getVideoInputDevice?.("camera"),
     screenDevice: client.getVideoInputDevice?.("screen"),
     audioDevice: client.getAudioInputDevice?.("microphone"),
     canvasDimensions: client.getCanvasDimensions?.(),
@@ -1447,38 +1990,52 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
   </div>
 ) : null}
 
-              <div className="relative overflow-hidden rounded-[24px] bg-[#021e14] border border-slate-900">
-                <video
-                  ref={previewRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full aspect-video object-cover bg-black"
-                />
+<div className="relative overflow-hidden rounded-[24px] bg-[#021e14] border border-slate-900">
+  {screenEnabled && screenStream ? (
+    <>
+      <video
+        ref={screenPreviewRef}
+        autoPlay
+        muted
+        playsInline
+        className="w-full aspect-video object-cover bg-black"
+      />
 
-                {!cameraEnabled && !usandoPlaceholderCamera ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-                    <div className="text-center">
-                      <CameraOff className="w-12 h-12 mx-auto mb-3 opacity-80" />
-                      <div className="font-bold">Câmera desligada</div>
-                    </div>
-                  </div>
-                ) : null}
+      {cameraEnabled && !usandoPlaceholderCamera && cameraStream ? (
+        <div className="absolute right-4 top-4 w-[260px] max-w-[36%] overflow-hidden rounded-2xl border-2 border-white/70 bg-black shadow-xl">
+          <video
+            ref={previewRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full aspect-video object-cover"
+          />
+          <div className="absolute left-2 bottom-2 rounded-lg bg-black/60 px-2 py-1 text-xs font-semibold text-white">
+            Câmera
+          </div>
+        </div>
+      ) : null}
+    </>
+  ) : (
+    <>
+      <video
+        ref={previewRef}
+        autoPlay
+        muted
+        playsInline
+        className="w-full aspect-video object-cover bg-black"
+      />
 
-                {screenEnabled && screenStream ? (
-                  <div className="absolute right-4 top-4 w-[260px] max-w-[36%] overflow-hidden rounded-2xl border-2 border-white/70 bg-black shadow-xl">
-                    <video
-                      ref={screenPreviewRef}
-                      autoPlay
-                      muted
-                      playsInline
-                      className="w-full aspect-video object-cover"
-                    />
-                    <div className="absolute left-2 bottom-2 rounded-lg bg-black/60 px-2 py-1 text-xs font-semibold text-white">
-                      Tela compartilhada
-                    </div>
-                  </div>
-                ) : null}
+      {!cameraEnabled && !usandoPlaceholderCamera ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+          <div className="text-center">
+            <CameraOff className="w-12 h-12 mx-auto mb-3 opacity-80" />
+            <div className="font-bold">Câmera desligada</div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )}
 
                 <div className="absolute left-4 bottom-4 flex items-center gap-2">
                   {isLive ? (
@@ -1564,6 +2121,75 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
                   Config. IVS
                 </button>
               </div>
+
+{!micEnabled ? (
+  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div className="flex items-start gap-3">
+      <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+        <MicOff className="w-5 h-5" />
+      </div>
+
+      <div>
+        <div className="font-black text-amber-900">
+          Microfone desligado
+        </div>
+        <div className="text-sm text-amber-800/80">
+          Você pode testar se o áudio está captando antes de ligar o microfone na live.
+        </div>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      onClick={abrirTesteMicrofone}
+      className="h-11 px-5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold"
+    >
+      Testar microfone
+    </button>
+  </div>
+) : null}
+
+<div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+  <div className="flex items-center justify-between gap-3 mb-3">
+    <div>
+      <div className="font-black text-[#193b2e]">
+        Volume do microfone
+      </div>
+      <div className="text-sm text-slate-500">
+        Controla o volume enviado para a live.
+      </div>
+    </div>
+
+    <div
+      className={`text-sm font-black ${
+        micInputVolume > 85 ? "text-red-600" : "text-slate-600"
+      }`}
+    >
+      {micInputVolume}%
+    </div>
+  </div>
+
+  <input
+    type="range"
+    min={0}
+    max={100}
+    value={micInputVolume}
+    onChange={(e) => setMicInputVolume(Number(e.target.value))}
+    className="w-full accent-[#216c43]"
+  />
+
+  <div className="mt-2 flex justify-between text-xs text-slate-400">
+    <span>Baixo</span>
+    <span>Recomendado: 60% a 80%</span>
+    <span>Alto</span>
+  </div>
+
+  {micInputVolume > 85 ? (
+    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 font-semibold">
+      O volume está alto e pode estourar. Tente reduzir para 70%.
+    </div>
+  ) : null}
+</div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
                 <div>
@@ -1846,6 +2472,160 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
           </aside>
         </div>
       </main>
+
+{micTestOpen ? (
+  <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="w-full max-w-lg rounded-[26px] bg-white shadow-2xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-[0.16em] text-slate-500 font-bold">
+            Teste de áudio
+          </div>
+          <h2 className="text-xl font-black text-[#193b2e]">
+            Testar microfone
+          </h2>
+        </div>
+
+        <button
+          type="button"
+          onClick={fecharTesteMicrofone}
+          className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="p-5 space-y-5">
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">
+            Microfone para teste
+          </label>
+
+          <select
+            value={micTestSelectedId}
+            onChange={(e) => trocarMicrofoneDoTeste(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none"
+          >
+            {microphones.length === 0 ? (
+              <option value="">Nenhum microfone encontrado</option>
+            ) : (
+              microphones.map((mic, index) => (
+                <option key={mic.deviceId || index} value={mic.deviceId}>
+                  {mic.label || `Microfone ${index + 1}`}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-bold text-slate-800">
+              Nível de entrada
+            </div>
+
+            <div className="text-sm font-bold text-slate-500">
+              {micTestStarting ? "Iniciando..." : `${micTestLevel}%`}
+            </div>
+          </div>
+
+          <div className="h-5 w-full rounded-full bg-slate-200 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-100 ${
+                micTestLevel > 70
+                  ? "bg-red-500"
+                  : micTestLevel > 35
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+              }`}
+              style={{ width: `${Math.max(4, micTestLevel)}%` }}
+            />
+          </div>
+
+          <div className="mt-3 text-sm text-slate-600">
+            {micTestLevel > 85
+              ? "O áudio está muito alto e pode estourar. Reduza o volume do microfone."
+              : "Fale perto do microfone. Se a barra mexer, o áudio está sendo captado."}
+          </div>
+          <div className="mt-2 text-xs text-amber-700 font-semibold">
+            Para escutar seu próprio microfone, use fone de ouvido para evitar eco ou microfonia.
+          </div>
+        </div>
+
+<div className="rounded-2xl border border-slate-200 bg-white p-4">
+  <div className="flex items-center justify-between mb-2">
+    <div>
+      <div className="font-bold text-slate-800">
+        Volume para escutar
+      </div>
+      <div className="text-sm text-slate-500">
+        Controla o volume do retorno no seu fone.
+      </div>
+    </div>
+
+    <div className="text-sm font-black text-slate-600">
+      {micMonitorVolume}%
+    </div>
+  </div>
+
+  <input
+    type="range"
+    min={0}
+    max={100}
+    value={micMonitorVolume}
+    onChange={(e) => setMicMonitorVolume(Number(e.target.value))}
+    className="w-full accent-[#216c43]"
+  />
+
+  <div className="mt-2 text-xs text-amber-700 font-semibold">
+    Use fone de ouvido. Se usar alto-falante, pode gerar eco ou microfonia.
+  </div>
+</div>
+
+        {micTestError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700 flex gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">{micTestError}</div>
+          </div>
+        ) : null}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={() => iniciarMonitoramentoMicrofone(micTestSelectedId)}
+            disabled={micTestStarting}
+            className="h-12 flex-1 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 font-bold text-slate-700 disabled:bg-slate-100"
+          >
+            {micTestStarting ? "Testando..." : "Testar novamente"}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleEscutarMicrofoneTeste}
+            disabled={micTestStarting || !!micTestError}
+            className={`h-12 flex-1 rounded-xl font-bold disabled:bg-slate-100 disabled:text-slate-400 ${
+              micTestListening
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
+            }`}
+          >
+            {micTestListening ? "Parar de escutar" : "Escutar meu microfone"}
+          </button>
+
+          <button
+            type="button"
+            onClick={aplicarMicrofoneTestado}
+            disabled={!micTestSelectedId || switchingDevice}
+            className="h-12 flex-1 rounded-xl bg-[#216c43] hover:bg-[#185334] text-white font-bold disabled:bg-slate-300"
+          >
+            Usar este microfone
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+) : null}
+
     </div>
   );
 }
