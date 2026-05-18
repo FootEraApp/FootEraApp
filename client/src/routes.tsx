@@ -74,7 +74,8 @@ import LearningLivePage from "./pages/learning/live.js";
 import CreatorEventosPage from "./pages/creator/eventos.js";
 import CreatorNovoEventoPage from "./pages/creator/eventos-novo.js";
 import MudarTipoPerfilPage from "./pages/perfil/mudarTipo.js";
-
+import SalaCopaEventoPage from "./pages/learning/evento/sala-copa.js";
+import LearningEventoAoVivoPage from "./pages/learning/evento/eventoAoVivo.js";
 export function AppRoutes() {
   return (
     <Switch>
@@ -273,6 +274,10 @@ export function AppRoutes() {
 
           <Route path="/learning/avaliar">
             <Private><AvaliarMetodologia /></Private>
+          </Route>
+          <Route path="/learning/evento/sala-copa" component={SalaCopaEventoPage} />
+          <Route path="/learning/evento/:aulaId">
+            {() => <LearningEventoAoVivoPage />}
           </Route>
           <Route path="/learning/:id">
             <Private><MetodologiaUnicaPage /></Private>

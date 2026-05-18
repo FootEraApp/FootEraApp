@@ -15,6 +15,12 @@ import CreatorCard from "../../components/CreatorCard";
 import ProfilePostsSection from "@/components/perfil/ProfilePostsSection";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const FRONTEND_BASE_URL =
+  import.meta.env.VITE_FRONTEND_BASE_URL ||
+  import.meta.env.VITE_APP_URL ||
+  window.location.origin;
+
+const AVATAR_FALLBACK = `${FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Conteudo = {
   id: string;
@@ -27,6 +33,35 @@ type Conteudo = {
   totalReviews?: number | null;
   totalAssinantes?: number | null;
   geraCertificado?: boolean;
+};
+
+type AulaAoVivoCreator = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+  dataInicio: string;
+  dataFim?: string | null;
+  status: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
+  thumbUrl?: string | null;
+  replayDisponivel?: boolean;
+  gravacaoAtiva?: boolean;
+  totalParticipantes?: number | null;
+  metodologiaId?: string | null;
+  metodologiaAvulsaId?: string | null;
+  itemId?: string | null;
+  itemAvulsaId?: string | null;
+  estruturaId?: string | null;
+  estruturaAvulsaId?: string | null;
+  metodologia?: {
+    id: string;
+    titulo: string;
+    capaUrl?: string | null;
+  } | null;
+  metodologiaAvulsa?: {
+    id: string;
+    titulo: string;
+    capaUrl?: string | null;
+  } | null;
 };
 
 type PerfilResponse = {
@@ -54,6 +89,7 @@ type PerfilResponse = {
     views: number;
   };
   conteudos: Conteudo[];
+  eventosAoVivo?: AulaAoVivoCreator[];
 };
 
 const money = (value: number) =>
@@ -64,6 +100,111 @@ const compact = (value: number) => {
   if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
   return String(value);
 };
+
+function normalizarTexto(value: any) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getEventoPublicoUrl(aula: AulaAoVivoCreator) {
+  const texto = normalizarTexto(
+    [
+      aula?.titulo,
+      aula?.descricao,
+      aula?.metodologia?.titulo,
+      aula?.metodologiaAvulsa?.titulo,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  const deveUsarSalaCopa =
+    texto.includes("sala copa") ||
+    texto.includes("copa") ||
+    texto.includes("copa do mundo") ||
+    texto.includes("mundial");
+
+  if (!deveUsarSalaCopa) {
+    return `/learning/evento/${aula.id}`;
+  }
+
+  const origem = aula?.metodologiaAvulsa?.id ? "avulsa" : "learning";
+  const metodologiaId = aula?.metodologiaAvulsa?.id || aula?.metodologia?.id || "";
+
+  return `/learning/evento/sala-copa?aulaId=${aula.id}&origem=${origem}&metodologiaId=${metodologiaId}`;
+}
+
+function getMetodologiaUrl(aula: AulaAoVivoCreator) {
+  if (aula.metodologiaAvulsa?.id) {
+    return `/learning/${aula.metodologiaAvulsa.id}?origem=avulsa`;
+  }
+
+  if (aula.metodologia?.id) {
+    return `/learning/${aula.metodologia.id}?origem=learning`;
+  }
+
+  return "/learning";
+}
+
+function getLiveStatusLabel(status?: string) {
+  const s = String(status || "").toUpperCase();
+
+  if (s === "AO_VIVO") return "Ao vivo agora";
+  if (s === "FINALIZADA") return "Finalizada";
+  if (s === "CANCELADA") return "Cancelada";
+  return "Agendada";
+}
+
+function getLiveStatusClass(status?: string) {
+  const s = String(status || "").toUpperCase();
+
+  if (s === "AO_VIVO") return "bg-red-50 text-red-700 border-red-200";
+  if (s === "FINALIZADA") return "bg-slate-100 text-slate-700 border-slate-200";
+  if (s === "CANCELADA") return "bg-red-50 text-red-700 border-red-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+}
+
+function getOrigemLiveBadge(aula?: AulaAoVivoCreator | null) {
+  if (!aula) {
+    return {
+      label: "Evento",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+
+  const isPremium =
+    !!aula.metodologiaAvulsa?.id ||
+    !!aula.metodologiaAvulsaId ||
+    !!aula.itemAvulsaId ||
+    !!aula.estruturaAvulsaId;
+
+  if (isPremium) {
+    return {
+      label: "Premium",
+      className: "bg-purple-50 text-purple-700 border-purple-200",
+    };
+  }
+
+  const isMetodologia =
+    !!aula.metodologia?.id ||
+    !!aula.metodologiaId ||
+    !!aula.itemId ||
+    !!aula.estruturaId;
+
+  if (isMetodologia) {
+    return {
+      label: "Metodologia",
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+    };
+  }
+
+  return {
+    label: "Evento avulso",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  };
+}
 
 export default function CreatorProfile() {
   const [data, setData] = useState<PerfilResponse | null>(null);
@@ -225,6 +366,44 @@ export default function CreatorProfile() {
   }
 
   const { creator, metricas, conteudos } = data;
+  const eventosAoVivo = Array.isArray(data.eventosAoVivo) ? data.eventosAoVivo : [];
+
+  const eventosDaAba = [
+    ...eventosAoVivo.map((aula) => ({
+      kind: "AULA_AO_VIVO" as const,
+      id: aula.id,
+      titulo: aula.titulo,
+      descricao: aula.descricao,
+      data: aula.dataInicio,
+      status: aula.status,
+      imagem:
+        aula.thumbUrl ||
+        aula.metodologiaAvulsa?.capaUrl ||
+        aula.metodologia?.capaUrl ||
+        AVATAR_FALLBACK,
+      metodologiaTitulo:
+        aula.metodologiaAvulsa?.titulo ||
+        aula.metodologia?.titulo ||
+        "Learning",
+      aula,
+    })),
+    ...eventos.map((ev) => ({
+      kind: "EVENTO" as const,
+      id: ev.id,
+      titulo: ev.titulo,
+      descricao: ev.descricao,
+      data: ev.dataEvento,
+      status: ev.status,
+      imagem: ev.capaUrl || ev.imagemUrl || AVATAR_FALLBACK,
+      metodologiaTitulo: ev.tipoLabel || ev.tipo || "Evento",
+      evento: ev,
+    })),
+  ].sort((a, b) => {
+    const da = new Date(a.data || 0).getTime();
+    const db = new Date(b.data || 0).getTime();
+    return da - db;
+  });
+
   const tipoOriginal = String(creator.perfilOriginal?.tipo || "").toLowerCase();
   const isAtletaCreator = tipoOriginal === "atleta";
   const institucional = creator.tipo === "INSTITUCIONAL";
@@ -648,9 +827,10 @@ export default function CreatorProfile() {
                   <CreatorCard
                     key={`${item.origem}-${item.id}`}
                     {...item}
+                    capaUrl={item.capaUrl || AVATAR_FALLBACK}
                     onClick={() => {
-                        const origem = item.origem === "PREMIUM" ? "avulsa" : "learning";
-                        window.location.href = `/learning/${item.id}?origem=${origem}`;
+                      const origem = item.origem === "PREMIUM" ? "avulsa" : "learning";
+                      window.location.href = `/learning/${item.id}?origem=${origem}`;
                     }}
                   />
                 ))}
@@ -695,17 +875,18 @@ export default function CreatorProfile() {
                 ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {conteudos.map((item) => (
-                        <CreatorCard
+                      <CreatorCard
                         key={`${item.origem}-${item.id}`}
                         {...item}
+                        capaUrl={item.capaUrl || AVATAR_FALLBACK}
                         onClick={() => {
-                            const origem =
+                          const origem =
                             item.origem === "PREMIUM" ? "avulsa" : "learning";
-                            window.location.href = `/learning/${item.id}?origem=${origem}`;
+                          window.location.href = `/learning/${item.id}?origem=${origem}`;
                         }}
-                        />
+                      />
                     ))}
-                    </div>
+                  </div>
                 )}
                 </section>
             </section>
@@ -747,44 +928,122 @@ export default function CreatorProfile() {
               )}
             </div>
 
-            {eventos.length === 0 ? (
+            {eventosDaAba.length === 0 ? (
               <p className="text-slate-500 text-sm">
                 Nenhum evento publicado ainda.
               </p>
             ) : (
               <div className="grid gap-3">
-                {eventos.map((ev) => (
-                  <button
-                    key={ev.id}
-                    type="button"
-                    onClick={() => {
-                      window.location.href = `/eventos/${ev.id}`;
-                    }}
-                    className="text-left rounded-xl border p-4 hover:bg-slate-50"
-                  >
-                    <div className="flex justify-between gap-3">
-                      <div>
-                        <h3 className="font-bold text-emerald-950">
-                          {ev.titulo}
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          {ev.tipoLabel || ev.tipo} •{" "}
-                          {new Date(ev.dataEvento).toLocaleString()}
-                        </p>
+                {eventosDaAba.map((ev) => {
+                  const isLiveLearning = ev.kind === "AULA_AO_VIVO";
+                  const aula = isLiveLearning ? ev.aula : null;
+                  const origemBadge = getOrigemLiveBadge(aula);
+
+                  return (
+                    <div
+                      key={`${ev.kind}-${ev.id}`}
+                      className="rounded-2xl border bg-white overflow-hidden shadow-sm"
+                    >
+                      <div className="h-36 bg-emerald-50 overflow-hidden flex items-center justify-center">
+                        <img
+                          src={ev.imagem || AVATAR_FALLBACK}
+                          alt={ev.titulo}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = AVATAR_FALLBACK;
+                          }}
+                        />
                       </div>
 
-                      <span className="text-xs bg-emerald-100 text-emerald-800 rounded-full px-2 py-1 h-fit">
-                        {ev.status}
-                      </span>
-                    </div>
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <span
+                              className={`inline-flex mb-2 rounded-full border px-2 py-1 text-[11px] font-bold ${
+                                isLiveLearning
+                                  ? getLiveStatusClass(aula?.status)
+                                  : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                              }`}
+                            >
+                              {isLiveLearning ? getLiveStatusLabel(aula?.status) : ev.status}
+                            </span>
 
-                    {ev.descricao && (
-                      <p className="text-sm text-slate-600 mt-2 line-clamp-2">
-                        {ev.descricao}
-                      </p>
-                    )}
-                  </button>
-                ))}
+                            {isLiveLearning ? (
+                              <span
+                                className={`ml-2 inline-flex mb-2 rounded-full border px-2 py-1 text-[11px] font-bold ${origemBadge.className}`}
+                              >
+                                {origemBadge.label}
+                              </span>
+                            ) : null}
+
+                            <h3 className="font-extrabold text-emerald-950 leading-tight">
+                              {ev.titulo}
+                            </h3>
+
+                            <p className="text-sm text-slate-500 mt-1">
+                              {isLiveLearning ? "Aula ao vivo Learning" : ev.metodologiaTitulo} •{" "}
+                              {ev.data ? new Date(ev.data).toLocaleString("pt-BR") : "Sem data"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {ev.descricao ? (
+                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">
+                            {ev.descricao}
+                          </p>
+                        ) : null}
+
+                        {isLiveLearning && aula ? (
+                          <div className="mt-4 grid gap-2">
+                            {isOwnCreator ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  window.location.href = `/learning/live-studio?aulaId=${aula.id}`;
+                                }}
+                                className="h-11 rounded-xl bg-emerald-700 text-white font-bold"
+                              >
+                                Preparar transmissão
+                              </button>
+                            ) : null}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = getEventoPublicoUrl(aula);
+                              }}
+                              className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold"
+                            >
+                              Ver página do evento
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = getMetodologiaUrl(aula);
+                              }}
+                              className="h-11 rounded-xl border border-slate-200 bg-white text-slate-800 font-bold"
+                            >
+                              Ver metodologia
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-4">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = `/eventos/${ev.id}`;
+                              }}
+                              className="h-11 w-full rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold"
+                            >
+                              Ver detalhes
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

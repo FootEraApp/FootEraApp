@@ -114,6 +114,35 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
   const usuario = data.usuario ?? {};
   const usuarioId = usuario.id ?? data.learning?.usuarioId ?? idDaUrl ?? meuId;
   const conteudos = Array.isArray(data.conteudos) ? data.conteudos : [];
+  
+  function getCursoHref(curso: any) {
+    const origem = String(
+      curso.origem ||
+        curso.origemTipo ||
+        curso.assinatura?.origem ||
+        ""
+    ).toUpperCase();
+
+    const metodologiaAvulsaId =
+      curso.metodologiaAvulsaId ||
+      curso.metodologiaAvulsa?.id ||
+      curso.avulsaId ||
+      null;
+
+    const metodologiaId =
+      curso.metodologiaId ||
+      curso.metodologia?.id ||
+      curso.id;
+
+    if (origem === "AVULSA" || metodologiaAvulsaId) {
+      return `/learning/${encodeURIComponent(
+        metodologiaAvulsaId || metodologiaId
+      )}?origem=avulsa`;
+    }
+
+    return `/learning/${encodeURIComponent(metodologiaId)}`;
+  }
+
   const cursosFinalizados = conteudos.filter((item: any) => {
   const status = String(item.status || item.assinatura?.status || "").toUpperCase();
   const progresso = Number(item.progressoPercentual ?? item.progresso ?? 0);
@@ -145,6 +174,7 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
 
   return (
     <div className="pb-24 bg-[#f5f2e8] min-h-screen">
+      <div className="w-full max-w-2xl mx-auto">
       <ProfileHeader
         perfilId={usuarioId}
         nome={usuario.nome ?? usuario.nomeDeUsuario ?? "Learning"}
@@ -298,7 +328,7 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
                   {cursosEmAndamento.map((curso: any) => (
                     <Link
                       key={curso.id}
-                      href={`/learning/${curso.metodologiaId || curso.id}`}
+                      href={getCursoHref(curso)}
                       className="block border rounded-xl px-4 py-3 hover:bg-green-50"
                     >
                       <p className="font-semibold text-green-900 text-base">
@@ -327,7 +357,7 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
                   {cursosFinalizados.map((curso: any) => (
                     <Link
                       key={curso.id}
-                      href={`/learning/${curso.metodologiaId || curso.id}`}
+                      href={getCursoHref(curso)}
                       className="block border rounded-xl p-4 hover:bg-green-50"
                     >
                       <p className="font-bold text-green-900">
@@ -422,5 +452,6 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
         {aba === "postagens" && <ProfilePostsSection usuarioId={usuarioId} />}
       </div>
     </div>
+   </div>
   );
 }

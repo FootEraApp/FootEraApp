@@ -240,7 +240,14 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         });
     }
 
-    const [metodologias, avulsas, vendasConfirmadas, totalAlunos, seguidores] = await Promise.all([
+    const [
+      metodologias,
+      avulsas,
+      aulasAoVivo,
+      vendasConfirmadas,
+      totalAlunos,
+      seguidores,
+    ] = await Promise.all([
       prisma.metodologia.findMany({
         where: { criadorUsuarioId: usuarioId, ativo: true },
         orderBy: { criadoEm: "desc" },
@@ -281,6 +288,50 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
           geraCertificado: true,
           geraBadge: true,
           criadoEm: true,
+        },
+      }),
+      prisma.aulaAoVivo.findMany({
+        where: {
+          OR: [
+            { criadorUsuarioId: usuarioId },
+            { metodologia: { criadorUsuarioId: usuarioId } },
+            { metodologiaAvulsa: { criadorUsuarioId: usuarioId } },
+          ],
+          status: {
+            in: ["AGENDADA", "AO_VIVO", "FINALIZADA"],
+          },
+        },
+        orderBy: {
+          dataInicio: "asc",
+        },
+        take: 20,
+        select: {
+          id: true,
+          titulo: true,
+          descricao: true,
+          dataInicio: true,
+          dataFim: true,
+          status: true,
+          thumbUrl: true,
+          replayDisponivel: true,
+          gravacaoAtiva: true,
+          totalParticipantes: true,
+          metodologia: {
+            select: {
+              id: true,
+              titulo: true,
+              capaUrl: true,
+              criadorUsuarioId: true,
+            },
+          },
+          metodologiaAvulsa: {
+            select: {
+              id: true,
+              titulo: true,
+              capaUrl: true,
+              criadorUsuarioId: true,
+            },
+          },
         },
       }),
       prisma.creatorVenda.findMany({
@@ -370,6 +421,20 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
           preco: toNumber(m.precoAssinaturaMensal),
         })),
       ],
+      eventosAoVivo: aulasAoVivo.map((aula) => ({
+        id: aula.id,
+        titulo: aula.titulo,
+        descricao: aula.descricao,
+        dataInicio: aula.dataInicio,
+        dataFim: aula.dataFim,
+        status: aula.status,
+        thumbUrl: aula.thumbUrl,
+        replayDisponivel: aula.replayDisponivel,
+        gravacaoAtiva: aula.gravacaoAtiva,
+        totalParticipantes: aula.totalParticipantes,
+        metodologia: aula.metodologia,
+        metodologiaAvulsa: aula.metodologiaAvulsa,
+      })),
     });
   } catch (error) {
     console.error("[creatorController.getPerfilPublicoCreator]", error);

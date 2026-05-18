@@ -30,6 +30,57 @@ function getAwsRegion() {
   return process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
 }
 
+function parseOptionalDate(value: any) {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "INVALID_DATE";
+  }
+
+  return date;
+}
+
+function validarDatasAulaAoVivo(params: {
+  dataInicio: Date;
+  dataFim?: Date | null;
+  inscricaoInicio?: Date | null;
+  inscricaoFim?: Date | null;
+}) {
+  const { dataInicio, dataFim, inscricaoInicio, inscricaoFim } = params;
+
+  if (dataFim && dataFim <= dataInicio) {
+    return "Data final precisa ser maior que a data de início.";
+  }
+
+  if (inscricaoInicio && inscricaoInicio <= new Date()) {
+    return "Início das inscrições não pode estar no passado.";
+  }
+
+  if (inscricaoFim && inscricaoFim <= new Date()) {
+    return "Fim das inscrições não pode estar no passado.";
+  }
+
+  if (inscricaoInicio && inscricaoFim && inscricaoFim <= inscricaoInicio) {
+    return "Fim das inscrições precisa ser depois do início das inscrições.";
+  }
+
+  if (inscricaoFim && dataInicio <= inscricaoFim) {
+    return "A data da live precisa ser depois do fim das inscrições.";
+  }
+
+  if (inscricaoInicio && !inscricaoFim) {
+    return "Informe também o fim das inscrições.";
+  }
+
+  if (!inscricaoInicio && inscricaoFim) {
+    return "Informe também o início das inscrições.";
+  }
+
+  return "";
+}
+
 function getIvsClient() {
   return new IvsClient({
     region: getAwsRegion(),
@@ -40,6 +91,31 @@ async function getAulaComOwner(aulaId: string) {
   return prisma.aulaAoVivo.findUnique({
     where: { id: aulaId },
     include: {
+      convidados: {
+        orderBy: { ordem: "asc" },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              foto: true,
+              tipo: true,
+              nomeDeUsuario: true,
+              email: true,
+            },
+          },
+        },
+      },
+      convidadoUsuario: {
+        select: {
+          id: true,
+          nome: true,
+          foto: true,
+          tipo: true,
+          nomeDeUsuario: true,
+          email: true,
+        },
+      },
       metodologia: {
         select: {
           id: true,
@@ -101,6 +177,16 @@ function sanitizeAulaForResponse(aula: any, isOwner: boolean) {
 
   return {
     ...aula,
+
+    metodologiaId: aula.metodologiaId || aula.metodologia?.id || null,
+    metodologiaAvulsaId: aula.metodologiaAvulsaId || aula.metodologiaAvulsa?.id || null,
+
+    estruturaId: aula.estruturaId || aula.estrutura?.id || null,
+    estruturaAvulsaId: aula.estruturaAvulsaId || aula.estruturaAvulsa?.id || null,
+
+    itemId: aula.itemId || aula.item?.id || null,
+    itemAvulsaId: aula.itemAvulsaId || aula.itemAvulsa?.id || null,
+
     // Nunca manda streamKey na rota pública de detalhe.
     // A streamKey só sai pelo endpoint /broadcast-config e só para o dono.
     streamKey: isOwner ? aula.streamKey : undefined,
@@ -250,6 +336,222 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
       message:
         error?.message ||
         "Erro ao preparar configuração da transmissão IVS.",
+    });
+  }
+}
+
+export async function atualizarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
+  try {
+    const userId = getAuthUserId(req);
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const aula = await getAulaComOwner(id);
+
+    if (!aula) {
+      return res.status(404).json({ message: "Aula ao vivo não encontrada." });
+    }
+
+    if (!isDonoDaAula(aula, userId)) {
+      return res.status(403).json({ message: "Sem permissão para editar esta aula." });
+    }
+
+    if (aula.metodologiaId || aula.metodologiaAvulsaId || aula.itemId || aula.itemAvulsaId) {
+      return res.status(400).json({
+        message:
+          "Esta aula pertence a uma metodologia. Edite pelo editor do Learning.",
+      });
+    }
+
+    const {
+      titulo,
+      descricao,
+      dataInicio,
+      dataFim,
+      inscricaoInicio,
+      inscricaoFim,
+      chatAtivo,
+      gravacaoAtiva,
+      replayDisponivel,
+      convidados,
+      precoAcesso,
+      acessoPago,
+    } = req.body || {};
+
+    const inicio = dataInicio ? new Date(dataInicio) : null;
+
+    if (!inicio || Number.isNaN(inicio.getTime())) {
+      return res.status(400).json({ message: "Data de início inválida." });
+    }
+
+    if (inicio <= new Date()) {
+      return res.status(400).json({ message: "Data de início não pode estar no passado." });
+    }
+
+    const fim = dataFim ? new Date(dataFim) : null;
+    const inicioInscricao = parseOptionalDate(inscricaoInicio);
+    const fimInscricao = parseOptionalDate(inscricaoFim);
+
+    if (inicioInscricao === "INVALID_DATE") {
+      return res.status(400).json({ message: "Início das inscrições inválido." });
+    }
+
+    if (fimInscricao === "INVALID_DATE") {
+      return res.status(400).json({ message: "Fim das inscrições inválido." });
+    }
+
+    const erroDatas = validarDatasAulaAoVivo({
+      dataInicio: inicio,
+      dataFim: fim,
+      inscricaoInicio: inicioInscricao,
+      inscricaoFim: fimInscricao,
+    });
+
+    if (erroDatas) {
+      return res.status(400).json({ message: erroDatas });
+    }
+
+    if (fim && Number.isNaN(fim.getTime())) {
+      return res.status(400).json({ message: "Data final inválida." });
+    }
+
+    if (fim && fim <= inicio) {
+      return res.status(400).json({
+        message: "Data final precisa ser maior que a data de início.",
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const aulaAtualizada = await tx.aulaAoVivo.update({
+        where: { id },
+        data: {
+          titulo: String(titulo || "").trim() || aula.titulo,
+          descricao:
+            descricao === undefined
+              ? aula.descricao
+              : String(descricao || "").trim() || null,
+          dataInicio: inicio,
+          dataFim: fim,
+          inscricaoInicio: inicioInscricao,
+          inscricaoFim: fimInscricao,
+          chatAtivo: chatAtivo !== false,
+          gravacaoAtiva: gravacaoAtiva !== false,
+          replayDisponivel: replayDisponivel === true,
+          convidadoUsuarioId: convidados?.[0]?.usuarioId || null,
+          convidadoNome: convidados?.[0]?.nome || null,
+          convidadoDescricao: convidados?.[0]?.descricao || null,
+          precoAcesso:
+            precoAcesso !== undefined && precoAcesso !== null && precoAcesso !== ""
+              ? Number(precoAcesso)
+              : null,
+          acessoPago:
+            acessoPago === true ||
+            acessoPago === "true" ||
+            Number(precoAcesso || 0) > 0,
+        },
+      });
+
+            if (aula.itemId) {
+        await tx.metodologiaEstruturaItem.update({
+          where: { id: aula.itemId },
+          data: {
+            titulo: String(titulo || "").trim() || aula.titulo,
+            descricao:
+              descricao === undefined
+                ? aula.descricao
+                : String(descricao || "").trim() || null,
+            duracaoMin: null,
+            thumbUrl: aula.thumbUrl || null,
+          },
+        });
+      }
+
+      if (aula.itemAvulsaId) {
+        await tx.metodologiaAvulsaEstruturaItem.update({
+          where: { id: aula.itemAvulsaId },
+          data: {
+            titulo: String(titulo || "").trim() || aula.titulo,
+            descricao:
+              descricao === undefined
+                ? aula.descricao
+                : String(descricao || "").trim() || null,
+            duracaoMin: null,
+            thumbUrl: aula.thumbUrl || null,
+          },
+        });
+      }
+
+      await tx.aulaAoVivoConvidado.deleteMany({
+        where: { aulaAoVivoId: id },
+      });
+
+      const convidadosNormalizados = Array.isArray(convidados)
+        ? convidados
+            .map((c: any, index: number) => ({
+              aulaAoVivoId: id,
+              usuarioId: c.usuarioId ? String(c.usuarioId) : null,
+              nome: c.nome ? String(c.nome).trim() : null,
+              descricao: c.descricao ? String(c.descricao).trim() : null,
+              ordem: index + 1,
+            }))
+            .filter((c: any) => c.usuarioId || c.nome)
+        : [];
+
+      if (convidadosNormalizados.length) {
+        await tx.aulaAoVivoConvidado.createMany({
+          data: convidadosNormalizados,
+        });
+      }
+
+      return aulaAtualizada;
+    });
+
+    return res.json({ item: updated });
+  } catch (error: any) {
+    console.error("Erro em atualizarAulaAoVivoAvulsa:", error);
+    return res.status(500).json({
+      message: error?.message || "Erro ao atualizar aula ao vivo.",
+    });
+  }
+}
+
+export async function deletarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
+  try {
+    const userId = getAuthUserId(req);
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const aula = await getAulaComOwner(id);
+
+    if (!aula) {
+      return res.status(404).json({ message: "Aula ao vivo não encontrada." });
+    }
+
+    if (!isDonoDaAula(aula, userId)) {
+      return res.status(403).json({ message: "Sem permissão para apagar esta aula." });
+    }
+
+    if (aula.status === "AO_VIVO") {
+      return res.status(400).json({
+        message: "Finalize a transmissão antes de apagar esta aula.",
+      });
+    }
+
+    await prisma.aulaAoVivo.delete({
+      where: { id },
+    });
+
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Erro em deletarAulaAoVivoAvulsa:", error);
+    return res.status(500).json({
+      message: error?.message || "Erro ao apagar aula ao vivo.",
     });
   }
 }
@@ -731,6 +1033,141 @@ export async function listarMinhasAulasAoVivo(req: AuthRequest, res: Response) {
 
     return res.status(500).json({
       message: "Erro ao listar suas aulas ao vivo.",
+    });
+  }
+}
+
+export async function criarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
+  try {
+    const userId = getAuthUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const {
+      titulo,
+      descricao,
+      dataInicio,
+      dataFim,
+      inscricaoInicio,
+      inscricaoFim,
+      chatAtivo,
+      gravacaoAtiva,
+      replayDisponivel,
+      convidados,
+      precoAcesso,
+      acessoPago,
+    } = req.body || {};
+
+    const tituloTrim = String(titulo || "").trim();
+
+    if (!tituloTrim) {
+      return res.status(400).json({ message: "Título é obrigatório." });
+    }
+
+    const inicio = dataInicio ? new Date(dataInicio) : null;
+
+    if (!inicio || Number.isNaN(inicio.getTime())) {
+      return res.status(400).json({ message: "Data de início inválida." });
+    }
+
+    if (inicio <= new Date()) {
+      return res.status(400).json({
+        message: "Data de início não pode estar no passado.",
+      });
+    }
+
+    const fim = dataFim ? new Date(dataFim) : null;
+
+    const inicioInscricao = parseOptionalDate(inscricaoInicio);
+    const fimInscricao = parseOptionalDate(inscricaoFim);
+
+    if (inicioInscricao === "INVALID_DATE") {
+      return res.status(400).json({ message: "Início das inscrições inválido." });
+    }
+
+    if (fimInscricao === "INVALID_DATE") {
+      return res.status(400).json({ message: "Fim das inscrições inválido." });
+    }
+
+    const erroDatas = validarDatasAulaAoVivo({
+      dataInicio: inicio,
+      dataFim: fim,
+      inscricaoInicio: inicioInscricao,
+      inscricaoFim: fimInscricao,
+    });
+
+    if (erroDatas) {
+      return res.status(400).json({ message: erroDatas });
+    }
+
+    if (fim && Number.isNaN(fim.getTime())) {
+      return res.status(400).json({ message: "Data final inválida." });
+    }
+
+    if (fim && fim <= inicio) {
+      return res.status(400).json({
+        message: "Data final precisa ser maior que a data de início.",
+      });
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const aula = await tx.aulaAoVivo.create({
+        data: {
+          titulo: tituloTrim,
+          descricao: String(descricao || "").trim() || null,
+          dataInicio: inicio,
+          dataFim: fim,
+          inscricaoInicio: inicioInscricao,
+          inscricaoFim: fimInscricao,
+          status: "AGENDADA",
+          chatAtivo: chatAtivo !== false,
+          gravacaoAtiva: gravacaoAtiva !== false,
+          replayDisponivel: replayDisponivel === true,
+          criadorUsuarioId: userId,
+          precoAcesso:
+            precoAcesso !== undefined && precoAcesso !== null && precoAcesso !== ""
+              ? Number(precoAcesso)
+              : null,
+
+          acessoPago:
+            acessoPago === true ||
+            acessoPago === "true" ||
+            Number(precoAcesso || 0) > 0,
+
+          convidadoUsuarioId: convidados?.[0]?.usuarioId || null,
+          convidadoNome: convidados?.[0]?.nome || null,
+          convidadoDescricao: convidados?.[0]?.descricao || null,
+        },
+      });
+
+      const convidadosNormalizados = Array.isArray(convidados)
+        ? convidados
+            .map((c: any, index: number) => ({
+              aulaAoVivoId: aula.id,
+              usuarioId: c.usuarioId ? String(c.usuarioId) : null,
+              nome: c.nome ? String(c.nome).trim() : null,
+              descricao: c.descricao ? String(c.descricao).trim() : null,
+              ordem: index + 1,
+            }))
+            .filter((c: any) => c.usuarioId || c.nome)
+        : [];
+
+      if (convidadosNormalizados.length) {
+        await tx.aulaAoVivoConvidado.createMany({
+          data: convidadosNormalizados,
+        });
+      }
+
+      return aula;
+    });
+
+    return res.status(201).json({ item: created });
+  } catch (error: any) {
+    console.error("Erro em criarAulaAoVivoAvulsa:", error);
+    return res.status(500).json({
+      message: error?.message || "Erro ao criar aula ao vivo.",
     });
   }
 }

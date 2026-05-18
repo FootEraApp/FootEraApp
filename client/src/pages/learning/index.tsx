@@ -37,21 +37,59 @@ type AulaAoVivoResumo = {
   status: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
   dataInicio: string;
   dataFim?: string | null;
+  inscricaoInicio?: string | null;
+  inscricaoFim?: string | null;
+  thumbUrl?: string | null;
   chatAtivo?: boolean;
   gravacaoAtiva?: boolean;
   replayDisponivel?: boolean;
   totalParticipantes?: number | null;
   totalMensagens?: number | null;
+
+  origemTipo?: "EVENTO_AVULSO" | "LEARNING" | "AVULSA";
+  origemLabel?: string;
+  preco?: number | null;
+  precoLabel?: string | null;
+  criadorNome?: string | null;
+
+  criadorUsuario?: {
+    id: string;
+    nome?: string | null;
+    foto?: string | null;
+    tipo?: string | null;
+    nomeDeUsuario?: string | null;
+  } | null;
+
+  metodologiaId?: string | null;
+  metodologiaTitulo?: string | null;
+
   metodologia?: {
     id: string;
     titulo: string;
     capaUrl?: string | null;
+    publicoAlvo?: string | null;
   } | null;
+
   metodologiaAvulsa?: {
     id: string;
     titulo: string;
     capaUrl?: string | null;
+    publicoAlvo?: string | null;
+    precoAssinaturaMensal?: number | null;
   } | null;
+
+  convidados?: Array<{
+    id?: string;
+    nome?: string | null;
+    descricao?: string | null;
+    usuario?: {
+      id: string;
+      nome?: string | null;
+      foto?: string | null;
+      tipo?: string | null;
+      nomeDeUsuario?: string | null;
+    } | null;
+  }>;
 };
 
 const FALLBACK_PERMISSAO_CRIACAO: LearningPermissaoCriacao = {
@@ -84,6 +122,24 @@ async function listMinhasAulasAoVivo(): Promise<{ items: AulaAoVivoResumo[] }> {
 
   if (!res.ok) {
     throw new Error(json?.message || "Erro ao carregar aulas ao vivo.");
+  }
+
+  return {
+    items: Array.isArray(json?.items) ? json.items : [],
+  };
+}
+
+async function listEventosAoVivoVisiveis(): Promise<{ items: AulaAoVivoResumo[] }> {
+  const token = getToken();
+
+  const res = await fetch(`${API.BASE_URL}/api/metodologias/eventos-ao-vivo/visiveis`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json?.message || "Erro ao carregar eventos ao vivo.");
   }
 
   return {
@@ -144,6 +200,44 @@ function getLiveStatusInfo(status?: string) {
   };
 }
 
+function normalizarTexto(value: any) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getEventoPublicoUrl(aula: AulaAoVivoResumo) {
+  const texto = normalizarTexto(
+    [
+      aula?.titulo,
+      aula?.descricao,
+      aula?.metodologia?.titulo,
+      aula?.metodologiaAvulsa?.titulo,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  const deveUsarSalaCopa =
+    texto.includes("sala copa") ||
+    texto.includes("copa") ||
+    texto.includes("copa do mundo") ||
+    texto.includes("mundial");
+
+  if (!deveUsarSalaCopa) {
+    return `/learning/evento/${aula.id}`;
+  }
+
+  const origem = aula?.metodologiaAvulsa?.id ? "avulsa" : "learning";
+  const metodologiaId =
+    aula?.metodologiaAvulsa?.id ||
+    aula?.metodologia?.id ||
+    "";
+
+  return `/learning/evento/sala-copa?aulaId=${aula.id}&origem=${origem}&metodologiaId=${metodologiaId}`;
+}
+
 function TabButton({
   active,
   children,
@@ -164,6 +258,160 @@ function TabButton({
   );
 }
 
+function EventoAoVivoExploreCard({
+  aula,
+  onVerEvento,
+  onVerMetodologia,
+}: {
+  aula: AulaAoVivoResumo;
+  onVerEvento: () => void;
+  onVerMetodologia?: () => void;
+}) {
+  const statusInfo = getLiveStatusInfo(aula.status);
+  const origemTipo = String(aula.origemTipo || "").toUpperCase();
+
+  const origemBadge =
+    origemTipo === "EVENTO_AVULSO"
+      ? {
+          label: "Evento avulso",
+          className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        }
+      : origemTipo === "AVULSA"
+        ? {
+            label: "Premium / Avulsa",
+            className: "bg-purple-50 text-purple-700 border-purple-200",
+          }
+        : {
+            label: "Metodologia",
+            className: "bg-blue-50 text-blue-700 border-blue-200",
+          };
+
+  const imagem =
+    aula.thumbUrl ||
+    aula.metodologiaAvulsa?.capaUrl ||
+    aula.metodologia?.capaUrl ||
+    "/assets/usuarios/footera-logo-fundo-verde.png";
+
+  const nomeMetodologia =
+    aula.metodologiaAvulsa?.titulo ||
+    aula.metodologia?.titulo ||
+    aula.metodologiaTitulo ||
+    "";
+
+  const precoTexto =
+    aula.precoLabel ||
+    (origemTipo === "LEARNING"
+      ? "Disponível via plano Learning"
+      : "Preço não definido");
+
+  return (
+    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+        <div className="h-44 md:h-full min-h-[170px] overflow-hidden rounded-xl bg-emerald-950">
+          <img
+            src={imagem}
+            alt={aula.titulo}
+            className="h-full w-full object-cover"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold ${statusInfo.className}`}
+            >
+              {statusInfo.icon}
+              {statusInfo.label}
+            </span>
+
+            <span
+              className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${origemBadge.className}`}
+            >
+              {origemBadge.label}
+            </span>
+          </div>
+
+          <h3 className="text-xl font-extrabold text-[#092f24] leading-tight">
+            {aula.titulo}
+          </h3>
+
+          {aula.descricao ? (
+            <p className="mt-1 text-sm text-slate-600 line-clamp-2">
+              {aula.descricao}
+            </p>
+          ) : null}
+
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-700">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="w-4 h-4 text-emerald-700" />
+              <span>{formatarDataHoraLive(aula.dataInicio)}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-700" />
+              <span>
+                Criador:{" "}
+                <b>{aula.criadorNome || aula.criadorUsuario?.nome || "Creator FootEra"}</b>
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+            <div>
+              <b>Acesso:</b> {precoTexto}
+            </div>
+
+            {nomeMetodologia ? (
+              <div className="mt-1">
+                <b>
+                  {origemTipo === "AVULSA"
+                    ? "Metodologia avulsa:"
+                    : origemTipo === "LEARNING"
+                      ? "Metodologia Learning:"
+                      : "Conteúdo:"}
+                </b>{" "}
+                {nomeMetodologia}
+              </div>
+            ) : null}
+
+            {origemTipo === "LEARNING" ? (
+              <div className="mt-1 text-xs text-emerald-800">
+                Para liberar, assine o plano Learning e escolha essa metodologia.
+              </div>
+            ) : null}
+
+            {origemTipo === "AVULSA" ? (
+              <div className="mt-1 text-xs text-emerald-800">
+                Para liberar, compre essa metodologia avulsa.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onVerEvento}
+              className="rounded-xl bg-[#216c43] px-4 py-3 text-sm font-black text-white hover:bg-[#185333]"
+            >
+              Ver página do evento
+            </button>
+
+            {onVerMetodologia ? (
+              <button
+                type="button"
+                onClick={onVerMetodologia}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 hover:bg-slate-50"
+              >
+                Ver metodologia
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LearningPage() {
   const [tab, setTab] = useState<TabKey>("explorar");
   const [loading, setLoading] = useState(true);
@@ -172,6 +420,15 @@ export default function LearningPage() {
   const [criadas, setCriadas] = useState<any[]>([]);
 
   const [livesCriadas, setLivesCriadas] = useState<AulaAoVivoResumo[]>([]);
+  const [eventosAoVivo, setEventosAoVivo] = useState<AulaAoVivoResumo[]>([]);
+
+  const [buscaEvento, setBuscaEvento] = useState("");
+  const [filtroOrigemEvento, setFiltroOrigemEvento] = useState<
+    "TODOS" | "EVENTO_AVULSO" | "LEARNING" | "AVULSA"
+  >("TODOS");
+  const [filtroStatusEvento, setFiltroStatusEvento] = useState<
+    "TODOS" | "AGENDADA" | "AO_VIVO" | "FINALIZADA"
+  >("TODOS");
 
   const [filtroPublico, setFiltroPublico] = useState<
     "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
@@ -264,9 +521,10 @@ export default function LearningPage() {
           isAtleta
             ? Promise.resolve({ items: [] })
             : listMinhasAulasAoVivo(),
+          listEventosAoVivoVisiveis(),
         ] as const;
 
-        const [visiveisRes, assinadasRes, criadasRes, livesRes] = await Promise.allSettled(promises);
+        const [visiveisRes, assinadasRes, criadasRes, livesRes, eventosRes] = await Promise.allSettled(promises);
 
         if (!mounted) return;
 
@@ -281,6 +539,9 @@ export default function LearningPage() {
         );
         setLivesCriadas(
           livesRes.status === "fulfilled" ? livesRes.value?.items || [] : []
+        );
+        setEventosAoVivo(
+          eventosRes.status === "fulfilled" ? eventosRes.value?.items || [] : []
         );
         if (!isAtleta) {
           setPermissaoCriacao(
@@ -407,6 +668,97 @@ export default function LearningPage() {
     [explorarFiltrado]
   );
 
+  const eventosAoVivoFiltrados = useMemo(() => {
+    let items = [...eventosAoVivo];
+
+    if (filtroOrigemEvento !== "TODOS") {
+      items = items.filter(
+        (item) => String(item?.origemTipo || "").toUpperCase() === filtroOrigemEvento
+      );
+    }
+
+    if (filtroStatusEvento !== "TODOS") {
+      items = items.filter(
+        (item) => String(item?.status || "").toUpperCase() === filtroStatusEvento
+      );
+    }
+
+    if (buscaEvento.trim()) {
+      const q = normalizarTexto(buscaEvento.trim());
+
+      items = items.filter((item) => {
+        const texto = normalizarTexto(
+          [
+            item.titulo,
+            item.descricao,
+            item.criadorNome,
+            item.criadorUsuario?.nome,
+            item.metodologia?.titulo,
+            item.metodologiaAvulsa?.titulo,
+            item.metodologiaTitulo,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+
+        return texto.includes(q);
+      });
+    }
+
+    return items.sort((a, b) => {
+      const da = new Date(a.dataInicio || 0).getTime();
+      const db = new Date(b.dataInicio || 0).getTime();
+      return da - db;
+    });
+  }, [eventosAoVivo, buscaEvento, filtroOrigemEvento, filtroStatusEvento]);
+
+  function getOrigemEventoBadge(aula: AulaAoVivoResumo) {
+    const tipo = String(aula.origemTipo || "").toUpperCase();
+
+    if (tipo === "EVENTO_AVULSO") {
+      return {
+        label: "Evento avulso",
+        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      };
+    }
+
+    if (tipo === "AVULSA") {
+      return {
+        label: "Premium / Avulsa",
+        className: "bg-purple-50 text-purple-700 border-purple-200",
+      };
+    }
+
+    return {
+      label: "Metodologia",
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+    };
+  }
+
+  function getMetodologiaEventoHref(aula: AulaAoVivoResumo) {
+    if (aula.metodologiaAvulsa?.id) {
+      return `/learning/${aula.metodologiaAvulsa.id}?origem=avulsa`;
+    }
+
+    if (aula.metodologia?.id) {
+      return `/learning/${aula.metodologia.id}`;
+    }
+
+    return "";
+  }
+
+  const totalLearningFiltrado = explorarLearning.length;
+  const totalAvulsasFiltrado = explorarAvulsas.length;
+  const totalEventosFiltrado = eventosAoVivoFiltrados.length;
+
+  function pluralMetodologia(qtd: number) {
+    return qtd === 1 ? "metodologia" : "metodologias";
+  }
+
+  function pluralEvento(qtd: number) {
+    return qtd === 1 ? "evento" : "eventos";
+  }
+
   return (
     <div className="min-h-screen bg-[#f7f7f4] pb-20">
       <div className="max-w-6xl mx-auto px-4 pt-5">
@@ -454,100 +806,234 @@ export default function LearningPage() {
 
         {!loading && tab === "explorar" ? (
           <div className="space-y-4">
-            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input
-                        value={busca}
-                        onChange={(e) => setBusca(e.target.value)}
-                        placeholder="Buscar por nome, descrição ou área"
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
-                        />
-
-                        <select
-                        value={filtroPublico}
-                        onChange={(e) =>
-                            setFiltroPublico(
-                            e.target.value as "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
-                            )
-                        }
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
-                        >
-                        <option value="TODOS">Todos os públicos</option>
-                        <option value="AMBOS">Ambos</option>
-                        <option value="PROFISSIONAIS">Profissionais</option>
-                        <option value="ATLETAS">Atletas</option>
-                        </select>
-
-                        <select
-                        value={filtroEstrutura}
-                        onChange={(e) =>
-                            setFiltroEstrutura(e.target.value as "TODOS" | "TRILHA" | "MODULO")
-                        }
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
-                        >
-                        <option value="TODOS">Todos os formatos</option>
-                        <option value="TRILHA">Com trilhas</option>
-                        <option value="MODULO">Com módulos</option>
-                        </select>
-
-                        <select
-                        value={filtroCertificado}
-                        onChange={(e) =>
-                            setFiltroCertificado(e.target.value as "TODOS" | "COM" | "SEM")
-                        }
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
-                        >
-                        <option value="TODOS">Com ou sem certificado</option>
-                        <option value="COM">Com certificado</option>
-                        <option value="SEM">Sem certificado</option>
-                        </select>
-
-                        <select
-                          value={filtroBadge}
-                          onChange={(e) =>
-                            setFiltroBadge(e.target.value as "TODOS" | "COM" | "SEM")
-                          }
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
-                        >
-                          <option value="TODOS">Com ou sem badge</option>
-                          <option value="COM">Com badge</option>
-                          <option value="SEM">Sem badge</option>
-                        </select>
-
-                        <select
-                        value={filtroMaterial}
-                        onChange={(e) =>
-                            setFiltroMaterial(
-                            e.target.value as "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
-                            )
-                        }
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
-                        >
-                        <option value="TODOS">Todos os materiais</option>
-                        <option value="VIDEO">Com vídeos/aulas</option>
-                        <option value="TREINO">Com treinos</option>
-                        <option value="MATERIAL">Com materiais</option>
-                        </select>
-
-                        <select
-                          value={filtroOrigem}
-                          onChange={(e) =>
-                            setFiltroOrigem(e.target.value as "TODOS" | "LEARNING" | "AVULSA")
-                          }
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
-                        >
-                          <option value="TODOS">Todas as metodologias</option>
-                          <option value="LEARNING">Só Learning</option>
-                          <option value="AVULSA">Só Avulsas</option>
-                        </select>
-                    </div>
+            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-5">
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-extrabold text-[#193b2e]">
+                      Metodologias
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Filtre cursos, trilhas e metodologias avulsas disponíveis.
+                    </p>
                   </div>
 
-            {explorarFiltrado.length ? (
+                  <div className="hidden sm:flex items-center gap-2">
+                    <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                      {totalLearningFiltrado} Learning
+                    </span>
+
+                    <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                      {totalAvulsasFiltrado} Avulsas
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    placeholder="Buscar metodologia por nome, descrição ou área"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                  />
+
+                  <select
+                    value={filtroPublico}
+                    onChange={(e) =>
+                      setFiltroPublico(
+                        e.target.value as "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Todos os públicos</option>
+                    <option value="AMBOS">Ambos</option>
+                    <option value="PROFISSIONAIS">Profissionais</option>
+                    <option value="ATLETAS">Atletas</option>
+                  </select>
+
+                  <select
+                    value={filtroEstrutura}
+                    onChange={(e) =>
+                      setFiltroEstrutura(e.target.value as "TODOS" | "TRILHA" | "MODULO")
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Todos os formatos</option>
+                    <option value="TRILHA">Com trilhas</option>
+                    <option value="MODULO">Com módulos</option>
+                  </select>
+
+                  <select
+                    value={filtroCertificado}
+                    onChange={(e) =>
+                      setFiltroCertificado(e.target.value as "TODOS" | "COM" | "SEM")
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Com ou sem certificado</option>
+                    <option value="COM">Com certificado</option>
+                    <option value="SEM">Sem certificado</option>
+                  </select>
+
+                  <select
+                    value={filtroBadge}
+                    onChange={(e) =>
+                      setFiltroBadge(e.target.value as "TODOS" | "COM" | "SEM")
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Com ou sem badge</option>
+                    <option value="COM">Com badge</option>
+                    <option value="SEM">Sem badge</option>
+                  </select>
+
+                  <select
+                    value={filtroMaterial}
+                    onChange={(e) =>
+                      setFiltroMaterial(
+                        e.target.value as "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Todos os materiais</option>
+                    <option value="VIDEO">Com vídeos/aulas</option>
+                    <option value="TREINO">Com treinos</option>
+                    <option value="MATERIAL">Com materiais</option>
+                  </select>
+
+                  <select
+                    value={filtroOrigem}
+                    onChange={(e) =>
+                      setFiltroOrigem(e.target.value as "TODOS" | "LEARNING" | "AVULSA")
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white md:col-span-2"
+                  >
+                    <option value="TODOS">Todas as metodologias</option>
+                    <option value="LEARNING">Só Learning</option>
+                    <option value="AVULSA">Só Avulsas</option>
+                  </select>
+                </div>
+
+                <div className="mt-3 flex sm:hidden flex-wrap items-center gap-2">
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                    {totalLearningFiltrado} Learning
+                  </span>
+
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                    {totalAvulsasFiltrado} Avulsas
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-extrabold text-[#193b2e]">
+                      Eventos
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Filtre aulas ao vivo únicas, eventos de metodologia e eventos premium.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                    {totalEventosFiltrado} {pluralEvento(totalEventosFiltrado)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <input
+                    value={buscaEvento}
+                    onChange={(e) => setBuscaEvento(e.target.value)}
+                    placeholder="Buscar evento, criador ou metodologia"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                  />
+
+                  <select
+                    value={filtroOrigemEvento}
+                    onChange={(e) =>
+                      setFiltroOrigemEvento(
+                        e.target.value as "TODOS" | "EVENTO_AVULSO" | "LEARNING" | "AVULSA"
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Todos os eventos ao vivo</option>
+                    <option value="EVENTO_AVULSO">Só evento único</option>
+                    <option value="LEARNING">Só eventos de metodologia Learning</option>
+                    <option value="AVULSA">Só eventos premium/avulsa</option>
+                  </select>
+
+                  <select
+                    value={filtroStatusEvento}
+                    onChange={(e) =>
+                      setFiltroStatusEvento(
+                        e.target.value as "TODOS" | "AGENDADA" | "AO_VIVO" | "FINALIZADA"
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                  >
+                    <option value="TODOS">Todos os status</option>
+                    <option value="AGENDADA">Agendados</option>
+                    <option value="AO_VIVO">Ao vivo agora</option>
+                    <option value="FINALIZADA">Finalizados / replay</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {explorarFiltrado.length || eventosAoVivoFiltrados.length ? (
               <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-base font-bold text-[#193b2e]">
+                        Eventos ao vivo
+                      </div>
+                      <p className="text-sm text-slate-500">
+                        Aulas ao vivo únicas, eventos de metodologias e eventos premium/avulsos.
+                      </p>
+                    </div>
+
+                    <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                      {totalEventosFiltrado} {pluralEvento(totalEventosFiltrado)}
+                    </span>
+                  </div>
+
+                  {eventosAoVivoFiltrados.length ? (
+                    eventosAoVivoFiltrados.map((aula) => {
+                      const metodologiaHref = getMetodologiaEventoHref(aula);
+
+                      return (
+                        <EventoAoVivoExploreCard
+                          key={`evento_live_${aula.id}`}
+                          aula={aula}
+                          onVerEvento={() => navigate(getEventoPublicoUrl(aula))}
+                          onVerMetodologia={
+                            metodologiaHref
+                              ? () => navigate(metodologiaHref)
+                              : undefined
+                          }
+                        />
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-2xl border bg-white p-6 text-slate-600">
+                      Nenhum evento ao vivo encontrado com esses filtros.
+                    </div>
+                  )}
+                </div>
                 {(filtroOrigem === "TODOS" || filtroOrigem === "LEARNING") && (
                   <div className="space-y-4">
-                    <div className="text-base font-bold text-[#193b2e]">Learning</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-base font-bold text-[#193b2e]">Learning</div>
+
+                      <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                        {totalLearningFiltrado} {pluralMetodologia(totalLearningFiltrado)}
+                      </span>
+                    </div>
 
                     {explorarLearning.length ? (
                       explorarLearning.map((item) => (
@@ -568,8 +1054,13 @@ export default function LearningPage() {
 
                 {(filtroOrigem === "TODOS" || filtroOrigem === "AVULSA") && (
                   <div className="space-y-4">
-                    <div className="text-base font-bold text-[#193b2e]">Avulsas</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-base font-bold text-[#193b2e]">Avulsas</div>
 
+                      <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                        {totalAvulsasFiltrado} {pluralMetodologia(totalAvulsasFiltrado)}
+                      </span>
+                    </div>
                     {explorarAvulsas.length ? (
                       explorarAvulsas.map((item) => (
                         <LearningCard
@@ -589,7 +1080,7 @@ export default function LearningPage() {
               </div>
             ) : (
               <div className="rounded-2xl border bg-white p-6 text-slate-600">
-                Nenhuma metodologia encontrada com os filtros selecionados.
+                Nenhuma metodologia ou evento ao vivo encontrado com os filtros selecionados.
               </div>
             )}
           </div>
@@ -657,6 +1148,8 @@ export default function LearningPage() {
                             aula.metodologiaAvulsa?.capaUrl ||
                             "/assets/usuarios/footera-logo.png";
 
+                          const eventoUrl = getEventoPublicoUrl(aula);
+                            
                           return (
                             <div
                               key={`live_${aula.id}`}
@@ -725,6 +1218,14 @@ export default function LearningPage() {
                                     }`}
                                   >
                                     {statusInfo.buttonLabel}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(eventoUrl)}
+                                    className="inline-flex h-11 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold items-center justify-center"
+                                  >
+                                    Ver página do evento
                                   </button>
 
                                   {(aula.metodologia?.id || aula.metodologiaAvulsa?.id) ? (
