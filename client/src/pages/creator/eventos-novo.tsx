@@ -146,6 +146,29 @@ export default function CreatorNovoEventoPage() {
         );
 
         const aula = data?.item || data;
+        const metodologiaId =
+          aula?.metodologiaId ||
+          aula?.metodologia?.id ||
+          "";
+
+        const metodologiaAvulsaId =
+          aula?.metodologiaAvulsaId ||
+          aula?.metodologiaAvulsa?.id ||
+          "";
+
+        if (metodologiaAvulsaId) {
+          setLocation(
+            `/learning/create?id=${encodeURIComponent(metodologiaAvulsaId)}&origem=avulsa`
+          );
+          return;
+        }
+
+        if (metodologiaId) {
+          setLocation(
+            `/learning/create?id=${encodeURIComponent(metodologiaId)}`
+          );
+          return;
+        }
 
         setForm((f) => ({
           ...f,

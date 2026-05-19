@@ -923,12 +923,11 @@ export default function LearningCreatePage() {
                       it.tipo === "AULA_AO_VIVO" && it.aulaAoVivo
                         ? {
                             id: it.aulaAoVivo.id,
-                            dataInicio: it.aulaAoVivo.dataInicio
-                              ? String(it.aulaAoVivo.dataInicio).slice(0, 16)
-                              : "",
-                            dataFim: it.aulaAoVivo.dataFim
-                              ? String(it.aulaAoVivo.dataFim).slice(0, 16)
-                              : "",
+                            inscricaoInicio: toDatetimeLocalValue(it.aulaAoVivo.inscricaoInicio),
+                            inscricaoFim: toDatetimeLocalValue(it.aulaAoVivo.inscricaoFim),
+
+                            dataInicio: toDatetimeLocalValue(it.aulaAoVivo.dataInicio),
+                            dataFim: toDatetimeLocalValue(it.aulaAoVivo.dataFim),
                             chatAtivo: it.aulaAoVivo.chatAtivo !== false,
                             gravacaoAtiva: it.aulaAoVivo.gravacaoAtiva !== false,
                             replayDisponivel: it.aulaAoVivo.replayDisponivel === true,
@@ -1529,6 +1528,14 @@ export default function LearningCreatePage() {
           const inicio = new Date(item.aulaAoVivo.dataInicio);
           const fim = item.aulaAoVivo.dataFim ? new Date(item.aulaAoVivo.dataFim) : null;
 
+          const inscricaoInicio = item.aulaAoVivo.inscricaoInicio
+            ? new Date(item.aulaAoVivo.inscricaoInicio)
+            : null;
+
+          const inscricaoFim = item.aulaAoVivo.inscricaoFim
+            ? new Date(item.aulaAoVivo.inscricaoFim)
+            : null;
+
           if (Number.isNaN(inicio.getTime())) {
             alert(`A data de início da aula ao vivo "${item.titulo}" é inválida.`);
             return false;
@@ -1538,7 +1545,38 @@ export default function LearningCreatePage() {
             alert(`A data final da aula ao vivo "${item.titulo}" precisa ser maior que a data de início.`);
             return false;
           }
+        
+
+        if (inscricaoInicio && Number.isNaN(inscricaoInicio.getTime())) {
+          alert(`O início das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
+          return false;
         }
+
+        if (inscricaoFim && Number.isNaN(inscricaoFim.getTime())) {
+          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
+          return false;
+        }
+
+        if (inscricaoInicio && !inscricaoFim) {
+          alert(`Informe também o fim das inscrições da aula ao vivo "${item.titulo}".`);
+          return false;
+        }
+
+        if (!inscricaoInicio && inscricaoFim) {
+          alert(`Informe também o início das inscrições da aula ao vivo "${item.titulo}".`);
+          return false;
+        }
+
+        if (inscricaoInicio && inscricaoFim && inscricaoFim <= inscricaoInicio) {
+          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser depois do início.`);
+          return false;
+        }
+
+        if (inscricaoFim && inscricaoFim >= inicio) {
+          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser antes do início da aula.`);
+          return false;
+        }
+      }
 
         if (item.tipo === "MATERIAL" && !item.arquivoUrl?.trim() && !item.materialUrl?.trim()) {
           alert(`O item "${item.titulo}" precisa ter arquivo ou link do material.`);
@@ -1684,6 +1722,8 @@ export default function LearningCreatePage() {
                     id: item.aulaAoVivo?.id || undefined,
                     titulo: item.titulo.trim(),
                     descricao: item.descricao?.trim() || null,
+                    inscricaoInicio: item.aulaAoVivo?.inscricaoInicio || null,
+                    inscricaoFim: item.aulaAoVivo?.inscricaoFim || null,
                     dataInicio: item.aulaAoVivo?.dataInicio || null,
                     dataFim: item.aulaAoVivo?.dataFim || null,
                     chatAtivo: item.aulaAoVivo?.chatAtivo !== false,
@@ -1937,15 +1977,14 @@ export default function LearningCreatePage() {
                     id: item.aulaAoVivo?.id || undefined,
                     titulo: item.titulo.trim(),
                     descricao: item.descricao?.trim() || null,
-
+                    inscricaoInicio: item.aulaAoVivo?.inscricaoInicio || null,
+                    inscricaoFim: item.aulaAoVivo?.inscricaoFim || null,
                     dataInicio: item.aulaAoVivo?.dataInicio || null,
                     dataFim: item.aulaAoVivo?.dataFim || null,
-
                     chatAtivo: item.aulaAoVivo?.chatAtivo !== false,
                     gravacaoAtiva: item.aulaAoVivo?.gravacaoAtiva !== false,
                     replayDisponivel: item.aulaAoVivo?.replayDisponivel === true,
                     status: item.aulaAoVivo?.status || "AGENDADA",
-
                     convidados: (item.aulaAoVivo?.convidados || [])
                       .map((c, index) => ({
                         usuarioId: c.usuarioId || null,
@@ -2688,8 +2727,7 @@ export default function LearningCreatePage() {
 
                                   if (novoTipo === "AULA_AO_VIVO") {
                                     const agora = new Date();
-                                    agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
-
+                                    
                                     const umaHoraDepois = new Date(agora);
                                     umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
 
@@ -2700,8 +2738,10 @@ export default function LearningCreatePage() {
                                       materialUrl: "",
                                       treinoProgramadoId: "",
                                       aulaAoVivo: {
-                                        dataInicio: agora.toISOString().slice(0, 16),
-                                        dataFim: umaHoraDepois.toISOString().slice(0, 16),
+                                        inscricaoInicio: "",
+                                        inscricaoFim: "",
+                                        dataInicio: toDatetimeLocalValue(agora),
+                                        dataFim: toDatetimeLocalValue(umaHoraDepois),
                                         chatAtivo: true,
                                         gravacaoAtiva: true,
                                         replayDisponivel: false,
