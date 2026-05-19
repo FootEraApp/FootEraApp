@@ -226,6 +226,9 @@ export default function LearningLivePage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const progressoMarcadoRef = useRef(false);
+  const timerConclusaoAoVivoRef = useRef<number | null>(null);
+  const aulaAoVivoTimerKeyRef = useRef<string | null>(null);
+  const aulaAtualRef = useRef<AulaAoVivoDetalhe | null>(null);
 
   const [aulaId] = useState(() => getAulaIdFromUrl());
   const [aula, setAula] = useState<AulaAoVivoDetalhe | null>(null);
@@ -304,6 +307,10 @@ export default function LearningLivePage() {
   }, [aula]);
 
   useEffect(() => {
+    aulaAtualRef.current = aula;
+  }, [aula]);
+
+  useEffect(() => {
     if (!aulaId) {
       setLoadingAula(false);
       setPageError("Aula ao vivo não encontrada.");
@@ -318,7 +325,7 @@ export default function LearningLivePage() {
       carregarMensagens(false);
     }, 8000);
 
-    return () => window.clearInterval(interval);
+    return () => { window.clearInterval(interval); limparTimerConclusaoAoVivo(); };
   }, [aulaId]);
 
   useEffect(() => {
@@ -360,8 +367,6 @@ export default function LearningLivePage() {
         const video = videoRef.current;
         if (!video) return;
 
-        console.log("[IVS PLAYER] Preparando player com URL:", streamAtual);
-
         const IVSPlayer = await carregarScriptIvsPlayer();
 
         if (cancelled) return;
@@ -395,6 +400,12 @@ export default function LearningLivePage() {
         player.addEventListener(PlayerState.ENDED, () => {
           console.log("[IVS PLAYER] ENDED");
           setPlayerLoading(false);
+
+          const aulaAtual = aula;
+
+          if (aulaAtual?.status === "FINALIZADA" && aulaAtual?.replayDisponivel) {
+            marcarAulaAoVivoComoConcluida(aulaAtual);
+          }
         });
 
         player.addEventListener(PlayerEventType.ERROR, (err: any) => {
@@ -448,13 +459,41 @@ export default function LearningLivePage() {
 
       player = null;
     };
-  }, [streamAtual]);
+  }, [streamAtual, aula?.id, aula?.status, aula?.replayDisponivel]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video) return;
+    if (!aula) return;
+    if (aula.status !== "FINALIZADA") return;
+    if (!aula.replayDisponivel) return;
+
+    const aulaAtual = aula;
+
+    function handleReplayEnded() {
+      marcarAulaAoVivoComoConcluida(aulaAtual);
+    }
+
+    video.addEventListener("ended", handleReplayEnded);
+
+    return () => {
+      video.removeEventListener("ended", handleReplayEnded);
+    };
+  }, [aula?.id, aula?.status, aula?.replayDisponivel, streamAtual]);
 
   async function marcarAulaAoVivoComoConcluida(aulaAtual: AulaAoVivoDetalhe) {
-    if (progressoMarcadoRef.current) return;
+    if (progressoMarcadoRef.current) {
+      console.log("[LIVE PROGRESSO] Já marcado nesta sessão, ignorando.");
+      return;
+    }
 
     const token = getToken();
-    if (!token) return;
+
+    if (!token) {
+      console.warn("[LIVE PROGRESSO] Sem token. Não dá para concluir item.");
+      return;
+    }
 
     const metodologiaId =
       aulaAtual.metodologia?.id || aulaAtual.metodologiaId || "";
@@ -474,18 +513,30 @@ export default function LearningLivePage() {
     const itemAvulsaId =
       aulaAtual.itemAvulsa?.id || aulaAtual.itemAvulsaId || "";
 
-    const isAvulsa = Boolean(metodologiaAvulsaId && estruturaAvulsaId && itemAvulsaId);
-    const isLearning = Boolean(metodologiaId && estruturaId && itemId);
+    const isAvulsa = Boolean(
+      metodologiaAvulsaId &&
+      itemAvulsaId
+    );
 
-    if (!isAvulsa && !isLearning) return;
+    const isLearning = Boolean(
+      metodologiaId &&
+      itemId
+    );
+
+    if (!isAvulsa && !isLearning) {
+      console.warn("[LIVE PROGRESSO] Aula sem vínculo completo com metodologia.", {
+        aulaAtual,
+      });
+      return;
+    }
 
     try {
       progressoMarcadoRef.current = true;
 
       const url = isAvulsa
-        ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaAvulsaId}/estruturas/${estruturaAvulsaId}/concluir-item`
-        : `${API.BASE_URL}/api/metodologias/${metodologiaId}/estruturas/${estruturaId}/concluir-item`;
-
+        ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaAvulsaId}/concluir-item`
+        : `${API.BASE_URL}/api/metodologias/${metodologiaId}/concluir-item`;
+        
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -501,15 +552,86 @@ export default function LearningLivePage() {
 
       if (!res.ok) {
         progressoMarcadoRef.current = false;
-        console.warn("[LIVE] Não foi possível concluir aula ao vivo:", json);
+
+        console.warn("[LIVE PROGRESSO] Não foi possível concluir aula ao vivo:", {
+          status: res.status,
+          json,
+        });
+
         return;
       }
 
-      console.log("[LIVE] Aula ao vivo marcada como concluída.");
+      const itemConcluidoId = isAvulsa ? itemAvulsaId : itemId;
+      const metodologiaConcluidaId = isAvulsa ? metodologiaAvulsaId : metodologiaId;
+
+      try {
+        const storageKey = isAvulsa
+          ? `footera:metodologia-avulsa:${metodologiaConcluidaId}:concluidos`
+          : `footera:metodologia:${metodologiaConcluidaId}:concluidos`;
+
+        const atuais = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        const lista = Array.isArray(atuais) ? atuais.map(String) : [];
+
+        localStorage.setItem(
+            storageKey,
+            JSON.stringify(Array.from(new Set([...lista, String(itemConcluidoId)])))
+          );
+        } catch {}
+
     } catch (err) {
       progressoMarcadoRef.current = false;
-      console.warn("[LIVE] Erro ao marcar progresso da aula ao vivo:", err);
+      console.warn("[LIVE PROGRESSO] Erro ao marcar progresso da aula ao vivo:", err);
     }
+  }
+
+  function limparTimerConclusaoAoVivo() {
+    if (timerConclusaoAoVivoRef.current) {
+      window.clearTimeout(timerConclusaoAoVivoRef.current);
+      timerConclusaoAoVivoRef.current = null;
+    }
+
+    aulaAoVivoTimerKeyRef.current = null;
+  }
+
+  function programarConclusaoAulaAoVivo(aulaAtual: AulaAoVivoDetalhe) {
+    if (!aulaAtual?.id) {
+      console.warn("[LIVE PROGRESSO] Não programou conclusão: aula sem id.");
+      return;
+    }
+
+    if (progressoMarcadoRef.current) {
+      console.log("[LIVE PROGRESSO] Não programou: progresso já marcado.");
+      return;
+    }
+
+    if (aulaAtual.status !== "AO_VIVO") {
+      console.log("[LIVE PROGRESSO] Não programou timer porque status não é AO_VIVO:", {
+        status: aulaAtual.status,
+        aulaId: aulaAtual.id,
+      });
+
+      limparTimerConclusaoAoVivo();
+      return;
+    }
+
+    const timerKey = `${aulaAtual.id}:AO_VIVO`;
+
+    if (
+      aulaAoVivoTimerKeyRef.current === timerKey &&
+      timerConclusaoAoVivoRef.current
+    ) {
+      return;
+    }
+
+    limparTimerConclusaoAoVivo();
+
+    aulaAoVivoTimerKeyRef.current = timerKey;
+
+    timerConclusaoAoVivoRef.current = window.setTimeout(() => {
+      const aulaMaisAtual = aulaAtualRef.current || aulaAtual;
+
+      marcarAulaAoVivoComoConcluida(aulaMaisAtual);
+    }, 5 * 60 * 1000);
   }
 
   async function registrarPresenca(showError = false) {
@@ -602,16 +724,7 @@ export default function LearningLivePage() {
         return;
       }
       setAula(item);
-
-      const podeMarcarProgresso =
-        item?.status === "AO_VIVO" ||
-        (item?.status === "FINALIZADA" && item?.replayDisponivel);
-
-      if (podeMarcarProgresso) {
-        window.setTimeout(() => {
-          marcarAulaAoVivoComoConcluida(item);
-        }, 15000);
-      }
+      programarConclusaoAulaAoVivo(item);
     } catch (e: any) {
       setPageError(e?.message || "Erro ao carregar aula ao vivo.");
     } finally {

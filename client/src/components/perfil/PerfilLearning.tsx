@@ -21,6 +21,7 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
   const [aba, setAba] = useState<"perfil" | "cursos" | "conquistas" | "postagens">("perfil");
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<any[]>([]);
+  const [progressoCursos, setProgressoCursos] = useState<Record<string, number>>({});
 
   const token =
     Storage.token ||
@@ -103,6 +104,122 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
     };
   }, [token, usuarioIdParaConquistas]);
 
+  function getCursoIdentity(curso: any) {
+    const origem = String(
+      curso.origem ||
+        curso.origemTipo ||
+        curso.assinatura?.origem ||
+        ""
+    ).toUpperCase();
+
+    const metodologiaAvulsaId =
+      curso.metodologiaAvulsaId ||
+      curso.metodologiaAvulsa?.id ||
+      curso.avulsaId ||
+      null;
+
+    const metodologiaId =
+      curso.metodologiaId ||
+      curso.metodologia?.id ||
+      curso.id ||
+      null;
+
+    const isAvulsa = origem === "AVULSA" || !!metodologiaAvulsaId;
+    const idFinal = metodologiaAvulsaId || metodologiaId;
+
+    return {
+      id: idFinal ? String(idFinal) : "",
+      isAvulsa,
+      key: `${isAvulsa ? "AVULSA" : "LEARNING"}:${idFinal || ""}`,
+    };
+  }
+
+  useEffect(() => {
+    if (!token) return;
+
+    const conteudosRaw = Array.isArray(data?.conteudos) ? data.conteudos : [];
+    if (!conteudosRaw.length) return;
+
+    let cancel = false;
+
+    async function carregarProgressosReais() {
+      const atualizacoes: Record<string, number> = {};
+
+      await Promise.all(
+        conteudosRaw.map(async (curso: any) => {
+          const info = getCursoIdentity(curso);
+
+          if (!info.id) return;
+
+          const progressoFallback = Number(
+            curso.progressoPercentual ??
+              curso.progresso ??
+              curso.percentual ??
+              0
+          ) || 0;
+
+          try {
+            const url = info.isAvulsa
+              ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${encodeURIComponent(info.id)}?_t=${Date.now()}`
+              : `${API.BASE_URL}/api/metodologias/${encodeURIComponent(info.id)}/detalhe?_t=${Date.now()}`;
+
+            const res = await axios.get(url, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            const raw = res.data?.item ?? res.data;
+
+            const estruturas = Array.isArray(raw?.estruturas)
+              ? raw.estruturas
+              : [];
+
+            const itens = estruturas.flatMap((estrutura: any) =>
+              Array.isArray(estrutura?.itens)
+                ? estrutura.itens.filter((it: any) => it?.publicado !== false)
+                : []
+            );
+
+            const totalItens = itens.length;
+
+            const concluidosRaw = Array.isArray(raw?.viewer?.progresso?.concluidos)
+              ? raw.viewer.progresso.concluidos
+              : [];
+
+            const concluidosSet = new Set(
+              concluidosRaw.map((v: any) => String(v))
+            );
+
+            const totalConcluidos = itens.filter((it: any) =>
+              concluidosSet.has(String(it.id))
+            ).length;
+
+            atualizacoes[info.key] =
+              totalItens > 0
+                ? Math.round((totalConcluidos / totalItens) * 100)
+                : progressoFallback;
+          } catch (e) {
+            atualizacoes[info.key] = progressoFallback;
+          }
+        })
+      );
+
+      if (!cancel) {
+        setProgressoCursos((prev) => ({
+          ...prev,
+          ...atualizacoes,
+        }));
+      }
+    }
+
+    carregarProgressosReais();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, data?.conteudos]);
+
   if (!data) {
     return (
       <div className="p-10 text-center text-red-600">
@@ -113,8 +230,24 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
 
   const usuario = data.usuario ?? {};
   const usuarioId = usuario.id ?? data.learning?.usuarioId ?? idDaUrl ?? meuId;
-  const conteudos = Array.isArray(data.conteudos) ? data.conteudos : [];
-  
+  const conteudosOriginais = Array.isArray(data.conteudos) ? data.conteudos : [];
+
+  const conteudos = conteudosOriginais.map((curso: any) => {
+    const info = getCursoIdentity(curso);
+    const progressoReal = progressoCursos[info.key];
+
+    const progressoFinal =
+      typeof progressoReal === "number"
+        ? progressoReal
+        : Number(curso.progressoPercentual ?? curso.progresso ?? 0) || 0;
+
+    return {
+      ...curso,
+      progressoPercentual: progressoFinal,
+      progresso: progressoFinal,
+    };
+  });
+
   function getCursoHref(curso: any) {
     const origem = String(
       curso.origem ||
@@ -335,7 +468,7 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
                         {curso.titulo || curso.nome || "Curso"}
                       </p>
                       <p className="text-sm text-green-900/60">
-                        Progresso: {Number(curso.progressoPercentual ?? curso.progresso ?? 0)}%
+                        Progresso: {Math.round(Number(curso.progressoPercentual ?? curso.progresso ?? 0))}%
                       </p>
                     </Link>
                   ))}

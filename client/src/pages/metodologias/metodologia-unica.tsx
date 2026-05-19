@@ -419,17 +419,22 @@ export default function MetodologiaUnicaPage() {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 
-      const url = fromAdmin
+      const baseUrl = fromAdmin
         ? `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${isAvulsa ? "AVULSA" : "LEARNING"}`
         : isAvulsa
           ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
           : `${API.BASE_URL}/api/metodologias/${id}/detalhe`;
 
+      const url = `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+
+
       const r = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        cache: "no-store",
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
       });
       const j = await r.json().catch(() => ({}));
 
@@ -440,6 +445,19 @@ export default function MetodologiaUnicaPage() {
       }
 
       const raw = j?.item ?? j;
+
+      let concluidosLocais: string[] = [];
+
+      try {
+        const storageKey = isAvulsa
+          ? `footera:metodologia-avulsa:${id}:concluidos`
+          : `footera:metodologia:${id}:concluidos`;
+
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        concluidosLocais = Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch {
+        concluidosLocais = [];
+      }
 
       const normalizado = {
         ...raw,
@@ -474,9 +492,14 @@ export default function MetodologiaUnicaPage() {
             (raw?.minhaAvaliacao ?? null),
           motivoBloqueio: raw?.viewer?.motivoBloqueio ?? null,
           progresso: {
-            concluidos: Array.isArray(raw?.viewer?.progresso?.concluidos)
-              ? raw.viewer.progresso.concluidos.map((v: any) => String(v))
-              : [],
+            concluidos: Array.from(
+              new Set([
+                ...(Array.isArray(raw?.viewer?.progresso?.concluidos)
+                  ? raw.viewer.progresso.concluidos.map((v: any) => String(v))
+                  : []),
+                ...concluidosLocais,
+              ])
+            ),
           },
         },
       };
@@ -607,7 +630,15 @@ export default function MetodologiaUnicaPage() {
   const concluIds = useMemo(() => new Set(data?.viewer?.progresso?.concluidos || []), [data]);
 
   const totalItens = allItens.length;
-  const totalConcluidos = useMemo(() => (data?.viewer?.progresso?.concluidos?.length || 0), [data]);
+  const totalConcluidos = useMemo(() => {
+    if (!data) return 0;
+
+    const idsItensDaTela = new Set(allItens.map((it) => String(it.id)));
+    const concluidos = data.viewer?.progresso?.concluidos || [];
+
+    return concluidos.filter((id) => idsItensDaTela.has(String(id))).length;
+  }, [data, allItens]);
+
   const pct = totalItens > 0 
     ? Math.round((totalConcluidos / totalItens) * 100) 
     : 0;

@@ -96,6 +96,18 @@ router.delete(
   deleteMetodologiaAvulsa
 );
 
+router.post(
+  "/metodologias-avulsas/:id/concluir-item",
+  authenticateToken,
+  concluirItemMetodologia
+);
+
+router.post(
+  "/:id/concluir-item",
+  authenticateToken,
+  concluirItemMetodologia
+);
+
 // legado
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
@@ -112,6 +124,7 @@ router.post(
   uploadToS3.single("file"),
   criarSubmissaoMetodologiaItem
 );
+
 router.post(
   "/metodologias-avulsas/:id/estruturas/:estruturaId/submissoes",
   authenticateToken,
