@@ -137,8 +137,8 @@ const VIDEO_FULL_HD = {
   index: 0,
   x: 0,
   y: 0,
-  width: 1280,
-  height: 720,
+  width: 1920,
+  height: 1080,
 };
 
 const CAMERA_PIP_POSITION = {
@@ -485,8 +485,8 @@ function criarPlaceholderVideoStream(texto = "Sem câmera") {
   pararStream(placeholderStreamRef.current);
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1280;
-  canvas.height = 720;
+  canvas.width = VIDEO_FULL_HD.width;
+  canvas.height = VIDEO_FULL_HD.height;
 
   const ctx = canvas.getContext("2d");
 
@@ -596,8 +596,8 @@ function criarProgramaIvsStream(
   pararProgramCanvasStream();
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1280;
-  canvas.height = 720;
+  canvas.width = VIDEO_FULL_HD.width;
+  canvas.height = VIDEO_FULL_HD.height;
 
   const ctx = canvas.getContext("2d");
 
@@ -615,31 +615,29 @@ function criarProgramaIvsStream(
 
     if (telaVideo) {
       // Tela compartilhada vira o foco principal e cobre tudo.
-      desenharCover(ctx, telaVideo, 0, 0, 1280, 720);
+      desenharCover(ctx, telaVideo, 0, 0, canvas.width, canvas.height);
     } else if (cameraVideo) {
-      // Se não tiver tela, câmera real ocupa tudo.
-      desenharCover(ctx, cameraVideo, 0, 0, 1280, 720);
+      desenharCover(ctx, cameraVideo, 0, 0, canvas.width, canvas.height);
     } else {
-      // Se não tiver câmera real nem tela, manda banner limpo.
       ctx.fillStyle = "#0b4a2f";
-      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.fillStyle = "#f5f2e8";
       ctx.textAlign = "center";
-      ctx.font = "bold 54px Arial";
-      ctx.fillText("FootEra Learning", 640, 330);
+      ctx.font = "bold 72px Arial";
+      ctx.fillText("FootEra Learning", canvas.width / 2, canvas.height / 2 - 45);
 
-      ctx.font = "30px Arial";
-      ctx.fillText("Transmissão sem câmera ativa", 640, 385);
+      ctx.font = "40px Arial";
+      ctx.fillText("Transmissão sem câmera ativa", canvas.width / 2, canvas.height / 2 + 25);
     }
 
     // Câmera só aparece no canto se for câmera real.
     // Placeholder NÃO entra aqui.
     if (telaVideo && cameraVideo) {
-      const pipX = 930;
-      const pipY = 36;
-      const pipW = 300;
-      const pipH = 169;
+      const pipW = 420;
+      const pipH = 236;
+      const pipX = canvas.width - pipW - 54;
+      const pipY = 54;
       const radius = 18;
 
       ctx.save();
@@ -696,7 +694,11 @@ async function atualizarProgramaIvs(client = broadcastClient) {
 
     const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
 
-    const dimensao = client.getCanvasDimensions?.() || { width: 1280, height: 720 };
+    const dimensao = client.getCanvasDimensions?.() || {
+      width: VIDEO_FULL_HD.width,
+      height: VIDEO_FULL_HD.height,
+    };
+    
     await client.addVideoInputDevice(
       programaStream,
       "program",
@@ -725,8 +727,8 @@ function criarScreenCoverStream(sourceStream: MediaStream) {
   video.autoplay = true;
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1280;
-  canvas.height = 720;
+  canvas.width = VIDEO_FULL_HD.width;
+  canvas.height = VIDEO_FULL_HD.height;
 
   const ctx = canvas.getContext("2d");
 
@@ -1130,6 +1132,20 @@ async function trocarDispositivo(
     stream.getTracks().forEach((track) => track.stop());
   }
 
+async function pararBroadcastSeguro(client: any) {
+  if (!client?.stopBroadcast) return;
+
+  try {
+    const result = client.stopBroadcast();
+
+    if (result && typeof result.then === "function") {
+      await result;
+    }
+  } catch (e) {
+    console.warn("[IVS] Erro ignorado ao parar broadcast:", e);
+  }
+}
+
 function pararAudioLiveProcessado() {
   pararStream(liveMicProcessedStreamRef.current);
   liveMicProcessedStreamRef.current = null;
@@ -1486,8 +1502,8 @@ async function toggleCamera() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 30 },
         },
         audio: false,
@@ -1554,6 +1570,8 @@ async function toggleCamera() {
   }
 
 async function criarBroadcastClient(config: BroadcastConfig) {
+console.log("🚨 TESTE NOVO CÓDIGO LIVE STUDIO 1080P - ENTROU AQUI 🚨");
+
   if (!cameraStream?.getVideoTracks().length && !screenStream?.getVideoTracks().length) {
     throw new Error("Ligue a câmera ou compartilhe a tela antes de iniciar a live.");
   }
@@ -1571,21 +1589,33 @@ async function criarBroadcastClient(config: BroadcastConfig) {
     throw new Error("IVS Broadcast SDK não carregou corretamente.");
   }
 
-  const streamConfig =
-    IVSBroadcastClient.STANDARD_LANDSCAPE ||
-    IVSBroadcastClient.BASIC_FULL_HD_LANDSCAPE ||
-    IVSBroadcastClient.BASIC_LANDSCAPE ||
-    mod.STANDARD_LANDSCAPE ||
-    mod.BASIC_FULL_HD_LANDSCAPE ||
-    mod.BASIC_LANDSCAPE ||
-    {
-      maxResolution: {
-        width: 1280,
-        height: 720,
-      },
-      maxFramerate: 30,
-      maxBitrate: 3500,
-    };
+//  const streamConfig =
+//    IVSBroadcastClient.BASIC_FULL_HD_LANDSCAPE ||
+//    mod.BASIC_FULL_HD_LANDSCAPE ||
+//    IVSBroadcastClient.STANDARD_LANDSCAPE ||
+//    mod.STANDARD_LANDSCAPE ||
+//    IVSBroadcastClient.BASIC_LANDSCAPE ||
+//    mod.BASIC_LANDSCAPE ||
+//    {
+//      maxResolution: {
+//        width: VIDEO_FULL_HD.width,
+//        height: VIDEO_FULL_HD.height,
+//      },
+//      maxFramerate: 30,
+//      maxBitrate: 6000,
+//    };
+
+const streamConfig = {
+  maxResolution: {
+    width: VIDEO_FULL_HD.width,
+    height: VIDEO_FULL_HD.height,
+  },
+  maxFramerate: 30,
+  maxBitrate: 8500,
+};
+
+console.log("[IVS DEBUG] streamConfig FINAL usado:", streamConfig);
+console.log("[IVS DEBUG] VIDEO_FULL_HD:", VIDEO_FULL_HD);
 
   const endpointIvs = normalizarIvsIngestEndpoint(config.ingestEndpoint);
   const streamKeyLimpa = String(config.streamKey || "").trim();
@@ -1653,6 +1683,9 @@ async function criarBroadcastClient(config: BroadcastConfig) {
     ingestEndpoint: endpointIvs,
   });
 
+console.log("[IVS DEBUG] canvasDimensions logo após create:", client.getCanvasDimensions?.());
+console.log("[IVS DEBUG] client criado com streamConfig:", streamConfig);
+
   client.on?.("connectionStateChange", (state: any) => {
     console.log("[IVS] connectionStateChange:", state);
   });
@@ -1686,7 +1719,27 @@ async function criarBroadcastClient(config: BroadcastConfig) {
 
   const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
 
-  const dimensao = client.getCanvasDimensions?.() || { width: 1280, height: 720 };
+console.log("[IVS DEBUG] programaStream tracks:", programaStream.getVideoTracks().map((track) => ({
+  id: track.id,
+  label: track.label,
+  enabled: track.enabled,
+  readyState: track.readyState,
+  settings: track.getSettings?.(),
+})));
+
+  const dimensao = client.getCanvasDimensions?.() || {
+    width: VIDEO_FULL_HD.width,
+    height: VIDEO_FULL_HD.height,
+  };
+
+console.log("[IVS DEBUG] posição enviada para addVideoInputDevice:", {
+  index: 0,
+  x: 0,
+  y: 0,
+  width: dimensao.width,
+  height: dimensao.height,
+});
+
   await client.addVideoInputDevice(
     programaStream,
     "program",
@@ -1722,10 +1775,7 @@ async function criarBroadcastClient(config: BroadcastConfig) {
       setStarting(true);
       setBroadcastError(null);
 
-      const config =
-        broadcastConfig.ingestEndpoint && broadcastConfig.streamKey
-          ? broadcastConfig
-          : await buscarBroadcastConfig();
+      const config = await buscarBroadcastConfig();
 
       const client = await criarBroadcastClient(config);
 
@@ -1760,8 +1810,13 @@ const sessionId = client.getSessionId?.();
 console.log("[IVS] Connection state após 8s:", estadoConexao);
 console.log("[IVS] Session ID após 8s:", sessionId);
 
-if (estadoConexao !== "connected") {
-  await client.stopBroadcast?.().catch(() => null);
+const transmissaoAceita =
+  estadoConexao === "connected" ||
+  estadoConexao === "active" ||
+  !!sessionId;
+
+if (!transmissaoAceita) {
+  await pararBroadcastSeguro(client);
 
   throw new Error(
     "A transmissão não conectou ao IVS. Tente usar Google Chrome ou Edge, sem VPN ou bloqueadores ativos."
@@ -1772,17 +1827,23 @@ console.log("[IVS] Broadcast conectado com sucesso.");
 
 const token = getToken();
 
-await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          playbackUrl: config.playbackUrl || null,
-          urlStream: config.playbackUrl || null,
-        }),
-      }).catch(() => null);
+const iniciarRes = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  },
+  body: JSON.stringify({
+    playbackUrl: config.playbackUrl || null,
+    urlStream: config.playbackUrl || null,
+  }),
+});
+
+const iniciarJson = await iniciarRes.json().catch(() => ({}));
+
+if (!iniciarRes.ok) {
+  throw new Error(iniciarJson?.message || "A transmissão conectou, mas não foi possível marcar a aula como ao vivo.");
+}
 
       setAula((prev) =>
         prev
@@ -1801,24 +1862,84 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
     }
   }
 
+async function sincronizarReplayComTentativas(tentativas = 5) {
+  const token = getToken();
+
+  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+    try {
+      const syncRes = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/sincronizar-replay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      const syncJson = await syncRes.json().catch(() => ({}));
+
+      if (syncRes.ok) {
+        const item = syncJson?.item;
+
+        setAula((prev) =>
+          prev
+            ? {
+                ...prev,
+                replayDisponivel: true,
+                videoGravadoUrl: item?.videoGravadoUrl || prev.videoGravadoUrl,
+                thumbUrl: item?.thumbUrl || prev.thumbUrl,
+              }
+            : prev
+        );
+
+        setBroadcastError(null);
+        await carregarAula(false);
+
+        console.log("[REPLAY] Sincronizado com sucesso:", syncJson);
+        return true;
+      }
+
+      console.warn(`[REPLAY] Tentativa ${tentativa} falhou:`, syncJson);
+    } catch (e) {
+      console.warn(`[REPLAY] Tentativa ${tentativa} com erro:`, e);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+  }
+
+  setBroadcastError("Live finalizada. O replay ainda está processando no S3.");
+  return false;
+}
+
   async function finalizarLive() {
     try {
       setStopping(true);
       setBroadcastError(null);
 
       if (broadcastClient) {
-        await broadcastClient.stopBroadcast();
+        await pararBroadcastSeguro(broadcastClient);
       }
 
       const token = getToken();
 
-      await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/finalizar`, {
+      const finalizarRes = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/finalizar`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      }).catch(() => null);
+      });
+
+      const finalizarJson = await finalizarRes.json().catch(() => ({}));
+
+      if (!finalizarRes.ok) {
+        throw new Error(finalizarJson?.message || "Erro ao finalizar aula ao vivo.");
+      }
+
+setBroadcastError("Live finalizada. Processando replay no S3...");
+
+window.setTimeout(() => {
+  sincronizarReplayComTentativas(5);
+}, 60000);
 
       setAula((prev) =>
         prev
@@ -1998,7 +2119,7 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
         autoPlay
         muted
         playsInline
-        className="w-full aspect-video object-cover bg-black"
+        className="w-full aspect-video object-contain bg-black"
       />
 
       {cameraEnabled && !usandoPlaceholderCamera && cameraStream ? (
@@ -2023,7 +2144,7 @@ await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/iniciar`, {
         autoPlay
         muted
         playsInline
-        className="w-full aspect-video object-cover bg-black"
+        className="w-full aspect-video object-contain bg-black"
       />
 
       {!cameraEnabled && !usandoPlaceholderCamera ? (
