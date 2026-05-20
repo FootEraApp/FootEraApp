@@ -14,6 +14,8 @@ import {
   deletarAulaAoVivoAvulsa,
   criarAulaAoVivoAvulsa,
   sincronizarReplayAulaAoVivo,
+  registrarPresencaAulaAoVivo,
+  sairPresencaAulaAoVivo
 } from "../controllers/aulasAoVivoController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
@@ -32,6 +34,9 @@ router.post("/:id/cancelar", cancelarAulaAoVivo);
 router.get("/:id/mensagens", listarMensagensAulaAoVivo);
 router.post("/:id/mensagens", enviarMensagemAulaAoVivo);
 router.patch("/:id/mensagens/:mensagemId/deletar", deletarMensagemAulaAoVivo);
+
+router.post("/:id/presenca", registrarPresencaAulaAoVivo);
+router.post("/:id/presenca/sair", sairPresencaAulaAoVivo);
 
 router.get("/:id", getAulaAoVivo);
 router.put("/:id", atualizarAulaAoVivoAvulsa);

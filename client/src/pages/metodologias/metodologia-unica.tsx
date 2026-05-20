@@ -92,9 +92,13 @@ type MetodologiaDetalhe = {
   area?: string | null;
   geraCertificado?: boolean;
   geraBadge?: boolean;
+  criadorUsuarioId?: string | null;
+  isOwner?: boolean;
   estruturas: MetodologiaEstrutura[];
   viewer: {
     // antigo
+    isOwner?: boolean;
+    isAdmin?: boolean;
     isAssinante: boolean;
     // NOVO: acesso real (learning OU avulsa)
     temAcesso: boolean;
@@ -415,17 +419,22 @@ export default function MetodologiaUnicaPage() {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 
-      const url = fromAdmin
+      const baseUrl = fromAdmin
         ? `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${isAvulsa ? "AVULSA" : "LEARNING"}`
         : isAvulsa
           ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${id}`
           : `${API.BASE_URL}/api/metodologias/${id}/detalhe`;
 
+      const url = `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+
+
       const r = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        cache: "no-store",
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
       });
       const j = await r.json().catch(() => ({}));
 
@@ -436,6 +445,19 @@ export default function MetodologiaUnicaPage() {
       }
 
       const raw = j?.item ?? j;
+
+      let concluidosLocais: string[] = [];
+
+      try {
+        const storageKey = isAvulsa
+          ? `footera:metodologia-avulsa:${id}:concluidos`
+          : `footera:metodologia:${id}:concluidos`;
+
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        concluidosLocais = Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch {
+        concluidosLocais = [];
+      }
 
       const normalizado = {
         ...raw,
@@ -457,6 +479,8 @@ export default function MetodologiaUnicaPage() {
           ),
         criadorNome: raw?.criadorNome ?? raw?.criadorUsuario?.nome ?? null,
         viewer: {
+          isOwner: raw?.viewer?.isOwner ?? raw?.isOwner ?? false,
+          isAdmin: raw?.viewer?.isAdmin ?? raw?.isAdmin ?? adminPreview,
           isAssinante: raw?.viewer?.isAssinante ?? adminPreview,
           temAcesso: raw?.viewer?.temAcesso ?? adminPreview,
           assinaturaTipo: raw?.viewer?.assinaturaTipo ?? (isAvulsa ? "AVULSA" : "LEARNING"),
@@ -468,9 +492,14 @@ export default function MetodologiaUnicaPage() {
             (raw?.minhaAvaliacao ?? null),
           motivoBloqueio: raw?.viewer?.motivoBloqueio ?? null,
           progresso: {
-            concluidos: Array.isArray(raw?.viewer?.progresso?.concluidos)
-              ? raw.viewer.progresso.concluidos.map((v: any) => String(v))
-              : [],
+            concluidos: Array.from(
+              new Set([
+                ...(Array.isArray(raw?.viewer?.progresso?.concluidos)
+                  ? raw.viewer.progresso.concluidos.map((v: any) => String(v))
+                  : []),
+                ...concluidosLocais,
+              ])
+            ),
           },
         },
       };
@@ -601,7 +630,15 @@ export default function MetodologiaUnicaPage() {
   const concluIds = useMemo(() => new Set(data?.viewer?.progresso?.concluidos || []), [data]);
 
   const totalItens = allItens.length;
-  const totalConcluidos = useMemo(() => (data?.viewer?.progresso?.concluidos?.length || 0), [data]);
+  const totalConcluidos = useMemo(() => {
+    if (!data) return 0;
+
+    const idsItensDaTela = new Set(allItens.map((it) => String(it.id)));
+    const concluidos = data.viewer?.progresso?.concluidos || [];
+
+    return concluidos.filter((id) => idsItensDaTela.has(String(id))).length;
+  }, [data, allItens]);
+
   const pct = totalItens > 0 
     ? Math.round((totalConcluidos / totalItens) * 100) 
     : 0;
@@ -761,6 +798,7 @@ export default function MetodologiaUnicaPage() {
   const assinaturas = Number(data.totalAssinantes ?? 0);
   const capaHeader = normalizeMediaUrl(data.capaUrl) || AVATAR_FALLBACK;
   const podeAvaliar = !!data?.viewer?.podeAvaliar; // vindo do backend
+  const podeEditarMetodologia = !!data?.viewer?.isOwner;
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8">
@@ -827,58 +865,76 @@ export default function MetodologiaUnicaPage() {
                 ) : null}
               </div>
 
-              {!adminPreview && (
-              <div className="flex flex-col items-end gap-2">
-                <button
-                  disabled={busy || !!data?.viewer?.temAcesso}
-                  onClick={assinarMetodologia}
-                  className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
-                >
-                  {(() => {
-                    const motivo = String(data.viewer?.motivoBloqueio || "");
+              {podeEditarMetodologia ? (
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate(
+                        `/learning/create?id=${encodeURIComponent(data.id)}` +
+                          `${isAvulsa ? "&origem=avulsa" : ""}`
+                      );
+                    }}
+                    className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                  >
+                    Editar metodologia
+                  </button>
 
-                    if (data.viewer?.temAcesso) {
-                      return data.viewer?.assinaturaTipo === "AVULSA"
-                        ? "✅ Metodologia avulsa ativa"
-                        : "✅ Metodologia no Learning";
-                    }
-
-                    if (motivo === "PRECISA_PAGAR_AVULSA") return "Comprar metodologia";
-                    if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
-                    if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
-                      return "Ver minhas metodologias";
-                    }
-
-                    return isAvulsa ? "Comprar metodologia" : "Ativar Learning";
-                  })()}
-                </button>
-
-                {!adminPreview && (!data.viewer?.isAssinante || !data.viewer?.temAcesso) && (
                   <div className="text-xs text-gray-500 text-right max-w-[240px]">
-                   {(() => {
+                    Você é o criador desta metodologia e pode editar aulas, desafios e conteúdos.
+                  </div>
+                </div>
+              ) : !adminPreview ? (
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    disabled={busy || !!data?.viewer?.temAcesso}
+                    onClick={assinarMetodologia}
+                    className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
+                  >
+                    {(() => {
                       const motivo = String(data.viewer?.motivoBloqueio || "");
 
-                      if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") {
-                        return "Para acessar esta metodologia, você precisa ter um plano Learning ativo e selecionar esta metodologia dentro do limite mensal do seu plano.";
+                      if (data.viewer?.temAcesso) {
+                        return data.viewer?.assinaturaTipo === "AVULSA"
+                          ? "✅ Metodologia avulsa ativa"
+                          : "✅ Metodologia no Learning";
                       }
 
+                      if (motivo === "PRECISA_PAGAR_AVULSA") return "Comprar metodologia";
+                      if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
                       if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
-                        return "Você já atingiu o limite de metodologias Learning do seu plano neste ciclo. Vá para 'Minhas metodologias' para revisar suas escolhas.";
+                        return "Ver minhas metodologias";
                       }
 
-                      if (motivo === "PRECISA_PAGAR_AVULSA") {
-                        return "Para acessar esta metodologia, você precisa comprar esta metodologia avulsa especificamente. Ela não entra no plano Learning.";
-                      }
-
-                      return isAvulsa
-                        ? "Esta é uma metodologia avulsa e só é liberada com a compra dela."
-                        : "Esta é uma metodologia Learning e só é liberada para usuários com plano Learning.";
+                      return isAvulsa ? "Comprar metodologia" : "Ativar Learning";
                     })()}
+                  </button>
 
-                  </div>
-                )}
-              </div>
-              )}
+                  {(!data.viewer?.isAssinante || !data.viewer?.temAcesso) && (
+                    <div className="text-xs text-gray-500 text-right max-w-[240px]">
+                      {(() => {
+                        const motivo = String(data.viewer?.motivoBloqueio || "");
+
+                        if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") {
+                          return "Para acessar esta metodologia, você precisa ter um plano Learning ativo e selecionar esta metodologia dentro do limite mensal do seu plano.";
+                        }
+
+                        if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
+                          return "Você já atingiu o limite de metodologias Learning do seu plano neste ciclo. Vá para 'Minhas metodologias' para revisar suas escolhas.";
+                        }
+
+                        if (motivo === "PRECISA_PAGAR_AVULSA") {
+                          return "Para acessar esta metodologia, você precisa comprar esta metodologia avulsa especificamente. Ela não entra no plano Learning.";
+                        }
+
+                        return isAvulsa
+                          ? "Esta é uma metodologia avulsa e só é liberada com a compra dela."
+                          : "Esta é uma metodologia Learning e só é liberada para usuários com plano Learning.";
+                      })()}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           
             {adminPreview && (

@@ -202,6 +202,88 @@ function sanitizeAulaForResponse(aula: any, isOwner: boolean) {
   };
 }
 
+const LIVE_ONLINE_WINDOW_SECONDS = 30;
+
+async function calcularMetricasPresencaAula(aulaId: string, status?: string | null) {
+  const desde = new Date(Date.now() - LIVE_ONLINE_WINDOW_SECONDS * 1000);
+
+  const totalOnline =
+    status === "AO_VIVO"
+      ? await prisma.aulaAoVivoPresenca.count({
+          where: {
+            aulaAoVivoId: aulaId,
+            entrouAoVivo: true,
+            ultimoPingEm: {
+              gte: desde,
+            },
+          },
+        })
+      : 0;
+
+  const totalParticipantes = await prisma.aulaAoVivoPresenca.count({
+    where: {
+      aulaAoVivoId: aulaId,
+      entrouAoVivo: true,
+    },
+  });
+
+  return {
+    totalOnline,
+    totalParticipantes,
+  };
+}
+
+async function registrarPresencaInterna(aulaId: string, usuarioId: string) {
+  const aula = await prisma.aulaAoVivo.findUnique({
+    where: { id: aulaId },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!aula) {
+    throw new Error("Aula ao vivo não encontrada.");
+  }
+
+  const agora = new Date();
+
+  if (aula.status === "AO_VIVO") {
+    await prisma.aulaAoVivoPresenca.upsert({
+      where: {
+        aulaAoVivoId_usuarioId: {
+          aulaAoVivoId: aulaId,
+          usuarioId,
+        },
+      },
+      create: {
+        aulaAoVivoId: aulaId,
+        usuarioId,
+        entrouEm: agora,
+        ultimoPingEm: agora,
+        saiuEm: null,
+        entrouAoVivo: true,
+      },
+      update: {
+        ultimoPingEm: agora,
+        saiuEm: null,
+        entrouAoVivo: true,
+      },
+    });
+  }
+
+  const metricas = await calcularMetricasPresencaAula(aulaId, aula.status);
+
+  await prisma.aulaAoVivo.update({
+    where: { id: aulaId },
+    data: {
+      totalParticipantes: metricas.totalParticipantes,
+    },
+  });
+
+  return metricas;
+}
+
 export async function getAulaAoVivo(req: AuthRequest, res: Response) {
   try {
     const userId = getAuthUserId(req);
@@ -217,8 +299,14 @@ export async function getAulaAoVivo(req: AuthRequest, res: Response) {
 
     const owner = isDonoDaAula(aula, userId);
 
+    const metricas = await calcularMetricasPresencaAula(aula.id, aula.status);
+
     return res.json({
-      item: sanitizeAulaForResponse(aula, owner),
+      item: {
+        ...sanitizeAulaForResponse(aula, owner),
+        totalOnline: metricas.totalOnline,
+        totalParticipantes: metricas.totalParticipantes,
+      },
       isOwner: owner,
     });
   } catch (error) {
@@ -650,9 +738,15 @@ export async function iniciarAulaAoVivo(req: AuthRequest, res: Response) {
       },
     });
 
+    const metricas = await registrarPresencaInterna(id, userId);
+
     return res.json({
       message: "Live iniciada com sucesso.",
-      item: sanitizeAulaForResponse(updated, true),
+      item: {
+        ...sanitizeAulaForResponse(updated, true),
+        totalOnline: metricas.totalOnline,
+        totalParticipantes: metricas.totalParticipantes,
+      },
     });
   } catch (error) {
     console.error("Erro em iniciarAulaAoVivo:", error);
@@ -728,9 +822,25 @@ export async function finalizarAulaAoVivo(req: AuthRequest, res: Response) {
       },
     });
 
+    await prisma.aulaAoVivoPresenca.updateMany({
+      where: {
+        aulaAoVivoId: id,
+        saiuEm: null,
+      },
+      data: {
+        saiuEm: new Date(),
+      },
+    });
+
+    const metricas = await calcularMetricasPresencaAula(id, "FINALIZADA");
+
     return res.json({
       message: "Live finalizada com sucesso.",
-      item: sanitizeAulaForResponse(updated, true),
+      item: {
+        ...sanitizeAulaForResponse(updated, true),
+        totalOnline: 0,
+        totalParticipantes: metricas.totalParticipantes,
+      },
     });
   } catch (error) {
     console.error("Erro em finalizarAulaAoVivo:", error);
@@ -790,6 +900,92 @@ export async function cancelarAulaAoVivo(req: AuthRequest, res: Response) {
 
     return res.status(500).json({
       message: "Erro ao cancelar live.",
+    });
+  }
+}
+
+export async function registrarPresencaAulaAoVivo(req: AuthRequest, res: Response) {
+  try {
+    const userId = getAuthUserId(req);
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Usuário não autenticado.",
+      });
+    }
+
+    const aula = await prisma.aulaAoVivo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!aula) {
+      return res.status(404).json({
+        message: "Aula ao vivo não encontrada.",
+      });
+    }
+
+    const metricas = await registrarPresencaInterna(id, userId);
+
+    return res.json({
+      ok: true,
+      totalOnline: metricas.totalOnline,
+      totalParticipantes: metricas.totalParticipantes,
+    });
+  } catch (error: any) {
+    console.error("Erro em registrarPresencaAulaAoVivo:", error);
+
+    return res.status(500).json({
+      message: error?.message || "Erro ao registrar presença na live.",
+    });
+  }
+}
+
+export async function sairPresencaAulaAoVivo(req: AuthRequest, res: Response) {
+  try {
+    const userId = getAuthUserId(req);
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Usuário não autenticado.",
+      });
+    }
+
+    await prisma.aulaAoVivoPresenca.updateMany({
+      where: {
+        aulaAoVivoId: id,
+        usuarioId: userId,
+      },
+      data: {
+        saiuEm: new Date(),
+      },
+    });
+
+    const aula = await prisma.aulaAoVivo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    const metricas = await calcularMetricasPresencaAula(id, aula?.status);
+
+    return res.json({
+      ok: true,
+      totalOnline: metricas.totalOnline,
+      totalParticipantes: metricas.totalParticipantes,
+    });
+  } catch (error: any) {
+    console.error("Erro em sairPresencaAulaAoVivo:", error);
+
+    return res.status(500).json({
+      message: error?.message || "Erro ao sair da presença da live.",
     });
   }
 }

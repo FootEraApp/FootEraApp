@@ -72,7 +72,15 @@ function calcularDatasExecucao(estrutura: any, assinatura: any) {
 
 function getUserId(req: Request): string | null {
   const r: any = req;
-  return r.userId || r.user?.id || r.usuarioId || null;
+
+  return (
+    r.userId ||
+    r.usuarioId ||
+    r.user?.id ||
+    r.user?.userId ||
+    r.user?.usuarioId ||
+    null
+  );
 }
 
 async function isAdminUser(userId: string | null | undefined) {
@@ -2431,12 +2439,16 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         : null;
 
     const hasAccess = assinaturaDaAcesso(assinatura);
+
+    const isOwner =
+      !!userId && String(metodologia.criadorUsuarioId || "") === String(userId);
+
     const assinaturaTipo = assinatura
       ? assinatura.origem === MetodologiaAssinaturaOrigem.AVULSA
         ? "AVULSA"
         : "LEARNING"
       : null;
-
+      
     const assinaturasPrincipais = userId
       ? await (prisma as any).assinatura.findMany({
           where: { usuarioId: userId },
@@ -2461,12 +2473,14 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
           })
         : 0;
 
-    const podeAssinarAgora = !!userId && !hasAccess && limite > 0 && usadasNoMes < limite;
-
+    const acessoFinal = hasAccess || isAdmin || isOwner;
+    const podeAssinarAgora = !!userId && !acessoFinal && limite > 0 && usadasNoMes < limite;
     let motivoBloqueio: string | null = null;
 
     if (hasAccess) {
       motivoBloqueio = "JA_ASSINADA";
+    } else if (isOwner || isAdmin) {
+      motivoBloqueio = null;
     } else if (podeAssinarAgora) {
       motivoBloqueio = null;
     } else if (limite <= 0) {
@@ -2475,8 +2489,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       motivoBloqueio = "LIMITE_METODOLOGIAS";
     }
 
-    const acessoFinal = hasAccess || isAdmin;
-    const podeVerVideo = acessoFinal || metodologia.criadorUsuarioId === userId;
+    const podeVerVideo = acessoFinal;
 
     const estruturas = metodologia.estruturas.map((estrutura) => {
       const { inicio, fim } = calcularDatasExecucao(estrutura, assinatura);
@@ -2585,6 +2598,8 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       geraCertificado: !!metodologia.geraCertificado,
       estruturas,
       viewer: {
+        isOwner,
+        isAdmin,
         isAssinante: acessoFinal,
         temAcesso: acessoFinal,
         assinaturaTipo: hasAccess
@@ -2595,8 +2610,8 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         expiraEm: assinatura?.expiraEm
           ? new Date(assinatura.expiraEm).toISOString()
           : null,
-        podeAssinarAgora: isAdmin ? false : podeAssinarAgora,
-        motivoBloqueio: isAdmin ? null : motivoBloqueio,
+        podeAssinarAgora: isAdmin || isOwner ? false : podeAssinarAgora,
+        motivoBloqueio: isAdmin || isOwner ? null : motivoBloqueio,
         podeAvaliar: !!userId && acessoFinal && !minhaAvaliacao,
         minhaAvaliacao: minhaAvaliacao
           ? {
@@ -5198,8 +5213,12 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
     }
 
     const isAdmin = await isAdminUser(userId);
+
+    const isOwner =
+      !!userId && String(item.criadorUsuarioId || "") === String(userId);
+
     const hasAccess = assinaturaDaAcesso(assinatura);
-    const acessoFinal = hasAccess || isAdmin;
+    const acessoFinal = hasAccess || isAdmin || isOwner;
 
     const concluidosSubmissoes = userId
       ? await (prisma as any).metodologiaItemSubmissao.findMany({
@@ -5339,6 +5358,9 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
 
     return res.json({
       id: item.id,
+      isAdmin,
+      isOwner,
+      criadorUsuarioId: item.criadorUsuarioId,
       titulo: item.titulo,
       descricao: item.descricao,
       capaUrl: item.capaUrl ?? null,
@@ -5356,9 +5378,11 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
       precoAssinaturaMensal: item.precoAssinaturaMensal ?? null,
       estruturas,
       viewer: {
-        isAssinante: hasAccess,
+        isOwner,
+        isAdmin,
+        isAssinante: acessoFinal,
         temAcesso: acessoFinal,
-        assinaturaTipo: hasAccess
+        assinaturaTipo: hasAccess || isAdmin || isOwner
           ? "AVULSA"
           : isAdmin
             ? "AVULSA"
@@ -5366,8 +5390,8 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
         expiraEm: assinatura?.expiraEm
           ? new Date(assinatura.expiraEm).toISOString()
           : null,
-        podeAssinarAgora: !isAdmin && !hasAccess,
-        motivoBloqueio: isAdmin
+        podeAssinarAgora: !isAdmin && !isOwner && !hasAccess,
+        motivoBloqueio: isAdmin || isOwner
           ? null
           : hasAccess
             ? null
@@ -5375,8 +5399,10 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
         podeAvaliar:
           !!userId &&
           acessoFinal &&
+          !isAdmin &&
+          !isOwner &&
           !minhaAvaliacao &&
-          (isAdmin || !!assinatura?.concluiuEm),
+          !!assinatura?.concluiuEm,
         minhaAvaliacao: minhaAvaliacao
           ? {
               nota: minhaAvaliacao.nota,

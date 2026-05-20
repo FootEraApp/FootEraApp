@@ -123,6 +123,7 @@ model Usuario {
   aulasAoVivoCriadas              AulaAoVivo[]               @relation("AulaAoVivoCriador")
   aulasAoVivoMensagens            AulaAoVivoMensagem[]       @relation("AulaAoVivoMensagemUsuario")
   aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]       @relation("AulaAoVivoMensagemDeletadaPor")
+  aulasAoVivoPresencas            AulaAoVivoPresenca[]       @relation("AulaAoVivoPresencaUsuario")
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -1108,6 +1109,7 @@ model AulaAoVivo {
 
   mensagens AulaAoVivoMensagem[]
   acessos   AulaAoVivoAcesso[]
+  presencas AulaAoVivoPresenca[]
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -1188,6 +1190,29 @@ model AulaAoVivoMensagem {
   @@index([usuarioId])
   @@index([deletadaPorId])
   @@index([criadoEm])
+}
+
+model AulaAoVivoPresenca {
+  id String @id @default(uuid())
+
+  aulaAoVivoId String
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+
+  usuarioId String
+  usuario   Usuario @relation("AulaAoVivoPresencaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  entrouEm     DateTime  @default(now())
+  ultimoPingEm DateTime  @default(now())
+  saiuEm       DateTime?
+
+  // Marca se esse usuário entrou enquanto a aula estava realmente AO_VIVO.
+  entrouAoVivo Boolean @default(false)
+
+  @@unique([aulaAoVivoId, usuarioId])
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+  @@index([ultimoPingEm])
+  @@index([entrouAoVivo])
 }
 
 model DesafioOficial {
