@@ -288,6 +288,11 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
           geraCertificado: true,
           geraBadge: true,
           criadoEm: true,
+          _count: {
+            select: {
+              assinantes: true,
+            },
+          },
         },
       }),
       prisma.aulaAoVivo.findMany({
@@ -419,6 +424,7 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
           ...m,
           origem: "PREMIUM",
           preco: toNumber(m.precoAssinaturaMensal),
+          totalAssinantes: m._count?.assinantes ?? 0,
         })),
       ],
       eventosAoVivo: aulasAoVivo.map((aula) => ({

@@ -756,7 +756,7 @@ export default function PaginaSubmissao() {
       return;
     }
 
-    if (!isSessaoTreino && isDesafio && !atletaId) {
+    if (!isSessaoTreino && isDesafio && !atletaId && !metodologiaId) {
       alert("Selecione o atleta.");
       return;
     }

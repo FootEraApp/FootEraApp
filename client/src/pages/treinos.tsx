@@ -87,9 +87,16 @@ export default function Treinos() {
 
           <button
             onClick={() => (window.location.href = "/perfil/mudar-tipo")}
-            className="mt-5 rounded-xl bg-green-700 px-4 py-3 text-white font-bold"
+            className="mt-5 w-full rounded-xl bg-green-700 px-4 py-3 text-white font-bold"
           >
             Mudar tipo de perfil
+          </button>
+
+          <button
+            onClick={() => (window.location.href = "/perfil")}
+            className="mt-3 w-full rounded-xl border border-green-700 px-4 py-3 text-green-800 font-bold"
+          >
+            Voltar ao perfil
           </button>
         </div>
       </div>

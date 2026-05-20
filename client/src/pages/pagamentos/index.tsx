@@ -1,3 +1,4 @@
+// client/src/pages/pagamentos/index.tsx
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   ArrowLeft,
@@ -80,6 +81,7 @@ type MetodologiaAvulsa = {
   _count: { itens: number; assinantes: number };
   videoCount: number;
   treinoCount: number;
+  aulaAoVivoCount?: number;
   precoAssinaturaMensal: number;
   pontosTotal?: number | null;
   publicoAlvo?: "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string | null;
@@ -2062,6 +2064,7 @@ export default function PagamentosPage() {
                     <span>Semanas: <b>{m.totalSemanas ?? 0}</b></span>
                     <span>Vídeos: <b>{m.videoCount ?? 0}</b></span>
                     <span>Treinos: <b>{m.treinoCount ?? 0}</b></span>
+                    <span>Aulas ao vivo: <b>{m.aulaAoVivoCount ?? 0}</b></span>
                     <span>Itens: <b>{m._count?.itens ?? 0}</b></span>
                     <span>
                       Público:{" "}

@@ -374,6 +374,15 @@ export default function AdminDashboard() {
     ativo: boolean;
     criadoEm?: string | null;
     origemTipo: "LEARNING" | "AVULSA";
+    videoCount?: number;
+    aulaCount?: number;
+    aulaAoVivoCount?: number;
+    aulasAoVivoCount?: number;
+    treinoCount?: number;
+    materialCount?: number;
+    desafioCount?: number;
+    estruturaCount?: number;
+    totalAssinantes?: number;
     criadorUsuario?: {
       id: string;
       nome?: string | null;
@@ -382,9 +391,7 @@ export default function AdminDashboard() {
       foto?: string | null;
       parceiro?: boolean | null;
     } | null;
-    _count?: { assinantes?: number; itens?: number };
-
-    // ✅ vem do include.itens (take 3)
+    _count?: { assinantes?: number; itens?: number; estruturas?: number };
     itens?: MetodologiaItemPreview[];
   };
 

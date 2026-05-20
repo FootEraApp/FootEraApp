@@ -2464,6 +2464,7 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
 
       const videoCount = itens.filter((i) => i.tipo === "VIDEO" || i.tipo === "AULA").length;
       const treinoCount = itens.filter((i) => i.tipo === "TREINO").length;
+      const aulaAoVivoCount = itens.filter((i) => i.tipo === "AULA_AO_VIVO").length;
       const somaPontos = itens.reduce((acc, i) => acc + Number(i.pontos || 0), 0);
 
       const totalSemanas = estruturas.reduce(
@@ -2481,6 +2482,7 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
         totalSemanas,
         videoCount,
         treinoCount,
+        aulaAoVivoCount,
         precoAssinaturaMensal: Number(m.precoAssinaturaMensal ?? 0),
         pontosTotal: somaPontos,
         planoId: `METODOLOGIA_AVULSA:${m.id}`,

@@ -769,6 +769,7 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
       treinoCount: number;
       videoCount: number;
       aulaCount: number;
+      aulaAoVivoCount: number;
       materialCount: number;
       desafioCount: number;
       estruturaCount: number;
@@ -809,6 +810,7 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
       treinoCount: 0,
       videoCount: 0,
       aulaCount: 0,
+      aulaAoVivoCount: 0,
       materialCount: 0,
       desafioCount: 0,
       estruturaCount: 0,
@@ -827,6 +829,7 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
     if (it.tipo === MetodologiaItemTipo.TREINO) out[metodologiaId].treinoCount++;
     if (it.tipo === MetodologiaItemTipo.VIDEO) out[metodologiaId].videoCount++;
     if (it.tipo === MetodologiaItemTipo.AULA) out[metodologiaId].aulaCount++;
+    if (it.tipo === MetodologiaItemTipo.AULA_AO_VIVO) out[metodologiaId].aulaAoVivoCount++;
     if (it.tipo === MetodologiaItemTipo.MATERIAL) out[metodologiaId].materialCount++;
     if (it.tipo === MetodologiaItemTipo.DESAFIO) out[metodologiaId].desafioCount++;
   }
@@ -1564,6 +1567,7 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             criadorUsuario: {
               select: { id: true, nome: true, foto: true, parceiro: true },
             },
+            _count: { select: { assinantes: true, estruturas: true } },
             estruturas: {
               include: {
                 itens: true,
@@ -1612,19 +1616,25 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             totalReviews: Number(m.totalReviews ?? 0),
             videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
             aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
+            aulaAoVivoCount: itens.filter((it: any) => it.tipo === "AULA_AO_VIVO").length,
+            aulasAoVivoCount: itens.filter((it: any) => it.tipo === "AULA_AO_VIVO").length,
             treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
             materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
             desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,
             estruturaCount: m.estruturas.length,
             _count: {
-              assinantes: 0,
-              estruturas: m.estruturas.length,
+              ...(m as any)._count,
+              assinantes: (m as any)._count?.assinantes ?? 0,
+              estruturas: (m as any)._count?.estruturas ?? m.estruturas.length,
             },
+            totalAssinantes: (m as any)._count?.assinantes ?? 0,
           };
         }
 
         if (r.metodologia) {
           const m = r.metodologia;
+
+          const aulaAoVivoCount = countsById[m.id]?.aulaAoVivoCount ?? 0;
 
           return {
             id: m.id,
@@ -1643,11 +1653,14 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             criadorUsuario: m.criadorUsuario,
             criadorNome: m.criadorUsuario?.nome ?? null,
             _count: m._count,
+            totalAssinantes: m._count?.assinantes ?? 0,
             origemRegistro: "LEARNING" as const,
             mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
             totalReviews: Number(m.totalReviews ?? 0),
             videoCount: countsById[m.id]?.videoCount ?? 0,
             aulaCount: countsById[m.id]?.aulaCount ?? 0,
+            aulaAoVivoCount,
+            aulasAoVivoCount: aulaAoVivoCount,
             treinoCount: countsById[m.id]?.treinoCount ?? 0,
             materialCount: countsById[m.id]?.materialCount ?? 0,
             desafioCount: countsById[m.id]?.desafioCount ?? 0,
@@ -1701,6 +1714,7 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
         orderBy: { criadoEm: "desc" },
         include: {
           criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
           estruturas: {
             include: { itens: true },
           },
@@ -1720,14 +1734,18 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
         origemRegistro: "AVULSA" as const,
         videoCount: itens.filter((it) => it.tipo === "VIDEO").length,
         aulaCount: itens.filter((it) => it.tipo === "AULA").length,
+        aulaAoVivoCount: itens.filter((it) => it.tipo === "AULA_AO_VIVO").length,
+        aulasAoVivoCount: itens.filter((it) => it.tipo === "AULA_AO_VIVO").length,
         treinoCount: itens.filter((it) => it.tipo === "TREINO").length,
         materialCount: itens.filter((it) => it.tipo === "MATERIAL").length,
         desafioCount: itens.filter((it) => it.tipo === "DESAFIO").length,
         estruturaCount: m.estruturas.length,
         _count: {
-          assinantes: 0,
-          estruturas: m.estruturas.length,
+          ...(m as any)._count,
+          assinantes: (m as any)._count?.assinantes ?? 0,
+          estruturas: (m as any)._count?.estruturas ?? m.estruturas.length,
         },
+        totalAssinantes: (m as any)._count?.assinantes ?? 0,
       };
     });
 
@@ -1739,6 +1757,9 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
       videoCount: learningCountsById[m.id]?.videoCount ?? 0,
       treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
       aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+      aulaAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+      aulasAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+      totalAssinantes: (m as any)._count?.assinantes ?? 0,
       materialCount: learningCountsById[m.id]?.materialCount ?? 0,
       desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
       estruturaCount: learningCountsById[m.id]?.estruturaCount ?? 0,
@@ -1792,6 +1813,7 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
         orderBy: { criadoEm: "desc" },
         include: {
           criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+          _count: { select: { assinantes: true, estruturas: true } },
           estruturas: {
             include: { itens: true },
           },
@@ -1809,6 +1831,9 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
       videoCount: learningCountsById[m.id]?.videoCount ?? 0,
       treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
       aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+      aulaAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+      aulasAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+      totalAssinantes: (m as any)._count?.assinantes ?? 0,
       materialCount: learningCountsById[m.id]?.materialCount ?? 0,
       desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
       estruturaCount: learningCountsById[m.id]?.estruturaCount ?? 0,
@@ -1822,14 +1847,18 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
         origemRegistro: "AVULSA" as const,
         videoCount: itens.filter((it) => it.tipo === "VIDEO").length,
         aulaCount: itens.filter((it) => it.tipo === "AULA").length,
+        aulaAoVivoCount: itens.filter((it) => it.tipo === "AULA_AO_VIVO").length,
+        aulasAoVivoCount: itens.filter((it) => it.tipo === "AULA_AO_VIVO").length,
         treinoCount: itens.filter((it) => it.tipo === "TREINO").length,
         materialCount: itens.filter((it) => it.tipo === "MATERIAL").length,
         desafioCount: itens.filter((it) => it.tipo === "DESAFIO").length,
         estruturaCount: m.estruturas.length,
         _count: {
-          assinantes: 0,
-          estruturas: m.estruturas.length,
+          ...(m as any)._count,
+          assinantes: (m as any)._count?.assinantes ?? 0,
+          estruturas: (m as any)._count?.estruturas ?? m.estruturas.length,
         },
+        totalAssinantes: (m as any)._count?.assinantes ?? 0,
       };
     });
 
@@ -2869,6 +2898,7 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
             status: true,
             expiraEm: true,
             concluiuEm: true,
+            progresso: true,
           },
         })
       : await prisma.metodologiaAssinante.findUnique({
@@ -2883,6 +2913,7 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
             status: true,
             expiraEm: true,
             concluiuEm: true,
+            progresso: true,
           },
         });
 
@@ -2895,9 +2926,37 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
     }
 
     if (!isAdmin && !assinatura?.concluiuEm) {
-      return res.status(400).json({
-        message: "Conclua a metodologia antes de avaliá-la.",
-      });
+      // Fallback: verifica em tempo real se todos os itens publicados estão concluídos
+      const totalItens = isAvulsa
+        ? await prisma.metodologiaAvulsaEstruturaItem.count({
+            where: { estrutura: { metodologiaAvulsaId: metodologiaId }, publicado: true },
+          })
+        : await prisma.metodologiaEstruturaItem.count({
+            where: { estrutura: { metodologiaId }, publicado: true },
+          });
+
+      const progresso: any = assinatura?.progresso || {};
+      const concluidos: string[] = Array.isArray(progresso?.concluidos)
+        ? progresso.concluidos.map(String)
+        : [];
+      const realmEnteConcluiu = totalItens > 0 && concluidos.length >= totalItens;
+
+      if (!realmEnteConcluiu) {
+        return res.status(400).json({
+          message: "Conclua a metodologia antes de avaliá-la.",
+        });
+      }
+
+      // Corrige o concluiuEm ausente no banco
+      if (assinatura) {
+        await prisma.metodologiaAssinante.update({
+          where: { id: assinatura.id },
+          data: {
+            status: MetodologiaAssinaturaStatus.CONCLUIDA,
+            concluiuEm: new Date(),
+          },
+        });
+      }
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -6249,6 +6308,9 @@ export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
         origemTipo: "LEARNING",
         videoCount: learningCountsById[m.id]?.videoCount ?? 0,
         aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+        aulaAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+        aulasAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+        totalAssinantes: (m as any)._count?.assinantes ?? 0,
         treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
         materialCount: learningCountsById[m.id]?.materialCount ?? 0,
         desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
@@ -6256,18 +6318,27 @@ export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
       })),
       ...avulsas.map((m) => {
         const itens = (m.estruturas || []).flatMap((e: any) => e.itens || []);
+        const aulaAoVivoCount = itens.filter(
+          (it: any) => String(it.tipo).toUpperCase() === "AULA_AO_VIVO"
+        ).length;
+
         return {
           ...m,
           origemTipo: "AVULSA",
-          videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
-          aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
-          treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
-          materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
-          desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,
+          origemRegistro: "AVULSA",
+          videoCount: itens.filter((it: any) => String(it.tipo).toUpperCase() === "VIDEO").length,
+          aulaCount: itens.filter((it: any) => String(it.tipo).toUpperCase() === "AULA").length,
+          aulaAoVivoCount,
+          aulasAoVivoCount: aulaAoVivoCount,
+          treinoCount: itens.filter((it: any) => String(it.tipo).toUpperCase() === "TREINO").length,
+          materialCount: itens.filter((it: any) => String(it.tipo).toUpperCase() === "MATERIAL").length,
+          desafioCount: itens.filter((it: any) => String(it.tipo).toUpperCase() === "DESAFIO").length,
           estruturaCount: (m.estruturas || []).length,
+          totalAssinantes: (m as any)._count?.assinantes ?? 0,
           _count: {
             ...(m as any)._count,
             estruturas: (m.estruturas || []).length,
+            assinantes: (m as any)._count?.assinantes ?? 0,
           },
         };
       })

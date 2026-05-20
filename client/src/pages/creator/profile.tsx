@@ -1,3 +1,4 @@
+// client/src/pages/creator/profile.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
@@ -411,6 +412,10 @@ export default function CreatorProfile() {
   conteudos.length > 0
     ? conteudos.reduce((acc, c) => acc + Number(c.mediaAvaliacao || 0), 0) / conteudos.length
     : 0;
+  const totalAssinantesConteudos = conteudos.reduce((acc, c) => {
+    return acc + Number(c.totalAssinantes ?? 0);
+  }, 0);
+
   const creatorReturnUrl = `/creator/profile?id=${creator.usuarioId}`;
   const isOwnCreator = meuId === creator.usuarioId;
   const perfilOriginal = creator.perfilOriginal || {};
@@ -810,7 +815,11 @@ export default function CreatorProfile() {
               </h2>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <Metric icon={<Users />} value={compact(metricas.alunos)} label="Usuarios Assinantes" />
+                <Metric
+                  icon={<Users />}
+                  value={compact(totalAssinantesConteudos)}
+                  label="Usuários Assinantes"
+                />
                 <Metric icon={<Star />} value={avaliacaoMedia ? avaliacaoMedia.toFixed(1) : "0.0"} label="Avaliação" />
                 <Metric icon={<BookOpen />} value={metricas.cursos} label="Conteúdos" />
                 <Metric icon={<Eye />} value={compact(metricas.views ?? 0)} label="Views" />

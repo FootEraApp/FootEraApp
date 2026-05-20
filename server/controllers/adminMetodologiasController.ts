@@ -12,6 +12,7 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
       treinoCount: number;
       videoCount: number;
       aulaCount: number;
+      aulaAoVivoCount: number;
       materialCount: number;
       desafioCount: number;
       estruturaCount: number;
@@ -47,6 +48,7 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
       treinoCount: 0,
       videoCount: 0,
       aulaCount: 0,
+      aulaAoVivoCount: 0,
       materialCount: 0,
       desafioCount: 0,
       estruturaCount: 0,
@@ -65,6 +67,7 @@ async function anexarCountsEstruturaPorMetodologia(ids: string[]) {
     if (it.tipo === "TREINO") out[metodologiaId].treinoCount++;
     if (it.tipo === "VIDEO") out[metodologiaId].videoCount++;
     if (it.tipo === "AULA") out[metodologiaId].aulaCount++;
+    if (it.tipo === "AULA_AO_VIVO") out[metodologiaId].aulaAoVivoCount++;
     if (it.tipo === "MATERIAL") out[metodologiaId].materialCount++;
     if (it.tipo === "DESAFIO") out[metodologiaId].desafioCount++;
   }
@@ -145,6 +148,7 @@ export async function listMetodologiasPendentes(req: Request, res: Response) {
           criadorUsuario: {
             select: { id: true, nome: true, nomeDeUsuario: true, email: true, foto: true, parceiro: true },
           },
+          _count: { select: { assinantes: true, estruturas: true } },
           estruturas: {
             take: 2,
             orderBy: { ordem: "asc" },
@@ -191,6 +195,8 @@ export async function listMetodologiasPendentes(req: Request, res: Response) {
         origemTipo: "LEARNING",
         videoCount: learningCountsById[m.id]?.videoCount ?? 0,
         aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+        aulaAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+        aulasAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
         treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
         materialCount: learningCountsById[m.id]?.materialCount ?? 0,
         desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
@@ -203,6 +209,8 @@ export async function listMetodologiasPendentes(req: Request, res: Response) {
           origemTipo: "AVULSA",
           videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
           aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
+          aulaAoVivoCount: itens.filter((it: any) => it.tipo === "AULA_AO_VIVO").length,
+          aulasAoVivoCount: itens.filter((it: any) => it.tipo === "AULA_AO_VIVO").length,
           treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
           materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
           desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,
@@ -720,6 +728,7 @@ export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
               parceiro: true,
             },
           },
+          _count: { select: { assinantes: true, estruturas: true } },
           estruturas: {
             take: 2,
             orderBy: { ordem: "asc" },
@@ -766,6 +775,8 @@ export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
         origemTipo: "LEARNING" as const,
         videoCount: learningCountsById[m.id]?.videoCount ?? 0,
         aulaCount: learningCountsById[m.id]?.aulaCount ?? 0,
+        aulaAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
+        aulasAoVivoCount: learningCountsById[m.id]?.aulaAoVivoCount ?? 0,
         treinoCount: learningCountsById[m.id]?.treinoCount ?? 0,
         materialCount: learningCountsById[m.id]?.materialCount ?? 0,
         desafioCount: learningCountsById[m.id]?.desafioCount ?? 0,
@@ -778,6 +789,8 @@ export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
           origemTipo: "AVULSA" as const,
           videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
           aulaCount: itens.filter((it: any) => it.tipo === "AULA").length,
+          aulaAoVivoCount: itens.filter((it: any) => it.tipo === "AULA_AO_VIVO").length,
+          aulasAoVivoCount: itens.filter((it: any) => it.tipo === "AULA_AO_VIVO").length,
           treinoCount: itens.filter((it: any) => it.tipo === "TREINO").length,
           materialCount: itens.filter((it: any) => it.tipo === "MATERIAL").length,
           desafioCount: itens.filter((it: any) => it.tipo === "DESAFIO").length,

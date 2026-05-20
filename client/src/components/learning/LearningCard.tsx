@@ -198,6 +198,10 @@ export default function LearningCard({
             <span className="px-2 py-1 rounded-full border bg-slate-50">
               {item?.desafioCount ?? 0} desafios
             </span>
+
+            <span className="px-2 py-1 rounded-full border bg-slate-50">
+              {item?.aulaAoVivoCount ?? item?.aulasAoVivoCount ?? 0} aulas ao vivo
+            </span>
           </div>
 
           <div className="mt-4 flex items-center gap-2">
