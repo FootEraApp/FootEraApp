@@ -4,7 +4,6 @@ import type { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
-
 async function montarRespostaElencos(donoId: string, turmaId?: string) {
   const whereBase: any = {
     OR: [{ clubeId: donoId }, { escolinhaId: donoId }, { professorId: donoId }],
@@ -254,38 +253,41 @@ export async function getEscalaPorDono(req: Request, res: Response) {
 
 export async function listarElencos(req: Request, res: Response) {
   try {
-    const raw = (req.query.tipoUsuarioId ?? "") as string;
-    const tipoUsuarioId = String(raw).trim();
-    if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    const tipoUsuarioId = String(req.query.tipoUsuarioId ?? "").trim();
+    const turmaId = req.query.turmaId ? String(req.query.turmaId).trim() : "";
+
+    if (!tipoUsuarioId) {
+      return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    }
+
+    const where: any = {
+      OR: [
+        { professorId: tipoUsuarioId },
+        { escolinhaId: tipoUsuarioId },
+        { clubeId: tipoUsuarioId },
+      ],
+      ativo: true,
+    };
+
+    if (turmaId) {
+      where.turmaId = turmaId;
+    }
 
     const elencos = await prisma.elenco.findMany({
-      where: {
-        OR: [
-          { professorId: tipoUsuarioId },
-          { escolinhaId: tipoUsuarioId },
-          { clubeId: tipoUsuarioId },
-        ],
-        ativo: true,
+      where,
+      select: {
+        id: true,
+        nome: true,
+        maxJogadores: true,
+        escala: true,
+        formacao: true,
+        atletasIds: true,
+        turmaId: true,
       },
       orderBy: { dataCriacao: "desc" },
     });
 
-    if (!elencos.length) return res.json([]);
-
-    const elencoIds = elencos.map((e) => e.id);
-    const vinculos = await prisma.atletaElenco.findMany({
-      where: { elencoId: { in: elencoIds } },
-    });
-
-    const porElenco = new Map<string, { atletaId: string; posicao: PosicaoCampo }[]>();
-    for (const v of vinculos) {
-      const arr = porElenco.get(v.elencoId) ?? [];
-      arr.push({ atletaId: v.atletaId, posicao: v.posicao });
-      porElenco.set(v.elencoId, arr);
-    }
-
-    const resposta = elencos.map((e) => ({ ...e, atletas: porElenco.get(e.id) ?? [] }));
-    return res.json(resposta);
+    return res.json(elencos);
   } catch (err) {
     console.error("Erro ao listar elencos:", err);
     return res.status(500).json({ error: "Erro ao listar elencos" });
@@ -304,6 +306,7 @@ export async function criarElenco(req: Request, res: Response) {
       formacao, 
       tipoUsuario,
       tipoUsuarioId,
+      reservasIds,
     } = req.body;
 
     const tipo = (tipoUsuario ?? "").toString().toLowerCase();
@@ -326,6 +329,13 @@ export async function criarElenco(req: Request, res: Response) {
 
     const escalaUsada = escala && typeof escala === "object" ? escala : null;
     const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
+    const reservasIdsLimpos = Array.isArray(reservasIds)
+      ? reservasIds.map(String).filter(Boolean)
+      : [];
+
+    const atletasIdsFinal = Array.from(
+      new Set([...atletasFromEscala, ...reservasIdsLimpos])
+    );
 
     if (atletasFromEscala.length !== 11) {
       return res.status(400).json({
@@ -340,8 +350,11 @@ export async function criarElenco(req: Request, res: Response) {
         professorId: professorId ?? owner.professorId ?? null,
         clubeId: clubeId ?? owner.clubeId ?? null,
         escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
-        atletasIds: atletasFromEscala,
-        escala: escalaUsada ?? null,
+        atletasIds: atletasIdsFinal,
+        escala: {
+          ...(escalaUsada ?? {}),
+          __reservasIds: reservasIdsLimpos,
+        },
         formacao: formacao ?? null,
         maxJogadores: 11, 
         turmaId: turmaId ?? null,
@@ -369,6 +382,7 @@ export async function atualizarElenco(req: Request, res: Response) {
       formacao,
       tipoUsuario,
       tipoUsuarioId,
+      reservasIds,
     } = req.body;
 
     const tipo = (tipoUsuario ?? "").toString().toLowerCase();
@@ -391,6 +405,13 @@ export async function atualizarElenco(req: Request, res: Response) {
 
     const escalaUsada = escala && typeof escala === "object" ? escala : null;
     const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
+    const reservasIdsLimpos = Array.isArray(reservasIds)
+      ? reservasIds.map(String).filter(Boolean)
+      : [];
+
+    const atletasIdsFinal = Array.from(
+      new Set([...atletasFromEscala, ...reservasIdsLimpos])
+    );
 
     if (atletasFromEscala.length !== 11) {
       return res.status(400).json({
@@ -406,8 +427,11 @@ export async function atualizarElenco(req: Request, res: Response) {
         professorId: professorId ?? owner.professorId ?? null,
         clubeId: clubeId ?? owner.clubeId ?? null,
         escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
-        atletasIds: atletasFromEscala,
-        escala: escalaUsada ?? null,
+        atletasIds: atletasIdsFinal,
+        escala: {
+          ...(escalaUsada ?? {}),
+          __reservasIds: reservasIdsLimpos,
+        },
         formacao: formacao ?? null,
         maxJogadores: 11, 
         turmaId: turmaId ?? null,

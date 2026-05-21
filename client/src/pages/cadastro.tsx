@@ -1,5 +1,5 @@
 // client/src/pages/cadastro
-import { useEffect, useMemo, useState, useCallback, type ComponentPropsWithoutRef } from "react";
+import { useEffect, useMemo, useState, useCallback, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import { API, APP } from "../config.js";
@@ -7,7 +7,6 @@ import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import GoogleButton from "../components/auth/GoogleButton";
 import MaintenanceScreen from "../components/MaintenanceScreen";
-
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -26,14 +25,28 @@ function ChevronUp(props: SvgProps) {
   );
 }
 
-type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Olheiro";
+type TipoPerfil =
+  | "Atleta"
+  | "Professor"
+  | "Olheiro"
+  | "Learning"
+  | "Escolinha"
+  | "Escola"
+  | "Clube"
+  | "Federacao"
+  | "Marca";
+
 type Etapa = 1 | 2 | 3;
 const mapTipo = {
   Atleta: "ATLETA",
   Professor: "PROFESSOR",
   Escolinha: "ESCOLINHA",
+  Escola: "ESCOLA",
   Clube: "CLUBE",
   Olheiro: "OLHEIRO",
+  Federacao: "FEDERACAO",
+  Marca: "MARCA",
+  Learning: "LEARNING",
 } as const;
 
 const PRECISA_NASCIMENTO = (t: TipoPerfil) =>
@@ -45,8 +58,43 @@ type CamposProfessor = {
   cref?: string;
   statusCref?: StatusCrefUI | undefined;
 };
-type CamposClube = { cnpjClube: string; cidadeClube: string };
-type CamposEscolinha = { cnpjEscolinha: string; cidadeEscolinha: string };
+type CamposClube = {
+  nomeClube: string;
+  cnpjClube: string;
+  telefone1Clube: string;
+  telefone2Clube: string;
+  emailClube: string;
+  siteOficialClube: string;
+  sedeClube: string;
+  logradouroClube: string;
+  numeroClube: string;
+  complementoClube: string;
+  bairroClube: string;
+  cidadeClube: string;
+  estadoClube: string;
+  paisClube: string;
+  cepClube: string;
+  estadio: string;
+};
+
+type CamposEscolinha = {
+  nomeEscolinha: string;
+  cnpjEscolinha: string;
+  telefone1Escolinha: string;
+  telefone2Escolinha: string;
+  emailEscolinha: string;
+  siteOficialEscolinha: string;
+  sedeEscolinha: string;
+  logradouroEscolinha: string;
+  numeroEscolinha: string;
+  complementoEscolinha: string;
+  bairroEscolinha: string;
+  cidadeEscolinha: string;
+  estadoEscolinha: string;
+  paisEscolinha: string;
+  cepEscolinha: string;
+};
+
 type CamposOlheiro = {
   areaAtuacao: string;
   anosExperiencia: number | "";
@@ -58,7 +106,7 @@ type CamposOlheiro = {
 };
 type CamposVinculo = {
   desejaVinculo: boolean;
-  tipoAlvo: "Professor" | "Escolinha" | "Clube" | "";
+  tipoAlvo: "Atleta" | "Professor" | "Escolinha" | "Clube" | "";
   alvoBusca: string;
   destinatarioId: string;       // Usuario.id -> usado em SolicitacaoTreino
   destinatarioEntidadeId: string; // Professor.id / Clube.id / Escolinha.id
@@ -66,14 +114,14 @@ type CamposVinculo = {
 type ResultadoBusca = {
   id: string; // id da entidade
   usuarioId: string; // id da tabela Usuario
-  tipo: "Professor" | "Escolinha" | "Clube";
+  tipo: "Atleta" | "Professor" | "Escolinha" | "Clube";
   nome: string;
   username: string;
   fotoUrl: string | null;
 };
 type Responsavel = { nome: string; email: string; telefone?: string };
 
-const CATEGORIAS_ATLETA = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
+const CATEGORIAS_ATLETA = ["Sub3","Sub5","Sub7","Sub9","Sub11","Sub13","Sub15","Sub16","Livre"] as const;
 type CategoriaAtleta = typeof CATEGORIAS_ATLETA[number];
 
 const STATUS_CREF = ["Pendente", "Ativo", "Desativo"] as const;
@@ -86,6 +134,14 @@ type CamposAtleta = {
  };
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function getTiposVinculoDisponiveis(tipo: TipoPerfil) {
+  if (tipo === "Atleta") return ["Escolinha", "Professor", "Clube"];
+  if (tipo === "Professor") return ["Atleta", "Escolinha", "Clube", "Professor"];
+  if (tipo === "Clube") return ["Atleta", "Professor", "Escolinha"];
+  if (tipo === "Escolinha") return ["Atleta", "Professor", "Clube"];
+  return [];
+}
 
 function getAvatarSrc(fotoUrl?: string | null) {
   const src = String(fotoUrl || "").trim();
@@ -127,6 +183,261 @@ function validarCNPJ(v: string) {
   return cnpj.endsWith(`${d1}${d2}`);
 }
 
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string | number | undefined;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <input
+        type={type}
+        className="w-full border rounded px-3 py-2"
+        value={value ?? ""}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function AccordionInfo({
+  aberto,
+  setAberto,
+  children,
+}: {
+  aberto: boolean;
+  setAberto: (v: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-4 border rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setAberto(!aberto)}
+        className="w-full flex items-center justify-between px-5 py-4 font-semibold text-left"
+      >
+        Informações adicionais (opcional)
+        {aberto ? <ChevronUp /> : <ChevronDown />}
+      </button>
+
+      {aberto && (
+        <div className="border-t p-5 space-y-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const isOrganizacao = (tipo: TipoPerfil) =>
+  ["Escolinha", "Escola", "Clube", "Federacao", "Marca"].includes(tipo);
+
+const isLearning = (tipo: TipoPerfil) => tipo === "Learning";
+
+const PERFIS_PESSOA: TipoPerfil[] = [
+  "Atleta",
+  "Professor",
+  "Olheiro",
+  "Learning",
+];
+
+const PERFIS_ORGANIZACAO: TipoPerfil[] = [
+  "Escolinha",
+  "Clube",
+  "Federacao",
+  "Marca",
+];
+
+const perfilVisual: Record<TipoPerfil, { titulo: string; subtitulo: string; emoji: string }> = {
+  Atleta: {
+    titulo: "Atleta",
+    subtitulo: "Para jogadores",
+    emoji: "⚽",
+  },
+  Professor: {
+    titulo: "Profissional",
+    subtitulo: "Professor ou treinador",
+    emoji: "🎯",
+  },
+  Olheiro: {
+    titulo: "Scout",
+    subtitulo: "Avaliação de talentos, olheiros",
+    emoji: "🔭",
+  },
+  Escolinha: {
+    titulo: "Escolinha",
+    subtitulo: "Formação de atletas",
+    emoji: "🏟️",
+  },
+  Clube: {
+    titulo: "Clube",
+    subtitulo: "Clube profissional",
+    emoji: "🛡️",
+  },
+  Learning: {
+    titulo: "Learning",
+    subtitulo: "Ver cursos, lives e webinars",
+    emoji: "🎓",
+  },
+  Federacao: {
+    titulo: "Federação",
+    subtitulo: "Canal oficial e eventos",
+    emoji: "🏅",
+  },
+  Marca: {
+    titulo: "Marca",
+    subtitulo: "Parceira e patrocinadora",
+    emoji: "👕",
+  },
+  Escola: {
+    titulo: "Escola",
+    subtitulo: "Instituição de ensino",
+    emoji: "🏫",
+  },
+};
+
+function CheckBadge() {
+  return (
+    <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-green-800 text-[11px] text-white">
+      ✓
+    </span>
+  );
+}
+
+function TipoContaCard({
+  ativo,
+  emoji,
+  titulo,
+  subtitulo,
+  onClick,
+}: {
+  ativo: boolean;
+  emoji: string;
+  titulo: string;
+  subtitulo: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative flex flex-1 items-center gap-3 rounded-xl border p-4 text-left transition",
+        ativo
+          ? "border-green-800 bg-green-50 shadow-sm"
+          : "border-gray-200 bg-white hover:border-green-300",
+      ].join(" ")}
+    >
+      {ativo && <CheckBadge />}
+
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100 text-2xl">
+        {emoji}
+      </span>
+
+      <span>
+        <strong className="block text-sm text-green-950">{titulo}</strong>
+        <span className="block text-xs text-gray-500">{subtitulo}</span>
+      </span>
+    </button>
+  );
+}
+
+function PerfilCard({
+  tipo,
+  ativo,
+  onClick,
+}: {
+  tipo: TipoPerfil;
+  ativo: boolean;
+  onClick: () => void;
+}) {
+  const item = perfilVisual[tipo];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative rounded-xl border p-3 text-center transition",
+        ativo
+          ? "border-green-800 bg-green-50 shadow-sm"
+          : "border-gray-200 bg-white hover:border-green-300",
+      ].join(" ")}
+    >
+      {ativo && <CheckBadge />}
+
+      <div className="mb-2 text-3xl">{item.emoji}</div>
+      <strong className="block text-xs text-green-950">{item.titulo}</strong>
+      <span className="mt-1 block text-[10px] text-gray-500">{item.subtitulo}</span>
+    </button>
+  );
+}
+
+function MinimalInput({
+  label,
+  icon,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  readOnly = false,
+  error = false,
+  right,
+  autoComplete,
+}: {
+  label: string;
+  icon: string;
+  value: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  readOnly?: boolean;
+  error?: boolean;
+  right?: ReactNode;
+  autoComplete?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-green-950 mb-1">
+        {label}
+      </label>
+
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+          {icon}
+        </span>
+
+        <input
+          type={type}
+          readOnly={readOnly}
+          autoComplete={autoComplete}
+          className={[
+            "w-full rounded-lg border bg-white py-2.5 pl-10 pr-10 text-sm outline-none transition",
+            "placeholder:text-gray-400 focus:border-green-800 focus:ring-2 focus:ring-green-100",
+            readOnly ? "bg-gray-100 text-gray-600" : "",
+            error ? "border-red-400" : "border-gray-300",
+          ].join(" ")}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange?.(e.target.value)}
+        />
+
+        {right}
+      </div>
+    </div>
+  );
+}
+
 export default function Cadastro() {
   const [_, navigate] = useLocation();
 
@@ -154,13 +465,15 @@ export default function Cadastro() {
   const [etapa, setEtapa] = useState<Etapa>(1);
   const [finalizandoCadastro, setFinalizandoCadastro] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
+  const [infoAdicionalClubeAberto, setInfoAdicionalClubeAberto] = useState(false);
+  const [infoAdicionalEscolinhaAberto, setInfoAdicionalEscolinhaAberto] = useState(false);
   const [infoAdicionalProfessorAberto, setInfoAdicionalProfessorAberto] = useState(false);
   const [infoAdicionalOlheiroAberto, setInfoAdicionalOlheiroAberto] = useState(false);
   const [infoAdicionalEtapa1Aberto, setInfoAdicionalEtapa1Aberto] = useState(false);
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: undefined, cref: "" });
-  const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "" });
-  const [escolinha, setEscolinha] = useState<CamposEscolinha>({ cnpjEscolinha: "", cidadeEscolinha: "" });
+  const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "", estadoClube: "", nomeClube: "", telefone1Clube: "", telefone2Clube: "", emailClube: "", siteOficialClube: "", sedeClube: "", logradouroClube: "", numeroClube: "", complementoClube: "", bairroClube: "", paisClube: "", cepClube: "", estadio: "" });
+  const [escolinha, setEscolinha] = useState<CamposEscolinha>({ cnpjEscolinha: "", cidadeEscolinha: "", estadoEscolinha: "", nomeEscolinha: "", telefone1Escolinha: "", telefone2Escolinha: "", emailEscolinha: "", siteOficialEscolinha: "", sedeEscolinha: "", logradouroEscolinha: "", numeroEscolinha: "", complementoEscolinha: "", bairroEscolinha: "", paisEscolinha: "", cepEscolinha: "" });
   const [olheiro, setOlheiro] = useState<CamposOlheiro>({
     areaAtuacao: "",
     anosExperiencia: "",
@@ -191,6 +504,19 @@ export default function Cadastro() {
   const senhaForte = PASS_RE.test(senha);
   const confirmarOk = confirmarSenha === senha && confirmarSenha.length > 0;
 
+  const DATA_MINIMA_NASCIMENTO = "1900-01-01";
+
+  function hojeISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function dataNascimentoValida(iso: string) {
+    if (!iso) return false;
+    if (iso < DATA_MINIMA_NASCIMENTO) return false;
+    if (iso > hojeISO()) return false;
+    return true;
+  }
+
   function calcIdade(iso: string) {
     if (!iso) return null;
     const [y, m, d] = iso.split("-").map(Number);
@@ -199,7 +525,8 @@ export default function Cadastro() {
     return Math.max(0, idade);
   }
   const idade = useMemo(() => calcIdade(dataNascimento), [dataNascimento]);
-
+  const precisaResponsavel = tipoPerfil === "Atleta" && idade !== null && idade < 12;
+  
   const verificarEmail = useMemo(() => debounce(async (e: string) => {
     if (!e || !EMAIL_RE.test(e)) return setEmailDisp(null);
     try {
@@ -265,8 +592,9 @@ export default function Cadastro() {
   const podeIrParaEtapa3 = () => {
     if (PRECISA_NASCIMENTO(tipoPerfil)) {
       if (!dataNascimento) return setErro("Informe a data de nascimento."), false;
-      const nasc = new Date(dataNascimento);
-      if (nasc > new Date()) return setErro("Data de nascimento no futuro."), false;
+      if (!dataNascimentoValida(dataNascimento)) {
+        return setErro("A data de nascimento deve estar entre 01/01/1900 e hoje."), false;
+      }
     }
 
     if (tipoPerfil === "Atleta") {
@@ -282,11 +610,48 @@ export default function Cadastro() {
       }
     }
     if (tipoPerfil === "Clube") {
-      if (clube.cnpjClube && !validarCNPJ(clube.cnpjClube)) return setErro("CNPJ do clube inválido."), false;
+      if (!clube.nomeClube.trim()) {
+        setErro("Informe o nome do clube.");
+        return false;
+      }
+
+      if (clube.cnpjClube && !validarCNPJ(clube.cnpjClube)) {
+        setErro("CNPJ inválido.");
+        return false;
+      }
     }
+
     if (tipoPerfil === "Escolinha") {
-      if (escolinha.cnpjEscolinha && !validarCNPJ(escolinha.cnpjEscolinha)) return setErro("CNPJ da escolinha inválido."), false;
+      if (!escolinha.nomeEscolinha.trim()) {
+        setErro("Informe o nome da escolinha.");
+        return false;
+      }
+
+      if (
+        escolinha.cnpjEscolinha &&
+        !validarCNPJ(escolinha.cnpjEscolinha)
+      ) {
+        setErro("CNPJ inválido.");
+        return false;
+      }
     }
+
+    if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
+      if (!clube.nomeClube.trim()) {
+        setErro(
+          tipoPerfil === "Federacao"
+            ? "Informe o nome da federação."
+            : "Informe o nome da marca."
+        );
+        return false;
+      }
+
+      if (clube.cnpjClube && !validarCNPJ(clube.cnpjClube)) {
+        setErro("CNPJ inválido.");
+        return false;
+      }
+    }
+
     if (tipoPerfil === "Olheiro") {
       if (olheiro.anosExperiencia !== "" && Number.isNaN(Number(olheiro.anosExperiencia))) {
         return setErro("Anos de experiência inválido."), false;
@@ -302,7 +667,7 @@ export default function Cadastro() {
       }
     }
 
-    if (idade !== null && idade < 18) {
+    if (precisaResponsavel) {
       if (!responsavel.nome.trim()) return setErro("Informe o nome do responsável."), false;
       if (!EMAIL_RE.test(responsavel.email)) return setErro("Informe um e-mail válido do responsável."), false;
       if (responsavel.telefone && !PHONE_RE.test(responsavel.telefone)) return setErro("Telefone do responsável inválido."), false;
@@ -355,11 +720,67 @@ export default function Cadastro() {
       }
 
       if (tipoPerfil === "Clube") {
-        payload.cnpjClube = clube.cnpjClube || undefined;
+        Object.assign(payload, {
+          nomeClube: clube.nomeClube.trim(),
+          cnpjClube: clube.cnpjClube || undefined,
+          telefone1Clube: clube.telefone1Clube || undefined,
+          telefone2Clube: clube.telefone2Clube || undefined,
+          emailClube: clube.emailClube || undefined,
+          siteOficialClube: clube.siteOficialClube || undefined,
+          sedeClube: clube.sedeClube || undefined,
+          logradouroClube: clube.logradouroClube || undefined,
+          numeroClube: clube.numeroClube || undefined,
+          complementoClube: clube.complementoClube || undefined,
+          bairroClube: clube.bairroClube || undefined,
+          cidadeClube: clube.cidadeClube || cidade || undefined,
+          estadoClube: clube.estadoClube || estado || undefined,
+          paisClube: clube.paisClube || pais || undefined,
+          cepClube: clube.cepClube || undefined,
+          estadio: clube.estadio || undefined,
+        });
       }
 
       if (tipoPerfil === "Escolinha") {
-        payload.cnpjEscolinha = escolinha.cnpjEscolinha || undefined;
+        Object.assign(payload, {
+          nomeEscolinha: escolinha.nomeEscolinha.trim(),
+          cnpjEscolinha: escolinha.cnpjEscolinha || undefined,
+          telefone1Escolinha: escolinha.telefone1Escolinha || undefined,
+          telefone2Escolinha: escolinha.telefone2Escolinha || undefined,
+          emailEscolinha: escolinha.emailEscolinha || undefined,
+          siteOficialEscolinha: escolinha.siteOficialEscolinha || undefined,
+          sedeEscolinha: escolinha.sedeEscolinha || undefined,
+          logradouroEscolinha: escolinha.logradouroEscolinha || undefined,
+          numeroEscolinha: escolinha.numeroEscolinha || undefined,
+          complementoEscolinha: escolinha.complementoEscolinha || undefined,
+          bairroEscolinha: escolinha.bairroEscolinha || undefined,
+          cidadeEscolinha: escolinha.cidadeEscolinha || cidade || undefined,
+          estadoEscolinha: escolinha.estadoEscolinha || estado || undefined,
+          paisEscolinha: escolinha.paisEscolinha || pais || undefined,
+          cepEscolinha: escolinha.cepEscolinha || undefined,
+        });
+      }
+
+      if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
+        Object.assign(payload, {
+          nomeOrganizacao: clube.nomeClube.trim() || undefined,
+
+          // mantém esses aliases porque o backend já reaproveita campos de clube/escolinha
+          nomeClube: clube.nomeClube.trim() || undefined,
+          cnpjClube: clube.cnpjClube || undefined,
+          telefone1Clube: clube.telefone1Clube || undefined,
+          telefone2Clube: clube.telefone2Clube || undefined,
+          emailClube: clube.emailClube || email.trim() || undefined,
+          siteOficialClube: clube.siteOficialClube || undefined,
+          sedeClube: clube.sedeClube || undefined,
+          logradouroClube: clube.logradouroClube || undefined,
+          numeroClube: clube.numeroClube || undefined,
+          complementoClube: clube.complementoClube || undefined,
+          bairroClube: clube.bairroClube || bairro || undefined,
+          cidadeClube: clube.cidadeClube || cidade || undefined,
+          estadoClube: clube.estadoClube || estado || undefined,
+          paisClube: clube.paisClube || pais || undefined,
+          cepClube: clube.cepClube || cep || undefined,
+        });
       }
 
       if (tipoPerfil === "Olheiro") {
@@ -384,11 +805,22 @@ export default function Cadastro() {
           }
         }
       }
-      if (idade !== null && idade < 18) {
+      if (precisaResponsavel) {
         payload.responsavel = {
           nome: responsavel.nome,
           email: responsavel.email,
           telefone: responsavel.telefone || undefined,
+        };
+      }
+
+      if (
+        getTiposVinculoDisponiveis(tipoPerfil).length > 0 &&
+        vinculo.desejaVinculo &&
+        vinculo.destinatarioId
+      ) {
+        payload.vinculo = {
+          desejaVinculo: true,
+          destinatarioId: vinculo.destinatarioId,
         };
       }
 
@@ -413,7 +845,12 @@ export default function Cadastro() {
       const data = await res.json();
       const token = data?.token || data?.accessToken || data?.jwt;
 
-      setSucesso("Cadastro salvo com sucesso! Redirecionando para a página de login…");
+      if (tipoPerfil === "Learning") {
+        setSucesso("Cadastro Learning realizado com sucesso! Verifique seu e-mail para confirmar a conta.");
+      } else {
+        setSucesso("Cadastro salvo com sucesso! Redirecionando para a página de login…");
+      }
+
       window.scrollTo({ top: 0, behavior: "smooth" });
 
       try {
@@ -424,7 +861,7 @@ export default function Cadastro() {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            doc: idade !== null && idade < 18 ? "Termos e Privacidade (menor)" : "Termos e Privacidade",
+            doc: precisaResponsavel ? "Termos e Privacidade (menor)" : "Termos e Privacidade",
             versao: { termos: "2025-10-06", privacidade: "2025-10-06" },
             hashes: { termosHash: "<opcional>", privHash: "<opcional>" },
             metodo: "click-wrap",
@@ -434,33 +871,14 @@ export default function Cadastro() {
         console.warn("Falha ao registrar consentimento:", e);
       }
 
-      if (
-        (tipoPerfil === "Atleta" || tipoPerfil === "Olheiro") &&
-        vinculo.desejaVinculo &&
-        vinculo.destinatarioId
-      ) {
-        try {
-          const respVinculo = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ destinatarioId: vinculo.destinatarioId }),
-          });
-
-          if (!respVinculo.ok) {
-            const txt = await respVinculo.text().catch(() => "");
-            throw new Error(txt || "Falha ao criar solicitação de vínculo.");
-          }
-        } catch (e) {
-          console.warn("Falha ao criar solicitação de vínculo:", e);
-        }
-      }
-
       setTimeout(() => navigate("/login"), 1800);
     } catch (err: any) {
       setErro(err?.message || "Falha no cadastro.");
+      setErro(
+        tipoPerfil === "Learning"
+          ? "Ocorreu um erro ao realizar cadastro Learning."
+          : err?.response?.data?.error || err?.response?.data?.message || "Erro ao realizar cadastro."
+      );
     } finally {
       setFinalizandoCadastro(false);
     }
@@ -485,7 +903,7 @@ export default function Cadastro() {
   useEffect(() => {
     const podeBuscar =
       etapa === 3 &&
-      (tipoPerfil === "Atleta" || tipoPerfil === "Olheiro") &&
+      getTiposVinculoDisponiveis(tipoPerfil).length > 0 &&
       vinculo.desejaVinculo &&
       vinculo.tipoAlvo &&
       vinculo.alvoBusca.length >= 2;
@@ -513,7 +931,7 @@ export default function Cadastro() {
   }, []);
 
   const selectedAlvo: ResultadoBusca | null = useMemo(
-    () => resultadosBusca.find(r => r.id === vinculo.destinatarioId) || null,
+    () => resultadosBusca.find(r => r.usuarioId === vinculo.destinatarioId) || null,
     [resultadosBusca, vinculo.destinatarioId]
   );
 
@@ -577,6 +995,9 @@ export default function Cadastro() {
         escolinha: "escolinha",
         escola: "escola",
         olheiro: "olheiro",
+        learning: "learning",
+        federacao: "federacao",
+        marca: "marca",
       };
 
       sessionStorage.setItem("tipoUsuario", mapTipoStore[rawTipo] ?? "atleta");
@@ -591,7 +1012,11 @@ export default function Cadastro() {
         String(usuario.plano ?? data.plano ?? "FREE")
       );
 
-      navigate(rawTipo === "admin" ? "/admin" : "/feed");
+      if (rawTipo === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/perfil");
+      }
     } catch (err: any) {
       console.error("Erro no cadastro/login com Google:", err.response?.data || err.message);
       setErro(
@@ -723,223 +1148,269 @@ export default function Cadastro() {
           </div>
           {etapa === 1 && (
             <div>
-              <h2 className="text-xl font-semibold mb-1">Criar conta</h2>
-              <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo</p>
+              <h2 className="text-2xl font-semibold mb-1">Criar conta</h2>
+                <p className="text-sm text-green-600 mb-6">Preencha os dados para criar sua conta.</p>
 
-              <label className="block mb-2 font-medium">Tipo de Perfil</label>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {(["Atleta", "Escolinha", "Clube", "Professor", "Olheiro"] as TipoPerfil[]).map((t) => (
-                  <label className="flex items-center text-sm" key={t}>
-                    <input
-                      type="radio"
-                      name="tipo"
-                      className="mr-2"
-                      value={t}
-                      checked={tipoPerfil === t}
-                      onChange={(e) => setTipoPerfil(e.target.value as TipoPerfil)}
-                    />
-                    {t === "Escolinha"
-                      ? "Escolinha de Futebol"
-                      : t === "Clube"
-                      ? "Clube Profissional"
-                      : t === "Professor"
-                      ? "Profissional do Futebol"
-                      : t === "Olheiro"
-                      ? "Olheiro (Scout)"
-                      : t}
-                  </label>
-                ))}
-              </div>
-
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Nome de usuário*</label>
-                <input
-                  className={`w-full border rounded px-3 py-2 ${nomeDeUsuario && !usernameValido ? "border-red-400" : ""}`}
-                  value={nomeDeUsuario}
-                  onChange={(e) => setNomeDeUsuario(e.target.value)}
-                />
-                {nomeDeUsuario && (
-                  <p className={`text-xs mt-1 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!usernameValido
-                      ? "Use 3–20 caracteres (letras, números, . e _)."
-                      : userDisp === null
-                      ? "Verificando..."
-                      : userDisp
-                      ? "Disponível"
-                      : "Indisponível"}
+                <div className="mb-5">
+                  <h3 className="font-bold text-green-950 mb-1">
+                    Como você quer entrar na FootEra?
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Escolha a opção que melhor te descreve.
                   </p>
-                )}
-              </div>
 
-              <div className="mt-3">
-                <label className="block text-sm font-medium mb-1">Email*</label>
-                <input
-                  type="email"
-                  className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                {email && (
-                  <p className={`text-xs mt-1 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
-                    {!emailValido
-                      ? "Formato de e-mail inválido."
-                      : emailDisp === null
-                      ? "Verificando..."
-                      : emailDisp
-                      ? "Disponível"
-                      : "Já cadastrado"}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Senha*</label>
-                  <div className="relative">
-                    <input
-                      type={mostrarSenha ? "text" : "password"}
-                      autoComplete="new-password"
-                      className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`}
-                      value={senha}
-                      onChange={(e) => setSenha(e.target.value)}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <TipoContaCard
+                      ativo={!isOrganizacao(tipoPerfil)}
+                      emoji="👤"
+                      titulo="Pessoa"
+                      subtitulo="Para indivíduos"
+                      onClick={() => setTipoPerfil("Atleta")}
                     />
-                    <button
-                      type="button"
-                      aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
-                      onClick={() => setMostrarSenha((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
-                    >
-                      {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
+
+                    <TipoContaCard
+                      ativo={isOrganizacao(tipoPerfil)}
+                      emoji="🏢"
+                      titulo="Organização"
+                      subtitulo="Para equipes, clubes ou instituições"
+                      onClick={() => setTipoPerfil("Escolinha")}
+                    />
                   </div>
+                </div>
+
+                <div className="mb-6">
+                  <h3 className="font-bold text-green-950 mb-1">
+                    {isOrganizacao(tipoPerfil)
+                      ? "Que tipo de organização você representa?"
+                      : "Qual é o seu perfil principal?"}
+                  </h3>
+
+                  <p className="text-xs text-gray-500 mb-3">
+                    Selecione a categoria que melhor se aplica.
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {(isOrganizacao(tipoPerfil) ? PERFIS_ORGANIZACAO : PERFIS_PESSOA).map((tipo) => (
+                      <PerfilCard
+                        key={tipo}
+                        tipo={tipo}
+                        ativo={tipoPerfil === tipo}
+                        onClick={() => setTipoPerfil(tipo)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+              <div className="mt-6 border-t pt-4">
+                <h3 className="font-bold text-green-950">Dados da conta</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Preencha seus dados para criar sua conta.
+                </p>
+
+                <div className="space-y-3">
+                  <MinimalInput
+                    label="Nome de usuário*"
+                    icon="👤"
+                    value={nomeDeUsuario}
+                    placeholder="Ex.: joaosilva10"
+                    error={!!nomeDeUsuario && !usernameValido}
+                    onChange={(v) => setNomeDeUsuario(v)}
+                  />
+
+                  {nomeDeUsuario && (
+                    <p className={`text-xs -mt-2 ${usernameValido ? (userDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
+                      {!usernameValido
+                        ? "Use 3–20 caracteres (letras, números, . e _)."
+                        : userDisp === null
+                        ? "Verificando..."
+                        : userDisp
+                        ? "Disponível"
+                        : "Indisponível"}
+                    </p>
+                  )}
+
+                  <MinimalInput
+                    label="E-mail*"
+                    icon="✉️"
+                    type="email"
+                    value={email}
+                    placeholder="exemplo@email.com"
+                    error={!!email && !emailValido}
+                    onChange={(v) => setEmail(v)}
+                  />
+
+                  {email && (
+                    <p className={`text-xs -mt-2 ${emailValido ? (emailDisp === false ? "text-red-600" : "text-green-700") : "text-red-600"}`}>
+                      {!emailValido
+                        ? "Formato de e-mail inválido."
+                        : emailDisp === null
+                        ? "Verificando..."
+                        : emailDisp
+                        ? "Disponível"
+                        : "Já cadastrado"}
+                    </p>
+                  )}
+
+                  <MinimalInput
+                    label="Senha*"
+                    icon="🔒"
+                    type={mostrarSenha ? "text" : "password"}
+                    value={senha}
+                    placeholder="Mínimo de 8 caracteres"
+                    autoComplete="new-password"
+                    error={!!senha && !senhaForte}
+                    onChange={(v) => setSenha(v)}
+                    right={
+                      <button
+                        type="button"
+                        aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                        onClick={() => setMostrarSenha((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                  />
+
                   {senha && (
-                    <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>
+                    <p className={`text-xs -mt-2 ${senhaForte ? "text-green-700" : "text-red-600"}`}>
                       Mín. 8 caracteres com letra e número.
                     </p>
                   )}
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Confirmar Senha*</label>
-                  <div className="relative">
-                    <input
-                      type={mostrarConfirmar ? "text" : "password"}
-                      autoComplete="new-password"
-                      className={`w-full border rounded px-3 py-2 pr-10 ${confirmarSenha && !confirmarOk ? "border-red-400" : ""}`}
-                      value={confirmarSenha}
-                      onChange={(e) => setConfirmarSenha(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"}
-                      onClick={() => setMostrarConfirmar((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
-                    >
-                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
+                  <MinimalInput
+                    label="Confirmar senha*"
+                    icon="🔒"
+                    type={mostrarConfirmar ? "text" : "password"}
+                    value={confirmarSenha}
+                    placeholder="Repita sua senha"
+                    autoComplete="new-password"
+                    error={!!confirmarSenha && !confirmarOk}
+                    onChange={(v) => setConfirmarSenha(v)}
+                    right={
+                      <button
+                        type="button"
+                        aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"}
+                        onClick={() => setMostrarConfirmar((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                  />
+
                   {confirmarSenha && (
-                    <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>
+                    <p className={`text-xs -mt-2 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>
                       {confirmarOk ? "OK" : "Senhas não coincidem."}
                     </p>
                   )}
                 </div>
-              </div>
+              </div>              
 
-              <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden bg-white">
-                <button
-                  type="button"
-                  onClick={() => setInfoAdicionalEtapa1Aberto((v) => !v)}
-                  className="w-full flex items-center justify-between px-5 py-5 text-left hover:bg-gray-50 transition"
-                >
-                  <span className="text-sm sm:text-base font-medium text-gray-900">
-                    Informações adicionais (opcional)
-                  </span>
-                  {infoAdicionalEtapa1Aberto ? <ChevronUp /> : <ChevronDown />}
-                </button>
+              {["Atleta", "Professor", "Olheiro"].includes(tipoPerfil) && (
+                <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden">
 
-                {infoAdicionalEtapa1Aberto && (
-                  <div className="px-4 pb-4 border-t border-gray-100">
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium mb-1">Nome Completo (opcional)</label>
-                      <input
-                        className="w-full border rounded px-3 py-2"
-                        value={nome}
-                        onChange={(e) => setNome(e.target.value)}
-                      />
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInfoAdicionalEtapa1Aberto((v) => !v)
+                    }
+                    className="w-full flex items-center justify-between px-5 py-5"
+                  >
+                    <span className="text-sm sm:text-base font-medium text-gray-900">
+                      Informações adicionais (opcional)
+                    </span>
 
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
-                        <input
-                          className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
-                          placeholder="00000-000"
-                          inputMode="numeric"
-                          value={cep}
-                          onChange={(e) => setCep(maskCEP(e.target.value))}
-                        />
-                        {cep && (
-                          <p
-                            className={`text-xs mt-1 ${
-                              cepStatus === "loading"
-                                ? "text-gray-500"
-                                : cepStatus === "ok"
-                                ? "text-green-700"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {cepStatus === "loading"
-                              ? "Buscando endereço…"
-                              : cepStatus === "ok"
-                              ? "Endereço localizado pelo CEP."
-                              : cepStatus === "invalid"
-                              ? "CEP inválido."
-                              : "CEP não encontrado."}
-                          </p>
-                        )}
+                    {infoAdicionalEtapa1Aberto ? (
+                      <ChevronUp />
+                    ) : (
+                      <ChevronDown />
+                    )}
+                  </button>
+
+                  {infoAdicionalEtapa1Aberto && (
+                      <div className="px-4 pb-4 border-t border-gray-100">
+                                  <div className="mt-4">
+                                    <label className="block text-sm font-medium mb-1">Nome Completo (opcional)</label>
+                                    <input
+                                      className="w-full border rounded px-3 py-2"
+                                      value={nome}
+                                      onChange={(e) => setNome(e.target.value)}
+                                    />
+                                  </div>
+
+                                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="sm:col-span-2">
+                                      <label className="block text-sm font-medium mb-1">CEP (opcional)</label>
+                                      <input
+                                        className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
+                                        placeholder="00000-000"
+                                        inputMode="numeric"
+                                        value={cep}
+                                        onChange={(e) => setCep(maskCEP(e.target.value))}
+                                      />
+                                      {cep && (
+                                        <p
+                                          className={`text-xs mt-1 ${
+                                            cepStatus === "loading"
+                                              ? "text-gray-500"
+                                              : cepStatus === "ok"
+                                              ? "text-green-700"
+                                              : "text-red-600"
+                                          }`}
+                                        >
+                                          {cepStatus === "loading"
+                                            ? "Buscando endereço…"
+                                            : cepStatus === "ok"
+                                            ? "Endereço localizado pelo CEP."
+                                            : cepStatus === "invalid"
+                                            ? "CEP inválido."
+                                            : "CEP não encontrado."}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
+                                      <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={cidade}
+                                        onChange={(e) => setCidade(e.target.value)}
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium mb-1">UF (opcional)</label>
+                                      <input
+                                        className="w-full border rounded px-3 py-2 uppercase"
+                                        maxLength={2}
+                                        value={estado}
+                                        onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
+                                      <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={bairro}
+                                        onChange={(e) => setBairro(e.target.value)}
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium mb-1">País (opcional)</label>
+                                      <input
+                                        className="w-full border rounded px-3 py-2"
+                                        value={pais}
+                                        onChange={(e) => setPais(e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
                       </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Cidade (opcional)</label>
-                        <input
-                          className="w-full border rounded px-3 py-2"
-                          value={cidade}
-                          onChange={(e) => setCidade(e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">UF (opcional)</label>
-                        <input
-                          className="w-full border rounded px-3 py-2 uppercase"
-                          maxLength={2}
-                          value={estado}
-                          onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Bairro (opcional)</label>
-                        <input
-                          className="w-full border rounded px-3 py-2"
-                          value={bairro}
-                          onChange={(e) => setBairro(e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">País (opcional)</label>
-                        <input
-                          className="w-full border rounded px-3 py-2"
-                          value={pais}
-                          onChange={(e) => setPais(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 mb-3">
                 <label className="flex items-start text-sm">
@@ -974,7 +1445,26 @@ export default function Cadastro() {
               {erro && <p className="text-sm text-red-600 mb-2">{erro}</p>}
 
               <div className="flex justify-end">
-                <button onClick={() => { if (podeIrParaEtapa2()) setEtapa(2); }} className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded">Próximo</button>
+                <button
+                  disabled={finalizandoCadastro}
+                  onClick={() => {
+                    if (!podeIrParaEtapa2()) return;
+
+                    if (tipoPerfil === "Learning") {
+                      handleFinalizar();
+                      return;
+                    }
+
+                    setEtapa(2);
+                  }}
+                  className="bg-green-900 hover:bg-green-800 disabled:opacity-60 text-white px-4 py-2 rounded"
+                >
+                  {finalizandoCadastro
+                    ? "Concluindo cadastro..."
+                    : tipoPerfil === "Learning"
+                    ? "Concluir cadastro Learning"
+                    : "Próximo"}
+                </button>
               </div>
 
               <div className="mt-4">
@@ -1008,37 +1498,48 @@ export default function Cadastro() {
                   <label className="block text-sm font-medium mb-1">Data de nascimento*</label>
                   <input
                     type="date"
-                    className={`w-full border rounded px-3 py-2 ${erro && !dataNascimento ? "border-red-400" : ""}`}
+                    min={DATA_MINIMA_NASCIMENTO}
+                    max={hojeISO()}
                     value={dataNascimento}
-                    onChange={(e) => setDataNascimento(e.target.value)}
+                    onChange={(e) => {
+                      setDataNascimento(e.target.value);
+
+                      if (erro === "A data de nascimento deve estar entre 01/01/1900 e hoje.") {
+                        setErro("");
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!dataNascimento) return;
+
+                      if (!dataNascimentoValida(dataNascimento)) {
+                        setErro("A data de nascimento deve estar entre 01/01/1900 e hoje.");
+                      }
+                    }}
+                    className={`w-full border rounded px-3 py-2 ${
+                      dataNascimento && !dataNascimentoValida(dataNascimento) ? "border-red-400" : ""
+                    }`}
                   />
-                  {idade !== null && <p className="text-xs text-gray-500 mt-1">Idade estimada: {idade} anos</p>}
+                  {dataNascimento && !dataNascimentoValida(dataNascimento) ? (
+                    <p className="mt-1 text-xs text-red-600">
+                      A data de nascimento deve estar entre 01/01/1900 e hoje.
+                    </p>
+                  ) : idade !== null ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Idade estimada: {idade} anos
+                    </p>
+                  ) : null}
                 </div>
               )}
 
               {tipoPerfil === "Atleta" && (
                 <>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium mb-1">Você treina em alguma escolinha cadastrada na FootEra?</label>
-                    <div className="flex gap-4 text-sm">
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_at" value="sim" checked={atleta.treinaEscolinha === "sim"} onChange={(e) => { const v = e.target.value as "sim" | "nao"; setAtleta(p => ({ ...p, treinaEscolinha: v })); if (v === "sim") setVinculo(p => ({ ...p, desejaVinculo: true })); }} />Sim</label>
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="escolinha_at" value="nao" checked={atleta.treinaEscolinha === "nao"} onChange={(e) => { const v = e.target.value as "sim" | "nao"; setAtleta(p => ({ ...p, treinaEscolinha: v })); if (v === "nao") setVinculo(p => ({
-                        ...p,
-                        desejaVinculo: false,
-                        destinatarioId: "",
-                        destinatarioEntidadeId: "",
-                        alvoBusca: "",
-                      })); }} />Não, sou independente</label>
-                    </div>
-                  </div>
-
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium mb-1">Idade (calculada)</label>
                       <input className="w-full border rounded px-3 py-2 bg-gray-100" value={idade ?? ""} readOnly />
                     </div>
 
-                    {idade !== null && idade < 18 && (
+                    {precisaResponsavel && (
                       <div className="border rounded-md p-3 mt-3 sm:col-span-2">
                         <p className="text-sm font-medium mb-2">Dados do responsável (obrigatório)</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1094,295 +1595,318 @@ export default function Cadastro() {
 
               {tipoPerfil === "Professor" && (
                 <>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium mb-1">
-                      Você dá aula em alguma escolinha cadastrada?
-                    </label>
-
-                    <div className="flex gap-4 text-sm">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          className="mr-2"
-                          name="escolinha_pf"
-                          value="sim"
-                          checked={professor.treinaEscolinha === "sim"}
-                          onChange={(e) =>
-                            setProfessor((p) => ({
-                              ...p,
-                              treinaEscolinha: e.target.value as "sim" | "nao",
-                            }))
-                          }
-                        />
-                        Sim
+                  <AccordionInfo
+                    aberto={infoAdicionalProfessorAberto}
+                    setAberto={setInfoAdicionalProfessorAberto}
+                  >
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Você dá aula em alguma escolinha cadastrada?
                       </label>
-
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          className="mr-2"
-                          name="escolinha_pf"
-                          value="nao"
-                          checked={professor.treinaEscolinha === "nao"}
-                          onChange={(e) =>
-                            setProfessor((p) => ({
-                              ...p,
-                              treinaEscolinha: e.target.value as "sim" | "nao",
-                            }))
-                          }
-                        />
-                        Não, independente
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden bg-white">
-                    <button
-                      type="button"
-                      onClick={() => setInfoAdicionalProfessorAberto((v) => !v)}
-                      className="w-full flex items-center justify-between px-5 py-5 text-left hover:bg-gray-50 transition"
-                    >
-                      <span className="text-sm sm:text-base font-medium text-gray-900">
-                        Informações adicionais (opcional)
-                      </span>
-                      {infoAdicionalProfessorAberto ? <ChevronUp /> : <ChevronDown />}
-                    </button>
-
-                    {infoAdicionalProfessorAberto && (
-                      <div className="px-4 pb-4 border-t border-gray-100">
-                        <div className="mt-4">
-                          <label className="block text-sm font-medium mb-1">
-                            Área de Formação (opcional)
-                          </label>
-                          <input
-                            className="w-full border rounded px-3 py-2"
-                            value={professor.areaFormacao}
-                            onChange={(e) =>
-                              setProfessor((p) => ({
-                                ...p,
-                                areaFormacao: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              CREF (opcional)
-                            </label>
-                            <input
-                              className="w-full border rounded px-3 py-2"
-                              value={professor.cref || ""}
-                              onChange={(e) =>
-                                setProfessor((p) => ({
-                                  ...p,
-                                  cref: e.target.value,
-                                  statusCref: e.target.value.trim()
-                                    ? (p.statusCref || "Pendente")
-                                    : undefined,
-                                }))
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              Status do CREF
-                            </label>
-                            <select
-                              className="w-full border rounded px-3 py-2"
-                              value={professor.statusCref || "Pendente"}
-                              disabled={!professor.cref?.trim()}
-                              onChange={(e) =>
-                                setProfessor((p) => ({
-                                  ...p,
-                                  statusCref: e.target.value as StatusCrefUI,
-                                }))
-                              }
-                            >
-                              {STATUS_CREF.map((status) => (
-                                <option key={status} value={status}>
-                                  {status}
-                                </option>
-                              ))}
-                            </select>
-
-                            {!professor.cref?.trim() && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Preencha o CREF para liberar o status.
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                      <div className="flex gap-4">
+                        <label><input type="radio" className="mr-2" checked={professor.treinaEscolinha === "sim"} onChange={() => setProfessor((p) => ({ ...p, treinaEscolinha: "sim" }))} />Sim</label>
+                        <label><input type="radio" className="mr-2" checked={professor.treinaEscolinha === "nao"} onChange={() => setProfessor((p) => ({ ...p, treinaEscolinha: "nao" }))} />Não, independente</label>
                       </div>
-                    )}
-                  </div>
+                    </div>
+
+                    <Input label="Área de Formação" value={professor.areaFormacao} onChange={(v) => setProfessor((p) => ({ ...p, areaFormacao: v }))} />
+                    <Input label="CREF" value={professor.cref || ""} onChange={(v) => setProfessor((p) => ({ ...p, cref: v, statusCref: v.trim() ? p.statusCref ?? "Pendente" : undefined }))} />
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Status do CREF</label>
+                      <select
+                        className="w-full border rounded px-3 py-2"
+                        value={professor.statusCref ?? "Pendente"}
+                        disabled={!String(professor.cref || "").trim()}
+                        onChange={(e) => setProfessor((p) => ({ ...p, statusCref: e.target.value as StatusCrefUI }))}
+                      >
+                        {STATUS_CREF.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Clube" && (
                 <>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium mb-1">Parceria com a FootEra?</label>
-                    <div className="flex gap-4 text-sm">
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="parceria_clube" value="sim" /> Sim</label>
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="parceria_clube" value="nao" /> Não</label>
-                    </div>
-                  </div>
+                  <Input
+                    label="Nome do Clube*"
+                    value={clube.nomeClube}
+                    onChange={(v) => setClube((p) => ({ ...p, nomeClube: v }))}
+                  />
 
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">CNPJ (opcional)</label>
-                    <input className={`w-full border rounded px-3 py-2 ${clube.cnpjClube && !validarCNPJ(clube.cnpjClube) ? "border-red-400" : ""}`}
-                      placeholder="00.000.000/0000-00" value={clube.cnpjClube} onChange={(e) => setClube(p => ({ ...p, cnpjClube: e.target.value }))} />
-                  </div>
+                  <AccordionInfo
+                    aberto={infoAdicionalClubeAberto}
+                    setAberto={setInfoAdicionalClubeAberto}
+                  >
+                    <Input label="CNPJ" value={clube.cnpjClube} placeholder="00.000.000/0000-00" onChange={(v) => setClube((p) => ({ ...p, cnpjClube: v }))} />
+                    <Input label="Telefone 1" value={clube.telefone1Clube} onChange={(v) => setClube((p) => ({ ...p, telefone1Clube: v }))} />
+                    <Input label="Telefone 2" value={clube.telefone2Clube} onChange={(v) => setClube((p) => ({ ...p, telefone2Clube: v }))} />
+                    <Input label="E-mail" value={clube.emailClube} onChange={(v) => setClube((p) => ({ ...p, emailClube: v }))} />
+                    <Input label="Site oficial" value={clube.siteOficialClube} placeholder="https://..." onChange={(v) => setClube((p) => ({ ...p, siteOficialClube: v }))} />
+                    <Input label="Sede" value={clube.sedeClube} onChange={(v) => setClube((p) => ({ ...p, sedeClube: v }))} />
+                    <Input label="Logradouro" value={clube.logradouroClube} onChange={(v) => setClube((p) => ({ ...p, logradouroClube: v }))} />
+                    <Input label="Número" value={clube.numeroClube} onChange={(v) => setClube((p) => ({ ...p, numeroClube: v }))} />
+                    <Input label="Complemento" value={clube.complementoClube} onChange={(v) => setClube((p) => ({ ...p, complementoClube: v }))} />
+                    <Input label="Bairro" value={clube.bairroClube} onChange={(v) => setClube((p) => ({ ...p, bairroClube: v }))} />
+                    <Input label="Cidade" value={clube.cidadeClube} onChange={(v) => setClube((p) => ({ ...p, cidadeClube: v }))} />
+                    <Input label="UF" value={clube.estadoClube} onChange={(v) => setClube((p) => ({ ...p, estadoClube: v.toUpperCase().slice(0, 2) }))} />
+                    <Input label="País" value={clube.paisClube} onChange={(v) => setClube((p) => ({ ...p, paisClube: v }))} />
+                    <Input label="CEP" value={clube.cepClube} placeholder="00000-000" onChange={(v) => setClube((p) => ({ ...p, cepClube: maskCEP(v) }))} />
+                    <Input label="Estádio" value={clube.estadio} onChange={(v) => setClube((p) => ({ ...p, estadio: v }))} />
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Escolinha" && (
                 <>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium mb-1">É uma escolinha cadastrada?</label>
-                    <div className="flex gap-4 text-sm">
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="parceria_escolinha" value="sim" /> Sim</label>
-                      <label className="flex items-center"><input type="radio" className="mr-2" name="parceria_escolinha" value="nao" /> Não</label>
-                    </div>
-                  </div>
+                  <Input
+                    label="Nome da Escolinha*"
+                    value={escolinha.nomeEscolinha}
+                    onChange={(v) => setEscolinha((p) => ({ ...p, nomeEscolinha: v }))}
+                  />
 
-                  <div className="mt-3">
-                    <label className="block text-sm font-medium mb-1">CNPJ (opcional)</label>
-                    <input className={`w-full border rounded px-3 py-2 ${escolinha.cnpjEscolinha && !validarCNPJ(escolinha.cnpjEscolinha) ? "border-red-400" : ""}`}
-                      placeholder="00.000.000/0000-00" value={escolinha.cnpjEscolinha} onChange={(e) => setEscolinha(p => ({ ...p, cnpjEscolinha: e.target.value }))} />
-                  </div>
+                  <AccordionInfo
+                    aberto={infoAdicionalEscolinhaAberto}
+                    setAberto={setInfoAdicionalEscolinhaAberto}
+                  >
+                    <Input label="CNPJ" value={escolinha.cnpjEscolinha} placeholder="00.000.000/0000-00" onChange={(v) => setEscolinha((p) => ({ ...p, cnpjEscolinha: v }))} />
+                    <Input label="Telefone 1" value={escolinha.telefone1Escolinha} onChange={(v) => setEscolinha((p) => ({ ...p, telefone1Escolinha: v }))} />
+                    <Input label="Telefone 2" value={escolinha.telefone2Escolinha} onChange={(v) => setEscolinha((p) => ({ ...p, telefone2Escolinha: v }))} />
+                    <Input label="E-mail" value={escolinha.emailEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, emailEscolinha: v }))} />
+                    <Input label="Site oficial" value={escolinha.siteOficialEscolinha} placeholder="https://..." onChange={(v) => setEscolinha((p) => ({ ...p, siteOficialEscolinha: v }))} />
+                    <Input label="Sede" value={escolinha.sedeEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, sedeEscolinha: v }))} />
+                    <Input label="Logradouro" value={escolinha.logradouroEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, logradouroEscolinha: v }))} />
+                    <Input label="Número" value={escolinha.numeroEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, numeroEscolinha: v }))} />
+                    <Input label="Complemento" value={escolinha.complementoEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, complementoEscolinha: v }))} />
+                    <Input label="Bairro" value={escolinha.bairroEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, bairroEscolinha: v }))} />
+                    <Input label="Cidade" value={escolinha.cidadeEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, cidadeEscolinha: v }))} />
+                    <Input label="UF" value={escolinha.estadoEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, estadoEscolinha: v.toUpperCase().slice(0, 2) }))} />
+                    <Input label="País" value={escolinha.paisEscolinha} onChange={(v) => setEscolinha((p) => ({ ...p, paisEscolinha: v }))} />
+                    <Input label="CEP" value={escolinha.cepEscolinha} placeholder="00000-000" onChange={(v) => setEscolinha((p) => ({ ...p, cepEscolinha: maskCEP(v) }))} />
+                  </AccordionInfo>
+                </>
+              )}
+
+              {(tipoPerfil === "Federacao" || tipoPerfil === "Marca") && (
+                <>
+                  <Input
+                    label={tipoPerfil === "Federacao" ? "Nome da Federação*" : "Nome da Marca*"}
+                    value={clube.nomeClube}
+                    onChange={(v) =>
+                      setClube((prev) => ({
+                        ...prev,
+                        nomeClube: v,
+                      }))
+                    }
+                  />
+
+                  <AccordionInfo
+                    aberto={infoAdicionalClubeAberto}
+                    setAberto={setInfoAdicionalClubeAberto}
+                  >
+                    <Input
+                      label="CNPJ"
+                      value={clube.cnpjClube}
+                      placeholder="00.000.000/0000-00"
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          cnpjClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Telefone 1"
+                      value={clube.telefone1Clube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          telefone1Clube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Telefone 2"
+                      value={clube.telefone2Clube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          telefone2Clube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="E-mail"
+                      value={clube.emailClube}
+                      placeholder={email || "contato@exemplo.com"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          emailClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Site oficial"
+                      value={clube.siteOficialClube}
+                      placeholder="https://..."
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          siteOficialClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Sede"
+                      value={clube.sedeClube}
+                      placeholder="Ex.: São Paulo, SP"
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          sedeClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="CEP"
+                      value={clube.cepClube}
+                      placeholder="00000-000"
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          cepClube: maskCEP(v),
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Logradouro"
+                      value={clube.logradouroClube}
+                      placeholder="Rua, avenida..."
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          logradouroClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Número"
+                      value={clube.numeroClube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          numeroClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Complemento"
+                      value={clube.complementoClube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          complementoClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Bairro"
+                      value={clube.bairroClube}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          bairroClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Cidade"
+                      value={clube.cidadeClube}
+                      placeholder={cidade || "Ex.: São Paulo"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          cidadeClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="Estado"
+                      value={clube.estadoClube}
+                      placeholder={estado || "Ex.: SP"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          estadoClube: v,
+                        }))
+                      }
+                    />
+
+                    <Input
+                      label="País"
+                      value={clube.paisClube}
+                      placeholder={pais || "Brasil"}
+                      onChange={(v) =>
+                        setClube((prev) => ({
+                          ...prev,
+                          paisClube: v,
+                        }))
+                      }
+                    />
+                  </AccordionInfo>
                 </>
               )}
 
               {tipoPerfil === "Olheiro" && (
-              <>
-                <div className="mt-5 border border-gray-200 rounded-[22px] overflow-hidden bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setInfoAdicionalOlheiroAberto((v) => !v)}
-                    className="w-full flex items-center justify-between px-5 py-5 text-left hover:bg-gray-50 transition"
+                <>
+                  <AccordionInfo
+                    aberto={infoAdicionalOlheiroAberto}
+                    setAberto={setInfoAdicionalOlheiroAberto}
                   >
-                    <span className="text-sm sm:text-base font-medium text-gray-900">
-                      Informações adicionais (opcional)
-                    </span>
-                    {infoAdicionalOlheiroAberto ? <ChevronUp /> : <ChevronDown />}
-                  </button>
+                    <Input label="Área de Atuação" value={olheiro.areaAtuacao} placeholder="Ex: Base, Profissional, Captação SP" onChange={(v) => setOlheiro((p) => ({ ...p, areaAtuacao: v }))} />
+                    <Input
+                      label="Anos de Experiência"
+                      value={olheiro.anosExperiencia}
+                      type="number"
+                      onChange={(v) =>
+                        setOlheiro((prev) => ({
+                          ...prev,
+                          anosExperiencia: v === "" ? "" : Number(v),
+                        }))
+                      }
+                    />
+                    <Input label="Headline" value={olheiro.headline} placeholder="Ex: Scout focado em categorias de base" onChange={(v) => setOlheiro((p) => ({ ...p, headline: v }))} />
+                    <Input label="Site ou LinkedIn" value={olheiro.siteOuLinkedin} placeholder="https://..." onChange={(v) => setOlheiro((p) => ({ ...p, siteOuLinkedin: v }))} />
+                    <Input label="Telefone público" value={olheiro.telefonePublico} placeholder="(00) 00000-0000" onChange={(v) => setOlheiro((p) => ({ ...p, telefonePublico: v }))} />
+                    <Input label="E-mail público" value={olheiro.emailPublico} placeholder="seuemail@exemplo.com" onChange={(v) => setOlheiro((p) => ({ ...p, emailPublico: v }))} />
 
-                  {infoAdicionalOlheiroAberto && (
-                    <div className="px-4 pb-4 border-t border-gray-100">
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-1">
-                          Área de Atuação (opcional)
-                        </label>
-                        <input
-                          className="w-full border rounded px-3 py-2"
-                          placeholder="Ex: Base, Profissional, Captação SP"
-                          value={olheiro.areaAtuacao}
-                          onChange={(e) =>
-                            setOlheiro((p) => ({ ...p, areaAtuacao: e.target.value }))
-                          }
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-1">
-                          Anos de Experiência (opcional)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-full border rounded px-3 py-2"
-                          value={olheiro.anosExperiencia}
-                          onChange={(e) =>
-                            setOlheiro((p) => ({
-                              ...p,
-                              anosExperiencia: e.target.value === "" ? "" : Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-1">
-                          Headline (opcional)
-                        </label>
-                        <input
-                          className="w-full border rounded px-3 py-2"
-                          placeholder="Ex: Scout focado em categorias de base"
-                          value={olheiro.headline}
-                          onChange={(e) =>
-                            setOlheiro((p) => ({ ...p, headline: e.target.value }))
-                          }
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-1">
-                          Site ou Linkedin (opcional)
-                        </label>
-                        <input
-                          className="w-full border rounded px-3 py-2"
-                          placeholder="https://..."
-                          value={olheiro.siteOuLinkedin}
-                          onChange={(e) =>
-                            setOlheiro((p) => ({ ...p, siteOuLinkedin: e.target.value }))
-                          }
-                        />
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Telefone público (opcional)
-                          </label>
-                          <input
-                            className="w-full border rounded px-3 py-2"
-                            placeholder="(00) 00000-0000"
-                            value={olheiro.telefonePublico}
-                            onChange={(e) =>
-                              setOlheiro((p) => ({ ...p, telefonePublico: e.target.value }))
-                            }
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Email público (opcional)
-                          </label>
-                          <input
-                            type="email"
-                            className="w-full border rounded px-3 py-2"
-                            placeholder="seuemail@exemplo.com"
-                            value={olheiro.emailPublico}
-                            onChange={(e) =>
-                              setOlheiro((p) => ({ ...p, emailPublico: e.target.value }))
-                            }
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-1">
-                          Descrição (opcional)
-                        </label>
-                        <textarea
-                          className="w-full border rounded px-3 py-2"
-                          rows={4}
-                          placeholder="Fale um pouco sobre seu trabalho como olheiro..."
-                          value={olheiro.descricao}
-                          onChange={(e) =>
-                            setOlheiro((p) => ({ ...p, descricao: e.target.value }))
-                          }
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Descrição</label>
+                      <textarea
+                        className="w-full border rounded px-3 py-2"
+                        rows={3}
+                        value={olheiro.descricao}
+                        placeholder="Fale um pouco sobre seu trabalho como olheiro..."
+                        onChange={(e) => setOlheiro((p) => ({ ...p, descricao: e.target.value }))}
+                      />
                     </div>
-                  )}
-                </div>
-              </>
-            )}
+                  </AccordionInfo>
+                </>
+              )}
 
               {erro && <p className="text-sm text-red-600 mt-3">{erro}</p>}
 
@@ -1398,11 +1922,11 @@ export default function Cadastro() {
               <h2 className="text-xl font-semibold mb-1">Complementar</h2>
               <p className="text-sm text-green-600 mb-4">Revise e finalize o cadastro</p>
 
-              {(tipoPerfil === "Atleta" || tipoPerfil === "Olheiro") && (
+              {getTiposVinculoDisponiveis(tipoPerfil).length > 0 && (
                 <div className="border rounded-md p-3 mb-4">
                   <label className="flex items-center text-sm">
                     <input type="checkbox" className="mr-2" checked={vinculo.desejaVinculo} onChange={(e) => setVinculo(p => ({ ...p, desejaVinculo: e.target.checked }))} />
-                    Desejo solicitar vínculo com uma Escolinha, Professor ou Clube agora
+                    Desejo solicitar vínculo com algum tipo de usuario agora
                   </label>
 
                   {vinculo.desejaVinculo && (
@@ -1410,7 +1934,12 @@ export default function Cadastro() {
                       <div>
                         <label className="block text-sm font-medium mb-1">Tipo do destinatário</label>
                         <select className="w-full border rounded px-3 py-2" value={vinculo.tipoAlvo} onChange={(e) => setVinculo(p => ({ ...p, tipoAlvo: e.target.value as any, destinatarioId: "" }))}>
-                          <option value="">Selecione</option><option value="Escolinha">Escolinha</option><option value="Professor">Professor</option><option value="Clube">Clube</option>
+                          <option value="">Selecione</option>
+                          {getTiposVinculoDisponiveis(tipoPerfil).map((tipo) => (
+                            <option key={tipo} value={tipo}>
+                              {tipo}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
@@ -1486,15 +2015,12 @@ export default function Cadastro() {
                 <div><span className="font-medium">Nome:</span> {nome}</div>
                 <div><span className="font-medium">Email:</span> {email}</div>
                 <div><span className="font-medium">Username:</span> @{nomeDeUsuario}</div>
-                {PRECISA_NASCIMENTO(tipoPerfil) && (
-                  <div><span className="font-medium">Nascimento:</span> {dataNascimento || "-"}</div>
-                )}
 
                 <div className="mt-2">
                   <span className="font-medium">Localização:</span> {`${bairro ? bairro + ", " : ""}${cidade || "-"}`} {estado ? `- ${estado}` : ""} {pais ? `• ${pais}` : ""}
                 </div>
 
-                {idade !== null && idade < 18 && (
+                {precisaResponsavel && (
                   <div className="mt-2">
                     <div><span className="font-medium">Responsável:</span> {responsavel.nome || "-"}</div>
                     <div><span className="font-medium">Email Resp.:</span> {responsavel.email || "-"}</div>

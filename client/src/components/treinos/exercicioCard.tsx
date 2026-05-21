@@ -55,12 +55,14 @@ function formatarFaixas(faixas?: string[] | null) {
   if (!Array.isArray(faixas) || faixas.length === 0) return "";
 
   const mapa: Record<string, string> = {
+    Sub3: "Sub-3",
+    Sub5: "Sub-5",
+    Sub7: "Sub-7",
     Sub9: "Sub-9",
     Sub11: "Sub-11",
     Sub13: "Sub-13",
     Sub15: "Sub-15",
-    Sub17: "Sub-17",
-    Sub20: "Sub-20",
+    Sub16: "Sub-16",
     Livre: "Livre",
   };
 
@@ -109,7 +111,8 @@ function temMaisInformacoes(item: ExercicioItem) {
   return !!(
     item.quantidadeAtletas?.trim() ||
     item.materiaisNecessarios?.trim() ||
-    item.espacoNecessario?.trim()
+    item.espacoNecessario?.trim() ||
+    (Array.isArray(item.tags) && item.tags.length > 0)
   );
 }
 
@@ -221,6 +224,13 @@ export default function ExercicioCard({
                         <span className="font-semibold text-[#173D34]">Espaço:</span>{" "}
                         {item.espacoNecessario || "-"}
                       </div>
+
+                      {Array.isArray(item.tags) && item.tags.length > 0 ? (
+                        <div>
+                          <span className="font-semibold text-[#173D34]">Tags:</span>{" "}
+                          {item.tags.join(", ")}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}

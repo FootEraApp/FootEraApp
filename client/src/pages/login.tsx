@@ -209,6 +209,9 @@ export default function PaginaLogin() {
           escolinha: "escolinha",
           escola: "escola",
           olheiro: "olheiro",
+          learning: "learning",
+          federacao: "federacao",
+          marca: "marca",
         };
 
         const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
@@ -229,7 +232,11 @@ export default function PaginaLogin() {
         const plano = String(usuario.plano ?? data.plano ?? "FREE");
         store.setItem("plano", plano);
 
-        navigate(isAdmin ? "/admin" : "/feed");
+        if (isAdmin) {
+          navigate("/admin");
+        } else {
+          navigate("/perfil");
+        }
       } catch (err: any) {
         console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
 
@@ -318,6 +325,9 @@ export default function PaginaLogin() {
           escolinha: "escolinha",
           escola: "escola",
           olheiro: "olheiro",
+          learning: "learning",
+          federacao: "federacao",
+          marca: "marca",
         };
 
         store.setItem("tipoUsuario", isAdmin ? "admin" : (mapTipo[rawTipo] ?? "atleta"));
@@ -342,7 +352,7 @@ export default function PaginaLogin() {
         setRecoverSenha("");
         setDeletedInfo(null);
 
-        navigate(isAdmin ? "/admin" : "/feed");
+        navigate(isAdmin ? "/admin" : "/perfil");
       } catch (e: any) {
         alert(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
       } finally {
@@ -365,7 +375,7 @@ export default function PaginaLogin() {
       ""
     ).toLowerCase();
 
-    navigate(tipo === "admin" ? "/admin" : "/feed");
+    navigate(tipo === "admin" ? "/admin" : "/perfil");
   }, []);
 
   useEffect(() => {
@@ -454,6 +464,9 @@ export default function PaginaLogin() {
         escolinha: "escolinha",
         escola: "escola",
         olheiro: "olheiro",
+        learning: "learning",
+        federacao: "federacao",
+        marca: "marca",
       };
 
       const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
@@ -474,7 +487,7 @@ export default function PaginaLogin() {
       const plano = String(usuario.plano ?? data.plano ?? "FREE");
       store.setItem("plano", plano);
 
-      navigate(isAdmin ? "/admin" : "/feed");
+      navigate(isAdmin ? "/admin" : "/perfil");
     } catch (err: any) {
       console.error("Erro no login com Google:", err.response?.data || err.message);
       setErro(

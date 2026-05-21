@@ -219,7 +219,15 @@ async function fetchPontuacaoTotalByUsuarioId(
   }
 }
 
-export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
+export default function PerfilClube({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+}) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
@@ -234,6 +242,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
   const [vinculadosPreview, setVinculadosPreview] = useState<AtletaItem[]>([]);
+  const [refreshVinculosKey, setRefreshVinculosKey] = useState(0);
   const [observadoEdits, setObservadoEdits] = useState<
     Record<string, { notaInterna: string; alertarMudancas: boolean }>
   >({});
@@ -466,7 +475,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     return () => {
       cancel = true;
     };
-  }, [token, clubeId]); // ✅ dependências corretas
+  }, [token, clubeId, refreshVinculosKey]); // ✅ dependências corretas
 
   useEffect(() => {
     setAtividades(null);
@@ -630,14 +639,14 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     }
 
     if (aba === "atletas") {
-      if (subAba === "vinculados" && vinculados == null) fetchVinculados();
+      if (subAba === "vinculados") fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
       if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
     }
     return () => {
       cancel.v = true;
     };
-  }, [aba, subAba, token, clubeId, vinculados, observados, solicitacoes]);
+  }, [aba, subAba, token, clubeId, refreshVinculosKey]);
 
   async function loadProfessores() {
     if (!token) return;
@@ -795,6 +804,23 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, token, clubeId]);
 
+  useEffect(() => {
+    function atualizarVinculos() {
+      setVinculados(null);
+      setVinculadosPreview([]);
+      setAtletasHeaderCount(null);
+      setRefreshVinculosKey((k) => k + 1);
+    }
+
+    window.addEventListener("focus", atualizarVinculos);
+    window.addEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+
+    return () => {
+      window.removeEventListener("focus", atualizarVinculos);
+      window.removeEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+    };
+  }, []);
+
   async function salvarObservado(atletaId: string) {
     if (!token || !clubeId) return;
     const edit =
@@ -894,6 +920,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         perfilTipoIdProp={data.clube.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
+        hasCreator={hasCreator}
+        creatorUsuarioId={creatorUsuarioId}
       />
 
       <div className="mt-4 grid grid-cols-6 gap-2">
@@ -950,6 +978,15 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                   <b>Email:</b> {emailDoPerfil}
                 </li>
               ) : null}
+              {data.clube.descricao?.trim() ? (
+                <p className="text-sm text-green-900/90 whitespace-pre-wrap">
+                  <b>Descrição:</b> {data.clube.descricao}
+                </p>
+              ) : (
+                <p className="text-sm text-green-900/70">
+                  Sem descrição cadastrada.
+                </p>
+              )}
 
               {data.clube.estadio && (
                 <li>
@@ -988,21 +1025,6 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                 </li>
               )}
             </ul>
-          </div>
-
-          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-green-900 mb-2">
-              Sobre o Clube
-            </h3>
-            {data.clube.descricao?.trim() ? (
-              <p className="text-sm text-green-900/90 whitespace-pre-wrap">
-                {data.clube.descricao}
-              </p>
-            ) : (
-              <p className="text-sm text-green-900/70">
-                Sem descrição cadastrada.
-              </p>
-            )}
           </div>
 
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">

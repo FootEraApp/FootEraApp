@@ -1,5 +1,5 @@
 // client/src/pages/metodologias/avaliar.tsx
-import React, { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Star as StarIcon, ArrowLeft, Volleyball } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
@@ -52,32 +52,21 @@ function Stars({
 
 export default function AvaliarMetodologia() {
   const [, navigate] = useLocation();
-  const [location] = useLocation();
 
-  const params = useMemo(() => {
-    const q = location.split("?")[1] ?? "";
-    return new URLSearchParams(q);
-  }, [location]);
+  const searchParams = new URLSearchParams(window.location.search);
 
-  const metodologiaId = useMemo(() => params.get("metodologiaId") || "", [params]);
-  const origem = useMemo(
-    () => String(params.get("origem") || "").toLowerCase(),
-    [params]
-  );
+  const metodologiaId = searchParams.get("metodologiaId") || "";
+  const origem = String(searchParams.get("origem") || "").toLowerCase();
   const isAvulsa = origem === "avulsa";
+  const veioDoAdmin = String(searchParams.get("from") || "") === "admin";
+  const temReward = String(searchParams.get("reward") || "") === "1";
 
   const [titulo, setTitulo] = useState<string>("Metodologia");
   const [nota, setNota] = useState<number>(0);
   const [comentario, setComentario] = useState<string>("");
-  const [ocorreuTudoCerto, setOcorreuTudoCerto] = useState<boolean>(true);
-  const [teveProblema, setTeveProblema] = useState<boolean>(false);
-  const [problemaTexto, setProblemaTexto] = useState<string>("");
-
-  // extras parecidos com treino (se você quiser manter)
-  const [teveDificuldade, setTeveDificuldade] = useState<boolean>(false);
-  const [dificuldadeMotivo, setDificuldadeMotivo] = useState<string>("");
-
+  const [sentimento, setSentimento] = useState<"ruim" | "medio" | "otimo" | "">("");
   const [enviando, setEnviando] = useState(false);
+  const podeEnviar = nota > 0 && sentimento !== "" && !enviando;
 
   useEffect(() => {
     async function carregarTituloPorId() {
@@ -119,7 +108,13 @@ export default function AvaliarMetodologia() {
     }
 
     carregarTituloPorId();
-  }, [metodologiaId]);
+  }, [metodologiaId, isAvulsa]);
+
+  function destinoPosAvaliacao() {
+    if (veioDoAdmin) return "/admin";
+    if (temReward) return "/perfil/conquistas";
+    return "/learning";
+  }
 
   async function enviar() {
     try {
@@ -134,12 +129,23 @@ export default function AvaliarMetodologia() {
         return;
       }
 
+      if (nota <= 0) {
+        alert("Escolha uma nota com estrelas.");
+        return;
+      }
+
+      if (!sentimento) {
+        alert("Escolha como foi a metodologia.");
+        return;
+      }
+
       setEnviando(true);
 
       const payload = {
         metodologiaId,
         origem: isAvulsa ? "AVULSA" : "LEARNING",
         nota,
+        sentimento,
         comentario: comentario.trim() || null,
       };
 
@@ -159,7 +165,7 @@ export default function AvaliarMetodologia() {
 
       alert("Avaliação enviada! ✅");
       localStorage.setItem(`metodologia:avaliada:${metodologiaId}`, "1");
-      navigate("/learning/minhas");
+      navigate(destinoPosAvaliacao());
     } catch (e: any) {
       console.error(e);
       alert(e?.message || "Erro ao enviar avaliação");
@@ -173,7 +179,7 @@ export default function AvaliarMetodologia() {
       <div className="h-20 bg-green-900 text-white">
         <div className="max-w-3xl mx-auto h-full px-4 flex items-center justify-between">
           <Link
-            href="/learning/minhas"
+            href={destinoPosAvaliacao()}
             aria-label="Voltar para minhas categorias"
             className="inline-flex h-10 w-10 items-center justify-center
               rounded-full border border-green-800 bg-white text-green-900
@@ -207,79 +213,35 @@ export default function AvaliarMetodologia() {
             </div>
             <Stars value={nota} onChange={setNota} />
 
-            <div className="mt-5 text-base font-bold">
-              Ocorreu tudo certo?
-            </div>
-            <div className="mt-2">
-              <label className="flex items-center gap-2 mb-2">
-                <input
-                  type="radio"
-                  checked={ocorreuTudoCerto === true}
-                  onChange={() => {
-                    setOcorreuTudoCerto(true);
-                    setTeveProblema(false);
-                    setProblemaTexto("");
-                  }}
-                />
-                <span>Sim, tudo certo ✅</span>
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={ocorreuTudoCerto === false}
-                  onChange={() => {
-                    setOcorreuTudoCerto(false);
-                    setTeveProblema(true);
-                  }}
-                />
-                <span>Não, tive algum problema ⚠️</span>
-              </label>
-
-              {(!ocorreuTudoCerto || teveProblema) && (
-                <textarea
-                  value={problemaTexto}
-                  onChange={(e) => setProblemaTexto(e.target.value)}
-                  placeholder="Descreva o que aconteceu (bug, conteúdo faltando, vídeo não abriu, etc.)"
-                  className="mt-3 w-full min-h-[90px] rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-green-200"
-                />
-              )}
-            </div>
-
             <div className="mt-6">
-              <div className="text-base font-bold mb-2">
-                Teve alguma dificuldade para acompanhar?
+              <div className="text-base font-bold mb-3">
+                Como foi a metodologia?
               </div>
 
-              <label className="flex items-center gap-2 mb-2">
-                <input
-                  type="radio"
-                  checked={teveDificuldade === false}
-                  onChange={() => setTeveDificuldade(false)}
-                />
-                <span>Não</span>
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={teveDificuldade === true}
-                  onChange={() => setTeveDificuldade(true)}
-                />
-                <span>Sim</span>
-              </label>
-
-              {teveDificuldade && (
-                <input
-                  value={dificuldadeMotivo}
-                  onChange={(e) => setDificuldadeMotivo(e.target.value)}
-                  placeholder="Qual foi a dificuldade?"
-                  className="mt-3 w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-green-200"
-                />
-              )}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { key: "ruim", emoji: "😞", label: "Ruim" },
+                  { key: "medio", emoji: "😐", label: "Média" },
+                  { key: "otimo", emoji: "😄", label: "Ótima" },
+                ].map((op) => (
+                  <button
+                    key={op.key}
+                    type="button"
+                    onClick={() => setSentimento(op.key as any)}
+                    className={`rounded-xl border p-4 text-center transition ${
+                      sentimento === op.key
+                        ? "border-green-800 bg-green-50"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <div className="text-4xl">{op.emoji}</div>
+                    <div className="mt-2 text-sm font-semibold">{op.label}</div>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="mt-6 text-base font-bold">Comentário</div>
+            <div className="mt-6 text-base font-bold">Comentário (opcional)</div>
             <textarea
               value={comentario}
               onChange={(e) => setComentario(e.target.value)}
@@ -288,10 +250,12 @@ export default function AvaliarMetodologia() {
             />
 
             <button
-              disabled={enviando}
+              disabled={!podeEnviar}
               onClick={enviar}
               className={`mt-7 w-full h-12 rounded-xl text-white font-semibold ${
-                enviando ? "bg-gray-300" : "bg-green-800 hover:bg-green-900"
+                podeEnviar
+                  ? "bg-green-800 hover:bg-green-900"
+                  : "bg-gray-300 cursor-not-allowed"
               }`}
             >
               {enviando ? "Enviando..." : "Enviar"}
@@ -299,7 +263,7 @@ export default function AvaliarMetodologia() {
 
             <div className="mt-3 text-center">
               <Link
-                href="/treinos"
+                href={destinoPosAvaliacao()}
                 className="text-sm text-gray-500 underline"
               >
                 Pular avaliação

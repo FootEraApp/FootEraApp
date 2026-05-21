@@ -475,7 +475,7 @@ export default function PaginaElenco({
   modo = "elenco",
   titulo,
   backHref,
-  permitirReservas = false,
+  permitirReservas = true,
   eventoId,
   onSalvar,
 }: PaginaElencoProps) {
@@ -533,14 +533,6 @@ export default function PaginaElenco({
     meio: 3,
     defesa: 4,
   });
-
-  useEffect(() => {
-    setFormacao({ atacantes: 3, meio: 3, defesa: 4 });
-  }, [activeIndex]);
-
-  useEffect(() => {
-    setReservasIds([]);
-  }, [activeIndex]);
 
   const fetchPontuacoes = async (ids: string[]) => {
     const token = Storage.token;
@@ -717,6 +709,33 @@ export default function PaginaElenco({
       if (cancelled) return;
 
       const baseAtletas = normalizeAtletas(res.data);
+      const rElencos = await axios.get(ELENCOS_BASE, {
+        params: { tipoUsuarioId: Storage.tipoUsuarioId, turmaId },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const salvos = Array.isArray(rElencos.data) ? rElencos.data : [];
+      const salvosDaTurma = salvos.filter((e: any) => String(e.turmaId) === String(turmaId));
+
+      if (salvosDaTurma.length) {
+        const montados = salvosDaTurma.map((e: any) =>
+          buildElencoUI(e, baseAtletas)
+        );
+
+        const primeiro = salvosDaTurma[0];
+        const escalaSalva = primeiro?.escala || {};
+
+        setTodosAtletas(baseAtletas);
+        setElencos(montados);
+        setActiveIndex(0);
+        setReservasIds(Array.isArray(escalaSalva.__reservasIds) ? escalaSalva.__reservasIds.map(String) : []);
+
+        if (primeiro?.formacao) {
+          setFormacao(parseFormacaoStr(primeiro.formacao));
+        }
+
+        return;
+      }
 
       if (modo === "convocacao" && eventoId) {
         try {
@@ -748,18 +767,19 @@ export default function PaginaElenco({
       }
 
       setTodosAtletas(baseAtletas);
-      setElencos((prev) => {
-        if (!prev.length) {
-          return [{
-            id: null,
-            nome: "Elenco 1",
-            maxJogadores: 11,
-            posicoes: emptyPosicoes(),
-            livres: baseAtletas.slice(),
-          }];
-        }
-        return rebuildElencosKeepingLayout(prev, baseAtletas);
-      });
+      setElencos([
+      {
+        id: null,
+        nome: "Elenco 1",
+        maxJogadores: 11,
+        posicoes: emptyPosicoes(),
+        livres: baseAtletas.slice(),
+      },
+    ]);
+
+    setActiveIndex(0);
+    setReservasIds([]);
+    setFormacao({ atacantes: 3, meio: 3, defesa: 4 });
       setReservasIds((prev) => filterReservasForTurma(baseAtletas, prev));
     } catch (e) {
       console.error("Erro ao carregar membros da turma:", e);
@@ -1054,6 +1074,7 @@ const salvarElencoAtivo = async () => {
     tipoUsuarioId,
     turmaId: turmaId || undefined,
     formacao: payloadBase.formacao,
+    reservasIds: payloadBase.reservasIds,
   };
 
   try {

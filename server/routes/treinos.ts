@@ -45,14 +45,20 @@ import {
   atualizarExercicioPersonalizado,
   deletarExercicioPersonalizado,
   getMeusExercicios,
+  iniciarTreinoViaMetodologia,
+  salvarVideosExecucaoTreino,
+  uploadExecucaoVideoTreino,
+  listarSessoesTreino,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
+import { uploadToS3 } from "server/middlewares/s3Upload.js";
 
 const router = Router();
 router.use(authenticateToken);
 
+router.get("/sessoes", listarSessoesTreino);
 router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", getEscalaPorDono);
@@ -64,15 +70,29 @@ router.post(
   criarElenco
 );
 router.put("/elencos/:id", requireElencoOwner, atualizarElenco);
+router.post(
+  "/upload-execucao-video",
+  uploadToS3.single("file"),
+  uploadExecucaoVideoTreino
+);
+
+router.post(
+  "/agendados/:id/videos-execucao",
+  salvarVideosExecucaoTreino
+);
 router.post("/agendados/:id/iniciar", iniciarTreino);
 router.delete("/agendados/:id", excluirTreinoAgendado);
 router.post("/agendados/:id/complete", concluirTreino);
+
 router.get("/agendados", getTreinosAgendados);
+
 router.put("/agendados/:id", atualizarAgendamento);
+
 router.post("/agendados",
   requireCapability("agendamento:pessoal"),
   agendarTreino
 );
+
 router.get(
   "/programados/stats",
   authenticateToken,
@@ -88,6 +108,7 @@ router.put(
   ),
   atualizarTreinoProgramado
 );
+router.post("/programados/:id/iniciar-via-metodologia", iniciarTreinoViaMetodologia);
 router.delete("/programados/:id", deletarTreinoProgramado);
 router.get("/programados", listarTodosTreinosProgramados);
 router.post(

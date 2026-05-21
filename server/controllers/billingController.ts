@@ -5,7 +5,8 @@ import {
   MetodoPagamento,
   Periodicidade,
   PagamentoStatus,
-  NotificacaoTipo
+  NotificacaoTipo,
+  CreatorVendaStatus
 } from "@prisma/client";
 import QRCode from "qrcode";
 import * as mercadopagoModule from "mercadopago";
@@ -18,19 +19,39 @@ function isLegacyPlano(planoId: string | null | undefined) {
   return String(planoId || "").toUpperCase() === "ATLETA_METODO_1";
 }
 
-function allowedPlanIdsByTipo(tipoRaw: string) {
-  const tipo = String(tipoRaw || "").trim().toLowerCase();
+function normalizeTipoBilling(tipoRaw: string | null | undefined) {
+  return String(tipoRaw || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
-  if (tipo === "atleta") {
-    return ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3"];
+function allowedPlanIdsByTipo(tipoRaw: string) {
+  const tipo = normalizeTipoBilling(tipoRaw);
+
+  if (tipo === "atleta" || tipo === "learning") {
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3"]
+      : ["ATLETA_PRO"];
   }
 
   if (tipo === "professor") {
-    return ["PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3"];
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3"]
+      : ["PROFESSOR_PRO"];
   }
 
-  if (tipo === "clube" || tipo === "escolinha") {
-    return ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"];
+  if (
+    tipo === "clube" ||
+    tipo === "escolinha" ||
+    tipo === "escola" ||
+    tipo === "federacao" ||
+    tipo === "marca"
+  ) {
+    return BILLING_SHOW_LEARNING_PLANS
+      ? ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"]
+      : ["ORGANIZACOES_PRO"];
   }
 
   if (tipo === "olheiro") {
@@ -38,13 +59,19 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
   }
 
   if (tipo === "admin") {
-    // admin pode tudo (pra testes/dev)
-    return [
-      "ATLETA_PRO","ATLETA_LEARNING_1","ATLETA_LEARNING_3",
-      "PROFESSOR_PRO","PROFESSOR_LEARNING_1","PROFESSOR_LEARNING_3",
-      "ORGANIZACOES_PRO","ORGANIZACOES_LEARNING_3",
-      "OLHEIRO_PRO"
-    ];
+    return BILLING_SHOW_LEARNING_PLANS
+      ? [
+          "ATLETA_PRO",
+          "ATLETA_LEARNING_1",
+          "ATLETA_LEARNING_3",
+          "PROFESSOR_PRO",
+          "PROFESSOR_LEARNING_1",
+          "PROFESSOR_LEARNING_3",
+          "ORGANIZACOES_PRO",
+          "ORGANIZACOES_LEARNING_3",
+          "OLHEIRO_PRO",
+        ]
+      : ["ATLETA_PRO", "PROFESSOR_PRO", "ORGANIZACOES_PRO", "OLHEIRO_PRO"];
   }
 
   return [];
@@ -53,7 +80,29 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
 function assertPlanoPermitido(tipoUsuario: string, planoId: string) {
   const planoNorm = normalizePlanoId(planoId);
 
-  if (isMetodologiaAvulsa(planoNorm) || isMetodologiaLearning(planoNorm)) return;
+  if (isMetodologiaAvulsa(planoNorm)) {
+    if (!BILLING_SHOW_METODOLOGIAS_AVULSAS) {
+      const err: any = new Error("Assinatura de metodologia avulsa indisponível no momento.");
+      err.statusCode = 403;
+      err.code = "METODOLOGIA_AVULSA_DISABLED";
+      throw err;
+    }
+    return;
+  }
+
+  if (isMetodologiaLearning(planoNorm)) {
+    if (!BILLING_SHOW_METODOLOGIAS_LEARNING) {
+      const err: any = new Error("Assinatura de metodologia learning indisponível no momento.");
+      err.statusCode = 403;
+      err.code = "METODOLOGIA_LEARNING_DISABLED";
+      throw err;
+    }
+    return;
+  }
+
+  if (isAulaAoVivo(planoNorm)) {
+    return;
+  }
 
   const allowed = allowedPlanIdsByTipo(tipoUsuario);
   if (!allowed.includes(planoNorm)) {
@@ -90,6 +139,15 @@ if (HAS_MERCADO_PAGO) {
     "[billing] SDK do MercadoPago não expõe .configure(); rodando em modo fake."
   );
 }
+
+const BILLING_SHOW_LEARNING_PLANS =
+  process.env.BILLING_SHOW_LEARNING_PLANS === "true";
+
+const BILLING_SHOW_METODOLOGIAS_AVULSAS =
+  process.env.BILLING_SHOW_METODOLOGIAS_AVULSAS === "true";
+
+const BILLING_SHOW_METODOLOGIAS_LEARNING =
+  process.env.BILLING_SHOW_METODOLOGIAS_LEARNING === "true";
 
 type Pagador = {
   nome: string;
@@ -364,7 +422,7 @@ function roundToDot90Ceil(value: number) {
 
 const PLANS = [
   // ATLETA
-  { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais"] },
+  { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: null, benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais", "Quantidade ilimitada de treinos agendados por semana"] },
   { id: "ATLETA_LEARNING_1", title: "Atleta Learning 1", monthly: 44.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher 1 metodologia por mês"] },
   { id: "ATLETA_LEARNING_3", title: "Atleta Learning 3", monthly: 64.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"] },
   
@@ -394,6 +452,11 @@ function normalizePlanoId(planoId: string) {
     return `METODOLOGIA:${id}`;
   }
 
+  if (raw.toUpperCase().startsWith("AULA_AO_VIVO:")) {
+    const id = raw.split(":").slice(1).join(":").trim();
+    return `AULA_AO_VIVO:${id}`;
+  }
+
   return raw.toUpperCase();
 }
 
@@ -405,11 +468,89 @@ function isMetodologiaLearning(planoId: string) {
   return String(planoId || "").toUpperCase().startsWith("METODOLOGIA:");
 }
 
+function isAulaAoVivo(planoId: string) {
+  return String(planoId || "").toUpperCase().startsWith("AULA_AO_VIVO:");
+}
+
+function extractAulaAoVivoId(planoId: string) {
+  return String(planoId || "")
+    .replace(/^AULA_AO_VIVO:/i, "")
+    .trim();
+}
+
 function extractMetodologiaId(planoId: string) {
   return String(planoId || "")
     .replace(/^METODOLOGIA_AVULSA:/i, "")
     .replace(/^METODOLOGIA:/i, "")
     .trim();
+}
+
+async function registrarCreatorVendaTx(args: {
+  tx: Prisma.TransactionClient;
+  compradorId: string;
+  metodologiaAvulsaId?: string | null;
+  metodologiaId?: string | null;
+  valorBruto: number;
+  provider?: string | null;
+  providerRef?: string | null;
+}) {
+  const { tx, compradorId, metodologiaAvulsaId, metodologiaId, valorBruto } = args;
+
+  const conteudo = metodologiaAvulsaId
+    ? await tx.metodologiaAvulsa.findUnique({
+        where: { id: metodologiaAvulsaId },
+        select: { id: true, criadorUsuarioId: true },
+      })
+    : metodologiaId
+      ? await tx.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true, criadorUsuarioId: true },
+        })
+      : null;
+
+  if (!conteudo?.criadorUsuarioId) return null;
+
+  const creator = await tx.creator.findUnique({
+    where: { usuarioId: conteudo.criadorUsuarioId },
+    select: { id: true, comissaoFootera: true },
+  });
+
+  if (!creator) return null;
+
+  const percentualFootera = Number(creator.comissaoFootera ?? 0.15);
+  const valorFootera = Number((valorBruto * percentualFootera).toFixed(2));
+  const valorCreator = Number((valorBruto - valorFootera).toFixed(2));
+
+  return tx.creatorVenda.upsert({
+    where: {
+      provider_providerRef: {
+        provider: args.provider ?? "FOOTERA_BILLING",
+        providerRef: args.providerRef ?? `${compradorId}:${metodologiaAvulsaId ?? metodologiaId}`,
+      },
+    },
+    update: {
+      status: CreatorVendaStatus.CONFIRMADA,
+      valorBruto,
+      percentualFootera,
+      valorFootera,
+      valorCreator,
+      pagoEm: new Date(),
+    },
+    create: {
+      creatorId: creator.id,
+      compradorId,
+      metodologiaId: metodologiaId ?? null,
+      metodologiaAvulsaId: metodologiaAvulsaId ?? null,
+      valorBruto,
+      percentualFootera,
+      valorFootera,
+      valorCreator,
+      status: CreatorVendaStatus.CONFIRMADA,
+      pagoEm: new Date(),
+      provider: args.provider ?? "FOOTERA_BILLING",
+      providerRef: args.providerRef ?? `${compradorId}:${metodologiaAvulsaId ?? metodologiaId}`,
+    },
+  });
 }
 
 function findPlan(planoId: string) {
@@ -424,6 +565,31 @@ async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<
     const mid = extractMetodologiaId(id);
     const { valorFinal } = await computeMetodologiaAvulsaPricing(mid);
     return Number(valorFinal);
+  }
+
+  if (isAulaAoVivo(id)) {
+    const aulaId = extractAulaAoVivoId(id);
+
+    const aula = await prisma.aulaAoVivo.findUnique({
+      where: { id: aulaId },
+      select: {
+        id: true,
+        titulo: true,
+        precoAcesso: true,
+        acessoPago: true,
+        status: true,
+      },
+    });
+
+    if (!aula) throw new Error("Aula ao vivo não encontrada.");
+
+    const valor = Number(aula.precoAcesso || 0);
+
+    if (!aula.acessoPago || valor <= 0) {
+      return 0;
+    }
+
+    return valor;
   }
 
   const p = findPlan(id);
@@ -748,10 +914,9 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    const trialJaUsado = (assinaturas as any[]).some((a) => {
-      const principal = !isMetodologiaAvulsa(a.plano) && !isMetodologiaLearning(a.plano);
-      return principal && Boolean(a.trialStartsAt);
-    });
+    const trialJaUsado = (assinaturas as any[]).some((a) =>
+      Boolean(a.trialStartsAt || a.trialEndsAt)
+    );
 
     const now = new Date();
     const status = String(assinaturaPrincipal?.status || "SEM_ASSINATURA");
@@ -909,9 +1074,17 @@ export async function applyCoupon(req: Request, res: Response) {
     for (const it of items) {
       assertPlanoPermitido(usuarioTipo, it.planoId);
 
-      if (!isMetodologiaAvulsa(it.planoId)) {
+      if (
+        !isMetodologiaAvulsa(it.planoId) &&
+        !isMetodologiaLearning(it.planoId) &&
+        !isAulaAoVivo(it.planoId)
+      ) {
         const plan = findPlan(it.planoId);
-        if (!plan) return res.status(400).json({ message: `Plano inválido: ${it.planoId}` });
+        if (!plan) {
+          return res.status(400).json({
+            message: `Plano inválido: ${it.planoId}`,
+          });
+        }
       }
 
       if (!["Mensal", "Anual"].includes(it.periodicidade as any)) {
@@ -981,9 +1154,12 @@ export async function applyCoupon(req: Request, res: Response) {
 export async function startTrial(req: AuthenticatedRequest, res: Response) {
   try {
     const usuarioId = getUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
 
     const now = new Date();
+
     const { planoId, periodicidade, metodoPreferido } = req.body as {
       planoId: string;
       periodicidade: Periodicidade;
@@ -991,31 +1167,39 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     };
 
     const planoNorm = normalizePlanoId(planoId);
-    const plan = findPlan(planoNorm);
-    if (!plan) return res.status(400).json({ message: "Plano inválido" });
+    const periodicidadeFinal: Periodicidade =
+      periodicidade === "Anual" ? "Anual" : "Mensal";
 
-    const tipo = await getUserTipo(usuarioId);
-    assertPlanoPermitido(tipo, planoId);
-
-    if (isMetodologiaAvulsa(planoNorm)) {
-      return res.status(400).json({ message: "Trial só pode ser usado em plano principal (Pro/Learning/Plus)." });
+    if (!planoNorm) {
+      return res.status(400).json({ message: "Plano inválido" });
     }
 
-    if (!["Mensal", "Anual"].includes(periodicidade as any)) {
+    if (!["Mensal", "Anual"].includes(periodicidadeFinal as any)) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    const existing = await (prisma as any).assinatura.findUnique({
-      where: { usuarioId_plano: { usuarioId, plano: planoNorm } },
-    });
+    const tipo = await getUserTipo(usuarioId);
+    assertPlanoPermitido(tipo, planoNorm);
+
+    const isAvulsa = isMetodologiaAvulsa(planoNorm);
+    const isLearningMetodologia = isMetodologiaLearning(planoNorm);
+    const isAula = isAulaAoVivo(planoNorm);
+    const isPlanoPrincipal = !isAvulsa && !isLearningMetodologia && !isAula;
+
+    if (isPlanoPrincipal && !findPlan(planoNorm)) {
+      return res.status(400).json({ message: "Plano inválido" });
+    }
 
     const jaUsouTrialNaConta = await (prisma as any).assinatura.findFirst({
       where: {
         usuarioId,
         trialStartsAt: { not: null },
-        NOT: { plano: { startsWith: "METH_" } },
       },
-      select: { id: true, plano: true, trialStartsAt: true },
+      select: {
+        id: true,
+        plano: true,
+        trialStartsAt: true,
+      },
     });
 
     if (jaUsouTrialNaConta) {
@@ -1025,59 +1209,236 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       });
     }
 
+    const existing = await (prisma as any).assinatura.findUnique({
+      where: {
+        usuarioId_plano: {
+          usuarioId,
+          plano: planoNorm,
+        },
+      },
+    });
+
     if (existing?.status === "ATIVA") {
-      return res.status(400).json({ code: "ALREADY_ACTIVE", message: "Você já possui assinatura ativa neste plano." });
+      return res.status(400).json({
+        code: "ALREADY_ACTIVE",
+        message: "Você já possui acesso ativo neste item.",
+      });
     }
 
-    if (existing?.status === "TRIAL" && existing.trialEndsAt && now <= existing.trialEndsAt) {
-      return res.status(400).json({ code: "TRIAL_ALREADY_ACTIVE", message: "Seu trial já está ativo." });
+    if (
+      existing?.status === "TRIAL" &&
+      existing.trialEndsAt &&
+      now <= existing.trialEndsAt
+    ) {
+      return res.status(400).json({
+        code: "TRIAL_ALREADY_ACTIVE",
+        message: "Seu trial já está ativo.",
+      });
     }
 
     if (existing?.trialStartsAt) {
-      return res.status(400).json({ code: "TRIAL_ALREADY_USED", message: "Você já utilizou o mês grátis neste plano." });
+      return res.status(400).json({
+        code: "TRIAL_ALREADY_USED",
+        message: "Você já utilizou o mês grátis neste item.",
+      });
     }
 
     const trialEndsAt = addMonths(now, 1);
     const metodoPreferidoFinal: MetodoPagamento | null = metodoPreferido ?? null;
 
-    const out = await (prisma as any).assinatura.upsert({
-      where: { usuarioId_plano: { usuarioId, plano: planoNorm } },
-      update: {
-        periodicidade,
-        ativo: true,
-        startsAt: now,
-        status: "TRIAL",
-        trialStartsAt: now,
-        trialEndsAt,
-        renovaEm: trialEndsAt,
-        canceledAt: null,
-        bloqueadoEm: null,
-        lembreteEnviado: false,
-        metodoPreferido: metodoPreferidoFinal,
-        metodoPreferidoDefinidoEm: metodoPreferidoFinal ? now : null,
-      } as any,
-      create: {
-        usuarioId,
-        plano: planoNorm,
-        periodicidade,
-        ativo: true,
-        startsAt: now,
-        status: "TRIAL",
-        trialStartsAt: now,
-        trialEndsAt,
-        renovaEm: trialEndsAt,
-        canceledAt: null,
-        bloqueadoEm: null,
-        lembreteEnviado: false,
-        metodoPreferido: metodoPreferidoFinal,
-        metodoPreferidoDefinidoEm: metodoPreferidoFinal ? now : null,
-      } as any,
+    const result = await prisma.$transaction(async (tx) => {
+      const assinatura = await (tx as any).assinatura.upsert({
+        where: {
+          usuarioId_plano: {
+            usuarioId,
+            plano: planoNorm,
+          },
+        },
+        update: {
+          periodicidade: periodicidadeFinal,
+          ativo: true,
+          startsAt: now,
+          status: "TRIAL",
+          trialStartsAt: now,
+          trialEndsAt,
+          renovaEm: trialEndsAt,
+          canceledAt: null,
+          bloqueadoEm: null,
+          lembreteEnviado: false,
+          metodoPreferido: metodoPreferidoFinal,
+          metodoPreferidoDefinidoEm: metodoPreferidoFinal ? now : null,
+        } as any,
+        create: {
+          usuarioId,
+          plano: planoNorm,
+          periodicidade: periodicidadeFinal,
+          ativo: true,
+          startsAt: now,
+          status: "TRIAL",
+          trialStartsAt: now,
+          trialEndsAt,
+          renovaEm: trialEndsAt,
+          canceledAt: null,
+          bloqueadoEm: null,
+          lembreteEnviado: false,
+          metodoPreferido: metodoPreferidoFinal,
+          metodoPreferidoDefinidoEm: metodoPreferidoFinal ? now : null,
+        } as any,
+      });
+
+      await tx.pagamento.create({
+        data: {
+          usuarioId,
+          plano: planoNorm,
+          periodicidade: periodicidadeFinal,
+          metodo: "PIX",
+          status: "APROVADO",
+          valor: 0 as any,
+          moeda: "BRL",
+          provider: "FOOTERA_TRIAL",
+          providerRef: `TRIAL-${usuarioId}-${planoNorm}-${Date.now()}`,
+          pagoEm: now,
+          meta: {
+            trial: true,
+            trialStartsAt: now.toISOString(),
+            trialEndsAt: trialEndsAt.toISOString(),
+          },
+        } as any,
+      });
+
+      if (isAvulsa) {
+        const metodologiaAvulsaId = extractMetodologiaId(planoNorm);
+
+        const metodologiaAvulsa = await tx.metodologiaAvulsa.findUnique({
+          where: { id: metodologiaAvulsaId },
+          select: { id: true, ativo: true },
+        });
+
+        if (!metodologiaAvulsa || !metodologiaAvulsa.ativo) {
+          throw new Error("Metodologia avulsa não encontrada ou indisponível.");
+        }
+
+        await tx.metodologiaAssinante.upsert({
+          where: {
+            metodologiaAvulsaId_usuarioId: {
+              metodologiaAvulsaId,
+              usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVA",
+            origem: "AVULSA",
+            iniciouEm: now,
+            expiraEm: trialEndsAt,
+            cancelouEm: null,
+          },
+          create: {
+            metodologiaAvulsaId,
+            usuarioId,
+            status: "ATIVA",
+            origem: "AVULSA",
+            iniciouEm: now,
+            expiraEm: trialEndsAt,
+          },
+        } as any);
+      }
+
+      if (isLearningMetodologia) {
+        const metodologiaId = extractMetodologiaId(planoNorm);
+
+        const metodologia = await tx.metodologia.findUnique({
+          where: { id: metodologiaId },
+          select: { id: true, ativo: true },
+        });
+
+        if (!metodologia || !metodologia.ativo) {
+          throw new Error("Metodologia não encontrada ou indisponível.");
+        }
+
+        await tx.metodologiaAssinante.upsert({
+          where: {
+            metodologiaId_usuarioId: {
+              metodologiaId,
+              usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVA",
+            origem: "LEARNING",
+            iniciouEm: now,
+            expiraEm: trialEndsAt,
+            cancelouEm: null,
+          },
+          create: {
+            metodologiaId,
+            usuarioId,
+            status: "ATIVA",
+            origem: "LEARNING",
+            iniciouEm: now,
+            expiraEm: trialEndsAt,
+          },
+        } as any);
+      }
+
+      if (isAula) {
+        const aulaAoVivoId = extractAulaAoVivoId(planoNorm);
+
+        const aula = await tx.aulaAoVivo.findUnique({
+          where: { id: aulaAoVivoId },
+          select: {
+            id: true,
+            status: true,
+            acessoPago: true,
+            precoAcesso: true,
+          },
+        });
+
+        if (!aula || aula.status === "CANCELADA") {
+          throw new Error("Aula ao vivo não encontrada ou indisponível.");
+        }
+
+        await tx.aulaAoVivoAcesso.upsert({
+          where: {
+            aulaAoVivoId_usuarioId: {
+              aulaAoVivoId,
+              usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVO",
+            origem: "TRIAL",
+            valorPago: 0 as any,
+            pagoEm: now,
+            expiraEm: trialEndsAt,
+          },
+          create: {
+            aulaAoVivoId,
+            usuarioId,
+            status: "ATIVO",
+            origem: "TRIAL",
+            valorPago: 0 as any,
+            pagoEm: now,
+            expiraEm: trialEndsAt,
+          },
+        });
+      }
+
+      return assinatura;
     });
 
-    return res.json({ ok: true, assinatura: out });
-  } catch (err) {
+    return res.json({
+      ok: true,
+      assinatura: result,
+      trialEndsAt,
+      message: "Mês grátis iniciado com sucesso.",
+    });
+  } catch (err: any) {
     console.error("Erro startTrial:", err);
-    return res.status(500).json({ message: "Erro ao iniciar trial" });
+
+    return res.status(err?.statusCode || 500).json({
+      message: err?.message || "Erro ao iniciar trial",
+      code: err?.code,
+    });
   }
 }
 
@@ -1223,6 +1584,17 @@ async function approvePaymentAndProvision(
           },
         });
 
+        const valorBruto = await priceFor(pid, it.periodicidade);
+
+        await registrarCreatorVendaTx({
+          tx,
+          compradorId: pg.usuarioId,
+          metodologiaAvulsaId,
+          valorBruto,
+          provider: "PAGAMENTO",
+          providerRef: pg.id,
+        });
+
         continue;
       }
 
@@ -1251,6 +1623,38 @@ async function approvePaymentAndProvision(
             origem: "LEARNING",
             status: "ATIVA",
             iniciouEm: now,
+          },
+        });
+
+        continue;
+      }
+
+      if (isAulaAoVivo(pid)) {
+        const aulaAoVivoId = extractAulaAoVivoId(pid);
+        const valorPago = await priceFor(pid, it.periodicidade);
+
+        await (tx as any).aulaAoVivoAcesso.upsert({
+          where: {
+            aulaAoVivoId_usuarioId: {
+              aulaAoVivoId,
+              usuarioId: pg.usuarioId,
+            },
+          },
+          update: {
+            status: "ATIVO",
+            origem: "PAGAMENTO",
+            valorPago,
+            pagoEm: now,
+            expiraEm: null,
+          },
+          create: {
+            aulaAoVivoId,
+            usuarioId: pg.usuarioId,
+            status: "ATIVO",
+            origem: "PAGAMENTO",
+            valorPago,
+            pagoEm: now,
+            expiraEm: null,
           },
         });
 
@@ -1290,11 +1694,17 @@ export async function startCheckout(req: Request, res: Response) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    if (isMetodologiaAvulsa(planoNorm)) {
-      // avulsa usa o valor salvo em precoAssinaturaMensal
+    if (
+      isMetodologiaAvulsa(planoNorm) ||
+      isMetodologiaLearning(planoNorm) ||
+      isAulaAoVivo(planoNorm)
+    ) {
+      // produto especial: metodologia, metodologia avulsa ou aula ao vivo única
     } else {
       const plan = findPlan(planoNorm);
-      if (!plan) return res.status(400).json({ message: "Plano inválido" });
+      if (!plan) {
+        return res.status(400).json({ message: "Plano inválido" });
+      }
     }
     try {
       validateMetodoAndFields(metodoFinal, pagador, cartao);
@@ -1578,9 +1988,17 @@ export async function startCheckoutBundle(req: Request, res: Response) {
     for (const it of normalizedItems) {
       assertPlanoPermitido(tipo, it.planoId);
 
-      if (!isMetodologiaAvulsa(it.planoId)) {
+      if (
+        !isMetodologiaAvulsa(it.planoId) &&
+        !isMetodologiaLearning(it.planoId) &&
+        !isAulaAoVivo(it.planoId)
+      ) {
         const plan = findPlan(it.planoId);
-        if (!plan) return res.status(400).json({ message: `Plano inválido: ${it.planoId}` });
+        if (!plan) {
+          return res.status(400).json({
+            message: `Plano inválido: ${it.planoId}`,
+          });
+        }
       }
 
       if (!["Mensal", "Anual"].includes(it.periodicidade as any)) {
@@ -2020,12 +2438,14 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
 
 export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Response) {
   try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+    if (!BILLING_SHOW_METODOLOGIAS_AVULSAS) {
+      return res.json({ items: [] });
+    }
 
     const metodologias = await prisma.metodologiaAvulsa.findMany({
-      where: { ativo: true },
-      orderBy: { criadoEm: "desc" },
+      where: {
+        ativo: true,
+      },
       include: {
         estruturas: {
           include: {
@@ -2033,14 +2453,21 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
           },
         },
       },
+      orderBy: {
+        criadoEm: "desc",
+      },
     });
 
     const items = metodologias.map((m) => {
-      const itens = m.estruturas.flatMap((e) => e.itens || []);
+      const estruturas = m.estruturas || [];
+      const itens = estruturas.flatMap((e) => e.itens || []);
+
       const videoCount = itens.filter((i) => i.tipo === "VIDEO" || i.tipo === "AULA").length;
       const treinoCount = itens.filter((i) => i.tipo === "TREINO").length;
+      const aulaAoVivoCount = itens.filter((i) => i.tipo === "AULA_AO_VIVO").length;
       const somaPontos = itens.reduce((acc, i) => acc + Number(i.pontos || 0), 0);
-      const totalSemanas = m.estruturas.reduce(
+
+      const totalSemanas = estruturas.reduce(
         (acc, e) => Math.max(acc, Number(e.duracaoSemanas || 0)),
         0
       );
@@ -2055,7 +2482,8 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
         totalSemanas,
         videoCount,
         treinoCount,
-        precoAssinaturaMensal: Number(m.precoAssinaturaMensal),
+        aulaAoVivoCount,
+        precoAssinaturaMensal: Number(m.precoAssinaturaMensal ?? 0),
         pontosTotal: somaPontos,
         planoId: `METODOLOGIA_AVULSA:${m.id}`,
         _count: {
@@ -2264,3 +2692,58 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
     return res.status(500).json({ message: "Erro ao verificar assinaturas expirando" });
   }
 }
+
+export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Response) {
+  try {
+    const items = await prisma.aulaAoVivo.findMany({
+      where: {
+        metodologiaId: null,
+        metodologiaAvulsaId: null,
+        acessoPago: true,
+        precoAcesso: {
+          gt: 0,
+        },
+        status: {
+          in: ["AGENDADA", "AO_VIVO", "FINALIZADA"],
+        },
+      },
+      orderBy: {
+        dataInicio: "asc",
+      },
+      select: {
+        id: true,
+        titulo: true,
+        descricao: true,
+        dataInicio: true,
+        dataFim: true,
+        inscricaoInicio: true,
+        inscricaoFim: true,
+        precoAcesso: true,
+        acessoPago: true,
+        status: true,
+        totalParticipantes: true,
+        criadorUsuario: {
+          select: {
+            id: true,
+            nome: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      items: items.map((aula: any) => ({
+        ...aula,
+        precoAcesso: Number(aula.precoAcesso || 0),
+        planoId: `AULA_AO_VIVO:${aula.id}`,
+      })),
+    });
+  } catch (e: any) {
+    console.error("Erro em getAulasAoVivoPagas:", e);
+    return res.status(500).json({
+      message: "Erro ao listar eventos ao vivo pagos.",
+      detail: e?.message,
+    });
+  }
+}
+

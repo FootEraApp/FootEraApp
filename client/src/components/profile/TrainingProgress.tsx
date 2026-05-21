@@ -171,14 +171,21 @@ function computeFromHistorico(wire?: any) {
     /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
   const isDesafio = (t: any) =>
     /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
-
+  const isMetodologia = (t: any) =>
+   /metodologia/i.test(String(t?.tipo ?? t?.categoria ?? ""));
   const isConcluido = (t: any) => /conclu|aprov|finaliz|valid|ok|encerr/i
     .test(String(t?.status ?? t?.situacao ?? ""));
 
   const treinosConcluidos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
   const desafiosConcluidos = hist.filter((t) => isDesafio(t) && isConcluido(t));
 
-  const eventosPontuaveis = [...treinosConcluidos, ...desafiosConcluidos];
+  const metodologiasConcluidas = hist.filter((t) => isMetodologia(t) && isConcluido(t));
+
+  const eventosPontuaveis = [
+    ...treinosConcluidos,
+    ...desafiosConcluidos,
+    ...metodologiasConcluidas,
+  ];
   const performance = eventosPontuaveis.reduce((acc, it) => {
     const p = pickNumber(
       it?.pontos,
@@ -335,22 +342,18 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
       return (Array.isArray(raw) ? raw : []).map((t: any) => {
        
       const submissaoTreinosCount =
-        typeof t?.submissaoTreinos === "number"
-          ? t.submissaoTreinos
-          : typeof t?.submissaoTreinos === "string"
-            ? Number(t.submissaoTreinos)
-            : null;
-
+        Array.isArray(t?.submissoesTreino)
+          ? t.submissoesTreino.length
+          : Number(t?.submissaoTreinos || 0);
+          
       const temSubmissao =
         Boolean(t?.submissao?.feito === true) ||
-        Boolean(
-          typeof t?.submissaoTreinos === "number" && t.submissaoTreinos > 0
-        );
+        Boolean(submissaoTreinosCount && submissaoTreinosCount > 0) ||
         Boolean(t?.submissaoTreinoId || t?.submissaoId) ||
         Boolean(t?.submissaoTreino?.id || t?.submissao?.id) ||
         (Array.isArray(t?.submissoesTreino) && t.submissoesTreino.some((s: any) => s?.id)) ||
         (Array.isArray(t?.submissoes) && t.submissoes.some((s: any) => s?.id));
-
+        
         const dataTreinoWire =
           t?.dataTreino ??
           t?.dataHora ??                
@@ -408,6 +411,44 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
       return r.json();
     },
   });
+
+  const atividadesRecentes = useMemo(() => {
+    const base = Array.isArray(atividades) ? atividades : [];
+
+    return base
+      .filter((a: any) => {
+        const tipo = String(a?.tipo || "").toLowerCase();
+
+        return (
+          tipo.includes("treino") ||
+          tipo.includes("desafio") ||
+          tipo.includes("metodologia")
+        );
+      })
+      .map((a: any) => ({
+        ...a,
+        titulo: a?.titulo ?? a?.nome ?? "Atividade",
+        nome: a?.nome ?? a?.titulo ?? "Atividade",
+        imagemUrl:
+          a?.imagemUrl ??
+          a?.imagem ??
+          a?.treino?.imagemUrl ??
+          a?.desafio?.imagemUrl ??
+          null,
+        data:
+          a?.createdAt ??
+          a?.criadoEm ??
+          a?.data ??
+          a?.dataRealizada ??
+          null,
+      }))
+      .sort((a: any, b: any) => {
+        const da = new Date(a?.data || 0).getTime();
+        const db = new Date(b?.data || 0).getTime();
+        return db - da;
+      })
+      .slice(0, 6);
+  }, [atividades]);
 
   const trainingStats = useMemo(
     () => ({
@@ -490,11 +531,12 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     window.addEventListener("treino:agendado", refetchTreinos);
     window.addEventListener("treino:submetido", refetchTreinos);
     window.addEventListener("perfil:refresh", refetchResumo);
-
+    window.addEventListener("metodologia:concluida", refetchResumo);
     return () => {
       window.removeEventListener("treino:agendado", refetchTreinos);
       window.removeEventListener("treino:submetido", refetchTreinos);
       window.removeEventListener("perfil:refresh", refetchResumo);
+      window.removeEventListener("metodologia:concluida", refetchResumo);
     };
   }, [qc, atletaId, targetUserId]);
 
@@ -718,31 +760,20 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                   
                 </div>
 
-                {Array.isArray(atividades) && atividades.length > 0 ? (
+                {Array.isArray(atividadesRecentes) && atividadesRecentes.length > 0 ? (
                   <div className="grid grid-cols-3 gap-3">
-                    {atividades.slice(0, 6).map((a: any, idx: number) => {
+                    {atividadesRecentes.slice(0, 6).map((a: any, idx: number) => {
                       const img = getActivityImage(a);
                       const label =
-                        a?.tipo ?? a?.categoria ?? a?.kind ?? (a?.desafioId ? "Desafio" : "Treino");
+                        String(a?.tipo || "").toLowerCase() === "metodologia"
+                          ? "Metodologia"
+                          : a?.tipo ?? a?.categoria ?? a?.kind ?? (a?.desafioId ? "Desafio" : "Treino");
                       const titulo =
                         a?.titulo ?? a?.nome ?? a?.treino?.nome ?? a?.desafio?.nome ?? "Atividade";
                       const dataWire =
-                        a?.criadoEm ??                
-                        a?.data ??                   
-                        a?.dataRealizada ??
-                        a?.dataConclusao ??
-                        a?.dataFim ??
-                        a?.dataCriacao ??
                         a?.createdAt ??
-                        a?.updatedAt ??
-                        a?.treinoAgendado?.dataTreino ??
-                        a?.treinoAgendado?.dataHora ??
-                        a?.treinoAgendado?.createdAt ??
-                        a?.treinoAgendado?.updatedAt ??
-                        a?.treinoAgendado?.submissao?.createdAt ??
-                        a?.submissao?.createdAt ??
-                        a?.submissaoTreino?.createdAt ??
-                        a?.submissaoDesafio?.createdAt ??
+                        a?.criadoEm ??
+                        a?.data ??
                         null;
 
                       const dataAtividade = safeDateFromWire(
@@ -759,6 +790,8 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                           onClick={() => {
                             if (isTreino) {
                               abrirTreinoAtividade(a);
+                            } else if (String(label).toLowerCase() === "metodologia") {
+                              setLocation("/learning");
                             } else {
                               setLocation("/trainings");
                             }

@@ -7,7 +7,8 @@ import { FLAGS } from "../config.js";
 import ToggleSwitch from "../components/ToggleSwitch";
 import axios from "axios";
 import Storage from "../utils/storage.js"
-
+import LearningCard from "../components/learning/LearningCard.js";
+import { Pencil, Trash2 } from "lucide-react";
 // <-- ajuste o caminho correto do seu storage.ts do CLIENT
 type Tab =
   | "dashboard"
@@ -37,7 +38,18 @@ interface Treinos {
   submissoesaprovados?: number;
 }
 
-type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin" | "olheiro";
+type UsuarioTipo =
+  | ""
+  | "atleta"
+  | "learning"
+  | "escola"
+  | "clube"
+  | "marca"
+  | "federacao"
+  | "professor"
+  | "admin"
+  | "olheiro";
+  
 type StatusConta =
   | "ATIVO"
   | "BLOQUEADO"
@@ -48,8 +60,11 @@ type StatusConta =
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
   atleta: "Atleta",
+  learning: "Learning",
   escola: "Escolinha",
   clube: "Clube",
+  marca: "Marca",
+  federacao: "Federacao",
   professor: "Professor",
   admin: "Admin",
   olheiro: "Olheiro",
@@ -73,7 +88,7 @@ interface UsuarioAdmin {
   blockedReason?: string | null;
 }
 
-type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
+type PlanoAssinatura = "FREE" | "PRO" | "LEARNING" | string;
 
 interface AssinaturaDTO {
   id?: string;
@@ -142,6 +157,11 @@ function toAbsoluteUrl(raw?: string | null) {
 function avatarSrc(raw?: string | null) {
   const v = formatarUrlFoto(raw, "usuarios");
   return v && String(v).trim() ? v : AVATAR_FALLBACK;
+}
+
+function irParaPerfilUsuario(usuarioId?: string | null) {
+  if (!usuarioId) return;
+  window.location.href = `/perfil/${usuarioId}`;
 }
 
 function onAvatarError(e: React.SyntheticEvent<HTMLImageElement>) {
@@ -217,6 +237,15 @@ function formatResultado(it: ModeracaoItem) {
   return unidade ? `${r} ${unidade}` : String(r);
 }
 
+function getAdminMetodologiaHref(item: any) {
+  const origemTipo = String(item?.origemTipo || item?.origemRegistro || "LEARNING").toUpperCase();
+  const isAvulsa = origemTipo === "AVULSA";
+
+  return isAvulsa
+    ? `/learning/${item.id}?from=admin&origem=avulsa`
+    : `/learning/${item.id}?from=admin`;
+}
+
 export default function AdminDashboard() {
   const [aba, setAba] = useState<Tab>("dashboard");
 
@@ -283,12 +312,17 @@ export default function AdminDashboard() {
   const [profToDelete, setProfToDelete] = useState<{ id: string; nome?: string } | null>(null);
   const [profDeleteBusy, setProfDeleteBusy] = useState(false);
   const [profDeleteErr, setProfDeleteErr] = useState<string>("");
-  const [metTab, setMetTab] = useState<"pendentes" | "minhas">("pendentes");
+  const [metTab, setMetTab] = useState<"pendentes" | "minhas" | "todas">("pendentes");
   const [metMinhas, setMetMinhas] = useState<MetodologiaPendente[]>([]);
   const [metMinhasLoading, setMetMinhasLoading] = useState(false);
   const [metMinhasErro, setMetMinhasErro] = useState("");
   const [metMinhasTotal, setMetMinhasTotal] = useState(0);
   const [metMinhasPage, setMetMinhasPage] = useState(1);
+  const [metTodas, setMetTodas] = useState<any[]>([]);
+  const [metTodasLoading, setMetTodasLoading] = useState(false);
+  const [metTodasErro, setMetTodasErro] = useState("");
+  const [metTodasTotal, setMetTodasTotal] = useState(0);
+  const [metTodasPage, setMetTodasPage] = useState(1);
 
   type MetodologiaItemPreview = {
     id: string;
@@ -339,6 +373,16 @@ export default function AdminDashboard() {
     categorias?: any[];
     ativo: boolean;
     criadoEm?: string | null;
+    origemTipo: "LEARNING" | "AVULSA";
+    videoCount?: number;
+    aulaCount?: number;
+    aulaAoVivoCount?: number;
+    aulasAoVivoCount?: number;
+    treinoCount?: number;
+    materialCount?: number;
+    desafioCount?: number;
+    estruturaCount?: number;
+    totalAssinantes?: number;
     criadorUsuario?: {
       id: string;
       nome?: string | null;
@@ -347,9 +391,7 @@ export default function AdminDashboard() {
       foto?: string | null;
       parceiro?: boolean | null;
     } | null;
-    _count?: { assinantes?: number; itens?: number };
-
-    // ✅ vem do include.itens (take 3)
+    _count?: { assinantes?: number; itens?: number; estruturas?: number };
     itens?: MetodologiaItemPreview[];
   };
 
@@ -461,6 +503,7 @@ const [assQ, setAssQ] = useState("");
 const [assDebQ, setAssDebQ] = useState("");
 const [assPlano, setAssPlano] = useState<string>("");
 const [assAtivo, setAssAtivo] = useState<string>("");
+const [assTipo, setAssTipo] = useState<string>("");
 const [assPage, setAssPage] = useState(1);
 const assPageSize = 20;
 const [assLoading, setAssLoading] = useState(false);
@@ -525,7 +568,7 @@ async function carregarMinhasMetodologiasAdmin(page: number) {
   }
 }
 
-async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string) {
+async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string, origemTipo: "LEARNING" | "AVULSA" = "LEARNING") {
   const ok = window.confirm(
     `Tem certeza que deseja apagar a metodologia "${titulo || "sem título"}"?`
   );
@@ -534,10 +577,13 @@ async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string) {
   setAcaoBusyId(id);
 
   try {
-    const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
+    const r = await fetch(
+      `${API.BASE_URL}/api/admin/metodologias/${id}?origemTipo=${encodeURIComponent(origemTipo)}`,
+      {
+        method: "DELETE",
+        headers: authHeaders(),
+      }
+    );
 
     const txt = await r.text().catch(() => "");
     if (!r.ok) {
@@ -553,6 +599,145 @@ async function apagarMinhaMetodologiaAdmin(id: string, titulo?: string) {
   } finally {
     setAcaoBusyId(null);
   }
+}
+
+async function ativarMetodologiaAdmin(
+  id: string,
+  origemTipo: "LEARNING" | "AVULSA",
+  titulo?: string
+) {
+  setAcaoBusyId(id);
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}/ativo`, {
+      method: "PATCH",
+      headers: {
+        ...authHeaders({ "Content-Type": "application/json" }),
+      },
+      body: JSON.stringify({
+        ativo: true,
+        origemTipo,
+      }),
+    });
+
+    const txt = await r.text().catch(() => "");
+    let json: any = null;
+    try {
+      json = txt ? JSON.parse(txt) : null;
+    } catch {
+      json = null;
+    }
+
+    if (!r.ok) {
+      showToast("error", json?.message || txt || `Erro HTTP ${r.status}`);
+      return;
+    }
+
+    setMetPendentes((prev) => prev.filter((m) => m.id !== id));
+    setMetTotal((prev) => Math.max(0, prev - 1));
+
+    showToast(
+      "success",
+      `Metodologia "${titulo || "sem título"}" ativada com sucesso.`
+    );
+
+    // opcional: recarrega também a aba "todas"
+    carregarTodasMetodologiasAdmin(metTodasPage);
+  } catch (e: any) {
+    showToast("error", e?.message || "Erro ao ativar metodologia.");
+  } finally {
+    setAcaoBusyId(null);
+  }
+}
+
+function renderMetodologiaAdminActions(
+  item: any,
+  tabOrigem: "pendentes" | "minhas" | "todas"
+) {
+  const origemTipo = String(
+    item?.origemTipo || item?.origemRegistro || "LEARNING"
+  ).toUpperCase() as "LEARNING" | "AVULSA";
+
+  if (tabOrigem === "pendentes") {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = getAdminMetodologiaHref(item);
+          }}
+          className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+        >
+          Ver metodologia
+        </button>
+
+        <button
+          type="button"
+          onClick={() => ativarMetodologiaAdmin(item.id, origemTipo, item.titulo)}
+          className="inline-flex h-10 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold items-center"
+          disabled={acaoBusyId === item.id}
+        >
+          {acaoBusyId === item.id ? "Ativando..." : "Ativar"}
+        </button>
+      </>
+    );
+  }
+
+  if (tabOrigem === "minhas") {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = getAdminMetodologiaHref(item);
+          }}
+          className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+        >
+          Gerenciar
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href =
+              `/learning/create?id=${item.id}` +
+              `&tipo=${encodeURIComponent(item.tipo || "")}` +
+              `&origem=${origemTipo === "AVULSA" ? "avulsa" : "learning"}`;
+          }}
+          className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 h-10 text-slate-700"
+          title="Editar metodologia"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            apagarMinhaMetodologiaAdmin(item.id, item.titulo, origemTipo)
+          }
+          className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 h-10 text-red-600"
+          title="Apagar metodologia"
+          disabled={acaoBusyId === item.id}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          window.location.href = getAdminMetodologiaHref(item);
+        }}
+        className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
+      >
+        Ver metodologia
+      </button>
+    </>
+  );
 }
 
 async function bloquearOuReativarConta(
@@ -774,7 +959,7 @@ useEffect(() => {
   if (aba !== "assinaturas") return;
   void carregarAssinantes(1);
   void carregarAssOverview();
-}, [aba, assPlano, assAtivo, assDebQ]);
+}, [aba, assPlano, assAtivo, assDebQ, assTipo]);
 
 useEffect(() => {
   if (aba !== "feedback") return;
@@ -852,6 +1037,39 @@ useEffect(() => {
     return () => clearTimeout(h);
   }, [metQ]);
 
+  async function carregarTodasMetodologiasAdmin(page = 1) {
+    setMetTodasLoading(true);
+    setMetTodasErro("");
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(metPageSize));
+      if (metDebQ) params.set("q", metDebQ);
+
+      const r = await fetch(
+        `${API.BASE_URL}/api/admin/metodologias/todas?${params.toString()}`,
+        { headers: authHeaders() }
+      );
+
+      const j = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        throw new Error(j?.message || "Erro ao carregar metodologias.");
+      }
+
+      setMetTodas(Array.isArray(j.items) ? j.items : []);
+      setMetTodasTotal(Number(j.total || 0));
+      setMetTodasPage(Number(j.page || page));
+    } catch (e: any) {
+      setMetTodas([]);
+      setMetTodasTotal(0);
+      setMetTodasErro(e?.message || "Erro ao carregar metodologias.");
+    } finally {
+      setMetTodasLoading(false);
+    }
+  }
+
   async function carregarMetodologiasPendentes(page: number) {
     setMetLoading(true);
     setMetErro("");
@@ -889,13 +1107,13 @@ useEffect(() => {
     }
   }
 
-  async function setMetodologiaAtiva(id: string, ativo: boolean) {
+  async function setMetodologiaAtiva(id: string, ativo: boolean, origemTipo: "LEARNING" | "AVULSA" = "LEARNING") {
     setAcaoBusyId(id);
     try {
       const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}/ativo`, {
         method: "PATCH",
         headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ ativo }),
+        body: JSON.stringify({ ativo, origemTipo }),
       });
       const txt = await r.text().catch(() => "");
       if (!r.ok) {
@@ -925,131 +1143,133 @@ useEffect(() => {
 
     if (metTab === "pendentes") {
       void carregarMetodologiasPendentes(1);
-    } else {
+    } else if (metTab === "minhas") {
       void carregarMinhasMetodologiasAdmin(1);
+    } else {
+      void carregarTodasMetodologiasAdmin(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, metTab, metDebQ]);
 
-async function carregarAssinantes(page: number) {
-  setAssLoading(true);
-  setAssErro("");
-  try {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("pageSize", String(assPageSize));
-    if (assDebQ) params.set("q", assDebQ);
-    if (assPlano) params.set("plano", assPlano);
-    if (assAtivo) params.set("ativo", assAtivo);
+  async function carregarAssinantes(page: number) {
+    setAssLoading(true);
+    setAssErro("");
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(assPageSize));
+      if (assDebQ) params.set("q", assDebQ);
+      if (assPlano) params.set("plano", assPlano);
+      if (assTipo) params.set("tipo", assTipo);
+      if (assAtivo) params.set("ativo", assAtivo);
 
-    const r = await fetch(`${API.BASE_URL}/api/admin/assinantes?${params}`, { headers: authHeaders() });
-    if (!r.ok) {
-      setAssErro(await r.text());
+      const r = await fetch(`${API.BASE_URL}/api/admin/assinantes?${params}`, { headers: authHeaders() });
+      if (!r.ok) {
+        setAssErro(await r.text());
+        setAssinantes([]);
+        setAssTotal(0);
+        return;
+      }
+      const j = await r.json();
+      setAssinantes(Array.isArray(j.items) ? j.items : []);
+      setAssTotal(Number(j.total || 0));
+      setAssPage(Number(j.page || page));
+    } catch {
+      setAssErro("Falha ao carregar assinantes.");
       setAssinantes([]);
       setAssTotal(0);
-      return;
+    } finally {
+      setAssLoading(false);
     }
-    const j = await r.json();
-    setAssinantes(Array.isArray(j.items) ? j.items : []);
-    setAssTotal(Number(j.total || 0));
-    setAssPage(Number(j.page || page));
-  } catch {
-    setAssErro("Falha ao carregar assinantes.");
-    setAssinantes([]);
-    setAssTotal(0);
-  } finally {
-    setAssLoading(false);
   }
-}
 
-async function carregarAssOverview() {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/admin/assinantes/overview`, { headers: authHeaders() });
-    if (r.ok) setAssOverview(await r.json());
-    else setAssOverview(null);
-  } catch {
-    setAssOverview(null);
-  }
-}
-
-async function carregarExercicios() {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() });
-    const j = await r.json();
-
-    const arr = Array.isArray(j)
-      ? j
-      : j.items ?? j.data ?? j.exercicios ?? j.rows ?? j.result ?? [];
-
-    setExercicios(Array.isArray(arr) ? arr : []);
-  } catch {
-    setExercicios([]);
-  }
-}
-
-async function carregarFeedback() {
-  setFbLoading(true);
-  setFbError(null);
-  try {
-    const params = new URLSearchParams();
-    if (fbTipo) params.set("tipo", fbTipo);
-    if (fbFrom) params.set("from", fbFrom);
-
-    const url = `${API.BASE_URL}/api/feedback?${params.toString()}`;
-    const r = await fetch(url, { headers: authHeaders() });
-    const txt = await r.text();
-
-    if (!r.ok) {
-      throw new Error(txt || `Erro HTTP ${r.status}`);
+  async function carregarAssOverview() {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/admin/assinantes/overview`, { headers: authHeaders() });
+      if (r.ok) setAssOverview(await r.json());
+      else setAssOverview(null);
+    } catch {
+      setAssOverview(null);
     }
-
-    const data = txt ? JSON.parse(txt) : [];
-    let arr: FeedbackAdmin[] = Array.isArray(data) ? data : data.items ?? [];
-
-    if (fbOnlyUnread) {
-      arr = arr.filter((f) => !f.lidoEm);
-    }
-
-    arr = [...arr].sort((a, b) => {
-      const da = new Date(a.createdAt).getTime();
-      const db = new Date(b.createdAt).getTime();
-      return da - db; 
-    });
-
-    setFbItems(arr);
-  } catch (err: any) {
-    console.error("Erro ao carregar feedbacks:", err);
-    setFbError(err?.message || "Erro ao carregar feedbacks.");
-    setFbItems([]);
-  } finally {
-    setFbLoading(false);
   }
-}
 
-async function marcarFeedbackComoLido(id: string) {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/feedback/${id}/lido`, {
-      method: "PATCH",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-    });
+  async function carregarExercicios() {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() });
+      const j = await r.json();
 
-    if (!r.ok) {
+      const arr = Array.isArray(j)
+        ? j
+        : j.items ?? j.data ?? j.exercicios ?? j.rows ?? j.result ?? [];
+
+      setExercicios(Array.isArray(arr) ? arr : []);
+    } catch {
+      setExercicios([]);
+    }
+  }
+
+  async function carregarFeedback() {
+    setFbLoading(true);
+    setFbError(null);
+    try {
+      const params = new URLSearchParams();
+      if (fbTipo) params.set("tipo", fbTipo);
+      if (fbFrom) params.set("from", fbFrom);
+
+      const url = `${API.BASE_URL}/api/feedback?${params.toString()}`;
+      const r = await fetch(url, { headers: authHeaders() });
       const txt = await r.text();
-      alert(`Erro ao marcar como lido: ${txt || r.status}`);
-      return;
+
+      if (!r.ok) {
+        throw new Error(txt || `Erro HTTP ${r.status}`);
+      }
+
+      const data = txt ? JSON.parse(txt) : [];
+      let arr: FeedbackAdmin[] = Array.isArray(data) ? data : data.items ?? [];
+
+      if (fbOnlyUnread) {
+        arr = arr.filter((f) => !f.lidoEm);
+      }
+
+      arr = [...arr].sort((a, b) => {
+        const da = new Date(a.createdAt).getTime();
+        const db = new Date(b.createdAt).getTime();
+        return da - db; 
+      });
+
+      setFbItems(arr);
+    } catch (err: any) {
+      console.error("Erro ao carregar feedbacks:", err);
+      setFbError(err?.message || "Erro ao carregar feedbacks.");
+      setFbItems([]);
+    } finally {
+      setFbLoading(false);
     }
-
-    setFbItems((prev) =>
-      prev.map((f) =>
-        f.id === id ? { ...f, lidoEm: new Date().toISOString() } : f
-      )
-    );
-  } catch (e) {
-    console.error(e);
-    alert("Falha ao marcar feedback como lido.");
   }
-}
 
+  async function marcarFeedbackComoLido(id: string) {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/feedback/${id}/lido`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text();
+        alert(`Erro ao marcar como lido: ${txt || r.status}`);
+        return;
+      }
+
+      setFbItems((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, lidoEm: new Date().toISOString() } : f
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      alert("Falha ao marcar feedback como lido.");
+    }
+  }
 
   function fmtDate(d?: string | null) {
     return d ? new Date(d).toLocaleString("pt-BR") : "—";
@@ -1794,8 +2014,11 @@ async function confirmarExcluirProfessor() {
               >
                 <option value="">Todos os tipos</option>
                 <option value="atleta">Atletas</option>
+                <option value="learning">Learning</option>
                 <option value="escola">Escolas</option>
                 <option value="clube">Clubes</option>
+                <option value="marca">Marcas</option>
+                <option value="federacao">Federações</option>
                 <option value="professor">Professores</option>
                 <option value="admin">Administrador</option>
                 <option value="olheiro">Olheiro</option>
@@ -1845,13 +2068,29 @@ async function confirmarExcluirProfessor() {
                       <tr key={u.id} className="border-t">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                           <img
-                              src={foto}
-                              onError={onAvatarError}
-                              className="w-8 h-8 rounded-full object-cover border"
+                           <button
+                              type="button"
+                              onClick={() => irParaPerfilUsuario(u.id)}
+                              className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
+                              title="Abrir perfil do usuário"
+                           >
+                            <img
+                                src={foto}
+                                onError={onAvatarError}
+                                className="w-8 h-8 rounded-full object-cover border"
+                                alt={nome}
                             />
+                           </button>
+
                             <div className="font-medium flex items-center gap-2">
-                              {nome}
+                              <button
+                                type="button"
+                                onClick={() => irParaPerfilUsuario(u.id)}
+                                className="hover:underline text-left"
+                                title="Abrir perfil do usuário"
+                              >
+                                {nome}
+                              </button>
                               <label className="flex items-center gap-2">
                                 <input
                                   type="checkbox"
@@ -2208,6 +2447,7 @@ async function confirmarExcluirProfessor() {
                 const cref = p.cref ?? p.usuario?.cref ?? "—";
                 const area = p.areaFormacao ?? p.formacao ?? "—";
                 const foto = avatarSrc(p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null);
+                const professorUsuarioId = p.usuarioId ?? p.usuario?.id ?? null;
 
                 const qualificacoes = Array.isArray(p.qualificacoes) ? p.qualificacoes : [];
                 const certificacoes = Array.isArray(p.certificacoes) ? p.certificacoes : [];
@@ -2221,14 +2461,30 @@ async function confirmarExcluirProfessor() {
                     className="bg-white p-4 rounded shadow flex justify-between items-center"
                   >
                     <div className="flex items-start gap-3">
-                      <img
-                        src={foto}
-                        onError={onAvatarError}
-                        className="w-12 h-12 rounded-full object-cover border"
-                        alt="Foto do professor"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => irParaPerfilUsuario(professorUsuarioId)}
+                        disabled={!professorUsuarioId}
+                        className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-green-700 disabled:cursor-not-allowed"
+                        title={professorUsuarioId ? "Abrir perfil do professor" : "Usuário do professor não encontrado"}
+                      >
+                        <img
+                          src={foto}
+                          onError={onAvatarError}
+                          className="w-12 h-12 rounded-full object-cover border"
+                          alt={nome}
+                        />
+                      </button>
                       <div>
-                        <strong>{nome}</strong>
+                        <button
+                          type="button"
+                          onClick={() => irParaPerfilUsuario(professorUsuarioId)}
+                          disabled={!professorUsuarioId}
+                          className="font-semibold hover:underline text-left disabled:hover:no-underline disabled:cursor-not-allowed"
+                          title={professorUsuarioId ? "Abrir perfil do professor" : "Usuário do professor não encontrado"}
+                        >
+                          {nome}
+                        </button>
 
                         <div className="text-sm text-gray-700 mt-1">
                           <span className="font-medium">CREF:</span> {cref}
@@ -2350,6 +2606,13 @@ async function confirmarExcluirProfessor() {
                 >
                   Minhas metodologias
                 </button>
+
+                <button
+                  className={`px-4 py-2 rounded ${metTab === "todas" ? "bg-green-700 text-white" : "bg-gray-200"}`}
+                  onClick={() => setMetTab("todas")}
+                >
+                  Metodologias totais
+                </button>
               </div>
 
               <button
@@ -2375,19 +2638,35 @@ async function confirmarExcluirProfessor() {
                 onClick={() => {
                   if (metTab === "pendentes") {
                     carregarMetodologiasPendentes(1);
-                  } else {
+                  } else if (metTab === "minhas") {
                     carregarMinhasMetodologiasAdmin(1);
+                  } else {
+                    carregarTodasMetodologiasAdmin(1);
                   }
                 }}
-                disabled={metTab === "pendentes" ? metLoading : metMinhasLoading}
+                disabled={
+                  metTab === "pendentes"
+                    ? metLoading
+                    : metTab === "minhas"
+                    ? metMinhasLoading
+                    : metTodasLoading
+                }
               >
-                {(metTab === "pendentes" ? metLoading : metMinhasLoading) ? "Carregando…" : "Atualizar"}
+                {(metTab === "pendentes"
+                  ? metLoading
+                  : metTab === "minhas"
+                  ? metMinhasLoading
+                  : metTodasLoading)
+                  ? "Carregando…"
+                  : "Atualizar"}
               </button>
 
               <div className="ml-auto text-sm text-gray-600">
                 {metTab === "pendentes"
                   ? (metLoading ? "Carregando…" : `${metTotal} pendente(s)`)
-                  : (metMinhasLoading ? "Carregando…" : `${metMinhasTotal} metodologia(s)`)}
+                  : metTab === "minhas"
+                  ? (metMinhasLoading ? "Carregando…" : `${metMinhasTotal} metodologia(s)`)
+                  : (metTodasLoading ? "Carregando…" : `${metTodasTotal} metodologia(s)`)}
               </div>
             </div>
 
@@ -2406,61 +2685,23 @@ async function confirmarExcluirProfessor() {
                     Nenhuma metodologia pendente no momento.
                   </div>
                 ) : (
-                  <ul className="space-y-3">
-                    {metPendentes.map((m) => {
-                      const capa = toAbsoluteUrl(m.capaUrl ?? null);
-
-                      return (
-                        <li key={m.id} className="bg-white rounded shadow border p-4">
-                          <div className="flex flex-col gap-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-lg font-bold text-[#193b2e]">{m.titulo}</div>
-                                <div className="text-sm text-slate-600 mt-1">
-                                  {m.descricao || "Sem descrição"}
-                                </div>
-                                <div className="text-xs text-slate-500 mt-2">
-                                  Criado por: {m.criadorUsuario?.nome || m.criadorUsuario?.email || "—"}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                {capa ? (
-                                  <button
-                                    className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                    onClick={() => setPlayer({ kind: "image", src: capa })}
-                                  >
-                                    Ver capa
-                                  </button>
-                                ) : null}
-
-                                <button
-                                  className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
-                                  onClick={() => {
-                                    window.location.href = `/learning/${m.id}?from=admin`;
-                                  }}
-                                >
-                                  Detalhes
-                                </button>
-
-                                <button
-                                  className="px-3 py-2 rounded bg-green-700 hover:bg-green-800 text-white text-sm disabled:opacity-60"
-                                  disabled={acaoBusyId === m.id}
-                                  onClick={() => {
-                                    const ok = confirm(`Ativar esta metodologia?\n\n"${m.titulo}"`);
-                                    if (!ok) return;
-                                    void setMetodologiaAtiva(m.id, true);
-                                  }}
-                                >
-                                  {acaoBusyId === m.id ? "Ativando..." : "Ativar ✅"}
-                                </button>
-                              </div>
-                            </div>
+                  <div className="space-y-3">
+                    {metPendentes.map((item: MetodologiaPendente) => (
+                      <LearningCard
+                        key={`met_pendente_${item.id}`}
+                        item={{
+                          ...item,
+                          origemRegistro: item.origemTipo,
+                        }}
+                        href={getAdminMetodologiaHref(item)}
+                        extraActions={
+                          <div className="flex items-center gap-2">
+                            {renderMetodologiaAdminActions(item, "pendentes")}
                           </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between mt-3">
@@ -2498,53 +2739,23 @@ async function confirmarExcluirProfessor() {
                     Você ainda não criou nenhuma metodologia.
                   </div>
                 ) : (
-                  metMinhas.map((item) => (
-                    <div key={item.id} className="bg-white p-4 rounded shadow border">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-lg font-bold text-[#193b2e]">{item.titulo}</div>
-                          <div className="text-sm text-slate-500 mt-1">
-                            {item.descricao || "Sem descrição"}
+                  <div className="space-y-4">
+                    {metMinhas.map((item: MetodologiaPendente) => (
+                      <LearningCard
+                        key={`met_minha_${item.id}`}
+                        item={{
+                          ...item,
+                          origemRegistro: item.origemTipo,
+                        }}
+                        href={getAdminMetodologiaHref(item)}
+                        extraActions={
+                          <div className="flex items-center gap-2">
+                            {renderMetodologiaAdminActions(item, "minhas")}
                           </div>
-                          <div className="text-xs text-slate-500 mt-2">
-                            Status: {item.ativo ? "Ativa" : "Pendente"}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              window.location.href = `/learning/${item.id}?from=admin`;
-                            }}
-                            className="px-3 py-2 rounded bg-green-700 text-white"
-                          >
-                            Gerenciar
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              window.location.href = `/learning/create?id=${item.id}`;
-                            }}
-                            className="px-3 py-2 rounded border bg-white text-slate-700"
-                            title="Editar metodologia"
-                          >
-                            ✏️
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => apagarMinhaMetodologiaAdmin(item.id, item.titulo)}
-                            className="px-3 py-2 rounded border border-red-200 bg-white text-red-600"
-                            title="Apagar metodologia"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between mt-3">
@@ -2572,6 +2783,65 @@ async function confirmarExcluirProfessor() {
                 </div>
               </div>
             )}
+
+            {metTab === "todas" && (
+              <div className="space-y-4">
+                {metTodasErro ? <div className="mb-3 text-sm text-red-600">{metTodasErro}</div> : null}
+
+                {metTodasLoading && metTodas.length === 0 ? (
+                  <div className="bg-white p-6 rounded shadow text-center text-gray-500">
+                    Carregando metodologias...
+                  </div>
+                ) : metTodas.length === 0 ? (
+                  <div className="bg-white p-6 rounded shadow text-center text-gray-500">
+                    Nenhuma metodologia encontrada.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {metTodas.map((item: any) => (
+                      <LearningCard
+                        key={`met_todas_${item.id}`}
+                        item={{
+                          ...item,
+                          origemRegistro: item.origemTipo,
+                        }}
+                        href={getAdminMetodologiaHref(item)}
+                        extraActions={
+                          <div className="flex items-center gap-2">
+                            {renderMetodologiaAdminActions(item, "todas")}
+                          </div>
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mt-3">
+                  <button
+                    disabled={metTodasPage <= 1 || metTodasLoading}
+                    onClick={() => carregarTodasMetodologiasAdmin(metTodasPage - 1)}
+                    className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+
+                  <div className="text-sm text-gray-600">Página {metTodasPage}</div>
+
+                  <button
+                    disabled={
+                      metTodasLoading ||
+                      metTodasPage * metPageSize >= metTodasTotal ||
+                      metTodas.length < metPageSize
+                    }
+                    onClick={() => carregarTodasMetodologiasAdmin(metTodasPage + 1)}
+                    className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
         
@@ -2752,7 +3022,22 @@ async function confirmarExcluirProfessor() {
                 <option value="">Todos os planos</option>
                 <option value="FREE">FREE</option>
                 <option value="PRO">PRO</option>
-                <option value="ELITE">ELITE</option>
+                <option value="LEARNING">LEARNING</option>
+              </select>
+              <select
+                value={assTipo}
+                onChange={(e) => setAssTipo(e.target.value)}
+                className="border rounded px-3 py-2"
+              >
+                <option value="">Todos os tipos</option>
+                <option value="Atleta">Atleta</option>
+                <option value="Learning">Learning</option>
+                <option value="Escolinha">Escola/Escolinha</option>
+                <option value="Clube">Clube</option>
+                <option value="Marca">Marca</option>
+                <option value="Federacao">Federação</option>
+                <option value="Professor">Professor</option>
+                <option value="Olheiro">Olheiro</option>
               </select>
               <select value={assAtivo} onChange={(e) => setAssAtivo(e.target.value)} className="border rounded px-3 py-2">
                 <option value="">Status (todos)</option>
@@ -2790,11 +3075,18 @@ async function confirmarExcluirProfessor() {
                       <tr key={a.id} className="border-t">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <img
-                              src={foto}
-                              onError={onAvatarError}
-                              className="w-8 h-8 rounded-full object-cover border"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => irParaPerfilUsuario(a.usuario.id)}
+                              className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
+                            >
+                              <img
+                                src={avatarSrc(a.usuario.foto)}
+                                onError={onAvatarError}
+                                className="w-8 h-8 rounded-full object-cover border"
+                                alt={a.usuario.nome ?? "Usuário"}
+                              />
+                            </button>
                             <div>
                               <div className="font-medium">{nome}</div>
                               <div className="text-xs text-gray-600">{u.email ?? "—"}</div>
@@ -2824,7 +3116,7 @@ async function confirmarExcluirProfessor() {
                               className="text-blue-600"
                               onClick={async () => {
                                 const atual = a.plano ?? "FREE";
-                                const novo = prompt('Novo plano (FREE | PRO | ELITE):', String(atual))?.toUpperCase().trim();
+                                const novo = prompt('Novo plano (FREE | PRO | LEARNING):', String(atual))?.toUpperCase().trim();
                                 if (!novo) return;
                                 await alterarPlanoAssinatura(u.id, novo);
                                 await carregarAssinantes(assPage);
@@ -2834,7 +3126,7 @@ async function confirmarExcluirProfessor() {
                               Trocar plano
                             </button>
 
-                            {a.ativo ? (
+                            {a.ativo && (
                               <button
                                 className="text-red-600"
                                 onClick={async () => {
@@ -2844,17 +3136,6 @@ async function confirmarExcluirProfessor() {
                                 }}
                               >
                                 Cancelar
-                              </button>
-                            ) : (
-                              <button
-                                className="text-green-700"
-                                onClick={async () => {
-                                  await reativarAssinatura(u.id);
-                                  await carregarAssinantes(assPage);
-                                  await carregarAssOverview();
-                                }}
-                              >
-                                Reativar
                               </button>
                             )}
                           </div>
@@ -3006,9 +3287,14 @@ async function confirmarExcluirProfessor() {
                         <td className="px-3 py-2">
                           {u ? (
                             <>
-                              <div className="font-medium">
+                              <button
+                                type="button"
+                                onClick={() => irParaPerfilUsuario(u.id)}
+                                className="font-medium hover:underline text-left"
+                                title="Abrir perfil do usuário"
+                              >
                                 {nome}
-                              </div>
+                              </button>
                               <div className="text-xs text-gray-600">
                                 {u.email ?? "—"}{" "}
                                 {u.tipo ? `(${u.tipo})` : ""}
@@ -3270,7 +3556,11 @@ async function confirmarExcluirProfessor() {
                       onClick={() => {
                         const ok = confirm(`Ativar esta metodologia?\n\n"${metDetail.titulo}"`);
                         if (!ok) return;
-                        void setMetodologiaAtiva(metDetail.id, true).then(() => {
+                        void setMetodologiaAtiva(
+                          metDetail.id,
+                          true,
+                          (metDetail.origemTipo || "LEARNING") as "LEARNING" | "AVULSA"
+                        ).then(() => {
                           setMetDetailOpen(false);
                         });
                       }}
@@ -3478,13 +3768,27 @@ async function confirmarExcluirProfessor() {
                   return (
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={avatarSrc(userSelecionado?.foto)}
-                          onError={onAvatarError}
-                          className="w-14 h-14 rounded-full object-cover border"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => irParaPerfilUsuario(userSelecionado.id)}
+                          className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
+                          title="Abrir perfil do usuário"
+                        >
+                          <img
+                            src={avatarSrc(userSelecionado.foto)}
+                            onError={onAvatarError}
+                            className="w-12 h-12 rounded-full object-cover border"
+                            alt={userSelecionado.nome ?? "Usuário"}
+                          />
+                        </button>
                         <div>
-                          <div className="font-semibold text-base">{u.nome ?? u.nomeDeUsuario}</div>
+                          <button
+                            type="button"
+                            onClick={() => irParaPerfilUsuario(userSelecionado.id)}
+                            className="font-semibold hover:underline text-left"
+                          >
+                            {userSelecionado.nome ?? userSelecionado.nomeDeUsuario ?? "Usuário"}
+                          </button>
                           <div className="text-sm text-gray-600">{u.email ?? "-"}</div>
                           <div className="text-xs text-gray-500">Tipo: {u.tipo ?? "-"} • Criado: {formatDate(u.criadoEm)}</div>
                         </div>
@@ -3530,7 +3834,7 @@ async function confirmarExcluirProfessor() {
                             className="px-3 py-2 bg-blue-600 text-white rounded"
                             onClick={async () => {
                               const atual = u.assinatura?.plano ?? "FREE";
-                              const novo = prompt('Novo plano (FREE | PRO | ELITE):', String(atual))?.toUpperCase().trim();
+                              const novo = prompt('Novo plano (FREE | PRO | LEARNING):', String(atual))?.toUpperCase().trim();
                               if (!novo) return;
                               await alterarPlanoAssinatura(u.id, novo);
                             }}
@@ -3538,19 +3842,12 @@ async function confirmarExcluirProfessor() {
                             Trocar plano
                           </button>
 
-                          {u.assinatura?.ativo ? (
+                          {u.assinatura?.ativo && (
                             <button
                               className="px-3 py-2 bg-red-600 text-white rounded"
                               onClick={() => cancelarAssinatura(u.id)}
                             >
                               Cancelar assinatura
-                            </button>
-                          ) : (
-                            <button
-                              className="px-3 py-2 bg-green-700 text-white rounded"
-                              onClick={() => reativarAssinatura(u.id)}
-                            >
-                              Reativar assinatura
                             </button>
                           )}
                         </div>

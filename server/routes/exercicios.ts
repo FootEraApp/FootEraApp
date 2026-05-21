@@ -10,6 +10,7 @@ import {
   buscarExercicioPorId,
   duplicarExercicio,
   favoritarExercicio,
+  criarExercicioPersonalizado,
 } from "../controllers/exerciciosController.js";
 
 const router = express.Router();
@@ -24,7 +25,12 @@ router.delete("/:id", authenticateToken, excluirExercicio);
 router.post("/:id/duplicar", authenticateToken, duplicarExercicio);
 router.patch("/:id/favoritar", authenticateToken, favoritarExercicio);
 router.get("/", listarExercicios);
-
+router.post(
+  "/personalizados",
+  authenticateToken,
+  uploadToS3.single("video"),
+  criarExercicioPersonalizado
+);
 // ✅ Usando uploadToS3.single("video")
 router.post("/", authenticateToken, uploadToS3.single("video"), criarExercicio);
 

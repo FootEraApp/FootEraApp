@@ -6,7 +6,9 @@ import {
   listarSeguindo,
   minhaRede,
   statusSeguidor,  
-  removerSeguidor
+  removerSeguidor,
+  aceitarSeguidor,
+  recusarSeguidor,
 } from "../controllers/seguirController.js";
 
 const router = Router();
@@ -18,6 +20,8 @@ router.get("/meus-seguidos", listarSeguindo);
 router.get("/status", statusSeguidor);
 router.delete("/seguidores/:seguidorUsuarioId", removerSeguidor);
 router.delete("/:seguidoUsuarioId", deixarDeSeguir);
+router.post("/aceitar", aceitarSeguidor);
+router.post("/recusar", recusarSeguidor);
 router.delete("/", deixarDeSeguir); 
 router.post("/", seguirUsuario);
 

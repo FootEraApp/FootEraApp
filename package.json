@@ -30,6 +30,7 @@
     "test:cmd": "start-server-and-test \"npm run e2e:server\" http://localhost:3001/api/health \"start-server-and-test \\\"npm run e2e:client\\\" http://localhost:5173 \\\"npm run e2e:test\\\"\""
   },
   "dependencies": {
+    "@aws-sdk/client-ivs": "^3.1045.0",
     "@headlessui/react": "^2.2.4",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.10.0",

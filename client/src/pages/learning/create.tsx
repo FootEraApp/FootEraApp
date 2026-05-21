@@ -11,6 +11,8 @@ import {
   Dumbbell,
   FileText,
   Trophy,
+  Radio,
+  Calendar,
 } from "lucide-react";
 import {
   createMetodologiaCompleta,
@@ -83,6 +85,31 @@ type LocalItem = LearningEstruturaItemInput & {
   videoModalOpen?: boolean;
   materialFileName?: string | null;
   materialPreviewUrl?: string | null;
+
+  aulaAoVivo?: {
+    id?: string;
+    inscricaoInicio?: string;
+    inscricaoFim?: string;
+    dataInicio: string;
+    dataFim?: string;
+    chatAtivo: boolean;
+    gravacaoAtiva: boolean;
+    replayDisponivel?: boolean;
+    status?: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
+
+    // legado, pode manter para compatibilidade
+    convidadoUsuarioId?: string;
+    convidadoNome?: string;
+    convidadoDescricao?: string;
+
+    // novo
+    convidados?: Array<{
+      localId: string;
+      usuarioId?: string;
+      nome: string;
+      descricao?: string;
+    }>;
+  };
 };
 
 type LocalEstrutura = LearningEstruturaInput & {
@@ -142,7 +169,8 @@ const ITEM_TYPES_TRILHA: { value: LearningItemTipo; label: string; icon: React.R
 ];
 
 const ITEM_TYPES_MODULO: { value: LearningItemTipo; label: string; icon: React.ReactNode }[] = [
-  { value: "AULA", label: "Aula", icon: <Video className="w-4 h-4" /> },
+  { value: "AULA", label: "Aula gravada", icon: <Video className="w-4 h-4" /> },
+  { value: "AULA_AO_VIVO", label: "Aula ao vivo", icon: <Radio className="w-4 h-4" /> },
   { value: "VIDEO", label: "Vídeo", icon: <Video className="w-4 h-4" /> },
   { value: "MATERIAL", label: "Material", icon: <FileText className="w-4 h-4" /> },
   { value: "DESAFIO", label: "Desafio", icon: <Trophy className="w-4 h-4" /> },
@@ -170,6 +198,7 @@ function calcularPontuacaoItem(item: Partial<LocalItem>) {
       return item.treinoSelecionado?.pontuacao ?? item.pontos ?? null;
     case "VIDEO":
     case "AULA":
+    case "AULA_AO_VIVO":
       return calcularPontuacaoVideoOuAula(item.duracaoMin);
     case "MATERIAL":
       return 10;
@@ -199,6 +228,33 @@ function toInputDate(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function toDatetimeLocalValue(value?: string | Date | null) {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+      date.getDate()
+    )}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function datetimeLocalToIso(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  const date = new Date(raw);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
+}
+
 function getToken() {
   return (
     localStorage.getItem("token") ||
@@ -221,6 +277,31 @@ function getTipoUsuarioId() {
     sessionStorage.getItem("tipoUsuarioId") ||
     ""
   );
+}
+
+async function buscarUsuariosFootera(q: string) {
+  const busca = q.trim();
+
+  if (busca.length < 2) return [];
+
+  const token = getToken();
+
+  const res = await fetch(
+    `${API.BASE_URL}/api/usuarios/buscar?q=${encodeURIComponent(busca)}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) return [];
+
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json.items)) return json.items;
+  if (Array.isArray(json.usuarios)) return json.usuarios;
+
+  return [];
 }
 
 function tipoParaVinculoFront(tipo: string) {
@@ -306,6 +387,11 @@ function normalizeTreinoSelecionavel(t: any): TreinoSelecionavel {
 }
 
 function emptyItem(tipo: LearningItemTipo = "VIDEO"): LocalItem {
+  const agora = new Date();
+
+  const umaHoraDepois = new Date(agora);
+  umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
+
   return {
     localId: uid("item"),
     titulo: "",
@@ -326,6 +412,24 @@ function emptyItem(tipo: LearningItemTipo = "VIDEO"): LocalItem {
     videoModalOpen: false,
     materialFileName: null,
     materialPreviewUrl: null,
+
+    aulaAoVivo:
+      tipo === "AULA_AO_VIVO"
+        ? {
+            inscricaoInicio: "",
+            inscricaoFim: "",
+            dataInicio: toDatetimeLocalValue(agora),
+            dataFim: toDatetimeLocalValue(umaHoraDepois),
+            chatAtivo: true,
+            gravacaoAtiva: true,
+            replayDisponivel: false,
+            status: "AGENDADA",
+            convidadoUsuarioId: "",
+            convidadoNome: "",
+            convidadoDescricao: "",
+            convidados: [],
+          }
+        : undefined,
   };
 }
 
@@ -436,11 +540,146 @@ export default function LearningCreatePage() {
 
   const [destinoMetodologia, setDestinoMetodologia] = useState<DestinoMetodologia>("LEARNING");
   const [precoAssinaturaMensal, setPrecoAssinaturaMensal] = useState("");
+  const [buscaConvidadoPorItem, setBuscaConvidadoPorItem] = useState<Record<string, string>>({});
+  const [resultadosConvidadoPorItem, setResultadosConvidadoPorItem] = useState<Record<string, any[]>>({});
+  const [buscandoConvidadoPorItem, setBuscandoConvidadoPorItem] = useState<Record<string, boolean>>({});
 
   const itemTypeOptions = useMemo(
     () => (estruturaTipo === "TRILHA" ? ITEM_TYPES_TRILHA : ITEM_TYPES_MODULO),
     [estruturaTipo]
   );
+
+  function addConvidadoManual(estruturaLocalId: string, item: LocalItem) {
+    const atual = item.aulaAoVivo?.convidados || [];
+
+    updateItem(estruturaLocalId, item.localId, {
+      aulaAoVivo: {
+        ...(item.aulaAoVivo || {
+          dataInicio: "",
+          dataFim: "",
+          chatAtivo: true,
+          gravacaoAtiva: true,
+          replayDisponivel: false,
+          status: "AGENDADA",
+        }),
+        convidados: [
+          ...atual,
+          {
+            localId: uid("convidado"),
+            usuarioId: "",
+            nome: "",
+            descricao: "",
+          },
+        ],
+      },
+    });
+  }
+
+  function updateConvidadoAula(
+    estruturaLocalId: string,
+    item: LocalItem,
+    convidadoLocalId: string,
+    patch: Partial<{
+      usuarioId: string;
+      nome: string;
+      descricao: string;
+    }>
+  ) {
+    const atual = item.aulaAoVivo?.convidados || [];
+
+    updateItem(estruturaLocalId, item.localId, {
+      aulaAoVivo: {
+        ...item.aulaAoVivo!,
+        convidados: atual.map((c) =>
+          c.localId === convidadoLocalId ? { ...c, ...patch } : c
+        ),
+      },
+    });
+  }
+
+  function removerConvidadoAula(
+    estruturaLocalId: string,
+    item: LocalItem,
+    convidadoLocalId: string
+  ) {
+    const atual = item.aulaAoVivo?.convidados || [];
+
+    updateItem(estruturaLocalId, item.localId, {
+      aulaAoVivo: {
+        ...item.aulaAoVivo!,
+        convidados: atual.filter((c) => c.localId !== convidadoLocalId),
+      },
+    });
+  }
+
+  function selecionarUsuarioComoConvidado(
+    estruturaLocalId: string,
+    item: LocalItem,
+    usuario: any
+  ) {
+    const atual = item.aulaAoVivo?.convidados || [];
+
+    updateItem(estruturaLocalId, item.localId, {
+      aulaAoVivo: {
+        ...item.aulaAoVivo!,
+        convidados: [
+          ...atual,
+          {
+            localId: uid("convidado"),
+            usuarioId: String(usuario.id),
+            nome: String(usuario.nome || usuario.nomeDeUsuario || ""),
+            descricao: String(usuario.tipo || "Convidado FootEra"),
+          },
+        ],
+      },
+    });
+
+    setBuscaConvidadoPorItem((prev) => ({
+      ...prev,
+      [item.localId]: "",
+    }));
+
+    setResultadosConvidadoPorItem((prev) => ({
+      ...prev,
+      [item.localId]: [],
+    }));
+  }
+
+  async function buscarConvidadosParaItem(itemLocalId: string, q: string) {
+    const busca = q.trim();
+
+    setBuscaConvidadoPorItem((prev) => ({
+      ...prev,
+      [itemLocalId]: q,
+    }));
+
+    if (busca.length < 2) {
+      setResultadosConvidadoPorItem((prev) => ({
+        ...prev,
+        [itemLocalId]: [],
+      }));
+      return;
+    }
+
+    try {
+      setBuscandoConvidadoPorItem((prev) => ({
+        ...prev,
+        [itemLocalId]: true,
+      }));
+
+      const items = await buscarUsuariosFootera(busca);
+
+      setResultadosConvidadoPorItem((prev) => ({
+        ...prev,
+        [itemLocalId]: items,
+      }));
+    } finally {
+      setBuscandoConvidadoPorItem((prev) => ({
+        ...prev,
+        [itemLocalId]: false,
+      }));
+    }
+  }
 
   useEffect(() => {
     if (editMetodologiaId) {
@@ -576,16 +815,28 @@ export default function LearningCreatePage() {
         const params = new URLSearchParams(window.location.search);
         const origem = String(params.get("origem") || "").toLowerCase();
 
-        const res =
-          origem === "avulsa"
-            ? await getMetodologiaAvulsaById(editMetodologiaId)
-            : await getMetodologiaById(editMetodologiaId);
+        let res: any = null;
 
-        const item = res?.item;
+        if (origem === "avulsa") {
+          res = await getMetodologiaAvulsaById(editMetodologiaId);
+        } else {
+          res = await getMetodologiaById(editMetodologiaId);
+
+          if (!(res?.item ?? res)?.id) {
+            try {
+              const tentativaAvulsa = await getMetodologiaAvulsaById(editMetodologiaId);
+              if ((tentativaAvulsa?.item ?? tentativaAvulsa)?.id) {
+                res = tentativaAvulsa;
+              }
+            } catch {}
+          }
+        }
+
+        const item = res?.item ?? res;
 
         if (!ativo) return;
 
-        if (!item) {
+        if (!item || !item.id) {
           throw new Error("Metodologia não encontrada para edição.");
         }
 
@@ -599,7 +850,11 @@ export default function LearningCreatePage() {
         setCapaPreviewUrl(item.capaUrl || null);
         setTipoMetodologia(item.tipo);
         setEstruturaTipo(item.estruturaTipo);
-        setDestinoMetodologia(origem === "avulsa" ? "AVULSA" : "LEARNING");
+        const veioComoAvulsa =
+          origem === "avulsa" ||
+          item?.precoAssinaturaMensal != null;
+
+        setDestinoMetodologia(veioComoAvulsa ? "AVULSA" : "LEARNING");
         setPrecoAssinaturaMensal(
           item?.precoAssinaturaMensal != null ? String(item.precoAssinaturaMensal) : ""
         );
@@ -669,6 +924,44 @@ export default function LearningCreatePage() {
                           exercicios: [],
                         }
                       : null,
+
+                    aulaAoVivo:
+                      it.tipo === "AULA_AO_VIVO" && it.aulaAoVivo
+                        ? {
+                            id: it.aulaAoVivo.id,
+                            inscricaoInicio: toDatetimeLocalValue(it.aulaAoVivo.inscricaoInicio),
+                            inscricaoFim: toDatetimeLocalValue(it.aulaAoVivo.inscricaoFim),
+
+                            dataInicio: toDatetimeLocalValue(it.aulaAoVivo.dataInicio),
+                            dataFim: toDatetimeLocalValue(it.aulaAoVivo.dataFim),
+                            chatAtivo: it.aulaAoVivo.chatAtivo !== false,
+                            gravacaoAtiva: it.aulaAoVivo.gravacaoAtiva !== false,
+                            replayDisponivel: it.aulaAoVivo.replayDisponivel === true,
+                            status: it.aulaAoVivo.status || "AGENDADA",
+
+                            convidadoUsuarioId: it.aulaAoVivo.convidadoUsuarioId || "",
+                            convidadoNome: it.aulaAoVivo.convidadoNome || "",
+                            convidadoDescricao: it.aulaAoVivo.convidadoDescricao || "",
+
+                            convidados: Array.isArray(it.aulaAoVivo?.convidados)
+                              ? it.aulaAoVivo.convidados.map((c: any) => ({
+                                  localId: String(c.id || uid("convidado")),
+                                  usuarioId: c.usuarioId ? String(c.usuarioId) : "",
+                                  nome: String(c.nome || c.usuario?.nome || ""),
+                                  descricao: String(c.descricao || (c.usuario ? "Convidado FootEra" : "")),
+                                }))
+                              : it.aulaAoVivo?.convidadoNome
+                                ? [
+                                    {
+                                      localId: uid("convidado"),
+                                      usuarioId: it.aulaAoVivo?.convidadoUsuarioId || "",
+                                      nome: it.aulaAoVivo?.convidadoNome || "",
+                                      descricao: it.aulaAoVivo?.convidadoDescricao || "",
+                                    },
+                                  ]
+                                : [],
+                          }
+                        : undefined,
                   }))
                 : [],
             }))
@@ -1232,6 +1525,65 @@ export default function LearningCreatePage() {
           return false;
         }
 
+        if (item.tipo === "AULA_AO_VIVO") {
+          if (!item.aulaAoVivo?.dataInicio) {
+            alert(`A aula ao vivo "${item.titulo}" precisa ter data e horário de início.`);
+            return false;
+          }
+
+          const inicio = new Date(item.aulaAoVivo.dataInicio);
+          const fim = item.aulaAoVivo.dataFim ? new Date(item.aulaAoVivo.dataFim) : null;
+
+          const inscricaoInicio = item.aulaAoVivo.inscricaoInicio
+            ? new Date(item.aulaAoVivo.inscricaoInicio)
+            : null;
+
+          const inscricaoFim = item.aulaAoVivo.inscricaoFim
+            ? new Date(item.aulaAoVivo.inscricaoFim)
+            : null;
+
+          if (Number.isNaN(inicio.getTime())) {
+            alert(`A data de início da aula ao vivo "${item.titulo}" é inválida.`);
+            return false;
+          }
+
+          if (fim && fim <= inicio) {
+            alert(`A data final da aula ao vivo "${item.titulo}" precisa ser maior que a data de início.`);
+            return false;
+          }
+        
+
+        if (inscricaoInicio && Number.isNaN(inscricaoInicio.getTime())) {
+          alert(`O início das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
+          return false;
+        }
+
+        if (inscricaoFim && Number.isNaN(inscricaoFim.getTime())) {
+          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
+          return false;
+        }
+
+        if (inscricaoInicio && !inscricaoFim) {
+          alert(`Informe também o fim das inscrições da aula ao vivo "${item.titulo}".`);
+          return false;
+        }
+
+        if (!inscricaoInicio && inscricaoFim) {
+          alert(`Informe também o início das inscrições da aula ao vivo "${item.titulo}".`);
+          return false;
+        }
+
+        if (inscricaoInicio && inscricaoFim && inscricaoFim <= inscricaoInicio) {
+          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser depois do início.`);
+          return false;
+        }
+
+        if (inscricaoFim && inscricaoFim >= inicio) {
+          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser antes do início da aula.`);
+          return false;
+        }
+      }
+
         if (item.tipo === "MATERIAL" && !item.arquivoUrl?.trim() && !item.materialUrl?.trim()) {
           alert(`O item "${item.titulo}" precisa ter arquivo ou link do material.`);
           return false;
@@ -1329,7 +1681,7 @@ export default function LearningCreatePage() {
         area,
         geraBadge,
         geraCertificado,
-        ativo: true,
+        ativo: false,
         estruturas: estruturas.map((estrutura, i) => ({
           id: estrutura.id || undefined,
           titulo: estrutura.titulo.trim(),
@@ -1358,18 +1710,45 @@ export default function LearningCreatePage() {
             titulo: item.titulo.trim(),
             descricao: item.descricao?.trim() || null,
             ordem: j + 1,
-            videoUrl: item.videoUrl?.trim() || null,
+            videoUrl: item.tipo === "AULA_AO_VIVO" ? null : item.videoUrl?.trim() || null,
             thumbUrl: item.thumbUrl?.trim() || null,
             arquivoUrl: item.arquivoUrl?.trim() || null,
             materialUrl: item.materialUrl?.trim() || null,
             treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
             pontos: calcularPontuacaoItem(item),
             duracaoMin:
-              item.tipo === "VIDEO" || item.tipo === "AULA"
+              item.tipo === "VIDEO" || item.tipo === "AULA" || item.tipo === "AULA_AO_VIVO"
                 ? (item.duracaoMin ? Number(item.duracaoMin) : null)
                 : null,
             obrigatorio: item.obrigatorio ?? true,
             publicado: item.publicado ?? true,
+            aulaAoVivo:
+              item.tipo === "AULA_AO_VIVO"
+                ? {
+                    id: item.aulaAoVivo?.id || undefined,
+                    titulo: item.titulo.trim(),
+                    descricao: item.descricao?.trim() || null,
+                    inscricaoInicio: datetimeLocalToIso(item.aulaAoVivo?.inscricaoInicio),
+                    inscricaoFim: datetimeLocalToIso(item.aulaAoVivo?.inscricaoFim),
+                    dataInicio: datetimeLocalToIso(item.aulaAoVivo?.dataInicio),
+                    dataFim: datetimeLocalToIso(item.aulaAoVivo?.dataFim),
+                    chatAtivo: item.aulaAoVivo?.chatAtivo !== false,
+                    gravacaoAtiva: item.aulaAoVivo?.gravacaoAtiva !== false,
+                    replayDisponivel: item.aulaAoVivo?.replayDisponivel === true,
+                    status: item.aulaAoVivo?.status || "AGENDADA",
+                    convidados: (item.aulaAoVivo?.convidados || [])
+                    .map((c, index) => ({
+                      usuarioId: c.usuarioId || null,
+                      nome: c.nome?.trim() || null,
+                      descricao: c.descricao?.trim() || null,
+                      ordem: index + 1,
+                    }))
+                    .filter((c) => c.usuarioId || c.nome),
+                    convidadoUsuarioId: item.aulaAoVivo?.convidados?.[0]?.usuarioId || null,
+                    convidadoNome: item.aulaAoVivo?.convidados?.[0]?.nome?.trim() || null,
+                    convidadoDescricao: item.aulaAoVivo?.convidados?.[0]?.descricao?.trim() || null,
+                  }
+                : undefined,
           })),
         })),
       };
@@ -1396,6 +1775,7 @@ export default function LearningCreatePage() {
       if (origemAtual === "avulsa" && destinoMetodologia === "AVULSA") {
         await updateMetodologiaAvulsa(editMetodologiaId, {
           ...payloadBase,
+          ativo: false, // força inativo para revisão do time antes de publicar
           precoAssinaturaMensal: Number(precoAssinaturaMensal),
         });
 
@@ -1407,17 +1787,14 @@ export default function LearningCreatePage() {
 
       if (origemAtual !== "avulsa" && destinoMetodologia === "LEARNING") {
         await updateMetodologia(editMetodologiaId, {
-          titulo: titulo.trim(),
-          descricao: descricao.trim() || null,
-          capaUrl: capaUrl.trim() || null,
-          publicoAlvo,
-          tipo: tipoMetodologia,
-          estruturaTipo,
-          area,
-          geraBadge,
-          geraCertificado,
-          ativo: true,
+          ...payloadBase,
+          ativo: false,
         });
+
+        localStorage.removeItem(LEARNING_DRAFT_KEY);
+        alert("✅ Sua metodologia foi editada com sucesso!");
+        navigate("/learning");
+        return;
       }
 
       if (origemAtual === "avulsa" && destinoMetodologia === "LEARNING") {
@@ -1429,7 +1806,10 @@ export default function LearningCreatePage() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${getToken()}`,
             },
-            body: JSON.stringify(payloadBase),
+            body: JSON.stringify({
+              ...payloadBase,
+              ativo: false,
+            }),
           }
         );
 
@@ -1456,6 +1836,7 @@ export default function LearningCreatePage() {
             },
             body: JSON.stringify({
               ...payloadBase,
+              ativo: false,
               precoAssinaturaMensal: Number(precoAssinaturaMensal),
             }),
           }
@@ -1484,7 +1865,7 @@ export default function LearningCreatePage() {
         area,
         geraBadge,
         geraCertificado,
-        ativo: true,
+        ativo: false,
       });
 
       const metodologiaId = editMetodologiaId || metodologiaResp?.item?.id;
@@ -1519,7 +1900,6 @@ export default function LearningCreatePage() {
           objetivo: estrutura.objetivo?.trim() || null,
           tipo: estruturaTipo,
           ordem: i + 1,
-
           duracaoSemanas:
             estruturaTipo === "TRILHA" ? Number(estrutura.duracaoSemanas || 0) : null,
           treinosPorSemana:
@@ -1551,7 +1931,7 @@ export default function LearningCreatePage() {
               ? (estrutura.modoExecucao === "DESAFIO_FECHADO" ? false : !!estrutura.permiteAtraso)
               : true,
 
-          ativo: true,
+          ativo: estrutura.ativo ?? true,
         };
         let estruturaId = estrutura.id;
 
@@ -1571,29 +1951,63 @@ export default function LearningCreatePage() {
         }
 
         await createMetodologiaEstruturaItens(metodologiaId, estruturaId, {
-          itens: estrutura.itens.map((item, itemIndex) => ({
+          itens: estrutura.itens.map((item, j) => ({
+            id: item.id || undefined,
+            tipo: item.tipo,
             titulo: item.titulo.trim(),
             descricao: item.descricao?.trim() || null,
-            tipo: item.tipo,
-            ordem: itemIndex + 1,
-            videoUrl: item.videoUrl?.trim() || null,
+            ordem: j + 1,
+
+            videoUrl: item.tipo === "AULA_AO_VIVO" ? null : item.videoUrl?.trim() || null,
             thumbUrl: item.thumbUrl?.trim() || null,
             arquivoUrl: item.arquivoUrl?.trim() || null,
             materialUrl: item.materialUrl?.trim() || null,
             treinoProgramadoId: item.treinoProgramadoId?.trim() || null,
+
+            pontos: calcularPontuacaoItem(item),
             duracaoMin:
-              item.tipo === "VIDEO" || item.tipo === "AULA"
-                ? (item.duracaoMin ? Number(item.duracaoMin) : null)
+              item.tipo === "VIDEO" ||
+              item.tipo === "AULA" ||
+              item.tipo === "AULA_AO_VIVO"
+                ? item.duracaoMin
+                  ? Number(item.duracaoMin)
+                  : null
                 : null,
-            pontos:
-              item.tipo === "TREINO"
-                ? null
-                : calcularPontuacaoItem(item),
-            obrigatorio: item.obrigatorio !== false,
-            publicado: item.publicado !== false,
-            videoPreviewUrl: item.videoUrl || null,
-            videoFileName: item.videoUrl ? String(item.videoUrl).split("/").pop() || "video" : null,
-            videoModalOpen: false,
+
+            obrigatorio: item.obrigatorio ?? true,
+            publicado: item.publicado ?? true,
+
+            aulaAoVivo:
+              item.tipo === "AULA_AO_VIVO"
+                ? {
+                    id: item.aulaAoVivo?.id || undefined,
+                    titulo: item.titulo.trim(),
+                    descricao: item.descricao?.trim() || null,
+                    inscricaoInicio: item.aulaAoVivo?.inscricaoInicio || null,
+                    inscricaoFim: item.aulaAoVivo?.inscricaoFim || null,
+                    dataInicio: item.aulaAoVivo?.dataInicio || null,
+                    dataFim: item.aulaAoVivo?.dataFim || null,
+                    chatAtivo: item.aulaAoVivo?.chatAtivo !== false,
+                    gravacaoAtiva: item.aulaAoVivo?.gravacaoAtiva !== false,
+                    replayDisponivel: item.aulaAoVivo?.replayDisponivel === true,
+                    status: item.aulaAoVivo?.status || "AGENDADA",
+                    convidados: (item.aulaAoVivo?.convidados || [])
+                      .map((c, index) => ({
+                        usuarioId: c.usuarioId || null,
+                        nome: c.nome?.trim() || null,
+                        descricao: c.descricao?.trim() || null,
+                        ordem: index + 1,
+                      }))
+                      .filter((c) => c.usuarioId || c.nome),
+
+                    convidadoUsuarioId:
+                      item.aulaAoVivo?.convidados?.[0]?.usuarioId || null,
+                    convidadoNome:
+                      item.aulaAoVivo?.convidados?.[0]?.nome?.trim() || null,
+                    convidadoDescricao:
+                      item.aulaAoVivo?.convidados?.[0]?.descricao?.trim() || null,
+                  }
+                : undefined,
           })),
         });
       }
@@ -1602,7 +2016,24 @@ export default function LearningCreatePage() {
       localStorage.removeItem(LEARNING_DRAFT_KEY);
       navigate(`/learning/${metodologiaId}`);
     } catch (e: any) {
-      alert(e?.message || (editMetodologiaId ? "Erro ao atualizar metodologia." : "Erro ao criar metodologia."));
+      const msg =
+        e?.response?.data?.message ||
+        e?.data?.message ||
+        e?.message ||
+        "Esse título já existe em outra metodologia criada por você. Se quiser criá-la, mude o título.";
+
+      const code =
+        e?.response?.data?.code ||
+        e?.data?.code ||
+        null;
+
+      if (code === "METODOLOGIA_NOME_DUPLICADO_DO_MESMO_CRIADOR") {
+        alert(msg);
+        return;
+      }
+
+      alert(msg);
+      return;
     } finally {
       setSaving(false);
     }
@@ -2297,11 +2728,45 @@ export default function LearningCreatePage() {
                               </label>
                               <select
                                 value={item.tipo}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  const novoTipo = e.target.value as LearningItemTipo;
+
+                                  if (novoTipo === "AULA_AO_VIVO") {
+                                    const agora = new Date();
+                                    
+                                    const umaHoraDepois = new Date(agora);
+                                    umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
+
+                                    updateItem(estrutura.localId, item.localId, {
+                                      tipo: novoTipo,
+                                      videoUrl: "",
+                                      arquivoUrl: "",
+                                      materialUrl: "",
+                                      treinoProgramadoId: "",
+                                      aulaAoVivo: {
+                                        inscricaoInicio: "",
+                                        inscricaoFim: "",
+                                        dataInicio: toDatetimeLocalValue(agora),
+                                        dataFim: toDatetimeLocalValue(umaHoraDepois),
+                                        chatAtivo: true,
+                                        gravacaoAtiva: true,
+                                        replayDisponivel: false,
+                                        status: "AGENDADA",
+                                        convidadoDescricao: "",
+                                        convidadoNome: "",
+                                        convidadoUsuarioId: "",
+                                        convidados: [],
+                                      },
+                                    });
+
+                                    return;
+                                  }
+
                                   updateItem(estrutura.localId, item.localId, {
-                                    tipo: e.target.value as LearningItemTipo,
-                                  })
-                                }
+                                    tipo: novoTipo,
+                                    aulaAoVivo: undefined,
+                                  });
+                                }}
                                 className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none"
                               >
                                 {itemTypeOptions.map((opt) => (
@@ -2311,6 +2776,307 @@ export default function LearningCreatePage() {
                                 ))}
                               </select>
                             </div>
+
+                            {item.tipo === "AULA_AO_VIVO" && (
+                              <div className="md:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="flex items-start gap-3 mb-4">
+                                  <div className="h-10 w-10 rounded-xl bg-[#216c43] text-white flex items-center justify-center">
+                                    <Radio className="w-5 h-5" />
+                                  </div>
+
+                                  <div>
+                                    <div className="text-base font-bold text-[#193b2e]">
+                                      Aula ao vivo
+                                    </div>
+                                    <div className="text-sm text-slate-600">
+                                      Agende a transmissão. Depois de salvar, o dono da metodologia poderá iniciar a live no estúdio.
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                        Início das inscrições
+                                      </label>
+                                      <input
+                                        type="datetime-local"
+                                        value={item.aulaAoVivo?.inscricaoInicio || ""}
+                                        onChange={(e) =>
+                                          updateItem(estrutura.localId, item.localId, {
+                                            aulaAoVivo: {
+                                              ...(item.aulaAoVivo || {
+                                                inscricaoInicio: "",
+                                                inscricaoFim: "",
+                                                dataInicio: "",
+                                                dataFim: "",
+                                                chatAtivo: true,
+                                                gravacaoAtiva: true,
+                                                replayDisponivel: false,
+                                                status: "AGENDADA",
+                                              }),
+                                              inscricaoInicio: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none bg-white"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                        Fim das inscrições
+                                      </label>
+                                      <input
+                                        type="datetime-local"
+                                        value={item.aulaAoVivo?.inscricaoFim || ""}
+                                        onChange={(e) =>
+                                          updateItem(estrutura.localId, item.localId, {
+                                            aulaAoVivo: {
+                                              ...(item.aulaAoVivo || {
+                                                inscricaoInicio: "",
+                                                inscricaoFim: "",
+                                                dataInicio: "",
+                                                dataFim: "",
+                                                chatAtivo: true,
+                                                gravacaoAtiva: true,
+                                                replayDisponivel: false,
+                                                status: "AGENDADA",
+                                              }),
+                                              inscricaoFim: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none bg-white"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                      Data e horário de início*
+                                    </label>
+                                    <input
+                                      type="datetime-local"
+                                      value={item.aulaAoVivo?.dataInicio || ""}
+                                      onChange={(e) =>
+                                        updateItem(estrutura.localId, item.localId, {
+                                          aulaAoVivo: {
+                                            ...(item.aulaAoVivo || {
+                                              dataInicio: "",
+                                              dataFim: "",
+                                              chatAtivo: true,
+                                              gravacaoAtiva: true,
+                                              replayDisponivel: false,
+                                              status: "AGENDADA",
+                                            }),
+                                            dataInicio: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none bg-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                      Data e horário de término previsto
+                                    </label>
+                                    <input
+                                      type="datetime-local"
+                                      value={item.aulaAoVivo?.dataFim || ""}
+                                      onChange={(e) =>
+                                        updateItem(estrutura.localId, item.localId, {
+                                          aulaAoVivo: {
+                                            ...(item.aulaAoVivo || {
+                                              dataInicio: "",
+                                              dataFim: "",
+                                              chatAtivo: true,
+                                              gravacaoAtiva: true,
+                                              replayDisponivel: false,
+                                              status: "AGENDADA",
+                                            }),
+                                            dataFim: e.target.value,
+                                          },
+                                        })
+                                      }
+                                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none bg-white"
+                                    />
+                                  </div>
+
+                                  <div className="md:col-span-2 border-t border-emerald-200 pt-4 mt-2">
+                                    <div className="flex items-center justify-between gap-3 mb-2">
+                                      <div>
+                                        <div className="text-sm font-bold text-[#193b2e]">
+                                          Convidados da aula ao vivo
+                                        </div>
+                                        <p className="text-xs text-slate-600">
+                                          Opcional. Você pode adicionar nenhum, um ou vários convidados. Cada aula ao vivo tem sua própria lista.
+                                        </p>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => addConvidadoManual(estrutura.localId, item)}
+                                        className="rounded-xl bg-[#216c43] px-3 py-2 text-sm font-bold text-white"
+                                      >
+                                        + Convidado externo
+                                      </button>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-emerald-100 bg-white p-3 mb-4">
+                                      <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                        Buscar pessoa da FootEra
+                                      </label>
+
+                                      <input
+                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none"
+                                        value={buscaConvidadoPorItem[item.localId] || ""}
+                                        onChange={(e) => buscarConvidadosParaItem(item.localId, e.target.value)}
+                                        placeholder="Digite nome, @usuário ou e-mail"
+                                      />
+
+                                      {buscandoConvidadoPorItem[item.localId] ? (
+                                        <div className="mt-2 text-xs text-slate-500">Buscando...</div>
+                                      ) : null}
+
+                                      {(resultadosConvidadoPorItem[item.localId] || []).length > 0 ? (
+                                        <div className="mt-2 max-h-48 overflow-auto rounded-xl border bg-white">
+                                          {(resultadosConvidadoPorItem[item.localId] || []).map((u: any) => (
+                                            <button
+                                              key={u.id}
+                                              type="button"
+                                              onClick={() => selecionarUsuarioComoConvidado(estrutura.localId, item, u)}
+                                              className="w-full text-left px-3 py-2 hover:bg-emerald-50"
+                                            >
+                                              <div className="font-semibold text-sm text-slate-800">
+                                                {u.nome || u.nomeDeUsuario || "Usuário"}
+                                              </div>
+                                              <div className="text-xs text-slate-500">
+                                                {u.email ? `${u.email} • ` : ""}
+                                                {u.tipo || "FootEra"}
+                                              </div>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                    </div>
+
+                                    {(item.aulaAoVivo?.convidados || []).length > 0 ? (
+                                      <div className="grid gap-3">
+                                        {(item.aulaAoVivo?.convidados || []).map((conv, index) => (
+                                          <div
+                                            key={conv.localId}
+                                            className="rounded-2xl border border-emerald-100 bg-white p-3"
+                                          >
+                                            <div className="flex items-center justify-between mb-3">
+                                              <div className="text-sm font-bold text-emerald-900">
+                                                Convidado {index + 1}
+                                              </div>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => removerConvidadoAula(estrutura.localId, item, conv.localId)}
+                                                className="text-xs font-bold text-red-600"
+                                              >
+                                                Remover
+                                              </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                              <div>
+                                                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                                  Nome
+                                                </label>
+                                                <input
+                                                  className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none"
+                                                  value={conv.nome || ""}
+                                                  onChange={(e) =>
+                                                    updateConvidadoAula(estrutura.localId, item, conv.localId, {
+                                                      usuarioId: "",
+                                                      nome: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Ex.: Rafael Sobis"
+                                                />
+                                              </div>
+
+                                              <div>
+                                                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                                                  Descrição
+                                                </label>
+                                                <input
+                                                  className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white outline-none"
+                                                  value={conv.descricao || ""}
+                                                  onChange={(e) =>
+                                                    updateConvidadoAula(estrutura.localId, item, conv.localId, {
+                                                      descricao: e.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Ex.: Ex-atleta, comentarista, treinador..."
+                                                />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="rounded-xl bg-white border border-emerald-100 p-3 text-sm text-slate-600">
+                                        Nenhum convidado adicionado. Essa aula vai mostrar o creator como responsável.
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="md:col-span-2 flex flex-wrap gap-4">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.aulaAoVivo?.chatAtivo !== false}
+                                        onChange={(e) =>
+                                          updateItem(estrutura.localId, item.localId, {
+                                            aulaAoVivo: {
+                                              ...(item.aulaAoVivo || {
+                                                dataInicio: "",
+                                                dataFim: "",
+                                                chatAtivo: true,
+                                                gravacaoAtiva: true,
+                                                replayDisponivel: false,
+                                                status: "AGENDADA",
+                                              }),
+                                              chatAtivo: e.target.checked,
+                                            },
+                                          })
+                                        }
+                                      />
+                                      Chat ativo
+                                    </label>
+
+                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.aulaAoVivo?.gravacaoAtiva !== false}
+                                        onChange={(e) =>
+                                          updateItem(estrutura.localId, item.localId, {
+                                            aulaAoVivo: {
+                                              ...(item.aulaAoVivo || {
+                                                dataInicio: "",
+                                                dataFim: "",
+                                                chatAtivo: true,
+                                                gravacaoAtiva: true,
+                                                replayDisponivel: false,
+                                                status: "AGENDADA",
+                                              }),
+                                              gravacaoAtiva: e.target.checked,
+                                            },
+                                          })
+                                        }
+                                      />
+                                      Gravar replay automaticamente
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {item.tipo !== "TREINO" ? (
                               <>

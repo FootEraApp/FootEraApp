@@ -3,9 +3,10 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { Nivel, StatusCref, TipoUsuario, AuthProvider } from "@prisma/client";
+import { Nivel, StatusCref, TipoUsuario, AuthProvider, NotificacaoTipo } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { validateGoogleCredential } from "../services/googleTokenService.js";
+import { recomputeAndEmitBadge } from "./notificacoesController.js";
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
@@ -25,6 +26,13 @@ function stringParaTipoUsuario(tipo: string): TipoUsuario | null {
       return TipoUsuario.Olheiro;
     case "ADMIN":
       return TipoUsuario.Admin;
+    case "LEARNING":
+      return TipoUsuario.Learning;
+    case "FEDERACAO":
+    case "FEDERAÇÃO":
+      return TipoUsuario.Federacao;
+    case "MARCA":
+      return TipoUsuario.Marca;
     default:
       return null;
   }
@@ -79,6 +87,57 @@ function gerarJwt(usuario: {
   );
 }
 
+async function criarSolicitacaoVinculoCadastro(params: {
+  remetenteId: string;
+  destinatarioId?: string;
+}) {
+  const remetenteId = String(params.remetenteId || "").trim();
+  const destinatarioId = String(params.destinatarioId || "").trim();
+
+  if (!remetenteId || !destinatarioId || remetenteId === destinatarioId) return;
+
+  const [remetente, destinatario] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: remetenteId }, select: { id: true } }),
+    prisma.usuario.findUnique({ where: { id: destinatarioId }, select: { id: true } }),
+  ]);
+
+  if (!remetente || !destinatario) return;
+
+  const existente = await prisma.solicitacaoTreino.findFirst({
+    where: {
+      status: { in: ["pendente", "ativa"] },
+      OR: [
+        { remetenteId, destinatarioId },
+        { remetenteId: destinatarioId, destinatarioId: remetenteId },
+      ],
+    },
+  });
+
+  if (!existente) {
+    await prisma.solicitacaoTreino.create({
+      data: {
+        remetenteId,
+        destinatarioId,
+        status: "pendente",
+      },
+    });
+  }
+
+  await prisma.notificacao.create({
+    data: {
+      usuarioId: destinatarioId,
+      actorId: remetenteId,
+      tipo: NotificacaoTipo.GENERICA,
+      titulo: "Solicitação de vínculo",
+      mensagem: "quer se vincular/treinar junto com você",
+      link: "/notificacoes",
+      lida: false,
+    },
+  });
+
+  await recomputeAndEmitBadge(destinatarioId);
+}
+
 async function montarRespostaAuth(usuarioId: string) {
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
@@ -88,6 +147,9 @@ async function montarRespostaAuth(usuarioId: string) {
       clube: { select: { id: true } },
       escolinha: { select: { id: true } },
       olheiro: { select: { id: true } },
+      learningProfile: { select: { id: true } },
+      federacao: { select: { id: true } },
+      marca: { select: { id: true } },
       administrador: { select: { id: true } },
     },
   });
@@ -103,6 +165,9 @@ async function montarRespostaAuth(usuarioId: string) {
     usuario.escolinha?.id ??
     usuario.olheiro?.id ??
     usuario.administrador?.id ??
+    usuario.learningProfile?.id ??
+    usuario.federacao?.id ??
+    usuario.marca?.id ??
     null;
 
   const token = gerarJwt(usuario);
@@ -276,12 +341,30 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     dataNascimento,
     responsavel,
     vinculo,
+    headline,
+    siteOuLinkedin,
+    nomeOrganizacao,
   } = req.body ?? {};
 
   if (!preCadastroToken || !senha || !tipo || !nomeDeUsuario) {
     return res.status(400).json({
       error: "Campos obrigatórios: preCadastroToken, senha, tipo, nomeDeUsuario.",
     });
+  }
+
+  function dataNascimentoPermitida(valor?: string | null) {
+    if (!valor) return false;
+
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return false;
+
+    const min = new Date("1900-01-01T00:00:00.000Z");
+    const hoje = new Date();
+
+    data.setHours(0, 0, 0, 0);
+    hoje.setHours(23, 59, 59, 999);
+
+    return data >= min && data <= hoje;
   }
 
   try {
@@ -336,8 +419,20 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       tipoEnum === TipoUsuario.Olheiro ||
       tipoEnum === TipoUsuario.Professor;
 
+    if (precisaNascimento && !dataNascimentoPermitida(dataNascimento)) {
+      return res.status(400).json({
+        error: "A data de nascimento deve estar entre 01/01/1900 e hoje.",
+      });
+    }
+
     const dataNascFinal =
       precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+    const idadeCalcInicial = dataNascFinal ? calcularIdade(dataNascFinal) : null;
+
+    const precisaResponsavel =
+      tipoEnum === TipoUsuario.Atleta &&
+      idadeCalcInicial !== null &&
+      idadeCalcInicial < 12;
 
     const usuario = await prisma.usuario.create({
       data: {
@@ -352,9 +447,9 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         cep: cep ?? null,
         cpf: cpf ?? null,
         dataNascimento: dataNascFinal,
-        responsavelNome: responsavel?.nome ?? null,
-        responsavelEmail: responsavel?.email ?? null,
-        responsavelTelefone: responsavel?.telefone ?? null,
+        responsavelNome: precisaResponsavel ? responsavel?.nome ?? null : null,
+        responsavelEmail: precisaResponsavel ? responsavel?.email ?? null : null,
+        responsavelTelefone: precisaResponsavel ? responsavel?.telefone ?? null : null,
 
         googleSub: pre.googleSub,
         googleEmail: pre.email,
@@ -490,6 +585,8 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
             emailPublico: emailPublico ?? emailNorm,
             telefonePublico: telefonePublico ?? null,
             colaboracaoClubeId: colaboracaoClubeId || null,
+            headline: headline ?? null,
+            siteOuLinkedin: siteOuLinkedin ?? null,
           },
           select: { id: true },
         });
@@ -509,6 +606,101 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         });
 
         tipoUsuarioId = admin.id;
+        break;
+      }
+
+      case TipoUsuario.Learning: {
+        const learning = await prisma.learningProfile.create({
+          data: {
+            usuarioId: usuario.id,
+          },
+          select: { id: true },
+        });
+
+        tipoUsuarioId = learning.id;
+        break;
+      }
+
+      case TipoUsuario.Federacao: {
+        const federacao = await prisma.federacao.create({
+          data: {
+            usuarioId: usuario.id,
+            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
+            cnpj: cnpjClube || cnpjEscolinha || null,
+            telefone1: telefone1Clube || telefone1Escolinha || null,
+            telefone2: telefone2Clube || telefone2Escolinha || null,
+            email: emailClube || emailEscolinha || emailNorm,
+            siteOficial: siteOficialClube || siteOficialEscolinha || null,
+            sede: sedeClube || sedeEscolinha || null,
+            cidade: cidadeClube || cidadeEscolinha || cidade || null,
+            estado: estadoClube || estadoEscolinha || estado || null,
+            pais: paisClube || paisEscolinha || pais || null,
+            cep: cepClube || cepEscolinha || null,
+            descricao: descricao ?? null,
+            logo: pre.foto ?? null,
+          },
+          select: { id: true },
+        });
+
+        await prisma.creator.upsert({
+          where: { usuarioId: usuario.id },
+          update: {
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+          },
+          create: {
+            usuarioId: usuario.id,
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+            nomePublico: nomeOrganizacao || nomeFinal,
+            headline: "Canal oficial FootEra",
+          },
+        });
+
+        tipoUsuarioId = federacao.id;
+        break;
+      }
+
+      case TipoUsuario.Marca: {
+        const marca = await prisma.marca.create({
+          data: {
+            usuarioId: usuario.id,
+            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
+            cnpj: cnpjClube || cnpjEscolinha || null,
+            telefone1: telefone1Clube || telefone1Escolinha || null,
+            telefone2: telefone2Clube || telefone2Escolinha || null,
+            email: emailClube || emailEscolinha || emailNorm,
+            siteOficial: siteOficialClube || siteOficialEscolinha || null,
+            cidade: cidadeClube || cidadeEscolinha || cidade || null,
+            estado: estadoClube || estadoEscolinha || estado || null,
+            pais: paisClube || paisEscolinha || pais || null,
+            cep: cepClube || cepEscolinha || null,
+            descricao: descricao ?? null,
+            logo: pre.foto ?? null,
+          },
+          select: { id: true },
+        });
+
+        await prisma.creator.upsert({
+          where: { usuarioId: usuario.id },
+          update: {
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+          },
+          create: {
+            usuarioId: usuario.id,
+            tipo: "INSTITUCIONAL",
+            instituicaoOficial: true,
+            ativo: true,
+            nomePublico: nomeOrganizacao || nomeFinal,
+            headline: "Canal oficial FootEra",
+          },
+        });
+
+        tipoUsuarioId = marca.id;
         break;
       }
     }
@@ -552,18 +744,11 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       console.warn("Falha ao criar privacidade padrão:", e);
     }
 
-    if (
-      tipoEnum === TipoUsuario.Atleta &&
-      vinculo?.desejaVinculo &&
-      vinculo?.destinatarioId
-    ) {
+    if (vinculo?.desejaVinculo && vinculo?.destinatarioId) {
       try {
-        await prisma.solicitacaoTreino.create({
-          data: {
-            remetenteId: usuario.id,
-            destinatarioId: String(vinculo.destinatarioId),
-            status: "pendente" as any,
-          },
+        await criarSolicitacaoVinculoCadastro({
+          remetenteId: usuario.id,
+          destinatarioId: vinculo.destinatarioId,
         });
       } catch (e) {
         console.warn("Falha ao criar solicitação de vínculo:", e);

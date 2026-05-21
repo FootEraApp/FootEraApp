@@ -11,6 +11,10 @@ import HealthBanner from "../components/legal/HealthBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import PerfilLearning from "@/components/perfil/PerfilLearning.js";
+import PerfilMarca from "@/components/perfil/PerfilMarca.js";
+import PerfilFederacao from "@/components/perfil/PerfilFederacao.js";
+import { API } from "../config.js";
 
 type TipoPerfil =
   | "Atleta"
@@ -18,7 +22,10 @@ type TipoPerfil =
   | "Clube"
   | "Escolinha"
   | "Admin"
-  | "Olheiro";
+  | "Olheiro"
+  | "Learning"
+  | "Federacao"
+  | "Marca";
 
 interface PerfilMinimo {
   tipo: TipoPerfil;
@@ -43,11 +50,39 @@ export default function ProfilePage() {
 
   const [assinatura, setAssinatura] = useState<AssinaturaLite | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(false);
+  const [hasCreator, setHasCreator] = useState(false);
 
   const token = Storage.token;
 
   const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
+
+  useEffect(() => {
+    if (!usuarioId || !token) return;
+
+    const tipoNorm = String(tipo || "").toLowerCase();
+
+    if (tipoNorm === "atleta" || tipoNorm === "learning") {
+      setHasCreator(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    fetch(`${API.BASE_URL}/api/creator/profile/${usuarioId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => {
+        if (!cancelled) setHasCreator(r.ok);
+      })
+      .catch(() => {
+        if (!cancelled) setHasCreator(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [usuarioId, token, tipo]);
 
   useEffect(() => {
     if (!token) return;
@@ -133,10 +168,34 @@ export default function ProfilePage() {
       </div>
 
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
-      {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
-      {tipo === "Clube" && <PerfilClube idDaUrl={idDaUrl} usuarioId={usuarioId} />}
-      {tipo === "Escolinha" && <PerfilEscola idDaUrl={idDaUrl} />}
-      {tipo === "Olheiro" && <PerfilOlheiro idDaUrl={idDaUrl} />}
+      {tipo === "Professor" && (
+        <PerfilProfessor idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipo === "Clube" && (
+        <PerfilClube idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipo === "Escolinha" && (
+        <PerfilEscola idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipo === "Olheiro" && (
+        <PerfilOlheiro idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
+      )}
+      {tipo === "Federacao" && (
+        <PerfilFederacao
+          idDaUrl={idDaUrl}
+          hasCreator={hasCreator}
+          creatorUsuarioId={usuarioId}
+        />
+      )}
+
+      {tipo === "Marca" && (
+        <PerfilMarca
+          idDaUrl={idDaUrl}
+          hasCreator={hasCreator}
+          creatorUsuarioId={usuarioId}
+        />
+      )}
+      {tipo === "Learning" && <PerfilLearning idDaUrl={idDaUrl} />}
 
       <BottomNav active="perfil" />
     </div>

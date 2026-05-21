@@ -12,7 +12,7 @@ import {
   PosicaoCampo,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { sanitizeMediaPath } from '../../utils/mediaSanitizer.js';
+import { sanitizeMediaPath } from '@/utils/mediaSanitizer.js';
 
 const prisma = new PrismaClient();
 const m = (p?: string | null) => sanitizeMediaPath(p);
@@ -434,7 +434,7 @@ async function main() {
           altura: 1.75,
           peso: 65.0,
           seloQualidade: "Prata",
-          categoria: [Categoria.Sub17],
+          categoria: [Categoria.Livre],
           foto: "/assets/usuarios/lucas.jpg"
         }
       }
@@ -611,7 +611,7 @@ async function main() {
       descricao: "Seed: treino da escolinha para testes de vínculo/treinos disponíveis.",
       tipoTreino: TipoTreino.Tecnico,
       nivel: Nivel.Base,
-      categoria: [Categoria.Sub15, Categoria.Sub17].filter(Boolean) as Categoria[],
+      categoria: [Categoria.Sub15, Categoria.Livre].filter(Boolean) as Categoria[],
       duracao: 50,
       pontuacao: 10,
       imagemUrl: "/assets/treinos/controle.jpg",
@@ -830,7 +830,7 @@ async function main() {
           naturalidade: 'São Paulo - SP',
           telefone1: '11999990022',
           seloQualidade: 'Prata',
-          categoria: [Categoria.Sub17],
+          categoria: [Categoria.Livre],
           foto: '/assets/usuarios/atleta-formadores.png',
           clubeId: clube1Db ? clube1Db.id : null,
         },
@@ -938,7 +938,7 @@ async function main() {
           naturalidade: "Curitiba - PR",
           telefone1: "11999999999",
           seloQualidade: "Bronze",
-          categoria: [Categoria.Sub17],
+          categoria: [Categoria.Livre],
           foto: "/assets/usuarios/teste.jpg"
         }
       }
@@ -960,7 +960,7 @@ async function main() {
       naturalidade: "Curitiba - PR",
       telefone1: "11999999999",
       seloQualidade: "Bronze",
-      categoria: [Categoria.Sub17],
+      categoria: [Categoria.Livre],
       foto: "/assets/usuarios/teste.jpg"
     }
   });
@@ -1017,7 +1017,7 @@ async function main() {
           naturalidade: "Vitória - ES",
           telefone1: "11999999999",
           seloQualidade: "Bronze",
-          categoria: [Categoria.Sub17],
+          categoria: [Categoria.Livre],
           foto: "/assets/usuarios/isadora.jpg"
         }
       }
@@ -1091,7 +1091,7 @@ async function main() {
           naturalidade: 'São Paulo - SP',
           telefone1: '11999990002',
           seloQualidade: 'Prata',
-          categoria: [Categoria.Sub17],
+          categoria: [Categoria.Livre],
           foto: '/assets/usuarios/teste-atleta-pro.png',
         },
       },

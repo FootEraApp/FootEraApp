@@ -30,6 +30,9 @@ import {
   deleteMetodologiaAvulsa,
   migrarMetodologiaAvulsaParaLearning,
   migrarMetodologiaParaAvulsa,
+  deleteMetodologiaAvulsaEstruturaItens,
+  criarSubmissaoMetodologiaItem,
+  listEventosAoVivoVisiveis,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js";
 import { uploadToS3 } from "../middlewares/s3Upload.js";
@@ -52,6 +55,7 @@ router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
+router.get("/eventos-ao-vivo/visiveis", authenticateToken, listEventosAoVivoVisiveis);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
 
 // criação completa normal
@@ -68,6 +72,11 @@ router.post(
   authenticateToken,
   requireMetodologiaCreateAccess,
   createMetodologiaAvulsaCompleta
+);
+router.delete(
+  "/metodologias-avulsas/:metodologiaAvulsaId/estruturas/:estruturaId/itens",
+  authenticateToken,
+  deleteMetodologiaAvulsaEstruturaItens
 );
 router.post(
   "/metodologias-avulsas",
@@ -87,6 +96,18 @@ router.delete(
   deleteMetodologiaAvulsa
 );
 
+router.post(
+  "/metodologias-avulsas/:id/concluir-item",
+  authenticateToken,
+  concluirItemMetodologia
+);
+
+router.post(
+  "/:id/concluir-item",
+  authenticateToken,
+  concluirItemMetodologia
+);
+
 // legado
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
@@ -97,8 +118,30 @@ router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, require
 router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstrutura);
 router.post("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOwnership, createMetodologiaEstruturaItens);
 router.delete("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstruturaItens);
-router.post("/:id/estruturas/:estruturaId/concluir-item", authenticateToken, concluirEstruturaItemMetodologia);
+router.post(
+  "/:id/estruturas/:estruturaId/submissoes",
+  authenticateToken,
+  uploadToS3.single("file"),
+  criarSubmissaoMetodologiaItem
+);
 
+router.post(
+  "/metodologias-avulsas/:id/estruturas/:estruturaId/submissoes",
+  authenticateToken,
+  uploadToS3.single("file"),
+  criarSubmissaoMetodologiaItem
+);
+
+router.post(
+  "/metodologias-avulsas/:id/estruturas/:estruturaId/concluir-item",
+  authenticateToken,
+  concluirEstruturaItemMetodologia
+);
+router.post(
+  "/:id/estruturas/:estruturaId/concluir-item",
+  authenticateToken,
+  concluirEstruturaItemMetodologia
+);
 router.post(
   "/:id/migrar-para-avulsa",
   authenticateToken,
@@ -115,6 +158,7 @@ router.post(
 router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
 router.post("/:id/assinar", authenticateToken, assinarMetodologia);
 router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
+router.post("/metodologias-avulsas/:id/concluir-item", authenticateToken, concluirItemMetodologia);
 
 // por id por último
 router.get("/:id", authenticateToken, getMetodologiaById);

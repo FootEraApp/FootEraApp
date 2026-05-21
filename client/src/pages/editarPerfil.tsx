@@ -66,7 +66,11 @@ const EditarPerfil = () => {
     | "escolinha"
     | "clube"
     | "admin"
-    | "olheiro";
+    | "olheiro"
+    | "federacao"
+    | "marca"
+    | "learning"
+    ;
   const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -80,7 +84,10 @@ const EditarPerfil = () => {
   const [clubeSelId, setClubeSelId] = useState<string | null>(null);
   const [escolinhaSelId, setEscolinhaSelId] = useState<string | null>(null);
   const [professorSelIds, setProfessorSelIds] = useState<string[]>([]);
-
+  const [buscaClubeVinculo, setBuscaClubeVinculo] = useState("");
+  const [buscaEscolinhaVinculo, setBuscaEscolinhaVinculo] = useState("");
+  const [buscaProfessorVinculo, setBuscaProfessorVinculo] = useState("");
+  
   function onlyDigits(v: string) {
     return (v || "").replace(/\D/g, "");
   }
@@ -112,13 +119,38 @@ const EditarPerfil = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!res?.data?.usuario || !res?.data?.dadosEspecificos) {
+        if (!res?.data?.usuario) {
           setErro("Perfil não encontrado ou resposta inválida do servidor.");
           return;
         }
 
         const u = res.data.usuario || {};
-        const dadosEsp: any = { ...(res.data.dadosEspecificos || {}) };
+        const tipoSrv = res.data?.tipo ?? res.data?.tipoUsuario ?? tipoUsuarioOriginal ?? "";
+        const tipoNorm = String(tipoSrv || "").toLowerCase();
+
+        const dadosEsp: any = {
+          ...(res.data.dadosEspecificos || {}),
+        };
+
+        if (!dadosEsp.id && res.data?.tipoUsuarioId) {
+          dadosEsp.id = res.data.tipoUsuarioId;
+        }
+
+        if (tipoNorm === "learning" && !dadosEsp.id && res.data?.learningProfileId) {
+          dadosEsp.id = res.data.learningProfileId;
+        }
+
+        if (tipoNorm === "marca" && !dadosEsp.id && res.data?.marcaId) {
+          dadosEsp.id = res.data.marcaId;
+        }
+
+        if (tipoNorm === "federacao" && !dadosEsp.id && res.data?.federacaoId) {
+          dadosEsp.id = res.data.federacaoId;
+        }
+
+        if (!Array.isArray(dadosEsp.categorias)) {
+          dadosEsp.categorias = dadosEsp.categorias ? [dadosEsp.categorias] : [];
+        }
 
         if (dadosEsp.site && !dadosEsp.siteOficial) {
           dadosEsp.siteOficial = dadosEsp.site;
@@ -205,7 +237,6 @@ const EditarPerfil = () => {
 
         setDadosTipo(dadosEsp);
 
-        const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? "";
         const t = String(tipoSrv).toLowerCase();
         setTipoRender((t === "escolinha" ? "escola" : (t as TipoRender)));
       } catch (err: any) {
@@ -230,38 +261,40 @@ const EditarPerfil = () => {
   useEffect(() => {
     const cepDigits = onlyDigits(String(dadosUsuario?.cep ?? ""));
 
-    // só busca quando tiver exatamente 8 números
     if (cepDigits.length !== 8) return;
 
     let cancel = false;
 
-    (async () => {
+    const timer = window.setTimeout(async () => {
       try {
-        const { data } = await axios.get(`https://viacep.com.br/ws/${cepDigits}/json/`);
+        const { data } = await axios.get(
+          `https://viacep.com.br/ws/${cepDigits}/json/`
+        );
 
         if (cancel) return;
 
         if (!data || data.erro) {
-          // opcional: você pode avisar, mas eu recomendo só não preencher
+          console.warn("[EditarPerfil] CEP não encontrado:", cepDigits);
           return;
         }
 
         setDadosUsuario((prev: any) => ({
           ...prev,
           cep: cepDigits,
-          logradouro: prev?.logradouro || data.logradouro || "",
-          cidade: prev?.cidade || data.localidade || "",
-          estado: prev?.estado || data.uf || "",
-          pais: prev?.pais || "Brasil",
+          logradouro: data.logradouro || "",
+          bairro: data.bairro || prev?.bairro || "",
+          cidade: data.localidade || "",
+          estado: data.uf || "",
+          pais: "Brasil",
         }));
       } catch (e) {
-        // opcional: log
         console.warn("[EditarPerfil] ViaCEP falhou", e);
       }
-    })();
+    }, 350);
 
     return () => {
       cancel = true;
+      window.clearTimeout(timer);
     };
   }, [dadosUsuario?.cep]);
 
@@ -346,21 +379,39 @@ const EditarPerfil = () => {
   if (erro) {
     return <div className="text-center text-red-600 mt-10">{erro}</div>;
   }
-  if (!dadosUsuario || !dadosTipo) {
+  if (!dadosUsuario) {
     return (
       <div className="text-center text-red-600 mt-10">
         Erro ao carregar o perfil.
       </div>
     );
   }
-
+  const dadosTipoSeguro = dadosTipo || {};
   const isAtleta = tipoRender === "atleta";
   const isOlheiro = tipoRender === "olheiro";
   const isProfessor = tipoRender === "professor";
   const isClube = tipoRender === "clube";
   const isEscolinha = tipoRender === "escola" || tipoRender === "escolinha";
+  const isFederacao = tipoRender === "federacao";
+  const isMarca = tipoRender === "marca";
+  const isLearning = tipoRender === "learning";
+  const isOrganizacaoInstitucional = isClube || isEscolinha || isFederacao || isMarca;
 
   const mostrarCepUsuario = true;
+  const clubesFiltrados = listaClubes.filter((op) =>
+    op.nome.toLowerCase().includes(buscaClubeVinculo.toLowerCase())
+  );
+
+  const escolinhasFiltradas = listaEscolinhas.filter((op) =>
+    op.nome.toLowerCase().includes(buscaEscolinhaVinculo.toLowerCase())
+  );
+
+  const professoresFiltrados = listaProfessores.filter((op) =>
+    op.nome.toLowerCase().includes(buscaProfessorVinculo.toLowerCase())
+  );
+
+  const clubeSelecionado = listaClubes.find((op) => op.id === clubeSelId) || null;
+  const escolinhaSelecionada = listaEscolinhas.find((op) => op.id === escolinhaSelId) || null;
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -441,6 +492,144 @@ const EditarPerfil = () => {
       );
     };
 
+    if (isLearning) {
+      return (
+        <>
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Bio</label>
+            <textarea
+              name="tipo_bio"
+              value={dadosTipo?.bio || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded min-h-[90px]"
+              placeholder="Conte um pouco sobre você, seus interesses e seu momento na FootEra."
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Objetivo</label>
+            <input
+              name="tipo_objetivo"
+              value={dadosTipo?.objetivo || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Ex: aprender mais, evoluir como atleta, estudar metodologias..."
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (isFederacao || isMarca) {
+      return (
+        <>
+          <div className="mb-4">
+            <label className="block text-sm font-medium">
+              {isFederacao ? "Nome da Federação" : "Nome da Marca"}
+            </label>
+            <input
+              name="tipo_nome"
+              value={dadosTipo?.nome || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder={isFederacao ? "Ex: Federação Capixaba" : "Ex: Marca FootEra"}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">CNPJ</label>
+            <input
+              name="tipo_cnpj"
+              value={formatCnpj(String(dadosTipo?.cnpj ?? ""))}
+              onChange={(e) => {
+                setDadosTipo({
+                  ...dadosTipo,
+                  cnpj: onlyCnpj(e.target.value),
+                });
+              }}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="00.000.000/0000-00"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Telefone 1</label>
+            <input
+              name="tipo_telefone1"
+              value={dadosTipo?.telefone1 || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Ex: (27) 99999-9999"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Telefone 2</label>
+            <input
+              name="tipo_telefone2"
+              value={dadosTipo?.telefone2 || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">E-mail público</label>
+            <input
+              type="email"
+              name="tipo_email"
+              value={dadosTipo?.email || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="contato@exemplo.com"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Site oficial</label>
+            <input
+              name="tipo_siteOficial"
+              value={dadosTipo?.siteOficial || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder="https://..."
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Sede</label>
+            <input
+              name="tipo_sede"
+              value={dadosTipo?.sede || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+              placeholder={
+                isFederacao
+                  ? "Ex: Sede administrativa em Vitória - ES"
+                  : "Ex: Unidade matriz em Vila Velha - ES"
+              }
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Descrição</label>
+            <textarea
+              name="tipo_descricao"
+              value={dadosTipo?.descricao || ""}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded min-h-[110px]"
+              placeholder={
+                isFederacao
+                  ? "Descreva a federação, atuação, região, modalidades e objetivos."
+                  : "Descreva a marca, atuação, produtos, serviços ou conteúdos."
+              }
+            />
+          </div>
+        </>
+      );
+    }
+
     switch (tipoRender) {
       case "atleta":
         return (
@@ -459,40 +648,108 @@ const EditarPerfil = () => {
 
             <div className="mb-4">
               <label className="block text-sm font-medium">Escolinha</label>
-              <select
-                className="w-full border px-3 py-2 rounded"
-                value={escolinhaSelId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEscolinhaSelId(v === "" ? null : v);
-                }}
-              >
-                <option value="">Nenhuma</option>
-                {listaEscolinhas.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.nome}
-                  </option>
-                ))}
-              </select>
+
+              {escolinhaSelecionada && (
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setEscolinhaSelId(null)}
+                    className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                    title="Remover"
+                  >
+                    {escolinhaSelecionada.nome} <span className="ml-1 text-gray-500">×</span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                className="w-full border px-3 py-2 rounded mb-2"
+                placeholder="Pesquisar escolinha pelo nome..."
+                value={buscaEscolinhaVinculo}
+                onChange={(e) => setBuscaEscolinhaVinculo(e.target.value)}
+              />
+
+              <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
+                {escolinhasFiltradas.length === 0 ? (
+                  <div className="text-sm text-gray-500">Nenhuma escolinha encontrada.</div>
+                ) : (
+                  escolinhasFiltradas.map((op) => {
+                    const checked = escolinhaSelId === op.id;
+
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="escolinhaVinculo"
+                          checked={checked}
+                          onChange={() => setEscolinhaSelId(op.id)}
+                        />
+                        <span className="text-sm">{op.nome}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Você pode selecionar apenas uma escolinha.
+              </p>
             </div>
 
             <div className="mb-4">
               <label className="block text-sm font-medium">Clube</label>
-              <select
-                className="w-full border px-3 py-2 rounded"
-                value={clubeSelId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setClubeSelId(v === "" ? null : v);
-                }}
-              >
-                <option value="">Nenhum</option>
-                {listaClubes.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.nome}
-                  </option>
-                ))}
-              </select>
+
+              {clubeSelecionado && (
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setClubeSelId(null)}
+                    className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                    title="Remover"
+                  >
+                    {clubeSelecionado.nome} <span className="ml-1 text-gray-500">×</span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                className="w-full border px-3 py-2 rounded mb-2"
+                placeholder="Pesquisar clube pelo nome..."
+                value={buscaClubeVinculo}
+                onChange={(e) => setBuscaClubeVinculo(e.target.value)}
+              />
+
+              <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
+                {clubesFiltrados.length === 0 ? (
+                  <div className="text-sm text-gray-500">Nenhum clube encontrado.</div>
+                ) : (
+                  clubesFiltrados.map((op) => {
+                    const checked = clubeSelId === op.id;
+
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="clubeVinculo"
+                          checked={checked}
+                          onChange={() => setClubeSelId(op.id)}
+                        />
+                        <span className="text-sm">{op.nome}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Você pode selecionar apenas um clube.
+              </p>
             </div>
 
             <div className="mb-4">
@@ -519,11 +776,18 @@ const EditarPerfil = () => {
                 </div>
               )}
 
+              <input
+                className="w-full border px-3 py-2 rounded mb-2"
+                placeholder="Pesquisar professor pelo nome..."
+                value={buscaProfessorVinculo}
+                onChange={(e) => setBuscaProfessorVinculo(e.target.value)}
+              />
+
               <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
-                {listaProfessores.length === 0 ? (
+                {professoresFiltrados.length === 0 ? (
                   <div className="text-sm text-gray-500">Nenhum professor disponível.</div>
                 ) : (
-                  listaProfessores.map((op) => {
+                  professoresFiltrados.map((op) => {
                     const checked = professorSelIds.includes(op.id);
                     return (
                       <label
@@ -576,15 +840,26 @@ const EditarPerfil = () => {
       case "escolinha":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Nome da Escolinha", "nome")}
             {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
-            {renderInput("Email", "email")}
-            {renderInput("Site Oficial", "siteOficial")}
+            {renderInput("E-mail público", "email", "email")}
+            {renderInput("Site oficial", "siteOficial")}
+            {renderInput("Sede", "sede")}
+            {renderInput("Categorias", "categorias")}
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Descrição</label>
+              <textarea
+                name="tipo_descricao"
+                value={dadosTipo.descricao ?? ""}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded min-h-[110px]"
+                placeholder="Descreva a escolinha, estrutura, categorias e metodologia."
+              />
+            </div>
           </>
         );
-
       case "olheiro":
         return (
           <>
@@ -668,36 +943,28 @@ const EditarPerfil = () => {
       case "clube":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Nome do Clube", "nome")}
             {renderInput("CNPJ", "cnpj")}
             {renderInput("Telefone 1", "telefone1")}
             {renderInput("Telefone 2", "telefone2")}
-            {renderInput("Email", "email")}
-            {renderInput("Site Oficial", "siteOficial")}
+            {renderInput("E-mail público", "email", "email")}
+            {renderInput("Site oficial", "siteOficial")}
+            {renderInput("Sede", "sede")}
             {renderInput("Estádio", "estadio")}
-
+            {renderInput("Categorias", "categorias")}
             <div className="mb-4">
               <label className="block text-sm font-medium">Descrição</label>
               <textarea
                 name="tipo_descricao"
-                value={dadosTipo["descricao"] ?? ""}
+                value={dadosTipo.descricao ?? ""}
                 onChange={handleChange}
-                className="w-full border px-3 py-2 rounded"
-                rows={4}
-                placeholder="Fale sobre o clube, história, missão, etc."
+                className="w-full border px-3 py-2 rounded min-h-[110px]"
+                placeholder="Descreva o clube, história, estrutura e objetivos."
               />
             </div>
-
-            {renderInput(
-              "Categorias de Base (separadas por vírgula)",
-              "categorias"
-            )}
-            <p className="text-xs text-gray-500 -mt-3 mb-2">
-              Ex.: Sub9, Sub11, Sub13, Sub15, Sub17, Sub20, Livre
-            </p>
           </>
         );
-    }
+      }
   };
 
 const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
@@ -710,8 +977,8 @@ return (
 
 
     <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center relative">
-      <Link
-        href="/perfil"
+      <Link 
+        href={new URLSearchParams(window.location.search).get("returnTo") || "/perfil"}
         aria-label="Voltar para perfil"
         className="inline-flex h-10 w-10 items-center justify-center
           rounded-full bg-white/10 text-white
@@ -822,7 +1089,7 @@ return (
           <label className="block text-sm font-medium">CEP</label>
           <input
             name="cep"
-            value={dadosUsuario.cep || ""}
+            value={String(dadosUsuario.cep || "").replace(/^(\d{5})(\d)/, "$1-$2")}
             onChange={(e) => {
               const digits = onlyDigits(e.target.value).slice(0, 8);
               setDadosUsuario((prev: any) => ({ ...prev, cep: digits }));
@@ -934,11 +1201,8 @@ return (
             tipo.professorIds = professorSelIds;
             tipo.professorId = professorSelIds.length > 0 ? professorSelIds[0] : null;
 
-            if (typeof tipo.categorias === "string") {
-              tipo.categorias = tipo.categorias
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean);
+            if (!Array.isArray(tipo.categorias)) {
+              tipo.categorias = tipo.categorias ? [tipo.categorias] : [];
             }
 
             if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
@@ -978,7 +1242,11 @@ return (
             formData.append("tipo", JSON.stringify(tipo));
             formData.append(
               "tipoUsuario",
-              String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola")
+              String(tipoUsuarioOriginal)
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/^escolinha$/, "escola")
             );
 
             // 5. Única requisição PUT para o Perfil
@@ -1007,7 +1275,8 @@ return (
 
             alert("Perfil atualizado com sucesso!");
             Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
-            window.location.href = "/perfil";
+            const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+            window.location.href = returnTo || "/perfil";
 
           } catch (err: any) {
             console.error("[EditarPerfil] Erro ao salvar:", err);

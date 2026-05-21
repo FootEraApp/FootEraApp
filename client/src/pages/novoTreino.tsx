@@ -13,7 +13,7 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
-import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
+import type { TreinoCreatePayload } from "../utils/treinos.types.js";
 import {
   montarExerciciosParaPayload,
 } from "../utils/treinos.helpers.js";
@@ -40,13 +40,15 @@ type ExItemUILocal = {
   descanso?: string | null;
   ordem?: number | null;
   categorias?: string[];
-  tipo?: "catalogo" | "personalizado" | "meus" | "temporario";
-  origem?: "catalogo" | "personalizado" | "meus" | "temporario";
+  tipo?: "catalogo" | "exercicio" | "personalizado" | "meus" | "temporario";
+  origem?: "catalogo" | "exercicio" | "personalizado" | "meus" | "temporario";
   observacao?: string | null;
   exercicio?: any;
   exercicioPersonalizado?: any;
   exercicioTemporario?: any;
   nomeCatalogo?: string | null;
+  tipoExecucao?: "repeticao" | "duracao";
+  descricaoExecucao?: string | null;  
 };
 type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 type PontuacaoDetalhe = {
@@ -59,28 +61,33 @@ type PontuacaoDetalhe = {
 };
 
 type ExercicioSelecionadoUI = {
-  exercicioId?: string;     
-  id?: string;             
+  exercicioId?: string | null;
+  idCatalogo?: string | null;
+  exercicioPersonalizadoId?: string | null;
+  exercicioTemporarioId?: string | null;
+  id?: string | null;
+  nome?: string | null;
+  descricao?: string | null;
+  videoUrl?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
   ordem?: number | null;
   repeticoes?: string | number | null;
-  series?: number | null;
+  series?: string | number | null;
+  duracao?: string | null;
+  descanso?: string | null;
+  tipoExecucao?: "repeticao" | "duracao";
 };
 
-function toRepeticoesStr(v: any): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "string") return v.trim();
-  if (typeof v === "number") return String(v);
-  return String(v);
-}
-
 function exercicioTemExecucaoValida(ex: ExItemUILocal) {
-  const temSeriesOuReps =
-    String(ex.series ?? "").trim() !== "" ||
-    String(ex.repeticoes ?? "").trim() !== "";
+  if (ex.tipoExecucao === "duracao") {
+    return String(ex.duracao ?? "").trim() !== "";
+  }
 
-  const temDuracao = String(ex.duracao ?? "").trim() !== "";
-
-  return temSeriesOuReps || temDuracao;
+  return (
+    String(ex.series ?? "").trim() !== "" &&
+    String(ex.repeticoes ?? "").trim() !== ""
+  );
 }
 
 function formatSerieXReps(series?: number | null, repsRaw?: string | number | null) {
@@ -100,7 +107,7 @@ function formatSerieXReps(series?: number | null, repsRaw?: string | number | nu
   return reps;
 }
 
-export function montarPayloadSomenteInfoEExercicios(params: {
+function montarPayloadSomenteInfoEExercicios(params: {
   titulo: string;
   descricao: string;
   nivel: any; 
@@ -127,6 +134,7 @@ export function montarPayloadSomenteInfoEExercicios(params: {
     categoria,
     dicas,
     exerciciosSelecionados,
+    
   } = params;
 
   const exercicios = (exerciciosSelecionados ?? [])
@@ -140,22 +148,42 @@ export function montarPayloadSomenteInfoEExercicios(params: {
       const nomeCustom = String(it.nome ?? "").trim();
       const descCustom = String(it.descricao ?? "").trim();
       const repsFinal =
-        formatSerieXReps(it.series ?? null, it.repeticoes) ??
-        toRepeticoesStr(it.repeticoes);
+        it.tipoExecucao === "repeticao"
+          ? formatSerieXReps(it.series ?? null, it.repeticoes)
+          : null;
       const base = {
         ordem: Number.isFinite(Number(it.ordem)) ? Number(it.ordem) : idx + 1,
-        repeticoes: repsFinal,
-        descansoSeg: it.descansoSeg ?? null,
+        repeticoes: it.tipoExecucao === "repeticao" ? repsFinal : null,
+        series:
+          it.tipoExecucao === "repeticao" &&
+          Number.isFinite(Number(it.series)) &&
+          Number(it.series) > 0
+            ? Number(it.series)
+            : null,
+        duracao:
+          it.tipoExecucao === "duracao" && String(it.duracao ?? "").trim() !== ""
+            ? String(it.duracao).trim()
+            : null,
+        descanso:
+          String(it.descanso ?? "").trim() !== ""
+            ? String(it.descanso).trim()
+            : null,
       };
 
-      // ✅ catálogo
       if (exercicioId) {
-        return { ...base, exercicioId };
+        return {
+          ...base,
+          exercicioId,
+          descricao: descCustom || null,
+        };
       }
 
-      // ✅ personalizado EXISTENTE (só linka, não recria)
       if (exercicioPersonalizadoId) {
-        return { ...base, exercicioPersonalizadoId };
+        return {
+          ...base,
+          exercicioPersonalizadoId,
+          descricao: descCustom || null,
+        };
       }
 
       // ✅ personalizado NOVO (linha adicionada) — TEM que ir NO ROOT (o backend lê assim)
@@ -168,6 +196,7 @@ export function montarPayloadSomenteInfoEExercicios(params: {
           videoPosterUrl: it.videoPosterUrl ?? null,
           // (opcional) se você tiver esses campos na UI
           nivel: it.nivel ?? nivel,
+          duracao: it.tipoExecucao === "duracao" ? it.duracao : null,
           categorias: Array.isArray(it.categorias) ? it.categorias : (Array.isArray(categoria) ? categoria : []),
         };
       }
@@ -324,8 +353,8 @@ function calcularPontuacaoTreino(
 
   const dur = Number.isFinite(Number(duracaoMin)) ? Number(duracaoMin) : 0;
   const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
-
   const total = ptsEx + ptsNivel + ptsTipo + ptsDur;
+
   return {
     total,
     nivel: ptsNivel,
@@ -344,15 +373,17 @@ interface Exercicio {
   id: string;
   nome: string;
   repeticoes?: string;
+  series?: number | null;
+  duracao?: string | null;
+  descanso?: string | null;
   videoDemonstrativoUrl?: string;
   objetivo?: string | null;
   descricao?: string | null;
   nivel?: string;
-  categorias?: string[];      
-  duracaoMinutos?: number | null; 
-  tipoTreino?: string | null; 
-}
-
+  categorias?: string[];
+  duracaoMinutos?: number | null;
+  tipoTreino?: string | null;
+}   
 
 interface AtletaVinculado {
   id: string;
@@ -366,6 +397,10 @@ interface TreinoProgramado {
   nome: string;
   descricao?: string;
   nivel: string;
+  tipoTreino?: string | null;
+  sessaoTreinoId?: string | null;
+  sessaoTreino?: { id: string; nome: string } | null;
+  sessaoTreinoNome?: string | null;
   imagemUrl: string | null;
   dataAgendada?: string;
   exercicios: {
@@ -383,7 +418,11 @@ interface TreinoProgramado {
   } | null;
   criadorNome?: string | null;
   criadorTipo?: string | null;
-  criadores?: { id: string; nome: string }[];
+  criadores?: {
+    tipo: "Professor" | "Clube" | "Escolinha";
+    id: string;
+    nome: string;
+  }[];
 }
 
 interface Elenco {
@@ -409,6 +448,10 @@ type MeuExercicioItem = {
   categorias?: string[];
   videoDemonstrativoUrl?: string | null;
   videoPosterUrl?: string | null;
+  series?: number | null;
+  repeticoes?: string | null;
+  duracao?: string | null;
+  descanso?: string | null;
 };
 
 const SAVE_KEY = "novoTreinoState";
@@ -820,12 +863,14 @@ export default function NovoTreino() {
   type NivelTreino = (typeof opcoesNiveis)[number];
   const OPCOES_CATEGORIA = [
     "Todas as categorias",
+    "Sub3",
+    "Sub5",
+    "Sub7",
     "Sub9",
     "Sub11",
     "Sub13",
     "Sub15",
-    "Sub17",
-    "Sub20",
+    "Sub16",
     "Livre",
   ];
 
@@ -867,6 +912,11 @@ export default function NovoTreino() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [isFreePlan, setIsFreePlan] = useState(false);
+
+  const [isAtletaPro, setIsAtletaPro] = useState(true);
+  const [assinaturaChecada, setAssinaturaChecada] = useState(false);
+  const [carregandoAssinatura, setCarregandoAssinatura] = useState(false);
+
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
@@ -876,6 +926,7 @@ export default function NovoTreino() {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState([]);
   type AbaTreinosAtleta = "meu_professor" | "footera";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
+  const [buscaTreinoAtleta, setBuscaTreinoAtleta] = useState("");
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
   const [professorVinculadoIds, setProfessorVinculadoIds] = useState<string[]>([]);
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
@@ -885,7 +936,6 @@ export default function NovoTreino() {
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [nivel, setNivel] = useState<NivelTreino>("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
   const [categorias, setCategorias] = useState<string[]>([]);
@@ -921,6 +971,179 @@ export default function NovoTreino() {
   const [horaAgendamentoInput, setHoraAgendamentoInput] = useState<string>("18:00");
   const [meusExercicios, setMeusExercicios] = useState<MeuExercicioItem[]>([]);
   const [loadingMeusExercicios, setLoadingMeusExercicios] = useState(false);
+  const [nivel, setNivel] = useState<NivelTreino>("Base");
+  const [sessoesTreino, setSessoesTreino] = useState<string[]>([
+    "Aquecimento",
+    "Coletivo",
+    "Treino de finalização",
+  ]);
+  const [sessaoTreino, setSessaoTreino] = useState("Aquecimento");
+  const [sessaoOutro, setSessaoOutro] = useState("");
+  const sessaoTreinoFinal =
+    sessaoTreino === "Outro" ? sessaoOutro.trim() : sessaoTreino.trim();
+
+  const etapa1Valida =
+    nome.trim() !== "" &&
+    Number(duracao) > 0 &&
+    tipoTreino.trim() !== "" &&
+    nivel.trim() !== "" &&
+    sessaoTreinoFinal !== "";
+
+  const etapa2Valida = exerciciosSelecionados.some((ex) =>
+    String(ex.nome || ex.exercicioId || ex.idCatalogo || ex.exercicioPersonalizadoId || "").trim() !== ""
+  );
+  
+  const veioDeUsarNoTreinoRef = useRef(false);
+
+  useEffect(() => {
+
+    const raw = sessionStorage.getItem("treino_exercicios_preselecionados");
+    if (!raw) return;
+
+    veioDeUsarNoTreinoRef.current = true;
+
+    sessionStorage.removeItem(SAVE_KEY);
+    sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+    const tituloTemp = "Novo treino";
+    setNome((atual) => atual.trim() ? atual : tituloTemp);
+
+    try {
+      const lista = JSON.parse(raw);
+      const arr = Array.isArray(lista) ? lista : [lista];
+
+      const novos: ExItemUILocal[] = arr
+        .map((item: any, index: number): ExItemUILocal => {
+          const origemRaw = String(item.origem || item.tipo || "personalizado").toLowerCase();
+
+          const origemNormalizada: ExItemUILocal["origem"] =
+            origemRaw === "exercicio" || origemRaw === "catalogo"
+              ? "catalogo"
+              : origemRaw === "temporario"
+              ? "temporario"
+              : "personalizado";
+
+          const isCatalogo = origemNormalizada === "catalogo";
+          const isTemporario = origemNormalizada === "temporario";
+          const isPersonalizado = origemNormalizada === "personalizado";
+
+          const duracaoItem =
+            item.duracao != null && String(item.duracao).trim() !== ""
+              ? String(item.duracao).trim()
+              : "";
+
+          const seriesItem =
+            item.series != null && String(item.series).trim() !== ""
+              ? item.series
+              : null;
+
+          const repeticoesItem =
+            item.repeticoes != null && String(item.repeticoes).trim() !== ""
+              ? item.repeticoes
+              : "";
+
+          const descansoItem =
+            item.descanso != null && String(item.descanso).trim() !== ""
+              ? String(item.descanso).trim()
+              : "";
+
+          const tipoExecucao: ExItemUILocal["tipoExecucao"] =
+            duracaoItem ? "duracao" : "repeticao";
+
+          return {
+            idLocal: String(crypto.randomUUID()),
+            id: null,
+            nome: String(item.nome || "Exercício").trim(),
+            descricao: item.descricao ?? item.objetivo ?? null,
+            objetivo: item.objetivo ?? item.descricao ?? null,
+            nivel: item.nivel ?? null,
+            categorias: Array.isArray(item.categorias) ? item.categorias : [],
+            videoUrl: item.videoDemonstrativoUrl || item.videoUrl || null,
+            videoDemonstrativoUrl: item.videoDemonstrativoUrl || item.videoUrl || null,
+            videoPosterUrl: item.videoPosterUrl || null,
+            series: seriesItem,
+            repeticoes: repeticoesItem,
+            duracao: duracaoItem,
+            descanso: descansoItem,
+            ordem: index + 1,
+            tipoExecucao,
+
+            exercicioId: isCatalogo
+              ? String(item.idCatalogo || item.exercicioId || item.id || "")
+              : null,
+
+            idCatalogo: isCatalogo
+              ? String(item.idCatalogo || item.exercicioId || item.id || "")
+              : null,
+
+            exercicioPersonalizadoId: isPersonalizado
+              ? String(item.exercicioPersonalizadoId || item.id || "")
+              : null,
+
+            exercicioTemporarioId: isTemporario
+              ? String(item.exercicioTemporarioId || item.id || "")
+              : null,
+
+            origem: origemNormalizada,
+            tipo: origemNormalizada,
+          };
+        })
+        .filter((x) =>
+          String(
+            x.nome ||
+              x.exercicioId ||
+              x.idCatalogo ||
+              x.exercicioPersonalizadoId ||
+              x.exercicioTemporarioId ||
+              ""
+          ).trim() !== ""
+        );
+
+      setExerciciosSelecionados((prev) => {
+        const chave = (e: ExItemUILocal) =>
+          String(
+            e.exercicioId ||
+              e.idCatalogo ||
+              e.exercicioPersonalizadoId ||
+              e.exercicioTemporarioId ||
+              e.nome ||
+              ""
+          );
+
+        const ids = new Set(prev.map(chave));
+
+        const filtrados = novos.filter((n) => !ids.has(chave(n)));
+
+        return [...prev, ...filtrados].map((e, idx) => ({
+          ...e,
+          ordem: idx + 1,
+        }));
+      });
+
+      setEtapa(2);
+      setCompletedUntil((prev) => Math.max(prev, 2));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(novos));
+
+      sessionStorage.removeItem("treino_exercicios_preselecionados");
+    } catch (e) {
+      console.error("Erro ao carregar exercícios:", e);
+    }
+  }, []);
+
+  function irParaEtapa(destino: number) {
+    if (destino >= 2 && !etapa1Valida) {
+      alert("Preencha título, duração, tipo do treino, nível e sessão do treino.");
+      return;
+    }
+
+    if (destino >= 3 && !etapa2Valida) {
+      alert("Selecione pelo menos um exercício para continuar.");
+      return;
+    }
+
+    setEtapa(destino);
+    setCompletedUntil((prev) => Math.max(prev, destino));
+  }
 
   type AbaExercicios = "meus" | "catalogo" | "personalizados";
   const [abaExercicios, setAbaExercicios] = useState<AbaExercicios>("meus");
@@ -1002,18 +1225,6 @@ export default function NovoTreino() {
     });
   }
 
-  function atualizarCampoExercicio(
-    idLocal: string,
-    campo: "series" | "repeticoes" | "duracao" | "descanso",
-    valor: string
-  ) {
-    setExerciciosSelecionados((prev) =>
-      prev.map((item) =>
-        item.idLocal === idLocal ? { ...item, [campo]: valor } : item
-      )
-    );
-  }
-
   function showToast(
     message: string,
     type: "success" | "error" | "info" = "success",
@@ -1054,6 +1265,62 @@ export default function NovoTreino() {
     }
   }
 
+  async function checarAssinaturaAtletaPro() {
+    const tipo = String(
+      (Storage as any).tipoSalvo ??
+        localStorage.getItem("tipoUsuario") ??
+        sessionStorage.getItem("tipoUsuario") ??
+        ""
+    ).trim().toLowerCase();
+
+    if (tipo !== "atleta") {
+      setIsAtletaPro(true);
+      setAssinaturaChecada(true);
+      return true;
+    }
+
+    const token = getToken();
+
+    const userId =
+      (Storage as any).usuarioId ||
+      localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      "";
+
+    if (!token || !userId) {
+      setIsAtletaPro(false);
+      setAssinaturaChecada(true);
+      return false;
+    }
+
+    try {
+      setCarregandoAssinatura(true);
+
+      const res = await axios.get(
+        `${API.BASE_URL}/api/usuarios/${encodeURIComponent(userId)}/assinatura`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const ok = Boolean(res.data?.isPro);
+
+      setIsAtletaPro(ok);
+      setAssinaturaChecada(true);
+
+      return ok;
+    } catch (e) {
+      console.warn("[NovoTreino] erro ao checar assinatura:", e);
+
+      setIsAtletaPro(false);
+      setAssinaturaChecada(true);
+
+      return false;
+    } finally {
+      setCarregandoAssinatura(false);
+    }
+  }
+
   const professorLogadoId = useMemo(() => {
     const tipo = String(
       (Storage as any).tipoSalvo ??
@@ -1070,6 +1337,30 @@ export default function NovoTreino() {
         sessionStorage.getItem("tipoUsuarioId") ||
         ""
     ).trim();
+  }, []);
+
+  useEffect(() => {
+    const carregarSessoes = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch(`${API.BASE_URL}/api/treinos/sessoes`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        const data = await res.json().catch(() => ({}));
+        const nomes = Array.isArray(data?.items)
+          ? data.items.map((s: any) => String(s.nome || "").trim()).filter(Boolean)
+          : [];
+
+        setSessoesTreino(
+          Array.from(
+            new Set(["Aquecimento", "Coletivo", "Treino de finalização", ...nomes])
+          )
+        );
+      } catch {}
+    };
+
+    carregarSessoes();
   }, []);
 
   useEffect(() => {
@@ -1166,10 +1457,14 @@ export default function NovoTreino() {
 
   useEffect(() => {
     try {
+      if (veioDeUsarNoTreinoRef.current) return;
+
+      const temPreSelecionado = sessionStorage.getItem("treino_exercicios_preselecionados");
+      if (temPreSelecionado) return;
+
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) setExerciciosSelecionados(JSON.parse(raw));
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [DRAFT_KEY]);
 
   const gruposProfessoresFiltrados = useMemo(() => {
@@ -1233,18 +1528,16 @@ export default function NovoTreino() {
             : p.series != null && String(p.series).trim() !== ""
             ? Number(p.series)
             : null,
-
         repeticoes:
           p.repeticoes != null ? String(p.repeticoes) : "",
-
         duracao:
           p.duracao != null ? String(p.duracao) : "",
-
         descanso:
           p.descanso != null ? String(p.descanso) : "",
         ordem: prev.length + 1,
         categorias: Array.isArray(p.categorias) ? p.categorias : [],
         origem: "personalizado",
+        tipoExecucao: p.duracao ? "duracao" : "repeticao",
       },
     ]);
   }
@@ -1316,6 +1609,13 @@ export default function NovoTreino() {
         nome: t.nome ?? t.titulo ?? "(sem nome)",
         descricao: t.descricao ?? t.resumo ?? "",
         nivel: t.nivel ?? t.dificuldade ?? "-",
+        tipoTreino: t.tipoTreino ?? null,
+        sessaoTreinoId: t.sessaoTreinoId ?? null,
+        sessaoTreino: t.sessaoTreino ?? null,
+        sessaoTreinoNome:
+          t.sessaoTreinoNome ??
+          t.sessaoTreino?.nome ??
+          null,
         pontuacao: t.pontuacao ?? null,
         imagemUrl:
           t.imagemUrl ??
@@ -1514,66 +1814,66 @@ export default function NovoTreino() {
     };
   }, [atletaIdLogado]);
 
-useEffect(() => {
-  const tipo =
-    (Storage as any).tipoSalvo ??
-    localStorage.getItem("tipoUsuario") ??
-    sessionStorage.getItem("tipoUsuario") ??
-    "";
+  useEffect(() => {
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
 
-  if (String(tipo).toLowerCase() !== "atleta") return;
+    if (String(tipo).toLowerCase() !== "atleta") return;
 
-  let cancel = false;
+    let cancel = false;
 
-  (async () => {
-    try {
-      const token = getToken();
-      if (!token) return;
+    (async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
 
-      const atletaId = String(atletaIdLogado || "").trim();
-      if (!atletaId) return;
+        const atletaId = String(atletaIdLogado || "").trim();
+        if (!atletaId) return;
 
-      const headers = { Authorization: `Bearer ${token}` };
+        const headers = { Authorization: `Bearer ${token}` };
 
-      const tries = [
-        `${API.BASE_URL}/api/atletas/${encodeURIComponent(atletaId)}`,
-        `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, 
-      ];
+        const tries = [
+          `${API.BASE_URL}/api/atletas/${encodeURIComponent(atletaId)}`,
+          `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, 
+        ];
 
-      let data: any = null;
-      for (const url of tries) {
-        const r = await fetch(url, { headers });
-        if (!r.ok) continue;
-        data = await r.json().catch(() => null);
-        if (data) break;
+        let data: any = null;
+        for (const url of tries) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          data = await r.json().catch(() => null);
+          if (data) break;
+        }
+
+        const rels =
+          data?.relacoesTreinamento ??
+          data?.atleta?.relacoesTreinamento ??
+          data?.data?.relacoesTreinamento ??
+          [];
+
+        const profIds = Array.from(
+          new Set(
+            (Array.isArray(rels) ? rels : [])
+              .filter((x: any) => x?.ativo !== false)
+              .map((x: any) => String(x?.professorId ?? x?.professor?.id ?? "").trim())
+              .filter((id: string) => id && id !== "undefined" && id !== "null"),
+          ),
+        );
+
+        if (!cancel) setProfessorVinculadoIds(profIds);
+      } catch (e) {
+        console.warn("[NovoTreino] falha ao carregar professorVinculadoIds:", e);
+        if (!cancel) setProfessorVinculadoIds([]);
       }
+    })();
 
-      const rels =
-        data?.relacoesTreinamento ??
-        data?.atleta?.relacoesTreinamento ??
-        data?.data?.relacoesTreinamento ??
-        [];
-
-      const profIds = Array.from(
-        new Set(
-          (Array.isArray(rels) ? rels : [])
-            .filter((x: any) => x?.ativo !== false)
-            .map((x: any) => String(x?.professorId ?? x?.professor?.id ?? "").trim())
-            .filter((id: string) => id && id !== "undefined" && id !== "null"),
-        ),
-      );
-
-      if (!cancel) setProfessorVinculadoIds(profIds);
-    } catch (e) {
-      console.warn("[NovoTreino] falha ao carregar professorVinculadoIds:", e);
-      if (!cancel) setProfessorVinculadoIds([]);
-    }
-  })();
-
-  return () => {
-    cancel = true;
-  };
-}, [atletaIdLogado]);
+    return () => {
+      cancel = true;
+    };
+  }, [atletaIdLogado]);
 
   useEffect(() => {
     const tipo =
@@ -1774,7 +2074,7 @@ useEffect(() => {
       const shouldRestore =
         sessionStorage.getItem(RESTORE_FLAG_KEY) === "1";
 
-      if (shouldRestore) {
+      if (shouldRestore && !veioDeUsarNoTreinoRef.current) {
         const saved = safeParse<any>(sessionStorage.getItem(SAVE_KEY), null);
         if (saved) {
           setEtapa(saved.etapa ?? 1);
@@ -1802,13 +2102,14 @@ useEffect(() => {
             exercicioId: x.exercicioId ?? x.idCatalogo ?? null,
             exercicioPersonalizadoId: x.exercicioPersonalizadoId ?? null,
             nome: x.nome ?? "",
-            descricao: x.descricao ?? null,
+            descricao: x.descricaoExecucao ?? x.exercicio?.descricao ?? "",
             objetivo: x.objetivo ?? null,
             repeticoes: x.repeticoes ?? "",
             ordem: x.ordem ?? idx + 1,
             series: x.series ?? "",
             duracao: x.duracao ?? "",
             descanso: x.descanso ?? "",
+            tipoExecucao: x.duracao ? "duracao" : "repeticao",
             videoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
             videoDemonstrativoUrl: x.videoDemonstrativoUrl ?? x.videoUrl ?? null,
             videoPosterUrl: x.videoPosterUrl ?? null,
@@ -1834,7 +2135,7 @@ useEffect(() => {
     setIniciado(true);
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     if (!isEditing) return;
     if (!iniciado) return;
     if (carregouEdicaoRef.current) return;
@@ -2108,7 +2409,6 @@ useEffect(() => {
     setCapaUrl(String(t.imagemUrl ?? t.capaUrl ?? t.capa ?? t.foto ?? ""));
     const cats = t.categoria ?? t.categorias ?? [];
     setCategorias(Array.isArray(cats) ? cats.map(String) : cats ? [String(cats)] : []);
-
     // ✅ se vier do backend como publico/parceiro
     setTreinoFootera(Boolean(t.publico ?? t.parceiro ?? t.isFootera ?? false));
 
@@ -2135,54 +2435,81 @@ useEffect(() => {
     const exUi: ExItemUILocal[] = (Array.isArray(exs) ? exs : []).map((ex: any, idx: number) => ({
       idLocal: crypto.randomUUID(),
       id: ex.id ?? `ex_${idx}`,
-      // catálogo
+
       idCatalogo:
         ex.exercicioId ??
         ex.idCatalogo ??
         (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
         null,
+
       exercicioId:
         ex.exercicioId ??
         ex.idCatalogo ??
         (ex.exercicio && !ex.exercicioPersonalizado ? ex.exercicio.id : null) ??
         null,
-      // personalizado
+
       exercicioPersonalizadoId:
         ex.exercicioPersonalizadoId ??
         ex.exercicioPersonalizado?.id ??
         null,
+
+      exercicioTemporarioId:
+        ex.exercicioTemporarioId ??
+        ex.exercicioTemporario?.id ??
+        null,
+
       tipo:
         ex.exercicioPersonalizadoId || ex.exercicioPersonalizado
           ? "personalizado"
           : ex.exercicioTemporarioId || ex.exercicioTemporario
           ? "temporario"
           : "catalogo",
+
+      origem:
+        ex.exercicioPersonalizadoId || ex.exercicioPersonalizado
+          ? "personalizado"
+          : ex.exercicioTemporarioId || ex.exercicioTemporario
+          ? "temporario"
+          : "catalogo",
+
       nome:
         ex.nome ??
         ex.exercicio?.nome ??
         ex.exercicioPersonalizado?.nome ??
         ex.exercicioTemporario?.nome ??
         "",
-      descricao:
+
+      objetivo:
         ex.objetivo ??
-        ex.descricao ??
         ex.exercicio?.objetivo ??
-        ex.exercicio?.descricao ??
         ex.exercicioPersonalizado?.objetivo ??
-        ex.exercicioPersonalizado?.descricao ??
         ex.exercicioTemporario?.objetivo ??
+        null,
+
+      descricao:
+        ex.descricaoExecucao ??
+        ex.descricao ??
+        ex.exercicio?.descricao ??
+        ex.exercicioPersonalizado?.descricao ??
         ex.exercicioTemporario?.descricao ??
         "",
+
       repeticoes: ex.repeticoes ?? ex.reps ?? "",
+
       series:
         typeof ex.series === "number"
           ? ex.series
           : ex.series != null && String(ex.series).trim() !== ""
           ? Number(ex.series)
-          : null,
+          : "",
+
       duracao: ex.duracao ?? "",
       descanso: ex.descanso ?? "",
       ordem: Number(ex.ordem ?? idx + 1),
+
+      tipoExecucao:
+        String(ex.duracao ?? "").trim() !== "" ? "duracao" : "repeticao",
+
       videoUrl:
         ex.videoDemonstrativoUrl ??
         ex.videoUrl ??
@@ -2190,18 +2517,33 @@ useEffect(() => {
         ex.exercicioTemporario?.videoDemonstrativoUrl ??
         ex.exercicio?.videoDemonstrativoUrl ??
         null,
+
+      videoDemonstrativoUrl:
+        ex.videoDemonstrativoUrl ??
+        ex.videoUrl ??
+        ex.exercicioPersonalizado?.videoDemonstrativoUrl ??
+        ex.exercicioTemporario?.videoDemonstrativoUrl ??
+        ex.exercicio?.videoDemonstrativoUrl ??
+        null,
+
       videoPosterUrl:
         ex.videoPosterUrl ??
         ex.exercicioPersonalizado?.videoPosterUrl ??
+        ex.exercicioTemporario?.videoPosterUrl ??
+        ex.exercicio?.videoPosterUrl ??
         null,
+
       nivel:
         ex.nivel ??
         ex.exercicioPersonalizado?.nivel ??
+        ex.exercicioTemporario?.nivel ??
         ex.exercicio?.nivel ??
         null,
+
       categorias:
         ex.categorias ??
         ex.exercicioPersonalizado?.categorias ??
+        ex.exercicioTemporario?.categorias ??
         ex.exercicio?.categorias ??
         [],
     }));
@@ -2355,10 +2697,6 @@ useEffect(() => {
   }, [professorLogadoId]);
 
   const [completedUntil, setCompletedUntil] = useState<number>(1);
-  const goTo = (n: number) => {
-    setEtapa(n);
-    setCompletedUntil((prev) => Math.max(prev, n));
-  };
 
   function normalizaNome(n?: string) {
     return (n || "").trim().toLowerCase();
@@ -2563,6 +2901,7 @@ useEffect(() => {
         videoPosterUrl: null,
         categorias: [],
         origem: "temporario",
+        tipoExecucao: "repeticao",
       },
     ]);
   };
@@ -2600,13 +2939,23 @@ useEffect(() => {
   };
 
   function adicionarExercicioExistente(ex: any) {
+    const origem = String(ex.origem ?? ex.tipo ?? "").toLowerCase();
+
+    const ehPersonalizado =
+      origem === "personalizado" ||
+      !!ex.exercicioPersonalizadoId;
+
     setExerciciosSelecionados((prev) => [
       ...prev,
       {
         idLocal: crypto.randomUUID(),
-        idCatalogo: String(ex.id ?? ""),
-        exercicioId: String(ex.id ?? ""),
-        exercicioPersonalizadoId: null,
+
+        idCatalogo: ehPersonalizado ? null : String(ex.exercicioId ?? ex.id ?? ""),
+        exercicioId: ehPersonalizado ? null : String(ex.exercicioId ?? ex.id ?? ""),
+        exercicioPersonalizadoId: ehPersonalizado
+          ? String(ex.exercicioPersonalizadoId ?? ex.id ?? "")
+          : null,
+
         nome: ex.nome ?? "Exercício",
         descricao: ex.objetivo ?? ex.descricao ?? "",
         objetivo: ex.objetivo ?? null,
@@ -2615,7 +2964,6 @@ useEffect(() => {
         videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
         videoPosterUrl: ex.videoPosterUrl ?? null,
 
-        // ✅ agora traz os valores já existentes do exercício
         series:
           typeof ex.series === "number"
             ? ex.series
@@ -2623,22 +2971,20 @@ useEffect(() => {
             ? Number(ex.series)
             : null,
 
-        repeticoes:
-          ex.repeticoes != null ? String(ex.repeticoes) : "",
-
-        duracao:
-          ex.duracao != null ? String(ex.duracao) : "",
-
-        descanso:
-          ex.descanso != null ? String(ex.descanso) : "",
-
+        repeticoes: ex.repeticoes != null ? String(ex.repeticoes) : "",
+        duracao: ex.duracao != null ? String(ex.duracao) : "",
+        descanso: ex.descanso != null ? String(ex.descanso) : "",
         ordem: prev.length + 1,
+
         categorias: Array.isArray(ex.categorias)
           ? ex.categorias
           : Array.isArray(ex.categoria)
           ? ex.categoria
           : [],
-        origem: "catalogo",
+
+        origem: ehPersonalizado ? "personalizado" : "catalogo",
+        tipo: ehPersonalizado ? "personalizado" : "catalogo",
+        tipoExecucao: ex.duracao ? "duracao" : "repeticao",
       },
     ]);
   }
@@ -3004,10 +3350,10 @@ useEffect(() => {
             nome: nomeTemp || e.nome,
             ordem: e.ordem ?? idx + 1,
             descricao:
-              typeof (e as any).objetivo === "string"
-                ? (e as any).objetivo
-                : typeof e.descricao === "string"
-                ? e.descricao
+              typeof e.descricao === "string" && e.descricao.trim()
+                ? e.descricao.trim()
+                : typeof (e as any).objetivo === "string" && (e as any).objetivo.trim()
+                ? (e as any).objetivo.trim()
                 : null,
             videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null, // ✅ mantém vídeo também
             repeticoes:
@@ -3056,9 +3402,10 @@ useEffect(() => {
       (payload as any).objetivo = (metas ?? "").trim() || null;
       (payload as any).tipoUsuario = tipoUsuarioNorm;            
       (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor || tipoUsuarioId);
-      // ✅ define se o treino é "Footera" (público/parceiro) ou normal
-      // (o backend pode usar "publico" e/ou "parceiro" — mandamos ambos pra garantir)
-      // ✅ segurança extra: se não é parceiro, força false
+      (payload as any).sessaoTreino =
+        sessaoTreino === "Outro"
+          ? sessaoOutro.trim()
+          : sessaoTreino;
       const treinoFooteraFinal = isParceiro ? Boolean(treinoFootera) : false;
       if (!isParceiro && treinoFootera) setTreinoFootera(false);
 
@@ -3095,66 +3442,69 @@ useEffect(() => {
             ? String(posterRaw)
             : null;
 
-        const forcePersonalizado =
-          !!videoFinal || !!posterFinal || !!String(e.exercicioPersonalizadoId ?? "").trim();
+        const seriesFinal =
+          typeof e.series === "number"
+            ? e.series
+            : e.series != null && String(e.series).trim()
+            ? parseInt(String(e.series), 10) || null
+            : null;
 
-        // nome fallback (importante quando forçar personalizado mesmo tendo exercicioId)
-        const nomeFinal =
-          String(e.nome || "").trim() ||
-          String(e.exercicio?.nome || "").trim() ||
-          String(e.nomeCatalogo || "").trim() ||
-          "";
+        const duracaoFinal =
+          e.duracao != null && String(e.duracao).trim()
+            ? String(e.duracao).trim()
+            : null;
 
-        if (e.exercicioId && !forcePersonalizado) {
+        const descansoFinal =
+          e.descanso != null && String(e.descanso).trim()
+            ? String(e.descanso).trim()
+            : null;
+
+        const descricaoFinal =
+          String(
+            e.descricaoExecucao ??
+            e.descricao ??
+            e.observacao ??
+            e.objetivo ??
+            ""
+          ).trim() || null;
+
+        // Se tem exercicioId (catálogo), sempre envia — independente de ter vídeo/personalizado
+        if (e.exercicioId) {
           return {
             exercicioId: String(e.exercicioId),
-            ordem: Number(e.ordem ?? idx + 1),
+            exercicioPersonalizadoId: null,
+            exercicioTemporarioId: e.exercicioTemporarioId ?? null,
+            nome: typeof e.nome === "string" && e.nome.trim() ? e.nome.trim() : null,
+            descricao: typeof e.descricao === "string" && e.descricao.trim() ? e.descricao.trim() : null,
+            videoDemonstrativoUrl: videoFinal,
+            videoPosterUrl: posterFinal,
             repeticoes: repeticoesFinal,
-            series:
-              typeof e.series === "number"
-                ? e.series
-                : e.series != null && String(e.series).trim() !== ""
-                ? parseInt(String(e.series), 10)
-                : null,
-            duracao:
-              e.duracao != null && String(e.duracao).trim() !== ""
-                ? String(e.duracao).trim()
-                : null,
-            descanso:
-              e.descanso != null && String(e.descanso).trim() !== ""
-                ? String(e.descanso).trim()
-                : null,
-            observacao: e.observacao ?? null,
+            series: seriesFinal,
+            duracao: duracaoFinal,
+            descanso: descansoFinal,
+            ordem: Number.isFinite(Number(e.ordem)) ? Number(e.ordem) : idx + 1,
+            nivel: e.nivel ?? null,
+            categorias: Array.isArray(e.categorias) ? e.categorias : [],
           };
         }
 
+        // Exercício personalizado ou novo customizado
         return {
+          exercicioId: null,
           nome: String(e.nome || "").trim(),
-          descricao: String((e as any).objetivo || e.descricao || "").trim() || null,
           nivel: e.nivel ?? null,
           categorias: Array.isArray(e.categorias) ? e.categorias : [],
           ordem: Number(e.ordem ?? idx + 1),
           repeticoes: repeticoesFinal,
-          series:
-            typeof e.series === "number"
-              ? e.series
-              : e.series != null && String(e.series).trim() !== ""
-              ? parseInt(String(e.series), 10)
-              : null,
-          duracao:
-            e.duracao != null && String(e.duracao).trim() !== ""
-              ? String(e.duracao).trim()
-              : null,
-          descanso:
-            e.descanso != null && String(e.descanso).trim() !== ""
-              ? String(e.descanso).trim()
-              : null,
-          observacao: e.observacao ?? null,
+          series: seriesFinal,
+          duracao: duracaoFinal,
+          descanso: descansoFinal,
+          descricao: descricaoFinal,
           exercicioPersonalizadoId: e.exercicioPersonalizadoId
             ? String(e.exercicioPersonalizadoId)
             : null,
-          videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
-          videoPosterUrl: e.videoPosterUrl ?? null,
+          videoDemonstrativoUrl: videoFinal,
+          videoPosterUrl: posterFinal,
         };
       });
 
@@ -3353,9 +3703,21 @@ useEffect(() => {
         return;
       }
 
-      // fallback normal
-      const msgErro = data?.message || e?.message || "Falha inesperada ao criar treino.";
+      const msgErro =
+        data?.message ||
+        e?.message ||
+        "Falha inesperada ao criar treino.";
+
       console.error("[NovoTreino] erro criar treino:", data || e);
+
+      if (data?.code === "TREINO_NOME_DUPLICADO_DO_MESMO_DONO") {
+        alert(
+          data?.message ||
+            "Esse treino não pode ser criado porque você já possui um treino com esse nome. Se quiser criar, mude o nome do treino."
+        );
+        return;
+      }
+
       showToast(msgErro, "error");
     } finally {
       criandoTreinoRef.current = false;
@@ -3458,21 +3820,41 @@ useEffect(() => {
     );
 
   if (usuario.tipo === "atleta") {
-    const treinosMeuProfessorBrutos =
-      professorVinculadoIds.length === 0
-        ? []
-        : treinosDisponiveis.filter((t) => {
-            const criadoresIds = (t.criadores || []).map((c) => String(c.id));
-            const criadorId = t.criador?.id ? String(t.criador.id) : "";
-            const todos = new Set<string>([...criadoresIds, ...(criadorId ? [criadorId] : [])]);
-            return professorVinculadoIds.some((pid) => todos.has(String(pid)));
-          });
+    const normalizarBusca = (v: string) =>
+      String(v || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
 
-    const treinosMeuProfessor = treinosMeuProfessorBrutos;
+    const termoBusca = normalizarBusca(buscaTreinoAtleta);
+
+    const treinosMeuProfessor = treinosDisponiveis;
+
     const treinosParceirosFootera = treinosFootera;
 
-    const listaAtiva =
-      abaTreinosAtleta === "meu_professor" ? treinosMeuProfessor : treinosParceirosFootera;
+    const listaBase =
+      abaTreinosAtleta === "meu_professor"
+        ? treinosMeuProfessor
+        : treinosParceirosFootera;
+
+    const listaAtiva = termoBusca
+      ? listaBase.filter((t) => {
+          const nomesCriadores = [
+            t.criador?.nome,
+            t.criadorNome,
+            ...(t.criadores || []).map((c) => c.nome),
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          const textoBusca = normalizarBusca(
+            `${t.nome || ""} ${t.descricao || ""} ${nomesCriadores}`
+          );
+
+          return textoBusca.includes(termoBusca);
+        })
+      : listaBase;
 
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
@@ -3500,12 +3882,18 @@ useEffect(() => {
                 : "bg-white text-green-900 border-green-200 hover:bg-green-50",
             ].join(" ")}
           >
-            Meu professor
+            Meus vinculados
           </button>
 
           <button
             type="button"
-            onClick={() => setAbaTreinosAtleta("footera")}
+            onClick={async () => {
+              setAbaTreinosAtleta("footera");
+
+              if (!assinaturaChecada) {
+                await checarAssinaturaAtletaPro();
+              }
+            }}
             className={[
               "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
               abaTreinosAtleta === "footera"
@@ -3516,19 +3904,60 @@ useEffect(() => {
             Professores Footera
           </button>
         </div>
+          {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
+            <div className="relative mb-4">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
-        {listaAtiva.length === 0 ? (
+              <input
+                value={buscaTreinoAtleta}
+                onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
+                placeholder={
+                  abaTreinosAtleta === "meu_professor"
+                    ? "Pesquisar por treino, professor, clube ou escolinha..."
+                    : "Pesquisar por treino ou professor Footera..."
+                }
+                className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
+              />
+            </div>
+          )}
+
+          {abaTreinosAtleta === "footera" && carregandoAssinatura ? (
+            <div className="bg-white border rounded-xl p-5 text-center text-gray-700">
+              Verificando sua assinatura...
+            </div>
+          ) : abaTreinosAtleta === "footera" && assinaturaChecada && !isAtletaPro ? (
+            <div className="bg-white border border-amber-200 rounded-xl p-5 text-center shadow-sm">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <CalendarIcon className="h-6 w-6" />
+              </div>
+
+              <h3 className="text-lg font-bold text-green-900 mb-2">
+                Treinos FootEra disponíveis apenas para assinantes
+              </h3>
+
+              <p className="text-sm text-gray-700 mb-4">
+                Você ainda não possui assinatura ativa. Por enquanto, você pode agendar apenas
+                os treinos dos seus professores, clubes ou escolinhas vinculados.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setAbaTreinosAtleta("meu_professor")}
+                className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              >
+                Voltar para meus treinos
+              </button>
+            </div>
+          ) : listaAtiva.length === 0 ? (
           <div className="text-gray-600 bg-white border rounded-xl p-4">
             {abaTreinosAtleta === "meu_professor" ? (
               <>
-                {professorVinculadoIds.length === 0 ? (
-                  <p>
-                    Você ainda não possui <b>professor vinculado</b>. Assim que houver vínculo,
-                    os treinos dele aparecerão aqui.
-                  </p>
+                {buscaTreinoAtleta.trim() ? (
+                  <p>Nenhum treino encontrado para essa busca.</p>
                 ) : (
                   <p>
-                    Nenhum treino do seu professor está disponível para agendar no momento.
+                    Nenhum treino dos seus professores, clubes ou escolinhas vinculados está
+                    disponível para agendar no momento.
                   </p>
                 )}
               </>
@@ -3570,6 +3999,19 @@ useEffect(() => {
               <p className="text-sm">
                 <strong>Nível:</strong> {t.nivel}
               </p>
+
+              {(t.sessaoTreinoNome || t.sessaoTreino?.nome) ? (
+                <p className="text-sm">
+                  <strong>Sessão:</strong>{" "}
+                  {t.sessaoTreinoNome || t.sessaoTreino?.nome}
+                </p>
+              ) : null}
+
+              {t.tipoTreino ? (
+                <p className="text-sm">
+                  <strong>Tipo do treino:</strong> {t.tipoTreino}
+                </p>
+              ) : null}
 
               {t.criadores?.length ? (
                 <p className="text-sm mt-1">
@@ -3803,7 +4245,7 @@ useEffect(() => {
             )}
 
             <label className="block text-sm text-gray-700 mb-1">
-              Título do Treino
+              Título do Treino*
             </label>
             <input
               className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -3813,7 +4255,7 @@ useEffect(() => {
             />
 
             <label className="block text-sm text-gray-700 mb-1">
-              Descrição
+              Descrição (opcional)
             </label>
             <textarea
               className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -3825,7 +4267,7 @@ useEffect(() => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
-                  Tipo do Treino
+                  Tipo do Treino*
                 </label>
                 <select
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -3843,7 +4285,7 @@ useEffect(() => {
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
-                  Duração do Treino (minutos)
+                  Duração do Treino (minutos)*
                 </label>
                 <input
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
@@ -3859,7 +4301,7 @@ useEffect(() => {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm text-gray-700 mb-1">
-                    Nível do Treino
+                    Nível do Treino*
                   </label>
 
                   <select
@@ -3876,9 +4318,37 @@ useEffect(() => {
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Sessão do Treino*
+                  </label>
+
+                  <select
+                    className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
+                    value={sessaoTreino}
+                    onChange={(e) => setSessaoTreino(e.target.value)}
+                  >
+                    {sessoesTreino.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="Outro">Outro</option>
+                  </select>
+
+                  {sessaoTreino === "Outro" && (
+                    <input
+                      className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
+                      placeholder="Digite o nome da nova sessão"
+                      value={sessaoOutro}
+                      onChange={(e) => setSessaoOutro(e.target.value)}
+                    />
+                  )}
+                </div>
+
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
-                  Professores realizadores (colaboradores)
+                  Professores realizadores (colaboradores) (opcional)
                 </label>
 
                 <div className="border rounded p-2">
@@ -4157,59 +4627,99 @@ useEffect(() => {
                             <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">
                               {descFinal || " "}
                             </p>
-                          ) : (
+                          ) : ex.origem === "temporario" ? null : (
                             <textarea
                               className="border w-full mb-2 p-1 rounded"
                               placeholder="Descrição"
                               value={ex.descricao || ""}
                               onChange={(e) =>
-                                atualizarExercicio(
-                                  i,
-                                  "descricao",
-                                  e.target.value,
-                                )
+                                atualizarExercicio(i, "descricao", e.target.value)
                               }
                             />
                           )}
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Séries</label>
-                              <input
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder="ex.: 3"
-                                value={ex.series ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "series", e.target.value)}
-                              />
+                            <div className="md:col-span-2 flex gap-2 mb-1">
+                              <button
+                                type="button"
+                                onClick={() => atualizarExercicio(i, "tipoExecucao", "repeticao")}
+                                className={`px-3 py-1 rounded ${
+                                  ex.tipoExecucao === "repeticao"
+                                    ? "bg-green-600 text-white"
+                                    : "bg-gray-200 text-gray-700"
+                                }`}
+                              >
+                                Série / Repetição
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => atualizarExercicio(i, "tipoExecucao", "duracao")}
+                                className={`px-3 py-1 rounded ${
+                                  ex.tipoExecucao === "duracao"
+                                    ? "bg-green-600 text-white"
+                                    : "bg-gray-200 text-gray-700"
+                                }`}
+                              >
+                                Duração
+                              </button>
                             </div>
 
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Repetições</label>
-                              <input
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder="ex.: 12"
-                                value={ex.repeticoes ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "repeticoes", e.target.value)}
-                              />
-                            </div>
+                            {ex.tipoExecucao === "repeticao" ? (
+                              <>
+                                <div>
+                                  <label className="block text-sm text-zinc-700 mb-1">Séries</label>
+                                  <input
+                                    type="number"
+                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                    placeholder="ex.: 3"
+                                    value={ex.series ?? ""}
+                                    onChange={(e) => atualizarExercicio(i, "series", e.target.value)}
+                                  />
+                                </div>
 
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Duração</label>
-                              <input
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder="ex.: 2min"
-                                value={ex.duracao ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "duracao", e.target.value)}
-                              />
-                            </div>
+                                <div>
+                                  <label className="block text-sm text-zinc-700 mb-1">Repetições</label>
+                                  <input
+                                    type="text"
+                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                    placeholder="ex.: 12"
+                                    value={ex.repeticoes ?? ""}
+                                    onChange={(e) => atualizarExercicio(i, "repeticoes", e.target.value)}
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <div className="md:col-span-2">
+                                <label className="block text-sm text-zinc-700 mb-1">Duração</label>
+                                <input
+                                  type="text"
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+                                  placeholder="ex.: 2min"
+                                  value={ex.duracao ?? ""}
+                                  onChange={(e) => atualizarExercicio(i, "duracao", e.target.value)}
+                                />
+                              </div>
+                            )}
 
-                            <div>
-                              <label className="block text-sm text-zinc-700 mb-1">Descanso</label>
+                            <div className={ex.tipoExecucao === "duracao" ? "md:col-span-2" : ""}>
+                              <label className="block text-sm text-zinc-700 mb-1">Descanso (opcional)</label>
                               <input
+                                type="text"
                                 className="w-full rounded-lg border border-zinc-300 px-3 py-2"
                                 placeholder="ex.: 30seg"
                                 value={ex.descanso ?? ""}
-                                onChange={(e) => atualizarCampoExercicio(ex.idLocal, "descanso", e.target.value)}
+                                onChange={(e) => atualizarExercicio(i, "descanso", e.target.value)}
+                              />
+                            </div>
+
+                            <div className="md:col-span-2">
+                              <label className="block text-sm text-zinc-700 mb-1">Descrição (opcional)</label>
+                              <textarea
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 min-h-[90px]"
+                                placeholder="Descreva instruções, observações ou detalhes do exercício"
+                                value={ex.descricao ?? ""}
+                                onChange={(e) => atualizarExercicio(i, "descricao", e.target.value)}
                               />
                             </div>
                           </div>
@@ -5097,7 +5607,7 @@ useEffect(() => {
               type="button"
               onClick={() => {
                 if (etapa === 1) navigate("/treinos");
-                else goTo(etapa - 1);
+                else irParaEtapa(etapa - 1);
               }}
               className="px-3 sm:px-4 py-2 rounded-xl bg-gray-200 text-gray-900 shrink-0"
             >
@@ -5107,7 +5617,12 @@ useEffect(() => {
             <div className="flex-1 min-w-0">
               <div className="overflow-x-auto">
                 <div className="min-w-max">
-                  <Stepper steps={steps} current={etapa} onJump={goTo} completedUntil={completedUntil} />
+                  <Stepper
+                    steps={steps}
+                    current={etapa}
+                    onJump={irParaEtapa}
+                    completedUntil={completedUntil}
+                  />
                 </div>
               </div>
             </div>
@@ -5115,7 +5630,7 @@ useEffect(() => {
             {etapa < 3 ? (
               <button
                 type="button"
-                onClick={() => goTo(etapa + 1)}
+                onClick={() => irParaEtapa(etapa + 1)}
                 className="px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0"
               >
                 Próximo
@@ -5225,10 +5740,23 @@ useEffect(() => {
           </div>
         </div>
       )}
-      
-    
-      <BottomNav />
-      
+      {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
+        <div className="relative mb-4">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+          <input
+            value={buscaTreinoAtleta}
+            onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
+            placeholder={
+              abaTreinosAtleta === "meu_professor"
+                ? "Pesquisar por treino, professor, clube ou escolinha..."
+                : "Pesquisar por treino ou professor Footera..."
+            }
+            className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
+          />
+        </div>
+      )}
+      <BottomNav />     
     </div>
   );
 }

@@ -54,65 +54,76 @@ model Usuario {
   blockedAt                 DateTime?
   blockedReason             String?
   reactivatedAt             DateTime?
+  learningProfile           LearningProfile?
+  federacao                 Federacao?
+  marca                     Marca?
 
-  amigosDe                Amigo[]                   @relation("AmigoUsuario")
-  amigos                  Amigo[]                   @relation("UsuarioAmigo")
-  atividadesRecentes      AtividadeRecente[]
-  atleta                  Atleta?
-  certificadosMetodologia CertificadoMetodologia[]
-  clube                   Clube?
-  comentarios             Comentario[]
-  curtidas                Curtida[]
-  desafiosCriados         DesafioEmGrupo[]          @relation("CriadorDesafioEmGrupo")
-  escolinha               Escolinha?
-  favoritadoPor           FavoritoUsuario[]         @relation("UsuarioFavorito")
-  favoritos               FavoritoUsuario[]         @relation("UsuarioFavoritador")
-  gruposDono              Grupo[]                   @relation("GruposQuePossuo")
-  logsErro                LogErro[]
-  MembroGrupo             MembroGrupo[]
-  mensagensEnviadas       Mensagem[]                @relation("MensagensEnviadas")
-  mensagensRecebidas      Mensagem[]                @relation("MensagensRecebidas")
-  mensagensReferenciando  Mensagem[]                @relation("UsuarioMensagemReferencia")
-  MensagemGrupo           MensagemGrupo[]
-  olheiro                 Olheiro?
-  PasswordReset           PasswordReset[]
-  postagens               Postagem[]
-  professor               Professor?
-  seguidores              Seguidor[]                @relation("Seguido")
-  seguindo                Seguidor[]                @relation("Seguidor")
-  solicitacoesRecebidas   SolicitacaoTreino[]       @relation("SolicitacoesRecebidas")
-  solicitacoesEnviadas    SolicitacaoTreino[]       @relation("SolicitacoesEnviadas")
-  submissaoDesafios       SubmissaoDesafio[]
-  submissaoEmGrupo        SubmissaoDesafioEmGrupo[]
-  submissaoTreinos        SubmissaoTreino[]
-  treinoRealizado         TreinoRealizado[]
-  desafiosEmGrupo         DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
-  Consentimento           Consentimento[]
-  Turmas                  TurmaUsuario[]
-  TreinoUsuario           TreinoUsuario[]
-  SubmissionChecklist     SubmissionChecklist[]
-  TreinoSalvo             TreinoSalvo[]
-  TreinoRotina            TreinoRotina[]
-  Pagamento               Pagamento[]
-  Cupom                   Cupom[]
-  CupomResgate            CupomResgate[]
-  LogAuditoria            LogAuditoria[]
-  inscricoesEvento        InscricaoEvento[]
-  convitesEvento          InscricaoEvento[]         @relation("ConvitesEvento")
-  feedbacks               Feedback[]
-  SessaoTreinoTurma       SessaoTreinoTurma[]
-  notificacoes            Notificacao[]             @relation("NotificacaoUsuario")
-  notificacoesGeradas     Notificacao[]             @relation("NotificacaoActor")
-  AvaliacaoTreino         AvaliacaoTreino[]
-  AvaliacaoMetodologia    AvaliacaoMetodologia[]
-  treinosCriadosComoAdmin TreinoProgramado[]        @relation("TreinoProgramadoCriadorUsuario")
-
-  metodologiasCriadas        Metodologia[]          @relation("MetodologiaCriador")
-  metodologiasAssinadas      MetodologiaAssinante[]
-  metodologiasAvulsasCriadas MetodologiaAvulsa[]    @relation("MetodologiaAvulsaCriador")
-
-  LoginEvent             LoginEvent[]
-  ExercicioPersonalizado ExercicioPersonalizado[]
+  amigosDe                        Amigo[]                    @relation("AmigoUsuario")
+  amigos                          Amigo[]                    @relation("UsuarioAmigo")
+  atividadesRecentes              AtividadeRecente[]
+  atleta                          Atleta?
+  certificadosMetodologia         CertificadoMetodologia[]
+  clube                           Clube?
+  comentarios                     Comentario[]
+  curtidas                        Curtida[]
+  desafiosCriados                 DesafioEmGrupo[]           @relation("CriadorDesafioEmGrupo")
+  escolinha                       Escolinha?
+  favoritadoPor                   FavoritoUsuario[]          @relation("UsuarioFavorito")
+  favoritos                       FavoritoUsuario[]          @relation("UsuarioFavoritador")
+  gruposDono                      Grupo[]                    @relation("GruposQuePossuo")
+  logsErro                        LogErro[]
+  MembroGrupo                     MembroGrupo[]
+  mensagensEnviadas               Mensagem[]                 @relation("MensagensEnviadas")
+  mensagensRecebidas              Mensagem[]                 @relation("MensagensRecebidas")
+  mensagensReferenciando          Mensagem[]                 @relation("UsuarioMensagemReferencia")
+  MensagemGrupo                   MensagemGrupo[]
+  olheiro                         Olheiro?
+  PasswordReset                   PasswordReset[]
+  postagens                       Postagem[]
+  professor                       Professor?
+  seguidores                      Seguidor[]                 @relation("Seguido")
+  seguindo                        Seguidor[]                 @relation("Seguidor")
+  solicitacoesRecebidas           SolicitacaoTreino[]        @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas            SolicitacaoTreino[]        @relation("SolicitacoesEnviadas")
+  submissaoDesafios               SubmissaoDesafio[]
+  submissaoEmGrupo                SubmissaoDesafioEmGrupo[]
+  submissaoTreinos                SubmissaoTreino[]
+  treinoRealizado                 TreinoRealizado[]
+  desafiosEmGrupo                 DesafioEmGrupo[]           @relation("MembrosDesafioEmGrupo")
+  Consentimento                   Consentimento[]
+  Turmas                          TurmaUsuario[]
+  TreinoUsuario                   TreinoUsuario[]
+  SubmissionChecklist             SubmissionChecklist[]
+  TreinoSalvo                     TreinoSalvo[]
+  TreinoRotina                    TreinoRotina[]
+  Pagamento                       Pagamento[]
+  Cupom                           Cupom[]
+  CupomResgate                    CupomResgate[]
+  LogAuditoria                    LogAuditoria[]
+  inscricoesEvento                InscricaoEvento[]
+  convitesEvento                  InscricaoEvento[]          @relation("ConvitesEvento")
+  feedbacks                       Feedback[]
+  SessaoTreinoTurma               SessaoTreinoTurma[]
+  notificacoes                    Notificacao[]              @relation("NotificacaoUsuario")
+  notificacoesGeradas             Notificacao[]              @relation("NotificacaoActor")
+  AvaliacaoTreino                 AvaliacaoTreino[]
+  AvaliacaoMetodologia            AvaliacaoMetodologia[]
+  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]      @relation("AulaAoVivoConvidadoUsuario")
+  treinosCriadosComoAdmin         TreinoProgramado[]         @relation("TreinoProgramadoCriadorUsuario")
+  aulasAoVivoComoConvidado        AulaAoVivo[]               @relation("AulaAoVivoConvidado")
+  creator                         Creator?
+  comprasCreator                  CreatorVenda[]             @relation("CreatorVendaComprador")
+  metodologiasCriadas             Metodologia[]              @relation("MetodologiaCriador")
+  metodologiasAssinadas           MetodologiaAssinante[]
+  metodologiasAvulsasCriadas      MetodologiaAvulsa[]        @relation("MetodologiaAvulsaCriador")
+  aulasAoVivoAcessos              AulaAoVivoAcesso[]
+  LoginEvent                      LoginEvent[]
+  ExercicioPersonalizado          ExercicioPersonalizado[]
+  MetodologiaItemSubmissao        MetodologiaItemSubmissao[]
+  aulasAoVivoCriadas              AulaAoVivo[]               @relation("AulaAoVivoCriador")
+  aulasAoVivoMensagens            AulaAoVivoMensagem[]       @relation("AulaAoVivoMensagemUsuario")
+  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]       @relation("AulaAoVivoMensagemDeletadaPor")
+  aulasAoVivoPresencas            AulaAoVivoPresenca[]       @relation("AulaAoVivoPresencaUsuario")
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -195,6 +206,7 @@ model Professor {
   statusCref          StatusCref?
   qualificacoes       String[]
   certificacoes       String[]
+  descricao           String?
   email               String?              @db.VarChar(191)
   observacoes         AtletaObservado[]    @relation("ObservacaoProfessor")
   usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -301,23 +313,24 @@ model Amigo {
 }
 
 model Olheiro {
-  id                     String   @id @default(uuid())
-  usuarioId              String   @unique
+  id                     String    @id @default(uuid())
+  usuarioId              String    @unique
   fotoUrl                String?
   headline               String?
   descricao              String?
   areaAtuacao            String?
-  anosExperiencia        Int      @default(0)
+  anosExperiencia        Int       @default(0)
   emailPublico           String?
   telefonePublico        String?
   siteOuLinkedin         String?
   colaboracaoClubeId     String?
   colaboracaoProfessorId String?
   colaboracaoEscolinhaId String?
-  reputacaoScore         Int      @default(0)
-  totalIndicacoes        Int      @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  dataNascimento         DateTime?
+  reputacaoScore         Int       @default(0)
+  totalIndicacoes        Int       @default(0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   AtletaObservado AtletaObservado[]
   Indicacao       Indicacao[]
@@ -423,7 +436,7 @@ model Atleta {
 model TreinoProgramado {
   id           String                @id @default(uuid())
   codigo       String?
-  nome         String                @unique
+  nome         String
   descricao    String?
   nivel        Nivel
   createdAt    DateTime              @default(now())
@@ -469,9 +482,22 @@ model TreinoProgramado {
   Professor                Professor?                 @relation(fields: [professorId], references: [id])
   professorId              String?
   MetodologiaEstruturaItem MetodologiaEstruturaItem[]
+  sessaoTreinoId           String?
+  sessaoTreino             TreinoSessao?              @relation(fields: [sessaoTreinoId], references: [id], onDelete: SetNull)
 
+  @@index([sessaoTreinoId])
   @@index([criadorProfessorId])
   @@index([criadorUsuarioId])
+}
+
+model TreinoSessao {
+  id              String   @id @default(uuid())
+  nome            String
+  nomeNormalizado String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  treinos TreinoProgramado[]
 }
 
 model TreinoProgramadoProfessor {
@@ -498,6 +524,7 @@ model TreinoProgramadoExercicio {
   series                   Int?
   duracao                  String?
   descanso                 String?
+  descricaoExecucao        String?
   exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
   exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
   treinoProgramado         TreinoProgramado        @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
@@ -567,8 +594,21 @@ model ExercicioPersonalizado {
   categorias            Categoria[] @default([])
   videoDemonstrativoUrl String?
   videoPosterUrl        String?
-  criadorUsuarioId      String
-  criadorUsuario        Usuario     @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+
+  tipo                 TipoExercicio?
+  modoExecucao         ModoExecucaoExercicio?
+  series               Int?
+  repeticoes           String?
+  duracao              String?
+  descanso             String?
+  tags                 String[]               @default([])
+  quantidadeAtletas    String?
+  materiaisNecessarios String?
+  espacoNecessario     EspacoExercicio?
+  favorito             Boolean                @default(false)
+
+  criadorUsuarioId String
+  criadorUsuario   Usuario @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -624,6 +664,7 @@ model Metodologia {
   geraCertificado  Boolean                  @default(false)
   geraBadge        Boolean                  @default(false)
   estruturas       MetodologiaEstrutura[]
+  vendasCreator    CreatorVenda[]
 
   professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
   clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -638,11 +679,18 @@ model Metodologia {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens             MetodologiaItem[]
-  assinantes        MetodologiaAssinante[]
-  MetodologiaTreino MetodologiaTreino[]
-  avaliacoes        AvaliacaoMetodologia[]
-  certificados      CertificadoMetodologia[]
+  itens                    MetodologiaItem[]
+  assinantes               MetodologiaAssinante[]
+  MetodologiaTreino        MetodologiaTreino[]
+  avaliacoes               AvaliacaoMetodologia[]
+  certificados             CertificadoMetodologia[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  aulasAoVivo AulaAoVivo[]
+  Federacao   Federacao?   @relation(fields: [federacaoId], references: [id])
+  federacaoId String?
+  Marca       Marca?       @relation(fields: [marcaId], references: [id])
+  marcaId     String?
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -678,8 +726,11 @@ model MetodologiaEstrutura {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens      MetodologiaEstruturaItem[]
-  progressos MetodologiaProgressoEstrutura[]
+  itens                    MetodologiaEstruturaItem[]
+  progressos               MetodologiaProgressoEstrutura[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  aulasAoVivo AulaAoVivo[]
 
   @@unique([metodologiaId, ordem])
   @@index([metodologiaId])
@@ -722,8 +773,11 @@ model MetodologiaEstruturaItem {
   obrigatorio Boolean @default(true)
   publicado   Boolean @default(true)
 
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  aulaAoVivo AulaAoVivo?
 
   @@unique([estruturaId, ordem])
   @@index([estruturaId])
@@ -781,6 +835,44 @@ model MetodologiaItem {
   @@index([metodologiaId])
   @@index([treinoProgramadoId])
   @@index([semana])
+}
+
+model MetodologiaItemSubmissao {
+  id String @id @default(uuid())
+
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+
+  estruturaId       String?
+  estruturaAvulsaId String?
+
+  itemId       String?
+  itemAvulsaId String?
+
+  usuarioId String
+
+  tipoItem   String
+  observacao String?
+  arquivoUrl String?
+  mimeType   String?
+  status     String  @default("ENVIADA")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metodologia       Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+
+  estrutura       MetodologiaEstrutura?       @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  estruturaAvulsa MetodologiaAvulsaEstrutura? @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+
+  item       MetodologiaEstruturaItem?       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemAvulsa MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([metodologiaId, estruturaId, itemId, usuarioId])
+  @@index([metodologiaAvulsaId, estruturaAvulsaId, itemAvulsaId, usuarioId])
 }
 
 model MetodologiaAssinante {
@@ -843,12 +935,25 @@ model MetodologiaAvulsa {
 
   precoAssinaturaMensal Decimal @db.Decimal(10, 2)
 
+  mediaAvaliacao Float?
+  totalReviews   Int    @default(0)
+
   estruturas   MetodologiaAvulsaEstrutura[]
   assinantes   MetodologiaAssinante[]
   certificados CertificadoMetodologia[]
 
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  aulasAoVivo AulaAoVivo[]
+
+  vendasCreator CreatorVenda[]
+
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  AvaliacaoMetodologia     AvaliacaoMetodologia[]
+  Federacao                Federacao?                 @relation(fields: [federacaoId], references: [id])
+  federacaoId              String?
+  Marca                    Marca?                     @relation(fields: [marcaId], references: [id])
+  marcaId                  String?
 
   @@index([criadorUsuarioId])
   @@index([ativo])
@@ -881,21 +986,24 @@ model MetodologiaAvulsaEstrutura {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  itens MetodologiaAvulsaEstruturaItem[]
+  itens                    MetodologiaAvulsaEstruturaItem[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  aulasAoVivo AulaAoVivo[]
 
   @@unique([metodologiaAvulsaId, ordem])
   @@index([metodologiaAvulsaId])
 }
 
 model MetodologiaAvulsaEstruturaItem {
-  id          String                     @id @default(uuid())
-  estruturaId String
-  estrutura   MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
-
-  ordem     Int
-  titulo    String
-  descricao String?
-  tipo      MetodologiaItemTipo
+  id                       String                     @id @default(uuid())
+  estruturaId              String
+  estrutura                MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  ordem                    Int
+  titulo                   String
+  descricao                String?
+  tipo                     MetodologiaItemTipo
 
   videoUrl    String?
   thumbUrl    String?
@@ -913,8 +1021,198 @@ model MetodologiaAvulsaEstruturaItem {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
+  aulaAoVivo AulaAoVivo?
+
   @@unique([estruturaId, ordem])
   @@index([estruturaId])
+}
+
+model AulaAoVivo {
+  id   String  @id @default(uuid())
+  slug String? @unique
+
+  titulo    String
+  descricao String?
+
+  status AulaAoVivoStatus @default(AGENDADA)
+
+  dataInicio      DateTime
+  dataFim         DateTime?
+  inscricaoInicio DateTime?
+  inscricaoFim    DateTime?
+  iniciouEm       DateTime?
+  finalizouEm     DateTime?
+  cancelouEm      DateTime?
+
+  // Dados da live
+  urlStream      String?
+  streamKey      String?
+  provedorStream String?
+
+  // Amazon IVS
+  ivsChannelArn     String?
+  ivsStreamKeyArn   String?
+  ivsIngestEndpoint String?
+
+  // NOVOS CAMPOS PARA GRAVAÇÃO IVS/S3
+  ivsRecordingConfigurationArn String?
+  ivsRecordingS3Prefix         String?
+  ivsRecordingStatus           String?
+  ivsRecordingId               String?
+
+  // Dados do replay depois que a live acabar
+  videoGravadoUrl String?
+  thumbUrl        String?
+  duracaoMin      Int?
+
+  // Controles
+  chatAtivo        Boolean @default(true)
+  gravacaoAtiva    Boolean @default(true)
+  replayDisponivel Boolean @default(false)
+
+  // Métricas simples
+  totalMensagens     Int @default(0)
+  totalParticipantes Int @default(0)
+
+  // Quem criou/agendou a aula
+  criadorUsuarioId String?
+  criadorUsuario   Usuario? @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
+
+  // Convidado da live/evento
+  convidadoUsuarioId String?
+  convidadoUsuario   Usuario?              @relation("AulaAoVivoConvidado", fields: [convidadoUsuarioId], references: [id], onDelete: SetNull)
+  convidadoNome      String?
+  convidadoDescricao String?
+  convidados         AulaAoVivoConvidado[]
+  // Learning normal
+  metodologiaId      String?
+  metodologia        Metodologia?          @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+
+  estruturaId String?
+  estrutura   MetodologiaEstrutura? @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+
+  itemId String?                   @unique
+  item   MetodologiaEstruturaItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Metodologia Avulsa
+  metodologiaAvulsaId String?
+  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+
+  estruturaAvulsaId String?
+  estruturaAvulsa   MetodologiaAvulsaEstrutura? @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+
+  itemAvulsaId String?                         @unique
+  itemAvulsa   MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+
+  precoAcesso Decimal? @db.Decimal(10, 2)
+  acessoPago  Boolean  @default(false)
+
+  mensagens AulaAoVivoMensagem[]
+  acessos   AulaAoVivoAcesso[]
+  presencas AulaAoVivoPresenca[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([status])
+  @@index([dataInicio])
+  @@index([criadorUsuarioId])
+  @@index([metodologiaId])
+  @@index([estruturaId])
+  @@index([metodologiaAvulsaId])
+  @@index([estruturaAvulsaId])
+  @@index([ivsRecordingId])
+}
+
+model AulaAoVivoAcesso {
+  id           String @id @default(uuid())
+  aulaAoVivoId String
+  usuarioId    String
+
+  status    String   @default("ATIVO")
+  origem    String   @default("PAGAMENTO")
+  valorPago Decimal? @db.Decimal(10, 2)
+
+  criadoEm DateTime  @default(now())
+  pagoEm   DateTime?
+  expiraEm DateTime?
+
+  aulaAoVivo AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([aulaAoVivoId, usuarioId])
+  @@index([usuarioId])
+  @@index([aulaAoVivoId])
+}
+
+model AulaAoVivoConvidado {
+  id String @id @default(uuid())
+
+  aulaAoVivoId String
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+
+  usuarioId String?
+  usuario   Usuario? @relation("AulaAoVivoConvidadoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  nome      String?
+  descricao String?
+
+  ordem Int @default(1)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+}
+
+model AulaAoVivoMensagem {
+  id String @id @default(uuid())
+
+  aulaAoVivoId String
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+
+  usuarioId String
+  usuario   Usuario @relation("AulaAoVivoMensagemUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  mensagem String
+  tipo     TipoMensagemLive @default(TEXTO)
+
+  // Para moderação: melhor ocultar do que apagar direto
+  deletada      Boolean   @default(false)
+  deletadaEm    DateTime?
+  deletadaPorId String?
+  deletadaPor   Usuario?  @relation("AulaAoVivoMensagemDeletadaPor", fields: [deletadaPorId], references: [id], onDelete: SetNull)
+
+  criadoEm DateTime @default(now())
+
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+  @@index([deletadaPorId])
+  @@index([criadoEm])
+}
+
+model AulaAoVivoPresenca {
+  id String @id @default(uuid())
+
+  aulaAoVivoId String
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+
+  usuarioId String
+  usuario   Usuario @relation("AulaAoVivoPresencaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  entrouEm     DateTime  @default(now())
+  ultimoPingEm DateTime  @default(now())
+  saiuEm       DateTime?
+
+  // Marca se esse usuário entrou enquanto a aula estava realmente AO_VIVO.
+  entrouAoVivo Boolean @default(false)
+
+  @@unique([aulaAoVivoId, usuarioId])
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+  @@index([ultimoPingEm])
+  @@index([entrouAoVivo])
 }
 
 model DesafioOficial {
@@ -1099,6 +1397,8 @@ model Escolinha {
   indicacoes             Indicacao[]
   Metodologia            Metodologia[]
   MetodologiaAvulsa      MetodologiaAvulsa[]
+  descricao              String?
+  categorias             Categoria[]
 }
 
 model Comentario {
@@ -1238,35 +1538,27 @@ model SubmissaoTreino {
 }
 
 model AvaliacaoTreino {
-  id String @id @default(uuid())
-
-  atletaId         String
-  treinoAgendadoId String
-
+  id                String               @id @default(uuid())
+  atletaId          String
+  treinoAgendadoId  String
   submissaoTreinoId String
-
-  autorTipo AvaliacaoAutorTipo
-  autorId   String
-
-  autorUsuarioId String?
-
-  nota              Int     @default(0)
-  concluiu          Boolean @default(true)
-  teveDificuldade   Boolean @default(false)
+  autorTipo         AvaliacaoAutorTipo
+  autorId           String
+  autorUsuarioId    String?
+  nota              Int                  @default(0)
+  concluiu          Boolean              @default(true)
+  teveDificuldade   Boolean              @default(false)
   dificuldadeMotivo String?
   motivoNaoConcluiu String?
+  sentimento        SentimentoAvaliacao?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  atleta         Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  treinoAgendado TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
-
-  submissaoTreino SubmissaoTreino @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
-
-  autorUsuario Usuario? @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
-
-  comentarios AvaliacaoTreinoComentario[]
+  atleta          Atleta                      @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoAgendado  TreinoAgendado              @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
+  submissaoTreino SubmissaoTreino             @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  autorUsuario    Usuario?                    @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
+  comentarios     AvaliacaoTreinoComentario[]
 
   @@unique([submissaoTreinoId, autorTipo, autorId])
   @@index([submissaoTreinoId])
@@ -1277,18 +1569,23 @@ model AvaliacaoTreino {
 }
 
 model AvaliacaoMetodologia {
-  id            String      @id @default(uuid())
-  metodologiaId String
-  usuarioId     String
-  nota          Int
-  comentario    String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                  String               @id @default(uuid())
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+  usuarioId           String
+  nota                Int
+  comentario          String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  sentimento          SentimentoAvaliacao?
+  metodologia         Metodologia?         @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa   MetodologiaAvulsa?   @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  usuario             Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([metodologiaId, usuarioId])
+  @@unique([metodologiaAvulsaId, usuarioId])
   @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
   @@index([usuarioId])
   @@index([createdAt])
 }
@@ -1441,7 +1738,7 @@ model TreinoAgendado {
   id                 String  @id @default(uuid())
   titulo             String
   local              String?
-  atletaId           String
+  atletaId           String?
   treinoProgramadoId String?
 
   dataTreino    DateTime?
@@ -1468,7 +1765,7 @@ model TreinoAgendado {
   finishedAt      DateTime?
   duracaoSegundos Int?
 
-  atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
   submissaoTreinos SubmissaoTreino[]
   avaliacaoTreino  AvaliacaoTreino[]
@@ -1698,28 +1995,35 @@ model AtletaElenco {
 }
 
 model Evento {
-  id              String       @id @default(uuid())
-  clubeId         String?
-  escolinhaId     String?
-  titulo          String
-  tipo            EventoTipo   @default(PENEIRA)
-  descricao       String?
-  dataEvento      DateTime
-  inscricaoInicio DateTime?
-  inscricaoFim    DateTime?
-  local           String?
-  cidade          String?
-  estado          String?
-  pais            String?
-  endereco        String?
-  vagas           Int?
-  valorInscricao  Decimal?     @db.Decimal(10, 2)
-  linkInscricao   String?
-  requisitos      String[]
-  status          EventoStatus @default(ABERTO)
-  criadoEm        DateTime     @default(now())
-  atualizadoEm    DateTime     @updatedAt
+  id               String       @id @default(uuid())
+  clubeId          String?
+  escolinhaId      String?
+  titulo           String
+  tipo             EventoTipo   @default(PENEIRA)
+  descricao        String?
+  dataEvento       DateTime
+  inscricaoInicio  DateTime?
+  inscricaoFim     DateTime?
+  local            String?
+  cidade           String?
+  estado           String?
+  pais             String?
+  endereco         String?
+  vagas            Int?
+  valorInscricao   Decimal?     @db.Decimal(10, 2)
+  linkInscricao    String?
+  requisitos       String[]
+  status           EventoStatus @default(ABERTO)
+  criadoEm         DateTime     @default(now())
+  atualizadoEm     DateTime     @updatedAt
+  creatorUsuarioId String?
+  creatorTipo      String?
 
+  federacaoId String?
+  federacao   Federacao? @relation(fields: [federacaoId], references: [id])
+
+  marcaId          String?
+  marca            Marca?             @relation(fields: [marcaId], references: [id])
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   inscricoes       InscricaoEvento[]
@@ -1973,13 +2277,13 @@ model Consentimento {
 }
 
 model Turma {
-  id          String     @id @default(uuid())
+  id          String      @id @default(uuid())
   nome        String
-  categoria   String?
+  categoria   Categoria[] @default([])
   descricao   String?
-  ativo       Boolean    @default(true)
+  ativo       Boolean     @default(true)
   escolinhaId String?
-  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  escolinha   Escolinha?  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
 
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -2524,10 +2828,17 @@ model ConquistaVinculo {
   ownerTipo   ConquistaOwnerTipo
   ownerId     String
 
-  atletaId    String?
-  professorId String?
-  clubeId     String?
-  escolinhaId String?
+  atletaId          String?
+  professorId       String?
+  clubeId           String?
+  escolinhaId       String?
+  learningProfileId String?
+  marcaId           String?
+  federacaoId       String?
+
+  learningProfile LearningProfile? @relation(fields: [learningProfileId], references: [id], onDelete: SetNull)
+  marca           Marca?           @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+  federacao       Federacao?       @relation(fields: [federacaoId], references: [id], onDelete: SetNull)
 
   conquistadoEm DateTime?
   progresso     Int       @default(0)
@@ -2563,6 +2874,176 @@ model LoginEvent {
 
   @@index([usuarioId, createdAt])
   @@index([createdAt])
+}
+
+model Creator {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nomePublico  String?
+  headline     String?
+  bio          String?
+  nicho        String?
+  avatarUrl    String?
+  bannerUrl    String?
+  siteUrl      String?
+  instagramUrl String?
+  youtubeUrl   String?
+
+  tipo               CreatorTipo @default(PESSOA_FISICA)
+  ativo              Boolean     @default(true)
+  verificado         Boolean     @default(false)
+  instituicaoOficial Boolean     @default(false)
+  views              Int         @default(0)
+  comissaoFootera    Decimal     @default(0.15) @db.Decimal(5, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendas CreatorVenda[]
+
+  @@index([usuarioId])
+  @@index([ativo])
+  @@index([tipo])
+}
+
+model CreatorVenda {
+  id String @id @default(uuid())
+
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  compradorId String?
+  comprador   Usuario? @relation("CreatorVendaComprador", fields: [compradorId], references: [id], onDelete: SetNull)
+
+  metodologiaId String?
+  metodologia   Metodologia? @relation(fields: [metodologiaId], references: [id], onDelete: SetNull)
+
+  metodologiaAvulsaId String?
+  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: SetNull)
+
+  valorBruto        Decimal @db.Decimal(10, 2)
+  percentualFootera Decimal @default(0.15) @db.Decimal(5, 4)
+  valorFootera      Decimal @db.Decimal(10, 2)
+  valorCreator      Decimal @db.Decimal(10, 2)
+
+  status CreatorVendaStatus @default(PENDENTE)
+
+  provider    String?
+  providerRef String?
+  meta        Json?
+
+  criadoEm  DateTime  @default(now())
+  pagoEm    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@unique([provider, providerRef])
+  @@index([creatorId])
+  @@index([compradorId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
+  @@index([status])
+}
+
+model CreatorUsoLearning {
+  id            String   @id @default(uuid())
+  creatorId     String
+  usuarioId     String?
+  metodologiaId String?
+  itemId        String?
+  pontosUso     Decimal  @default(1.0)
+  tipoUso       String
+  createdAt     DateTime @default(now())
+}
+
+model LearningProfile {
+  id        String @id @default(uuid())
+  usuarioId String @unique
+
+  bio        String?
+  objetivo   String?
+  interesses String[] @default([])
+
+  criadoEm  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuario    Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  conquistas ConquistaVinculo[]
+}
+
+model Federacao {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  cnpj        String?
+  email       String?
+  telefone1   String?
+  telefone2   String?
+  siteOficial String?
+  sede        String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  descricao   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos           Evento[]
+  conquistas        ConquistaVinculo[]
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
+model Marca {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  cnpj        String?
+  email       String?
+  telefone1   String?
+  telefone2   String?
+  siteOficial String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  sede        String?
+  logo        String?
+  descricao   String?
+  conquistas  ConquistaVinculo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos           Evento[]
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
+enum CreatorTipo {
+  PESSOA_FISICA
+  INSTITUCIONAL
+}
+
+enum CreatorVendaStatus {
+  PENDENTE
+  CONFIRMADA
+  CANCELADA
+  REEMBOLSADA
+}
+
+enum SentimentoAvaliacao {
+  ruim
+  medio
+  otimo
 }
 
 enum AccountStatus {
@@ -2690,10 +3171,14 @@ enum Nivel {
 }
 
 enum Categoria {
+  Sub3
+  Sub5
+  Sub7
   Sub9
   Sub11
   Sub13
   Sub15
+  Sub16
   Sub17
   Sub20
   Livre
@@ -2704,8 +3189,12 @@ enum TipoUsuario {
   Professor
   Clube
   Escolinha
+  Escola
   Admin
   Olheiro
+  Learning
+  Federacao
+  Marca
 }
 
 enum TipoMidia {
@@ -2831,6 +3320,9 @@ enum ConquistaOwnerTipo {
   Professor
   Clube
   Escolinha
+  Learning
+  Marca
+  Federacao
 }
 
 enum ConquistaTipo {
@@ -2846,6 +3338,7 @@ enum ConquistaTipo {
 enum MetodologiaConteudoTipo {
   TREINO
   VIDEO
+  AULA_AO_VIVO
 }
 
 enum MetodologiaAssinaturaStatus {
@@ -2876,6 +3369,7 @@ enum MetodologiaItemTipo {
   TREINO
   VIDEO
   AULA
+  AULA_AO_VIVO
   MATERIAL
   DESAFIO
 }
@@ -2933,11 +3427,28 @@ enum EspacoExercicio {
 }
 
 enum FaixaEtariaExercicio {
+  Sub3
+  Sub5
+  Sub7
   Sub9
   Sub11
   Sub13
   Sub15
+  Sub16
   Sub17
   Sub20
   Livre
+}
+
+enum AulaAoVivoStatus {
+  AGENDADA
+  AO_VIVO
+  FINALIZADA
+  CANCELADA
+}
+
+enum TipoMensagemLive {
+  TEXTO
+  SISTEMA
+  ALERTA
 }

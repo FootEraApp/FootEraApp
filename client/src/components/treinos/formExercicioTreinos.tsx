@@ -26,12 +26,14 @@ const OPCOES_NIVEL = [
 ];
 
 const OPCOES_FAIXA = [
+  { value: "Sub3", label: "Sub-3" },
+  { value: "Sub5", label: "Sub-5" },
+  { value: "Sub7", label: "Sub-7" },
   { value: "Sub9", label: "Sub-9" },
   { value: "Sub11", label: "Sub-11" },
   { value: "Sub13", label: "Sub-13" },
   { value: "Sub15", label: "Sub-15" },
-  { value: "Sub17", label: "Sub-17" },
-  { value: "Sub20", label: "Sub-20" },
+  { value: "Sub16", label: "Sub-16" },
   { value: "Livre", label: "Livre" },
 ];
 
@@ -178,10 +180,6 @@ export default function FormExercicioTreinos({
     if (modoExecucao === "Tempo") {
       setSeries("");
       setRepeticoes("");
-    }
-
-    if (modoExecucao === "SeriesRepeticoes") {
-      setDuracao("");
     }
 
     if (modoExecucao === "LivreOrientativo") {
@@ -365,6 +363,8 @@ export default function FormExercicioTreinos({
       formData.append("codigo", codigoFinal);
       formData.append("nome", nome.trim());
       formData.append("objetivo", objetivo.trim());
+      formData.append("descricao", objetivo.trim());
+      formData.append("categorias", JSON.stringify(faixasEtarias));
       formData.append("tipo", tipo);
       formData.append("nivel", nivel);
       formData.append("faixaEtaria", JSON.stringify(faixasEtarias));
@@ -377,7 +377,7 @@ export default function FormExercicioTreinos({
       } else if (modoExecucao === "SeriesRepeticoes") {
         formData.append("series", series.trim());
         formData.append("repeticoes", repeticoes.trim());
-        formData.append("duracao", "");
+        formData.append("duracao", duracao.trim());
         formData.append("descanso", descanso.trim());
       } else if (modoExecucao === "LivreOrientativo") {
         formData.append("duracao", duracao.trim());
@@ -396,16 +396,17 @@ export default function FormExercicioTreinos({
 
       if (video) formData.append("video", video);
 
-      const res = await fetch(
-        `${API.BASE_URL}/api/exercicios${exercicioId ? `/${exercicioId}` : ""}`,
-        {
-          method: exercicioId ? "PUT" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const endpoint = exercicioId
+        ? `${API.BASE_URL}/api/exercicios/${exercicioId}`
+        : `${API.BASE_URL}/api/exercicios/personalizados`;
+
+      const res = await fetch(endpoint, {
+        method: exercicioId ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
       const json = await res.json().catch(() => ({}));
 
@@ -443,7 +444,7 @@ export default function FormExercicioTreinos({
       <form onSubmit={handleSubmit} className="space-y-5 px-5 py-5">
         <div>
           <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-            Nome do exercício
+            Nome do exercício*
           </label>
           <input
             value={nome}
@@ -455,7 +456,7 @@ export default function FormExercicioTreinos({
 
         <div>
           <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-            Objetivo
+            Objetivo/Descrição (opcional)
           </label>
           <textarea
             value={objetivo}
@@ -469,7 +470,7 @@ export default function FormExercicioTreinos({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-              Tipo
+              Tipo*
             </label>
             <select
               value={tipo}
@@ -487,7 +488,7 @@ export default function FormExercicioTreinos({
 
           <div>
             <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-              Nível
+              Nível*
             </label>
             <select
               value={nivel}
@@ -506,7 +507,7 @@ export default function FormExercicioTreinos({
 
         <div>
           <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-            Faixa etária
+            Faixa etária*
           </label>
 
           <div className="flex flex-wrap gap-3">
@@ -606,7 +607,7 @@ export default function FormExercicioTreinos({
           )}
 
           {modoExecucao === "SeriesRepeticoes" && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
                   Séries
@@ -628,6 +629,18 @@ export default function FormExercicioTreinos({
                   onChange={(e) => setRepeticoes(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
                   placeholder="Ex: 10, 12, 15"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
+                  Duração / observação
+                </label>
+                <input
+                  value={duracao}
+                  onChange={(e) => setDuracao(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
+                  placeholder="Ex: 2min, até errar, por lado..."
                 />
               </div>
 

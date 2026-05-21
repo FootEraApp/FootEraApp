@@ -69,8 +69,13 @@ export const MESSAGES = {
 export const FLAGS = {
   DESAFIOS_ENABLED: false,
   LEARNING_ENABLED: true,
-  PAGAMENTOS_ENABLED: false,
+  PAGAMENTOS_ENABLED: true,
   FORMADORES_ENABLED: false,
+
+  // Pagamentos
+  PAGAMENTOS_SHOW_LEARNING_PLANS: true,
+  PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS: true,
+  PAGAMENTOS_SHOW_METODOLOGIAS_LEARNING: true,
 } as const;
 
 export default { API, APP, appUrl };

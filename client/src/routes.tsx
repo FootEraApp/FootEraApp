@@ -65,7 +65,17 @@ import ExercicioNovoPage from "./pages/treino/exercicios/novo.js";
 import ExercicioEditarPage from "./pages/treino/exercicios/editar/[id].js";
 import LearningCreatePage from "./pages/learning/create.js";
 import LearningPage from "./pages/learning/index.js";
-
+import FooteraContentLab from "./pages/landingPageContentLab.js";
+import TreinoMetodologiaPage from "./pages/treino/treino-metodologia.js";
+import CreatorProfile from "./pages/creator/profile.js";
+import CreatorDashboard from "./pages/creator/dashboard.js";
+import LearningLiveStudioPage from "./pages/learning/live-studio.js";
+import LearningLivePage from "./pages/learning/live.js";
+import CreatorEventosPage from "./pages/creator/eventos.js";
+import CreatorNovoEventoPage from "./pages/creator/eventos-novo.js";
+import MudarTipoPerfilPage from "./pages/perfil/mudarTipo.js";
+import SalaCopaEventoPage from "./pages/learning/evento/sala-copa.js";
+import LearningEventoAoVivoPage from "./pages/learning/evento/eventoAoVivo.js";
 export function AppRoutes() {
   return (
     <Switch>
@@ -79,6 +89,9 @@ export function AppRoutes() {
       <Route path="/cadastro"><PaginaCadastro /></Route>
       <Route path="/verificar-email" component={PaginaVerificarEmail} />
       <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
+
+      <Route path="/content-lab"><FooteraContentLab /></Route>
+
       <Route path="/esqueci-senha">
         <PublicOnly><PaginaEsqueciSenha /></PublicOnly>
       </Route>
@@ -130,6 +143,9 @@ export function AppRoutes() {
         {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
       </Route>
 
+      <Route path="/perfil/mudar-tipo">
+        <Private><MudarTipoPerfilPage /></Private>
+      </Route>
       <Route path="/perfil/conquistas"><PaginaConquistas /></Route>
       <Route path="/perfil/GerenciarAtletas"><PaginaGerenciarAtleta /></Route>
       <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>
@@ -211,11 +227,26 @@ export function AppRoutes() {
       <Route path="/treinos/elenco/jogos"><Private><PaginaJogosElenco/></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/tutorial" component={TutorialPage}/>
+      <Route path="/treinos/metodologia" component={TreinoMetodologiaPage} />
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
       <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
+      
+      <Route path="/creator/profile">
+        <Private><CreatorProfile /></Private>
+      </Route>
+      <Route path="/creator/dashboard">
+        <Private><CreatorDashboard /></Private>
+      </Route>
+      <Route path="/creator/eventos/novo">
+        <Private><CreatorNovoEventoPage /></Private>
+      </Route>
+      <Route path="/creator/eventos">
+        <Private><CreatorEventosPage /></Private>
+      </Route>
+
       <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
@@ -232,11 +263,24 @@ export function AppRoutes() {
           <Route path="/learning/create">
             <Private><LearningCreatePage /></Private>
           </Route>
-          <Route path="/learning/:id">
-            <Private><MetodologiaUnicaPage /></Private>
+
+          <Route path="/learning/live-studio">
+            <Private>< LearningLiveStudioPage/></Private>
           </Route>
+
+          <Route path="/learning/live">
+            <Private><LearningLivePage /></Private>
+          </Route>
+
           <Route path="/learning/avaliar">
             <Private><AvaliarMetodologia /></Private>
+          </Route>
+          <Route path="/learning/evento/sala-copa" component={SalaCopaEventoPage} />
+          <Route path="/learning/evento/:aulaId">
+            {() => <LearningEventoAoVivoPage />}
+          </Route>
+          <Route path="/learning/:id">
+            <Private><MetodologiaUnicaPage /></Private>
           </Route>
           <Route path="/learning">
             <Private><LearningPage /></Private>

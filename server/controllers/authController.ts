@@ -6,7 +6,13 @@ import { getUserFlags } from "../services/flags.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET não configurado no ambiente.");
+  }
+  return secret;
+})();
 
 export async function logout(req: any, res: any) {
   const userId = req.userId;
@@ -70,8 +76,8 @@ export async function login(req: Request, res: Response) {
     const usuario = await prisma.usuario.findFirst({
       where: {
         OR: [
-          { nomeDeUsuario: userKey },       // mantém case como está
-          { email: lowerKey },              // email normalizado
+          { nomeDeUsuario: lowerKey },
+          { email: lowerKey },
         ],
       },
       include: {
@@ -81,6 +87,9 @@ export async function login(req: Request, res: Response) {
         escolinha: { select: { id: true } },
         olheiro: { select: { id: true } },
         administrador: { select: { id: true } },
+        learningProfile: { select: { id: true } },
+        federacao: { select: { id: true } },
+        marca: { select: { id: true } },
       },
     });
 
@@ -149,6 +158,9 @@ export async function login(req: Request, res: Response) {
       usuario.escolinha?.id ??
       usuario.olheiro?.id ??
       usuario.administrador?.id ??
+      usuario.learningProfile?.id ??
+      usuario.federacao?.id ??
+      usuario.marca?.id ??
       null;
 
     await prisma.loginEvent.create({
@@ -164,7 +176,7 @@ export async function login(req: Request, res: Response) {
       {
         id: usuario.id,
         tipo: usuario.tipo,
-        tokenVersion: usuario.tokenVersion ?? 0, 
+        tokenVersion: usuario.tokenVersion ?? 0,
       },
       JWT_SECRET,
       { expiresIn: "7d" }

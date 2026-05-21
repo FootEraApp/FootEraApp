@@ -162,10 +162,66 @@ function normTipoTreino(v?: string): TipoTreino | null {
   return null;
 }
 
+const SESSOES_PADRAO_TREINO = [
+  "Aquecimento",
+  "Coletivo",
+  "Treino de finalização",
+];
+
+function normalizarSessaoTreinoNome(nome: string) {
+  return String(nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+async function resolverSessaoTreinoId(sessaoTreino?: any, sessaoTreinoId?: any) {
+  const id = String(sessaoTreinoId ?? "").trim();
+  if (id) {
+    const existe = await prisma.treinoSessao.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    return existe?.id ?? null;
+  }
+
+  const nome = String(sessaoTreino ?? "").trim();
+  if (!nome) return null;
+
+  return (
+    await prisma.treinoSessao.upsert({
+      where: { nomeNormalizado: normalizarSessaoTreinoNome(nome) },
+      update: { nome },
+      create: {
+        nome,
+        nomeNormalizado: normalizarSessaoTreinoNome(nome),
+      },
+      select: { id: true },
+    })
+  ).id;
+}
+
 function normCategoria(v?: string): Categoria {
-  const s = String(v || "").replace(/-/g, "").toUpperCase();
-  const ok = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"];
-  return (ok.includes(s) ? s : "Sub13") as Categoria;
+  const s = String(v || "")
+    .trim()
+    .replace(/-/g, "")
+    .toLowerCase();
+
+  const mapa: Record<string, Categoria> = {
+    sub3: "Sub3" as Categoria,
+    sub5: "Sub5" as Categoria,
+    sub7: "Sub7" as Categoria,
+    sub9: "Sub9" as Categoria,
+    sub11: "Sub11" as Categoria,
+    sub13: "Sub13" as Categoria,
+    sub15: "Sub15" as Categoria,
+    sub16: "Sub16" as Categoria,
+    livre: "Livre" as Categoria,
+  };
+
+  return mapa[s] ?? ("Sub13" as Categoria);
 }
 
 export const createTreinoProgramado = async (req: Request, res: Response) => {
@@ -198,6 +254,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       atletasIds = [],
       elencoId,
       elencosIds = [],
+      sessaoTreino,
+      sessaoTreinoId,
       criadorProfessorId
     } = req.body as {
       nome?: string; nivel?: string; descricao?: string;
@@ -208,6 +266,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       tipoUsuario?: string; tipoUsuarioId?: string;
       atletasIds?: string[]; elencoId?: string; elencosIds?: string[];
       criadorProfessorId?: string;
+      sessaoTreino?: string;
+      sessaoTreinoId?: string;
     };
 
     if (!nome) {
@@ -341,17 +401,80 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
         const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
         const exercicioIdCatalogo = String(e?.exercicioId ?? "").trim();
-
         // ✅ fallback que muita tela manda como "id"
         const idGenerico = String(e?.id ?? "").trim();
         const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
+        const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
 
         // 1) Se veio explícito, usa explícito
         if (exercicioPersonalizadoId) {
-          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso };
+          const personalizado = await prisma.exercicioPersonalizado.findUnique({
+            where: { id: exercicioPersonalizadoId },
+            select: {
+              id: true,
+              nome: true,
+              nomeNormalizado: true,
+            },
+          });
+
+          if (!personalizado) {
+            throw new Error("Exercício personalizado não encontrado.");
+          }
+
+          const nomeNormPersonalizado =
+            personalizado.nomeNormalizado ||
+            normalizarNomeExercicio(personalizado.nome);
+
+          const oficialMesmoNome = await prisma.exercicio.findFirst({
+            where: {
+              OR: [
+                { nomeNormalizado: nomeNormPersonalizado },
+                { nome: { equals: personalizado.nome, mode: "insensitive" } },
+              ],
+            },
+            select: { id: true },
+          });
+
+          if (oficialMesmoNome?.id) {
+            return {
+              exercicioId: oficialMesmoNome.id,
+              ordem,
+              repeticoes,
+              series,
+              duracao,
+              descanso,
+              descricaoExecucao: descricaoExercicio,
+            };
+          }
+
+          if (descricaoExercicio) {
+            await prisma.exercicioPersonalizado.update({
+              where: { id: exercicioPersonalizadoId },
+              data: {
+                descricao: descricaoExercicio,
+                nomeNormalizado: nomeNormPersonalizado,
+              },
+            });
+          }
+
+          return {
+            exercicioPersonalizadoId,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+            descricaoExecucao: descricaoExercicio,
+          };
         }
         if (exercicioTemporarioId) {
-          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso };
+          if (descricaoExercicio) {
+            await prisma.exercicioTemporario.update({
+              where: { id: exercicioTemporarioId },
+              data: { descricao: descricaoExercicio },
+            });
+          }
+          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
         if (exercicioIdCatalogo) {
           return {
@@ -360,23 +483,102 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             repeticoes,
             series,
             duracao,
-            descanso
+            descanso,
+            descricaoExecucao: descricaoExercicio,
+          };
+        }
+
+        if (idGenerico && (tipo === "catalogo" || tipo === "exercicio")) {
+          return {
+            exercicioId: idGenerico,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+            descricaoExecucao: descricaoExercicio,
           };
         }
 
         if (idGenerico) {
           if (tipo === "personalizado") {
-            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+            const personalizado = await prisma.exercicioPersonalizado.findUnique({
+              where: { id: idGenerico },
+              select: { id: true, nome: true, nomeNormalizado: true },
+            });
+
+            if (personalizado) {
+              const nomeNorm =
+                personalizado.nomeNormalizado ||
+                normalizarNomeExercicio(personalizado.nome);
+
+              const oficialMesmoNome = await prisma.exercicio.findFirst({
+                where: {
+                  OR: [
+                    { nomeNormalizado: nomeNorm },
+                    { nome: { equals: personalizado.nome, mode: "insensitive" } },
+                  ],
+                },
+                select: { id: true },
+              });
+
+              if (oficialMesmoNome?.id) {
+                return {
+                  exercicioId: oficialMesmoNome.id,
+                  ordem,
+                  repeticoes,
+                  series,
+                  duracao,
+                  descanso,
+                  descricaoExecucao: descricaoExercicio,
+                };
+              }
+            }
+
+            if (descricaoExercicio) {
+              await prisma.exercicioPersonalizado.update({
+                where: { id: idGenerico },
+                data: { descricao: descricaoExercicio },
+              });
+            }
+
+            return {
+              exercicioPersonalizadoId: idGenerico,
+              ordem,
+              repeticoes,
+              series,
+              duracao,
+              descanso,
+              descricaoExecucao: descricaoExercicio,
+            };
           }
-          if (tipo === "temporario") {
-            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
-          }
-          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
         }
 
         const nomeOriginal = String(e?.nome ?? "").trim();
         const nomeNormalizado = normalizarNomeExercicio(nomeOriginal);
-          
+        
+        // 🔥 PROTEÇÃO ANTI-DUPLICAÇÃO (CATÁLOGO)
+        const existenteCatalogo = await prisma.exercicio.findFirst({
+          where: {
+            OR: [
+              { nomeNormalizado },
+              { nome: { equals: nomeOriginal, mode: "insensitive" } },
+            ],
+          },
+          select: { id: true },
+        });
+
+        if (existenteCatalogo?.id) {
+          return {
+            exercicioId: existenteCatalogo.id,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+            descricaoExecucao: descricaoExercicio,
+          };
+        }
         if (!nomeNormalizado) {
           throw new Error("Nome do exercício personalizado não informado.");
         }
@@ -392,12 +594,13 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           : [];
 
         const existenteExercicio = await prisma.exercicio.findFirst({
-          where: { nomeNormalizado },
-          select: {
-            id: true,
-            nome: true,
-            codigo: true,
+          where: {
+            OR: [
+              { nomeNormalizado },
+              { nome: { equals: nomeOriginal, mode: "insensitive" } },
+            ],
           },
+          select: { id: true },
         });
 
         if (existenteExercicio?.id) {
@@ -408,6 +611,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             series,
             duracao,
             descanso,
+            descricaoExecucao: descricaoExercicio,
           };
         }
 
@@ -516,6 +720,11 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       req.file?.filename ? `/upload/${req.file.filename}` : null;
 
     const imagemFinal = uploadedPath ?? (imagemUrl ? String(imagemUrl) : null);
+    const sessaoTreinoIdFinal = await resolverSessaoTreinoId(
+      sessaoTreino,
+      sessaoTreinoId
+    );
+
     const treinoCriado = await prisma.treinoProgramado.create({
           data: {
             nome,
@@ -532,16 +741,15 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             pontuacao: pontuacao != null ? Number(pontuacao) : null,
             expiraEm: expiraEm ? new Date(expiraEm) : null,
             naoExpira: Boolean(naoExpira),
-            ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
-            ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
-            ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
-            ...(owner.criadorUsuarioId
-              ? { criadorUsuario: { connect: { id: owner.criadorUsuarioId } } }
-              : {}),
+            sessaoTreinoId: sessaoTreinoIdFinal,
+            ...(owner.professorId ? { professorId: owner.professorId } : {}),
+            ...(owner.clubeId ? { clubeId: owner.clubeId } : {}),
+            ...(owner.escolinhaId ? { escolinhaId: owner.escolinhaId } : {}),
+            ...(owner.criadorUsuarioId ? { criadorUsuarioId: owner.criadorUsuarioId } : {}),
             ...(criadorProfessorIdNorm
-              ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
+              ? { criadorProfessorId: criadorProfessorIdNorm }
               : owner.dono === "Professor"
-              ? { criadorProfessor: { connect: { id: owner.professorId! } } }
+              ? { criadorProfessorId: owner.professorId! }
               : {}),
             professores: {
               create: colabProfIds.map((professorId: string) => ({ professorId })),
@@ -553,6 +761,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             criadorUsuario: true,
             clube: true,
             escolinha: true,
+            sessaoTreino: true,
             exercicios: {
               include: {
                 exercicio: true,
@@ -649,6 +858,7 @@ export const getTreinoById = async (req: Request, res: Response) => {
         criadorUsuario: true,
         clube: true,
         escolinha: true,
+        sessaoTreino: true,
         exercicios: {
           include: {
             exercicio: true,
@@ -681,6 +891,8 @@ export async function updateTreino(req: Request, res: Response) {
       duracao, dicas, imagemUrl, metas, pontuacao, expiraEm, naoExpira,
       exercicios = [],
       tipoUsuario, tipoUsuarioId,
+      sessaoTreino,
+      sessaoTreinoId
     } = req.body;
 
     if (!Array.isArray(exercicios) || exercicios.length === 0) {
@@ -778,29 +990,172 @@ export async function updateTreino(req: Request, res: Response) {
         const idGenerico = String(e?.id ?? "").trim();
         const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
 
+        const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
+
         if (exercicioPersonalizadoId) {
-          return { exercicioPersonalizadoId, ordem, repeticoes, series, duracao, descanso };
+          const personalizado = await prisma.exercicioPersonalizado.findUnique({
+            where: { id: exercicioPersonalizadoId },
+            select: {
+              id: true,
+              nome: true,
+              nomeNormalizado: true,
+            },
+          });
+
+          if (!personalizado) {
+            throw new Error("Exercício personalizado não encontrado.");
+          }
+
+          const nomeNormPersonalizado =
+            personalizado.nomeNormalizado ||
+            normalizarNomeExercicio(personalizado.nome);
+
+          const oficialMesmoNome = await prisma.exercicio.findFirst({
+            where: {
+              OR: [
+                { nomeNormalizado: nomeNormPersonalizado },
+                { nome: { equals: personalizado.nome, mode: "insensitive" } },
+              ],
+            },
+            select: { id: true },
+          });
+
+          if (oficialMesmoNome?.id) {
+            return {
+              exercicioId: oficialMesmoNome.id,
+              ordem,
+              repeticoes,
+              series,
+              duracao,
+              descanso,
+              descricaoExecucao: descricaoExercicio,
+            };
+          }
+
+          if (descricaoExercicio) {
+            await prisma.exercicioPersonalizado.update({
+              where: { id: exercicioPersonalizadoId },
+              data: {
+                descricao: descricaoExercicio,
+                nomeNormalizado: nomeNormPersonalizado,
+              },
+            });
+          }
+
+          return {
+            exercicioPersonalizadoId,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+            descricaoExecucao: descricaoExercicio,
+          };
         }
         if (exercicioTemporarioId) {
-          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso };
+          if (descricaoExercicio) {
+            await prisma.exercicioTemporario.update({
+              where: { id: exercicioTemporarioId },
+              data: { descricao: descricaoExercicio },
+            });
+          }
+          return { exercicioTemporarioId, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
         }
         if (exercicioIdCatalogo) {
-          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes, series, duracao, descanso };
+          return { exercicioId: exercicioIdCatalogo, ordem, repeticoes, series, duracao, descanso, descricaoExecucao: descricaoExercicio };
+        }
+
+        if (idGenerico && (tipo === "catalogo" || tipo === "exercicio")) {
+          return {
+            exercicioId: idGenerico,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+            descricaoExecucao: descricaoExercicio,
+          };
         }
 
         if (idGenerico) {
           if (tipo === "personalizado") {
-            return { exercicioPersonalizadoId: idGenerico, ordem, repeticoes, series, duracao, descanso };
+            const personalizado = await prisma.exercicioPersonalizado.findUnique({
+              where: { id: idGenerico },
+              select: { id: true, nome: true, nomeNormalizado: true },
+            });
+
+            if (personalizado) {
+              const nomeNorm =
+                personalizado.nomeNormalizado ||
+                normalizarNomeExercicio(personalizado.nome);
+
+              const oficialMesmoNome = await prisma.exercicio.findFirst({
+                where: {
+                  OR: [
+                    { nomeNormalizado: nomeNorm },
+                    { nome: { equals: personalizado.nome, mode: "insensitive" } },
+                  ],
+                },
+                select: { id: true },
+              });
+
+              if (oficialMesmoNome?.id) {
+                return {
+                  exercicioId: oficialMesmoNome.id,
+                  ordem,
+                  repeticoes,
+                  series,
+                  duracao,
+                  descanso,
+                  descricaoExecucao: descricaoExercicio,
+                };
+              }
+            }
+
+            if (descricaoExercicio) {
+              await prisma.exercicioPersonalizado.update({
+                where: { id: idGenerico },
+                data: { descricao: descricaoExercicio },
+              });
+            }
+
+            return {
+              exercicioPersonalizadoId: idGenerico,
+              ordem,
+              repeticoes,
+              series,
+              duracao,
+              descanso,
+              descricaoExecucao: descricaoExercicio,
+            };
           }
-          if (tipo === "temporario") {
-            return { exercicioTemporarioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
-          }
-          return { exercicioId: idGenerico, ordem, repeticoes, series, duracao, descanso };
         }
 
         const nomeOriginal = String(e?.nome ?? "").trim();
         const nomeNormalizado = normalizarNomeExercicio(nomeOriginal);
 
+        // 🔥 PROTEÇÃO ANTI-DUPLICAÇÃO (CATÁLOGO)
+        const existenteCatalogo = await prisma.exercicio.findFirst({
+          where: {
+            OR: [
+              { nomeNormalizado },
+              { nome: { equals: nomeOriginal, mode: "insensitive" } },
+            ],
+          },
+          select: { id: true },
+        });
+
+        if (existenteCatalogo?.id) {
+          return {
+            exercicioId: existenteCatalogo.id,
+            ordem,
+            repeticoes,
+            series,
+            duracao,
+            descanso,
+            descricaoExecucao: descricaoExercicio,
+          };
+        }
         if (!nomeNormalizado) {
           throw new Error("Nome do exercício personalizado não informado.");
         }
@@ -817,7 +1172,12 @@ export async function updateTreino(req: Request, res: Response) {
           : [];
 
         const existenteExercicio = await prisma.exercicio.findFirst({
-          where: { nomeNormalizado },
+          where: {
+            OR: [
+              { nomeNormalizado },
+              { nome: { equals: nomeOriginal, mode: "insensitive" } },
+            ],
+          },
           select: {
             id: true,
             nome: true,
@@ -833,6 +1193,7 @@ export async function updateTreino(req: Request, res: Response) {
             series,
             duracao,
             descanso,
+            descricaoExecucao: descricaoExercicio,
           };
         }
 
@@ -878,12 +1239,7 @@ export async function updateTreino(req: Request, res: Response) {
             ).id;
           } catch (err: any) {
             const again = await prisma.exercicioPersonalizado.findFirst({
-              where: {
-                nome: {
-                  equals: nomeNormalizado,
-                  mode: "insensitive",
-                },
-              },
+              where: { nomeNormalizado },
               select: { id: true },
             });
 
@@ -918,6 +1274,11 @@ export async function updateTreino(req: Request, res: Response) {
       uploadedPath ? { imagemUrl: uploadedPath }
       : (imagemUrl !== undefined ? { imagemUrl: imagemUrl ? String(imagemUrl) : null } : {});
 
+    const sessaoTreinoIdFinal =
+      sessaoTreino !== undefined || sessaoTreinoId !== undefined
+        ? await resolverSessaoTreinoId(sessaoTreino, sessaoTreinoId)
+        : undefined;
+
     await prisma.$transaction([
       prisma.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } }),
       prisma.treinoProgramado.update({
@@ -946,6 +1307,13 @@ export async function updateTreino(req: Request, res: Response) {
           ...(expiraEm !== undefined ? { expiraEm: expiraEm ? new Date(expiraEm) : null } : {}),
           ...(naoExpira !== undefined ? { naoExpira: Boolean(naoExpira) } : {}),
           ...dataDono,
+          ...(sessaoTreinoIdFinal !== undefined
+            ? {
+                sessaoTreino: sessaoTreinoIdFinal
+                  ? { connect: { id: sessaoTreinoIdFinal } }
+                  : { disconnect: true },
+              }
+            : {}),
           exercicios: { create: itens },
         },
       }),
@@ -958,6 +1326,7 @@ export async function updateTreino(req: Request, res: Response) {
         Professor: { include: { usuario: true } },
         clube: true,
         escolinha: true,
+        sessaoTreino: true,
         professores: { include: { professor: { include: { usuario: true } } } },
         exercicios: {
           include: {
@@ -1037,6 +1406,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       tipoUsuario,
       tipoUsuarioId,
       onlyMine,
+      sessaoTreinoId,
     } = req.query as Record<string, string | undefined>;
 
     const where: any = {};
@@ -1090,7 +1460,6 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           ...(isProfessor ? [{ professorId: viewerId }] : []),
           ...(isClube ? [{ clubeId: viewerId }] : []),
           ...(isEscolinha ? [{ escolinhaId: viewerId }] : []),
-
           ...(isProfessor ? [{ professores: { some: { professorId: viewerId } } }] : []),
 
           // públicos de parceiro (seu requisito)
@@ -1107,6 +1476,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           Professor: { include: { usuario: true } },
           clube: true,
           escolinha: true,
+          sessaoTreino: true,
           professores: { include: { professor: { include: { usuario: true } } } },
           exercicios: {
             include: {
@@ -1119,7 +1489,6 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       });
 
       const mapped = treinos.map((t) => {
-      const donoId = t.professorId || t.clubeId || t.escolinhaId || "";
 
       const isOwner =
         (viewerTipo === "professor" && t.professorId === viewerId) ||
@@ -1150,6 +1519,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
         Professor: { include: { usuario: true } },
         clube: true,
         escolinha: true,
+        sessaoTreino: true,
         professores: {
           include: { professor: { include: { usuario: true } } },
         },

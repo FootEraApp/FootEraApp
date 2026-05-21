@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from 'wouter';
 import BottomNav from "@/components/layout/BottomNav.js";
 
-type Usuario = { id: string; nome: string; foto?: string | null };
+type Usuario = { id: string; nome: string; foto?: string | null; isPendente?: boolean };
 type Seguidor = Usuario & { isSeguindo?: boolean };
 
 const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
@@ -72,8 +72,14 @@ export default function MinhaRede() {
       setSeguidores(prev =>
         prev.map(s => (s.id === userId ? { ...s, isSeguindo: true } : s))
       );
+
       const seg = seguidores.find(s => s.id === userId);
-      if (seg) setSeguindo(prev => [...prev, seg]);
+      if (seg) {
+        setSeguindo(prev => [
+          ...prev.filter(u => u.id !== userId),
+          { ...seg, isPendente: true },
+        ]);
+      }
     }
   }
 
@@ -154,12 +160,18 @@ export default function MinhaRede() {
 
                 <span className="font-medium">{u.nome || "Usuário"}</span>
               </div>
-              <button
-                className="bg-red-600 text-white rounded px-3 py-1 text-sm"
-                onClick={() => unfollow(u.id)}
-              >
-                Deixar de seguir
-              </button>
+              {u.isPendente ? (
+                <span className="bg-gray-200 text-gray-700 rounded px-3 py-1 text-sm">
+                  Solicitação enviada
+                </span>
+              ) : (
+                <button
+                  className="bg-red-600 text-white rounded px-3 py-1 text-sm"
+                  onClick={() => unfollow(u.id)}
+                >
+                  Deixar de seguir
+                </button>
+              )}
             </div>
           ))}
         </div>

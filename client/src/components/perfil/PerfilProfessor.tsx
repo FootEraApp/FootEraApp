@@ -220,7 +220,15 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-export default function PerfilProfessor({ idDaUrl }: Props) {
+export default function PerfilProfessor({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+}) {
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -244,7 +252,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const [orgsDisponiveis, setOrgsDisponiveis] = useState<Organizacao[]>([]);
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
-  const [orgSelecionada, setOrgSelecionada] = useState<string>("");
+  const [escolinhaSelecionada, setEscolinhaSelecionada] = useState<string>("");
+  const [clubeSelecionado, setClubeSelecionado] = useState<string>("");
+
+  const [buscaEscolinha, setBuscaEscolinha] = useState("");
+  const [buscaClube, setBuscaClube] = useState("");
   const [treinosCriados, setTreinosCriados] = useState<TreinoCriado[] | null>(null);
 
   const [turmasOpen, setTurmasOpen] = useState(false);
@@ -253,6 +265,29 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
   const professorId = data?.professor?.id;
+  const escolinhasDisponiveis = orgsDisponiveis.filter(
+    (o) =>
+      o.tipo === "Escolinha" &&
+      o.nome.toLowerCase().includes(buscaEscolinha.toLowerCase())
+  );
+
+  const clubesDisponiveis = orgsDisponiveis.filter(
+    (o) =>
+      o.tipo === "Clube" &&
+      o.nome.toLowerCase().includes(buscaClube.toLowerCase())
+  );
+
+  const escolinhaAtual = orgsDisponiveis.find((o) => o.id === escolinhaSelecionada);
+  const clubeAtual = orgsDisponiveis.find((o) => o.id === clubeSelecionado);
+  const escolinhaVinculada =
+    orgsDisponiveis.find((o) => o.id === data?.professor?.escolinhaId) ||
+    orgsVinculadas.find((o) => o.tipo === "Escolinha") ||
+    null;
+
+  const clubeVinculado =
+    orgsDisponiveis.find((o) => o.id === data?.professor?.clubeId) ||
+    orgsVinculadas.find((o) => o.tipo === "Clube") ||
+    null;
 
   const abas = [
     { id: "visao", label: "Visão Geral" },
@@ -689,7 +724,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   }, [rawToken, aba, headers, isOwn, idDaUrl]);
 
   useEffect(() => {
-    setOrgSelecionada(data?.professor?.escolinhaId ?? data?.professor?.clubeId ?? "");
+    setEscolinhaSelecionada(data?.professor?.escolinhaId ?? "");
+    setClubeSelecionado(data?.professor?.clubeId ?? "");
   }, [data?.professor?.escolinhaId, data?.professor?.clubeId]);
 
   useEffect(() => {
@@ -697,8 +733,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
     const parseOrg = (x: any, tipoFallback?: "Escolinha" | "Clube"): Organizacao => ({
       id: String(x.id),
-      usuarioId: x.usuarioId ?? null,
-      nome: String(x.nome ?? x.titulo ?? "Organização"),
+      usuarioId: x.usuarioId ?? x.usuario?.id ?? x.userId ?? x.usuario_id ?? null,
+      nome: String(x.nome ?? x.nomeEscolinha ?? x.nomeClube ?? x.titulo ?? "Organização"),
       tipo: (x.tipo ?? x.kind ?? tipoFallback ?? "Escolinha") as "Escolinha" | "Clube",
     });
 
@@ -806,47 +842,39 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     }
   }
 
-  async function salvarVinculo() {
+  async function enviarSolicitacaoOrganizacao(
+    org: Organizacao | undefined,
+    vinculoAtualId: string | null | undefined,
+    tipo: "escolinha" | "clube"
+  ) {
     if (!rawToken || !professorId) return;
 
     try {
-      const resp = await axios.put(
-        `${API.BASE_URL}/api/professores/${professorId}/vinculos`,
-        { organizacaoId: orgSelecionada || null },
+      if (!org) {
+        alert(`Selecione uma ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
+        return;
+      }
+
+      if (org.id === vinculoAtualId) {
+        alert(`Você já está vinculado a esse ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
+        return;
+      }
+
+      if (!org.usuarioId) {
+        alert(`${org.nome} não possui usuário vinculado para receber solicitação.`);
+        return;
+      }
+
+      await axios.post(
+        `${API.BASE_URL}/api/solicitacoes-treino`,
+        { destinatarioId: org.usuarioId },
         { headers }
       );
 
-      const org = orgsDisponiveis.find((o) => o.id === orgSelecionada);
-
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              professor: {
-                ...prev.professor,
-                escolinhaId:
-                  org?.tipo === "Escolinha"
-                    ? orgSelecionada || null
-                    : orgSelecionada
-                    ? null
-                    : null,
-                clubeId:
-                  org?.tipo === "Clube"
-                    ? orgSelecionada || null
-                    : orgSelecionada
-                    ? null
-                    : null,
-              },
-            }
-          : prev
-      );
-
-      await reloadTurmas();
-
-      alert(resp.data?.message || "Vínculo atualizado!");
+      alert(`Solicitação enviada para ${org.nome}. Aguarde a confirmação.`);
     } catch (e: any) {
-      console.error("[PerfilProfessor.salvarVinculo]", e?.response?.data || e);
-      alert(e?.response?.data?.message || "Erro ao salvar vínculo.");
+      console.error("[PerfilProfessor.enviarSolicitacaoOrganizacao]", e?.response?.data || e);
+      alert(e?.response?.data?.message || "Erro ao enviar solicitação de vínculo.");
     }
   }
 
@@ -872,6 +900,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         ]}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
+        hasCreator={hasCreator}
+        creatorUsuarioId={creatorUsuarioId}
       />
 
       <div className="mt-4 px-4">
@@ -892,61 +922,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
       {aba === "visao" && (
         <div className="mt-4 px-4 grid gap-4">
-          <SectionCard
-            title="Vínculo com Escolinha/Clube"
-            right={
-              canEdit ? (
-                <button
-                  onClick={salvarVinculo}
-                  className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
-                  disabled={!orgSelecionada}
-                >
-                  Salvar vínculo
-                </button>
-              ) : null
-            }
-          >
-            {canEdit ? (
-              <div className="grid gap-2">
-                <label className="text-sm">Selecione a organização onde você trabalha</label>
-                <select
-                  className="border rounded px-3 py-2"
-                  value={orgSelecionada}
-                  onChange={(e) => setOrgSelecionada(e.target.value)}
-                >
-                  <option value="">— Nenhuma —</option>
-                  {orgsDisponiveis.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.nome} ({o.tipo})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-green-900/70">
-                  Esse vínculo permite participar de turmas com múltiplos professores.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {orgsVinculadas.length ? (
-                  orgsVinculadas.map((o) => (
-                    <Link
-                      key={o.id}
-                      href={`/perfil/${o.usuarioId ?? o.id}`}
-                      className="flex items-center justify-between rounded-xl border border-green-100 p-3 hover:bg-green-50"
-                    >
-                      <div>
-                        <div className="text-sm font-medium text-green-900">{o.nome}</div>
-                        <div className="text-xs text-green-900/70">{o.tipo}</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-green-800" />
-                    </Link>
-                  ))
-                ) : (
-                  <div className="text-sm text-green-900/70">Nenhum vínculo público.</div>
-                )}
-              </div>
-            )}
-          </SectionCard>
 
           <SectionCard title="Informações do Professor">
             <ul className="text-sm text-green-900/90 space-y-2">
@@ -972,9 +947,15 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
               <li>
                 <b>Área de formação:</b> {data.professor.areaFormacao}
               </li>
-              {data.professor.escola && (
+              {escolinhaVinculada && (
                 <li>
-                  <b>Escola:</b> {data.professor.escola}
+                  <b>Escolinha vinculada:</b> {escolinhaVinculada.nome}
+                </li>
+              )}
+
+              {clubeVinculado && (
+                <li>
+                  <b>Clube vinculado:</b> {clubeVinculado.nome}
                 </li>
               )}
               {data.professor.statusCref && (
@@ -983,6 +964,143 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
                 </li>
               )}
             </ul>
+          </SectionCard>
+          <SectionCard
+            title="Vínculos com Escolinha e Clube"
+            right={null}
+          >
+            {canEdit ? (
+              <div className="grid gap-5">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-green-900">Escolinha</label>
+
+                  {escolinhaAtual && (
+                    <button
+                      type="button"
+                      onClick={() => setEscolinhaSelecionada("")}
+                      className="w-fit text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                    >
+                      {escolinhaAtual.nome} <span className="ml-1 text-gray-500">×</span>
+                    </button>
+                  )}
+
+                  <input
+                    className="border rounded px-3 py-2"
+                    placeholder="Pesquisar escolinha pelo nome..."
+                    value={buscaEscolinha}
+                    onChange={(e) => setBuscaEscolinha(e.target.value)}
+                  />
+
+                  <div className="border rounded p-2 bg-white max-h-44 overflow-auto">
+                    <label className="flex items-center gap-2 py-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="escolinhaVinculoProfessor"
+                        checked={!escolinhaSelecionada}
+                        onChange={() => setEscolinhaSelecionada("")}
+                      />
+                      <span className="text-sm">Nenhuma</span>
+                    </label>
+
+                    {escolinhasDisponiveis.map((o) => (
+                      <label key={o.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="escolinhaVinculoProfessor"
+                          checked={escolinhaSelecionada === o.id}
+                          onChange={() => setEscolinhaSelecionada(o.id)}
+                        />
+                        <span className="text-sm">{o.nome}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                      type="button"
+                      onClick={() => enviarSolicitacaoOrganizacao(escolinhaAtual, data?.professor?.escolinhaId, "escolinha")}
+                      className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
+                    >
+                      Solicitar vínculo com escolinha
+                    </button>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-green-900">Clube</label>
+
+                  {clubeAtual && (
+                    <button
+                      type="button"
+                      onClick={() => setClubeSelecionado("")}
+                      className="w-fit text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                    >
+                      {clubeAtual.nome} <span className="ml-1 text-gray-500">×</span>
+                    </button>
+                  )}
+
+                  <input
+                    className="border rounded px-3 py-2"
+                    placeholder="Pesquisar clube pelo nome..."
+                    value={buscaClube}
+                    onChange={(e) => setBuscaClube(e.target.value)}
+                  />
+
+                  <div className="border rounded p-2 bg-white max-h-44 overflow-auto">
+                    <label className="flex items-center gap-2 py-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="clubeVinculoProfessor"
+                        checked={!clubeSelecionado}
+                        onChange={() => setClubeSelecionado("")}
+                      />
+                      <span className="text-sm">Nenhum</span>
+                    </label>
+
+                    {clubesDisponiveis.map((o) => (
+                      <label key={o.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="clubeVinculoProfessor"
+                          checked={clubeSelecionado === o.id}
+                          onChange={() => setClubeSelecionado(o.id)}
+                        />
+                        <span className="text-sm">{o.nome}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => enviarSolicitacaoOrganizacao(clubeAtual, data?.professor?.clubeId, "clube")}
+                    className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
+                  >
+                    Solicitar vínculo com clube
+                  </button>
+                </div>
+
+                <p className="text-xs text-green-900/70">
+                  Cada vínculo envia uma solicitação para a organização aceitar. Depois de aceito,
+                  ele ficará salvo no seu perfil.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {orgsVinculadas.length ? (
+                  orgsVinculadas.map((o) => (
+                    <Link
+                      key={o.id}
+                      href={`/perfil/${o.usuarioId ?? o.id}`}
+                      className="flex items-center justify-between rounded-xl border border-green-100 p-3 hover:bg-green-50"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-green-900">{o.nome}</div>
+                        <div className="text-xs text-green-900/70">{o.tipo}</div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-green-800" />
+                    </Link>
+                  ))
+                ) : (
+                  <div className="text-sm text-green-900/70">Nenhum vínculo público.</div>
+                )}
+              </div>
+            )}
           </SectionCard>
 
           {!!data.professor.qualificacoes?.length && (

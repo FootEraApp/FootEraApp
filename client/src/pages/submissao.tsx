@@ -14,6 +14,15 @@ const Storage = {
       ""
     );
   },
+  get tipoUsuarioRaw() {
+    return (
+      localStorage.getItem("usuarioTipoRaw") ||
+      sessionStorage.getItem("usuarioTipoRaw") ||
+      localStorage.getItem("tipoUsuario") ||
+      sessionStorage.getItem("tipoUsuario") ||
+      ""
+    );
+  },
 };
 
 export default function PaginaSubmissao() {
@@ -25,6 +34,7 @@ export default function PaginaSubmissao() {
 
   const [, navigate] = useLocation();
   const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
+  const [treinoProgramadoId, setTreinoProgramadoId] = useState<string | null>(null);
   const [desafioId, setDesafioId] = useState<string | null>(null);
   const [modeParam, setModeParam] = useState<"camera" | "galeria" | null>(null);
   const [atletaId, setAtletaId] = useState<string | null>(null);
@@ -47,6 +57,7 @@ export default function PaginaSubmissao() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arquivoInputRef = useRef<HTMLInputElement | null>(null);
   const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
   const [treinoIsRecording, setTreinoIsRecording] = useState(false);
   const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
@@ -55,7 +66,7 @@ export default function PaginaSubmissao() {
   const [metodologiaId, setMetodologiaId] = useState<string | null>(null);
   const [estruturaId, setEstruturaId] = useState<string | null>(null);
   const [metodologiaItemId, setMetodologiaItemId] = useState<string | null>(null);
-
+  const [enviando, setEnviando] = useState(false);
   const treinoMediaStreamRef = useRef<MediaStream | null>(null);
   const treinoMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const treinoChunksRef = useRef<BlobPart[]>([]);
@@ -104,6 +115,21 @@ export default function PaginaSubmissao() {
       attemptKey(dId, aId),
       String(Math.min(ATTEMPT_LIMIT, Math.max(0, n)))
     );
+
+  function isPdfFile(file?: File | null) {
+    return !!file && (
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf")
+    );
+  }
+
+  function isImageFile(file?: File | null) {
+    return !!file && file.type.startsWith("image/");
+  }
+
+  function isVideoFile(file?: File | null) {
+    return !!file && file.type.startsWith("video/");
+  }
 
   function parseTempoToSeconds(v: string): number | undefined {
     const s = v.trim();
@@ -300,6 +326,9 @@ export default function PaginaSubmissao() {
 
   const run = async () => {
     const params = new URLSearchParams(window.location.search);
+    setMetodologiaId(params.get("metodologiaId"));
+    setEstruturaId(params.get("estruturaId"));
+    setMetodologiaItemId(params.get("metodologiaItemId"));
     const tId = params.get("treinoAgendadoId");
     const dId = params.get("desafioId");
     const mode = params.get("mode") as "camera" | "galeria" | null;
@@ -310,7 +339,9 @@ export default function PaginaSubmissao() {
     const mId = params.get("metodologiaId");
     const eId = params.get("estruturaId");
     const mItemId = params.get("metodologiaItemId");
+    const tpId = params.get("treinoProgramadoId");
 
+    setTreinoProgramadoId(tpId);
     setMetodologiaId(mId);
     setEstruturaId(eId);
     setMetodologiaItemId(mItemId);
@@ -378,9 +409,14 @@ export default function PaginaSubmissao() {
       setTempoTexto(secondsToMMSS(tempoSegParam));
     }
 
-    const tipoId =
-      (Storage as any)?.tipoUsuarioId ?? (Storage as any)?.tipoUserId ?? null;
-    if (tipoId) setAtletaId(String(tipoId));
+    const tipoUsuarioRaw = String(Storage.tipoUsuarioRaw || "").toLowerCase();
+    const tipoId = Storage.tipoUsuarioId || null;
+
+    if (tipoUsuarioRaw === "atleta" && tipoId) {
+      setAtletaId(String(tipoId));
+    } else {
+      setAtletaId(null);
+    }
 
     if (mode === "camera") {
       if (dId) habilitarCameraLive("desafio");
@@ -542,21 +578,37 @@ export default function PaginaSubmissao() {
     }
   }
 
-  function handleVideo(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleArquivoInput(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null;
     handleArquivoChange(f);
   }
+
   const handleArquivoChange = (file: File | null) => {
     setArquivo(file);
+
     if (preview) {
       URL.revokeObjectURL(preview);
       setPreview(null);
     }
+
     if (file) {
       const url = URL.createObjectURL(file);
       setPreview(url);
     }
   };
+
+  function removerArquivoSelecionado() {
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+
+    setArquivo(null);
+    setPreview(null);
+
+    if (arquivoInputRef.current) {
+      arquivoInputRef.current.value = "";
+    }
+  }
 
   async function startRecordingTreino() {
     setTreinoRecError(null);
@@ -650,28 +702,45 @@ export default function PaginaSubmissao() {
     try {
       if (!metodologiaId || !estruturaId || !metodologiaItemId) return false;
 
-      const res = await fetch(
-        `${API.BASE_URL}/api/metodologias/${metodologiaId}/estruturas/${estruturaId}/concluir-item`,
+      const params = new URLSearchParams(window.location.search);
+      const isAvulsa =
+        params.get("origemTipo") === "AVULSA" ||
+        params.get("origem") === "avulsa" ||
+        window.location.search.includes("origemTipo=AVULSA") ||
+        window.location.search.includes("origem=avulsa");
+
+      const base = isAvulsa
+        ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaId}`
+        : `${API.BASE_URL}/api/metodologias/${metodologiaId}`;
+
+      const r = await fetch(
+        `${base}/estruturas/${estruturaId}/concluir-item`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${Storage.token || ""}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ itemId: metodologiaItemId }),
+          body: JSON.stringify({
+            itemId: metodologiaItemId,
+            origemTipo: isAvulsa ? "AVULSA" : "LEARNING",
+          }),
         }
       );
 
-      const js = await res.json().catch(() => ({}));
+      const j = await r.json().catch(() => ({}));
 
-      if (!res.ok) {
-        console.warn("[metodologia] falha ao concluir item:", js);
+      if (!r.ok) {
+        console.warn("[metodologia] falha ao concluir item:", j);
+
+        // se a submissão já foi salva e a tela já marca como concluído,
+        // não queremos quebrar o fluxo só por causa dessa chamada extra
         return false;
       }
 
       return Boolean(
-        (js as any)?.metodologiaCompleta ??
-          (js as any)?.progresso?.metodologiaCompleta
+        (j as any)?.metodologiaCompleta ??
+        (j as any)?.progresso?.metodologiaCompleta
       );
     } catch (e) {
       console.warn("[metodologia] erro ao concluir item:", e);
@@ -680,139 +749,260 @@ export default function PaginaSubmissao() {
   }
 
   const handleEnviar = async () => {
-    if (!isSessaoTreino && !atletaId) {
-      alert("Preencha todos os campos obrigatórios.");
+    if (enviando) return;
+
+    if (isSessaoTreino && awardAtletas.length === 0) {
+      alert("Nenhum atleta presente foi encontrado para esta sessão.");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("observacao", observacao);
-
-    let url = "";
-
-    if (isDesafio) {
-      if (!desafioId) {
-        alert("Desafio inválido.");
-        return;
-      }
-      if (!recordedBlob) {
-        alert("Grave o vídeo do desafio antes de enviar.");
-        return;
-      }
-
-      formData.append("desafioId", desafioId);
-      formData.append("atletaId", atletaId!);
-
-      const seg = tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
-      if (seg != null) formData.append("tempoSeg", String(seg));
-
-      formData.append(
-        "arquivo",
-        recordedBlob,
-        `desafio-${desafioId}-${Date.now()}.webm`
-      );
-
-      url = `${API.BASE_URL}/api/submissoes/desafio`;
-    }
-
-    else if (isTreino) {
-      if (treinoMode === "live") {
-        if (!treinoRecordedBlob) {
-          alert("Grave um vídeo do treino antes de enviar.");
-          return;
-        }
-        formData.append(
-          "arquivo",
-          treinoRecordedBlob,
-          `treino-${treinoAgendadoId ?? sessaoId ?? "livre"}-${Date.now()}.webm`
-        );
-      } else {
-        if (!arquivo) {
-          alert("Selecione uma imagem ou vídeo do treino.");
-          return;
-        }
-        formData.append("arquivo", arquivo);
-      }
-
-      const seg = tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
-      if (seg != null) formData.append("tempoSeg", String(seg));
-      if (reps) formData.append("repeticoes", reps);
-
-      if (isSessaoTreino) {
-        formData.append("sessaoId", sessaoId!);
-        formData.append("pontos", String(awardPontos));
-        formData.append("atletas", JSON.stringify(awardAtletas));
-        url = `${API.BASE_URL}/api/submissoes/treino/sessao`;
-      } else {
-        if (!treinoAgendadoId) {
-          alert("Treino agendado inválido.");
-          return;
-        }
-        formData.append("atletaId", atletaId!);
-        formData.append("treinoAgendadoId", treinoAgendadoId);
-        url = `${API.BASE_URL}/api/submissoes/treino`;
-      }
-    }
-
-    else {
-      alert("Nada para enviar.");
+    if (!isSessaoTreino && isDesafio && !atletaId && !metodologiaId) {
+      alert("Selecione o atleta.");
       return;
     }
+
+    setEnviando(true);
 
     try {
+      const formData = new FormData();
+      if (observacao.trim()) {
+        formData.append("observacao", observacao.trim());
+      }
+
+      let url = "";
+
+      if (isDesafio) {
+        if (!desafioId) {
+          alert("Desafio inválido.");
+          return;
+        }
+
+        formData.append("desafioId", desafioId);
+
+        if (atletaId) {
+          formData.append("atletaId", atletaId);
+        }
+
+        const seg =
+          tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
+        if (seg != null) formData.append("tempoSeg", String(seg));
+
+        if (arquivo) {
+          formData.append("arquivo", arquivo);
+        }
+        url = `${API.BASE_URL}/api/submissoes/desafio`;
+      } else if (isTreino) {
+        if (arquivo) {
+          formData.append("arquivo", arquivo);
+        } else {
+          if (arquivo) {
+            formData.append("arquivo", arquivo);
+          }
+        }
+
+        const seg =
+          tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
+        if (seg != null) formData.append("tempoSeg", String(seg));
+        if (reps) formData.append("repeticoes", reps);
+
+        if (isSessaoTreino) {
+          formData.append("sessaoId", sessaoId!);
+          formData.append("pontos", String(awardPontos));
+          formData.append("atletas", JSON.stringify(awardAtletas));
+          url = `${API.BASE_URL}/api/submissoes/treino/sessao`;
+        } else {
+          if (!treinoAgendadoId) {
+            alert("Treino agendado inválido.");
+            return;
+          }
+
+          formData.append("treinoAgendadoId", treinoAgendadoId);
+          if (metodologiaId) formData.append("metodologiaId", metodologiaId);
+          if (estruturaId) formData.append("estruturaId", estruturaId);
+          if (metodologiaItemId) formData.append("metodologiaItemId", metodologiaItemId);
+
+          const search = new URLSearchParams(window.location.search);
+          const isAvulsa =
+            search.get("origemTipo") === "AVULSA" ||
+            search.get("origem") === "avulsa" ||
+            window.location.search.includes("origemTipo=AVULSA") ||
+            window.location.search.includes("origem=avulsa");
+
+          if (isAvulsa) {
+            formData.append("origemTipo", "AVULSA");
+          }
+
+          url = `${API.BASE_URL}/api/submissoes/treino`;
+        }
+      } else {
+        alert("Nada para enviar.");
+        return;
+      }
+
+      // desafio da metodologia
+      if (metodologiaId && estruturaId && metodologiaItemId && isDesafio) {
+        const metodologiaFormData = new FormData();
+        metodologiaFormData.append("observacao", observacao);
+        metodologiaFormData.append("desafioId", desafioId!);
+        metodologiaFormData.append("itemId", metodologiaItemId);
+
+        if (atletaId) {
+          metodologiaFormData.append("atletaId", atletaId);
+        }
+
+        const seg =
+          tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
+        if (seg != null) metodologiaFormData.append("tempoSeg", String(seg));
+
+        if (arquivo) {
+          metodologiaFormData.append("file", arquivo);
+        }
+
+        const search = new URLSearchParams(window.location.search);
+        const fromAdmin = search.get("from") === "admin";
+        const isAvulsa =
+          search.get("origemTipo") === "AVULSA" ||
+          search.get("origem") === "avulsa" ||
+          window.location.search.includes("origemTipo=AVULSA") ||
+          window.location.search.includes("origem=avulsa");
+
+        const metodologiaBase = isAvulsa
+          ? `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaId}`
+          : `${API.BASE_URL}/api/metodologias/${metodologiaId}`;
+
+        const metodologiaRes = await fetch(
+          `${metodologiaBase}/estruturas/${estruturaId}/submissoes`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${Storage.token || ""}`,
+            },
+            body: metodologiaFormData,
+          }
+        );
+
+        const metodologiaJson = await metodologiaRes.json().catch(() => ({}));
+
+        if (!metodologiaRes.ok) {
+          throw new Error(
+            metodologiaJson?.message || "Erro ao enviar submissão da metodologia"
+          );
+        }
+
+        if (fromAdmin) {
+          if (isAvulsa) {
+            navigate(`/learning/${metodologiaId}?from=admin&origem=avulsa`);
+          } else {
+            navigate(`/learning/${metodologiaId}?from=admin`);
+          }
+          return;
+        }
+
+        if (isAvulsa) {
+          navigate(`/learning/${metodologiaId}?origem=avulsa`);
+        } else {
+          navigate(`/learning/${metodologiaId}`);
+        }
+        return;
+      }
+
+      // fluxo normal
       const res = await fetch(url, {
         method: "POST",
         body: formData,
-        headers: { Authorization: `Bearer ${Storage.token || ""}` },
+        headers: {
+          Authorization: `Bearer ${Storage.token || ""}`,
+        },
       });
 
       const js = await res.json().catch(() => ({}));
 
-      if (res.ok) {
-        const msg =
-          (js as any)?.autoAprovado
-            ? "Submissão enviada e aprovada automaticamente (sem pontuação por ausência de vínculo)."
-            : (js as any)?.mensagem ||
-              (js as any)?.message ||
-              "Submissão enviada com sucesso!";
+      if (!res.ok) {
+        throw new Error(
+          (js as any)?.error ||
+            (js as any)?.erro ||
+            (js as any)?.message ||
+            "Erro ao enviar submissão."
+        );
+      }
 
-        alert(msg);
-        
-        const metodologiaCompleta = await concluirItemDaMetodologia();
+      let metodologiaCompleta = false;
+      if (metodologiaId && estruturaId && metodologiaItemId) {
+        metodologiaCompleta = await concluirItemDaMetodologia();
+      }
 
-        if (metodologiaCompleta && metodologiaId) {
-          navigate(`/learning/avaliar?metodologiaId=${encodeURIComponent(metodologiaId)}`);
+      if (metodologiaCompleta && metodologiaId) {
+        const qsAvaliar = new URLSearchParams();
+        const search = new URLSearchParams(window.location.search);
+        const fromAdmin = search.get("from") === "admin";
+        const isAvulsa =
+          search.get("origemTipo") === "AVULSA" ||
+          search.get("origem") === "avulsa" ||
+          window.location.search.includes("origemTipo=AVULSA") ||
+          window.location.search.includes("origem=avulsa");
+
+        qsAvaliar.set("metodologiaId", metodologiaId);
+        if (isAvulsa) qsAvaliar.set("origem", "avulsa");
+        if (fromAdmin) qsAvaliar.set("from", "admin");
+
+        navigate(`/learning/avaliar?${qsAvaliar.toString()}`);
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("treino:submetido"));
+        window.dispatchEvent(new Event("perfil:refresh"));
+      }
+
+      const search = new URLSearchParams(window.location.search);
+      const fromAdmin = search.get("from") === "admin";
+      const isAvulsa =
+        search.get("origemTipo") === "AVULSA" ||
+        search.get("origem") === "avulsa" ||
+        window.location.search.includes("origemTipo=AVULSA") ||
+        window.location.search.includes("origem=avulsa");
+
+      if (metodologiaId) {
+        if (fromAdmin) {
+          if (isAvulsa) {
+            navigate(`/learning/${metodologiaId}?from=admin&origem=avulsa`);
+          } else {
+            navigate(`/learning/${metodologiaId}?from=admin`);
+          }
           return;
         }
 
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("treino:submetido"));
-          window.dispatchEvent(new Event("perfil:refresh"));
+        if (isAvulsa) {
+          navigate(`/learning/${metodologiaId}?origem=avulsa`);
+        } else {
+          navigate(`/learning/${metodologiaId}`);
         }
-        const submissaoId =
-          String(
-            (js as any)?.submissao?.id ??
+        return;
+      }
+
+      const submissaoId =
+        String(
+          (js as any)?.submissao?.id ??
             (js as any)?.id ??
             (js as any)?.submissaoTreinoId ??
             ""
-          ) || "";
+        ) || "";
 
-        if (!treinoAgendadoId) {
-          navigate("/treinos");
-          return;
-        }
-
-        navigate(
-          `/treinos/avaliar?treinoAgendadoId=${encodeURIComponent(treinoAgendadoId)}&submissaoTreinoId=${encodeURIComponent(submissaoId)}`
-        );
+      if (!treinoAgendadoId) {
+        navigate("/treinos");
         return;
-      } else {
-        console.error("Erro:", js);
-        alert((js as any)?.error || (js as any)?.erro || (js as any)?.message || "Erro ao enviar submissão.");
       }
-    } catch (err) {
+
+      navigate(
+        `/treinos/avaliar?treinoAgendadoId=${encodeURIComponent(
+          treinoAgendadoId
+        )}&submissaoTreinoId=${encodeURIComponent(submissaoId)}`
+      );
+    } catch (err: any) {
       console.error("Erro no envio:", err);
-      alert("Erro de conexão ao enviar submissão.");
+      alert(err?.message || "Erro de conexão ao enviar submissão.");
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -822,7 +1012,7 @@ export default function PaginaSubmissao() {
     <div className="min-h-screen bg-transparent pb-24 px-4 pt-6">
       <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6">
         <h1 className="text-2xl font-bold mb-6 text-green-800 text-center">
-          {isDesafio ? "Desafio (Submissão ao Vivo)" : "Enviar Submissão"}
+          {isDesafio ? "Enviar Submissão do Desafio" : "Enviar Submissão"}
         </h1>
 
         {isSessaoTreino && (
@@ -835,28 +1025,6 @@ export default function PaginaSubmissao() {
             </div>
           </div>
         )}
-
-        {!isSecureContext && (
-          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded">
-            Para acessar a câmera, abra esta página via <strong>HTTPS</strong>{" "}
-            (ou em <code>localhost</code> durante o desenvolvimento).
-          </div>
-        )}
-
-        <label className="block text-sm font-medium mb-1 text-gray-700">
-          Comentário
-        </label>
-        <textarea
-          value={observacao}
-          onChange={(e) => setObservacao(e.target.value)}
-          className="w-full border p-3 mb-4 rounded-md shadow-sm"
-          rows={4}
-          placeholder={
-            isDesafio
-              ? "Comente sua execução do desafio..."
-              : "Comente seu treino..."
-          }
-        />
 
         {isTreino && (
           <>
@@ -887,59 +1055,53 @@ export default function PaginaSubmissao() {
             </div>
 
             <div className="mt-6">
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => setTreinoMode("upload")}
-                  className={`px-3 py-2 rounded border ${
-                    treinoMode === "upload"
-                      ? "bg-green-100 border-green-600 text-green-800"
-                      : "bg-white border-gray-300"
-                  }`}
-                >
-                  Upload
-                </button>
-                <button
-                  onClick={() => setTreinoMode("live")}
-                  className={`px-3 py-2 rounded border ${
-                    treinoMode === "live"
-                      ? "bg-green-100 border-green-600 text-green-800"
-                      : "bg-white border-gray-300"
-                  }`}
-                >
-                  Gravar ao vivo (sem limite)
-                </button>
-              </div>
-
               {treinoMode === "upload" ? (
                 <>
                   <label className="block text-sm font-medium mb-1">
-                    Enviar Vídeo ou Foto *
+                    Enviar Vídeo, PDF, ou Foto (opcional)
                   </label>
                   <input
+                    ref={arquivoInputRef}
                     type="file"
                     name="arquivo"
                     data-testid="submissao-file"
-                    accept="video/*,image/*"
-                    // @ts-ignore
-                    capture={modeParam === "camera" ? "environment" : undefined}
-                    onChange={handleVideo}
+                    accept="video/*,image/*,application/pdf,.pdf"
+                    onChange={handleArquivoInput}
                   />
 
-                  {preview && (
+                  {preview && arquivo && (
                     <div className="mt-4">
-                      {arquivo?.type?.startsWith("image") ? (
+                      {isImageFile(arquivo) ? (
                         <img
                           src={preview}
                           alt="Preview"
                           className="w-full h-auto rounded border object-contain"
                         />
-                      ) : (
+                      ) : isVideoFile(arquivo) ? (
                         <video controls className="w-full rounded border">
-                          <source src={preview} type={arquivo?.type} />
+                          <source src={preview} type={arquivo.type} />
                           Seu navegador não suporta visualização de vídeo.
                         </video>
+                      ) : isPdfFile(arquivo) ? (
+                        <iframe
+                          src={preview}
+                          className="w-full h-[420px] rounded border"
+                          title="Preview PDF"
+                        />
+                      ) : (
+                        <div className="p-3 border rounded bg-gray-50 text-sm text-gray-700">
+                          Arquivo selecionado: <strong>{arquivo.name}</strong>
+                        </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={removerArquivoSelecionado}
+                        className="mt-3 rounded-md border border-red-500 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Remover arquivo selecionado
+                      </button>
                     </div>
+                    
                   )}
                 </>
               ) : (
@@ -1022,98 +1184,73 @@ export default function PaginaSubmissao() {
 
         {isDesafio && (
           <div className="mt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-700">
-                Tentativas usadas:{" "}
-                <strong>
-                  {attemptsUsed}/{ATTEMPT_LIMIT}
-                </strong>
-              </span>
-              {recError && (
-                <span className="text-xs text-red-600">{recError}</span>
-              )}
-            </div>
+            <label className="block text-sm font-medium mb-1">
+              Enviar vídeo, foto ou PDF (opcional)
+            </label>
 
-            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border mb-3">
-              {recordedUrl && (
-                <span className="pointer-events-none absolute top-2 left-2 z-10 text-xs font-semibold px-2 py-1 rounded-full text-white bg-green-700 shadow">
-                  {attemptsUsed <= 1 ? "1ª tentativa" : "2ª tentativa"}
-                </span>
-              )}
+            <input
+              ref={arquivoInputRef}
+              type="file"
+              name="arquivo"
+              data-testid="submissao-file"
+              accept="video/*,image/*,application/pdf,.pdf"
+              onChange={handleArquivoInput}
+              className="block w-full"
+            />
 
-              {!recordedUrl ? (
-                <video
-                  ref={liveVideoRef}
-                  className="w-full h-full object-contain"
-                  muted
-                  playsInline
-                />
-              ) : (
-                <video
-                  className="w-full h-full object-contain"
-                  controls
-                  src={recordedUrl}
-                />
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              {!isRecording && !recordedUrl && (
-                <>
-                  <button
-                    onClick={() => habilitarCameraLive("desafio")}
-                    className="px-4 py-2 rounded font-semibold border border-gray-300 hover:bg-gray-50"
-                  >
-                    Habilitar câmera
-                  </button>
-                  <button
-                    onClick={startRecording}
-                    disabled={attemptsUsed >= ATTEMPT_LIMIT}
-                    className={`px-4 py-2 rounded font-semibold text-white ${
-                      attemptsUsed >= ATTEMPT_LIMIT
-                        ? "bg-gray-400"
-                        : "bg-green-700 hover:bg-green-600"
-                    }`}
-                  >
-                    Começar a gravar
-                  </button>
-                </>
-              )}
-
-              {isRecording && (
+            {preview && arquivo && (
+              <div className="mt-4">
+                {isImageFile(arquivo) ? (
+                  <img
+                    src={preview}
+                    alt="Preview"
+                    className="w-full h-auto rounded border object-contain"
+                  />
+                ) : isVideoFile(arquivo) ? (
+                  <video controls className="w-full rounded border">
+                    <source src={preview} type={arquivo.type} />
+                    Seu navegador não suporta visualização de vídeo.
+                  </video>
+                ) : isPdfFile(arquivo) ? (
+                  <iframe
+                    src={preview}
+                    className="w-full h-[420px] rounded border"
+                    title="Preview PDF"
+                  />
+                ) : (
+                  <div className="p-3 border rounded bg-gray-50 text-sm text-gray-700">
+                    Arquivo selecionado: <strong>{arquivo.name}</strong>
+                  </div>
+                )}
                 <button
-                  onClick={stopRecording}
-                  className="px-4 py-2 rounded font-semibold text-white bg-red-700 hover:bg-red-600"
+                  type="button"
+                  onClick={removerArquivoSelecionado}
+                  className="mt-3 rounded-md border border-red-500 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                 >
-                  Parar & Revisar
+                  Remover arquivo selecionado
                 </button>
-              )}
-
-              {!isRecording && recordedUrl && attemptsUsed < ATTEMPT_LIMIT && (
-                <button
-                  onClick={descartarETentarDeNovo}
-                  className="px-4 py-2 rounded font-semibold text-green-800 border border-green-800 hover:bg-green-50"
-                >
-                  Refazer (2ª tentativa)
-                </button>
-              )}
-            </div>
+              </div>
+            )}
 
             <p className="text-xs text-gray-500 mt-2">
-              • O desafio é gravado ao vivo pelo app. Sem upload de arquivos.{" "}
+              • Envie um vídeo, foto ou PDF como comprovação do desafio.
               <br />
-              • Máximo de <strong>{ATTEMPT_LIMIT} tentativas</strong>.
-              Enviaremos em <em>repetições</em> o número de tentativas usadas.
+              • Confira o preview antes de enviar a submissão.
             </p>
           </div>
         )}
 
         <button
+          type="button"
+          disabled={enviando}
           onClick={handleEnviar}
-          className="w-full mt-6 bg-green-800 hover:bg-green-700 text-white py-2 rounded font-semibold"
-          disabled={isDesafio && !recordedBlob}
+          className={`w-full rounded-md py-3 font-bold text-white mt-4 ${
+            enviando
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-700 hover:bg-green-800"
+          }`}
         >
-          Enviar Submissão
+          {enviando ? "Enviando..." : "Enviar Submissão"}
         </button>
       </div>
 

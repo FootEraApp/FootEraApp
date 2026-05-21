@@ -1,7 +1,8 @@
 import type { Response } from "express";
-import { StatusSessaoTreinoTurma } from "@prisma/client";
+import { StatusSessaoTreinoTurma, TipoMidia } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
 function assertInstrutor(req: AuthenticatedRequest) {
   const u: any = req.authUser || (req as any).user || {};
@@ -1283,5 +1284,208 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
   } catch (err: any) {
     console.error("Erro obterSessao", err);
     return res.status(err.status || 500).json({ error: err.message || "Erro ao obter sessão" });
+  }
+}
+
+export async function salvarVideosExecucaoSessao(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    assertInstrutor(req);
+
+    const { id } = req.params; // sessaoId
+    const u: any = req.authUser || req.user;
+    const usuarioId = String(u?.id || "");
+    const tipoRaw = String(u?.tipo || "").toLowerCase();
+
+    const ok = await podeGerenciarSessao({
+      usuarioId,
+      tipoRaw,
+      isAdmin: Boolean(u?.isAdmin),
+      sessaoId: String(id),
+    });
+
+    if (!ok) {
+      return res.status(403).json({
+        error: "Você não pode alterar uma sessão fora do seu escopo.",
+      });
+    }
+
+    const sessao = await prisma.sessaoTreinoTurma.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        treinoProgramadoId: true,
+        turmaId: true,
+      },
+    });
+
+    if (!sessao) {
+      return res.status(404).json({ error: "Sessão não encontrada." });
+    }
+
+    const { updates } = req.body as {
+      updates?: Array<{
+        exerciseRowId: string;
+        kind: "catalogo" | "temporario" | "personalizado";
+        entityId: string;
+        existingUrl?: string | null;
+        uploadedUrl: string;
+        selectedUrl?: string | null;
+        saveMode: "SESSION_ONLY" | "UPDATE_OFFICIAL";
+        officialChoice?: "KEEP_OLD" | "USE_NEW" | null;
+      }>;
+    };
+
+    if (!Array.isArray(updates) || !updates.length) {
+      return res.status(400).json({ error: "Nenhuma atualização enviada." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of updates) {
+        if (!item.uploadedUrl) continue;
+
+        let kind = item.kind;
+        let entityId = item.entityId;
+
+        if (item.exerciseRowId) {
+          const row = await tx.sessaoTreinoTurmaExercicio.findUnique({
+            where: { id: item.exerciseRowId },
+            select: {
+              exercicioId: true,
+              exercicioTemporarioId: true,
+              exercicioPersonalizadoId: true,
+            },
+          });
+
+          if (row?.exercicioId) {
+            kind = "catalogo";
+            entityId = row.exercicioId;
+          } else if (row?.exercicioTemporarioId) {
+            kind = "temporario";
+            entityId = row.exercicioTemporarioId;
+          } else if (row?.exercicioPersonalizadoId) {
+            kind = "personalizado";
+            entityId = row.exercicioPersonalizadoId;
+          }
+        }
+
+        if (!entityId) continue;
+
+        if (item.saveMode === "SESSION_ONLY") {
+          await tx.midia.create({
+            data: {
+              titulo: `Execução do exercício ${item.exerciseRowId}`,
+              tipo: TipoMidia.Video,
+              url: item.uploadedUrl,
+              dataEnvio: new Date(),
+              descricao: JSON.stringify({
+                origem: "sessao_turma_execucao_instrutor",
+                sessaoId: id,
+                treinoProgramadoId: sessao.treinoProgramadoId,
+                turmaId: sessao.turmaId,
+                exerciseRowId: item.exerciseRowId,
+                kind: item.kind,
+                entityId: item.entityId,
+                criadoPorUsuarioId: usuarioId,
+              }),
+              storageClass: "HOT" as any,
+            } as any,
+          });
+
+          continue;
+        }
+
+        if (item.saveMode === "UPDATE_OFFICIAL") {
+          if (item.officialChoice === "KEEP_OLD") {
+            continue;
+          }
+
+          if (item.officialChoice !== "USE_NEW") {
+            continue;
+          }
+
+          if (kind === "catalogo") {
+            const atual = await tx.exercicio.findUnique({
+              where: { id: entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicio.update({
+              where: { id: entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+
+          if (kind === "temporario") {
+            const atual = await tx.exercicioTemporario.findUnique({
+              where: { id: entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioTemporario.update({
+              where: { id: entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+
+          if (kind === "personalizado") {
+            const atual = await tx.exercicioPersonalizado.findUnique({
+              where: { id: entityId },
+              select: { videoDemonstrativoUrl: true },
+            });
+
+            await tx.exercicioPersonalizado.update({
+              where: { id: entityId },
+              data: {
+                videoDemonstrativoUrl: item.uploadedUrl,
+              },
+            });
+
+            if (
+              atual?.videoDemonstrativoUrl &&
+              atual.videoDemonstrativoUrl !== item.uploadedUrl &&
+              atual.videoDemonstrativoUrl.includes("amazonaws.com")
+            ) {
+              await deleteFromS3(atual.videoDemonstrativoUrl);
+            }
+
+            continue;
+          }
+        }
+      }
+    });
+
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error("Erro salvarVideosExecucaoSessao", err);
+    return res.status(err.status || 500).json({
+      error: err.message || "Erro ao salvar vídeos da sessão.",
+    });
   }
 }

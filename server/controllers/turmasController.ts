@@ -11,6 +11,18 @@ function uniqById<T extends { id: string }>(arr: T[]) {
   return Array.from(map.values());
 }
 
+function parseCategoriasTurma(input: any): string[] {
+  if (Array.isArray(input)) {
+    return input.map(String).map((x) => x.trim()).filter(Boolean);
+  }
+
+  if (typeof input === "string" && input.trim()) {
+    return [input.trim()];
+  }
+
+  return [];
+}
+
 export async function getAlunosTurma(req: Request, res: Response) {
   const { id } = req.params;
 
@@ -392,6 +404,7 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
         id: true,
         nome: true,
         categoria: true,
+        descricao: true,
         professores: {
           select: {
             professor: {
@@ -423,6 +436,7 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
       professorNomes: profs.map((p) => p.nome),
       professorNome: profs.map((p) => p.nome).join(", ") || null,
       alunosCount: t._count.membros,
+      descricao: t.descricao ?? null,
     };
     });
 
@@ -490,6 +504,7 @@ export async function listarTurmas(req: Request, res: Response) {
         id: t.id,
         nome: t.nome,
         categoria: t.categoria,
+        descricao: (t as any).descricao ?? null,
         professorIds: profs.map((p) => p.id),
         professorNomes: profs.map((p) => p.nome),
         professorNome: profs.map((p) => p.nome).join(", ") || null,
@@ -557,12 +572,16 @@ export async function listarTurmasComoProfessor(
         id: t.id,
         nome: t.nome,
         categoria: t.categoria ?? null,
+        descricao: (t as any).descricao ?? null,
         professorIds: profs.map((p) => p.id),
         professorNomes: profs.map((p) => p.nome),
         professorNome: profs.map((p) => p.nome).join(", ") || null,
         alunosCount: t._count.membros,
         ownerTipo,
         ownerId,
+
+        // IMPORTANTE:
+        criadoPorProfessorId: !ownerId ? professorId : null,
       };
     });
 
@@ -581,37 +600,73 @@ export async function criarTurma(req: Request, res: Response) {
       ownerTipo,
       ownerId,
       nome,
+      descricao,
       categoria,
       professorId,
       atletaIds,
       usuarioIds,
     } = req.body || {};
 
-    if (!ownerTipo || !ownerId || !nome) {
+    if (!nome) {
       return res.status(400).json({
-        message: "ownerTipo, ownerId e nome são obrigatórios",
+        message: "nome é obrigatório",
       });
     }
 
-    const data: any = { nome: String(nome).trim() };
+    const usuarioLogadoId = String((req as any).userId || (req as any).userCtx?.id || "").trim();
 
-    if (categoria)   data.categoria = String(categoria);
-    if (ownerTipo === "Clube") {
-      data.clubeId = String(ownerId);
+    let professorIds: string[] = Array.isArray(req.body?.professorIds)
+      ? req.body.professorIds.map(String).filter(Boolean)
+      : professorId
+        ? [String(professorId)]
+        : [];
+
+    if (!ownerTipo && !ownerId && professorIds.length === 0 && usuarioLogadoId) {
+      const professorLogado = await prisma.professor.findFirst({
+        where: { usuarioId: usuarioLogadoId },
+        select: { id: true },
+      });
+
+      if (professorLogado?.id) {
+        professorIds = [String(professorLogado.id)];
+      }
     }
-    if (ownerTipo === "Escolinha") {
-      data.escolinhaId = String(ownerId);
+
+    if (!ownerTipo && !ownerId && professorIds.length === 0) {
+      return res.status(400).json({
+        message: "Não foi possível identificar o professor para criar a turma.",
+      });
+    }
+
+    const data: any = {
+      nome: String(nome).trim(),
+      categoria: parseCategoriasTurma(categoria),
+    };
+
+    if (descricao !== undefined) {
+      data.descricao = String(descricao || "").trim() || null;
+    }
+
+    if (ownerTipo && ownerId) {
+      if (ownerTipo === "Clube") {
+        data.clubeId = String(ownerId);
+      } else if (ownerTipo === "Escolinha") {
+        data.escolinhaId = String(ownerId);
+      } else {
+        return res.status(400).json({
+          message: "ownerTipo deve ser Clube ou Escolinha",
+        });
+      }
     }
 
     const turma = await prisma.turma.create({ data });
 
-    const professorIds: string[] = Array.isArray(req.body?.professorIds)
-      ? req.body.professorIds.map(String).filter(Boolean)
-      : professorId ? [String(professorId)] : [];
-
     if (professorIds.length) {
       await prisma.turmaProfessor.createMany({
-        data: professorIds.map((pid) => ({ turmaId: turma.id, professorId: pid })),
+        data: professorIds.map((pid) => ({
+          turmaId: turma.id,
+          professorId: pid,
+        })),
         skipDuplicates: true,
       });
     }
@@ -620,7 +675,7 @@ export async function criarTurma(req: Request, res: Response) {
 
     if (Array.isArray(usuarioIds)) {
       usuarioIdsFinal.push(
-        ...usuarioIds.map(String).filter((x) => x && x.trim()),
+        ...usuarioIds.map(String).filter((x) => x && x.trim())
       );
     }
 
@@ -633,7 +688,7 @@ export async function criarTurma(req: Request, res: Response) {
       usuarioIdsFinal.push(
         ...atletas
           .map((a) => a.usuarioId)
-          .filter((id): id is string => Boolean(id)),
+          .filter((id): id is string => Boolean(id))
       );
     }
 
@@ -666,14 +721,14 @@ export async function updateTurma(req: Request, res: Response) {
     const { id } = req.params;
     const { nome, categoria, descricao, ativo } = req.body as Partial<{
       nome: string;
-      categoria: string;
+      categoria: string | string[];
       descricao: string;
       ativo: boolean;
     }>;
 
     const data: any = {};
     if (nome !== undefined) data.nome = nome;
-    if (categoria !== undefined) data.categoria = categoria;
+    if (categoria !== undefined) data.categoria = parseCategoriasTurma(categoria);
     if (descricao !== undefined) data.descricao = descricao;
     if (ativo !== undefined) data.ativo = Boolean(ativo);
 

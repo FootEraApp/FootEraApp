@@ -138,6 +138,9 @@ import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js
 import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
 import { processExpiringSubscriptions } from "./controllers/billingController.js";
 import googleAuthRoutes from "./routes/googleAuth.js";
+import creatorRoutes from "./routes/creator.js";
+import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
+import learningEventosRoutes from "./routes/learningEventos.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -330,6 +333,8 @@ app.use("/api/treinosprogramados", authenticateToken, treinoProgramadoRoutes);
 
 //app.use("/api/upload/metodologias", metodologiasUploadRoutes);
 
+app.use("/api/aulas-ao-vivo", aulasAoVivoRoutes);
+
 app.use("/api/upload", authenticateToken, uploadRoutes);
 app.use("/api/vinculo", authenticateToken, vinculoRoutes);
 app.use("/api/vinculos", authenticateToken, vinculoRoutes);
@@ -362,7 +367,9 @@ app.use("/api/sessoes-turma", sessoesTurmaRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api/metodologias", metodologiasRoutes);
+app.use("/api/creator", creatorRoutes);
 app.use("/api/permissoes", permissoesRoutes);
+app.use("/api/learning/eventos", learningEventosRoutes);
 app.use("/api/dashboard", authenticateToken, dashboardOrganizacaoRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);

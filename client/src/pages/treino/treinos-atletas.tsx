@@ -58,6 +58,9 @@ interface TreinoAgendado {
   meuStatus?: TreinoStatus | string;
   startedAt?: string | null;
   completedAt?: string | null;
+  sessaoTreinoId?: string | null;
+  sessaoTreino?: { id: string; nome: string } | null;
+  sessaoTreinoNome?: string | null;
   submissao?: { enviados: number; aprovados: number; feito: boolean } | null;
   treinoProgramado?: {
     id?: string;
@@ -510,6 +513,7 @@ export default function TreinosAtletas() {
 
   const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId"); // treinoProgramadoId
   const qsMetodologiaId = qs.get("metodologiaId");
+  const qsEstruturaId = qs.get("estruturaId");
   const qsMetodologiaItemId = qs.get("metodologiaItemId");
 
   // ✅ chave pra guardar o vínculo metodologia <-> treino agendado
@@ -735,6 +739,50 @@ export default function TreinosAtletas() {
   }
 }
 
+useEffect(() => {
+  if (!openAgendadoByProgramadoId) return;
+  if (!treinosAgendados.length) return;
+
+  const alvo = treinosAgendados.find(
+    (t) => String(t?.treinoProgramado?.id || "") === String(openAgendadoByProgramadoId)
+  );
+
+  if (!alvo?.id) return;
+
+  // guarda vínculo da metodologia com esse treino agendado
+  if (qsMetodologiaId && qsEstruturaId && qsMetodologiaItemId) {
+    localStorage.setItem(
+      METODOLOGIA_LINK_KEY(alvo.id),
+      JSON.stringify({
+        metodologiaId: qsMetodologiaId,
+        estruturaId: qsEstruturaId,
+        metodologiaItemId: qsMetodologiaItemId,
+      })
+    );
+  }
+
+  // abre o treino diretamente igual à tela detalhada
+  setExpandedId(alvo.id);
+  setFullscreenId(alvo.id);
+
+  // limpa a query da URL depois de abrir
+  const next = new URLSearchParams(window.location.search);
+  next.delete("openAgendadoByProgramadoId");
+  next.delete("metodologiaId");
+  next.delete("estruturaId");
+  next.delete("metodologiaItemId");
+
+  const qs = next.toString();
+  navigate(qs ? `/treinos?${qs}` : "/treinos", { replace: true });
+}, [
+  openAgendadoByProgramadoId,
+  treinosAgendados,
+  qsMetodologiaId,
+  qsEstruturaId,
+  qsMetodologiaItemId,
+  navigate,
+]);
+
 function abrirMidiaExercicioDireto(
   exercicioId: string,
   nome: string,
@@ -935,21 +983,39 @@ function abrirMidiaExercicioDireto(
         return;
       }
 
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const agora = new Date();
 
-      if (r.status === 401) {
-        console.warn(
-          "[TREINOS] 401 ao buscar treinos agendados – provavelmente token inválido/expirado"
-        );
+      const monthAtual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+
+      const proximo = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+      const monthProximo = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, "0")}`;
+
+      const [resAtual, resProximo] = await Promise.all([
+        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthProximo}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (resAtual.status === 401 || resProximo.status === 401) {
+        console.warn("[TREINOS] 401 ao buscar treinos agendados");
         return;
       }
 
-      if (!r.ok) throw new Error("Falha ao buscar treinos agendados");
+      if (!resAtual.ok || !resProximo.ok) {
+        throw new Error("Falha ao buscar treinos agendados");
+      }
 
-      const js = await r.json();
-      const listaRaw: any[] = Array.isArray(js) ? js : js.items ?? [];
+      const jsAtual = await resAtual.json();
+      const jsProximo = await resProximo.json();
+
+      const listaRaw: any[] = [
+        ...(Array.isArray(jsAtual) ? jsAtual : jsAtual.items ?? []),
+        ...(Array.isArray(jsProximo) ? jsProximo : jsProximo.items ?? []),
+      ];
+
       const listaAdaptada: TreinoAgendado[] = listaRaw.map((item) => {
         const tp = item.treinoProgramado ?? null;
 
@@ -1212,6 +1278,7 @@ function abrirMidiaExercicioDireto(
         JSON.stringify({
           metodologiaId: qsMetodologiaId,
           metodologiaItemId: qsMetodologiaItemId,
+          estruturaId: qsEstruturaId,
         })
       );
     } catch {}
@@ -1278,6 +1345,7 @@ function abrirMidiaExercicioDireto(
   type TileInfo = {
     id: string;
     titulo: string;
+    sessaoTreinoNome?: string | null;
     label: string;
     date: Date | null;
     isToday: boolean;
@@ -1333,6 +1401,12 @@ function abrirMidiaExercicioDireto(
     return {
       id: t.id,
       titulo: t.titulo,
+      sessaoTreinoNome:
+        (t as any).sessaoTreinoNome ||
+        (t as any).sessaoTreino?.nome ||
+        (t as any).treinoProgramado?.sessaoTreinoNome ||
+        (t as any).treinoProgramado?.sessaoTreino?.nome ||
+        null,
       label,
       date: d,
       isToday,
@@ -1489,26 +1563,30 @@ function abrirMidiaExercicioDireto(
 
       const link = JSON.parse(raw) as {
         metodologiaId?: string;
+        estruturaId?: string;
         metodologiaItemId?: string;
       };
 
       const metodologiaId = String(link?.metodologiaId || "");
+      const estruturaId = String(link?.estruturaId || "");
       const itemId = String(link?.metodologiaItemId || "");
-      if (!metodologiaId || !itemId) return;
+      if (!metodologiaId || !estruturaId || !itemId) return;
 
       const token = getToken();
       if (!token) return;
 
-      await fetch(`${API.BASE_URL}/api/metodologias/${metodologiaId}/concluir-item`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ itemId }),
-      });
+      await fetch(
+        `${API.BASE_URL}/api/metodologias/${metodologiaId}/estruturas/${estruturaId}/concluir-item`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ itemId }),
+        }
+      );
 
-      // ✅ evita concluir 2x
       localStorage.removeItem(METODOLOGIA_LINK_KEY(treinoAgendadoId));
     } catch (e) {
       console.warn("[metodologia] falha ao concluir item:", e);
@@ -2136,6 +2214,11 @@ function abrirMidiaExercicioDireto(
                             <div className="mt-1 text-sm line-clamp-2">
                               {tl.titulo}
                             </div>
+                            {tl.sessaoTreinoNome ? (
+                              <div className="mt-1 text-[11px] text-gray-600">
+                                Sessão: {tl.sessaoTreinoNome}
+                              </div>
+                            ) : null}
                             <div className="mt-1 text-[11px] opacity-80">
                               {tl.label}
                             </div>
@@ -2546,6 +2629,7 @@ function abrirMidiaExercicioDireto(
                     const link = JSON.parse(raw);
                     if (link?.metodologiaId) params.set("metodologiaId", String(link.metodologiaId));
                     if (link?.metodologiaItemId) params.set("metodologiaItemId", String(link.metodologiaItemId));
+                    if (link?.estruturaId) params.set("estruturaId", String(link.estruturaId));
                   }
                 } catch {}
 
@@ -2608,86 +2692,87 @@ function abrirMidiaExercicioDireto(
       )}
 
       {videoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-lg p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => {
+            setVideoModal(null);
+            setVideoCarregando(false);
+            setVideoErro(null);
+          }}
+        >
+          <div
+            className="relative bg-white rounded-2xl w-full max-w-[720px] max-h-[85vh] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-        onClick={() => {
-          setVideoModal(null);
-          setVideoCarregando(false);
-          setVideoErro(null);
-        }}
-        className="absolute top-3 right-3 text-gray-600 hover:text-gray-800"
-      >
-        <X className="w-6 h-6" />
-      </button>
-
-      <h2 className="text-lg font-semibold mb-3">
-        {videoModal.nome}
-      </h2>
-
-      {videoCarregando && (
-        <div className="text-center py-10 text-gray-600">
-          Carregando vídeo...
-        </div>
-      )}
-
-      {videoErro && (
-        <div className="text-center py-6 text-red-600">
-          {videoErro}
-        </div>
-      )}
-
-      {!videoErro && isYouTubeUrl(videoModal.url) && (
-        <div className="w-full">
-          <div className="aspect-w-16 aspect-h-9 max-h-[70vh]">
-            <iframe
-              src={toYouTubeEmbed(videoModal.url)}
-              className="w-full h-full rounded-lg"
-              allowFullScreen
-            ></iframe>
-          </div>
-        </div>
-      )}
-
-      {!videoErro &&
-        !isYouTubeUrl(videoModal.url) &&
-        isVideoUrl(videoModal.url) && (
-          <div className="w-full flex justify-center">
-            <video
-              src={videoModal.url}
-              className="w-full max-h-[70vh] rounded-lg object-contain"
-              style={{ maxHeight: "70vh" }}
-              controls
-              autoPlay
-              onError={() => {
+              onClick={() => {
+                setVideoModal(null);
                 setVideoCarregando(false);
-                setVideoErro("Não foi possível carregar o vídeo.")
+                setVideoErro(null);
               }}
-              onLoadedData={() => setVideoCarregando(false)}
-            />
-          </div>
-        )}
+              className="absolute top-3 right-3 z-10 h-10 w-10 rounded-full bg-white/95 border shadow flex items-center justify-center"
+              aria-label="Fechar vídeo"
+              type="button"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-      {!videoErro &&
-        !isVideoUrl(videoModal.url) &&
-        !isYouTubeUrl(videoModal.url) && (
-          <div className="w-full flex justify-center">
-          <img
-            src={videoModal.url}
-            alt={videoModal.nome}
-            className="w-full max-h-[70vh] rounded-lg object-contain"
-            style={{ maxHeight: "70vh" }}
-            onLoad={() => setVideoCarregando(false)}
-            onError={() => {
-              setVideoCarregando(false);
-              setVideoErro("Não foi possível carregar a imagem.");
-            }}
-          />
+            <div className="px-4 pt-4 pb-2 border-b">
+              <div className="font-semibold text-green-900 pr-12">{videoModal.nome}</div>
+            </div>
+
+            {videoCarregando && (
+              <div className="text-center py-10 text-gray-600">
+                Carregando vídeo.
+              </div>
+            )}
+
+            {videoErro && (
+              <div className="text-center py-6 text-red-600 px-4">
+                {videoErro}
+              </div>
+            )}
+
+            {!videoErro && (
+              <div className="p-4 overflow-auto max-h-[calc(85vh-64px)]">
+                {isYouTubeUrl(videoModal.url) ? (
+                  <iframe
+                    src={toYouTubeEmbed(videoModal.url)}
+                    className="w-full aspect-video rounded-xl border bg-black"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title={videoModal.nome}
+                    onLoad={() => setVideoCarregando(false)}
+                  />
+                ) : isVideoUrl(videoModal.url) ? (
+                  <video
+                    src={videoModal.url}
+                    className="w-full max-h-[70vh] rounded-xl border bg-black object-contain"
+                    controls
+                    autoPlay
+                    onError={() => {
+                      setVideoCarregando(false);
+                      setVideoErro("Não foi possível carregar o vídeo.");
+                    }}
+                    onLoadedData={() => setVideoCarregando(false)}
+                  />
+                ) : (
+                  <img
+                    src={videoModal.url}
+                    alt={videoModal.nome}
+                    className="w-full max-h-[70vh] rounded-xl border object-contain"
+                    onLoad={() => setVideoCarregando(false)}
+                    onError={() => {
+                      setVideoCarregando(false);
+                      setVideoErro("Não foi possível carregar a imagem.");
+                    }}
+                  />
+                )}
+              </div>
+            )}
           </div>
-        )}
-    </div>
-  </div>
-)}
+        </div>
+      )}
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-end sm:items-center justify-center p-4">

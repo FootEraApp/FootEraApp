@@ -42,7 +42,11 @@ type TreinoUnicoPayload = {
   descricao?: string | null;
   nivel?: string | null;
   objetivo?: string | null;
+  tipoTreino?: string | null;
   duracao?: number | null;
+  sessaoTreinoId?: string | null;
+  sessaoTreino?: { id: string; nome: string } | null;
+  sessaoTreinoNome?: string | null;
   dicas?: string[] | null;
   prazoEnvio?: string | null;
   dataTreino?: string | null;
@@ -219,6 +223,25 @@ export default function TreinoUnico() {
                 <strong>Nível:</strong> {treino.nivel || "-"}
               </span>
             </div>
+
+            {(treino.sessaoTreinoNome || treino.sessaoTreino?.nome) && (
+              <div className="flex items-center gap-2">
+                <NotebookText className="w-4 h-4 text-green-700" />
+                <span>
+                  <strong>Sessão:</strong>{" "}
+                  {treino.sessaoTreinoNome || treino.sessaoTreino?.nome}
+                </span>
+              </div>
+            )}
+            {treino.tipoTreino && (
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-green-700" />
+                <span>
+                  <strong>Tipo do treino:</strong> {treino.tipoTreino}
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <Timer className="w-4 h-4 text-green-700" />
               <span>
