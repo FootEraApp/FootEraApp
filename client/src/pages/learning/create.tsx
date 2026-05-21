@@ -232,10 +232,6 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function toLocalInput(dt: Date) {
-  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
-}
-
 function toDatetimeLocalValue(value?: string | Date | null) {
     if (!value) return "";
 
@@ -246,7 +242,18 @@ function toDatetimeLocalValue(value?: string | Date | null) {
     return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
       date.getDate()
     )}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
-  }
+}
+
+function datetimeLocalToIso(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  const date = new Date(raw);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
+}
 
 function getToken() {
   return (
@@ -381,7 +388,6 @@ function normalizeTreinoSelecionavel(t: any): TreinoSelecionavel {
 
 function emptyItem(tipo: LearningItemTipo = "VIDEO"): LocalItem {
   const agora = new Date();
-  agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
 
   const umaHoraDepois = new Date(agora);
   umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
@@ -1722,10 +1728,10 @@ export default function LearningCreatePage() {
                     id: item.aulaAoVivo?.id || undefined,
                     titulo: item.titulo.trim(),
                     descricao: item.descricao?.trim() || null,
-                    inscricaoInicio: item.aulaAoVivo?.inscricaoInicio || null,
-                    inscricaoFim: item.aulaAoVivo?.inscricaoFim || null,
-                    dataInicio: item.aulaAoVivo?.dataInicio || null,
-                    dataFim: item.aulaAoVivo?.dataFim || null,
+                    inscricaoInicio: datetimeLocalToIso(item.aulaAoVivo?.inscricaoInicio),
+                    inscricaoFim: datetimeLocalToIso(item.aulaAoVivo?.inscricaoFim),
+                    dataInicio: datetimeLocalToIso(item.aulaAoVivo?.dataInicio),
+                    dataFim: datetimeLocalToIso(item.aulaAoVivo?.dataFim),
                     chatAtivo: item.aulaAoVivo?.chatAtivo !== false,
                     gravacaoAtiva: item.aulaAoVivo?.gravacaoAtiva !== false,
                     replayDisponivel: item.aulaAoVivo?.replayDisponivel === true,

@@ -157,22 +157,56 @@ function calcularPontuacaoItemBackend(params: {
   return 0;
 }
 
-function parseDataAulaAoVivo(value: any, label: string) {
-  const raw = String(value ?? "").trim();
+function normalizarDataHoraRecebida(value: any) {
+  if (value instanceof Date) return value;
 
-  if (!raw) {
-    throw new Error(`${label} é obrigatória para aula ao vivo.`);
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  const temTimezone =
+    /Z$/i.test(raw) || /[+-]\d{2}:?\d{2}$/.test(raw);
+
+  const ehDatetimeLocal =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(raw);
+
+  if (ehDatetimeLocal && !temTimezone) {
+    const comSegundos = raw.length === 16 ? `${raw}:00` : raw;
+
+    // datetime-local vindo do front representa horário do Brasil
+    return `${comSegundos}-03:00`;
   }
 
-  const date = new Date(raw);
+  return raw;
+}
+
+function parseDataCliente(
+  value: any,
+  label: string,
+  options?: {
+    obrigatoria?: boolean;
+    validarFuturo?: boolean;
+  }
+) {
+  const obrigatoria = options?.obrigatoria ?? false;
+  const validarFuturo = options?.validarFuturo ?? false;
+
+  const raw = normalizarDataHoraRecebida(value);
+
+  if (!raw) {
+    if (obrigatoria) {
+      throw new Error(`${label} é obrigatória para aula ao vivo.`);
+    }
+
+    return null;
+  }
+
+  const date = raw instanceof Date ? raw : new Date(raw);
 
   if (Number.isNaN(date.getTime())) {
     throw new Error(`${label} inválida para aula ao vivo.`);
   }
 
-  const agora = new Date();
-
-  if (date.getTime() <= agora.getTime()) {
+  if (validarFuturo && date.getTime() <= Date.now()) {
     throw new Error(`${label} não pode estar no passado.`);
   }
 
@@ -181,6 +215,20 @@ function parseDataAulaAoVivo(value: any, label: string) {
   }
 
   return date;
+}
+
+function parseDataAulaAoVivo(value: any, label: string) {
+  return parseDataCliente(value, label, {
+    obrigatoria: true,
+    validarFuturo: true,
+  }) as Date;
+}
+
+function parseDataAulaAoVivoOpcional(value: any, label: string) {
+  return parseDataCliente(value, label, {
+    obrigatoria: false,
+    validarFuturo: false,
+  });
 }
 
 async function criarAulaAoVivoParaItem(params: {
@@ -221,15 +269,20 @@ async function criarAulaAoVivoParaItem(params: {
     `A aula ao vivo "${tituloItem}" precisa ter data de início`
   );
 
-  const dataFim = aulaPayload.dataFim ? new Date(aulaPayload.dataFim) : null;
+  const dataFim = parseDataAulaAoVivoOpcional(
+    aulaPayload.dataFim,
+    `A data final da aula ao vivo "${tituloItem}"`
+  );
 
-  const inscricaoInicio = aulaPayload.inscricaoInicio
-    ? new Date(aulaPayload.inscricaoInicio)
-    : null;
+  const inscricaoInicio = parseDataAulaAoVivoOpcional(
+    aulaPayload.inscricaoInicio,
+    `O início das inscrições da aula ao vivo "${tituloItem}"`
+  );
 
-  const inscricaoFim = aulaPayload.inscricaoFim
-    ? new Date(aulaPayload.inscricaoFim)
-    : null;
+  const inscricaoFim = parseDataAulaAoVivoOpcional(
+    aulaPayload.inscricaoFim,
+    `O fim das inscrições da aula ao vivo "${tituloItem}"`
+  );
 
   if (inscricaoInicio && Number.isNaN(inscricaoInicio.getTime())) {
     throw new Error(`O início das inscrições da aula ao vivo "${tituloItem}" é inválido.`);
@@ -381,7 +434,10 @@ async function upsertAulaAoVivoParaItem(params: {
       ? aulaPayload.dataFim
       : aulaExistentePorId?.dataFim || null;
 
-  const dataFim = dataFimRaw ? new Date(dataFimRaw) : null;
+  const dataFim = parseDataAulaAoVivoOpcional(
+    dataFimRaw,
+    `A data final da aula ao vivo "${tituloItem}"`
+  );
 
   if (dataFim && Number.isNaN(dataFim.getTime())) {
     throw new Error(`A data final da aula ao vivo "${tituloItem}" é inválida.`);
@@ -405,13 +461,15 @@ async function upsertAulaAoVivoParaItem(params: {
       ? aulaPayload.inscricaoFim
       : aulaExistentePorId?.inscricaoFim || null;
 
-  const inscricaoInicio = inscricaoInicioRaw
-    ? new Date(inscricaoInicioRaw)
-    : null;
+  const inscricaoInicio = parseDataAulaAoVivoOpcional(
+    inscricaoInicioRaw,
+    `O início das inscrições da aula ao vivo "${tituloItem}"`
+  );
 
-  const inscricaoFim = inscricaoFimRaw
-    ? new Date(inscricaoFimRaw)
-    : null;
+  const inscricaoFim = parseDataAulaAoVivoOpcional(
+    inscricaoFimRaw,
+    `O fim das inscrições da aula ao vivo "${tituloItem}"`
+  );
 
   if (inscricaoInicio && Number.isNaN(inscricaoInicio.getTime())) {
     throw new Error(`O início das inscrições da aula ao vivo "${tituloItem}" é inválido.`);
