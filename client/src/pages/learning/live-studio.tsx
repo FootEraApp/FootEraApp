@@ -1930,53 +1930,73 @@ if (!iniciarRes.ok) {
     }
   }
 
-async function sincronizarReplayComTentativas(tentativas = 5) {
-  const token = getToken();
+  async function sincronizarReplayComTentativas(tentativas = 3) {
+    const token = getToken();
 
-  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-    try {
-      const syncRes = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/sincronizar-replay`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
+    if (!aulaId) return false;
 
-      const syncJson = await syncRes.json().catch(() => ({}));
-
-      if (syncRes.ok) {
-        const item = syncJson?.item;
-
-        setAula((prev) =>
-          prev
-            ? {
-                ...prev,
-                replayDisponivel: true,
-                videoGravadoUrl: item?.videoGravadoUrl || prev.videoGravadoUrl,
-                thumbUrl: item?.thumbUrl || prev.thumbUrl,
-              }
-            : prev
-        );
-
-        setBroadcastError(null);
-        await carregarAula(false);
-
-        console.log("[REPLAY] Sincronizado com sucesso:", syncJson);
-        return true;
-      }
-
-      console.warn(`[REPLAY] Tentativa ${tentativa} falhou:`, syncJson);
-    } catch (e) {
-      console.warn(`[REPLAY] Tentativa ${tentativa} com erro:`, e);
+    if (aula?.replayDisponivel && (aula.videoGravadoUrl || aula.urlStream)) {
+      setBroadcastError(null);
+      return true;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 30000));
-  }
+    for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+      try {
+        const syncRes = await fetch(
+          `${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/sincronizar-replay`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
 
-  setBroadcastError("Live finalizada. O replay ainda está processando no S3.");
-  return false;
-}
+        const syncJson = await syncRes.json().catch(() => ({}));
+
+        if (syncRes.ok && syncJson?.item) {
+          const item = syncJson.item;
+
+          setAula((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  replayDisponivel: item?.replayDisponivel === true,
+                  videoGravadoUrl: item?.videoGravadoUrl || prev.videoGravadoUrl,
+                  thumbUrl: item?.thumbUrl || prev.thumbUrl,
+                }
+              : prev
+          );
+
+          setBroadcastError(null);
+          await carregarAula(false);
+
+          return item?.replayDisponivel === true;
+        }
+
+        if (syncRes.status === 202 || syncJson?.processing) {
+          setBroadcastError(
+            syncJson?.message ||
+              "Replay ainda está processando no S3. Aguarde alguns minutos."
+          );
+
+          return false;
+        }
+
+        console.warn(`[REPLAY] Tentativa ${tentativa} falhou:`, syncJson);
+      } catch (e) {
+        console.warn(`[REPLAY] Tentativa ${tentativa} com erro:`, e);
+      }
+
+      if (tentativa < tentativas) {
+        await new Promise((resolve) => setTimeout(resolve, 30000));
+      }
+    }
+
+    setBroadcastError("Live finalizada. O replay ainda está processando no S3.");
+    return false;
+  }
 
   async function finalizarLive() {
     try {
@@ -2003,11 +2023,11 @@ async function sincronizarReplayComTentativas(tentativas = 5) {
         throw new Error(finalizarJson?.message || "Erro ao finalizar aula ao vivo.");
       }
 
-setBroadcastError("Live finalizada. Processando replay no S3...");
+      setBroadcastError("Live finalizada. Processando replay no S3...");
 
-window.setTimeout(() => {
-  sincronizarReplayComTentativas(5);
-}, 60000);
+      window.setTimeout(() => {
+        sincronizarReplayComTentativas(5);
+      }, 60000);
 
       setAula((prev) =>
         prev
@@ -2031,6 +2051,12 @@ window.setTimeout(() => {
     if (!texto) return;
     await navigator.clipboard.writeText(texto);
     alert("Copiado!");
+  }
+
+  function abrirPaginaDaLive() {
+    if (!aulaId) return;
+
+    navigate(`/learning/live?aulaId=${encodeURIComponent(aulaId)}`);
   }
 
   if (!aulaId) {
@@ -2506,15 +2532,42 @@ window.setTimeout(() => {
                 </div>
               ) : null}
 
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex items-start gap-3">
-                <CheckCircle2 className="w-6 h-6 text-[#216c43] mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-bold text-[#193b2e]">
-                    Após a aula, a gravação poderá ser disponibilizada como replay.
-                  </div>
-                  <div className="text-sm text-slate-600 mt-1">
-                    Quando o backend estiver pronto, o processo de gravação/replay pode ser automatizado
-                    usando IVS + S3.
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-6 h-6 text-[#216c43] mt-0.5 shrink-0" />
+
+                  <div className="flex-1">
+                    <div className="font-bold text-[#193b2e]">
+                      Após a aula, a gravação poderá ser disponibilizada como replay.
+                    </div>
+
+                    <div className="text-sm text-slate-600 mt-1">
+                      Quando o replay estiver disponível, o criador também pode abrir a página normal da live
+                      para assistir como os alunos.
+                    </div>
+
+                    <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={abrirPaginaDaLive}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#216c43] px-4 py-3 text-sm font-black text-white hover:bg-[#185333]"
+                      >
+                        <Video className="w-4 h-4" />
+                        {aula?.status === "FINALIZADA" && aula?.replayDisponivel
+                          ? "Ver replay da live"
+                          : "Ver página da live"}
+                      </button>
+                    </div>
+
+                    {aula?.status === "FINALIZADA" && aula?.replayDisponivel ? (
+                      <p className="mt-2 text-xs font-semibold text-emerald-800">
+                        Replay disponível. Clique para assistir na página pública da aula.
+                      </p>
+                    ) : aula?.status === "FINALIZADA" ? (
+                      <p className="mt-2 text-xs font-semibold text-amber-700">
+                        A live foi finalizada, mas o replay ainda pode estar processando.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>

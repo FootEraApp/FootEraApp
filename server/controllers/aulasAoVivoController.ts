@@ -1436,6 +1436,17 @@ export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
       });
     }
 
+    if (aula.replayDisponivel && aula.videoGravadoUrl) {
+      return res.json({
+        message: "Replay já estava disponível.",
+        item: aula,
+        replay: {
+          videoGravadoUrl: aula.videoGravadoUrl,
+          thumbUrl: aula.thumbUrl,
+        },
+      });
+    }
+
     const bucket = process.env.AWS_S3_BUCKET || process.env.IVS_RECORDING_S3_BUCKET;
 
     if (!bucket) {
@@ -1476,8 +1487,11 @@ export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
     const master = masters[0];
 
     if (!master?.Key) {
-      return res.status(404).json({
-        message: "Replay ainda não encontrado no S3. Aguarde alguns minutos e tente novamente.",
+      return res.status(202).json({
+        processing: true,
+        replayDisponivel: false,
+        message:
+          "Replay ainda não encontrado no S3. Aguarde alguns minutos e tente novamente.",
         prefix,
       });
     }
@@ -1485,25 +1499,20 @@ export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
     const masterKey = master.Key;
     const recordingId = extrairRecordingIdDoMasterKey(masterKey);
 
-const playlist1080 = objetos.find((obj) =>
-  obj.Key?.endsWith("/media/hls/1080p/playlist.m3u8")
-);
+    const playlist1080 = objetos.find((obj) =>
+      obj.Key?.endsWith("/media/hls/1080p/playlist.m3u8")
+    );
 
-const playlist1080p30 = objetos.find((obj) =>
-  obj.Key?.endsWith("/media/hls/1080p30/playlist.m3u8")
-);
+    const playlist1080p30 = objetos.find((obj) =>
+      obj.Key?.endsWith("/media/hls/1080p30/playlist.m3u8")
+    );
 
-const playlist720 = objetos.find((obj) =>
-  obj.Key?.endsWith("/media/hls/720p30/playlist.m3u8") ||
-  obj.Key?.endsWith("/media/hls/720p/playlist.m3u8")
-);
+    const replayKeyPreferido =
+      playlist1080?.Key ||
+      playlist1080p30?.Key ||
+      masterKey;
 
-const replayKeyPreferido =
-  playlist1080?.Key ||
-  playlist1080p30?.Key ||
-  masterKey;
-
-const videoGravadoUrl = montarUrlS3Publica(bucket, replayKeyPreferido);
+    const videoGravadoUrl = montarUrlS3Publica(bucket, replayKeyPreferido);
 
     const thumbnail = objetos
       .filter((obj) =>
