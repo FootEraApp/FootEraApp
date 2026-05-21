@@ -4,7 +4,14 @@ const prisma = new PrismaClient();
 
 type OldAchievement = {
   id: string;
-  entity: "Atleta" | "Professor" | "Clube" | "Escolinha";
+  entity:
+    | "Atleta"
+    | "Professor"
+    | "Clube"
+    | "Escolinha"
+    | "Learning"
+    | "Marca"
+    | "Federacao";
   title: string;
   description: string;
   icon?: string | null;
@@ -143,18 +150,176 @@ async function seedConquistasCatalog() {
     { id: "clu_evento_5", entity: "Clube", title: "Calendário Forte", description: "Organizou 5 eventos.", icon: "🗓️", tier: "prata", group: "Eventos", meta: 5 },
     { id: "clu_evento_10", entity: "Clube", title: "Clube Ativo", description: "Organizou 10 eventos.", icon: "🎟️", tier: "ouro", group: "Eventos", meta: 10 },
     { id: "clu_evento_25", entity: "Clube", title: "Agenda Lotada", description: "Organizou 25 eventos.", icon: "🏟️", tier: "platina", group: "Eventos", meta: 25 },
+
+    // LEARNING
+    {
+      id: "learn_first_course",
+      entity: "Learning",
+      title: "Primeiro Curso",
+      description: "Iniciou o primeiro curso/metodologia na FootEra.",
+      icon: "🎓",
+      tier: "bronze",
+      group: "Learning",
+      meta: 1,
+    },
+    {
+      id: "learn_course_done_1",
+      entity: "Learning",
+      title: "Primeira Formação",
+      description: "Concluiu 1 curso/metodologia.",
+      icon: "✅",
+      tier: "bronze",
+      group: "Learning",
+      meta: 1,
+    },
+    {
+      id: "learn_course_done_5",
+      entity: "Learning",
+      title: "Aluno Dedicado",
+      description: "Concluiu 5 cursos/metodologias.",
+      icon: "📚",
+      tier: "prata",
+      group: "Learning",
+      meta: 5,
+    },
+    {
+      id: "learn_cert_1",
+      entity: "Learning",
+      title: "Certificado na Mão",
+      description: "Recebeu o primeiro certificado.",
+      icon: "📜",
+      tier: "bronze",
+      group: "Learning",
+      meta: 1,
+    },
+
+    // MARCA
+    {
+      id: "brand_profile_complete",
+      entity: "Marca",
+      title: "Marca Apresentada",
+      description: "Completou as informações principais do perfil da marca.",
+      icon: "🏷️",
+      tier: "bronze",
+      group: "Gestão",
+      meta: 1,
+    },
+    {
+      id: "brand_first_content",
+      entity: "Marca",
+      title: "Primeiro Conteúdo",
+      description: "Publicou ou criou o primeiro conteúdo/metodologia como marca.",
+      icon: "📣",
+      tier: "bronze",
+      group: "Gestão",
+      meta: 1,
+    },
+    {
+      id: "brand_5_contents",
+      entity: "Marca",
+      title: "Marca Educadora",
+      description: "Criou 5 conteúdos/metodologias.",
+      icon: "🚀",
+      tier: "prata",
+      group: "Gestão",
+      meta: 5,
+    },
+    {
+      id: "brand_first_event",
+      entity: "Marca",
+      title: "Primeiro Evento",
+      description: "Criou ou participou da organização do primeiro evento.",
+      icon: "🏟️",
+      tier: "bronze",
+      group: "Eventos",
+      meta: 1,
+    },
+    {
+      id: "brand_5_events",
+      entity: "Marca",
+      title: "Calendário Ativo",
+      description: "Criou ou participou da organização de 5 eventos.",
+      icon: "📅",
+      tier: "prata",
+      group: "Eventos",
+      meta: 5,
+    },
+
+    // FEDERAÇÃO
+    {
+      id: "fed_profile_complete",
+      entity: "Federacao",
+      title: "Federação Verificada",
+      description: "Completou as informações principais do perfil da federação.",
+      icon: "🛡️",
+      tier: "bronze",
+      group: "Gestão",
+      meta: 1,
+    },
+    {
+      id: "fed_first_event",
+      entity: "Federacao",
+      title: "Primeiro Evento",
+      description: "Criou ou participou da organização do primeiro evento.",
+      icon: "🏟️",
+      tier: "bronze",
+      group: "Eventos",
+      meta: 1,
+    },
+    {
+      id: "fed_5_events",
+      entity: "Federacao",
+      title: "Calendário Ativo",
+      description: "Criou ou participou da organização de 5 eventos.",
+      icon: "📅",
+      tier: "prata",
+      group: "Eventos",
+      meta: 5,
+    },
+    {
+      id: "fed_content_1",
+      entity: "Federacao",
+      title: "Primeiro Conteúdo",
+      description: "Criou o primeiro conteúdo, curso ou metodologia no Learning.",
+      icon: "🎓",
+      tier: "bronze",
+      group: "Learning",
+      meta: 1,
+    },
+    {
+      id: "fed_content_5",
+      entity: "Federacao",
+      title: "Federação Educadora",
+      description: "Criou 5 conteúdos, cursos ou metodologias no Learning.",
+      icon: "📚",
+      tier: "prata",
+      group: "Learning",
+      meta: 5,
+    },
   ];
 
   const uniqueByCodigo = new Map<string, OldAchievement>();
   for (const a of achievements) uniqueByCodigo.set(a.id, a);
   const finalList = Array.from(uniqueByCodigo.values());
 
+  let criadas = 0;
+  let ignoradas = 0;
+
   for (const a of finalList) {
     const metaFinal = a.meta ?? inferMetaFromCodigo(a.id);
 
-    await prisma.conquista.upsert({
+    const existente = await prisma.conquista.findUnique({
       where: { codigo: a.id },
-      create: {
+      select: { id: true },
+    });
+
+    if (existente) {
+      ignoradas++;
+      continue;
+    }
+
+    await prisma.conquista.create({
+      data: {
         codigo: a.id,
         titulo: a.title,
         descricao: buildDescricao(a.description, a.group, a.tier),
@@ -164,19 +329,14 @@ async function seedConquistasCatalog() {
         meta: metaFinal ?? null,
         ativo: true,
       },
-      update: {
-        titulo: a.title,
-        descricao: buildDescricao(a.description, a.group, a.tier),
-        tipo: mapConquistaTipo(a.group),
-        publico: [mapOwnerTipo(a.entity)],
-        icon: a.icon ?? null,
-        meta: metaFinal ?? null,
-        ativo: true,
-      },
     });
+
+    criadas++;
   }
 
-  console.log(`✅ Conquistas (catálogo) seeded (upsert): ${finalList.length} registros`);
+  console.log(
+    `✅ Seed concluído. Criadas: ${criadas}. Já existiam: ${ignoradas}. Total na lista: ${finalList.length}`
+  );
 }
 
 async function main() {
