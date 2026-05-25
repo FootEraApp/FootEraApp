@@ -175,11 +175,22 @@ const localIpOrigin = LOCAL_IP ? `http://${LOCAL_IP}:${FRONT_PORT}` : undefined;
 
 const ALLOWED = new Set(
   [
+    "http://localhost",
+    "https://localhost",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
+
+    // Android Emulator / Capacitor
+    "http://10.0.2.2",
+    "http://10.0.2.2:3001",
+    "http://10.0.2.2:5173",
+
+    // Produção
     "https://footera.app.br",
     "https://www.footera.app.br",
+    "https://api.footera.app.br",
+
     fromEnv,
     fromEnvWww,
     localIpOrigin,

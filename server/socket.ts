@@ -22,8 +22,15 @@ async function touchSeen(userId: string, extra?: { login?: boolean; logout?: boo
 export function setupSocket(server: http.Server) {
   io = new Server(server, {
     cors: {
-      origin: ["https://footera.app.br", "https://www.footera.app.br"],
-      credentials: true,
+      origin: [
+      "http://localhost",
+      "https://localhost",
+      "http://localhost:5173",
+      "http://10.0.2.2:5173",
+      "https://footera.app.br",
+      "https://www.footera.app.br",
+    ],
+    credentials: true,
       methods: ["GET", "POST"],
     },
   });
