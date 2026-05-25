@@ -1,6 +1,13 @@
+// server/config.ts
+
 const viteEnv =
   typeof import.meta !== "undefined" && (import.meta as any).env
     ? ((import.meta as any).env as Record<string, string | undefined>)
+    : undefined;
+
+const nodeEnv =
+  typeof process !== "undefined"
+    ? (process.env as Record<string, string | undefined>)
     : undefined;
 
 const isDev =
@@ -9,6 +16,10 @@ const isDev =
     : typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
 
 const strip = (s?: string) => (s ?? "").replace(/\/+$/, "");
+
+const env = (key: string): string | undefined => {
+  return viteEnv?.[`VITE_${key}`] ?? viteEnv?.[key] ?? nodeEnv?.[key];
+};
 
 function inferApiFromHost(): string {
   if (isDev) {
@@ -21,7 +32,14 @@ function inferApiFromHost(): string {
       : "http://localhost:3001";
   }
 
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined") {
+    return (
+      env("BACKEND_URL") ||
+      env("API_BASE_URL") ||
+      env("APP_URL") ||
+      "https://api.footera.app.br"
+    );
+  }
 
   const { protocol, hostname, host } = window.location;
 
@@ -31,7 +49,13 @@ function inferApiFromHost(): string {
   return `${protocol}//api.${root}`;
 }
 
-let API_BASE = strip(viteEnv?.VITE_API_URL || inferApiFromHost());
+let API_BASE = strip(
+  viteEnv?.VITE_API_URL ||
+    env("BACKEND_URL") ||
+    env("API_BASE_URL") ||
+    env("APP_URL") ||
+    inferApiFromHost()
+);
 
 const isLocalApi =
   /^http:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/i.test(API_BASE);
@@ -49,6 +73,16 @@ if (!isDev && !API_BASE) {
   console.error("VITE_API_URL não definida e inferência falhou em produção.");
 }
 
+export const SERVER = {
+  PORT: env("PORT") ?? "3001",
+  NODE_ENV: env("NODE_ENV") ?? "development",
+  CLIENT_BASE_URL: strip(
+    env("CLIENT_BASE_URL") ||
+      env("FRONTEND_URL") ||
+      "http://localhost:5173"
+  ),
+} as const;
+
 export const API = {
   BASE_URL: API_BASE,
   REST: API_BASE ? `${API_BASE}/api` : "",
@@ -57,6 +91,8 @@ export const API = {
 
 const FRONTEND_BASE = strip(
   viteEnv?.VITE_FRONTEND_URL ??
+    env("FRONTEND_URL") ??
+    env("CLIENT_BASE_URL") ??
     (typeof window !== "undefined"
       ? window.location.origin
       : isDev
@@ -66,6 +102,12 @@ const FRONTEND_BASE = strip(
 
 export const APP = {
   FRONTEND_BASE_URL: FRONTEND_BASE || "http://localhost:5173",
+
+  // Alias para arquivos novos que usam APP.FRONTEND_URL
+  FRONTEND_URL: FRONTEND_BASE || "http://localhost:5173",
+
+  // Alias para arquivos novos que usam APP.BACKEND_URL
+  BACKEND_URL: API_BASE || "http://localhost:3001",
 } as const;
 
 export function appUrl(path: string = "/"): string {
@@ -90,4 +132,11 @@ export const FLAGS = {
   PAGAMENTOS_SHOW_METODOLOGIAS_LEARNING: true,
 } as const;
 
-export default { API, APP, appUrl };
+export default {
+  SERVER,
+  API,
+  APP,
+  appUrl,
+  MESSAGES,
+  FLAGS,
+};
