@@ -154,6 +154,15 @@ export default function PaginaLogin() {
 
       try {
         const url = `${API.BASE_URL}/api/auth/login`;
+        console.log("LOGIN URL USADA:", url);
+        console.log("[APP LOGIN DEBUG]", {
+          API_BASE_URL: API.BASE_URL,
+          url,
+          nomeDeUsuario,
+          ambiente: import.meta.env.MODE,
+          viteApiUrl: import.meta.env.VITE_API_URL,
+        });
+
         const resp = await axios.post(url, { nomeDeUsuario, senha });
         const data = resp.data ?? {};
 
@@ -238,7 +247,13 @@ export default function PaginaLogin() {
           navigate("/perfil");
         }
       } catch (err: any) {
-        console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
+        console.error("[APP LOGIN ERRO]", {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+          url: err.config?.url,
+          baseURL: err.config?.baseURL,
+        });
 
         const data = err.response?.data;
 
