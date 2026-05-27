@@ -64,8 +64,22 @@ const FRONTEND_BASE = strip(
       : "https://footera.app.br")
 );
 
+export const SERVER = {
+  PORT: process.env.PORT ?? "3001",
+  NODE_ENV: process.env.NODE_ENV ?? "development",
+  CLIENT_BASE_URL: process.env.CLIENT_BASE_URL ?? "http://localhost:5173",
+};
+
 export const APP = {
   FRONTEND_BASE_URL: FRONTEND_BASE || "http://localhost:5173",
+  FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:5173",
+   BACKEND_URL:
+    process.env.BACKEND_URL ||
+    process.env.API_BASE_URL ||
+    process.env.APP_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://api.footera.app.br"
+      : "http://localhost:3001"),
 } as const;
 
 export function appUrl(path: string = "/"): string {
