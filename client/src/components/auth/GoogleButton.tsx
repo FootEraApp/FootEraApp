@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 
 declare global {
   interface Window {
@@ -13,11 +15,14 @@ type GoogleButtonProps = {
 };
 
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-
 let googleScriptPromise: Promise<void> | null = null;
 
 function getGoogleClientId() {
-  return import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID_2 || "";
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+}
+
+function getGoogleAndroidClientId() {
+  return import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID || "";
 }
 
 function loadGoogleScript(): Promise<void> {
@@ -29,17 +34,9 @@ function loadGoogleScript(): Promise<void> {
     ) as HTMLScriptElement | null;
 
     if (existing) {
-      if ((window as any).google?.accounts?.id) {
-        resolve();
-        return;
-      }
-
+      if ((window as any).google?.accounts?.id) return resolve();
       existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Falha ao carregar script Google")),
-        { once: true }
-      );
+      existing.addEventListener("error", () => reject(new Error("Falha ao carregar script Google")), { once: true });
       return;
     }
 
@@ -64,20 +61,65 @@ export default function GoogleButton({
   const [erro, setErro] = useState("");
   const initializedRef = useRef(false);
 
+  const isNative = Capacitor.isNativePlatform();
+
+  async function handleNativeGoogleLogin() {
+    try {
+      setErro("");
+
+      const webClientId = getGoogleClientId();
+      const androidClientId = getGoogleAndroidClientId();
+
+      if (!androidClientId) {
+        setErro("VITE_GOOGLE_ANDROID_CLIENT_ID não configurado.");
+        return;
+      }
+
+      console.log("[GOOGLE NATIVE IDS]", { webClientId, androidClientId });
+
+      if (!webClientId) {
+        setErro("VITE_GOOGLE_CLIENT_ID não configurado.");
+        return;
+      }
+
+      console.log("[GOOGLE IDS]", JSON.stringify({
+        webClientId,
+        androidClientId,
+        isNative,
+      }));
+
+      await GoogleSignIn.initialize({
+        clientId: webClientId,
+      });
+
+      const result: any = await GoogleSignIn.signIn();
+
+      const credential = result?.idToken;
+
+      if (!credential) {
+        console.log("[GOOGLE NATIVE RESULT]", result);
+        setErro("Google não retornou idToken.");
+        return;
+      }
+
+      await onCredential(credential);
+    } catch (e: any) {
+      console.error("Erro no Google nativo:", e);
+      setErro(e?.message || "Não foi possível entrar com Google.");
+    }
+  }
+
   useEffect(() => {
+    if (isNative) return;
+
     let cancelled = false;
 
-    async function initGoogle() {
+    async function initGoogleWeb() {
       try {
         setErro("");
 
         const clientId = getGoogleClientId();
 
-        console.log("[GOOGLE] clientId usado:", clientId);
-        console.log("[GOOGLE] VITE_GOOGLE_CLIENT_ID:", import.meta.env.VITE_GOOGLE_CLIENT_ID);
-        console.log("[GOOGLE] VITE_GOOGLE_CLIENT_ID_2:", import.meta.env.VITE_GOOGLE_CLIENT_ID_2);
-        console.log("[GOOGLE] window origin:", window.location.origin);
-        
         if (!clientId) {
           setErro("VITE_GOOGLE_CLIENT_ID não configurado no frontend.");
           return;
@@ -132,18 +174,29 @@ export default function GoogleButton({
       }
     }
 
-    initGoogle();
+    initGoogleWeb();
 
     return () => {
       cancelled = true;
     };
-  }, [text, onCredential]);
+  }, [text, onCredential, isNative]);
 
   return (
     <div className="w-full">
-      <div className={disabled ? "pointer-events-none opacity-60 w-full" : "w-full"}>
-        <div ref={divRef} className="w-full min-h-[44px] flex justify-center" />
-      </div>
+      {isNative ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={handleNativeGoogleLogin}
+          className="w-full border border-gray-300 bg-white rounded px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
+        >
+          Continuar com Google
+        </button>
+      ) : (
+        <div className={disabled ? "pointer-events-none opacity-60 w-full" : "w-full"}>
+          <div ref={divRef} className="w-full min-h-[44px] flex justify-center" />
+        </div>
+      )}
 
       {erro ? (
         <p className="text-xs text-red-600 mt-2 text-center">{erro}</p>
