@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Instagram, Facebook } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 type TabKey = "termos" | "privacidade";
 
@@ -27,8 +28,8 @@ async function sha256(text: string): Promise<string> {
     .join("");
 }
 
-const VERSAO_TERMO = "2025-10-06";
-const VERSAO_PRIV = "2025-10-06";
+const VERSAO_TERMO = "2026-06-01";
+const VERSAO_PRIV = "2026-06-01";
 const SHOW_SOCIALS = false;
 const LOGO_SRC = "/assets/usuarios/footera-logo.png";
 
@@ -47,8 +48,8 @@ export default function TermosEPrivacidade() {
 
   useEffect(() => {
     const url = isTermos
-      ? "/assets/legal/termos-de-uso.txt"
-      : "/assets/legal/politica-de-privacidade.txt";
+      ? "/assets/legal/termos-de-uso-footera.md"
+      : "/assets/legal/politica-de-privacidade-footera.md";
 
     (async () => {
       try {
@@ -300,65 +301,58 @@ export default function TermosEPrivacidade() {
                     <p className="text-sm text-gray-600">Carregando…</p>
                   )}
 
-                  <article className="prose max-w-none prose-p:my-3 prose-h3:mt-6 prose-headings:text-gray-900">
-                    {paragraphs.map((p, i) => (
-                      <p
-                        key={i}
-                        className="whitespace-pre-wrap text-sm md:text-[15px] leading-7 text-gray-800"
-                      >
-                        {p}
-                      </p>
-                    ))}
+                  <article className="prose max-w-none">
+                    <ReactMarkdown>
+                      {conteudo}
+                    </ReactMarkdown>
                   </article>
 
-                  <div className="pt-4 border-t flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-gray-500">Arquivos oficiais:</span>
+                  <div className="pt-4 border-t text-sm space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-gray-500 font-medium">Arquivos oficiais:</span>
+                    </div>
 
-                    <a
-                      className="underline text-green-800 hover:text-green-700"
-                      href="/assets/legal/termos-de-uso.txt"
-                      download
-                    >
-                      Baixar TXT
-                    </a>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-gray-500">Termos de uso:</span>
 
-                    <a
-                      className="underline text-green-800 hover:text-green-700"
-                      href="/assets/legal/termos-de-uso-footera.docx"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Baixar DOCX
-                    </a>
+                      <a
+                        className="underline text-green-800 hover:text-green-700"
+                        href="/assets/legal/termos-de-uso-footera.md"
+                        download
+                      >
+                        Baixar Markdown
+                      </a>
 
-                    <span className="mx-2 text-gray-300">|</span>
+                      <a
+                        className="underline text-green-800 hover:text-green-700"
+                        href="/assets/legal/termos-de-uso-footera.docx"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Baixar DOCX
+                      </a>
+                    </div>
 
-                    <a
-                      className="underline text-green-800 hover:text-green-700"
-                      href="/assets/legal/politica-de-privacidade.txt"
-                      download
-                    >
-                      Baixar TXT
-                    </a>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-gray-500">Política de privacidade:</span>
 
-                    <a
-                      className="underline text-green-800 hover:text-green-700"
-                      href="/assets/legal/Politica-de-privacidade-Footera.docx"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Baixar DOCX
-                    </a>
+                      <a
+                        className="underline text-green-800 hover:text-green-700"
+                        href="/assets/legal/politica-de-privacidade-footera.md"
+                        download
+                      >
+                        Baixar Markdown
+                      </a>
 
-                    <span className="mx-2 text-gray-300">|</span>
-
-                    <button
-                      onClick={() => navigator.clipboard.writeText(hash)}
-                      className="text-gray-700 border px-2 py-1 rounded hover:bg-gray-50"
-                      title="Copiar hash"
-                    >
-                      Copiar hash
-                    </button>
+                      <a
+                        className="underline text-green-800 hover:text-green-700"
+                        href="/assets/legal/Politica-de-privacidade-Footera.docx"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Baixar DOCX
+                      </a>
+                    </div>
                   </div>
                 </div>
               </section>
