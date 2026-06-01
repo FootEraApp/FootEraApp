@@ -41,13 +41,87 @@ const Storage = {
 const TIMER_KEY = (id: string) => `footera:treino-metodologia:timer:${id}`;
 const CHECKLIST_KEY = (id: string) => `footera:treino-metodologia:checklist:${id}`;
 
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  if (raw.startsWith("/assets/")) return raw;
-  if (raw.startsWith("/uploads/")) return `${API.BASE_URL}${raw}`;
-  if (raw.startsWith("/exercicios/")) return `${API.BASE_URL}${raw}`;
-  return `${API.BASE_URL}/${String(raw).replace(/^\/+/, "")}`;
+
+  const p = String(raw).trim().replace(/\\/g, "/");
+
+  if (!p || p === "null" || p === "undefined") return "";
+
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
+  }
+
+  // Arquivos fixos do frontend: vídeos/imagens em /assets
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
+  if (p.startsWith("/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // Uploads/exercícios vindos do backend
+  if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("uploads/") || p.startsWith("upload/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  return `${API.BASE_URL}/${p}`;
 }
 
 function isVideoUrl(url: string) {
@@ -672,10 +746,13 @@ export default function TreinoMetodologiaPage() {
                     title={videoModal.nome}
                 />
                 ) : isVideoUrl(videoModal.url) ? (
-                <video controls className="w-full max-h-[70vh] rounded-xl border bg-black">
-                    <source src={videoModal.url} />
-                    Seu navegador não suporta vídeo.
-                </video>
+                <video
+                  src={videoModal.url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full max-h-[70vh] rounded-xl border bg-black"
+                />
                 ) : (
                 <img
                     src={videoModal.url}
