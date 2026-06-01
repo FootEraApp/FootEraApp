@@ -346,7 +346,7 @@ export default function TermosEPrivacidade() {
 
                       <a
                         className="underline text-green-800 hover:text-green-700"
-                        href="/assets/legal/Politica-de-privacidade-Footera.docx"
+                        href="/assets/legal/politica-de-privacidade-footera.docx"
                         target="_blank"
                         rel="noreferrer"
                       >
