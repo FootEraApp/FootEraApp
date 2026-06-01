@@ -198,21 +198,73 @@ function getStartWindowInfo(t: TreinoAgendado) {
   return { canStart, isLate };
 }
 
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
 
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  if (raw.startsWith("/assets/")) return raw;
+  const p = String(raw).trim().replace(/\\/g, "/");
+  if (!p || p === "null" || p === "undefined") return "";
 
-  if (raw.startsWith("/exercicios/")) {
-    return `${API.BASE_URL}${raw}`;
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
   }
 
-  if (raw.startsWith("/uploads/")) {
-    return `${API.BASE_URL}${raw}`;
+  // vídeos/imagens fixos do frontend
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
   }
 
-  return `${API.BASE_URL}/${raw.replace(/^\/+/, "")}`;
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // uploads/exercícios vindos do backend
+  if (p.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("uploads/") || p.startsWith("upload/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  return `${API.BASE_URL}/${p.replace(/^\/+/, "")}`;
 }
 
 
@@ -533,18 +585,9 @@ export default function TreinosAtletas() {
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const [filtroNivel, setFiltroNivel] = useState<string>("TODOS");
 
-  function normalizeAssetUrl(raw?: string | null) {
-    if (!raw) return "";
-
-    const v = String(raw).trim();
-    if (!v || v === "null" || v === "undefined") return "";
-
-    if (v.startsWith("http://") || v.startsWith("https://")) return v;
-    if (v.startsWith("/assets/")) return v;
-    if (v.startsWith("/uploads/")) return `${API.BASE_URL}${v}`;
-
-    return `${API.BASE_URL}/${v.replace(/^\/+/, "")}`;
-  }
+function normalizeAssetUrl(raw?: string | null) {
+  return resolveUploadUrl(raw);
+}
 
   function normNome(n?: string | null) {
     return String(n || "")

@@ -1,3 +1,4 @@
+//client/src/pages/admin/treinos/create
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -51,11 +52,85 @@ async function uploadImagem(token: string, file: File): Promise<string> {
   return url;
 }
 
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
 function normalizeUrl(u?: string | null) {
-  const s = String(u || "").trim();
-  if (!s) return "";
-  if (s.startsWith("http") || s.startsWith("blob:") || s.startsWith("data:")) return s;
-  return `${API.BASE_URL}${s.startsWith("/") ? "" : "/"}${s}`;
+  const s = String(u || "").trim().replace(/\\/g, "/");
+
+  if (!s || s === "null" || s === "undefined") return "";
+
+  if (
+    s.startsWith("http://") ||
+    s.startsWith("https://") ||
+    s.startsWith("blob:") ||
+    s.startsWith("data:")
+  ) {
+    return s;
+  }
+
+  // Arquivos fixos do frontend: vídeos/imagens em /assets
+  if (s.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${s}`
+      : s;
+  }
+
+  if (s.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${s}`
+      : `/${s}`;
+  }
+
+  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
+  if (s.startsWith("/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${s}`
+      : s;
+  }
+
+  if (s.startsWith("videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${s}`
+      : `/${s}`;
+  }
+
+  // Exercícios/uploads vindos do backend
+  if (s.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${s}`;
+  }
+
+  if (s.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${s}`;
+  }
+
+  if (s.startsWith("/uploads/") || s.startsWith("/upload/")) {
+    return `${API.BASE_URL}${s}`;
+  }
+
+  if (s.startsWith("uploads/") || s.startsWith("upload/")) {
+    return `${API.BASE_URL}/${s}`;
+  }
+
+  if (s.startsWith("/")) {
+    return `${API.BASE_URL}${s}`;
+  }
+
+  return `${API.BASE_URL}/${s}`;
 }
 
 type ProfessorMin = {
@@ -364,6 +439,8 @@ function VideoModal({
                 src={src}
                 controls
                 autoPlay
+                playsInline
+                preload="metadata"
                 className="h-[60vh] w-full bg-black object-contain"
               />
             ) : (
