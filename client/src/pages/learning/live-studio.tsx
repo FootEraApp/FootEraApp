@@ -266,21 +266,25 @@ export default function LearningLiveStudioPage() {
 
   const isLive = aula?.status === "AO_VIVO";
   const isFinished = aula?.status === "FINALIZADA";
+  const isNativeApp =
+    window.location.protocol === "capacitor:" ||
+    window.location.protocol === "ionic:" ||
+    (window.location.hostname === "localhost" && navigator.userAgent.includes("wv"));
+    
+  const userAgent = navigator.userAgent.toLowerCase();
 
-const userAgent = navigator.userAgent.toLowerCase();
+  const isOpera =
+    userAgent.includes("opr") ||
+    userAgent.includes("opera");
 
-const isOpera =
-  userAgent.includes("opr") ||
-  userAgent.includes("opera");
+  const isChrome =
+    userAgent.includes("chrome") &&
+    !userAgent.includes("opr") &&
+    !userAgent.includes("opera");
 
-const isChrome =
-  userAgent.includes("chrome") &&
-  !userAgent.includes("opr") &&
-  !userAgent.includes("opera");
+  const isEdge = userAgent.includes("edg");
 
-const isEdge = userAgent.includes("edg");
-
-const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
+  const navegadorPossivelmenteIncompativel = isOpera || (!isChrome && !isEdge);
 
   const metodologiaTitulo =
     aula?.metodologia?.titulo ||
@@ -1542,6 +1546,13 @@ async function toggleCamera() {
   }
 
   async function toggleScreenShare() {
+    if (isNativeApp) {
+      setBroadcastError(
+        "Compartilhar tela está disponível apenas pelo site no navegador. No app Android, use câmera e microfone."
+      );
+      return;
+    }
+
     if (screenEnabled) {
       pararStream(screenCanvasStreamRef.current);
       screenCanvasStreamRef.current = null;
@@ -2299,10 +2310,17 @@ if (!iniciarRes.ok) {
                 <button
                   type="button"
                   onClick={toggleScreenShare}
-                  className="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex flex-col items-center justify-center gap-1 text-sm font-semibold text-slate-700"
+                  disabled={isNativeApp}
+                  title={isNativeApp ? "Disponível apenas no navegador web" : ""}
+                  className={[
+                    "h-16 rounded-2xl border border-slate-200 bg-white flex flex-col items-center justify-center gap-1 text-sm font-semibold",
+                    isNativeApp
+                      ? "opacity-50 cursor-not-allowed text-slate-400"
+                      : "hover:bg-slate-50 text-slate-700",
+                  ].join(" ")}
                 >
                   <MonitorUp className={`w-5 h-5 ${screenEnabled ? "text-[#216c43]" : "text-slate-600"}`} />
-                  {screenEnabled ? "Parar tela" : "Compartilhar tela"}
+                  {isNativeApp ? "Compartilhar tela exclusivo para o site" : screenEnabled ? "Parar tela" : "Compartilhar tela"}
                 </button>
 
                 {!isLive ? (

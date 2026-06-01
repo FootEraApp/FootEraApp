@@ -232,27 +232,36 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+const SAO_PAULO_TZ = "America/Sao_Paulo";
+
 function toDatetimeLocalValue(value?: string | Date | null) {
-    if (!value) return "";
+  if (!value) return "";
 
-    const date = new Date(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
 
-    if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SAO_PAULO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
 
-    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
-      date.getDate()
-    )}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
 
 function datetimeLocalToIso(value?: string | null) {
   const raw = String(value || "").trim();
   if (!raw) return null;
 
-  const date = new Date(raw);
+  const normalized = raw.length === 16 ? `${raw}:00` : raw;
 
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date.toISOString();
+  return `${normalized}-03:00`;
 }
 
 function getToken() {

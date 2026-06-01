@@ -415,24 +415,23 @@ function VideoModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-3">
-      <div className="w-full max-w-5xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-gray-900">
-              {title || "Vídeo do exercício"}
-            </div>
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-2 sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3">
+          <div className="min-w-0 truncate text-sm font-bold text-gray-900">
+            {title || "Vídeo do exercício"}
           </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="text-sm font-semibold text-blue-700 underline hover:text-blue-800"
+            className="shrink-0 text-sm font-semibold text-blue-700 underline hover:text-blue-800"
           >
             Fechar
           </button>
         </div>
 
-        <div className="p-4">
+        <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-4">
           <div className="overflow-hidden rounded-xl bg-black">
             {src ? (
               <video
@@ -441,10 +440,10 @@ function VideoModal({
                 autoPlay
                 playsInline
                 preload="metadata"
-                className="h-[60vh] w-full bg-black object-contain"
+                className="max-h-[72vh] w-full bg-black object-contain"
               />
             ) : (
-              <div className="grid h-[60vh] place-items-center text-white/80">
+              <div className="grid h-56 place-items-center text-white/80">
                 Sem vídeo disponível para este exercício.
               </div>
             )}
@@ -1495,21 +1494,40 @@ export default function CriarOuEditarTreino() {
       <VideoModal open={videoOpen} title={videoTitle} src={videoSrc} onClose={closeVideo} />
 
       <div className="mx-auto max-w-5xl px-4 py-6">
-        <div className="sticky top-0 z-20 -mx-4 mb-6 bg-gray-50/80 px-4 pb-3 pt-2 backdrop-blur">
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
+        <div className="sticky top-0 z-20 -mx-4 mb-6 bg-gray-50/80 px-2 pb-3 pt-2 backdrop-blur">
+          <div className="rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1">
               <button
                 type="button"
                 onClick={onVoltar}
-                className="rounded-xl bg-gray-100 px-5 py-2 font-semibold text-gray-800 hover:bg-gray-200"
+                className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-800"
               >
                 Voltar
               </button>
 
-              <div className="flex flex-1 items-center justify-center gap-3">
-                <StepPill active={step === 1} done={step > 1} number={1} label="Informações" />
-                <span className="hidden h-px w-14 bg-gray-200 sm:block" />
-                <StepPill active={step === 2} done={false} number={2} label="Exercícios" />
+              <div className="flex min-w-0 items-center justify-center gap-1 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="min-w-0"
+                >
+                  <StepPill active={step === 1} done={step > 1} number={1} label="Info" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!podeIrProximo) {
+                      alert("Preencha o título, o nível e selecione quem será o criador.");
+                      return;
+                    }
+                    setStep(2);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="min-w-0"
+                >
+                  <StepPill active={step === 2} done={false} number={2} label="Exercícios" />
+                </button>
               </div>
 
               <button
@@ -1517,11 +1535,11 @@ export default function CriarOuEditarTreino() {
                 onClick={onProximo}
                 disabled={!podeIrProximo}
                 className={[
-                  "rounded-xl px-6 py-2 font-semibold text-white",
-                  podeIrProximo ? "bg-green-800 hover:bg-green-900" : "bg-green-600 cursor-not-allowed",
+                  "rounded-xl px-3 py-2 text-xs font-bold text-white",
+                  podeIrProximo ? "bg-green-800" : "bg-green-500 cursor-not-allowed",
                 ].join(" ")}
               >
-                Próximo
+                {step === 1 ? "Próx." : "Salvar"}
               </button>
             </div>
           </div>
