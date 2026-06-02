@@ -301,15 +301,85 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
 }
 const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return null;
-  const p = String(raw).trim();
-  if (!p) return null;
 
-  if (p.startsWith("http://") || p.startsWith("https://")) return p;
-  if (p.startsWith("/")) return `${API.BASE_URL}${p}`;
+  const p = String(raw).trim().replace(/\\/g, "/");
+  if (!p || p === "null" || p === "undefined") return null;
 
-  // "uploads/..." ou "assets/..." sem barra
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
+  }
+
+  // Arquivos fixos do frontend: vídeos/imagens em /assets
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
+  if (p.startsWith("/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // Uploads/exercícios vindos do backend
+  if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("uploads/") || p.startsWith("upload/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
   return `${API.BASE_URL}/${p}`;
 }
 
@@ -445,13 +515,7 @@ const getToken = () =>
   "";
 
 function normalizeAssetUrl(raw?: string | null) {
-  if (!raw) return null;
-  const u = String(raw).trim();
-  if (!u) return null;
-
-  if (u.startsWith("http://") || u.startsWith("https://")) return u;
-  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
-  return `${API.BASE_URL}/${u}`; // cobre "uploads/..." sem barra
+  return resolveUploadUrl(raw);
 }
 
 function isUsuarioFree() {
@@ -3638,13 +3702,14 @@ async function salvarProgressoSessao(sessaoId: string) {
 
               <div className="w-full flex justify-center">
                 {isArquivo ? (
-                  <video
-                    src={videoModal.url}
-                    className="max-h-[70vh] w-auto rounded-xl"
-                    controls
-                    autoPlay
-                    playsInline
-                  />
+                <video
+                  src={videoModal.url}
+                  className="max-h-[70vh] w-auto rounded-xl"
+                  controls
+                  autoPlay
+                  playsInline
+                  preload="metadata"
+                />
                 ) : (
                   <iframe
                     src={videoModal.url}

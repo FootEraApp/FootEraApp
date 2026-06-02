@@ -16,6 +16,7 @@ export default function MeusExerciciosTab() {
   const [tipoFiltro, setTipoFiltro] = useState("Todos");
   const [faixaEtariaFiltro, setFaixaEtariaFiltro] = useState("Todos");
   const [nivelFiltro, setNivelFiltro] = useState("Todos");
+  const [videoFiltro, setVideoFiltro] = useState("Todos");
 
   async function carregar() {
     try {
@@ -190,11 +191,43 @@ export default function MeusExerciciosTab() {
     window.location.href = "/treinos/novo";
   }
 
+  function temVideo(item: ExercicioItem) {
+    const x = item as any;
+
+    const urls = [
+      x.videoDemonstrativoUrl,
+      x.videoPosturaUrl,
+      x.videoUrl,
+      x.urlVideo,
+      x.video,
+      x.midiaUrl,
+      x.midia?.url,
+      ...(Array.isArray(x.midias) ? x.midias.map((m: any) => m?.url) : []),
+    ];
+
+    return urls.some((url) => {
+      const valor = String(url || "").trim().toLowerCase();
+      return Boolean(valor && valor !== "null" && valor !== "undefined");
+    });
+  }
+
+  const itemsFiltrados = useMemo(() => {
+    if (videoFiltro === "Com video") {
+      return items.filter(temVideo);
+    }
+
+    if (videoFiltro === "Sem video") {
+      return items.filter((item) => !temVideo(item));
+    }
+
+    return items;
+  }, [items, videoFiltro]);
+
   const totalTexto = useMemo(() => {
     if (loading) return "Carregando...";
-    if (!items.length) return "Nenhum exercício cadastrado.";
-    return `${items.length} exercício${items.length > 1 ? "s" : ""}`;
-  }, [items, loading]);
+    if (!itemsFiltrados.length) return "Nenhum exercício cadastrado.";
+    return `${itemsFiltrados.length} exercício${itemsFiltrados.length > 1 ? "s" : ""}`;
+  }, [itemsFiltrados, loading]);
 
   return (
     <section className="space-y-5">
@@ -260,7 +293,7 @@ export default function MeusExerciciosTab() {
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
             <select
               value={tipoFiltro}
               onChange={(e) => setTipoFiltro(e.target.value)}
@@ -300,6 +333,16 @@ export default function MeusExerciciosTab() {
               <option value="Avancado">Avançado</option>
               <option value="Performance">Performance</option>
             </select>
+
+            <select
+              value={videoFiltro}
+              onChange={(e) => setVideoFiltro(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-[#0D6A43]"
+            >
+              <option value="Todos">Vídeo: Todos</option>
+              <option value="Com video">Com vídeo</option>
+              <option value="Sem video">Sem vídeo</option>
+            </select>
           </div>
         </div>
       </div>
@@ -314,15 +357,17 @@ export default function MeusExerciciosTab() {
         <div className="rounded-[20px] border border-gray-200 bg-white p-6 text-gray-500">
           Carregando exercícios...
         </div>
-      ) : !items.length ? (
+      ) : !itemsFiltrados.length ? (
         <div className="rounded-[20px] border border-gray-200 bg-white p-6 text-gray-500">
-          {somenteFavoritos
+          {videoFiltro !== "Todos"
+            ? `Nenhum exercício encontrado para o filtro "${videoFiltro}".`
+            : somenteFavoritos
             ? "Você não possui exercícios favoritos."
             : "Você ainda não cadastrou nenhum exercício."}
         </div>
       ) : (
         <div className="space-y-4">
-          {items.map((item) => (
+          {itemsFiltrados.map((item) => (
             <ExercicioCard
               key={item.id}
               item={item}

@@ -142,16 +142,92 @@ function authHeaders(extra: Record<string, string> = {}) {
   return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
 }
 
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
 function toAbsoluteUrl(raw?: string | null) {
   if (!raw) return null;
-  const v = String(raw).trim();
-  if (v.startsWith("http") || v.startsWith("data:")) return v;
-  if (v.startsWith("/assets/") || v.startsWith("/videos/") || v.startsWith("/exercicios/")) return v;
-  if (v.startsWith("assets/") || v.startsWith("videos/") || v.startsWith("exercicios/")) return `/${v}`;
-  if (v.startsWith("/uploads/")) return `${API.BASE_URL}${v}`;
-  if (v.startsWith("uploads/")) return `${API.BASE_URL}/${v}`;
-  if (/^[\w-]{11}$/.test(v)) return `https://www.youtube.com/watch?v=${v}`;
-  return `${API.BASE_URL}${v.startsWith("/") ? v : `/${v}`}`;
+
+  const v = String(raw).trim().replace(/\\/g, "/");
+  if (!v || v === "null" || v === "undefined") return null;
+
+  if (
+    v.startsWith("blob:") ||
+    v.startsWith("data:") ||
+    v.startsWith("http://") ||
+    v.startsWith("https://")
+  ) {
+    return v;
+  }
+
+  // Arquivos fixos do frontend: imagens e vídeos em /assets
+  if (v.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${v}`
+      : v;
+  }
+
+  if (v.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${v}`
+      : `/${v}`;
+  }
+
+  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
+  if (v.startsWith("/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${v}`
+      : v;
+  }
+
+  if (v.startsWith("videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${v}`
+      : `/${v}`;
+  }
+
+  // Caso antigo: /exercicios/... normalmente vem do backend
+  if (v.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${v}`;
+  }
+
+  if (v.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${v}`;
+  }
+
+  // Uploads do backend
+  if (v.startsWith("/uploads/") || v.startsWith("/upload/")) {
+    return `${API.BASE_URL}${v}`;
+  }
+
+  if (v.startsWith("uploads/") || v.startsWith("upload/")) {
+    return `${API.BASE_URL}/${v}`;
+  }
+
+  // ID puro do YouTube
+  if (/^[\w-]{11}$/.test(v)) {
+    return `https://www.youtube.com/watch?v=${v}`;
+  }
+
+  if (v.startsWith("/")) {
+    return `${API.BASE_URL}${v}`;
+  }
+
+  return `${API.BASE_URL}/${v}`;
 }
 
 function avatarSrc(raw?: string | null) {

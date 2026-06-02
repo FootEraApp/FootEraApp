@@ -1,3 +1,4 @@
+// client/src/pages/TreinoUnico
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -73,14 +74,66 @@ function useQuery() {
   return { get, go };
 }
 
-const mediaUrl = (u?: string | null) => {
-  if (!u) return "";
-  if (u.startsWith("http")) return u;
-  if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
-  if (u.startsWith("/uploads/") || u.startsWith("/upload/")) return `${API.BASE_URL}${u}`;
-  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
-  return `${API.BASE_URL}/${u}`;
-};
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
+function mediaUrl(raw?: string | null) {
+  if (!raw) return "";
+
+  const p = String(raw).trim().replace(/\\/g, "/");
+  if (!p) return "";
+
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
+  }
+
+  // vídeos/imagens fixos do frontend
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // uploads vindos do backend
+  if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("uploads/") || p.startsWith("upload/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  return `${API.BASE_URL}/${p}`;
+}
 
 function Stars({ value }: { value: number }) {
   const v = Math.max(0, Math.min(5, Number(value) || 0));

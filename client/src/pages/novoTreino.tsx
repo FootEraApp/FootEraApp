@@ -319,23 +319,95 @@ function resolveAvatarUrl(raw?: string) {
   return u || AVATAR_FALLBACK;
 }
 
-function resolveMediaUrl(raw?: string) {
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
+function resolveMediaUrl(raw?: string | null) {
   if (!raw) return "";
-  const p = raw.replace(/\\/g, "/");
-  if (p.startsWith("blob:") || p.startsWith("data:")) return p;
-  if (p.startsWith("http")) return p;
-  if (p.startsWith("/assets/")) return p;
+
+  const p = String(raw).trim().replace(/\\/g, "/");
+  if (!p) return "";
+
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
+  }
+
+  // imagens/vídeos fixos dentro de /assets
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
   return `${API.BASE_URL}${p.startsWith("/") ? p : `/${p}`}`;
 }
 
-function resolveVideoUrl(raw?: string) {
+function resolveVideoUrl(raw?: string | null) {
   if (!raw) return "";
-  const p = raw.replace(/\\/g, "/");
 
-  if (p.startsWith("blob:") || p.startsWith("data:")) return p;
+  const p = String(raw).trim().replace(/\\/g, "/");
+  if (!p) return "";
 
-  if (p.startsWith("http")) return p;
-  if (p.startsWith("/assets/")) return p;
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
+  }
+
+  // vídeos fixos de exercício
+  if (p.startsWith("/assets/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // qualquer outro /assets também pode ir para CDN no app
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
   return `${API.BASE_URL}${p.startsWith("/") ? p : `/${p}`}`;
 }
 

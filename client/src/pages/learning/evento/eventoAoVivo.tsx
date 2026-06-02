@@ -135,6 +135,8 @@ function getAulaIdFromPathOrQuery() {
   return parts[parts.length - 1] || "";
 }
 
+const TIMEZONE_BR = "America/Sao_Paulo";
+
 function formatarData(value?: string | null) {
   if (!value) return "Data em breve";
 
@@ -142,6 +144,7 @@ function formatarData(value?: string | null) {
   if (Number.isNaN(d.getTime())) return "Data inválida";
 
   return d.toLocaleDateString("pt-BR", {
+    timeZone: TIMEZONE_BR,
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -155,8 +158,10 @@ function formatarHora(value?: string | null) {
   if (Number.isNaN(d.getTime())) return "";
 
   return d.toLocaleTimeString("pt-BR", {
+    timeZone: TIMEZONE_BR,
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }
 

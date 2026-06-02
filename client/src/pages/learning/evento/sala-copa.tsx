@@ -112,6 +112,8 @@ function formatMoney(value: number) {
   });
 }
 
+const TIMEZONE_BR = "America/Sao_Paulo";
+
 function formatarData(value?: string | null) {
   if (!value) return "Data em breve";
 
@@ -119,6 +121,7 @@ function formatarData(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "Data inválida";
 
   return date.toLocaleDateString("pt-BR", {
+    timeZone: TIMEZONE_BR,
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -132,6 +135,7 @@ function formatarDiaSemana(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "evento Learning";
 
   return date.toLocaleDateString("pt-BR", {
+    timeZone: TIMEZONE_BR,
     weekday: "long",
   });
 }
@@ -143,8 +147,10 @@ function formatarHora(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "Horário inválido";
 
   return date.toLocaleTimeString("pt-BR", {
+    timeZone: TIMEZONE_BR,
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }
 
