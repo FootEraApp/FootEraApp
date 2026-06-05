@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import Storage from "../../utils/storage.js";
 import { API } from "../../config.js";
 import { EVENTO_TIPOS, EventoTipo } from "@/utils/eventos.js";
+import { dataTagErrorSymbol } from "@tanstack/react-query";
 
 type EventoForm = {
   titulo: string;
@@ -33,6 +34,79 @@ type EventoForm = {
     descricao: string;
   }>;
 };
+
+const TIMEZONE_BR = "America/Sao_Paulo";
+const SAO_PAULO_OFFSET = "-03:00";
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function getSaoPauloParts(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE_BR,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value || "";
+
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
+
+function toDatetimeLocalValue(value?: string | Date | null) {
+  if (!value) return "";
+
+  const p = getSaoPauloParts(value);
+  if (!p) return "";
+
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+function toSaoPauloIso(value?: string | null) {
+  if (!value) return null;
+
+  const clean = String(value).trim();
+  if (!clean) return null;
+
+  /**
+   * datetime-local vem assim: 2026-06-03T18:00
+   * Aqui transformamos em: 2026-06-03T18:00:00-03:00
+   * Assim o backend salva o instante correto para São Paulo.
+   */
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(clean)) {
+    return `${clean}:00${SAO_PAULO_OFFSET}`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(clean)) {
+    return `${clean}${SAO_PAULO_OFFSET}`;
+  }
+
+  return clean;
+}
+
+function parseSaoPauloDateTimeLocal(value?: string | null) {
+  const iso = toSaoPauloIso(value);
+  if (!iso) return null;
+
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 export default function CreatorNovoEventoPage() {
   const [, setLocation] = useLocation();
@@ -228,27 +302,8 @@ export default function CreatorNovoEventoPage() {
     return ["AULA_AO_VIVO", "WEBINAR", "LIVE"].includes(tipoSelecionado);
   }, [tipoSelecionado]);
 
-  function pad2(n: number) {
-    return String(n).padStart(2, "0");
-  }
 
-  function toLocalInput(dt: Date) {
-    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
-  }
-
-  function toDatetimeLocalValue(value?: string | Date | null) {
-    if (!value) return "";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) return "";
-
-    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
-      date.getDate()
-    )}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
-  }
-
-  const minDateTime = toLocalInput(new Date());
+  const minDateTime = toDatetimeLocalValue(new Date());
   const maxDateTime = "2050-12-31T23:59";
 
   function set<K extends keyof EventoForm>(k: K, v: EventoForm[K]) {
@@ -371,30 +426,30 @@ export default function CreatorNovoEventoPage() {
   }
 
   function parseDateTimeLocalObrigatorio(value: string, label: string) {
-  if (!value) {
+    if (!value) {
+      return {
+        ok: false as const,
+        message: `${label} é obrigatório.`,
+        date: null,
+      };
+    }
+
+    const date = parseSaoPauloDateTimeLocal(value);
+
+    if (!date) {
+      return {
+        ok: false as const,
+        message: `${label} inválido.`,
+        date: null,
+      };
+    }
+
     return {
-      ok: false as const,
-      message: `${label} é obrigatório.`,
-      date: null,
+      ok: true as const,
+      message: "",
+      date,
     };
   }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return {
-      ok: false as const,
-      message: `${label} inválido.`,
-      date: null,
-    };
-  }
-
-  return {
-    ok: true as const,
-    message: "",
-    date,
-  };
-}
 
   function parseDateTimeLocalOpcional(value: string, label: string) {
     if (!value) {
@@ -405,9 +460,9 @@ export default function CreatorNovoEventoPage() {
       };
     }
 
-    const date = new Date(value);
+    const date = parseSaoPauloDateTimeLocal(value);
 
-    if (Number.isNaN(date.getTime())) {
+    if (!date) {
       return {
         ok: false as const,
         message: `${label} inválido.`,
@@ -517,8 +572,10 @@ export default function CreatorNovoEventoPage() {
 
       const body = {
         ...form,
-        inscricaoInicio: form.inscricaoInicio || null,
-        inscricaoFim: form.inscricaoFim || null,
+        dataEvento: toSaoPauloIso(form.dataEvento),
+        dataFimEvento: toSaoPauloIso(form.dataFimEvento),
+        inscricaoInicio: toSaoPauloIso(form.inscricaoInicio),
+        inscricaoFim: toSaoPauloIso(form.inscricaoFim),
         vagas: form.vagas ? Number(form.vagas) : null,
         valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
         requisitos: form.requisitos
@@ -557,10 +614,10 @@ export default function CreatorNovoEventoPage() {
           {
             titulo: form.titulo.trim(),
             descricao: form.descricao.trim() || null,
-            dataInicio: form.dataEvento,
-            dataFim: form.dataFimEvento || null,
-            inscricaoInicio: form.inscricaoInicio || null,
-            inscricaoFim: form.inscricaoFim || null,
+            dataInicio: toSaoPauloIso(form.dataEvento),
+            dataFim: toSaoPauloIso(form.dataFimEvento) || null,
+            inscricaoInicio: toSaoPauloIso(form.inscricaoInicio) || null,
+            inscricaoFim: toSaoPauloIso(form.inscricaoFim) || null,
             acessoPago: Number(form.valorInscricao || 0) > 0,
             precoAcesso: form.valorInscricao ? Number(form.valorInscricao) : null,
             chatAtivo: true,
@@ -591,10 +648,10 @@ export default function CreatorNovoEventoPage() {
           {
             titulo: form.titulo.trim(),
             descricao: form.descricao.trim() || null,
-            dataInicio: form.dataEvento,
-            dataFim: form.dataFimEvento || null,
-            inscricaoInicio: form.inscricaoInicio || null,
-            inscricaoFim: form.inscricaoFim || null,
+            dataInicio: toSaoPauloIso(form.dataEvento),
+            dataFim: toSaoPauloIso(form.dataFimEvento) || null,
+            inscricaoInicio: toSaoPauloIso(form.inscricaoInicio) || null,
+            inscricaoFim: toSaoPauloIso(form.inscricaoFim) || null,
             acessoPago: Number(form.valorInscricao || 0) > 0,
             precoAcesso: form.valorInscricao ? Number(form.valorInscricao) : null,
             chatAtivo: true,

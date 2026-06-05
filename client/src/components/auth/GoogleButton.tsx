@@ -113,6 +113,27 @@ export default function GoogleButton({
     if (isNative) return;
 
     let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const GOOGLE_BUTTON_WIDTH = 320;
+    const GOOGLE_BUTTON_HEIGHT = 44;
+
+    function ajustarEscala() {
+      if (!divRef.current) return;
+
+      const outer = divRef.current.parentElement;
+      if (!outer) return;
+
+      const availableWidth = Math.floor(outer.getBoundingClientRect().width);
+      const scale = Math.min(1, availableWidth / GOOGLE_BUTTON_WIDTH);
+
+      divRef.current.style.transform = `scale(${scale})`;
+      divRef.current.style.transformOrigin = "top center";
+      divRef.current.style.width = `${GOOGLE_BUTTON_WIDTH}px`;
+      divRef.current.style.height = `${GOOGLE_BUTTON_HEIGHT}px`;
+
+      outer.style.height = `${GOOGLE_BUTTON_HEIGHT * scale}px`;
+    }
 
     async function initGoogleWeb() {
       try {
@@ -139,35 +160,47 @@ export default function GoogleButton({
           return;
         }
 
-        if (initializedRef.current) return;
+        if (!initializedRef.current) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response: any) => {
+              const credential = response?.credential;
+              if (!credential) return;
+              await onCredential(credential);
+            },
+            auto_select: false,
+            cancel_on_tap_outside: true,
+            ux_mode: "popup",
+          });
 
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response: any) => {
-            const credential = response?.credential;
-            if (!credential) return;
-            await onCredential(credential);
-          },
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          ux_mode: "popup",
-        });
+          divRef.current.innerHTML = "";
 
-        divRef.current.innerHTML = "";
+          window.google.accounts.id.renderButton(divRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text,
+            shape: "rectangular",
+            logo_alignment: "left",
+            width: GOOGLE_BUTTON_WIDTH,
+          });
 
-        const width = Math.min(divRef.current.clientWidth || 360, 520);
+          initializedRef.current = true;
+        }
 
-        window.google.accounts.id.renderButton(divRef.current, {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          text,
-          shape: "rectangular",
-          logo_alignment: "left",
-          width,
-        });
+        ajustarEscala();
 
-        initializedRef.current = true;
+        const outer = divRef.current.parentElement;
+
+        if (outer) {
+          resizeObserver = new ResizeObserver(() => {
+            if (!cancelled) ajustarEscala();
+          });
+
+          resizeObserver.observe(outer);
+        }
+
+        window.addEventListener("resize", ajustarEscala);
       } catch (e: any) {
         console.error("Erro ao iniciar Google Button:", e);
         setErro(e?.message || "Não foi possível carregar o botão do Google.");
@@ -178,28 +211,41 @@ export default function GoogleButton({
 
     return () => {
       cancelled = true;
+      window.removeEventListener("resize", ajustarEscala);
+
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [text, onCredential, isNative]);
 
   return (
-    <div className="w-full">
+    <div className="w-full min-w-0 overflow-hidden">
       {isNative ? (
         <button
           type="button"
           disabled={disabled}
           onClick={handleNativeGoogleLogin}
-          className="w-full border border-gray-300 bg-white rounded px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
+          className="flex min-h-[44px] w-full min-w-0 items-center justify-center rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
         >
           Continuar com Google
         </button>
       ) : (
-        <div className={disabled ? "pointer-events-none opacity-60 w-full" : "w-full"}>
-          <div ref={divRef} className="w-full min-h-[44px] flex justify-center" />
+        <div
+          className={[
+            "relative mx-auto w-full min-w-0 overflow-hidden",
+            disabled ? "pointer-events-none opacity-60" : "",
+          ].join(" ")}
+        >
+          <div
+            ref={divRef}
+            className="mx-auto flex min-h-[44px] items-center justify-center"
+          />
         </div>
       )}
 
       {erro ? (
-        <p className="text-xs text-red-600 mt-2 text-center">{erro}</p>
+        <p className="mt-2 text-center text-xs text-red-600">{erro}</p>
       ) : null}
     </div>
   );

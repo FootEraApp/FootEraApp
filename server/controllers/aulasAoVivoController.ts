@@ -1228,6 +1228,35 @@ export async function listarMinhasAulasAoVivo(req: AuthRequest, res: Response) {
         },
       ],
       include: {
+        convidados: {
+          orderBy: {
+            ordem: "asc",
+          },
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                nomeDeUsuario: true,
+                email: true,
+                foto: true,
+                tipo: true,
+              },
+            },
+          },
+        },
+
+        convidadoUsuario: {
+          select: {
+            id: true,
+            nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            foto: true,
+            tipo: true,
+          },
+        },
+
         metodologia: {
           select: {
             id: true,
@@ -1235,6 +1264,7 @@ export async function listarMinhasAulasAoVivo(req: AuthRequest, res: Response) {
             capaUrl: true,
           },
         },
+
         metodologiaAvulsa: {
           select: {
             id: true,

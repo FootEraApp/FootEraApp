@@ -1041,14 +1041,14 @@ export default function Cadastro() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen">
-      <div className="md:w-1/2 bg-[#14532d] text-white flex flex-col items-center p-5 md:p-10">
+    <div className="flex min-h-screen flex-col bg-cream lg:flex-row">
+      <div className="w-full bg-[#14532d] text-white flex flex-col items-center px-5 py-6 sm:px-8 lg:w-1/2 lg:p-10">
         <div className="w-full max-w-[680px]">
-          <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
+          <div className="relative flex w-full items-center justify-center gap-4 lg:flex-col lg:gap-2">
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="cursor-pointer"
+              className="shrink-0 cursor-pointer"
               aria-label="Voltar para Home"
             >
               <img
@@ -1056,13 +1056,22 @@ export default function Cadastro() {
                 alt="Logo FootEra"
                 className="
                   shrink-0 object-contain transform-gpu
-                  w-14 h-14 sm:w-16 sm:h-16 md:w-[110px] md:h-[110px] lg:w-[130px] lg:h-[130px]
-                  origin-left md:origin-center mr-1
+                  w-16 h-16 sm:w-20 sm:h-20 lg:w-[130px] lg:h-[130px]
+                  origin-center
                 "
               />
             </button>
-            <h1 className="flex-1 lg:flex-none text-center text-xl lg:text-3xl font-bold">Bem-vindo à FootEra</h1>
-            <button type="button" className="lg:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full" aria-expanded={infoAberto} aria-controls="cadastro-info" onClick={() => setInfoAberto(v => !v)} title={infoAberto ? "Recolher" : "Expandir"}>
+            <h1 className="min-w-0 text-center text-xl font-bold sm:text-2xl lg:text-3xl">
+              Bem-vindo à FootEra
+            </h1>
+            <button
+              type="button"
+              className="absolute right-4 top-6 lg:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
+              aria-expanded={infoAberto}
+              aria-controls="cadastro-info"
+              onClick={() => setInfoAberto(v => !v)}
+              title={infoAberto ? "Recolher" : "Expandir"}
+            >
               {infoAberto ? <ChevronUp /> : <ChevronDown />}
             </button>
           </div>
@@ -1123,7 +1132,7 @@ export default function Cadastro() {
         </div>
       </div>
 
-      <div className="relative bg-cream flex justify-center lg:justify-center items-start p-6 lg:p-10 w-full lg:w-1/2">
+      <div className="relative w-full bg-cream flex justify-center items-start px-4 py-7 sm:px-6 lg:w-1/2 lg:p-10">
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div
             aria-hidden
@@ -1138,7 +1147,7 @@ export default function Cadastro() {
           />
         </div>
 
-        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl p-6 mx-auto lg:mt-6">
+        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl min-w-0 overflow-hidden p-4 sm:p-6 mx-auto lg:mt-6">
           <div className="flex items-center justify-between mb-6">
             <Step n={1} label="Dados de Usuário" />
             <div className={`flex-1 mx-2 h-0.5 ${etapa >= 2 ? "bg-green-800" : "bg-gray-200"}`} />
@@ -1467,18 +1476,20 @@ export default function Cadastro() {
                 </button>
               </div>
 
-              <div className="mt-4">
-                <div className="w-full max-w-[460px] mx-auto">
-                  <div className="my-4 flex items-center gap-3">
-                    <div className="h-px bg-gray-200 flex-1" />
-                    <span className="text-xs text-gray-500">ou</span>
-                    <div className="h-px bg-gray-200 flex-1" />
+              <div className="mt-4 w-full min-w-0 overflow-hidden">
+                <div className="w-full max-w-[420px] min-w-0 mx-auto overflow-hidden">
+                  <div className="my-4 flex min-w-0 items-center gap-3">
+                    <div className="h-px min-w-0 flex-1 bg-gray-200" />
+                    <span className="shrink-0 text-xs text-gray-500">ou</span>
+                    <div className="h-px min-w-0 flex-1 bg-gray-200" />
                   </div>
 
-                  <GoogleButton
-                    text="signup_with"
-                    onCredential={handleGoogleCredential}
-                  />
+                  <div className="w-full min-w-0 overflow-hidden">
+                    <GoogleButton
+                      text="signup_with"
+                      onCredential={handleGoogleCredential}
+                    />
+                  </div>
                 </div>
               </div>
 

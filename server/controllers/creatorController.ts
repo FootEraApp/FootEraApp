@@ -321,6 +321,47 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
           replayDisponivel: true,
           gravacaoAtiva: true,
           totalParticipantes: true,
+
+          metodologiaId: true,
+          metodologiaAvulsaId: true,
+          itemId: true,
+          itemAvulsaId: true,
+          estruturaId: true,
+          estruturaAvulsaId: true,
+
+          convidadoUsuarioId: true,
+          convidadoNome: true,
+          convidadoDescricao: true,
+
+          convidadoUsuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              email: true,
+              foto: true,
+              tipo: true,
+            },
+          },
+
+          convidados: {
+            orderBy: {
+              ordem: "asc",
+            },
+            include: {
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  nomeDeUsuario: true,
+                  email: true,
+                  foto: true,
+                  tipo: true,
+                },
+              },
+            },
+          },
+
           metodologia: {
             select: {
               id: true,
@@ -329,6 +370,7 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
               criadorUsuarioId: true,
             },
           },
+
           metodologiaAvulsa: {
             select: {
               id: true,
@@ -427,7 +469,7 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
           totalAssinantes: m._count?.assinantes ?? 0,
         })),
       ],
-      eventosAoVivo: aulasAoVivo.map((aula) => ({
+       eventosAoVivo: aulasAoVivo.map((aula) => ({
         id: aula.id,
         titulo: aula.titulo,
         descricao: aula.descricao,
@@ -438,6 +480,20 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         replayDisponivel: aula.replayDisponivel,
         gravacaoAtiva: aula.gravacaoAtiva,
         totalParticipantes: aula.totalParticipantes,
+
+        metodologiaId: aula.metodologiaId,
+        metodologiaAvulsaId: aula.metodologiaAvulsaId,
+        itemId: aula.itemId,
+        itemAvulsaId: aula.itemAvulsaId,
+        estruturaId: aula.estruturaId,
+        estruturaAvulsaId: aula.estruturaAvulsaId,
+
+        convidadoUsuarioId: aula.convidadoUsuarioId,
+        convidadoNome: aula.convidadoNome,
+        convidadoDescricao: aula.convidadoDescricao,
+        convidadoUsuario: aula.convidadoUsuario,
+        convidados: aula.convidados,
+
         metodologia: aula.metodologia,
         metodologiaAvulsa: aula.metodologiaAvulsa,
       })),

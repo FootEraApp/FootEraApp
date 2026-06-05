@@ -2722,10 +2722,45 @@ export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Respon
         acessoPago: true,
         status: true,
         totalParticipantes: true,
+
+        criadorUsuarioId: true,
         criadorUsuario: {
           select: {
             id: true,
             nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            tipo: true,
+          },
+        },
+
+        convidadoUsuarioId: true,
+        convidadoNome: true,
+        convidadoDescricao: true,
+        convidadoUsuario: {
+          select: {
+            id: true,
+            nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            tipo: true,
+          },
+        },
+
+        convidados: {
+          orderBy: {
+            ordem: "asc",
+          },
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                nomeDeUsuario: true,
+                email: true,
+                tipo: true,
+              },
+            },
           },
         },
       },
@@ -2746,4 +2781,3 @@ export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Respon
     });
   }
 }
-

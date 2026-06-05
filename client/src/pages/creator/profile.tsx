@@ -36,6 +36,23 @@ type Conteudo = {
   geraCertificado?: boolean;
 };
 
+type UsuarioResumoAula = {
+  id: string;
+  nome?: string | null;
+  nomeDeUsuario?: string | null;
+  email?: string | null;
+  foto?: string | null;
+  tipo?: string | null;
+};
+
+type ConvidadoAula = {
+  id?: string;
+  usuarioId?: string | null;
+  nome?: string | null;
+  descricao?: string | null;
+  usuario?: UsuarioResumoAula | null;
+};
+
 type AulaAoVivoCreator = {
   id: string;
   titulo: string;
@@ -47,6 +64,11 @@ type AulaAoVivoCreator = {
   replayDisponivel?: boolean;
   gravacaoAtiva?: boolean;
   totalParticipantes?: number | null;
+  convidadoUsuarioId?: string | null;
+  convidadoNome?: string | null;
+  convidadoDescricao?: string | null;
+  convidadoUsuario?: UsuarioResumoAula | null;
+  convidados?: ConvidadoAula[];
   metodologiaId?: string | null;
   metodologiaAvulsaId?: string | null;
   itemId?: string | null;
@@ -205,6 +227,54 @@ function getOrigemLiveBadge(aula?: AulaAoVivoCreator | null) {
     label: "Evento avulso",
     className: "bg-emerald-50 text-emerald-700 border-emerald-200",
   };
+}
+
+function getNomeUsuarioAula(usuario?: UsuarioResumoAula | null) {
+  if (!usuario) return "";
+
+  return (
+    usuario.nome ||
+    usuario.nomeDeUsuario ||
+    usuario.email ||
+    ""
+  );
+}
+
+function getConvidadosLabel(aula?: AulaAoVivoCreator | null) {
+  if (!aula) return "";
+
+  const convidadosArray = Array.isArray(aula.convidados)
+    ? aula.convidados
+        .map((c) => {
+          const nome =
+            c.nome ||
+            getNomeUsuarioAula(c.usuario) ||
+            "";
+
+          const descricao = c.descricao || "";
+
+          if (!nome) return "";
+
+          return descricao ? `${nome} — ${descricao}` : nome;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (convidadosArray.length > 0) {
+    return convidadosArray.join(" • ");
+  }
+
+  const convidadoUnico =
+    aula.convidadoNome ||
+    getNomeUsuarioAula(aula.convidadoUsuario);
+
+  if (convidadoUnico) {
+    return aula.convidadoDescricao
+      ? `${convidadoUnico} — ${aula.convidadoDescricao}`
+      : convidadoUnico;
+  }
+
+  return "";
 }
 
 export default function CreatorProfile() {
@@ -561,6 +631,7 @@ export default function CreatorProfile() {
       : Array.isArray(perfilOriginal.categorias)
       ? perfilOriginal.categorias
       : [];
+
   const tabs = institucional
   ? [
       ["visao", "Visão Geral"],
@@ -572,6 +643,7 @@ export default function CreatorProfile() {
   : [
       ["visao", "Visão Geral"],
       ["conteudo", "Conteúdo"],
+      ["eventos", "Eventos"],
       ["ganhos", "Ganhos"],
       ["postagens", "Postagens"],
       ["sobre", "Sobre"],
@@ -947,6 +1019,7 @@ export default function CreatorProfile() {
                   const isLiveLearning = ev.kind === "AULA_AO_VIVO";
                   const aula = isLiveLearning ? ev.aula : null;
                   const origemBadge = getOrigemLiveBadge(aula);
+                  const convidadosLabel = isLiveLearning ? getConvidadosLabel(aula) : "";
 
                   return (
                     <div
@@ -1000,6 +1073,12 @@ export default function CreatorProfile() {
                           <p className="text-sm text-slate-600 mt-2 line-clamp-2">
                             {ev.descricao}
                           </p>
+                        ) : null}
+
+                        {convidadosLabel ? (
+                          <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                            <b>Convidados:</b> {convidadosLabel}
+                          </div>
                         ) : null}
 
                         {isLiveLearning && aula ? (
