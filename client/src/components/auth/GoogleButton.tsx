@@ -13,11 +13,10 @@ type GoogleButtonProps = {
 };
 
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-
 let googleScriptPromise: Promise<void> | null = null;
 
 function getGoogleClientId() {
-  return import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID_2 || "";
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 }
 
 function loadGoogleScript(): Promise<void> {
@@ -29,10 +28,7 @@ function loadGoogleScript(): Promise<void> {
     ) as HTMLScriptElement | null;
 
     if (existing) {
-      if ((window as any).google?.accounts?.id) {
-        resolve();
-        return;
-      }
+      if ((window as any).google?.accounts?.id) return resolve();
 
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
@@ -66,18 +62,34 @@ export default function GoogleButton({
 
   useEffect(() => {
     let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
 
-    async function initGoogle() {
+    const GOOGLE_BUTTON_WIDTH = 320;
+    const GOOGLE_BUTTON_HEIGHT = 44;
+
+    function ajustarEscala() {
+      if (!divRef.current) return;
+
+      const outer = divRef.current.parentElement;
+      if (!outer) return;
+
+      const availableWidth = Math.floor(outer.getBoundingClientRect().width);
+      const scale = Math.min(1, availableWidth / GOOGLE_BUTTON_WIDTH);
+
+      divRef.current.style.transform = `scale(${scale})`;
+      divRef.current.style.transformOrigin = "top center";
+      divRef.current.style.width = `${GOOGLE_BUTTON_WIDTH}px`;
+      divRef.current.style.height = `${GOOGLE_BUTTON_HEIGHT}px`;
+
+      outer.style.height = `${GOOGLE_BUTTON_HEIGHT * scale}px`;
+    }
+
+    async function initGoogleWeb() {
       try {
         setErro("");
 
         const clientId = getGoogleClientId();
 
-        console.log("[GOOGLE] clientId usado:", clientId);
-        console.log("[GOOGLE] VITE_GOOGLE_CLIENT_ID:", import.meta.env.VITE_GOOGLE_CLIENT_ID);
-        console.log("[GOOGLE] VITE_GOOGLE_CLIENT_ID_2:", import.meta.env.VITE_GOOGLE_CLIENT_ID_2);
-        console.log("[GOOGLE] window origin:", window.location.origin);
-        
         if (!clientId) {
           setErro("VITE_GOOGLE_CLIENT_ID não configurado no frontend.");
           return;
@@ -97,56 +109,81 @@ export default function GoogleButton({
           return;
         }
 
-        if (initializedRef.current) return;
+        if (!initializedRef.current) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response: any) => {
+              const credential = response?.credential;
+              if (!credential) return;
+              await onCredential(credential);
+            },
+            auto_select: false,
+            cancel_on_tap_outside: true,
+            ux_mode: "popup",
+          });
 
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response: any) => {
-            const credential = response?.credential;
-            if (!credential) return;
-            await onCredential(credential);
-          },
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          ux_mode: "popup",
-        });
+          divRef.current.innerHTML = "";
 
-        divRef.current.innerHTML = "";
+          window.google.accounts.id.renderButton(divRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text,
+            shape: "rectangular",
+            logo_alignment: "left",
+            width: GOOGLE_BUTTON_WIDTH,
+          });
 
-        const width = Math.min(divRef.current.clientWidth || 360, 520);
+          initializedRef.current = true;
+        }
 
-        window.google.accounts.id.renderButton(divRef.current, {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          text,
-          shape: "rectangular",
-          logo_alignment: "left",
-          width,
-        });
+        ajustarEscala();
 
-        initializedRef.current = true;
+        const outer = divRef.current.parentElement;
+
+        if (outer) {
+          resizeObserver = new ResizeObserver(() => {
+            if (!cancelled) ajustarEscala();
+          });
+
+          resizeObserver.observe(outer);
+        }
+
+        window.addEventListener("resize", ajustarEscala);
       } catch (e: any) {
         console.error("Erro ao iniciar Google Button:", e);
         setErro(e?.message || "Não foi possível carregar o botão do Google.");
       }
     }
 
-    initGoogle();
+    initGoogleWeb();
 
     return () => {
       cancelled = true;
+      window.removeEventListener("resize", ajustarEscala);
+
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
     };
   }, [text, onCredential]);
 
   return (
-    <div className="w-full">
-      <div className={disabled ? "pointer-events-none opacity-60 w-full" : "w-full"}>
-        <div ref={divRef} className="w-full min-h-[44px] flex justify-center" />
+    <div className="w-full min-w-0 overflow-hidden">
+      <div
+        className={[
+          "relative mx-auto w-full min-w-0 overflow-hidden",
+          disabled ? "pointer-events-none opacity-60" : "",
+        ].join(" ")}
+      >
+        <div
+          ref={divRef}
+          className="mx-auto flex min-h-[44px] items-center justify-center"
+        />
       </div>
 
       {erro ? (
-        <p className="text-xs text-red-600 mt-2 text-center">{erro}</p>
+        <p className="mt-2 text-center text-xs text-red-600">{erro}</p>
       ) : null}
     </div>
   );

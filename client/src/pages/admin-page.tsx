@@ -465,6 +465,7 @@ export default function AdminDashboard() {
       nomeDeUsuario?: string | null;
       email?: string | null;
       foto?: string | null;
+      tipo?: string | null;
       parceiro?: boolean | null;
     } | null;
     _count?: { assinantes?: number; itens?: number; estruturas?: number };

@@ -28,6 +28,23 @@ type EventoListItem = {
   linkInscricao?: string | null;
 };
 
+type UsuarioResumoAula = {
+  id: string;
+  nome?: string | null;
+  nomeDeUsuario?: string | null;
+  email?: string | null;
+  foto?: string | null;
+  tipo?: string | null;
+};
+
+type ConvidadoAula = {
+  id?: string;
+  usuarioId?: string | null;
+  nome?: string | null;
+  descricao?: string | null;
+  usuario?: UsuarioResumoAula | null;
+};
+
 type AulaAoVivoResumo = {
   id: string;
   titulo: string;
@@ -41,6 +58,11 @@ type AulaAoVivoResumo = {
   totalParticipantes?: number | null;
   totalMensagens?: number | null;
   thumbUrl?: string | null;
+  convidadoUsuarioId?: string | null;
+  convidadoNome?: string | null;
+  convidadoDescricao?: string | null;
+  convidadoUsuario?: UsuarioResumoAula | null;
+  convidados?: ConvidadoAula[];
   metodologiaId?: string | null;
   metodologiaAvulsaId?: string | null;
   estruturaId?: string | null;
@@ -125,6 +147,8 @@ function getMetodologiaUrl(aula: AulaAoVivoResumo) {
   return `/creator/eventos/novo?aulaId=${aula.id}`;
 }
 
+const TIMEZONE_BR = "America/Sao_Paulo";
+
 function formatarDataHoraLive(value?: string | null) {
   if (!value) return "Sem data definida";
 
@@ -132,12 +156,62 @@ function formatarDataHoraLive(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "Data inválida";
 
   return date.toLocaleString("pt-BR", {
+    timeZone: TIMEZONE_BR,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
+}
+
+function getNomeUsuarioAula(usuario?: UsuarioResumoAula | null) {
+  if (!usuario) return "";
+
+  return (
+    usuario.nome ||
+    usuario.nomeDeUsuario ||
+    usuario.email ||
+    ""
+  );
+}
+
+function getConvidadosLabel(aula?: AulaAoVivoResumo | null) {
+  if (!aula) return "";
+
+  const convidadosArray = Array.isArray(aula.convidados)
+    ? aula.convidados
+        .map((c) => {
+          const nome =
+            c.nome ||
+            getNomeUsuarioAula(c.usuario) ||
+            "";
+
+          const descricao = c.descricao || "";
+
+          if (!nome) return "";
+
+          return descricao ? `${nome} — ${descricao}` : nome;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (convidadosArray.length > 0) {
+    return convidadosArray.join(" • ");
+  }
+
+  const convidadoUnico =
+    aula.convidadoNome ||
+    getNomeUsuarioAula(aula.convidadoUsuario);
+
+  if (convidadoUnico) {
+    return aula.convidadoDescricao
+      ? `${convidadoUnico} — ${aula.convidadoDescricao}`
+      : convidadoUnico;
+  }
+
+  return "";
 }
 
 function getLiveStatusInfo(status?: string) {
@@ -439,6 +513,7 @@ export default function CreatorEventosPage() {
                 const aula = item.aula;
                 const statusInfo = getLiveStatusInfo(aula.status);
                 const origemInfo = getOrigemAula(aula);
+                const convidadosLabel = getConvidadosLabel(aula);
 
                 const capa =
                   aula.thumbUrl ||
@@ -503,6 +578,12 @@ export default function CreatorEventosPage() {
                                 {aula.totalParticipantes ?? 0} participantes
                               </span>
                             </div>
+
+                            {convidadosLabel ? (
+                              <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-green-900">
+                                <b>Convidados:</b> {convidadosLabel}
+                              </div>
+                            ) : null}
                           </div>
 
                           <div className="flex shrink-0 gap-2">
