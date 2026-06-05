@@ -72,6 +72,22 @@ type BillingState = {
   trialJaUsado?: boolean; 
 };
 
+type UsuarioResumoPagamento = {
+  id: string;
+  nome?: string | null;
+  nomeDeUsuario?: string | null;
+  email?: string | null;
+  tipo?: string | null;
+};
+
+type ConvidadoAulaPagamento = {
+  id?: string;
+  usuarioId?: string | null;
+  nome?: string | null;
+  descricao?: string | null;
+  usuario?: UsuarioResumoPagamento | null;
+};
+
 type MetodologiaAvulsa = {
   id: string;
   titulo: string;
@@ -86,6 +102,9 @@ type MetodologiaAvulsa = {
   pontosTotal?: number | null;
   publicoAlvo?: "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string | null;
   planoId: string;
+
+  criadorUsuarioId?: string | null;
+  criadorUsuario?: UsuarioResumoPagamento | null;
 };
 
 type AulaAoVivoPaga = {
@@ -100,10 +119,15 @@ type AulaAoVivoPaga = {
   acessoPago: boolean;
   status: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
   totalParticipantes?: number | null;
-  criadorUsuario?: {
-    id: string;
-    nome?: string | null;
-  } | null;
+
+  criadorUsuarioId?: string | null;
+  criadorUsuario?: UsuarioResumoPagamento | null;
+  convidadoUsuarioId?: string | null;
+  convidadoNome?: string | null;
+  convidadoDescricao?: string | null;
+  convidadoUsuario?: UsuarioResumoPagamento | null;
+  convidados?: ConvidadoAulaPagamento[];
+
   planoId: string;
 };
 
@@ -475,11 +499,95 @@ function toTs(iso?: string | null) {
   return Number.isFinite(t) ? t : null;
 }
 
+const TIMEZONE_BR = "America/Sao_Paulo";
+
 function formatDateBR(iso?: string | null) {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("pt-BR");
+
+  return d.toLocaleDateString("pt-BR", {
+    timeZone: TIMEZONE_BR,
+  });
+}
+
+function formatDateTimeBR(iso?: string | null) {
+  if (!iso) return null;
+
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d.toLocaleString("pt-BR", {
+    timeZone: TIMEZONE_BR,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function getNomeUsuarioPagamento(usuario?: UsuarioResumoPagamento | null) {
+  if (!usuario) return "";
+
+  return (
+    usuario.nome ||
+    usuario.nomeDeUsuario ||
+    usuario.email ||
+    ""
+  );
+}
+
+function getCriadorLabel(item: any) {
+  const nome =
+    getNomeUsuarioPagamento(item?.criadorUsuario) ||
+    item?.criadorNome ||
+    item?.criadorEmail ||
+    "";
+
+  if (nome) return nome;
+
+  if (item?.criadorUsuarioId) {
+    return `Usuário ${String(item.criadorUsuarioId).slice(0, 8)}...`;
+  }
+
+  return "";
+}
+
+function getConvidadosLabel(aula: AulaAoVivoPaga) {
+  const convidadosArray = Array.isArray(aula.convidados)
+    ? aula.convidados
+        .map((c) => {
+          const nome =
+            c.nome ||
+            getNomeUsuarioPagamento(c.usuario) ||
+            "";
+
+          const descricao = c.descricao || "";
+
+          if (!nome) return "";
+
+          return descricao ? `${nome} — ${descricao}` : nome;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (convidadosArray.length > 0) {
+    return convidadosArray.join(" • ");
+  }
+
+  const convidadoUnico =
+    aula.convidadoNome ||
+    getNomeUsuarioPagamento(aula.convidadoUsuario);
+
+  if (convidadoUnico) {
+    return aula.convidadoDescricao
+      ? `${convidadoUnico} — ${aula.convidadoDescricao}`
+      : convidadoUnico;
+  }
+
+  return "";
 }
 
 type RoleUI = "Atleta" | "Olheiro" | "Professor" | "Organizações";
@@ -2080,6 +2188,12 @@ export default function PagamentosPage() {
                     </span>
                   </div>
 
+                  {getCriadorLabel(m) ? (
+                    <div className="text-sm text-gray-700 mt-2">
+                      <b>Criador:</b> {getCriadorLabel(m)}
+                    </div>
+                  ) : null}
+
                   <div className="text-sm text-gray-800 mt-2">
                     <b>Mensal:</b> {brl(m.precoAssinaturaMensal)}
                   </div>
@@ -2132,7 +2246,9 @@ export default function PagamentosPage() {
             })
             .map((aula) => {
               const checked = !!pickAulasAoVivo[aula.id];
-              const data = new Date(aula.dataInicio);
+              const dataLabel = formatDateTimeBR(aula.dataInicio);
+              const criadorLabel = getCriadorLabel(aula);
+              const convidadosLabel = getConvidadosLabel(aula);
 
               return (
                 <label
@@ -2163,20 +2279,24 @@ export default function PagamentosPage() {
 
                       <div className="mt-2 text-sm text-gray-700">
                         <b>Data:</b>{" "}
-                        {Number.isNaN(data.getTime())
-                          ? "Data em breve"
-                          : data.toLocaleString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                        {dataLabel || "Data em breve"}
                       </div>
 
                       <div className="text-sm text-gray-700">
                         <b>Status:</b> {aula.status}
                       </div>
+
+                      {criadorLabel ? (
+                        <div className="text-sm text-gray-700 mt-2">
+                          <b>Criador:</b> {criadorLabel}
+                        </div>
+                      ) : null}
+
+                      {convidadosLabel ? (
+                        <div className="text-sm text-gray-700 mt-1">
+                          <b>Convidados:</b> {convidadosLabel}
+                        </div>
+                      ) : null}
 
                       <div className="mt-2 font-bold text-green-950">
                         Acesso único:{" "}
@@ -2185,7 +2305,7 @@ export default function PagamentosPage() {
                           currency: "BRL",
                         })}
                       </div>
-
+                      
                       <div className="text-xs text-gray-500 mt-1">
                         ID: {aula.id}
                       </div>

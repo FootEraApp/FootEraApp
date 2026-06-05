@@ -122,6 +122,13 @@ type EventoPreview = {
   cidade?: string | null;
   estado?: string | null;
   descricao?: string | null;
+
+  origem?: "EVENTO_CLUBE" | "AULA_AO_VIVO_CREATOR";
+  thumbUrl?: string | null;
+  totalParticipantes?: number | null;
+
+  criadorLabel?: string | null;
+  convidadosLabel?: string | null;
 };
 
 type AtividadeRecenteTipo =
@@ -701,47 +708,189 @@ export default function PerfilClube({
     }
   }
 
+  const TIMEZONE_BR = "America/Sao_Paulo";
+
+  function getDiaBR(value?: string | null) {
+    if (!value) return "";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: TIMEZONE_BR,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+
+  function getNomePessoa(item?: any) {
+    if (!item) return "";
+
+    return String(
+      item.nome ||
+        item.nomePublico ||
+        item.nomeDeUsuario ||
+        item.email ||
+        ""
+    ).trim();
+  }
+
+  function getCriadorLabelFromCreator(resp?: any) {
+    if (!resp) return "";
+
+    return (
+      getNomePessoa(resp.creator) ||
+      getNomePessoa(resp.creator?.usuario) ||
+      getNomePessoa(resp.usuario) ||
+      getNomePessoa(resp)
+    );
+  }
+
+  function getConvidadosLabelFromAula(aula?: any) {
+    if (!aula) return "";
+
+    const convidadosArray = Array.isArray(aula.convidados)
+      ? aula.convidados
+          .map((c: any) => {
+            const nome =
+              String(c.nome || "").trim() ||
+              getNomePessoa(c.usuario) ||
+              getNomePessoa(c.convidadoUsuario);
+
+            const descricao = String(c.descricao || "").trim();
+
+            if (!nome) return "";
+
+            return descricao ? `${nome} — ${descricao}` : nome;
+          })
+          .filter(Boolean)
+      : [];
+
+    if (convidadosArray.length > 0) {
+      return convidadosArray.join(" • ");
+    }
+
+    const convidadoUnico =
+      String(aula.convidadoNome || "").trim() ||
+      getNomePessoa(aula.convidadoUsuario);
+
+    if (!convidadoUnico) return "";
+
+    const descricao = String(aula.convidadoDescricao || "").trim();
+
+    return descricao ? `${convidadoUnico} — ${descricao}` : convidadoUnico;
+  }
+
   async function loadEventosPreview() {
-    const id = clubeId; 
-    if (!token || !id) return;
+    const id = clubeId;
+
+    if (!token) return;
+
+    const usuarioCreatorId =
+      creatorUsuarioId ||
+      data?.clube?.usuarioId ||
+      entidadeUsuarioId ||
+      Storage.usuarioId ||
+      "";
+
+    if (!id && !usuarioCreatorId) return;
 
     setEventosErro("");
     setEventosLoading(true);
+
     try {
-      const { data } = await axios.get(
-        `${API.BASE_URL}/api/eventos/clubes/${id}`,
-        { headers }
-      );
+      const requests: Promise<any>[] = [];
 
-      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+      if (id) {
+        requests.push(
+          axios.get(`${API.BASE_URL}/api/eventos/clubes/${id}`, { headers })
+        );
+      }
 
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
+      if (hasCreator && usuarioCreatorId) {
+        requests.push(
+          axios.get(
+            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
+              usuarioCreatorId
+            )}`
+          )
+        );
+      }
 
-      const mapped: EventoPreview[] = (arr ?? [])
-        .filter((ev: any) => {
-          if (!ev?.dataEvento) return false;
-          const dataEv = new Date(ev.dataEvento);
-          dataEv.setHours(0, 0, 0, 0);
-          return dataEv >= hoje;
-        })
-        .sort(
-          (a: any, b: any) =>
-            new Date(a.dataEvento).getTime() - new Date(b.dataEvento).getTime()
-        )
-        .map((ev: any) => ({
+      const results = await Promise.allSettled(requests);
+
+      const eventosNormaisResp =
+        results[0]?.status === "fulfilled" ? results[0].value.data : [];
+
+      const creatorResp =
+        hasCreator && results.length > 1 && results[1]?.status === "fulfilled"
+          ? results[1].value.data
+          : null;
+
+      const arrEventosNormais = Array.isArray(eventosNormaisResp)
+        ? eventosNormaisResp
+        : eventosNormaisResp?.items ??
+          eventosNormaisResp?.data ??
+          [];
+
+      const eventosNormais: EventoPreview[] = (arrEventosNormais ?? []).map(
+        (ev: any) => ({
           id: String(ev.id),
           titulo: String(ev.titulo ?? "Evento"),
           tipo: ev.tipo ?? null,
           status: ev.status ?? null,
-          dataEvento: String(ev.dataEvento ?? ""),
+          dataEvento: String(ev.dataEvento ?? ev.data ?? ev.inicio ?? ""),
           cidade: ev.cidade ?? null,
           estado: ev.estado ?? null,
           descricao: ev.descricao ?? null,
-        }));
+          origem: "EVENTO_CLUBE",
+          criadorLabel: data?.clube?.nome || data?.usuario?.nome || null,
+          convidadosLabel: null,
+        })
+      );
 
-      setEventosPreview(mapped.slice(0, 3));
-      setEventosCount(mapped.length);
+      const criadorCreatorLabel =
+      getCriadorLabelFromCreator(creatorResp) ||
+      data?.clube?.nome ||
+      data?.usuario?.nome ||
+      "";
+
+    const aulasAoVivoCreator: EventoPreview[] = Array.isArray(
+      creatorResp?.eventosAoVivo
+    )
+      ? creatorResp.eventosAoVivo.map((aula: any) => ({
+          id: String(aula.id),
+          titulo: String(aula.titulo ?? "Aula ao vivo"),
+          tipo: "Aula ao vivo",
+          status: aula.status ?? null,
+          dataEvento: String(aula.dataInicio ?? ""),
+          cidade: null,
+          estado: null,
+          descricao: aula.descricao ?? null,
+          origem: "AULA_AO_VIVO_CREATOR",
+          thumbUrl: aula.thumbUrl ?? null,
+          totalParticipantes: aula.totalParticipantes ?? null,
+          criadorLabel: criadorCreatorLabel,
+          convidadosLabel: getConvidadosLabelFromAula(aula),
+        }))
+      : [];
+
+      const hojeBR = getDiaBR(new Date().toISOString());
+
+      const todos = [...eventosNormais, ...aulasAoVivoCreator]
+        .filter((ev) => {
+          const diaEventoBR = getDiaBR(ev.dataEvento);
+          return !!diaEventoBR && diaEventoBR >= hojeBR;
+        })
+        .sort(
+          (a, b) =>
+            new Date(a.dataEvento || 0).getTime() -
+            new Date(b.dataEvento || 0).getTime()
+        );
+
+      setEventosPreview(todos.slice(0, 5));
+      setEventosCount(todos.length);
     } catch (e: any) {
       setEventosPreview([]);
       setEventosErro(
@@ -802,7 +951,7 @@ export default function PerfilClube({
       loadEventosPreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, token, clubeId]);
+  }, [aba, token, clubeId, hasCreator, creatorUsuarioId, entidadeUsuarioId]);
 
   useEffect(() => {
     function atualizarVinculos() {
@@ -1219,7 +1368,7 @@ export default function PerfilClube({
               <h3 className="font-semibold text-green-900">Eventos</h3>
 
               <Link
-                href={`/eventos/clubes/${clubeIdStr}`}
+                href={hasCreator ? "/creator/eventos" : `/eventos/clubes/${clubeIdStr}`}
                 className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
               >
                 Ver eventos
@@ -1250,10 +1399,25 @@ export default function PerfilClube({
 
                     const where = [ev.cidade, ev.estado].filter(Boolean).join(" - ");
 
+                    const tipoLabel =
+                      ev.origem === "AULA_AO_VIVO_CREATOR"
+                        ? "Aula ao vivo Creator"
+                        : ev.tipo;
+
+                    const participantes =
+                      ev.origem === "AULA_AO_VIVO_CREATOR" &&
+                      typeof ev.totalParticipantes === "number"
+                        ? `${ev.totalParticipantes} participantes`
+                        : "";
+
                     return (
                       <Link
                         key={ev.id}
-                        href={`/eventos/clubes/${clubeIdStr}`}
+                        href={
+                          ev.origem === "AULA_AO_VIVO_CREATOR"
+                            ? `/learning/evento/${ev.id}`
+                            : `/eventos/clubes/${clubeIdStr}`
+                        }
                         className="block rounded-xl border border-green-100 bg-white/70 p-3 hover:bg-white"
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -1262,8 +1426,20 @@ export default function PerfilClube({
                               {ev.titulo}
                             </div>
                             <div className="text-xs text-green-900/70">
-                              {[ev.tipo, when, where].filter(Boolean).join(" • ")}
+                              {[tipoLabel, when, where, participantes].filter(Boolean).join(" • ")}
                             </div>
+
+                            {ev.criadorLabel ? (
+                              <div className="mt-1 text-xs text-green-900/80">
+                                <b>Criador:</b> {ev.criadorLabel}
+                              </div>
+                            ) : null}
+
+                            {ev.convidadosLabel ? (
+                              <div className="mt-1 text-xs text-green-900/80">
+                                <b>Convidados:</b> {ev.convidadosLabel}
+                              </div>
+                            ) : null}
 
                             {ev.descricao?.trim() ? (
                               <div className="text-xs text-green-900/80 mt-2 line-clamp-2">
@@ -1295,7 +1471,7 @@ export default function PerfilClube({
             {isOwn && (
               <div className="mt-4">
                 <Link
-                  href={`/eventos/clubes/${clubeIdStr}/novo`}
+                  href={hasCreator ? "/creator/eventos/novo" : `/eventos/clubes/${clubeIdStr}/novo`}
                   className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
                 >
                   <span>+</span> Criar novo evento

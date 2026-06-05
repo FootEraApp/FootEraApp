@@ -125,6 +125,15 @@ type EventoItem = {
   cidade?: string | null;
   estado?: string | null;
   endereco?: string | null;
+  descricao?: string | null;
+  status?: string | null;
+
+  origem?: "EVENTO_ESCOLINHA" | "AULA_AO_VIVO_CREATOR";
+  thumbUrl?: string | null;
+  totalParticipantes?: number | null;
+
+  criadorLabel?: string | null;
+  convidadosLabel?: string | null;
 };
 
 type CertificadoResumo = {
@@ -664,41 +673,146 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     }
   }
 
-    async function loadEventosEscolinha() {
-      if (!token) return;
-      if (eventosLoading) return;
+  const TIMEZONE_BR = "America/Sao_Paulo";
 
-      const escolaId =
-        (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+  function getDiaBR(value?: string | null) {
+    if (!value) return "";
 
-      if (!escolaId) {
-        setEventos([]); 
-        return;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: TIMEZONE_BR,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+
+  function getNomePessoa(item?: any) {
+    if (!item) return "";
+
+    return String(
+      item.nome ||
+        item.nomePublico ||
+        item.nomeDeUsuario ||
+        item.email ||
+        ""
+    ).trim();
+  }
+
+  function getCriadorLabelFromCreator(resp?: any) {
+    if (!resp) return "";
+
+    return (
+      getNomePessoa(resp.creator) ||
+      getNomePessoa(resp.creator?.usuario) ||
+      getNomePessoa(resp.usuario) ||
+      getNomePessoa(resp)
+    );
+  }
+
+  function getConvidadosLabelFromAula(aula?: any) {
+    if (!aula) return "";
+
+    const convidadosArray = Array.isArray(aula.convidados)
+      ? aula.convidados
+          .map((c: any) => {
+            const nome =
+              String(c.nome || "").trim() ||
+              getNomePessoa(c.usuario) ||
+              getNomePessoa(c.convidadoUsuario);
+
+            const descricao = String(c.descricao || "").trim();
+
+            if (!nome) return "";
+
+            return descricao ? `${nome} — ${descricao}` : nome;
+          })
+          .filter(Boolean)
+      : [];
+
+    if (convidadosArray.length > 0) {
+      return convidadosArray.join(" • ");
+    }
+
+    const convidadoUnico =
+      String(aula.convidadoNome || "").trim() ||
+      getNomePessoa(aula.convidadoUsuario);
+
+    if (!convidadoUnico) return "";
+
+    const descricao = String(aula.convidadoDescricao || "").trim();
+
+    return descricao ? `${convidadoUnico} — ${descricao}` : convidadoUnico;
+  }
+
+  async function loadEventosEscolinha() {
+    if (!token) return;
+    if (eventosLoading) return;
+
+    const escolaId =
+      (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+
+    const usuarioCreatorId =
+      creatorUsuarioId ||
+      data?.escolinha?.usuarioId ||
+      entidadeUsuarioId ||
+      Storage.usuarioId ||
+      "";
+
+    if (!escolaId && !usuarioCreatorId) {
+      setEventos([]);
+      return;
+    }
+
+    setEventosLoading(true);
+
+    try {
+      const requests: Promise<any>[] = [];
+
+      if (escolaId) {
+        requests.push(
+          axios.get(`${API.BASE_URL}/api/eventos/escolas/${escolaId}`, {
+            headers,
+            params: {
+              ownerTipo: "Escolinha",
+              ownerId: escolaId,
+            },
+          })
+        );
       }
 
-      setEventosLoading(true);
-    try {
-      const { data: resp } = await axios.get(
-        `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
-        {
-          headers,
-          params: {
-            ownerTipo: "Escolinha",
-            ownerId: escolaId,
-          },
-        }
-      );
+      if (hasCreator && usuarioCreatorId) {
+        requests.push(
+          axios.get(
+            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
+              usuarioCreatorId
+            )}`
+          )
+        );
+      }
+
+      const results = await Promise.allSettled(requests);
+
+      const eventosResp =
+        results[0]?.status === "fulfilled" ? results[0].value.data : [];
+
+      const creatorResp =
+        hasCreator && results.length > 1 && results[1]?.status === "fulfilled"
+          ? results[1].value.data
+          : null;
 
       const arr =
-        Array.isArray(resp) ? resp :
-        Array.isArray(resp?.items) ? resp.items :
-        Array.isArray(resp?.eventos) ? resp.eventos :
-        [];
+        Array.isArray(eventosResp)
+          ? eventosResp
+          : Array.isArray(eventosResp?.items)
+          ? eventosResp.items
+          : Array.isArray(eventosResp?.eventos)
+          ? eventosResp.eventos
+          : [];
 
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-
-      const normalizados: EventoItem[] = (arr ?? []).map((e: any) => {
+      const eventosNormais: EventoItem[] = (arr ?? []).map((e: any) => {
         const dt = e.dataEvento ?? e.data ?? e.inicio ?? null;
 
         return {
@@ -710,22 +824,55 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           cidade: e.cidade ?? null,
           estado: e.estado ?? null,
           endereco: e.endereco ?? null,
+          descricao: e.descricao ?? null,
+          status: e.status ?? null,
+          origem: "EVENTO_ESCOLINHA",
+          criadorLabel: data?.escolinha?.nome || data?.usuario?.nome || null,
+          convidadosLabel: null,
         };
       });
 
-      const filtradosOrdenados = normalizados
+      const criadorCreatorLabel =
+      getCriadorLabelFromCreator(creatorResp) ||
+      data?.escolinha?.nome ||
+      data?.usuario?.nome ||
+      "";
+
+    const aulasAoVivoCreator: EventoItem[] = Array.isArray(
+      creatorResp?.eventosAoVivo
+    )
+      ? creatorResp.eventosAoVivo.map((aula: any) => ({
+          id: String(aula.id),
+          titulo: String(aula.titulo ?? "Aula ao vivo"),
+          tipo: "Aula ao vivo",
+          dataEvento: String(aula.dataInicio ?? ""),
+          inicio: String(aula.dataInicio ?? ""),
+          cidade: null,
+          estado: null,
+          endereco: null,
+          descricao: aula.descricao ?? null,
+          status: aula.status ?? null,
+          origem: "AULA_AO_VIVO_CREATOR",
+          thumbUrl: aula.thumbUrl ?? null,
+          totalParticipantes: aula.totalParticipantes ?? null,
+          criadorLabel: criadorCreatorLabel,
+          convidadosLabel: getConvidadosLabelFromAula(aula),
+        }))
+      : [];
+
+      const hojeBR = getDiaBR(new Date().toISOString());
+
+      const filtradosOrdenados = [...eventosNormais, ...aulasAoVivoCreator]
         .filter((e) => {
           const raw = e.dataEvento || e.inicio;
-          if (!raw) return false;
-          const d = new Date(raw);
-          d.setHours(0, 0, 0, 0);
-          return d >= hoje;
+          const diaEventoBR = getDiaBR(raw);
+          return !!diaEventoBR && diaEventoBR >= hojeBR;
         })
         .sort((a, b) => {
           const da = new Date(a.dataEvento || a.inicio || 0).getTime();
           const db = new Date(b.dataEvento || b.inicio || 0).getTime();
-          return da - db; 
-        })
+          return da - db;
+        });
 
       setEventos(filtradosOrdenados);
     } catch (err) {
@@ -1128,7 +1275,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
             title="Eventos"
             right={
               <Link
-                href={`/eventos/escolas/${escolinhaIdStr}`}
+                href={hasCreator ? "/creator/eventos" : `/eventos/escolas/${escolinhaIdStr}`}
                 className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
               >
                 Ver todos
@@ -1142,7 +1289,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
             {isOwn && (
               <div className="mt-4">
                 <Link
-                  href={`/eventos/escolas/${escolinhaIdStr}/novo`}
+                  href={hasCreator ? "/creator/eventos/novo" : `/eventos/escolas/${escolinhaIdStr}/novo`}
                   className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-3 sm:px-4 py-2"
                 >
                   <span>+</span> Criar novo evento
@@ -1167,6 +1314,16 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                       const dt = e.dataEvento || e.inicio || "";
                       const when = dt ? new Date(dt).toLocaleString() : "Data não informada";
                       const where = [e.endereco, e.cidade, e.estado].filter(Boolean).join(" • ");
+                      const tipoLabel =
+                        e.origem === "AULA_AO_VIVO_CREATOR"
+                          ? "Aula ao vivo Creator"
+                          : e.tipo;
+
+                      const participantes =
+                        e.origem === "AULA_AO_VIVO_CREATOR" &&
+                        typeof e.totalParticipantes === "number"
+                          ? `${e.totalParticipantes} participantes`
+                          : "";
 
                       return (
                         <li
@@ -1179,13 +1336,27 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                               {e.titulo}
                             </div>
                             <div className="text-xs text-green-900/70">
-                              {when}
-                              {where ? ` • ${where}` : ""}
+                              {[tipoLabel, when, where, participantes].filter(Boolean).join(" • ")}
                             </div>
+                            {e.criadorLabel ? (
+                              <div className="mt-1 text-xs text-green-900/80">
+                                <b>Criador:</b> {e.criadorLabel}
+                              </div>
+                            ) : null}
+
+                            {e.convidadosLabel ? (
+                              <div className="mt-1 text-xs text-green-900/80">
+                                <b>Convidados:</b> {e.convidadosLabel}
+                              </div>
+                            ) : null}
                           </div>
 
                           <Link
-                            href={`/eventos/${e.id}`}
+                            href={
+                              e.origem === "AULA_AO_VIVO_CREATOR"
+                                ? `/learning/evento/${e.id}`
+                                : `/eventos/${e.id}`
+                            }
                             className="text-sm text-green-800 inline-flex items-center gap-1"
                           >
                             Abrir <ChevronRight className="w-4 h-4" />

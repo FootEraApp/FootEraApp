@@ -644,13 +644,13 @@ export default function PaginaLogin() {
           />
         </div>
 
-        <div className="relative z-10 w-full max-w-md bg-[#f8f8f8] shadow-xl rounded-[28px] p-7 md:p-8 mx-auto">
+        <div className="relative z-10 w-full max-w-md min-w-0 overflow-hidden bg-[#f8f8f8] shadow-xl rounded-[28px] p-4 sm:p-7 md:p-8 mx-auto">
           <h2 className="text-xl font-semibold mb-2 text-center">Entrar</h2>
           <p className="text-sm text-center text-gray-600 mb-6">
             Entre com seu usuário (ou e-mail) e senha
           </p>
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} className="w-full min-w-0">
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1">
                 Usuário ou e-mail
@@ -842,7 +842,7 @@ export default function PaginaLogin() {
               <div className="h-px bg-gray-200 flex-1" />
             </div>
 
-            <div className="w-full">
+            <div className="w-full min-w-0 overflow-hidden">
               <GoogleButton
                 text="continue_with"
                 onCredential={handleGoogleCredential}

@@ -72,6 +72,44 @@ function Stars({ value }: { value: number }) {
   );
 }
 
+function getCreatorName(item: any) {
+  const criador =
+    item?.criadorUsuario ||
+    item?.criador ||
+    item?.autor ||
+    item?.usuarioCriador ||
+    item?.owner ||
+    null;
+
+  const nome =
+    criador?.nome ||
+    criador?.nomeDeUsuario ||
+    criador?.email ||
+    item?.criadorNome ||
+    item?.criadorNomeDeUsuario ||
+    item?.criadorEmail ||
+    null;
+
+  if (nome) return String(nome);
+
+  if (item?.criadorUsuarioId) {
+    return `Usuário ${item.criadorUsuarioId}`;
+  }
+
+  return "";
+}
+
+function getCreatorType(item: any) {
+  const tipo =
+    item?.criadorUsuario?.tipo ||
+    item?.criador?.tipo ||
+    item?.autor?.tipo ||
+    item?.criadorTipo ||
+    "";
+
+  return tipo ? String(tipo) : "";
+}
+
 type Props = {
   item: any;
   href: string;
@@ -92,6 +130,8 @@ export default function LearningCard({
   const rating = Number(item?.mediaAvaliacao ?? 0);
   const reviews = Number(item?.totalReviews ?? 0);
   const assinaturas = Number(item?._count?.assinantes ?? item?.totalAssinantes ?? 0);
+  const creatorName = getCreatorName(item);
+  const creatorType = getCreatorType(item);
 
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
@@ -168,6 +208,16 @@ export default function LearningCard({
           {item?.descricao ? (
             <div className="mt-1 text-sm text-slate-600 line-clamp-2">
               {item.descricao}
+            </div>
+          ) : null}
+
+          {creatorName ? (
+            <div className="mt-1 text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Criador:</span>{" "}
+              {creatorName}
+              {creatorType ? (
+                <span className="text-slate-400"> • {creatorType}</span>
+              ) : null}
             </div>
           ) : null}
 
