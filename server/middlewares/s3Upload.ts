@@ -13,6 +13,9 @@ const s3 = new S3Client({
 });
 
 export const uploadToS3 = multer({
+  limits: {
+    fileSize: 4 * 1024 * 1024 * 1024, // 4GB
+  },
   storage: multerS3({
     s3: s3,
     bucket: process.env.AWS_S3_BUCKET!,
