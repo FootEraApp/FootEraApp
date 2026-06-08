@@ -11,7 +11,19 @@ const isDev =
 const strip = (s?: string) => (s ?? "").replace(/\/+$/, "");
 
 function inferApiFromHost(): string {
-  if (isDev) return "http://localhost:3001";
+  if (isDev) {
+    const isAndroid =
+      typeof navigator !== "undefined" &&
+      /Android/i.test(navigator.userAgent);
+
+    const isCapacitor =
+      typeof window !== "undefined" &&
+      !!(window as any).Capacitor;
+
+    return isAndroid || isCapacitor
+      ? "https://api.footera.app.br"
+      : "http://localhost:3001";
+  }
 
   if (typeof window === "undefined") return "";
 
@@ -25,10 +37,14 @@ function inferApiFromHost(): string {
 
 let API_BASE = strip(viteEnv?.VITE_API_URL || inferApiFromHost());
 
+const isLocalApi =
+  /^http:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/i.test(API_BASE);
+
 if (
   typeof window !== "undefined" &&
   window.location.protocol === "https:" &&
-  /^http:\/\//i.test(API_BASE)
+  /^http:\/\//i.test(API_BASE) &&
+  !isLocalApi
 ) {
   API_BASE = API_BASE.replace(/^http:\/\//i, "https://");
 }
