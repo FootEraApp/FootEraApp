@@ -105,6 +105,20 @@ export default function GoogleButton({
       await onCredential(credential);
     } catch (e: any) {
       console.error("Erro no Google nativo:", e);
+
+      const msg = String(e?.message || e || "").toLowerCase();
+
+      // Quando o usuário fecha/cancela o popup do Google, não mostra erro na tela.
+      if (
+        msg.includes("cancel") ||
+        msg.includes("canceled") ||
+        msg.includes("cancelled") ||
+        msg.includes("user canceled")
+      ) {
+        setErro("");
+        return;
+      }
+
       setErro(e?.message || "Não foi possível entrar com Google.");
     }
   }

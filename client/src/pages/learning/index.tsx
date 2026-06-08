@@ -163,6 +163,32 @@ function formatarDataHoraLive(value?: string | null) {
   });
 }
 
+function getDiaBR(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function isEventoGratuito(aula: AulaAoVivoResumo) {
+  const preco = Number(aula?.preco ?? 0);
+  const precoLabel = normalizarTexto(aula?.precoLabel || "");
+
+  return (
+    preco <= 0 ||
+    precoLabel.includes("gratis") ||
+    precoLabel.includes("gratuito") ||
+    precoLabel.includes("sem custo")
+  );
+}
+
 function getLiveStatusInfo(status?: string) {
   const s = String(status || "").toUpperCase();
 
@@ -299,11 +325,15 @@ function EventoAoVivoExploreCard({
     aula.metodologiaTitulo ||
     "";
 
+  const gratuito = isEventoGratuito(aula);
+
   const precoTexto =
-    aula.precoLabel ||
-    (origemTipo === "LEARNING"
-      ? "Disponível via plano Learning"
-      : "Preço não definido");
+    gratuito
+      ? "Gratuito"
+      : aula.precoLabel ||
+        (origemTipo === "LEARNING"
+          ? "Disponível via plano Learning"
+          : "Preço não definido");
 
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
@@ -425,7 +455,7 @@ export default function LearningPage() {
 
   const [buscaEvento, setBuscaEvento] = useState("");
   const [filtroOrigemEvento, setFiltroOrigemEvento] = useState<
-    "TODOS" | "EVENTO_AVULSO" | "LEARNING" | "AVULSA"
+    "TODOS" | "EVENTO_AVULSO" | "LEARNING" | "AVULSA" | "GRATUITO"
   >("TODOS");
   const [filtroStatusEvento, setFiltroStatusEvento] = useState<
     "TODOS" | "AGENDADA" | "AO_VIVO" | "FINALIZADA"
@@ -670,15 +700,42 @@ export default function LearningPage() {
   );
 
   const eventosAoVivoFiltrados = useMemo(() => {
+    const hojeBR = getDiaBR(new Date().toISOString());
+
     let items = [...eventosAoVivo];
 
-    if (filtroOrigemEvento !== "TODOS") {
+    /**
+     * Regra:
+     * - Finalizados / replay: pode mostrar evento antigo, mas só se estiver FINALIZADA
+     *   e tiver replay disponível.
+     * - Todos os outros filtros/status: mostra apenas eventos de hoje para frente.
+     */
+    if (filtroStatusEvento === "FINALIZADA") {
+      items = items.filter((item) => {
+        const status = String(item?.status || "").toUpperCase();
+
+        return (
+          status === "FINALIZADA" &&
+          !!item?.replayDisponivel
+        );
+      });
+    } else {
+      items = items.filter((item) => {
+        const diaEventoBR = getDiaBR(item?.dataInicio);
+        return !!diaEventoBR && diaEventoBR >= hojeBR;
+      });
+    }
+
+    if (filtroOrigemEvento === "GRATUITO") {
+      items = items.filter((item) => isEventoGratuito(item));
+    } else if (filtroOrigemEvento !== "TODOS") {
       items = items.filter(
-        (item) => String(item?.origemTipo || "").toUpperCase() === filtroOrigemEvento
+        (item) =>
+          String(item?.origemTipo || "").toUpperCase() === filtroOrigemEvento
       );
     }
 
-    if (filtroStatusEvento !== "TODOS") {
+    if (filtroStatusEvento !== "TODOS" && filtroStatusEvento !== "FINALIZADA") {
       items = items.filter(
         (item) => String(item?.status || "").toUpperCase() === filtroStatusEvento
       );
@@ -709,32 +766,14 @@ export default function LearningPage() {
     return items.sort((a, b) => {
       const da = new Date(a.dataInicio || 0).getTime();
       const db = new Date(b.dataInicio || 0).getTime();
+
+      if (filtroStatusEvento === "FINALIZADA") {
+        return db - da;
+      }
+
       return da - db;
     });
   }, [eventosAoVivo, buscaEvento, filtroOrigemEvento, filtroStatusEvento]);
-
-  function getOrigemEventoBadge(aula: AulaAoVivoResumo) {
-    const tipo = String(aula.origemTipo || "").toUpperCase();
-
-    if (tipo === "EVENTO_AVULSO") {
-      return {
-        label: "Evento avulso",
-        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      };
-    }
-
-    if (tipo === "AVULSA") {
-      return {
-        label: "Premium / Avulsa",
-        className: "bg-purple-50 text-purple-700 border-purple-200",
-      };
-    }
-
-    return {
-      label: "Metodologia",
-      className: "bg-blue-50 text-blue-700 border-blue-200",
-    };
-  }
 
   function getMetodologiaEventoHref(aula: AulaAoVivoResumo) {
     if (aula.metodologiaAvulsa?.id) {
@@ -956,12 +995,18 @@ export default function LearningPage() {
                     value={filtroOrigemEvento}
                     onChange={(e) =>
                       setFiltroOrigemEvento(
-                        e.target.value as "TODOS" | "EVENTO_AVULSO" | "LEARNING" | "AVULSA"
+                        e.target.value as
+                          | "TODOS"
+                          | "EVENTO_AVULSO"
+                          | "LEARNING"
+                          | "AVULSA"
+                          | "GRATUITO"
                       )
                     }
                     className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
                   >
                     <option value="TODOS">Todos os eventos ao vivo</option>
+                    <option value="GRATUITO">Eventos gratuitos</option>
                     <option value="EVENTO_AVULSO">Só evento único</option>
                     <option value="LEARNING">Só eventos de metodologia Learning</option>
                     <option value="AVULSA">Só eventos premium/avulsa</option>

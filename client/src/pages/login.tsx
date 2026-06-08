@@ -660,7 +660,13 @@ export default function PaginaLogin() {
                 className="w-full border border-gray-300 rounded px-3 py-2"
                 placeholder="Seu usuário ou e-mail"
                 value={nomeDeUsuario}
-                onChange={(e) => setNomeDeUsuario(e.target.value)}
+                onChange={(e) => {
+                  setNomeDeUsuario(e.target.value);
+                  setErro("");
+                  setDeletedInfo(null);
+                  setBlockedInfo(null);
+                  setNeedVerify(false);
+                }}
               />
             </div>
 
@@ -673,7 +679,13 @@ export default function PaginaLogin() {
                   className="w-full border border-gray-300 rounded px-3 py-2 pr-10"
                   placeholder="Sua senha"
                   value={senha}
-                  onChange={(e) => setSenha(e.target.value)}
+                  onChange={(e) => {
+                    setSenha(e.target.value);
+                    setErro("");
+                    setDeletedInfo(null);
+                    setBlockedInfo(null);
+                    setNeedVerify(false);
+                  }}
                 />
                 <button
                   type="button"

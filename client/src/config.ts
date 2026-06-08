@@ -16,7 +16,11 @@ function inferApiFromHost(): string {
       typeof navigator !== "undefined" &&
       /Android/i.test(navigator.userAgent);
 
-    return isAndroid
+    const isCapacitor =
+      typeof window !== "undefined" &&
+      !!(window as any).Capacitor;
+
+    return isAndroid || isCapacitor
       ? "https://api.footera.app.br"
       : "http://localhost:3001";
   }
