@@ -25,10 +25,6 @@ function shouldUseS3() {
   return !!key && !!secret && !!bucket;
 }
 
-/**
- * Nunca joga erro pro caller por causa de S3.
- * Se ffmpeg falhar, também não derruba o fluxo: retorna nulls.
- */
 export async function transcodeTo720p(midiaId: string, localPath: string) {
   const parsed = path.parse(localPath);
   const outPath = path.join(parsed.dir, `${parsed.name}_720p.mp4`);
@@ -37,7 +33,6 @@ export async function transcodeTo720p(midiaId: string, localPath: string) {
   let processedUrl: string | null = null;
   let thumbUrl: string | null = null;
 
-  // 1) Transcode + thumb (se der erro, segue com null)
   try {
     await new Promise<void>((resolve, reject) => {
       ffmpeg(localPath)
@@ -69,10 +64,8 @@ export async function transcodeTo720p(midiaId: string, localPath: string) {
     }
   } catch (e) {
     console.warn("[transcode] Falha no ffmpeg (seguindo sem S3):", (e as any)?.message || e);
-    // não derruba o fluxo
   }
 
-  // 2) Upload S3 (se habilitado)
   if (shouldUseS3()) {
     try {
       if (fs.existsSync(outPath)) {
@@ -93,7 +86,6 @@ export async function transcodeTo720p(midiaId: string, localPath: string) {
     }
   }
 
-  // 3) Atualiza Midia (não trava)
   try {
     await prisma.midia.update({
       where: { id: midiaId },
@@ -106,11 +98,6 @@ export async function transcodeTo720p(midiaId: string, localPath: string) {
   } catch (e) {
     console.warn("[midia.update] Falhou ao atualizar midia:", e);
   }
-
-  // (opcional) limpar arquivos gerados
-  // await safeUnlink(outPath);
-  // await safeUnlink(thumbPath);
-
   return { processedUrl, thumbUrl };
 }
 

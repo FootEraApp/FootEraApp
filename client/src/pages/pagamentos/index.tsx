@@ -2132,7 +2132,6 @@ export default function PagamentosPage() {
             <option value="AMBOS">Vídeos + Treinos</option>
           </select>
 
-          {/* ✅ NOVO: Público */}
           <select
             value={filtroPublicoMetod}
             onChange={(e) => setFiltroPublicoMetod(e.target.value as any)}

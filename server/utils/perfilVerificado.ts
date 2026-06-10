@@ -29,11 +29,6 @@ function hasDecimal(v: any) {
   return false;
 }
 
-/**
- * Regra do selo verificado:
- * - precisa ter base do usuário
- * - e os campos obrigatórios conforme o tipo
- */
 export function calcularPerfilVerificado(input: {
   usuario: {
     verified?: boolean | null;

@@ -349,6 +349,9 @@ export default function AdminDashboard() {
   const [profQ, setProfQ] = useState("");
   const [profDebQ, setProfDebQ] = useState("");
   const [profPage, setProfPage] = useState(1);
+  const [profParceiroFiltro, setProfParceiroFiltro] = useState<
+    "todos" | "parceiros" | "naoParceiros"
+  >("todos");
   const profPageSize = 20;
   const [profTotal, setProfTotal] = useState(0);
   const [desafios, setDesafios] = useState<any[]>([]);
@@ -1967,6 +1970,26 @@ async function confirmarExcluirProfessor() {
     return ka.localeCompare(kb);
   });
 
+  const isProfessorParceiro = (p: any) => {
+    return !!(
+      p?.usuario?.parceiro ??
+      p?.parceiro ??
+      p?.isParceiro ??
+      p?.usuario?.isParceiro
+    );
+  };
+
+  const professoresFiltrados = useMemo(() => {
+    return (Array.isArray(professores) ? professores : []).filter((p: any) => {
+      const parceiro = isProfessorParceiro(p);
+
+      if (profParceiroFiltro === "parceiros") return parceiro;
+      if (profParceiroFiltro === "naoParceiros") return !parceiro;
+
+      return true;
+    });
+  }, [professores, profParceiroFiltro]);
+
   const usuariosOrdenados = usuarios;
   const assinantesOrdenados = assinantes;
 
@@ -2035,30 +2058,49 @@ async function confirmarExcluirProfessor() {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h4 className="font-semibold mb-2 text-green-900">
+                  Status de verificação
+                </h4>
 
-              <div className="bg-white rounded shadow p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="font-semibold">Status de verificação</h4>
-                </div>
-                <div className="flex items-center gap-6">
-                  <DonutTwoSegments a={ver} b={nver} labelA="Verificados" labelB="Não verificados" />
-                  <div className="text-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="inline-block w-3 h-3 rounded bg-green-600" /> Verificados: <strong>{ver}</strong>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block w-3 h-3 rounded bg-gray-300" /> Não verificados: <strong>{nver}</strong>
-                    </div>
-                    <div className="mt-2 text-gray-600">
-                      Taxa: <strong>{(ver + nver > 0 ? Math.round((ver * 100) / (ver + nver)) : 0)}%</strong>
+                <div className="bg-white rounded shadow p-4 overflow-hidden">
+                  <div className="flex flex-col items-center gap-4">
+                    <DonutTwoSegments
+                      a={ver}
+                      b={nver}
+                      labelA=""
+                      labelB=""
+                      size={116}
+                      stroke={12}
+                    />
+
+                    <div className="w-full text-sm grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2 min-w-0 text-green-700">
+                        <span className="inline-block w-3 h-3 rounded bg-green-600 shrink-0" />
+                        <span className="font-medium">Verificados:</span>
+                        <strong className="ml-auto text-green-900">{ver}</strong>
+                      </div>
+
+                      <div className="flex items-center gap-2 min-w-0 text-gray-600">
+                        <span className="inline-block w-3 h-3 rounded bg-gray-300 shrink-0" />
+                        <span className="font-medium">Não verificados:</span>
+                        <strong className="ml-auto text-green-900">{nver}</strong>
+                      </div>
+
+                      <div className="sm:col-span-2 text-gray-600">
+                        Taxa:{" "}
+                        <strong className="text-green-900">
+                          {ver + nver > 0 ? Math.round((ver * 100) / (ver + nver)) : 0}%
+                        </strong>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-                        <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
-            <div className="bg-white p-4 rounded shadow">
+            <h4 className="font-semibold mb-2 text-green-900">Distribuição de Usuários</h4>
+              <div className="bg-white p-3 sm:p-4 rounded shadow overflow-hidden">
               {(() => {
                 const distData = [
                   { label: "Atletas", value: Number(dados.totalAtletas || 0) },
@@ -2068,7 +2110,7 @@ async function confirmarExcluirProfessor() {
                   { label: "Olheiros", value: Number(dados.totalOlheiros || 0) },
                   { label: "Administradores", value: Number(dados.totalAdministradores || 0) },
                 ].filter((d) => d.value > 0); 
-                return <PieChart data={distData} />;
+                return <PieChart data={distData} size={150} />;
               })()}
             </div>
           </div>
@@ -2146,18 +2188,20 @@ async function confirmarExcluirProfessor() {
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                            <button
-                              type="button"
-                              onClick={() => irParaPerfilUsuario(u.id)}
-                              className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
-                              title="Abrir perfil do usuário"
-                           >
+                            type="button"
+                            onClick={() => irParaPerfilUsuario(u.id)}
+                            className="shrink-0 w-9 h-9 rounded-full border bg-white overflow-hidden
+                                      inline-flex items-center justify-center
+                                      focus:outline-none focus:ring-2 focus:ring-green-700"
+                            title="Abrir perfil do usuário"
+                          >
                             <img
-                                src={foto}
-                                onError={onAvatarError}
-                                className="w-8 h-8 rounded-full object-cover border"
-                                alt={nome}
+                              src={foto}
+                              onError={onAvatarError}
+                              className="w-full h-full rounded-full object-contain p-[2px]"
+                              alt={nome}
                             />
-                           </button>
+                          </button>
 
                             <div className="font-medium flex items-center gap-2">
                               <button
@@ -2485,41 +2529,58 @@ async function confirmarExcluirProfessor() {
 
         {aba === "professores" && (
           <div>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
               <h3 className="font-bold text-lg">Gerenciar Professores</h3>
+
               <button
-                className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
+                className="w-full sm:w-auto bg-green-700 text-white px-4 py-2 rounded hover:bg-green-800"
                 onClick={() => (window.location.href = "/admin/professores/create")}
               >
                 + Novo Professor
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center mb-4">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center mb-4">
               <input
                 value={profQ}
                 onChange={(e) => setProfQ(e.target.value)}
                 placeholder="Buscar por nome, código, CREF…"
-                className="border rounded px-3 py-2 w-72"
+                className="border rounded px-3 py-2 w-full sm:w-72"
               />
 
+              <select
+                value={profParceiroFiltro}
+                onChange={(e) =>
+                  setProfParceiroFiltro(
+                    e.target.value as "todos" | "parceiros" | "naoParceiros"
+                  )
+                }
+                className="border rounded px-3 py-2 w-full sm:w-auto bg-white"
+              >
+                <option value="todos">Todos</option>
+                <option value="parceiros">Parceiros FootEra</option>
+                <option value="naoParceiros">Não parceiros</option>
+              </select>
+
               <button
-                className="px-3 py-2 rounded bg-gray-200"
+                className="px-3 py-2 rounded bg-gray-200 w-full sm:w-auto"
                 onClick={() => carregarProfessores(1)}
                 disabled={profLoading}
               >
                 {profLoading ? "Carregando…" : "Atualizar"}
               </button>
 
-              <div className="ml-auto text-sm text-gray-600">
-                {profLoading ? "Carregando…" : `${profTotal} resultados`}
+              <div className="sm:ml-auto text-sm text-gray-600">
+                {profLoading
+                  ? "Carregando…"
+                  : `${professoresFiltrados.length} de ${profTotal} resultado(s)`}
               </div>
             </div>
 
             {profErro && <div className="mb-3 text-sm text-red-600">{profErro}</div>}
 
             <ul className="space-y-2">
-              {professores.map((p: any) => {
+              {professoresFiltrados.map((p: any) => {
                 const nome = p.nome ?? p.usuario?.nome ?? "(sem nome)";
                 const cref = p.cref ?? p.usuario?.cref ?? "—";
                 const area = p.areaFormacao ?? p.formacao ?? "—";
@@ -2535,7 +2596,7 @@ async function confirmarExcluirProfessor() {
                 return (
                   <li
                     key={p.id}
-                    className="bg-white p-4 rounded shadow flex justify-between items-center"
+                    className="bg-white p-4 rounded shadow flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4"
                   >
                     <div className="flex items-start gap-3">
                       <button
@@ -2563,14 +2624,23 @@ async function confirmarExcluirProfessor() {
                           {nome}
                         </button>
 
-                        <div className="text-sm text-gray-700 mt-1">
-                          <span className="font-medium">CREF:</span> {cref}
-                          {" • "}
-                          <span className="font-medium">Formação:</span> {area}
+                        <div className="text-sm text-gray-700 mt-1 flex flex-col sm:block">
+                          <span>
+                            <span className="font-medium">CREF:</span> {cref}
+                          </span>
+
+                          <span className="hidden sm:inline"> • </span>
+
+                          <span>
+                            <span className="font-medium">Formação:</span> {area}
+                          </span>
+
                           {p.codigo ? (
                             <>
-                              {" • "}
-                              <span className="font-medium">Código:</span> {p.codigo}
+                              <span className="hidden sm:inline"> • </span>
+                              <span>
+                                <span className="font-medium">Código:</span> {p.codigo}
+                              </span>
                             </>
                           ) : null}
                         </div>
@@ -2584,8 +2654,11 @@ async function confirmarExcluirProfessor() {
                       </div>
                     </div>
 
-                    <div className="flex gap-3 items-center">
-                      <label className="flex items-center gap-2 text-sm select-none">
+                    <div className="flex items-center justify-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
+                      <label
+                        className="inline-flex items-center gap-2 text-sm select-none rounded-md border border-green-200 px-2 py-1 bg-white"
+                        title={parceiro ? "Parceiro FootEra" : "Não parceiro FootEra"}
+                      >
                         <input
                           type="checkbox"
                           checked={parceiro}
@@ -2602,7 +2675,10 @@ async function confirmarExcluirProfessor() {
                             void toggleParceiroProfessor(p.id, next);
                           }}
                         />
-                        Parceiro FootEra
+
+                        <span className="hidden xs:inline sm:inline whitespace-nowrap">
+                          Parceiro FootEra
+                        </span>
                       </label>
 
                       {parceiro ? (
@@ -2617,7 +2693,7 @@ async function confirmarExcluirProfessor() {
 
                       <button
                         onClick={() => (window.location.href = `/admin/professores/create?id=${p.id}`)}
-                        className="text-blue-600"
+                        className="h-9 w-9 inline-flex items-center justify-center rounded-md text-blue-600 hover:bg-blue-50"
                         title="Editar professor"
                       >
                         ✏️
@@ -2625,7 +2701,7 @@ async function confirmarExcluirProfessor() {
 
                       <button
                         onClick={() => abrirModalExcluirProfessor(p)}
-                        className="text-red-600"
+                        className="h-9 w-9 inline-flex items-center justify-center rounded-md text-red-600 hover:bg-red-50"
                         title="Excluir professor"
                       >
                         🗑️
@@ -2635,7 +2711,7 @@ async function confirmarExcluirProfessor() {
                 );
               })}
 
-              {!profLoading && professores.length === 0 && (
+              {!profLoading && professoresFiltrados.length === 0 && (
                 <li className="bg-white p-6 rounded shadow text-center text-gray-500">
                   Nenhum professor encontrado.
                 </li>
@@ -3151,22 +3227,29 @@ async function confirmarExcluirProfessor() {
                     return (
                       <tr key={a.id} className="border-t">
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-[190px]">
                             <button
-                              type="button"
-                              onClick={() => irParaPerfilUsuario(a.usuario.id)}
-                              className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
-                            >
-                              <img
-                                src={avatarSrc(a.usuario.foto)}
-                                onError={onAvatarError}
-                                className="w-8 h-8 rounded-full object-cover border"
-                                alt={a.usuario.nome ?? "Usuário"}
-                              />
-                            </button>
-                            <div>
-                              <div className="font-medium">{nome}</div>
-                              <div className="text-xs text-gray-600">{u.email ?? "—"}</div>
+                                type="button"
+                                onClick={() => irParaPerfilUsuario(a.usuario.id)}
+                                className="shrink-0 w-9 h-9 rounded-full border bg-white overflow-hidden
+                                          inline-flex items-center justify-center
+                                          focus:outline-none focus:ring-2 focus:ring-green-700"
+                                title="Abrir perfil do usuário"
+                              >
+                                <img
+                                  src={avatarSrc(a.usuario.foto)}
+                                  onError={onAvatarError}
+                                  className="w-full h-full rounded-full object-contain p-[2px]"
+                                  alt={a.usuario.nome ?? "Usuário"}
+                                />
+                              </button>
+                            <div className="min-w-0">
+                              <div className="font-medium leading-tight whitespace-normal break-words">
+                                {nome}
+                              </div>
+                              <div className="text-xs text-gray-600 whitespace-nowrap">
+                                {u.email ?? "—"}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -3716,7 +3799,6 @@ async function confirmarExcluirProfessor() {
                                   </td>
                                 </tr>
 
-                                {/* GAVETA */}
                                 {isTreino && tp && isOpen && (
                                   <tr className="border-t bg-gray-50">
                                     <td colSpan={5} className="px-3 py-3">
@@ -4240,10 +4322,14 @@ function DonutTwoSegments({
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const aLen = c * pctA;
-  const bLen = c - aLen;
   return (
-    <div className="flex items-center gap-4">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-4 min-w-0 w-full">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="shrink-0 max-w-[110px] sm:max-w-none"
+      >
         <g transform={`rotate(-90 ${size/2} ${size/2})`}>
           <circle cx={size/2} cy={size/2} r={r} stroke="#E5E7EB" strokeWidth={stroke} fill="none" />
           <circle
@@ -4259,10 +4345,23 @@ function DonutTwoSegments({
           {total ? `${Math.round(pctA * 100)}%` : "0%"}
         </text>
       </svg>
-      <div className="text-sm">
-        <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-green-600" /> {labelA}</div>
-        <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-gray-300" /> {labelB}</div>
-      </div>
+      {(labelA || labelB) && (
+        <div className="text-sm w-full sm:w-auto grid grid-cols-2 sm:grid-cols-1 gap-2">
+          {labelA ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-block w-3 h-3 rounded bg-green-600 shrink-0" />
+              <span className="break-words">{labelA}</span>
+            </div>
+          ) : null}
+
+          {labelB ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-block w-3 h-3 rounded bg-gray-300 shrink-0" />
+              <span className="break-words">{labelB}</span>
+            </div>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -4323,23 +4422,30 @@ function PieChart({
   });
 
   return (
-    <div className="flex items-center gap-4">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 w-full min-w-0">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="shrink-0 max-w-[150px] sm:max-w-none"
+      >
         <circle cx={cx} cy={cy} r={radius} fill="#F3F4F6" />
         {segments.map((s, idx) => (
           <path key={idx} d={s.d} fill={s.fill} />
         ))}
       </svg>
-      <div className="space-y-1 text-sm">
-        {segments.map((s, idx) => (
-          <div key={idx} className="flex items-center gap-2">
+      <div className="text-sm w-full min-w-0 grid grid-cols-1 gap-1">
+        {segments.map((s, i) => (
+          <div key={i} className="grid grid-cols-[14px_1fr_auto] items-start gap-2">
             <span
-              className="inline-block w-3 h-3 rounded"
+              className="inline-block w-3 h-3 rounded mt-1 shrink-0"
               style={{ backgroundColor: s.fill }}
             />
-            <span className="font-medium">{s.label}</span>
-            <span className="text-gray-500">
-              — {s.value} ({Math.round((s.value * 100) / total)}%)
+            <span className="font-medium leading-snug break-words">
+              {s.label}
+            </span>
+            <span className="text-gray-600 whitespace-nowrap">
+              {s.value} ({Math.round((s.value * 100) / total)}%)
             </span>
           </div>
         ))}

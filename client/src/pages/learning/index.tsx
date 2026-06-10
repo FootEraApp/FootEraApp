@@ -704,12 +704,6 @@ export default function LearningPage() {
 
     let items = [...eventosAoVivo];
 
-    /**
-     * Regra:
-     * - Finalizados / replay: pode mostrar evento antigo, mas só se estiver FINALIZADA
-     *   e tiver replay disponível.
-     * - Todos os outros filtros/status: mostra apenas eventos de hoje para frente.
-     */
     if (filtroStatusEvento === "FINALIZADA") {
       items = items.filter((item) => {
         const status = String(item?.status || "").toUpperCase();

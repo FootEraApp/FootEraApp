@@ -934,8 +934,12 @@ export default function TurmasManager({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4">
-          <div className={`grid grid-cols-1 gap-4 ${leftCollapsed ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
+          <div
+            className={`grid grid-cols-1 gap-4 min-w-0 ${
+              leftCollapsed ? "md:grid-cols-1" : "md:grid-cols-3"
+            }`}
+          >
             <div className={`${leftCollapsed ? "hidden" : "md:col-span-1"} flex flex-col gap-3`}>
               <div className="rounded-xl border border-zinc-200 bg-white p-3">
                 <div className="mb-2 text-sm font-medium text-zinc-900 flex items-center gap-2">
@@ -1085,7 +1089,7 @@ export default function TurmasManager({
               ) : null}
             </div>
 
-            <div className={leftCollapsed ? "md:col-span-3" : "md:col-span-2"}>
+            <div className={`${leftCollapsed ? "md:col-span-3" : "md:col-span-2"} min-w-0`}>
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-xs text-zinc-500">{leftCollapsed ? "Painel recolhido" : "Painel aberto"}</div>
 
@@ -1107,15 +1111,17 @@ export default function TurmasManager({
               ) : (
                 <div className="flex flex-col gap-4">
                   <div className="rounded-xl border border-zinc-200 bg-white flex flex-col min-h-0">
-                    <div className="flex items-center justify-between border-b border-zinc-100 p-2 flex-none">
-                      <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+                    <div className="border-b border-zinc-100 p-2 flex-none">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="w-full overflow-x-auto sm:w-auto">
+                          <div className="inline-flex min-w-max rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                         <button
                           type="button"
                           onClick={() => {
                             setAbaDireita("membros");
                             setLeftCollapsed(false);
                           }}
-                          className={`px-3 py-1.5 rounded-lg ${
+                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-2 ${
                             abaDireita === "membros"
                               ? "bg-emerald-600 text-white"
                               : "text-zinc-700 hover:bg-zinc-50"
@@ -1130,7 +1136,7 @@ export default function TurmasManager({
                             setAbaDireita("agenda");
                             setLeftCollapsed(true);
                           }}
-                          className={`px-3 py-1.5 rounded-lg flex items-center gap-2 ${
+                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 ${
                             abaDireita === "agenda" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
                           }`}
                         >
@@ -1144,22 +1150,23 @@ export default function TurmasManager({
                             setAbaDireita("frequencia");
                             setLeftCollapsed(true);
                           }}
-                          className={`px-3 py-1.5 rounded-lg flex items-center gap-2 ${
+                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 ${
                             abaDireita === "frequencia" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
                           }`}
                         >
                           📊 Frequência
                         </button>
                       </div>
+                      </div>
 
                       {abaDireita === "membros" ? (
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-end sm:gap-2">
                           {podeSairDaTurma ? (
                             <button
                               type="button"
                               onClick={pedirSairDaTurma}
                               disabled={salvando || leavingTurma}
-                              className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                              className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-amber-200 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-60 whitespace-nowrap"
                               title="Sair desta turma (ela não aparecerá mais para você)"
                             >
                               {leavingTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
@@ -1172,7 +1179,7 @@ export default function TurmasManager({
                               type="button"
                               onClick={() => setEditandoInfoTurma((v) => !v)}
                               disabled={salvando || !selecionada}
-                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                              className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-zinc-200 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 whitespace-nowrap"
                             >
                               Editar turma
                             </button>
@@ -1183,7 +1190,7 @@ export default function TurmasManager({
                               type="button"
                               onClick={deletarTurmaSelecionada}
                               disabled={deletandoTurma || salvando || !selecionada}
-                              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50 disabled:opacity-60"
+                              className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-red-200 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
                               title="Excluir esta turma"
                             >
                               {deletandoTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -1194,13 +1201,14 @@ export default function TurmasManager({
                           <button
                             onClick={salvarMembros}
                             disabled={salvando}
-                            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-70"
+                            className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-70 whitespace-nowrap"
                           >
                             {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                             Salvar alterações
                           </button>
                         </div>
                       ) : null}
+                    </div>
                     </div>
 
                     <div className="p-3">
@@ -1818,7 +1826,6 @@ export default function TurmasManager({
           </div>
         </div>
       ) : null}
-
     </div>
   );
 }

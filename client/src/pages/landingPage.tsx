@@ -124,10 +124,8 @@ export default function LandingPage({
     <div className="min-h-screen bg-[#F6F1E7]">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
         <div className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(0,0,0,0.12)] border border-black/5">
-          {/* HEADER */}
           <header className="bg-green-900 text-white">
             <div className="flex items-center justify-between px-5 py-4 md:px-8">
-              {/* LOGO */}
               <button
                 type="button"
                 onClick={() => changeTab("home")}
@@ -148,7 +146,6 @@ export default function LandingPage({
                 </div>
               </button>
 
-              {/* MENU DESKTOP */}
               <nav className="hidden lg:flex items-center gap-7 text-sm font-semibold">
                 <button
                   type="button"
@@ -179,7 +176,6 @@ export default function LandingPage({
                 </button>
               </nav>
 
-              {/* AÇÕES */}
               <div className="flex items-center gap-2 md:gap-3">
                 {showSocials && (
                   <div className="hidden md:flex items-center gap-2 mr-1">
@@ -221,7 +217,6 @@ export default function LandingPage({
               </div>
             </div>
 
-            {/* MENU MOBILE/TABLET */}
             <div className="lg:hidden px-5 pb-4 md:px-8">
               <div className="flex flex-wrap gap-2">
                 <button
@@ -258,10 +253,8 @@ export default function LandingPage({
             </div>
           </header>
 
-          {/* CONTEÚDO DINÂMICO */}
           {activeTab === "home" && (
             <section className="relative overflow-hidden bg-[#F6F1E7]">
-              {/* marca d'água */}
               <div className="pointer-events-none absolute inset-0">
                 <div
                   className="absolute right-[-60px] top-1/2 -translate-y-1/2 w-[320px] h-[320px] md:w-[500px] md:h-[500px] opacity-[0.05] rounded-full"
@@ -276,7 +269,6 @@ export default function LandingPage({
               </div>
 
               <div className="relative grid grid-cols-1 md:grid-cols-2 gap-10 items-center px-6 py-12 md:px-10 md:py-16 lg:px-14 lg:py-20">
-                {/* TEXTO */}
                 <div>
                   <span className="inline-flex items-center rounded-full bg-green-100 text-green-900 px-3 py-1 text-xs md:text-sm font-semibold">
                     Plataforma para quem vive futebol
@@ -330,7 +322,6 @@ export default function LandingPage({
                   </div>
                 </div>
 
-                {/* CARD VISUAL DIREITO */}
                 <div className="relative">
                   <div className="rounded-3xl bg-green-900 p-4 md:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.12)]">
                     <div className="rounded-2xl bg-white p-5 md:p-6">
@@ -583,7 +574,6 @@ export default function LandingPage({
             </section>
           )}
 
-          {/* RODAPÉ */}
           <footer className="border-t border-gray-200 bg-white px-6 py-5 md:px-10">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-gray-600">

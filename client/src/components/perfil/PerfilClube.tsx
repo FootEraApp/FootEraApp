@@ -243,7 +243,7 @@ export default function PerfilClube({
 
   const [data, setData] = useState<PayloadClube | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<AbaTopo>(canEdit ? "perfil" : "dashboard");
+  const [aba, setAba] = useState<AbaTopo>("perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
@@ -284,6 +284,11 @@ export default function PerfilClube({
   const entidadeUsuarioId = isOwn
     ? Storage.usuarioId
     : data?.clube?.usuarioId ?? null;
+
+  useEffect(() => {
+    setAba("perfil");
+    setSubAba("vinculados");
+  }, [targetId]);
 
   useEffect(() => {
     if (!token) return;
@@ -1057,7 +1062,7 @@ export default function PerfilClube({
   const clubeIdStr = data.clube.id;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+     <div className="w-full max-w-2xl mx-auto">
       <ProfileHeader
         nome={nome}
         time={time}
@@ -1073,47 +1078,51 @@ export default function PerfilClube({
         creatorUsuarioId={creatorUsuarioId}
       />
 
-      <div className="mt-4 grid grid-cols-6 gap-2">
-        {(canEdit
-          ? [
-              { key: "perfil", label: "Perfil" },
-              { key: "dashboard", label: "Dashboard" },
-              { key: "eventos", label: "Eventos" },
-              { key: "atletas", label: "Atletas" },
-              { key: "conquistas", label: "Conquistas"},
-              { key: "professores", label: "Professores" },
-              { key: "postagens", label: "Postagens" }
-            ]
-          : [
-              { key: "perfil", label: "Perfil" },
-              { key: "eventos", label: "Eventos" },
-              { key: "conquistas", label: "Conquistas"},
-              { key: "postagens", label: "Postagens" },
-            ]
-        ).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => {
-              const next = t.key as AbaTopo;
-              setAba(next);
+      <div className="mt-4 px-3 sm:px-4">
+        <div className="bg-white/90 rounded-xl p-1 border border-green-100">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
+            {(canEdit
+              ? [
+                  { key: "perfil", label: "Perfil" },
+                  { key: "dashboard", label: "Dashboard" },
+                  { key: "eventos", label: "Eventos" },
+                  { key: "atletas", label: "Atletas" },
+                  { key: "professores", label: "Professores" },
+                  { key: "conquistas", label: "Conquistas" },
+                  { key: "postagens", label: "Postagens" },
+                ]
+              : [
+                  { key: "perfil", label: "Perfil" },
+                  { key: "eventos", label: "Eventos" },
+                  { key: "conquistas", label: "Conquistas" },
+                  { key: "postagens", label: "Postagens" },
+                ]
+            ).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => {
+                  const next = t.key as AbaTopo;
+                  setAba(next);
 
-              if (next === "perfil") {
-                invalidateAtividades();
-              }
-            }}
-            className={`py-2 rounded-lg text-sm font-medium ${
-              aba === t.key
-                ? "bg-green-100 text-green-900"
-                : "bg-white/70 text-green-900 hover:bg-white"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+                  if (next === "perfil") {
+                    invalidateAtividades();
+                  }
+                }}
+                className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
+                  aba === t.key
+                    ? "bg-green-600 text-white shadow-sm"
+                    : "text-green-900 hover:bg-green-50"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       
       {aba === "perfil" && (
-        <section className="mt-4 grid gap-4">
+        <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">
               Informações do Clube
@@ -1356,13 +1365,13 @@ export default function PerfilClube({
       )}
 
       {aba === "dashboard" && canEdit && clubeId && (
-        <section className="mt-4">
+        <section className="mt-4 px-3 sm:px-4">
           <DashboardOrganizacao ownerTipo="Clube" ownerId={clubeId} />
         </section>
       )}
 
       {aba === "eventos" && (
-        <section className="mt-4 grid gap-4">
+        <section className="mt-4 px-3 sm:px-4">
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-green-900">Eventos</h3>
@@ -1483,7 +1492,7 @@ export default function PerfilClube({
       )}
 
       {aba === "postagens" && (
-        <section className="mt-4">
+        <section className="mt-4 px-3 sm:px-4">
           {(() => {
             const postsUserId = isOwn
               ? String(Storage.usuarioId || "")
@@ -1501,7 +1510,7 @@ export default function PerfilClube({
       )}
 
       {aba === "atletas" && (
-        <section className="mt-4 grid gap-4">
+        <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <div className="grid grid-cols-3 gap-2">
             {[
               { key: "vinculados", label: "Vinculados" },
@@ -1757,7 +1766,7 @@ export default function PerfilClube({
       )}
 
       {aba === "professores" && canEdit && (
-        <section className="mt-4 grid gap-4">
+        <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
             title="Professores do Clube"
             right={
@@ -1916,7 +1925,7 @@ export default function PerfilClube({
       )}
 
       {aba === "conquistas" && (
-        <div className="mt-4 px-4 grid gap-4">
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
             title="Certificados emitidos"
             right={

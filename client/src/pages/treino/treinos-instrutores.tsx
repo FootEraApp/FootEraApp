@@ -2717,7 +2717,6 @@ async function salvarProgressoSessao(sessaoId: string) {
         </div>
 
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
-          {/* LINHA 1: abas + campo */}
           <div className="flex flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
               {isGestor ? (
@@ -2794,7 +2793,6 @@ async function salvarProgressoSessao(sessaoId: string) {
               </div>
             </div>
 
-            {/* LINHA 2: gerenciar atletas */}
             <div className="w-full flex justify-end pt-1">
               <Link
                 href="/perfil/GerenciarAtletas"
@@ -2982,7 +2980,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                 </button>
               </div>
 
-             {/* ====== MEUS TREINOS (dono ou colaborador) ====== */}
               {(String(usuario?.tipo || "").toLowerCase() === "admin" || meusTreinosLista.length > 0) ? (
                 <>
                   {String(usuario?.tipo || "").toLowerCase() !== "admin" && (
@@ -3004,7 +3001,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                 </p>
               )}
 
-              {/* ====== TREINOS VINCULADOS (sem editar/excluir) ====== */}
               {String(usuario?.tipo || "").toLowerCase() !== "admin" && treinosVinculadosLista.length > 0 && (
                 <div className="mt-6">
                   <h4 className="text-sm font-semibold text-green-900 mb-2">
@@ -3014,7 +3010,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {treinosVinculadosLista.map((t) => (
                       <div key={t.id}>
-                        {/* reaproveita o card, mas SEM ações */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border">
                           <div className="flex items-start justify-between gap-3">
                             <h4

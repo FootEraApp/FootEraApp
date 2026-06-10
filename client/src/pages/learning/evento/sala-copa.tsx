@@ -160,16 +160,7 @@ function statusButtonLabel(status?: string, replayDisponivel?: boolean) {
   if (status === "FINALIZADA") return "Ver detalhes";
   return "Acessar evento";
 }
-/**
- * IMPORTANTE:
- * Quando você criar a aula ao vivo real no banco, coloque o ID dela aqui,
- * ou abra a página usando:
- *
- * /learning/evento/sala-copa?aulaId=ID_DA_AULA
- *
- * Assim, ao liberar acesso, a página leva para:
- * /learning/live?aulaId=ID_DA_AULA
- */
+
 function getAulaIdSalaCopa() {
   const params = new URLSearchParams(window.location.search);
   return params.get("aulaId") || "";

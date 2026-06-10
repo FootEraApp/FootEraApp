@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  Activity, PlusCircle, ChevronRight, Save, Loader2, X,
+  Activity, PlusCircle, ChevronRight, Save, Loader2, X, ArrowLeft
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
@@ -134,14 +134,26 @@ export default function PerfilOlheiro({
   idDaUrl,
   hasCreator = false,
   creatorUsuarioId = null,
+  mostrarBotaoVoltar = true,
 }: {
   idDaUrl?: string;
   hasCreator?: boolean;
   creatorUsuarioId?: string | null;
+  mostrarBotaoVoltar?: boolean;
 }) {
+  const [, navigate] = useLocation();
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    navigate("/perfil");
+  }
+
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
   const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
 
@@ -516,15 +528,27 @@ async function salvarNota(atletaId: string) {
     0;
 
   const atletasCount = (observados?.length ?? data.metrics?.observados ?? data.metrics?.atletasAcompanhados ?? 0);
-
   const time = clubeColab?.nome || "Olheiro";
-
   const indicacoesAprovadas = data.metrics?.indicacoesAprovadas ?? undefined;
   const taxaAprovacao = data.metrics?.taxaAprovacao ?? undefined;
   const atletasAssinados = data.metrics?.atletasAssinados ?? undefined;
   
   return (
-    <div className="max-w-md mx-auto pb-20">
+    <div className="w-full max-w-2xl mx-auto pb-28">
+      {mostrarBotaoVoltar && (
+        <div className="mb-4 px-3 sm:px-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="Voltar"
+            title="Voltar"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-green-800 bg-white text-green-900 shadow-sm hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-700/30"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
       <ProfileHeader
         nome={nome}
         time={time}
@@ -561,8 +585,9 @@ async function salvarNota(atletaId: string) {
         </div>
       )}
 
-      <div className="mt-4 px-4">
-        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-4 gap-1 border border-green-100">
+      <div className="mt-4 px-3 sm:px-4">
+      <div className="bg-white/90 rounded-xl p-1 border border-green-100">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
           {[
             { id: "visao", label: "Visão Geral" },
             { id: "atletas", label: "Atletas" },
@@ -572,8 +597,10 @@ async function salvarNota(atletaId: string) {
             <button
               key={t.id}
               onClick={() => setAba(t.id as Aba)}
-              className={`py-2 rounded-lg text-sm font-medium ${
-                aba === t.id ? "bg-green-600 text-white" : "text-green-900"
+              className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
+                aba === t.id
+                  ? "bg-green-600 text-white shadow-sm"
+                  : "text-green-900 hover:bg-green-50"
               }`}
             >
               {t.label}
@@ -581,9 +608,10 @@ async function salvarNota(atletaId: string) {
           ))}
         </div>
       </div>
+      </div>
 
       {aba === "visao" && (
-        <div className="mt-4 px-4 grid gap-4">
+         <div className="mt-5 px-3 sm:px-4 grid gap-5 sm:gap-6">
           <SectionCard
             title="Informações do Olheiro"
             right={handle ? <span className="text-xs text-green-900/60">{handle}</span> : null}
@@ -957,7 +985,7 @@ async function salvarNota(atletaId: string) {
       )}
 
       {aba === "postagens" && (
-        <section className="mt-4 px-4">
+        <section className="mt-5 px-3 sm:px-4">
           {perfilUsuarioId ? (
             <ProfilePostsSection usuarioId={perfilUsuarioId} />
           ) : (

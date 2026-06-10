@@ -1420,7 +1420,6 @@ export default function AgendaTreinos({
                                     ) : null}
                                   </div>
 
-                                  {/* ✅ LISTA DE ALUNOS */}
                                   {canOpenAlunos && isOpen ? (
                                     <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
                                       {alunosLoading ? (
@@ -1584,9 +1583,7 @@ export default function AgendaTreinos({
                   />
                 </div>
 
-                {/* Lista */}
                 <div className="relative">
-                  {/* Conteúdo normal (travado quando não for PRO) */}
                   <div
                     className={[
                       "p-3 space-y-2 max-h-[55vh] overflow-y-auto pr-2",
@@ -1761,7 +1758,6 @@ export default function AgendaTreinos({
                     )}
                   </div>
 
-                  {/* 🔒 Overlay PRO (somente na aba FootEra) */}
                   {abaTreinos === "footera" && proGateChecked && !isPro ? (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
                       <div className="absolute inset-0 bg-black/30 rounded-xl" />
@@ -1808,7 +1804,6 @@ export default function AgendaTreinos({
                     </div>
                   ) : null}
 
-                  {/* Loading do PRO (se quiser) */}
                   {abaTreinos === "footera" && !proGateChecked && proLoading ? (
                     <div className="absolute inset-0 z-40 flex items-center justify-center p-4">
                       <div className="absolute inset-0 bg-white/60 rounded-xl" />
@@ -1819,8 +1814,6 @@ export default function AgendaTreinos({
                   ) : null}
                 </div>
 
-
-                {/* Ação */}
                 <div className="p-3 border-t border-zinc-100">
                   <button
                     onClick={agendarParaDiasSelecionados}
