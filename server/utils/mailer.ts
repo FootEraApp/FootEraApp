@@ -17,19 +17,12 @@ function isDevLike() {
   return process.env.NODE_ENV !== "production";
 }
 
-/**
- * Em DEV, alguns PCs (proxy/antivírus) injetam certificado SSL e o Node acusa:
- * "self-signed certificate in certificate chain"
- * => habilitamos rejectUnauthorized=false APENAS em DEV quando SMTP_HOST existe.
- */
 function devTlsPatch() {
   const allowInsecure =
     isDevLike() &&
     (process.env.SMTP_ALLOW_INSECURE_TLS === "1" ||
       process.env.SMTP_ALLOW_INSECURE_TLS === "true");
 
-  // Se você NÃO setar a env, ainda dá pra "auto-liberar" só em DEV:
-  // eu recomendo deixar via ENV pra não correr risco sem querer.
   return allowInsecure
     ? { rejectUnauthorized: false }
     : undefined;
@@ -44,12 +37,10 @@ export async function createTransport(): Promise<Transporter> {
     return nodemailer.createTransport({
       host: SMTP_HOST,
       port,
-      secure: false, // SES normalmente usa 587 STARTTLS
+      secure: false, 
       requireTLS: true,
       auth:
         SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-
-      // ✅ aqui é o ponto
       tls: {
         minVersion: "TLSv1.2",
         ...(devTlsPatch() ?? {}),
@@ -64,7 +55,6 @@ export async function createTransport(): Promise<Transporter> {
     } as any);
   }
 
-  // fallback (Ethereal) - ótimo pra DEV sem SMTP
   const acc = await nodemailer.createTestAccount();
   return nodemailer.createTransport({
     host: acc.smtp.host,

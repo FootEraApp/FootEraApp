@@ -137,43 +137,108 @@ export default function CreateAdmin() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen">
-         <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
-           <div className="w-full max-w-[680px]">
-             <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
-               <img src={logo} className="w-10 h-10 lg:w-14 lg:h-14" alt="FootEra" />
-               <h1 className="flex-1 lg:flex-none text-center text-xl lg:text-3xl font-bold">Bem-vindo à FootEra</h1>
-               <button type="button" className="lg:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full" aria-expanded={infoAberto} aria-controls="cadastro-info" onClick={() => setInfoAberto(v => !v)} title={infoAberto ? "Recolher" : "Expandir"}>
-                 {infoAberto ? <ChevronUp /> : <ChevronDown />}
-               </button>
-             </div>
+      <div className="flex flex-col lg:flex-row min-h-screen">
+        <div className="w-full bg-[#14532d] text-white flex flex-col items-center px-5 py-6 sm:px-8 lg:w-1/2 lg:p-10">
+          <div className="w-full max-w-[680px]">
+            <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
+              <a href="/" className="cursor-pointer" aria-label="Voltar para Home">
+                <img
+                  src={logo}
+                  alt="Logo FootEra"
+                  className="
+                    shrink-0 object-contain transform-gpu
+                    w-14 h-14 sm:w-16 sm:h-16 lg:w-[130px] lg:h-[130px]
+                    origin-left lg:origin-center mr-1
+                  "
+                />
+              </a>
+
+              <h1 className="flex-1 lg:flex-none text-center text-xl lg:text-3xl font-bold leading-tight">
+                Bem-vindo à FootEra
+              </h1>
+
+              <button
+                type="button"
+                className="lg:hidden shrink-0 p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
+                aria-expanded={infoAberto}
+                aria-controls="admin-create-info"
+                onClick={() => setInfoAberto((v) => !v)}
+                title={infoAberto ? "Recolher" : "Expandir"}
+              >
+                {infoAberto ? <ChevronUp /> : <ChevronDown />}
+              </button>
+            </div>
+
+            <div
+              id="admin-create-info"
+              className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
+                infoAberto
+                  ? "max-h-[720px] opacity-100"
+                  : "max-h-0 opacity-0 lg:max-h-[720px] lg:opacity-100"
+              }`}
+            >
+              <p className="text-center text-base lg:text-2xl font-semibold mt-4">
+                Treine. Aprenda. Se conecte. Evolua.
+              </p>
+
+              <p className="text-center text-sm lg:text-lg mt-4 text-white/95">
+                O ecossistema digital do futebol, feito para quem vive o jogo.
+              </p>
+
+              <div className="mt-6 p-5 lg:p-6 rounded-2xl text-sm lg:text-base text-left w-full bg-white/10 border border-white/10 shadow-lg">
+                <h2 className="font-semibold text-xl lg:text-2xl mb-4">
+                  O Que você encontra FootEra
+                </h2>
+
+                <ul className="space-y-3">
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">🏋️</span>
+                    <span>
+                      <span className="font-semibold">Treinos e rotina</span> — exercícios, histórico e progresso.
+                    </span>
+                  </li>
+
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">🎓</span>
+                    <span>
+                      <span className="font-semibold">Learning</span> — metodologias, trilhas e cursos.
+                    </span>
+                  </li>
+
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">👥</span>
+                    <span>
+                      <span className="font-semibold">Rede social</span> — feed, conquistas e comunidade.
+                    </span>
+                  </li>
+
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">🏆</span>
+                    <span>
+                      <span className="font-semibold">Métricas & badges</span> — visualização e reputação no esporte.
+                    </span>
+                  </li>
+                </ul>
+
+                <div className="mt-5 flex items-center gap-3 text-white/90">
+                  <div className="h-px flex-1 bg-white/30" />
+                  <span className="italic font-semibold whitespace-nowrap">
+                    Para quem vive futebol.
+                  </span>
+                  <div className="h-px flex-1 bg-white/30" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
    
-             <div id="cadastro-info" className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${infoAberto ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0 lg:max-h-[520px] lg:opacity-100"}`}>
-               <p className="text-center max-w-md text-base lg:text-lg mt-4">
-                 Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar...
-                 aqui é o seu lugar. FootEra. A metodologia dos profissionais, para quem vive futebol.
-               </p>
-               <div className="mt-6 p-5 lg:p-6 rounded-xl text-sm lg:text-base text-left w-full bg-white/10 backdrop-blur-[1px]">
-                 <h2 className="font-semibold mb-2">O que a FootEra oferece:</h2>
-                 <ul className="list-disc list-inside space-y-1">
-                   <li>Treinamentos personalizados</li>
-                   <li>Desafios para testar suas habilidades</li>
-                   <li>Compartilhe seu progresso com a comunidade</li>
-                   <li>Conecte-se com escolinhas e clubes profissionais</li>
-                   <li>Acompanhe sua evolução com pontuações e rankings</li>
-                 </ul>
-               </div>
-             </div>
-           </div>
-         </div>
-   
-         <div className="relative bg-cream flex justify-center items-center p-6 lg:p-10 w-full lg:w-1/2">
+         <div className="relative bg-cream flex justify-center items-start p-6 lg:p-10 w-full lg:w-1/2">
            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
              <div aria-hidden className="w-[420px] h-[420px] opacity-[0.06] lg:opacity-[0.08] rounded-full overflow-hidden"
                style={{ backgroundImage: `url(${logo})`, backgroundRepeat: "no-repeat", backgroundPosition: "center 20%", backgroundSize: "85% auto", filter: "grayscale(100%)" }} />
            </div>
 
-        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl p-6">
+        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl min-w-0 overflow-hidden p-4 sm:p-6 mx-auto lg:mt-6">
           <h2 className="text-xl font-semibold mb-1">Criar conta admin</h2>
           <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo</p>
 

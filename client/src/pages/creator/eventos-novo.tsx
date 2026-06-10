@@ -84,11 +84,6 @@ function toSaoPauloIso(value?: string | null) {
   const clean = String(value).trim();
   if (!clean) return null;
 
-  /**
-   * datetime-local vem assim: 2026-06-03T18:00
-   * Aqui transformamos em: 2026-06-03T18:00:00-03:00
-   * Assim o backend salva o instante correto para São Paulo.
-   */
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(clean)) {
     return `${clean}:00${SAO_PAULO_OFFSET}`;
   }

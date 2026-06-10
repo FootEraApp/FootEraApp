@@ -497,7 +497,6 @@ export default function ConfiguracoesPerfil() {
         )}
       </div>
 
-      {/* ===== Tutorial ===== */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <div className="flex items-start justify-between gap-3">
           <div>

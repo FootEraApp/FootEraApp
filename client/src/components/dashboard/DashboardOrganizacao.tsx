@@ -109,7 +109,6 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
         </select>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <CardKpi icon={Activity} label="Treinos lançados (total)" value={data.kpis.treinosLancadosTotal} />
         <CardKpi icon={CalendarClock} label="Treinos lançados (mês)" value={data.kpis.treinosLancadosMes} />
@@ -123,7 +122,6 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
         />
       </div>
 
-      {/* Histórico por mês (simples, sem gráfico por enquanto) */}
       <div className="bg-white/80 rounded-2xl border border-green-100 shadow-sm p-4">
         <div className="font-semibold text-green-900 mb-2">Histórico por mês</div>
         <div className="grid gap-2">
@@ -138,7 +136,6 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
         </div>
       </div>
 
-      {/* Top frequência */}
       <div className="bg-white/80 rounded-2xl border border-green-100 shadow-sm p-4">
         <div className="font-semibold text-green-900 mb-2">Top frequência do mês</div>
         {data.topFrequencia.length ? (
@@ -155,7 +152,6 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
         )}
       </div>
 
-      {/* Por turma (se você devolver no backend) */}
       {data.porTurma?.length ? (
         <div className="bg-white/80 rounded-2xl border border-green-100 shadow-sm p-4">
           <div className="font-semibold text-green-900 mb-2">Presença por turma (mês)</div>

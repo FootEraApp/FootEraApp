@@ -427,6 +427,47 @@ const sameDay = (a?: Date | null, b?: Date | null) =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
+const TIMEZONE_BR = "America/Sao_Paulo";
+
+function formatarDataHoraBR(d?: Date | null) {
+  if (!d) return "Sem data";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TIMEZONE_BR,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
+function formatInputDateTimeSP(d: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE_BR,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+function inputDateTimeSPToIso(value: string) {
+  // value vem assim: 2026-06-09T15:30
+  // salvando como horário de São Paulo
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+    return null;
+  }
+
+  return `${value}:00-03:00`;
+}
+
 function getHoraHHMM(d?: Date | null) {
   if (!d) return "";
   const hh = d.getHours();
@@ -535,10 +576,8 @@ function StarRating({
 
         return (
           <span key={i} className="relative inline-block">
-            {/* estrela vazia */}
             <StarIcon className={`${sizeClass} text-gray-300`} fill="none" />
 
-            {/* estrela preenchida (recortada por %) */}
             <span
               className="absolute inset-0 overflow-hidden"
               style={{ width: pct }}
@@ -1679,8 +1718,47 @@ function abrirMidiaExercicioDireto(
   }
 
   async function remarcarTreino(t: TreinoAgendado) {
-    const nova = prompt("Escolha a nova data (AAAA-MM-DD):");
+    const dataAtual = getDataExibicaoTreino(t) || new Date();
+
+    const agora = new Date();
+    const maxDate = new Date(dataAtual);
+    maxDate.setDate(maxDate.getDate() + 7);
+
+    const sugestao = formatInputDateTimeSP(dataAtual > agora ? dataAtual : agora);
+
+    const nova = prompt(
+      `Escolha a nova data e horário no formato AAAA-MM-DDTHH:mm.\n\n` +
+        `Data atual: ${formatarDataHoraBR(dataAtual)}\n` +
+        `Limite máximo: ${formatarDataHoraBR(maxDate)}\n\n` +
+        `Exemplo: ${sugestao}`,
+      sugestao
+    );
+
     if (!nova) return;
+
+    const isoSP = inputDateTimeSPToIso(nova.trim());
+
+    if (!isoSP) {
+      alert("Formato inválido. Use AAAA-MM-DDTHH:mm. Exemplo: 2026-06-09T15:30");
+      return;
+    }
+
+    const novaDate = new Date(isoSP);
+
+    if (Number.isNaN(novaDate.getTime())) {
+      alert("Data ou horário inválido.");
+      return;
+    }
+
+    if (novaDate < agora) {
+      alert("Você não pode remarcar para uma data ou horário que já passou.");
+      return;
+    }
+
+    if (novaDate > maxDate) {
+      alert("Você só pode remarcar para no máximo 7 dias depois da data atual do treino.");
+      return;
+    }
 
     try {
       const token = getToken();
@@ -1691,15 +1769,21 @@ function abrirMidiaExercicioDireto(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          dataTreino: nova,
+          dataTreino: isoSP,
         }),
       });
 
-      if (!r.ok) throw new Error("Erro ao remarcar");
+      const js = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        throw new Error(js?.message || "Erro ao remarcar");
+      }
 
       setTreinosAgendados((arr) =>
-        arr.map((x) => (x.id === t.id ? { ...x, dataTreino: nova } : x))
+        arr.map((x) => (x.id === t.id ? { ...x, dataTreino: isoSP } : x))
       );
+
+      alert(`Treino remarcado para ${formatarDataHoraBR(novaDate)}.`);
     } catch (err) {
       console.error(err);
       alert("Não foi possível remarcar o treino.");
@@ -1766,7 +1850,19 @@ function abrirMidiaExercicioDireto(
         {exs.map((ex) => {
           const itemKey = (ex as any)._key ?? ex.exercicio.id;
           const checked = ck[itemKey] === true;
-          
+          const midiaDireta =
+            ex.exercicio.videoDemonstrativoUrl ||
+            (ex.exercicio as any).imgDemonstrativaUrl ||
+            null;
+
+          const midiaFallback = (() => {
+            const m = midiaDoCatalogo(ex.exercicio.nome);
+            return m?.video || m?.img || null;
+          })();
+
+          const midia = midiaDireta || midiaFallback;
+          const temVideo = !!midia && !isMissedTreino;
+
           return (
             <div 
               key={(ex as any)._key ?? ex.exercicio.id}
@@ -1786,11 +1882,7 @@ function abrirMidiaExercicioDireto(
                         : "bg-white border-gray-300 text-gray-400"
                     }`}
                   aria-pressed={checked}
-                  aria-label={
-                    checked
-                      ? "Marcar como não feito"
-                      : "Marcar como feito"
-                  }
+                  aria-label={checked ? "Marcar como não feito" : "Marcar como feito"}
                 >
                   {checked ? (
                     <CircleCheck className="w-4 h-4" />
@@ -1798,7 +1890,6 @@ function abrirMidiaExercicioDireto(
                     <CircleX className="w-4 h-4" />
                   )}
                 </button>
-
                 <div>
                   <div
                     className={`font-medium ${
@@ -1836,33 +1927,17 @@ function abrirMidiaExercicioDireto(
               </div>
 
               <button
-                disabled={isMissedTreino}
-                className={`text-green-700 underline text-sm ${
-                  isMissedTreino ? "text-gray-400 no-underline cursor-not-allowed" : ""
+                type="button"
+                disabled={!temVideo}
+                className={`text-sm shrink-0 ${
+                  temVideo
+                    ? "text-green-700 underline hover:text-green-900"
+                    : "text-gray-400 no-underline cursor-not-allowed"
                 }`}
                 onClick={() => {
-                  if (isMissedTreino) return;
-
-                  const midiaDireta =
-                    ex.exercicio.videoDemonstrativoUrl ||
-                    (ex.exercicio as any).imgDemonstrativaUrl ||
-                    null;
-
-                  const midiaFallback = (() => {
-                    const m = midiaDoCatalogo(ex.exercicio.nome); // agora nome resolve
-                    return m?.video || m?.img || null;
-                  })();
-
-                  const midia = midiaDireta || midiaFallback;
-
-                  if (!midia) {
-                    alert("Esse exercício não tem vídeo demonstrativo salvo.");
-                    return;
-                  }
-
+                  if (!temVideo || !midia) return;
                   abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
                 }}
-
               >
                 Ver vídeo
               </button>
@@ -1914,7 +1989,6 @@ function abrirMidiaExercicioDireto(
 
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
-            {/* Abas principais */}
             <div className="flex items-center gap-2 bg-white border rounded-xl p-1 shadow-sm">
               <button
                 type="button"
@@ -1955,8 +2029,6 @@ function abrirMidiaExercicioDireto(
               )}
             </div>
         
-
-            {/* Botão elenco (fica igual) */}
             {canVerElenco && (
               <Link
                 href="/treinos/elenco"
@@ -2445,9 +2517,7 @@ function abrirMidiaExercicioDireto(
                   <div className="flex-1 min-w-0 text-center relative z-0">
                     {st !== "IN_PROGRESS" && (
                       <div className="text-base sm:text-lg font-semibold text-green-900 truncate max-w-[70vw] mx-auto">
-                        {dExib
-                          ? `${dExib.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}${horaTop ? ` • ${horaTop}` : ""}`
-                          : "Sem data"}
+                        {formatarDataHoraBR(dExib)}
                       </div>
                     )}
                   </div>
@@ -2683,26 +2753,11 @@ function abrirMidiaExercicioDireto(
 
             return (
               <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-t px-4 py-3">
-                <div className="max-w-3xl mx-auto flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (isCompletedTreino || isMissedTreino) return;
-                      remarcarTreino(t);
-                    }}
-                    disabled={isCompletedTreino || isMissedTreino}
-                    className={`h-11 px-3 rounded-lg border text-gray-700 bg-white flex-1 ${
-                      isCompletedTreino || isMissedTreino
-                        ? "opacity-60 cursor-not-allowed"
-                        : "hover:bg-gray-50"
-                    }`}
-                  >
-                    Remarcar
-                  </button>
-
+                <div className="max-w-3xl mx-auto">
                   <button
                     onClick={handleCentralClick}
                     disabled={disabledCentral}
-                    className={`h-12 px-4 rounded-xl text-white font-medium flex-[1.4]
+                    className={`h-12 w-full px-4 rounded-xl text-white font-medium
                       ${
                         st === "IN_PROGRESS"
                           ? "bg-emerald-700 hover:bg-emerald-800"
@@ -2712,20 +2767,10 @@ function abrirMidiaExercicioDireto(
                           ? "bg-gray-400"
                           : "bg-green-700 hover:bg-green-800"
                       }
-                      ${
-                        visuallyDisabled
-                          ? "opacity-60 cursor-not-allowed"
-                          : ""
-                      }`}
+                      ${visuallyDisabled ? "opacity-60 cursor-not-allowed" : ""}
+                    `}
                   >
                     {labelCentral}
-                  </button>
-
-                  <button
-                    onClick={() => removerTreinoAgendado(t.id)}
-                    className="h-11 px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 flex-1"
-                  >
-                    Excluir
                   </button>
                 </div>
               </div>

@@ -4,7 +4,7 @@ type Props = {
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
-  label?: string; // opcional, se quiser texto ao lado
+  label?: string;
 };
 
 export default function ToggleSwitch({ checked, onChange, disabled, label }: Props) {
@@ -21,7 +21,6 @@ export default function ToggleSwitch({ checked, onChange, disabled, label }: Pro
           onChange={(e) => onChange(e.target.checked)}
         />
 
-        {/* trilho */}
         <span
           className={[
             "w-11 h-6 rounded-full transition-colors",
@@ -30,7 +29,6 @@ export default function ToggleSwitch({ checked, onChange, disabled, label }: Pro
           ].join(" ")}
         />
 
-        {/* bolinha */}
         <span
           className={[
             "absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform",

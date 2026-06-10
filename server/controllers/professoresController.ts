@@ -435,14 +435,36 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
         professor.clubeId
           ? prisma.clube.findMany({
               where: { id: professor.clubeId },
-              select: { id: true, nome: true },
+              select: {
+                id: true,
+                usuarioId: true,
+                nome: true,
+                logo: true,
+                usuario: {
+                  select: {
+                    id: true,
+                    foto: true,
+                  },
+                },
+              },
             })
           : Promise.resolve([]),
 
         professor.escolinhaId
           ? prisma.escolinha.findMany({
               where: { id: professor.escolinhaId },
-              select: { id: true, nome: true },
+              select: {
+                id: true,
+                usuarioId: true,
+                nome: true,
+                logo: true,
+                usuario: {
+                  select: {
+                    id: true,
+                    foto: true,
+                  },
+                },
+              },
             })
           : Promise.resolve([]),
 
@@ -450,7 +472,18 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
           where: { professorId },
           select: {
             clube: {
-              select: { id: true, nome: true },
+              select: {
+                id: true,
+                usuarioId: true,
+                nome: true,
+                logo: true,
+                usuario: {
+                  select: {
+                    id: true,
+                    foto: true,
+                  },
+                },
+              },
             },
           },
         }),
@@ -459,7 +492,18 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
           where: { professorId },
           select: {
             escolinha: {
-              select: { id: true, nome: true },
+              select: {
+                id: true,
+                usuarioId: true,
+                nome: true,
+                logo: true,
+                usuario: {
+                  select: {
+                    id: true,
+                    foto: true,
+                  },
+                },
+              },
             },
           },
         }),
@@ -485,42 +529,83 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
       gestorClubeIds.length
         ? prisma.clube.findMany({
             where: { id: { in: gestorClubeIds } },
-            select: { id: true, nome: true },
+            select: {
+              id: true,
+              usuarioId: true,
+              nome: true,
+              logo: true,
+              usuario: {
+                select: {
+                  id: true,
+                  foto: true,
+                },
+              },
+            },
           })
         : Promise.resolve([]),
 
       gestorEscolinhaIds.length
         ? prisma.escolinha.findMany({
             where: { id: { in: gestorEscolinhaIds } },
-            select: { id: true, nome: true },
+            select: {
+              id: true,
+              usuarioId: true,
+              nome: true,
+              logo: true,
+              usuario: {
+                select: {
+                  id: true,
+                  foto: true,
+                },
+              },
+            },
           })
         : Promise.resolve([]),
     ]);
 
-    const out: Array<{ id: string; nome: string; tipo: "Escolinha" | "Clube" }> = [];
+    const out: Array<{
+      id: string;
+      usuarioId?: string | null;
+      nome: string;
+      tipo: "Escolinha" | "Clube";
+      logo?: string | null;
+      foto?: string | null;
+    }> = [];
+
+    const mapOrgVinculo = (
+      org: any,
+      tipo: "Clube" | "Escolinha"
+    ) => ({
+      id: String(org.id),
+      usuarioId: org.usuarioId ?? org.usuario?.id ?? null,
+      nome: String(org.nome ?? "Organização"),
+      tipo,
+      logo: org.logo ?? org.usuario?.foto ?? null,
+      foto: org.logo ?? org.usuario?.foto ?? null,
+    });
 
     for (const c of clubesDiretos) {
-      out.push({ id: c.id, nome: c.nome, tipo: "Clube" });
+      out.push(mapOrgVinculo(c, "Clube"));
     }
 
     for (const e of escolinhasDiretas) {
-      out.push({ id: e.id, nome: e.nome, tipo: "Escolinha" });
+      out.push(mapOrgVinculo(e, "Escolinha"));
     }
 
     for (const row of clubesPivot) {
-      if (row.clube) out.push({ id: row.clube.id, nome: row.clube.nome, tipo: "Clube" });
+      if (row.clube) out.push(mapOrgVinculo(row.clube, "Clube"));
     }
 
     for (const row of escolinhasPivot) {
-      if (row.escolinha) out.push({ id: row.escolinha.id, nome: row.escolinha.nome, tipo: "Escolinha" });
+      if (row.escolinha) out.push(mapOrgVinculo(row.escolinha, "Escolinha"));
     }
 
     for (const c of clubesGestor) {
-      out.push({ id: c.id, nome: c.nome, tipo: "Clube" });
+      out.push(mapOrgVinculo(c, "Clube"));
     }
 
     for (const e of escolinhasGestor) {
-      out.push({ id: e.id, nome: e.nome, tipo: "Escolinha" });
+      out.push(mapOrgVinculo(e, "Escolinha"));
     }
 
     const seen = new Set<string>();

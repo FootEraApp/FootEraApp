@@ -810,7 +810,6 @@ export default function MetodologiaUnicaPage() {
         <ArrowLeft className="w-5 h-5" />
       </button>
 
-      {/* HEADER */}
       <div className="mt-4 rounded-2xl border bg-white p-4 md:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start gap-4">
           <div className="w-full md:w-80 shrink-0">
@@ -826,21 +825,30 @@ export default function MetodologiaUnicaPage() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start gap-2">
+                  <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white shrink-0">
                     {String(data.publicoAlvo ?? "AMBOS")}
                   </span>
-                  <h1 className="text-xl md:text-2xl font-bold truncate">{data.titulo}</h1>
+
+                  <h1 className="text-xl md:text-2xl font-bold leading-tight break-words min-w-0 flex-1">
+                    {data.titulo}
+                  </h1>
                 </div>
 
-                <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600">
                   <Stars value={rating} />
-                  <span className="font-semibold text-gray-800">{rating.toFixed(1)}</span>
-                  <span>({reviews})</span>
-                  <span className="text-gray-400">•</span>
-                  <span><b>{assinaturas}</b> assinaturas</span>
+                  <span className="font-semibold text-gray-800">
+                    {rating.toFixed(1)}
+                  </span>
+                  <span>
+                    ({reviews})
+                  </span>
+                  <span className="hidden sm:inline text-gray-400">•</span>
+                  <span className="w-full sm:w-auto text-gray-700">
+                    <b>{assinaturas}</b> assinaturas
+                  </span>
                 </div>
 
                 <div className="mt-2 text-sm text-gray-700 space-y-1">
@@ -866,7 +874,7 @@ export default function MetodologiaUnicaPage() {
               </div>
 
               {podeEditarMetodologia ? (
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto sm:max-w-[240px]">
                   <button
                     type="button"
                     onClick={() => {
@@ -875,21 +883,21 @@ export default function MetodologiaUnicaPage() {
                           `${isAvulsa ? "&origem=avulsa" : ""}`
                       );
                     }}
-                    className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                    className="w-full sm:w-auto px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
                   >
                     Editar metodologia
                   </button>
 
-                  <div className="text-xs text-gray-500 text-right max-w-[240px]">
+                  <div className="text-xs text-gray-500 text-left sm:text-right">
                     Você é o criador desta metodologia e pode editar aulas, desafios e conteúdos.
                   </div>
                 </div>
               ) : !adminPreview ? (
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto sm:max-w-[260px]">
                   <button
                     disabled={busy || !!data?.viewer?.temAcesso}
                     onClick={assinarMetodologia}
-                    className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
+                    className="w-full sm:w-auto px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
                   >
                     {(() => {
                       const motivo = String(data.viewer?.motivoBloqueio || "");
@@ -911,7 +919,7 @@ export default function MetodologiaUnicaPage() {
                   </button>
 
                   {(!data.viewer?.isAssinante || !data.viewer?.temAcesso) && (
-                    <div className="text-xs text-gray-500 text-right max-w-[240px]">
+                    <div className="text-xs text-gray-500 text-left sm:text-right">
                       {(() => {
                         const motivo = String(data.viewer?.motivoBloqueio || "");
 
@@ -938,17 +946,16 @@ export default function MetodologiaUnicaPage() {
             </div>
           
             {adminPreview && (
-              <div className="flex flex-col items-end gap-2">
+              <div className="mt-3 flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
                 <span className="px-4 py-2 rounded-full bg-slate-100 text-slate-700 font-semibold">
                   Visualização administrativa
                 </span>
-                <div className="text-xs text-gray-500 text-right max-w-[240px]">
+                <div className="text-xs text-gray-500 text-left sm:text-right max-w-full sm:max-w-[240px]">
                   Como administrador, você pode visualizar todos os conteúdos desta metodologia.
                 </div>
               </div>
             )}
 
-            {/* PROGRESSO */}
             <div className="mt-4">
               <div className="flex items-center justify-between text-xs text-gray-600">
                 <span>
@@ -961,7 +968,6 @@ export default function MetodologiaUnicaPage() {
               </div>
             </div>
 
-            {/* ✅ FINALIZAR METODOLOGIA (COLE AQUI) */}
             <div className="mt-4">
               <button
                 disabled={!data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou}
@@ -1025,7 +1031,7 @@ export default function MetodologiaUnicaPage() {
         {estruturasOrdenadas.map((estrutura, estruturaIndex) => (
           <div key={estrutura.id} className="rounded-2xl border bg-white p-4 shadow-sm">
            <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="font-semibold text-gray-900">
                   {estrutura.tipo === "MODULO"
@@ -1034,7 +1040,7 @@ export default function MetodologiaUnicaPage() {
                 </div>
               </div>
 
-              <div className="text-sm text-gray-600">{estrutura.titulo}</div>
+              <div className="text-sm text-gray-600 break-words">{estrutura.titulo}</div>
 
                 {estrutura.objetivo ? (
                   <div className="mt-1 text-sm text-gray-500">{estrutura.objetivo}</div>
@@ -1078,7 +1084,7 @@ export default function MetodologiaUnicaPage() {
                 </div>
               </div>
 
-              <div className="text-xs text-gray-600">
+              <div className="text-xs text-gray-600 whitespace-nowrap pt-1">
                 {estrutura.itens.filter((i) => concluIds.has(i.id)).length}/{estrutura.itens.length} concluídos
               </div>
             </div>
@@ -1114,23 +1120,31 @@ export default function MetodologiaUnicaPage() {
                 );
 
                 return (
-                  <div key={it.id} className="rounded-xl border p-3 flex items-center gap-3">
+                  <div
+                    key={it.id}
+                    className="rounded-xl border p-3 flex gap-3 items-start"
+                  >
                     <img
                       src={imgSrc}
                       onError={(e) => {
                         e.currentTarget.onerror = null;
                         e.currentTarget.src = AVATAR_FALLBACK;
                       }}
-                      className="h-16 w-28 rounded-lg border object-cover bg-white flex-shrink-0"
+                      className="h-14 w-20 sm:h-16 sm:w-28 rounded-lg border object-cover bg-white flex-shrink-0"
                       alt={it.titulo}
                     />
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-2">
                         <div className="min-w-0">
-                          <div className="font-semibold text-gray-900 truncate">{it.titulo}</div>
+                          <div className="font-semibold text-gray-900 text-sm sm:text-base leading-snug break-words">
+                            {it.titulo}
+                          </div>
+
                           {it.descricao ? (
-                            <div className="text-sm text-gray-600 line-clamp-2">{it.descricao}</div>
+                            <div className="mt-1 text-xs sm:text-sm text-gray-600 leading-snug break-words line-clamp-3 sm:line-clamp-2">
+                              {it.descricao}
+                            </div>
                           ) : null}
 
                           {isAulaAoVivo && it.aulaAoVivo?.dataInicio ? (
@@ -1147,33 +1161,35 @@ export default function MetodologiaUnicaPage() {
                           ) : null}
                         </div>
 
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="rounded-full border border-[#d8c9a7] bg-[#f6f1e4] text-[#a76500] text-sm px-3 py-1 whitespace-nowrap">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-[#d8c9a7] bg-[#f6f1e4] text-[#a76500] text-xs sm:text-sm px-2 sm:px-3 py-1 whitespace-nowrap">
                             + {pontosItem} pts
                           </span>
 
                           {concluido ? (
-                            <span className="px-2 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-800 flex items-center gap-1">
-                              <CheckCircle2 className="w-4 h-4" /> Concluído
+                            <span className="px-2 py-1 rounded-full text-xs border bg-emerald-50 text-emerald-800 inline-flex items-center gap-1 whitespace-nowrap">
+                              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              Concluído
                             </span>
                           ) : locked ? (
-                            <span className="px-2 py-1 rounded-full text-xs border bg-gray-50 text-gray-700 flex items-center gap-1">
-                              <Lock className="w-4 h-4" /> Bloqueado
+                            <span className="px-2 py-1 rounded-full text-xs border bg-gray-50 text-gray-700 inline-flex items-center gap-1 whitespace-nowrap">
+                              <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              Bloqueado
                             </span>
                           ) : null}
                         </div>
                       </div>
 
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <div className="text-xs text-gray-500">
+                      <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="text-xs text-gray-500 min-h-[16px]">
                           {isVideo && it.duracaoMin ? `${it.duracaoMin} min` : ""}
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           {isAulaAoVivo && (
                             <button
                               disabled={locked || !aulaHref}
-                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-xs sm:text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked || !aulaHref) return;
                                 navigate(aulaHref);
@@ -1186,7 +1202,7 @@ export default function MetodologiaUnicaPage() {
                           {isVideo && (
                             <button
                               disabled={locked}
-                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-xs sm:text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
                                 videoConcluindoRef.current = false;
@@ -1208,7 +1224,7 @@ export default function MetodologiaUnicaPage() {
                           {isTreino && (
                             <button
                               disabled={locked}
-                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-xs sm:text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
                                 if (!it.treinoProgramadoId) {
@@ -1234,7 +1250,7 @@ export default function MetodologiaUnicaPage() {
                           {isMaterial && (
                             <button
                               disabled={locked}
-                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-xs sm:text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={async () => {
                                 if (locked) return;
 
@@ -1251,7 +1267,7 @@ export default function MetodologiaUnicaPage() {
                           {isDesafio && (
                             <button
                               disabled={locked}
-                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
+                              className="px-3 py-2 rounded-lg bg-green-800 text-white text-xs sm:text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
 

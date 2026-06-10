@@ -615,10 +615,6 @@ async function montarEventoResponse(params: {
   };
 }
 
-/**
- * GET /api/learning/eventos/aulas/:aulaId
- * Página pública genérica para qualquer aula ao vivo.
- */
 export async function getAulaEventoPublica(req: Request, res: Response) {
   try {
     const aulaId = String(req.params.aulaId || "").trim();
@@ -647,9 +643,6 @@ export async function getAulaEventoPublica(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/learning/eventos/aulas/:aulaId/inscrever
- */
 export async function inscreverAulaEvento(req: Request, res: Response) {
   try {
     const aulaId = String(req.params.aulaId || "").trim();
@@ -943,9 +936,6 @@ export async function getSalaCopaPublica(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/learning/eventos/sala-copa/inscrever
- */
 export async function inscreverSalaCopa(req: Request, res: Response) {
   try {
     const aulaId = String(req.body?.aulaId || "").trim();
@@ -1026,9 +1016,6 @@ export async function inscreverSalaCopa(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/learning/eventos/sala-copa/comprar
- */
 export async function comprarSalaCopa(req: Request, res: Response) {
   try {
     const aulaId = String(req.body?.aulaId || "").trim();
@@ -1094,4 +1081,3 @@ async function buscarAcessoAulaAvulsa(params: {
     },
   });
 }
-

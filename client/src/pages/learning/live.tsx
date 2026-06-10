@@ -837,29 +837,31 @@ export default function LearningLivePage() {
 
     if (isScheduled) {
       return (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-white">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-white overflow-hidden">
           {capaUrl ? (
             <img
               src={capaUrl}
               alt={aula?.titulo || "Capa da aula"}
-              className="absolute inset-0 h-full w-full object-cover opacity-30"
+              className="absolute inset-0 h-full w-full object-cover opacity-25"
             />
           ) : null}
 
-          <div className="relative text-center px-6 max-w-xl">
-            <CalendarClock className="w-16 h-16 mx-auto mb-4 text-amber-300" />
+          <div className="relative w-full max-w-[92%] sm:max-w-xl text-center px-3 sm:px-6 py-3">
+            <CalendarClock className="w-8 h-8 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-4 text-amber-300" />
 
-            <div className="text-3xl font-black">Aula agendada</div>
+            <div className="text-lg sm:text-3xl font-black leading-tight">
+              Aula agendada
+            </div>
 
-            <p className="text-white/80 mt-3">
+            <p className="text-white/80 mt-1 sm:mt-3 text-xs sm:text-base">
               A transmissão começará em:
             </p>
 
-            <div className="mt-3 rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-xl font-black">
+            <div className="mt-2 sm:mt-3 rounded-xl sm:rounded-2xl border border-white/20 bg-white/10 px-3 sm:px-5 py-2 sm:py-4 text-sm sm:text-xl font-black leading-tight break-words">
               {formatarDataHora(aula?.dataInicio)}
             </div>
 
-            <p className="text-amber-200 font-bold mt-4">
+            <p className="text-amber-200 font-bold mt-2 sm:mt-4 text-xs sm:text-base leading-tight">
               {tempoAteLive(aula?.dataInicio)}
             </p>
           </div>
@@ -1034,7 +1036,7 @@ export default function LearningLivePage() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
           <section className="space-y-5">
-            <div className="rounded-[26px] bg-white border border-slate-200 shadow-sm p-5">
+            <div className="rounded-[22px] sm:rounded-[26px] bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
               <div className="flex flex-col md:flex-row md:items-start gap-4 mb-5">
                 <div className="h-20 w-20 rounded-2xl bg-[#0b4a2f] text-white flex items-center justify-center shrink-0 overflow-hidden">
                   {criadorFoto ? (
@@ -1092,26 +1094,26 @@ export default function LearningLivePage() {
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[24px] bg-black border border-slate-900 aspect-video">
+              <div className="relative overflow-hidden rounded-2xl sm:rounded-[24px] bg-black border border-slate-900 aspect-video">
                 {renderPlayerContent()}
 
-                <div className="absolute left-4 bottom-4 flex items-center gap-2">
+                <div className="absolute right-2 top-2 sm:right-4 sm:top-4 flex items-center gap-1.5 sm:gap-2 z-20">
                   {isLive ? (
-                    <span className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-black text-white">
+                    <span className="rounded-md sm:rounded-lg bg-red-600 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs font-black text-white shadow">
                       LIVE
                     </span>
                   ) : isFinished ? (
-                    <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-black text-white">
+                    <span className="rounded-md sm:rounded-lg bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs font-black text-white shadow">
                       REPLAY
                     </span>
                   ) : (
-                    <span className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-black text-white">
+                    <span className="rounded-md sm:rounded-lg bg-white/15 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs font-black text-white shadow">
                       AGENDADA
                     </span>
                   )}
 
-                  <span className="rounded-lg bg-black/55 px-3 py-1.5 text-xs font-bold text-white inline-flex items-center gap-1.5">
-                    <Users className="w-4 h-4" />
+                  <span className="rounded-md sm:rounded-lg bg-black/55 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs font-bold text-white inline-flex items-center gap-1 sm:gap-1.5 shadow">
+                    <Users className="w-3 h-3 sm:w-4 sm:h-4" />
                     {aula?.totalOnline ?? 0}
                   </span>
                 </div>

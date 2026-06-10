@@ -83,10 +83,8 @@ export default function TermosEPrivacidade() {
     <div className="min-h-screen bg-[#F6F1E7]">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
         <div className="overflow-hidden rounded-3xl bg-[#F6F1E7] shadow-[0_18px_50px_rgba(0,0,0,0.12)] border border-black/5">
-          {/* HEADER */}
           <header className="bg-green-900 text-white">
             <div className="flex items-center justify-between px-5 py-4 md:px-8">
-              {/* LOGO */}
               <button
                 type="button"
                 onClick={() => navigate("/")}
@@ -107,7 +105,6 @@ export default function TermosEPrivacidade() {
                 </div>
               </button>
 
-              {/* MENU DESKTOP */}
               <nav className="hidden lg:flex items-center gap-7 text-sm font-semibold">
                 <button
                   type="button"
@@ -138,7 +135,6 @@ export default function TermosEPrivacidade() {
                 </button>
               </nav>
 
-              {/* AÇÕES */}
               <div className="flex items-center gap-2 md:gap-3">
                 {SHOW_SOCIALS && (
                   <div className="hidden md:flex items-center gap-2 mr-1">
@@ -180,7 +176,6 @@ export default function TermosEPrivacidade() {
               </div>
             </div>
 
-            {/* MENU MOBILE/TABLET */}
             <div className="lg:hidden px-5 pb-4 md:px-8">
               <div className="flex flex-wrap gap-2">
                 <button
@@ -217,7 +212,6 @@ export default function TermosEPrivacidade() {
             </div>
           </header>
 
-          {/* TOPO DO CONTEÚDO */}
           <section className="bg-[#F6F1E7] border-b border-black/5">
             <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -282,7 +276,6 @@ export default function TermosEPrivacidade() {
             </div>
           </section>
 
-          {/* CONTEÚDO */}
           <main className="bg-[#F6F1E7] px-4 py-6 md:px-8 md:py-8">
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
               <section className="lg:col-span-8">
@@ -409,7 +402,6 @@ export default function TermosEPrivacidade() {
             </div>
           </main>
 
-          {/* RODAPÉ */}
           <footer className="border-t border-gray-200 bg-white px-6 py-5 md:px-10">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-gray-600">
