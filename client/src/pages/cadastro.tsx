@@ -1044,11 +1044,11 @@ export default function Cadastro() {
     <div className="flex min-h-screen flex-col bg-cream lg:flex-row">
       <div className="w-full bg-[#14532d] text-white flex flex-col items-center px-5 py-6 sm:px-8 lg:w-1/2 lg:p-10">
         <div className="w-full max-w-[680px]">
-          <div className="relative flex w-full items-center justify-center gap-4 lg:flex-col lg:gap-2">
+          <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="shrink-0 cursor-pointer"
+              className="cursor-pointer"
               aria-label="Voltar para Home"
             >
               <img
@@ -1056,20 +1056,22 @@ export default function Cadastro() {
                 alt="Logo FootEra"
                 className="
                   shrink-0 object-contain transform-gpu
-                  w-16 h-16 sm:w-20 sm:h-20 lg:w-[130px] lg:h-[130px]
-                  origin-center
+                  w-14 h-14 sm:w-16 sm:h-16 lg:w-[130px] lg:h-[130px]
+                  origin-left lg:origin-center mr-1
                 "
               />
             </button>
-            <h1 className="min-w-0 text-center text-xl font-bold sm:text-2xl lg:text-3xl">
+
+            <h1 className="flex-1 lg:flex-none text-center text-xl lg:text-3xl font-bold leading-tight">
               Bem-vindo à FootEra
             </h1>
+
             <button
               type="button"
-              className="absolute right-4 top-6 lg:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
+              className="lg:hidden shrink-0 p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
               aria-expanded={infoAberto}
               aria-controls="cadastro-info"
-              onClick={() => setInfoAberto(v => !v)}
+              onClick={() => setInfoAberto((v) => !v)}
               title={infoAberto ? "Recolher" : "Expandir"}
             >
               {infoAberto ? <ChevronUp /> : <ChevronDown />}
@@ -1546,7 +1548,7 @@ export default function Cadastro() {
                 <>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Idade (calculada)</label>
+                      <label className="block text-sm font-medium mb-1">Idade</label>
                       <input className="w-full border rounded px-3 py-2 bg-gray-100" value={idade ?? ""} readOnly />
                     </div>
 

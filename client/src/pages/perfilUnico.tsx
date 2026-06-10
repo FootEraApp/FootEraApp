@@ -14,10 +14,12 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import PerfilFederacao from "../components/perfil/PerfilFederacao.js";
 import PerfilMarca from "../components/perfil/PerfilMarca.js";
 import PerfilLearning from "../components/perfil/PerfilLearning.js";
+import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 
 type TipoPerfil =
   | "Atleta"
   | "Professor"
+  | "Olheiro"
   | "Clube"
   | "Escolinha"
   | "Escola"
@@ -51,6 +53,39 @@ export default function PerfilUnico() {
     navigate("/perfil");
   }
 
+  async function resolverUsuarioIdDeOrganizacao(idRecebido: string): Promise<string | null> {
+    const endpoints = [
+      `${API.BASE_URL}/api/clubes`,
+      `${API.BASE_URL}/api/escolinhas`,
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const r = await axios.get(endpoint, { headers });
+
+        const lista = Array.isArray(r.data)
+          ? r.data
+          : r.data?.items ?? r.data?.data ?? [];
+
+        const encontrado = lista.find((item: any) => String(item?.id) === String(idRecebido));
+
+        if (encontrado) {
+          return (
+            encontrado.usuarioId ??
+            encontrado.usuario?.id ??
+            encontrado.userId ??
+            encontrado.usuario_id ??
+            null
+          );
+        }
+      } catch {
+        // tenta o próximo endpoint
+      }
+    }
+
+    return null;
+  }
+
   useEffect(() => {
     if (!id || !token) return;
 
@@ -58,20 +93,47 @@ export default function PerfilUnico() {
 
     (async () => {
       setLoading(true);
+
       try {
-        const { data } = await axios.get<PerfilMinimo>(
-          `${API.BASE_URL}/api/perfil/${id}`,
-          { headers }
-        );
+        let perfilData: PerfilMinimo | null = null;
+
+        try {
+          const r = await axios.get<PerfilMinimo>(
+            `${API.BASE_URL}/api/perfil/${encodeURIComponent(id)}`,
+            { headers }
+          );
+
+          perfilData = r.data;
+        } catch (errPrimeiro) {
+          const usuarioIdResolvido = await resolverUsuarioIdDeOrganizacao(id);
+
+          if (!usuarioIdResolvido) {
+            throw errPrimeiro;
+          }
+
+          const r2 = await axios.get<PerfilMinimo>(
+            `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioIdResolvido)}`,
+            { headers }
+          );
+
+          perfilData = r2.data;
+
+          if (usuarioIdResolvido !== id) {
+            window.history.replaceState(null, "", `/perfil/${usuarioIdResolvido}`);
+          }
+        }
 
         if (cancelled) return;
 
-        setTipo(data?.tipo ?? null);
-        setUsuarioId(data?.usuario?.id ?? null);
+        setTipo(perfilData?.tipo ?? null);
+        setUsuarioId(perfilData?.usuario?.id ?? null);
       } catch (err) {
         console.error("Erro ao carregar tipo do perfil:", err);
-        setTipo(null);
-        setUsuarioId(null);
+
+        if (!cancelled) {
+          setTipo(null);
+          setUsuarioId(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -121,7 +183,7 @@ export default function PerfilUnico() {
   const tipoNormalizado = String(tipo).toLowerCase();
 
   return (
-    <div className="min-h-screen bg-transparent pb-20">
+    <div className="min-h-[100dvh] bg-transparent pb-32">
       <div className="mb-3">
         <button
           type="button"
@@ -143,6 +205,14 @@ export default function PerfilUnico() {
       {tipoNormalizado === "professor" && (
         <PerfilProfessor idDaUrl={id} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
       )}
+      {tipoNormalizado === "olheiro" && (
+        <PerfilOlheiro
+          idDaUrl={id}
+          hasCreator={hasCreator}
+          creatorUsuarioId={usuarioId}
+          mostrarBotaoVoltar={false}
+        />
+      )}
       {tipoNormalizado === "clube" && (
         <PerfilClube idDaUrl={id} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
       )}
@@ -159,8 +229,9 @@ export default function PerfilUnico() {
         <PerfilLearning idDaUrl={id} />
       )}
 
+      <div className="h-16" aria-hidden="true" />
+      
       <BottomNav />
-
     </div>
   );
 }

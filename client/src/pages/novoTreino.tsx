@@ -4269,7 +4269,6 @@ export default function NovoTreino() {
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
 
-            {/* ✅ Tipo de publicação — só aparece para professor parceiro */}
             {isParceiro && (
               <div className="mt-2">
                 <label className="block text-sm text-gray-700 mb-2">
@@ -4298,7 +4297,6 @@ export default function NovoTreino() {
                     </div>
                   </div>
 
-                  {/* Switch visual */}
                   <span
                     className={[
                       "relative inline-flex h-7 w-12 items-center rounded-full border transition",
@@ -4813,7 +4811,6 @@ export default function NovoTreino() {
             <div className="h-4" />
           
             <StepCard title="Exercícios Disponíveis">
-              {/* Abas */}
               <div className="mb-3 flex items-center gap-2">
                 <button
                   type="button"
@@ -5031,7 +5028,6 @@ export default function NovoTreino() {
                     </select>
                   </div>
 
-                  {/* Lista catálogo */}
                   <ul
                     ref={listRef}
                     onScroll={onScrollListaExercicios}
@@ -5176,7 +5172,6 @@ export default function NovoTreino() {
                     </select>
                   </div>
 
-                  {/* Lista personalizados */}
                   {loadingPersonalizados ? (
                     <div className="text-sm text-gray-600">Carregando personalizados...</div>
                   ) : (

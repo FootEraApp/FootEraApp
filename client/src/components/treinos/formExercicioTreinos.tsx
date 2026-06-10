@@ -1,3 +1,4 @@
+// client/src/components/treinos/formExercicioTreinos
 "use client";
 
 import { useEffect, useState } from "react";
@@ -42,6 +43,88 @@ const OPCOES_ESPACO = [
   { value: "Medio", label: "Médio" },
   { value: "Grande", label: "Grande" },
 ];
+
+const ASSETS_CDN_BASE =
+  import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
+
+function isNativeApp() {
+  if (typeof window === "undefined") return false;
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  return (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    hostname === "localhost" ||
+    hostname === "10.0.2.2"
+  );
+}
+
+function resolveMediaUrl(raw?: string | null) {
+  if (!raw) return "";
+
+  const p = String(raw).trim().replace(/\\/g, "/");
+  if (!p || p === "null" || p === "undefined") return "";
+
+  if (
+    p.startsWith("blob:") ||
+    p.startsWith("data:") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://")
+  ) {
+    return p;
+  }
+
+  // Arquivos fixos do frontend: vídeos/imagens em /assets
+  if (p.startsWith("/assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("assets/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
+  if (p.startsWith("/videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}${p}`
+      : p;
+  }
+
+  if (p.startsWith("videos/")) {
+    return isNativeApp()
+      ? `${ASSETS_CDN_BASE}/${p}`
+      : `/${p}`;
+  }
+
+  // Uploads/exercícios vindos do backend
+  if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("uploads/") || p.startsWith("upload/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  if (p.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${p}`;
+  }
+
+  if (p.startsWith("/")) {
+    return `${API.BASE_URL}${p}`;
+  }
+
+  return `${API.BASE_URL}/${p}`;
+}
 
 export default function FormExercicioTreinos({
   exercicioId = null,
@@ -147,17 +230,14 @@ export default function FormExercicioTreinos({
             : ""
         );
         
-        const videoUrlCompleta = data.videoDemonstrativoUrl
-          ? data.videoDemonstrativoUrl.startsWith("http://") || data.videoDemonstrativoUrl.startsWith("https://")
-            ? data.videoDemonstrativoUrl
-            : `${API.BASE_URL}${data.videoDemonstrativoUrl}`
-          : "";
+        const videoUrlOriginal = String(data.videoDemonstrativoUrl || "").trim();
+        const videoUrlCompleta = resolveMediaUrl(videoUrlOriginal);
 
         setVideoExistenteUrl(videoUrlCompleta);
         setVideoPreviewUrl(videoUrlCompleta);
         setVideoNome(
-          data.videoDemonstrativoUrl
-            ? data.videoDemonstrativoUrl.split("/").pop() || ""
+          videoUrlOriginal
+            ? videoUrlOriginal.split("/").pop() || ""
             : ""
         );
 
@@ -897,6 +977,8 @@ export default function FormExercicioTreinos({
               src={videoPreviewUrl}
               controls
               autoPlay
+              playsInline
+              preload="metadata"
               className="max-h-[70vh] w-full rounded-xl bg-black"
             />
           </div>

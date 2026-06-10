@@ -381,7 +381,6 @@ const GerenciarAtletas: React.FC = () => {
   const [loadingProgramados, setLoadingProgramados] = useState(false);
   const [treinosProgramados, setTreinosProgramados] = useState<TreinoProgramadoItem[]>([]);
   const [treinoProgramadoId, setTreinoProgramadoId] = useState<string>("");
-  const [salvandoAgenda, setSalvandoAgenda] = useState(false);
   const [avaliarOpen, setAvaliarOpen] = useState(false);
   const [avaliarLoading, setAvaliarLoading] = useState(false);
   const [submissaoSelecionada, setSubmissaoSelecionada] = useState<string>("");
@@ -1084,56 +1083,53 @@ async function salvarAvaliacao() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
+     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-44 sm:pb-40 lg:pb-36">
+      {tipo === "Professor" && modoGestor && contextoTipoUsuarioId && gestorCtx?.org && (
+        <div className="mb-4 -mx-3 sm:-mx-4 -mt-4 sm:-mt-6 bg-emerald-700 text-white shadow-sm overflow-visible">
+          <div className="relative px-4 sm:px-6 pt-4 pb-8">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="shrink-0 translate-y-4">
+                  <Avatar
+                    foto={gestorCtx.org.logo ?? null}
+                    alt={gestorCtx.org.nome ?? "Organização"}
+                    className="h-16 w-16 ring-4 ring-white/70 border border-white/30 bg-emerald-800/40"
+                  />
+                </div>
 
-{tipo === "Professor" && modoGestor && contextoTipoUsuarioId && gestorCtx?.org && (
-  <div className="mb-4 -mx-3 sm:-mx-4 -mt-4 sm:-mt-6 bg-emerald-700 text-white shadow-sm overflow-visible">
-    <div className="relative px-4 sm:px-6 pt-4 pb-8">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0">
-          {/* Avatar maior + vazando pra baixo */}
-          <div className="shrink-0 translate-y-4">
-            <Avatar
-              foto={gestorCtx.org.logo ?? null}
-              alt={gestorCtx.org.nome ?? "Organização"}
-              className="h-16 w-16 ring-4 ring-white/70 border border-white/30 bg-emerald-800/40"
-            />
-          </div>
+                <div className="min-w-0 pt-1">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-white/90" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-white/90">
+                      Modo gestor
+                    </span>
+                  </div>
 
-          <div className="min-w-0 pt-1">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-white/90" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-white/90">
-                Modo gestor
-              </span>
-            </div>
+                  <div className="truncate text-base sm:text-lg font-semibold leading-tight">
+                    {gestorCtx.org.nome ??
+                      (String(gestorCtx.org.tipo).toUpperCase() === "CLUBE" ? "Clube" : "Escolinha")}
+                  </div>
 
-            <div className="truncate text-base sm:text-lg font-semibold leading-tight">
-              {gestorCtx.org.nome ??
-                (String(gestorCtx.org.tipo).toUpperCase() === "CLUBE" ? "Clube" : "Escolinha")}
-            </div>
+                  <div className="truncate text-[12px] sm:text-sm text-white/90">
+                    Você está gerenciando como professor responsável •{" "}
+                    {String(gestorCtx.org.tipo).toUpperCase() === "CLUBE" ? "Clube" : "Escolinha"}
+                  </div>
+                </div>
+              </div>
 
-            <div className="truncate text-[12px] sm:text-sm text-white/90">
-              Você está gerenciando como professor responsável •{" "}
-              {String(gestorCtx.org.tipo).toUpperCase() === "CLUBE" ? "Clube" : "Escolinha"}
+              <button
+                type="button"
+                onClick={limparOrg}
+                className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 border border-white/25"
+                title="Sair do modo gestor"
+                aria-label="Sair do modo gestor"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Botão X */}
-        <button
-          type="button"
-          onClick={limparOrg}
-          className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 border border-white/25"
-          title="Sair do modo gestor"
-          aria-label="Sair do modo gestor"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       <div className="mb-3">
         <Link
@@ -1158,8 +1154,6 @@ async function salvarAvaliacao() {
 
             {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
-
-                {/* ATLETAS */}
                 <button
                   type="button"
                   onClick={() => setLocation(withGestorQS("/perfil/GerenciarAtletas"))}
@@ -1170,7 +1164,6 @@ async function salvarAvaliacao() {
                   Atletas
                 </button>
 
-                {/* TURMAS */}
                 <button
                   type="button"
                   onClick={() => setLocation(withGestorQS("/perfil/GerenciarProfessores?tab=turmas"))}
@@ -1181,7 +1174,6 @@ async function salvarAvaliacao() {
                   Turmas
                 </button>
 
-                {/* PROFESSORES */}
                 {tipo !== "Professor" && (
                   <button
                     type="button"
@@ -1196,7 +1188,6 @@ async function salvarAvaliacao() {
                   </button>
                 )}
 
-                {/* ORGANIZAÇÕES */}
                 <button
                   type="button"
                   onClick={() => setLocation(withGestorQS("/perfil/GerenciarProfessores?tab=organizacoes"))}
@@ -1689,7 +1680,7 @@ async function salvarAvaliacao() {
       />
 
       {carreiraOpen && focado && (
-        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-3">
+         <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-3 overflow-y-auto">
           <div
             className="
               w-screen h-[100dvh]
@@ -1840,8 +1831,8 @@ async function salvarAvaliacao() {
         )}
 
           {avaliarOpen && (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3">
-              <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="fixed inset-0 z-[70] flex items-start sm:items-center justify-center bg-black/60 p-3 overflow-y-auto">
+              <div className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto rounded-2xl bg-white shadow-2xl my-4">
                 <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
                   <div>
                     <div className="text-xs text-zinc-500">Avaliar treino</div>
@@ -1974,6 +1965,8 @@ async function salvarAvaliacao() {
               </div>
             </div>
           )}
+
+        <div className="h-24 sm:h-20 lg:h-16" aria-hidden="true" />
       <BottomNav />
     </div>
   );

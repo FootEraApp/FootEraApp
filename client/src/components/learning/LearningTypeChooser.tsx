@@ -20,7 +20,6 @@ export default function LearningTypeChooser({ onChoose }: Props) {
       </div>
 
       <div className="space-y-3">
-        {/* TRILHAS */}
         <button
           type="button"
           onClick={() => onChoose("TRILHAS_TREINO", "TRILHA")}
@@ -49,7 +48,6 @@ export default function LearningTypeChooser({ onChoose }: Props) {
           </div>
         </button>
 
-        {/* MODULOS */}
         <button
           type="button"
           onClick={() => onChoose("CURSO_FORMACAO", "MODULO")}

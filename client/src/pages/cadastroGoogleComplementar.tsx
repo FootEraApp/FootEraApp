@@ -1515,7 +1515,7 @@ export default function CadastroGoogleComplementar() {
                 <>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Idade (calculada)</label>
+                      <label className="block text-sm font-medium mb-1">Idade</label>
                       <input className="w-full border rounded px-3 py-2 bg-gray-100" value={idade ?? ""} readOnly />
                     </div>
 

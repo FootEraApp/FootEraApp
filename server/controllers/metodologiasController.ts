@@ -1509,10 +1509,6 @@ export async function updateMetodologia(req: Request, res: Response) {
   }
 }
 
-/** =========================
- * DELETE /api/metodologias/:id
- * Exclui (somente criador)
- * ========================= */
 export const deleteMetodologia = async (req: Request, res: Response) => {
   const { id } = req.params;
   const userId = getUserId(req);

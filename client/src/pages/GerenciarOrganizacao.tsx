@@ -314,7 +314,7 @@ export default function GerenciarOrganizacao({
   // ======= UI: PROFESSOR -> LISTA ORGS =======
   if (tipo === "Professor") {
     return (
-      <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+      <div className="rounded-2xl border border-zinc-200 bg-white overflow-visible">
         <div className="flex items-center justify-between border-b border-zinc-100 p-4">
           <div>
             <div className="text-sm font-semibold text-zinc-900">Organizações que você pode gerenciar</div>
@@ -414,9 +414,8 @@ export default function GerenciarOrganizacao({
     );
   }
 
-  // ======= UI: CLUBE/ESCOLA -> RESPONSÁVEIS + PERMISSÕES =======
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+    <div className="rounded-2xl border border-zinc-200 bg-white overflow-visible">
       <div className="flex items-center justify-between border-b border-zinc-100 p-4">
         <div>
           <div className="text-sm font-semibold text-zinc-900">Responsáveis (professores gestores)</div>
@@ -438,7 +437,6 @@ export default function GerenciarOrganizacao({
         <div className="p-8 text-center text-zinc-600">Não foi possível identificar sua organização.</div>
       ) : (
         <div className="p-4 space-y-4">
-          {/* adicionar gestor */}
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
             <div className="text-sm font-semibold text-zinc-900 mb-2">Adicionar responsável</div>
 
@@ -497,7 +495,6 @@ export default function GerenciarOrganizacao({
             </div>
           </div>
 
-          {/* lista gestores */}
           <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
             <div className="flex items-center justify-between border-b border-zinc-100 p-3">
               <div className="text-sm font-semibold text-zinc-900">Responsáveis atuais</div>
@@ -579,7 +576,6 @@ export default function GerenciarOrganizacao({
                         </div>
                       </div>
 
-                      {/* permissões editáveis por checkbox + botão salvar */}
                       <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                         <div className="text-xs font-semibold text-zinc-800 mb-2 inline-flex items-center gap-2">
                           <Save className="h-3.5 w-3.5" /> Funções (permissões)
@@ -588,7 +584,6 @@ export default function GerenciarOrganizacao({
                         <PermissoesPicker
                           value={perms}
                           onChange={(next) => {
-                            // salva imediatamente (ou você pode trocar para um botão)
                             salvarGestor(g, { permissoes: permsToPayload(next) });
                           }}
                         />
