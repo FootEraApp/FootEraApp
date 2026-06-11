@@ -764,8 +764,6 @@ export async function comprarAulaEvento(req: Request, res: Response) {
     const planoId = evento.acesso?.planoId;
     const preco = Number(evento.acesso?.preco || 0);
 
-    // Aula que pertence a metodologia NUNCA libera por aqui.
-    // Precisa pagar a metodologia pelo /pagamentos.
     if (produtoTipo === "METODOLOGIA" || produtoTipo === "METODOLOGIA_AVULSA") {
       return res.status(402).json({
         ok: false,
@@ -780,8 +778,6 @@ export async function comprarAulaEvento(req: Request, res: Response) {
       });
     }
 
-    // Aula avulsa paga também não libera por aqui.
-    // Precisa passar pelo checkout.
     if (produtoTipo === "AULA_AO_VIVO" && preco > 0) {
       return res.status(402).json({
         ok: false,
@@ -793,7 +789,6 @@ export async function comprarAulaEvento(req: Request, res: Response) {
       });
     }
 
-    // Só libera por aqui aula avulsa gratuita.
     const acessoLiberado = await prisma.aulaAoVivoAcesso.upsert({
       where: {
         aulaAoVivoId_usuarioId: {

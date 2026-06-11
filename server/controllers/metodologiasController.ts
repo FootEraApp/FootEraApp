@@ -25,7 +25,6 @@ import { deleteFromS3 } from "../middlewares/s3Upload.js";
 function calcularDatasExecucao(estrutura: any, assinatura: any) {
   const modo = estrutura?.modoExecucao;
 
-  // MODULO: usa o prazo final fixo, se existir
   if (estrutura?.tipo === "MODULO") {
     return {
       inicio: null,
@@ -172,7 +171,6 @@ function normalizarDataHoraRecebida(value: any) {
   if (ehDatetimeLocal && !temTimezone) {
     const comSegundos = raw.length === 16 ? `${raw}:00` : raw;
 
-    // datetime-local vindo do front representa horário do Brasil
     return `${comSegundos}-03:00`;
   }
 
@@ -529,9 +527,6 @@ async function upsertAulaAoVivoParaItem(params: {
 
   let aula = null;
 
-  // 1) Só atualiza pelo ID se esse ID realmente existir no banco.
-  // Em edição, o front pode mandar um aulaPayload.id antigo de uma aula
-  // que foi apagada junto com o item anterior.
   if (aulaPayload.id && aulaExistentePorId?.id) {
     aula = await tx.aulaAoVivo.update({
       where: { id: aulaExistentePorId.id },
@@ -539,7 +534,6 @@ async function upsertAulaAoVivoParaItem(params: {
     });
   }
 
-  // 2) Se não atualizou por ID, tenta achar aula ligada ao item atual.
   if (!aula) {
     const aulaExistentePorItem = await tx.aulaAoVivo.findFirst({
       where: metodologiaAvulsaId
@@ -556,7 +550,6 @@ async function upsertAulaAoVivoParaItem(params: {
     }
   }
 
-  // 3) Se não achou nenhuma, cria uma nova aula ao vivo.
   if (!aula) {
     aula = await tx.aulaAoVivo.create({
       data,
@@ -743,20 +736,15 @@ function isPlanoMetodologiaLearning(plano: string | null | undefined) {
 function metodologiaLimitFromPlano(plano: string | null | undefined): number {
   const p = String(plano || "").toUpperCase();
 
-  // se o cara comprou uma metodologia avulsa, isso NÃO é "quota mensal"
-  // (é acesso àquela metodologia específica via MetodologiaAssinante)
   if (isPlanoMetodologiaAvulsa(p)) return 0;
 
-  // 1 por mês
   if (p === "ATLETA_LEARNING_1") return 1;
   if (p === "PROFESSOR_LEARNING_1") return 1;
 
-  // 3 por mês
   if (p === "ATLETA_LEARNING_3") return 3;
   if (p === "PROFESSOR_LEARNING_3") return 3;
   if (p === "ORGANIZACOES_LEARNING_3") return 3;
 
-  // Pro e outros: zero
   return 0;
 }
 
@@ -1138,7 +1126,7 @@ export async function createMetodologia(req: Request, res: Response) {
         area: area ?? null,
         geraBadge: !!geraBadge,
         geraCertificado: !!geraCertificado,
-        totalSemanas: totalSemanas ?? null, // legado, enquanto existir
+        totalSemanas: totalSemanas ?? null, 
       },
       include: { _count: { select: { assinantes: true, estruturas: true } } },
     });
@@ -1150,7 +1138,6 @@ export async function createMetodologia(req: Request, res: Response) {
       console.error("Falha ao sync template de conquista da metodologia:", e);
     }
 
-    // ✅ ADICIONA NA ATIVIDADE RECENTE
     try {
       await prisma.atividadeRecente.create({
         data: {
@@ -1159,7 +1146,6 @@ export async function createMetodologia(req: Request, res: Response) {
           titulo: `Nova metodologia: ${created.titulo}`,
           imagemUrl: created.capaUrl ?? null,
           link: `/metodologias/${created.id}`,
-          // createdAt: NÃO precisa (default now())
         },
       });
     } catch (e) {
@@ -1224,7 +1210,6 @@ export async function updateMetodologia(req: Request, res: Response) {
           ? (capaUrl.trim() ? capaUrl.trim() : null)
           : undefined;
 
-    // ✅ NOVIDADE: Se a capa está sendo atualizada/removida, apaga a antiga do S3
     if (capaUrlUpdate !== undefined && current.capaUrl && current.capaUrl !== capaUrlUpdate && current.capaUrl.includes("amazonaws.com")) {
       await deleteFromS3(current.capaUrl);
     }
@@ -1514,7 +1499,6 @@ export const deleteMetodologia = async (req: Request, res: Response) => {
   const userId = getUserId(req);
 
   try {
-    // 1. Busca a metodologia incluindo os itens de vídeo
     const metodologia = await prisma.metodologia.findUnique({
       where: { id },
       select: { 
@@ -1534,18 +1518,14 @@ export const deleteMetodologia = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Metodologia não encontrada." });
     }
 
-    // Segurança extra
     if (metodologia.criadorUsuarioId !== userId) {
       return res.status(403).json({ message: "Sem permissão para deletar." });
     }
 
-    // 2. Deleta do Banco de Dados (Os itens são deletados por CASCADE no Prisma)
     await prisma.metodologia.delete({
       where: { id },
     });
 
-    // 3. Limpeza do S3
-    // 3.1 Apaga a capa
     if (metodologia.capaUrl && metodologia.capaUrl.includes("amazonaws.com")) {
       await deleteFromS3(metodologia.capaUrl);
     }
@@ -1937,20 +1917,15 @@ export async function listEventosAoVivoVisiveis(req: Request, res: Response) {
           not: "CANCELADA",
         },
         OR: [
-          // Evento avulso criado direto em /creator/eventos/novo
           {
             metodologiaId: null,
             metodologiaAvulsaId: null,
           },
-
-          // Aula dentro de metodologia Learning publicada
           {
             metodologia: {
               ativo: true,
             },
           },
-
-          // Aula dentro de metodologia avulsa publicada
           {
             metodologiaAvulsa: {
               ativo: true,
@@ -2170,8 +2145,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
     const { metodologiaId } = req.params;
-
-    // 1) Confere se metodologia existe e se o user é o criador
     const metodologia = await prisma.metodologia.findUnique({
       where: { id: metodologiaId },
       select: { id: true, criadorUsuarioId: true },
@@ -2185,7 +2158,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       return res.status(403).json({ message: "Você não tem permissão para alterar esta metodologia." });
     }
 
-    // 2) Normaliza payload (aceita {itens:[...]} ou item direto)
     const body = req.body || {};
     const itensEntrada = Array.isArray(body.itens) ? body.itens : [body];
 
@@ -2193,19 +2165,16 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       return res.status(400).json({ message: "Envie pelo menos 1 item." });
     }
 
-    // 3) Valida e prepara itens
     const itensPreparados: MetodologiaItemPreparado[] = [];
 
     for (let i = 0; i < itensEntrada.length; i++) {
       const raw = itensEntrada[i] || {};
-
       const semana = Number(raw.semana);
       if (!Number.isFinite(semana) || semana < 1) {
         return res.status(400).json({ message: `Item #${i + 1}: 'semana' inválida.` });
       }
 
       const tipoStr = String(raw.tipo || "").toUpperCase().trim();
-
       const tiposPermitidos = ["VIDEO", "TREINO"] as const;
 
       if (!tiposPermitidos.includes(tipoStr as any)) {
@@ -2251,7 +2220,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
           ? raw.thumbUrl.trim()
           : null;
 
-      // Regras básicas por tipo (pode relaxar se quiser)
       if (tipo === "VIDEO" && !videoUrl) {
         return res.status(400).json({ message: `Item #${i + 1}: tipo VIDEO exige 'videoUrl'.` });
       }
@@ -2262,8 +2230,8 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       itensPreparados.push({
         metodologiaId,
         semana,
-        ordem, // pode ser null (vamos auto setar)
-        tipo: tipo as MetodologiaConteudoTipo, // string (Prisma enum também aceita string igual ao valor)
+        ordem, 
+        tipo: tipo as MetodologiaConteudoTipo, 
         titulo:
           typeof raw.titulo === "string" && raw.titulo.trim()
             ? raw.titulo.trim()
@@ -2283,8 +2251,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       });
     }
 
-    // 4) Se ordem vier null, auto calcula (por semana)
-    //    Fazemos isso num transaction para garantir consistência.
     const created = await prisma.$transaction(async (tx) => {
       const result = [];
 
@@ -2319,7 +2285,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
           },
         });
 
-        // ✅ PASSO 2: se for TREINO, garante vínculo na MetodologiaTreino
         if (item.tipo === MetodologiaConteudoTipo.TREINO && item.treinoProgramadoId) {
           await tx.metodologiaTreino.upsert({
             where: {
@@ -2980,7 +2945,6 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
     }
 
     if (!isAdmin && !assinatura?.concluiuEm) {
-      // Fallback: verifica em tempo real se todos os itens publicados estão concluídos
       const totalItens = isAvulsa
         ? await prisma.metodologiaAvulsaEstruturaItem.count({
             where: { estrutura: { metodologiaAvulsaId: metodologiaId }, publicado: true },
@@ -3001,7 +2965,6 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
         });
       }
 
-      // Corrige o concluiuEm ausente no banco
       if (assinatura) {
         await prisma.metodologiaAssinante.update({
           where: { id: assinatura.id },
@@ -3439,7 +3402,6 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
           }
 
           if (modoExecucao === MetodologiaModoExecucao.LIVRE) {
-            // sem prazos
           }
 
           if (modoExecucao === MetodologiaModoExecucao.PRAZO_SUGERIDO) {
@@ -3494,7 +3456,6 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
         }
 
         if (metodologia.estruturaTipo === MetodologiaEstruturaTipo.MODULO) {
-          // módulo não exige modoExecucao nem prazo
         }
 
         let ordemFinal = ordemInformada;
@@ -4032,7 +3993,6 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
           });
         }
 
-        // mantém compatibilidade com tabela legado MetodologiaTreino
         if (tipo === MetodologiaItemTipo.TREINO && treinoProgramadoId) {
           await tx.metodologiaTreino.upsert({
             where: {
@@ -4406,13 +4366,11 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
             : MetodologiaProgressoStatus.NAO_INICIADA;
 
       progressoAssinaturaAtual.concluidos = concluidosLegado;
-      progressoAssinaturaAtual.pontosGanhos =
-        Number(progressoAssinaturaAtual.pontosGanhos ?? 0) + pontosItem;
+      progressoAssinaturaAtual.pontosGanhos = Number(progressoAssinaturaAtual.pontosGanhos ?? 0) + pontosItem;
       progressoAssinaturaAtual.ultimoItemConcluidoId = itemId;
       progressoAssinaturaAtual.atualizadoEm = new Date().toISOString();
 
       if (isAvulsa) {
-        // salva por estrutura dentro do JSON da assinatura
         const estruturasMap =
           progressoAssinaturaAtual.estruturas &&
           typeof progressoAssinaturaAtual.estruturas === "object"
@@ -4426,7 +4384,6 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
 
         estruturaAtual.status = statusEstrutura;
         estruturaAtual.itensConcluidos = concluidosLegado.filter((id) => {
-          // conta só os itens desta estrutura
           return true;
         }).length;
         estruturaAtual.ultimoItemConcluidoId = itemId;

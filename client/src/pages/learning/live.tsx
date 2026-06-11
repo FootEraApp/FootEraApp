@@ -906,7 +906,6 @@ export default function LearningLivePage() {
           muted
           playsInline
           poster={aula?.thumbUrl || capaUrl || undefined}
-          // Adicione o "!" aqui -> !object-cover
           className="absolute inset-0 h-full w-full bg-black !object-cover"
           style={{
             objectFit: "cover",

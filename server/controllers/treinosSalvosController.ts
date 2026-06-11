@@ -49,10 +49,9 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       tipoUsuarioId,
       criadoPorUsuarioId,
       treinoProgramadoId,
-      apagarTreinoSalvoId, // ✅ vem do frontend
+      apagarTreinoSalvoId, 
     } = req.body || {};
 
-    // ✅ dono obrigatório e único
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
     const ownerKeys = Object.keys(owner);
     if (ownerKeys.length !== 1) {
@@ -61,10 +60,6 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
           "Informe exatamente um dono: professorId OU escolinhaId OU clubeId (via tipoUsuario + tipoUsuarioId).",
       });
     }
-
-    // ✅ (opcional) regra do plano (se você quiser manter)
-    // Eu recomendo NÃO duplicar com route e NÃO duplicar com enforceTotalLimit.
-    // Se quiser manter, mantenha só aqui:
 
     if (
       !titulo ||
@@ -83,9 +78,7 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       treinoProgramadoId ??
       `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // ✅ tudo em transação: apaga (se mandou) e cria
     const created = await prisma.$transaction(async (tx) => {
-      // 1) se veio id pra apagar, apaga garantindo que é do user e do dono
       if (apagarTreinoSalvoId) {
         await tx.treinoSalvo.deleteMany({
           where: {
@@ -119,8 +112,6 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
         : [];
 
       const setExistentes = new Set(existentes.map((e) => e.id));
-
-      // remove órfãos (pra não poluir a contagem nunca mais)
       const orfaos = ativos.filter((a) => !setExistentes.has(String(a.treinoProgramadoId)));
       if (orfaos.length) {
         await tx.treinoSalvo.deleteMany({
@@ -135,7 +126,6 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
           .filter((a) => setExistentes.has(String(a.treinoProgramadoId)))
           .slice(0, 50);
 
-        // devolve lista para o front escolher qual apagar
         (res as any).__limitPayload = {
           code: "LIMIT_TREINOS_SALVOS",
           message: `Você já possui ${MAX_SLOTS} treinos salvos. Escolha um para apagar.`,
@@ -200,7 +190,6 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
     const userId = String(user?.id || "");
     if (!userId) return res.status(401).json({ message: "Não autenticado" });
 
-    // 1) pega salvos do usuário (e do dono) ainda "ativos" (não expirados)
     const salvos = await prisma.treinoSalvo.findMany({
       where: {
         usuarioId: userId,
@@ -220,7 +209,6 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
       new Set(salvos.map((s) => String(s.treinoProgramadoId)).filter(Boolean))
     );
 
-    // 2) confere quais ids ainda existem no banco
     const programados = idsProgramados.length
       ? await prisma.treinoProgramado.findMany({
           where: { id: { in: idsProgramados } },
@@ -229,12 +217,9 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
       : [];
 
     const mapNome = new Map(programados.map((p) => [p.id, p.nome]));
-
-    // 3) separa válidos x órfãos
     const validos = salvos.filter((s) => mapNome.has(String(s.treinoProgramadoId)));
     const orfaos = salvos.filter((s) => !mapNome.has(String(s.treinoProgramadoId)));
 
-    // 4) remove órfãos do banco (do usuário + dono)
     if (orfaos.length) {
       await prisma.treinoSalvo.deleteMany({
         where: {
@@ -245,7 +230,6 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
       });
     }
 
-    // 5) monta retorno com "nome" (sem relation)
     const meus = validos.map((s) => ({
       id: s.id,
       createdAt: s.createdAt,

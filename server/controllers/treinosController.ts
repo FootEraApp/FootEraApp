@@ -46,8 +46,6 @@ type AuthenticatedRequest = ExpressRequest & {
 };
 
 function getUserId(req: any): string | null {
-  // ajuste para o seu middleware:
-  // - se você usa authenticateToken e coloca req.user = { id: ... }
   const id =
     req?.user?.id ??
     req?.usuario?.id ??
@@ -127,7 +125,6 @@ function deduplicarExerciciosPorNome<T extends { nome?: string; origem?: string 
     const atualEhPersonalizado = item.origem === "personalizado";
     const existenteEhPersonalizado = existente.origem === "personalizado";
 
-    // prioridade para exercício oficial
     if (existenteEhPersonalizado && !atualEhPersonalizado) {
       map.set(chave, item);
     }
@@ -179,7 +176,6 @@ function parseDateInput(raw?: any): Date | null {
   const s = String(raw).trim();
   if (!s) return null;
 
-  // ISO com timezone explícito
   if (
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.test(s)
   ) {
@@ -187,7 +183,6 @@ function parseDateInput(raw?: any): Date | null {
     return Number.isNaN(dt.getTime()) ? null : dt;
   }
 
-  // datetime-local sem timezone
   const mLocal = s.match(
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
   );
@@ -204,7 +199,6 @@ function parseDateInput(raw?: any): Date | null {
     );
   }
 
-  // só data
   const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mDate) {
     const [, Y, M, D] = mDate;
@@ -891,15 +885,12 @@ async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
   if (resolved?.tipo === "professor") {
     const pid = resolved.id;
 
-    // ✅ treinos dele (criador) + onde é colaborador
     or.push({ professorId: pid });
     or.push({ professores: { some: { professorId: pid } } });
 
-    // ✅ treinos do clube dele (somente do clube, NÃO dos outros professores)
     const cid = await getClubeIdDoProfessor(pid);
     if (cid) or.push({ clubeId: cid });
 
-    // ✅ treinos da escolinha dele (somente da escolinha, NÃO dos outros professores)
     const eid = await getEscolinhaIdDoProfessor(pid);
     if (eid) or.push({ escolinhaId: eid });
 
@@ -1034,7 +1025,6 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
         objetivo: t.objetivo,
         dicas: t.dicas,
         pontuacao: t.pontuacao ?? null,
-        // 🔑 IDs do criador (usados no front para identificar Clube/Escolinha/Professor)
         clubeId: (t as any).clubeId ?? null,
         escolinhaId: (t as any).escolinhaId ?? null,
         professorId: (t as any).professorId ?? null,
@@ -1091,13 +1081,11 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
   }
 }
 
-// ✅ GET /api/treinos/publicos-professores-parceiros
 export async function treinosPublicosProfessoresParceiros(
   _req: AuthenticatedRequest,
   res: Response
 ) {
   try {
-    // ✅ "parceiro" está em Usuario
     const professoresParceiros = await prisma.professor.findMany({
       where: { usuario: { is: { parceiro: true } } },
       select: { id: true },
@@ -1106,7 +1094,6 @@ export async function treinosPublicosProfessoresParceiros(
     const professorIds = professoresParceiros.map((p) => p.id);
     if (!professorIds.length) return res.json([]);
 
-    // ✅ include tipado corretamente
     const include = {
       exercicios: {
         include: { exercicio: true, exercicioTemporario: true, exercicioPersonalizado: true },
@@ -1115,8 +1102,8 @@ export async function treinosPublicosProfessoresParceiros(
       professores: {
         include: { professor: { select: { id: true, nome: true } } },
       },
-      Professor: { select: { id: true, nome: true } }, // professorId
-      criadorProfessor: { select: { id: true, nome: true } }, // criadorProfessorId
+      Professor: { select: { id: true, nome: true } }, 
+      criadorProfessor: { select: { id: true, nome: true } }, 
       clube: { select: { id: true, nome: true } },
       escolinha: { select: { id: true, nome: true } },
       sessaoTreino: true,
@@ -1141,7 +1128,6 @@ export async function treinosPublicosProfessoresParceiros(
         nome: string;
       }> = [];
 
-      // ✅ criador
       if (t.criadorProfessor) {
         criadores.push({
           tipo: "Professor",
@@ -1150,7 +1136,6 @@ export async function treinosPublicosProfessoresParceiros(
         });
       }
 
-      // ✅ professor principal (Professor relation de professorId)
       if (t.Professor) {
         const exists = criadores.some(
           (c) => c.tipo === "Professor" && c.id === t.Professor!.id
@@ -1164,7 +1149,6 @@ export async function treinosPublicosProfessoresParceiros(
         }
       }
 
-      // ✅ colaboradores (TreinoProgramadoProfessor[])
       for (const link of t.professores) {
         const prof = link.professor;
         const exists = criadores.some(
@@ -1187,7 +1171,6 @@ export async function treinosPublicosProfessoresParceiros(
         objetivo: t.objetivo,
         dicas: t.dicas,
         pontuacao: t.pontuacao ?? null,
-        // 🔑 IDs do criador (usados no front para identificar Clube/Escolinha/Professor)
         clubeId: (t as any).clubeId ?? null,
         escolinhaId: (t as any).escolinhaId ?? null,
         professorId: (t as any).professorId ?? null,
@@ -1507,7 +1490,6 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
         sessaoTreinoId: (t as any).sessaoTreinoId ?? null,
         sessaoTreino: (t as any).sessaoTreino ?? null,
         sessaoTreinoNome: (t as any).sessaoTreino?.nome ?? null,
-        // ✅ AQUI É O PONTO: mandar os IDs pro front
         clubeId,
         escolinhaId,
         professorId,
@@ -1524,11 +1506,9 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
           return {
             id: String(row.id),
             ordem: row.ordem ?? null,
-            // mantém as 3 possibilidades pro front (igual treinos-instrutores/treinos-unicos)
             exercicio: row.exercicio ?? null,
             exercicioPersonalizado: row.exercicioPersonalizado ?? null,
             exercicioTemporario: row.exercicioTemporario ?? null,
-            // e ainda manda um "atalho" (opcional) pra facilitar em qualquer tela
             nome: base?.nome ?? null,
             descricao: (base as any)?.descricao ?? (base as any)?.objetivo ?? null,
             videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
@@ -1621,7 +1601,6 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
 
     if (!treino) return res.status(404).json({ message: "Treino não encontrado" });
 
-    // ✅ devolve cada row com o "base" completo (catálogo OU temporário OU personalizado)
     const out = {
       ...treino,
       exercicios: (Array.isArray((treino as any).exercicios) ? (treino as any).exercicios : []).map((row: any) => {
@@ -1740,9 +1719,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ message: "dataExpiracao inválida" });
     }
 
-    // ============================
-    // ✅ agendar por TURMA (lote)
-    // ============================
     if (turmaId && !atletaRef) {
       if (!req.userId) {
         return res.status(401).json({ message: "Usuário não autenticado" });
@@ -1759,14 +1735,12 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
 
       const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
 
-      // ✅ professor responsável da turma
       if (resolved.tipo === "professor") {
         turmaOwnerOr.push({
           professores: { some: { professorId: resolved.id } },
         });
       }
 
-      // ✅ se for dono institucional
       if (resolved.tipo === "clube") {
         turmaOwnerOr.push({ clubeId: resolved.id });
       }
@@ -1842,7 +1816,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
               titulo: tituloFinal,
               atletaId: a.id,
               treinoProgramadoId,
-              turmaId, // ✅ IMPORTANTE: salvar a turma no agendamento
+              turmaId,
               dataTreino: quandoBase,
               dataExpiracao: exp,
               dataOriginal: quandoBase,
@@ -2049,7 +2023,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         titulo: tituloFinal,
         atletaId,
         treinoProgramadoId,
-        turmaId: turmaId || null, // ✅ IMPORTANTE: se veio turma, salva também
+        turmaId: turmaId || null, 
         dataTreino: quandoBase,
         dataExpiracao: exp,
         dataOriginal: quandoBase,
@@ -2227,7 +2201,6 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
     const aprovadas = await prisma.submissaoTreino.groupBy({
       by: ["treinoAgendadoId"],
       where: {
-        // ✅ “submetido” = existe submissão (não depende de aprovado)
         treinoAgendado: { treinoProgramadoId: { in: ids } },
       },
       _count: { _all: true },
@@ -2284,21 +2257,12 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       return res.status(401).json({ error: "Usuário não autenticado" });
     }
 
-    const turmaId =
-      typeof req.query.turmaId === "string" ? req.query.turmaId.trim() : "";
-
-    const ownerTipoRaw =
-      typeof req.query.ownerTipo === "string" ? req.query.ownerTipo.trim() : "";
-
-    const ownerId =
-      typeof req.query.ownerId === "string" ? req.query.ownerId.trim() : "";
-
+    const turmaId = typeof req.query.turmaId === "string" ? req.query.turmaId.trim() : "";
+    const ownerTipoRaw = typeof req.query.ownerTipo === "string" ? req.query.ownerTipo.trim() : "";
+    const ownerId = typeof req.query.ownerId === "string" ? req.query.ownerId.trim() : "";
     const ownerTipo = ownerTipoRaw.toLowerCase();
+    const monthRaw = typeof req.query.month === "string" ? req.query.month.trim() : "";
 
-    const monthRaw =
-      typeof req.query.month === "string" ? req.query.month.trim() : "";
-
-    // month esperado: "YYYY-MM"
     const monthStart = (() => {
       if (!monthRaw) return startOfMonth(new Date());
       const m = monthRaw.match(/^(\d{4})-(\d{2})$/);
@@ -2324,7 +2288,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
       const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
 
-      // acesso normal
       if (resolved.tipo === "professor") {
         turmaOwnerOr.push({
           professores: { some: { professorId: resolved.id } },
@@ -2337,7 +2300,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
         turmaOwnerOr.push({ escolinhaId: resolved.id });
       }
 
-      // ✅ modo gestor: professor gerindo clube/escolinha
       if (resolved.tipo === "professor" && ownerId && ownerTipo) {
         if (ownerTipo === "clube") {
           turmaOwnerOr.push({ clubeId: ownerId });
@@ -2359,10 +2321,9 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
         return res.status(403).json({ error: "Você não tem acesso a esta turma." });
       }
 
-      // 2) buscar SOMENTE os treinos agendados para essa turma
       const rows = await prisma.treinoAgendado.findMany({
         where: {
-          turmaId: turmaId, // ✅ ESSA É A PRINCIPAL CORREÇÃO
+          turmaId: turmaId, 
           dataTreino: { gte: inicioMes, lt: inicioProximoMes },
         },
         include: {
@@ -2417,7 +2378,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
       if (!rows.length) return res.json([]);
 
-      // 3) agrupar por treino + dia + horário + turma
       const grupos = new Map<string, typeof rows>();
 
       for (const r of rows) {
@@ -2479,7 +2439,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
         if (maioriaConcluiu) {
           statusTurma = "CONCLUIDO";
         } else if (dataTreino) {
-          const limite = new Date(dataTreino.getTime() + 60 * 60 * 1000); // +1h
+          const limite = new Date(dataTreino.getTime() + 60 * 60 * 1000); 
           if (agora > limite) {
             statusTurma = "PERDIDO";
           }
@@ -2515,7 +2475,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
           meuStatus: statusTurma,
           status: statusTurma,
           execucaoStatus: statusTurma,
-          atleta: null, // ✅ agenda da turma não é por aluno individual
+          atleta: null, 
         };
       });
 
@@ -2538,9 +2498,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       return res.json(filtrado);
     }
 
-    // =========================================================
-    // ✅ MODO ATLETA (comportamento atual), só corrigindo "month"
-    // =========================================================
     const atletaIdQuery =
       typeof req.query.atletaId === "string" ? req.query.atletaId.trim() : "";
 
@@ -2909,8 +2866,6 @@ export async function getExercicios(req: AuthenticatedRequest, res: Response) {
         faixaEtaria: true,
         videoDemonstrativoUrl: true,
         criadoPorId: true,
-
-        // ✅ campos que precisam ir para o NovoTreino
         series: true,
         repeticoes: true,
         duracao: true,
@@ -3709,7 +3664,6 @@ export async function criarTreinoProgramado(
 ) {
   let userCtx: any = getUserFromReq(req);
 
-  // ✅ Suporta multipart com formData.append("payload", JSON.stringify(...))
   const rawPayload = (req.body as any)?.payload;
   if (rawPayload && typeof rawPayload === "string") {
     try {
@@ -3787,17 +3741,16 @@ export async function criarTreinoProgramado(
     const tokenUser =
       (req as any).user as { tipo?: string; tipoUsuarioId?: string } | undefined;
 
-  const tipoNormHeaderBody = String(
-    tokenUser?.tipo ||
-      (req.headers["x-tipo"] as string) ||
-      tipoUsuario ||
-      ""
-  )
-    .toLowerCase()
-    .trim();
+    const tipoNormHeaderBody = String(
+      tokenUser?.tipo ||
+        (req.headers["x-tipo"] as string) ||
+        tipoUsuario ||
+        ""
+    )
+      .toLowerCase()
+      .trim();
 
-  // ✅ fonte de verdade: token (tipoStr). header/body só como fallback
-  const tipoNorm = (tipoStr || tipoNormHeaderBody).toLowerCase().trim();
+    const tipoNorm = (tipoStr || tipoNormHeaderBody).toLowerCase().trim();
 
     const tipoUsuarioIdFinal = String(
       tokenUser?.tipoUsuarioId ||
@@ -3810,21 +3763,19 @@ export async function criarTreinoProgramado(
       return res.status(400).json({ message: "Nivel inválido" });
     }
     const nivelEnum = nivel as Nivel;
-
     const usuarioIdToken =
       (req as any).userId ||
       (req as any).user?.id ||
       (req as any).user?.usuarioId ||
       "";
 
-    // ✅ fonte de verdade do parceiro: Usuario.parceiro
     const usuarioDb = await prisma.usuario.findUnique({
       where: { id: String(usuarioIdToken) },
       select: { parceiro: true },
     });
 
     const usuarioEhParceiro = Boolean(usuarioDb?.parceiro);
-    const bypassLimitesTreinoParceiro = tipoStr === "professor" && usuarioEhParceiro;    // ✅ parceiro pode criar ilimitado (apenas professor)
+    const bypassLimitesTreinoParceiro = tipoStr === "professor" && usuarioEhParceiro;   
     const parceiroSolicitado = Boolean(parceiro);
 
     if (parceiroSolicitado && !usuarioEhParceiro) {
@@ -3834,10 +3785,7 @@ export async function criarTreinoProgramado(
       });
     }
 
-    // ✅ só professor pode criar treino parceiro (se você quiser essa regra)
-    const parceiroFinal =
-      tipoNorm === "professor" ? parceiroSolicitado : false;
-
+    const parceiroFinal = tipoNorm === "professor" ? parceiroSolicitado : false;
 
     if (
       !nome ||
@@ -3859,7 +3807,6 @@ export async function criarTreinoProgramado(
     let categorias: Categoria[] = [];
     const catRaw = req.body?.categoria;
 
-    // ✅ categoria opcional
     const categoriaVazia =
       catRaw == null ||
       catRaw === "" ||
@@ -3890,7 +3837,6 @@ export async function criarTreinoProgramado(
       ? Math.max(0, Math.floor(Number(pontuacao)))
       : null;
 
-    // limites (professor)
     if (
       tipoStr === "professor" &&
       !bypassLimitesTreinoParceiro &&
@@ -3947,10 +3893,8 @@ export async function criarTreinoProgramado(
 
     const body = req.body as any;
 
-    // ✅ se for professor, tipoUsuarioIdFinal pode vir como usuarioId
     let professorIdToConnect: string | null = null;
 
-    // ✅ resolve o professor ANTES do limite (pra ownerWhere funcionar)
     if (tipoNorm === "professor") {
       const prof = await prisma.professor.findFirst({
         where: {
@@ -3971,7 +3915,6 @@ export async function criarTreinoProgramado(
       professorIdToConnect = prof.id;
     }
 
-    // ✅ swap de slot: se já tem 5, obriga escolher um pra apagar
     const apagarTreinoProgramadoId = String(
       (req.body as any)?.apagarTreinoProgramadoId || ""
     ).trim();
@@ -3980,11 +3923,9 @@ export async function criarTreinoProgramado(
       (req.user as any)?.plano || (req.user as any)?.plan || "FREE"
     ).trim().toUpperCase();
 
-    const limit = planLimitFor(plan, "treinos_programados_mes"); // 5 no FREE
+    const limit = planLimitFor(plan, "treinos_programados_mes"); 
 
-    // ✅ parceiro professor não entra em limite
     if (!bypassLimitesTreinoParceiro && Number.isFinite(limit)) {
-      // monta o "owner" correto (e evita professorIdToConnect null)
       const ownerWhere =
         tipoNorm === "clube"
           ? { clubeId: String(tipoUsuarioIdFinal) }
@@ -4003,7 +3944,6 @@ export async function criarTreinoProgramado(
 
       if (ownerWhere) {
         const result = await prisma.$transaction(async (tx) => {
-          // se veio id pra apagar, apaga (garantindo ownership)
           if (apagarTreinoProgramadoId) {
             await tx.treinoProgramado.deleteMany({
               where: {
@@ -4062,10 +4002,7 @@ export async function criarTreinoProgramado(
       professorIdToConnect = prof.id;
     }
 
-    // ✅ criadorProfessor deve ser o id REAL do professor
-    const professorCriadorId =
-      tipoStr === "professor" ? (professorIdToConnect ?? "") : "";
-    // colaboradores
+    const professorCriadorId = tipoStr === "professor" ? (professorIdToConnect ?? "") : "";
     const colaboradoresEntradaRaw =
       body.colaboradoresProfessorIds ??
       body.professoresIds ??
@@ -4112,9 +4049,7 @@ export async function criarTreinoProgramado(
       }
     }
 
-    // ✅ bloqueia nome duplicado ANTES de criar (case-insensitive)
     const nomeFinal = String(nome || "").trim();
-
     const whereMesmoDono =
       tipoNorm === "professor"
         ? {
@@ -4208,16 +4143,13 @@ export async function criarTreinoProgramado(
       },
     });
 
-    // ✅ Vincular treino em 1+ metodologias (se vier do front)
     const metodologiaIdsRaw = (req.body as any)?.metodologiaIds;
     const metodologiaIds: string[] = Array.isArray(metodologiaIdsRaw)
       ? metodologiaIdsRaw.map((x: any) => String(x).trim()).filter(Boolean)
       : [];
 
     if (metodologiaIds.length) {
-      // só pode vincular em metodologias criadas pelo próprio usuário
       const userId = String(usuarioIdToken);
-
       const metas = await prisma.metodologia.findMany({
         where: { id: { in: metodologiaIds }, criadorUsuarioId: userId },
         select: { id: true },
@@ -4259,7 +4191,6 @@ export async function criarTreinoProgramado(
         message: "Adicione pelo menos 1 exercício (catálogo ou personalizado).",
       });
     }
-    // match simples no BD
     
     const promoverParaBancoSeBater = async (tx: any, nomeTemp: string) => {
       const nomeNorm = nomeTemp.trim();
@@ -4276,7 +4207,6 @@ export async function criarTreinoProgramado(
     };
 
     await prisma.$transaction(async (tx) => {
-      // 1) oficiais (createMany)
       if (exsOficiais.length) {
         for (let idx = 0; idx < exsOficiais.length; idx++) {
           const e = exsOficiais[idx];
@@ -4309,7 +4239,6 @@ export async function criarTreinoProgramado(
               ? e.descricaoExecucao.trim()
               : null;
 
-          // 1. atualiza descrição na origem, se existir
           if (e.exercicioId && typeof e.descricao === "string" && e.descricao.trim()) {
             await tx.exercicio.update({
               where: { id: String(e.exercicioId) },
@@ -4383,7 +4312,7 @@ export async function criarTreinoProgramado(
               data: dadosExecucaoBase,
             });
           }
-          // 2. cria o vínculo no treino
+
           await tx.treinoProgramadoExercicio.create({
             data: {
               treinoProgramadoId: treino.id,
@@ -4399,13 +4328,11 @@ export async function criarTreinoProgramado(
         }
       }
 
-      // 2) personalizados (reutilizáveis)
       for (let i = 0; i < exsTemporarios.length; i++) {
         const e = exsTemporarios[i];
         const nomeTemp = String(e?.nome ?? "").trim();
         if (!nomeTemp) continue;
 
-        // Sempre verifica catálogo pelo nome antes de criar personalizado
         const exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
 
         if (exercicioBancoId) {
@@ -4456,7 +4383,6 @@ export async function criarTreinoProgramado(
             },
           });
 
-          // ✅ atualiza também a tabela Exercicio
           await tx.exercicio.update({
             where: { id: exercicioBancoId },
             data: {
@@ -4479,7 +4405,7 @@ export async function criarTreinoProgramado(
             : (typeof e.exercicioPersonalizado?.descricao === "string" && e.exercicioPersonalizado.descricao.trim())
               ? e.exercicioPersonalizado.descricao.trim()
               : null;
-        // 1) Se veio exercicioPersonalizadoId, busca por ID diretamente
+
         const providedEpId = String(e.exercicioPersonalizadoId ?? "").trim();
         let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null = null;
 
@@ -4490,7 +4416,6 @@ export async function criarTreinoProgramado(
           });
         }
 
-        // 2) Fallback: busca por criador + nome
         if (!pers) {
           pers = await tx.exercicioPersonalizado.findFirst({
             where: {
@@ -4520,7 +4445,6 @@ export async function criarTreinoProgramado(
             ? String(e.descanso).trim()
             : null;
 
-        // 3) Se não existe, cria novo personalizado
         if (!pers) {
           pers = await tx.exercicioPersonalizado.create({
             data: {
@@ -4541,7 +4465,6 @@ export async function criarTreinoProgramado(
           });
         }
 
-        // ✅ 3) “narrow” pro TS parar de reclamar de null
         if (!pers) throw new Error("Falha ao criar ExercicioPersonalizado.");
 
         await tx.exercicioPersonalizado.update({
@@ -4583,7 +4506,7 @@ export async function criarTreinoProgramado(
             },
           });
         }
-        // ✅ 4) atualiza vídeo se estava vazio e agora veio
+
         const novoVideo = e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado ?? null;
         if ((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo) {
           await tx.exercicioPersonalizado.update({
@@ -4609,7 +4532,6 @@ export async function criarTreinoProgramado(
             ? e.descricaoExecucao.trim()
             : null;
 
-        // ✅ 5) linka no treino usando exercicioPersonalizadoId
         await tx.treinoProgramadoExercicio.create({
           data: {
             treinoProgramadoId: treino.id,
@@ -4638,7 +4560,6 @@ export async function criarTreinoProgramado(
 
     await syncTreinoProgramado(treino.id);
 
-    // recalcular estatísticas
     try {
       const rowsIncluidos = await prisma.treinoProgramadoExercicio.findMany({
         where: {
@@ -4662,7 +4583,6 @@ export async function criarTreinoProgramado(
       );
     }
 
-    // atletas via elencos
     const atletasFromElencos = elencosIds.length
       ? await prisma.atletaElenco.findMany({
           where: { elencoId: { in: elencosIds } },
@@ -4722,7 +4642,6 @@ export async function criarTreinoProgramado(
 
     return res.status(201).json(treino);
   } catch (err: any) {
-    // ✅ Prisma Unique Constraint
     if (err?.code === "P2002") {
       const target = err?.meta?.target;
       const fields = Array.isArray(target) ? target : [target].filter(Boolean);
@@ -4766,12 +4685,11 @@ export async function criarTreinoProgramado(
 export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
   let body: any = req.body;
 
-  // ✅ Suporta multipart com formData.append("payload", JSON.stringify(...))
   const rawPayload = body?.payload;
   if (rawPayload && typeof rawPayload === "string") {
     try {
       const parsed = JSON.parse(rawPayload);
-      body = { ...body, ...parsed }; // ✅ usa body atualizado, não só req.body
+      body = { ...body, ...parsed }; 
     } catch {
       return res.status(400).json({ message: "Payload inválido (JSON)." });
     }
@@ -5017,7 +4935,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
         : [];
 
       if (Array.isArray(metodologiaIdsRaw)) {
-        // se veio do front (mesmo vazio), sincroniza
         const userId = getUserId(req);
         if (!userId) throw new Error("Não autenticado.");
 
@@ -5032,7 +4949,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           }
         }
 
-        // remove vínculos que não estão mais na lista
         await (tx as any).metodologiaTreino.deleteMany({
           where: {
             treinoProgramadoId: id,
@@ -5040,7 +4956,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           },
         });
 
-        // adiciona os novos
         if (metodologiaIds.length) {
           await (tx as any).metodologiaTreino.createMany({
             data: metodologiaIds.map((metodologiaId) => ({
@@ -5075,18 +4990,14 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           );
         }
       }
-      // vamos manter um set de temporários usados, para apagar o que sobrar depois
       const keepTempIds = new Set<string>();
-      // para estatística (só oficiais)
       const novosOficiais: string[] = [];
-      // ✅ fonte única dos exercícios do payload (id / exercicioId / temporário)
       const exerciciosBody: any[] = Array.isArray((body as any)?.exercicios)
         ? (body as any).exercicios
         : Array.isArray(exercicios)
           ? exercicios
           : [];
 
-      // ✅ limpar vínculos antigos do treino (para recriar a lista do zero)
       await tx.treinoProgramadoExercicio.deleteMany({
         where: { treinoProgramadoId: id },
       });
@@ -5095,8 +5006,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
         const ex = exerciciosBody[i] ?? {};
         const repeticoes = String(ex?.repeticoes ?? ex?.repeticao ?? ex?.reps ?? "");
         const ordem = Number.isFinite(Number(ex?.ordem)) ? Number(ex.ordem) : i + 1;
-
-        // 1) oficial pode vir exercicioId ou id
         const exercicioId = ex?.exercicioId ?? ex?.id ?? null;
         if (exercicioId) {
           const exId = String(exercicioId);
@@ -5231,11 +5140,10 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
           continue;
         }
-        // 2) temporário pode vir como id direto
+
         const exercicioTemporarioId = ex?.exercicioTemporarioId ?? ex?.tempId ?? null;
         if (exercicioTemporarioId) {
           const tempId = String(exercicioTemporarioId);
-
           const descricaoSalvar =
             typeof ex?.descricao === "string" && ex.descricao.trim()
               ? ex.descricao.trim()
@@ -5245,7 +5153,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               ? ex.descricaoExecucao.trim()
               : null;
 
-          // ✅ segurança: só deixa usar temporário que é desse treino
           const exists = await tx.exercicioTemporario.findFirst({
             where: { id: tempId, treinoProgramadoId: id },
             select: { id: true },
@@ -5265,7 +5172,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               treinoProgramadoId: id,
               exercicioTemporarioId: tempId,
               repeticoes,
-              ordem, // ✅ obrigatório
+              ordem, 
               series:
                 Number.isFinite(Number(ex.series)) && Number(ex.series) > 0
                   ? Number(ex.series)
@@ -5286,7 +5193,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           continue;
         }
 
-        // 3) temporário pode vir como objeto
         const tempObj =
           ex?.exercicioTemporario ??
           ex?.temporario ??
@@ -5297,10 +5203,8 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           const nomeTemp = String(tempObj?.nome ?? tempObj?.titulo ?? "").trim();
           if (!nomeTemp) throw new Error(`Exercício temporário sem nome no índice ${i}`);
 
-          // herda vídeo (se existir no catálogo)
           const videoHerdado = await herdarVideoParaTemporarioTx(tx as any, nomeTemp);
 
-          // tenta reutilizar temporário existente com mesmo nome (nesse treino)
           let temp = await tx.exercicioTemporario.findFirst({
             where: {
               treinoProgramadoId: id,
@@ -5321,12 +5225,12 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           if (!temp) {
             temp = await tx.exercicioTemporario.create({
               data: {
-                treinoProgramadoId: id,     // ✅ obrigatório
+                treinoProgramadoId: id,     
                 codigo: null,
                 nome: nomeTemp,
                 descricao: descricaoSalvar,
-                nivel: (nivel !== undefined ? nivel : "Base"), // ✅ obrigatório
-                categorias: categoriasNorm ?? [],              // ✅ obrigatório
+                nivel: (nivel !== undefined ? nivel : "Base"), 
+                categorias: categoriasNorm ?? [],              
                 videoDemonstrativoUrl:
                   tempObj?.videoDemonstrativoUrl ??
                   tempObj?.videoUrl ??
@@ -5340,7 +5244,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
             });
           } else {
-            // se não tem vídeo e achamos um pra herdar, atualiza
             if ((!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") && videoHerdado) {
               await tx.exercicioTemporario.update({
                 where: { id: temp.id },
@@ -5373,7 +5276,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               treinoProgramadoId: id,
               exercicioTemporarioId: temp.id,
               repeticoes,
-              ordem, // ✅ obrigatório
+              ordem, 
               series:
                 Number.isFinite(Number(ex.series)) && Number(ex.series) > 0
                   ? Number(ex.series)
@@ -5394,11 +5297,9 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           continue;
         }
 
-        // nada reconhecido
         throw new Error(`Exercício inválido no índice ${i} (sem exercicioId e sem temporário)`);
       }
 
-      // ✅ apaga temporários que sobraram (não estão mais na lista)
      if (keepTempIds.size) {
         await tx.exercicioTemporario.deleteMany({
           where: {
@@ -5407,7 +5308,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           },
         });
       }
-      // se keepTempIds estiver vazio, não apaga nada automaticamente
 
     });
 
@@ -5459,14 +5359,8 @@ export const deletarTreinoProgramado = async (req: any, res: any) => {
 
     if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
 
-    // ✅ TODO: coloque aqui sua regra real de permissão
-    // Exemplo (se você tiver req.tipo / req.tipoUsuarioId):
-    // if (!ehDonoDoTreino(req, treino)) return res.status(403).json({ message: "Sem permissão." });
-
     await prisma.$transaction(async (tx) => {
       const now = new Date();
-
-      // 1) pegar agendamentos futuros desse treino (somente futuros)
       const futuros = await tx.treinoAgendado.findMany({
         where: {
           treinoProgramadoId: id,
@@ -5477,25 +5371,20 @@ export const deletarTreinoProgramado = async (req: any, res: any) => {
 
       const futurosIds = futuros.map((a) => a.id);
 
-      // 2) apagar submissões relacionadas a agendamentos futuros
       if (futurosIds.length) {
         await tx.submissaoTreino.deleteMany({
           where: { treinoAgendadoId: { in: futurosIds } },
         });
 
-        // 3) apagar os agendamentos futuros
         await tx.treinoAgendado.deleteMany({
           where: { id: { in: futurosIds } },
         });
       }
 
-      // 4) apagar atividades recentes relacionadas ao treino programado
-      // (⚠️ sem treinoAgendadoId porque não existe no seu schema)
       await tx.atividadeRecente.deleteMany({
         where: { id: id },
       });
 
-      // 5) apagar tabelas de vínculo do treino programado
       await tx.treinoProgramadoExercicio.deleteMany({
         where: { treinoProgramadoId: id },
       });
@@ -5504,9 +5393,6 @@ export const deletarTreinoProgramado = async (req: any, res: any) => {
         where: { treinoProgramadoId: id },
       });
 
-      // 6) por último: deletar o treino programado
-      // OBS: isso só vai funcionar se NÃO existir FK obrigatória apontando pra ele
-      // a partir de registros passados. Se existir, a gente muda pra "arquivar".
       await tx.treinoProgramado.delete({ where: { id } });
     });
 
@@ -5941,14 +5827,14 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       datas = [],
       atletaIds = [],
       elencosIds = [],
-      turmaIds = [],        // ✅ ADD
+      turmaIds = [],        
       incluirObservados = false,
     } = req.body as {
       treinoProgramadoId: string;
       datas: string[];
       atletaIds?: string[];
       elencosIds?: string[];
-      turmaIds?: string[];  // ✅ ADD
+      turmaIds?: string[];  
       incluirObservados?: boolean;
     };
 
@@ -5968,8 +5854,6 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     }
 
     const resolved = await resolveEntidade(req.userId!);
-
-    // ✅ atletas vindos de TURMAS (turmaUsuario -> atleta.usuarioId)
     const turmaIdsClean = Array.isArray(turmaIds)
       ? turmaIds.map(String).map((s) => s.trim()).filter(Boolean)
       : [];
@@ -6007,7 +5891,6 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
             return [] as Array<{ atletaId: string; turmaId: string }>;
           }
 
-          // pega membros por turma
           const membros = await prisma.turmaUsuario.findMany({
             where: { turmaId: { in: turmasValidas } },
             select: { turmaId: true, usuarioId: true },
@@ -6158,19 +6041,17 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     const resolvedMe = req.userId ? await resolveEntidade(req.userId) : null;
     const tipoUser = resolvedMe?.tipo ?? String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
     const criadoPorProfessorId = tipoUser === "professor" ? (resolvedMe?.id ?? null) : null;
-
     const toCreate: Array<Prisma.TreinoAgendadoCreateManyInput> = [];
 
     for (const dt of datasParsed) {
       const dataExpiracao = new Date(dt.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-      // 1) atletas vindos de turma => salva turmaId
       for (const item of atletasFromTurmas) {
         toCreate.push({
           titulo: tp.nome ?? "Treino",
           atletaId: item.atletaId,
           treinoProgramadoId: tp.id,
-          turmaId: item.turmaId, // ✅ AQUI salva a turma
+          turmaId: item.turmaId, 
           dataTreino: dt,
           dataOriginal: dt,
           dataExpiracao,
@@ -6179,7 +6060,6 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
         });
       }
 
-      // 2) atletas diretos / elenco / observados => sem turma
       for (const atletaId of atletaIdsDiretosFinal) {
         toCreate.push({
           titulo: tp.nome ?? "Treino",
@@ -6432,7 +6312,6 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
     const ehAdmin =
       tipoUsuario === "admin" || String(usuario?.tipo || "").toLowerCase() === "admin";
 
-    // admin pode finalizar treino de metodologia sem cair em limite
     if (!ehAdmin && req.user?.plano !== "PRO") {
       const ok = await requireUsage(req as any, res, "treinos_semana");
       if (!ok) return;
@@ -6649,7 +6528,7 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
   try {
     const turmaId = String(req.query.turmaId ?? "").trim();
     const treinoProgramadoId = String(req.query.treinoProgramadoId ?? "").trim();
-    const day = String(req.query.day ?? "").trim(); // YYYY-MM-DD
+    const day = String(req.query.day ?? "").trim(); 
 
     if (!turmaId || !treinoProgramadoId || !day) {
       return res
@@ -6659,7 +6538,6 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
 
     const { start, end } = startEndOfDayISO(day);
 
-    // 1) membros da turma (usuarioId)
     const membros = await prisma.turmaUsuario.findMany({
       where: { turmaId },
       select: { usuarioId: true },
@@ -6668,7 +6546,6 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
 
     if (!usuarioIds.length) return res.json({ items: [] });
 
-    // 2) atletas correspondentes aos usuários
     const atletas = await prisma.atleta.findMany({
       where: { usuarioId: { in: usuarioIds } },
       select: { id: true, usuarioId: true, nome: true, sobrenome: true, foto: true },
@@ -6677,7 +6554,6 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
 
     if (!atletaIds.length) return res.json({ items: [] });
 
-    // 3) treinos agendados nesse dia para esse treinoProgramado (somente atletas da turma)
     const ags = await prisma.treinoAgendado.findMany({
       where: {
         treinoProgramadoId,
@@ -6689,7 +6565,6 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
       },
     });
 
-    // 4) unique por usuarioId
     const map = new Map<string, { usuarioId: string; nome: string; foto: string | null }>();
 
     for (const row of ags) {
@@ -6775,7 +6650,6 @@ export async function atualizarExercicioPersonalizado(req: any, res: Response) {
     videoPosterUrl,
   } = req.body ?? {};
 
-  // garante ownership
   const atual = await prisma.exercicioPersonalizado.findFirst({
     where: { id, criadorUsuarioId: userId },
   });
@@ -6803,13 +6677,11 @@ export async function deletarExercicioPersonalizado(req: any, res: Response) {
   const id = String(req.params?.id || "").trim();
   if (!id) return res.status(400).json({ message: "id inválido." });
 
-  // garante ownership
   const atual = await prisma.exercicioPersonalizado.findFirst({
     where: { id, criadorUsuarioId: userId },
   });
   if (!atual) return res.status(404).json({ message: "Exercício não encontrado." });
 
-  // se estiver em uso em algum treino, você pode bloquear aqui (opcional)
   const emUso = await prisma.treinoProgramadoExercicio.count({
     where: { exercicioPersonalizadoId: id },
   });
@@ -6992,7 +6864,7 @@ export async function uploadExecucaoVideoTreino(req: AuthenticatedRequest, res: 
 
 export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params; // treinoAgendadoId
+    const { id } = req.params; 
     const usuarioId = req.userId!;
 
     const { updates } = req.body as {

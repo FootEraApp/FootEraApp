@@ -2,8 +2,11 @@
 import { OAuth2Client } from "google-auth-library";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_ANDROID_CLIENT_ID = process.env.GOOGLE_ANDROID_CLIENT_ID || "";
 
-const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+const GOOGLE_AUDIENCES = [GOOGLE_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID].filter(Boolean);
+
+const googleClient = new OAuth2Client();
 
 export type GoogleTokenPayload = {
   sub: string;
@@ -16,13 +19,13 @@ export type GoogleTokenPayload = {
 export async function validateGoogleCredential(
   credential: string
 ): Promise<GoogleTokenPayload> {
-  if (!GOOGLE_CLIENT_ID) {
-    throw new Error("GOOGLE_CLIENT_ID não configurado no servidor.");
+  if (!GOOGLE_AUDIENCES.length) {
+    throw new Error("GOOGLE_CLIENT_ID/GOOGLE_ANDROID_CLIENT_ID não configurado no servidor.");
   }
 
   const ticket = await googleClient.verifyIdToken({
     idToken: credential,
-    audience: GOOGLE_CLIENT_ID,
+    audience: GOOGLE_AUDIENCES,
   });
 
   const payload = ticket.getPayload();

@@ -334,8 +334,6 @@ export const gerenciarAtletasController = {
           : ({ escolinhaId: entidadeId } as Prisma.ProfessorWhereInput);
 
       const professorIdsSet = new Set<string>();
-
-      // 1) vínculo direto no model Professor
       const profsDiretos = await prisma.professor.findMany({
         where: ownerDirect,
         select: { id: true },
@@ -345,7 +343,6 @@ export const gerenciarAtletasController = {
         if (p.id) professorIdsSet.add(p.id);
       }
 
-      // 2) vínculo via RelacaoTreinamento
       const relacoes = await prisma.relacaoTreinamento.findMany({
         where: {
           ...ownerWhere,
@@ -359,7 +356,6 @@ export const gerenciarAtletasController = {
         if (r.professorId) professorIdsSet.add(r.professorId);
       }
 
-      // 3) vínculo via turmas do owner
       const turmasDoOwner = await prisma.turma.findMany({
         where: ownerWhere,
         select: {
@@ -382,7 +378,6 @@ export const gerenciarAtletasController = {
         }
       }
 
-      // 4) vínculo via OrganizacaoGestor
       const gestores = await prisma.organizacaoGestor.findMany({
         where: {
           ownerId: entidadeId,
@@ -396,7 +391,6 @@ export const gerenciarAtletasController = {
         if (g.professorId) professorIdsSet.add(g.professorId);
       }
 
-      // 5) vínculo via ProfessorClube / ProfessorEscolinha
       if (vinculo === "clube") {
         const pivotClubes = await prisma.professorClube.findMany({
           where: { clubeId: entidadeId },
@@ -542,7 +536,6 @@ export const gerenciarAtletasController = {
       if (criador === "clube") whereTreino = { clubeId: entidadeId };
       else if (criador === "escolinha") whereTreino = { escolinhaId: entidadeId };
       else {
-        // professor: dono OU colaborador
         whereTreino = {
           OR: [
             { professorId: entidadeId },
@@ -591,14 +584,13 @@ export const gerenciarAtletasController = {
         | "professor"
         | "admin";
 
-      let idOrUser = String(req.query.id || "").trim(); // ✅ vira let
+      let idOrUser = String(req.query.id || "").trim();
       const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); 
       const debug = String(req.query.debug || "") === "1";
       const conteudo = String(req.query.conteudo ?? "1") === "1";
       const userIdFromToken = String(
         (req as any).user?.id || (req as any).userId || ""
       ).trim();
-      // ✅ se o front não mandar id, usa o id do token
       if (!idOrUser && !tipoUsuarioId && userIdFromToken) {
         idOrUser = userIdFromToken;
       }
@@ -1031,7 +1023,6 @@ export const gerenciarAtletasController = {
             descanso: true,
             exercicioId: true,
             exercicioTemporarioId: true,
-            // ✅ ADICIONAR
             exercicioPersonalizadoId: true,
             exercicioPersonalizado: {
               select: {
@@ -1133,7 +1124,6 @@ export const gerenciarAtletasController = {
 
           // @ts-ignore
           const exercicios = (t as any).exercicios.map((e: any) => {
-            // 1) Catálogo
             if (e.exercicio) {
               return {
                 id: e.id,
@@ -1158,7 +1148,6 @@ export const gerenciarAtletasController = {
               };
             }
 
-            // 2) Temporário
             if (e.exercicioTemporario) {
               return {
                 id: e.id,
@@ -1184,7 +1173,6 @@ export const gerenciarAtletasController = {
               };
             }
 
-            // ✅ 3) Personalizado (NOVO)
             if (e.exercicioPersonalizado) {
               return {
                 id: e.id,
@@ -1210,7 +1198,6 @@ export const gerenciarAtletasController = {
               };
             }
 
-            // fallback
             return {
               id: e.id,
               ordem: e.ordem,
@@ -1347,8 +1334,6 @@ export const gerenciarAtletasController = {
       if (!atleta) return res.status(404).json({ message: "Atleta não encontrado" });
 
       const now = new Date();
-
-      // ===== mês atual (mantive sua lógica) =====
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
@@ -1364,12 +1349,9 @@ export const gerenciarAtletasController = {
       const totalTreinosMes = treinosMes + desafiosMes;
       const concluidosMes = treinosMes;
       const desafiosFeitosMes = desafiosMes;
-
-      // ===== rolling 28 dias =====
       const fourWeeksAgo = new Date(now);
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
-      // pega submissões aprovadas + pontuação do treinoProgramado
       const ultimas = await prisma.submissaoTreino.findMany({
         where: {
           atletaId: atleta.id,
@@ -1388,7 +1370,6 @@ export const gerenciarAtletasController = {
         orderBy: { criadoEm: "asc" },
       });
       
-      // buckets rolling: semana 0..3 (cada uma = janela de 7 dias a partir de fourWeeksAgo)
       const buckets = [0, 0, 0, 0];
 
       let totalPontos28d = 0;
@@ -1399,7 +1380,7 @@ export const gerenciarAtletasController = {
         totalPontos28d += pts;
 
         const diffMs = new Date(s.criadoEm).getTime() - fourWeeksAgo.getTime();
-        const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)); // 0..3
+        const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)); 
         if (weekIndex >= 0 && weekIndex <= 3) buckets[weekIndex] += pts;
       }
 
@@ -1410,22 +1391,15 @@ export const gerenciarAtletasController = {
         { semana: "S", pontos: buckets[3] },
       ];
 
-      // ✅ média “das 4 semanas” = média por semana (28 dias / 4)
       const mediaUltimas4Semanas = totalPontos28d / 4;
-
-      // (extra útil) média por treino concluído nos 28d
       const mediaPorTreino28d = ultimas.length ? totalPontos28d / ultimas.length : 0;
 
       return res.json({
         totalTreinosMes,
         concluidosMes,
         desafiosFeitosMes,
-
-        // principal (o que você pediu)
         mediaUltimas4Semanas: Math.round(mediaUltimas4Semanas),
         evolucaoSemanas: series,
-
-        // debug/apoio (recomendo manter)
         totalPontos28d,
         qtdTreinosConcluidos28d: ultimas.length,
         mediaPorTreino28d: Math.round(mediaPorTreino28d),
@@ -1994,7 +1968,7 @@ export const gerenciarAtletasController = {
         where: { atletaId: atletaId },
         include: {
           treinoProgramado: { select: { id: true, nome: true, pontuacao: true } },
-          submissaoTreinos: { // <- ajuste o nome conforme seu schema (pode ser "submissoes" etc.)
+          submissaoTreinos: { 
             orderBy: { criadoEm: "desc" },
             take: 1,
             select: { id: true, aprovado: true },
@@ -2018,15 +1992,9 @@ export const gerenciarAtletasController = {
             dataTreino: t.dataTreino,
             treinoProgramadoId: t.treinoProgramadoId,
             treinoProgramado: t.treinoProgramado ? { id: t.treinoProgramado.id, nome: t.treinoProgramado.nome } : null,
-
-            // ✅ isso aqui é o que vai deixar verde no front:
             meuStatus: concluido ? "COMPLETED" : "PENDENTE",
-
-            // (opcional) manda também os campos reais:
             status: t.status,
             execucaoStatus: t.execucaoStatus,
-
-            // ✅ sem precisar ter "submissaoTreinoId" no schema, você envia no payload:
             submissaoFeita: !!lastSub,
             submissaoTreinoId: lastSub?.id ?? null,
             aprovado: lastSub?.aprovado ?? null,

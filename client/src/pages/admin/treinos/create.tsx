@@ -8,7 +8,6 @@ function getReturnTo(): string {
   const qs = new URLSearchParams(window.location.search);
   const fromQuery = qs.get("returnTo");
   if (fromQuery) return fromQuery;
-
   const stored = sessionStorage.getItem("treino_returnTo");
   if (stored) return stored;
 
@@ -83,7 +82,6 @@ function normalizeUrl(u?: string | null) {
     return s;
   }
 
-  // Arquivos fixos do frontend: vídeos/imagens em /assets
   if (s.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${s}`
@@ -96,7 +94,6 @@ function normalizeUrl(u?: string | null) {
       : `/${s}`;
   }
 
-  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
   if (s.startsWith("/videos/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${s}`
@@ -109,7 +106,6 @@ function normalizeUrl(u?: string | null) {
       : `/${s}`;
   }
 
-  // Exercícios/uploads vindos do backend
   if (s.startsWith("/exercicios/")) {
     return `${API.BASE_URL}${s}`;
   }
@@ -207,7 +203,6 @@ type ExLinha = {
   tipoExecucao?: "repeticao" | "duracao";
   exercicioPersonalizadoId?: string | null;
   exercicioTemporarioId?: string | null;
-  // ✅ snapshot para o card de cima
   titulo?: string;
   descricao?: string;
   nivel?: string | null;
@@ -827,8 +822,6 @@ export default function CriarOuEditarTreino() {
     })();
   }, []);
 
-  // dados de exerciciosPersonalizados já carregados no useEffect inicial via loadExerciciosPersonalizados
-
   const exerciciosSelecionadosSet = useMemo(() => {
     return new Set(
       linhas.flatMap((l) => [
@@ -1093,34 +1086,25 @@ export default function CriarOuEditarTreino() {
       return [
         ...prev,
         {
-          // ✅ se for exercício do BD/tabela Exercicio
           exercicioId: ehPersonalizado ? "" : idCatalogo,
-
-          // ✅ se for exercício personalizado/tabela ExercicioPersonalizado
           exercicioPersonalizadoId: ehPersonalizado ? idPersonalizado : null,
           exercicioTemporarioId: null,
-
           ordem: prev.length + 1,
           repeticoes: repeticoesStr,
           series: seriesStr || sr.series || "",
           reps: repeticoesStr || sr.reps || "",
           duracao: ex.duracao != null ? String(ex.duracao) : "",
           descanso: ex.descanso != null ? String(ex.descanso) : "",
-
           tipoExecucao:
             ex.duracao != null && String(ex.duracao).trim() !== ""
               ? "duracao"
               : "repeticao",
-
           titulo: ex.nome ?? "Exercício",
           descricao: ex?.descricao ?? ex?.objetivo ?? "",
           nivel: ex.nivel ?? null,
           videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
           videoPosterUrl: ex.thumbUrl ?? ex.videoPosterUrl ?? null,
-
-          // ✅ importante: personalizado existente precisa ir como custom
           isCustom: ehPersonalizado,
-
           ...(ehPersonalizado
             ? {
                 customTitulo: ex.nome ?? "",
@@ -1344,7 +1328,6 @@ export default function CriarOuEditarTreino() {
               ? buildRepeticoes(String(l.series ?? ""), String(l.reps ?? ""))
               : null;
 
-          // 1) exercício oficial / catálogo
           if (!l.isCustom && l.exercicioId) {
             return {
               exercicioId: l.exercicioId,
@@ -1363,7 +1346,6 @@ export default function CriarOuEditarTreino() {
             };
           }
 
-          // 2) personalizado já existente
           if (l.isCustom && l.exercicioPersonalizadoId && !l.customVideoFile) {
             return {
               exercicioPersonalizadoId: l.exercicioPersonalizadoId,
@@ -1382,7 +1364,6 @@ export default function CriarOuEditarTreino() {
             };
           }
 
-          // 3) custom novo / temporário
           if (l.isCustom) {
             const nome = String(l.customTitulo ?? "").trim();
             if (!nome) return null;

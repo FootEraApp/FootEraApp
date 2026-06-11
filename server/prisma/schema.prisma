@@ -1043,48 +1043,36 @@ model AulaAoVivo {
   iniciouEm       DateTime?
   finalizouEm     DateTime?
   cancelouEm      DateTime?
+  urlStream       String?
+  streamKey       String?
+  provedorStream  String?
 
-  // Dados da live
-  urlStream      String?
-  streamKey      String?
-  provedorStream String?
-
-  // Amazon IVS
-  ivsChannelArn     String?
-  ivsStreamKeyArn   String?
-  ivsIngestEndpoint String?
-
-  // NOVOS CAMPOS PARA GRAVAÇÃO IVS/S3
+  ivsChannelArn                String?
+  ivsStreamKeyArn              String?
+  ivsIngestEndpoint            String?
   ivsRecordingConfigurationArn String?
   ivsRecordingS3Prefix         String?
   ivsRecordingStatus           String?
   ivsRecordingId               String?
 
-  // Dados do replay depois que a live acabar
   videoGravadoUrl String?
   thumbUrl        String?
   duracaoMin      Int?
 
-  // Controles
   chatAtivo        Boolean @default(true)
   gravacaoAtiva    Boolean @default(true)
   replayDisponivel Boolean @default(false)
 
-  // Métricas simples
   totalMensagens     Int @default(0)
   totalParticipantes Int @default(0)
 
-  // Quem criou/agendou a aula
-  criadorUsuarioId String?
-  criadorUsuario   Usuario? @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
-
-  // Convidado da live/evento
+  criadorUsuarioId   String?
+  criadorUsuario     Usuario? @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
   convidadoUsuarioId String?
   convidadoUsuario   Usuario?              @relation("AulaAoVivoConvidado", fields: [convidadoUsuarioId], references: [id], onDelete: SetNull)
   convidadoNome      String?
   convidadoDescricao String?
   convidados         AulaAoVivoConvidado[]
-  // Learning normal
   metodologiaId      String?
   metodologia        Metodologia?          @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
 
@@ -1094,7 +1082,6 @@ model AulaAoVivo {
   itemId String?                   @unique
   item   MetodologiaEstruturaItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  // Metodologia Avulsa
   metodologiaAvulsaId String?
   metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
 
@@ -1178,7 +1165,6 @@ model AulaAoVivoMensagem {
   mensagem String
   tipo     TipoMensagemLive @default(TEXTO)
 
-  // Para moderação: melhor ocultar do que apagar direto
   deletada      Boolean   @default(false)
   deletadaEm    DateTime?
   deletadaPorId String?
@@ -1205,7 +1191,6 @@ model AulaAoVivoPresenca {
   ultimoPingEm DateTime  @default(now())
   saiuEm       DateTime?
 
-  // Marca se esse usuário entrou enquanto a aula estava realmente AO_VIVO.
   entrouAoVivo Boolean @default(false)
 
   @@unique([aulaAoVivoId, usuarioId])

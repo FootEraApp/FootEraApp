@@ -9,7 +9,6 @@ const setToStorage = (key: string, value: string | null) => {
     sessionStorage.removeItem(key);
     return;
   }
-  // você pode escolher só localStorage, mas assim funciona em ambos
   localStorage.setItem(key, value);
   sessionStorage.setItem(key, value);
 };
@@ -33,11 +32,10 @@ const Storage = {
     return getFromStorage("token");
   },
 
-  // ✅ agora existe de verdade e não recursa
   get nomeDeUsuario() {
     return (
       getFromStorage("nomeDeUsuario") ||
-      getFromStorage("nomeUsuario") // fallback p/ legado
+      getFromStorage("nomeUsuario") 
     );
   },
   set nomeDeUsuario(v: string | null) {

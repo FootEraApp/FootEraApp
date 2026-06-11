@@ -856,9 +856,9 @@ function PaginaFeed(): JSX.Element {
                     })()}
 
                     {(() => {
-                      const chain = getRepostChain(post); // [pai, avô, bisavô...]
+                      const chain = getRepostChain(post); 
                       const root = chain.length ? chain[chain.length - 1] : null;
-                      const intermediarios = chain.slice(0, -1); // todos antes do original
+                      const intermediarios = chain.slice(0, -1);
 
                       return (
                         <div className="border rounded-xl p-3 bg-gray-50 space-y-2">

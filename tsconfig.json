@@ -2,7 +2,8 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
-    "moduleResolution": "Nodenext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
       "@/*": ["client/src/*"],
@@ -20,10 +21,7 @@
     "types": ["node", "express"],
     "jsx": "react-jsx"
   },
-  "include": [
-    "server/**/*.ts",
-    "server"
-  ],
+  "include": ["server/**/*.ts"],
   "exclude": [
     "node_modules",
     "dist",

@@ -1,6 +1,3 @@
-Termos de Uso (Atualização 01 de junho de 2026)
-
-
 
 **1. Aceitação dos Termos**
 

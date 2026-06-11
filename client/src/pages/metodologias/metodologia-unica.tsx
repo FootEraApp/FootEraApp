@@ -85,7 +85,7 @@ type MetodologiaDetalhe = {
   totalAssinantes?: number;
   mediaAvaliacao?: number | null;
   totalReviews?: number;
-  pontosTotal?: number; // vindo do backend (soma dos itens)
+  pontosTotal?: number;
   criadorNome?: string | null;
   tipo?: "TRILHAS_TREINO" | "CURSO_FORMACAO" | string;
   estruturaTipo?: "TRILHA" | "MODULO" | string;
@@ -96,15 +96,11 @@ type MetodologiaDetalhe = {
   isOwner?: boolean;
   estruturas: MetodologiaEstrutura[];
   viewer: {
-    // antigo
     isOwner?: boolean;
     isAdmin?: boolean;
     isAssinante: boolean;
-    // NOVO: acesso real (learning OU avulsa)
     temAcesso: boolean;
-    // NOVO: tipo do acesso
     assinaturaTipo?: "LEARNING" | "AVULSA" | null;
-    // NOVO: quando expira (pra avulsa = agora + 1 ano)
     expiraEm?: string | null;
     podeAssinarAgora: boolean;
     podeAvaliar?: boolean;
@@ -113,7 +109,7 @@ type MetodologiaDetalhe = {
       comentario: string | null;
       updatedAt: string 
     } | null;
-    motivoBloqueio?: string | null; // ex: "PRECISA_LEARNING", "PRECISA_PAGAR_AVULSA", "LIMITE_MES"...
+    motivoBloqueio?: string | null;
     progresso: {
       concluidos: string[];
     };
@@ -124,17 +120,10 @@ function normalizeMediaUrl(raw?: string | null) {
   if (!raw) return null;
   const u = String(raw).trim();
   if (!u) return null;
-
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
-
-  // ✅ uploads (backend)
   if (u.startsWith("uploads/")) return `${API.BASE_URL}/${u}`;
   if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
-
-  // ✅ assets (frontend)
   if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
-
-  // fallback
   if (u.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${u}`;
 
   return u;
@@ -146,7 +135,6 @@ function formatDateBR(raw?: string | null) {
   const s = String(raw).trim();
   if (!s) return null;
 
-  // se vier em ISO UTC, pega só YYYY-MM-DD sem converter fuso
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) {
     return `${m[3]}/${m[2]}/${m[1]}`;
@@ -189,7 +177,6 @@ function isSalaCopaText(value?: string | null) {
 
 function Stars({ value }: { value: number }) {
   const v = Math.max(0, Math.min(5, Number(value || 0)));
-  // arredonda pra 0.5
   const half = Math.round(v * 2) / 2;
   const full = Math.floor(half);
   const hasHalf = half - full === 0.5;
@@ -199,12 +186,10 @@ function Stars({ value }: { value: number }) {
       {Array.from({ length: 5 }).map((_, i) => {
         const idx = i + 1;
 
-        // cheia
         if (idx <= full) {
           return <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />;
         }
 
-        // meia
         if (idx === full + 1 && hasHalf) {
           return (
             <span key={i} className="relative inline-block w-4 h-4">
@@ -216,7 +201,6 @@ function Stars({ value }: { value: number }) {
           );
         }
 
-        // vazia
         return <Star key={i} className="w-4 h-4 text-gray-300" />;
       })}
     </div>
@@ -250,7 +234,7 @@ export default function MetodologiaUnicaPage() {
   const [thumbFromVideo, setThumbFromVideo] = useState<Record<string, string>>({});
   const [playerOpen, setPlayerOpen] = useState(false);
   const [playerItem, setPlayerItem] = useState<MetodologiaEstruturaItem | null>(null);
-  const [maxTime, setMaxTime] = useState(0); // trava seek
+  const [maxTime, setMaxTime] = useState(0); 
   const [playerEstruturaId, setPlayerEstruturaId] = useState<string | null>(null);
   const [videoConcluindo, setVideoConcluindo] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -351,7 +335,7 @@ export default function MetodologiaUnicaPage() {
     try {
         setThumbFromVideo((prev) => {
             if (prev[itemId]) return prev;
-            return prev; // mantém igual por enquanto
+            return prev;
         });
 
         const video = document.createElement("video");
@@ -382,7 +366,6 @@ export default function MetodologiaUnicaPage() {
 
         setThumbFromVideo((prev) => ({ ...prev, [itemId]: dataUrl }));
     } catch {
-        // se falhar, fica fallback
     }
     }
 
@@ -654,7 +637,6 @@ export default function MetodologiaUnicaPage() {
       return;
     }
 
-    // 1) Se o backend disser que não pode assinar agora, decide o destino certo:
     if (!data.viewer.podeAssinarAgora) {
         const motivo = String(data.viewer?.motivoBloqueio || "");
         const label =
@@ -666,7 +648,6 @@ export default function MetodologiaUnicaPage() {
                 ? "Ativar Learning"
                 : "Assinar metodologia";
 
-        // A) Não tem Learning ativo -> vai pro pagamento (com return)
         if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") {
         navigate(`/pagamentos?produto=learning&returnTo=/learning/${id}`);
         return;
@@ -677,19 +658,16 @@ export default function MetodologiaUnicaPage() {
           return;
         }
 
-        // B) Já atingiu limite (1/1 ou 3/3) -> vai pra Minhas Metodologias
         if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
         alert("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
         navigate(adminPreview ? "/admin" : "/learning")
         return;
         }
 
-        // fallback
         navigate("/pagamentos");
         return;
     }
 
-    // 2) Pode assinar: tenta “selecionar” essa metodologia
     try {
         setBusy(true);
 
@@ -704,13 +682,11 @@ export default function MetodologiaUnicaPage() {
         const j = await r.json().catch(() => ({}));
 
         if (!r.ok) {
-        // Se backend responder que precisa pagar, também joga pro pagamento
         if (j?.code === "PRECISA_PAGAR" || j?.code === "PRECISA_LEARNING") {
             navigate(`/pagamentos?produto=learning&returnTo=/learning/${id}`);
             return;
         }
 
-        // Se backend responder limite
         if (j?.code === "LIMITE_METODOLOGIAS") {
             alert(j?.message || "Você já atingiu o limite do seu plano.");
             navigate(adminPreview ? "/admin" : "/learning")
@@ -721,7 +697,6 @@ export default function MetodologiaUnicaPage() {
         return;
         }
 
-        // sucesso: redireciona para Minhas Metodologias (ou recarrega detalhe)
         alert("✅ Metodologia adicionada em 'Minhas Metodologias'!");
         navigate(adminPreview ? "/admin" : "/learning")
     } catch (e) {
@@ -797,7 +772,6 @@ export default function MetodologiaUnicaPage() {
   const pontosTotal = Number(data.pontosTotal ?? 0);
   const assinaturas = Number(data.totalAssinantes ?? 0);
   const capaHeader = normalizeMediaUrl(data.capaUrl) || AVATAR_FALLBACK;
-  const podeAvaliar = !!data?.viewer?.podeAvaliar; // vindo do backend
   const podeEditarMetodologia = !!data?.viewer?.isOwner;
 
   return (

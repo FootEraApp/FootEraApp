@@ -114,6 +114,10 @@ server/.env.*
 # vídeos
 *.mp4
 
+android/gradle.properties
+*.jks
+*.keystore
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

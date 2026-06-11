@@ -579,8 +579,6 @@ export async function listarTurmasComoProfessor(
         alunosCount: t._count.membros,
         ownerTipo,
         ownerId,
-
-        // IMPORTANTE:
         criadoPorProfessorId: !ownerId ? professorId : null,
       };
     });
@@ -851,8 +849,6 @@ export async function frequencia(req: Request, res: Response) {
 
     const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0));
     const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0));
-
-    // 1) membros da turma
     const membros = await prisma.turmaUsuario.findMany({
       where: { turmaId },
       select: { usuarioId: true },
@@ -860,7 +856,6 @@ export async function frequencia(req: Request, res: Response) {
 
     const usuarioIds = membros.map((m) => String(m.usuarioId)).filter(Boolean);
 
-    // 2) pegar atletas (nome/sobrenome vem do Atleta no seu schema)
     const atletas = usuarioIds.length
       ? await prisma.atleta.findMany({
           where: { usuarioId: { in: usuarioIds } },
@@ -869,7 +864,7 @@ export async function frequencia(req: Request, res: Response) {
             usuarioId: true,
             nome: true,
             sobrenome: true,
-            usuario: { select: { nome: true, foto: true } }, // usuario NÃO tem sobrenome
+            usuario: { select: { nome: true, foto: true } }, 
           },
         })
       : [];
@@ -886,7 +881,6 @@ export async function frequencia(req: Request, res: Response) {
       atletaNomeByAtletaId.set(aid, { nome, foto: (a.usuario?.foto ?? null) as any });
     }
 
-    // 3) treinos agendados da turma no ano (no seu schema é dataTreino)
     const agendados = await prisma.treinoAgendado.findMany({
       where: {
         turmaId,
@@ -900,8 +894,6 @@ export async function frequencia(req: Request, res: Response) {
     });
 
     const agendadosIds = agendados.map((t) => String(t.id)).filter(Boolean);
-
-    // 4) realizados: no seu schema SubmissaoTreino tem criadoEm (não createdAt)
     const realizadosTreinoAgendadoIds = new Set<string>();
     const contagemPorAtleta = new Map<string, number>();
     const realizadosPorMes = Array.from({ length: 12 }).map(() => 0);
@@ -927,7 +919,6 @@ export async function frequencia(req: Request, res: Response) {
       }
     }
 
-    // 5) histórico mensal (agendados x realizados)
     const agendadosPorMes = Array.from({ length: 12 }).map(() => 0);
 
     for (const a of agendados) {
@@ -943,7 +934,6 @@ export async function frequencia(req: Request, res: Response) {
       realizados: realizadosPorMes[i],
     }));
 
-    // 6) top atletas
     const topAtletas = Array.from(contagemPorAtleta.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)

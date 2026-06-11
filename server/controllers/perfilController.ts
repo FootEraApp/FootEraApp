@@ -39,7 +39,7 @@ function normalizarCategorias(input: any): Categoria[] {
 
       if (s.startsWith("sub")) {
         const num = s.replace(/\D/g, "");
-        return `Sub${num}`; // Sub9, Sub16
+        return `Sub${num}`; 
       }
 
       if (s === "livre") return "Livre";
@@ -698,7 +698,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         const m2 = link.match(/\/eventos\/([0-9a-f-]+)/i);
         if (m2) return `evento:${m2[1]}`;
 
-        // fallback
         return `${tipo}:${String(it.id ?? "")}`.toLowerCase();
       }
 
@@ -1359,7 +1358,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     nomeDeUsuario: usuario.nomeDeUsuario,
     email: usuario.email,
     foto: usuario.foto,
-    verified: (usuario as any).verified ?? false, // ✅ ADD
+    verified: (usuario as any).verified ?? false, 
   };
 
   if (isOwnProfile) {
@@ -1473,16 +1472,13 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
   const { id } = req.params;
   const userIdFromToken = req.userId;
 
-  // 1. Verificação de permissão
   if (!userIdFromToken || id !== userIdFromToken) {
     return res.status(403).json({ error: "Você só pode editar o seu próprio perfil." });
   }
 
-  // Pegamos os dados do body (que podem vir como string devido ao FormData)
   let { usuario, tipo, tipoUsuario } = req.body;
 
   try {
-    // 2. Parse dos dados (FormData envia objetos como string JSON)
     if (typeof usuario === "string") {
       try {
         usuario = JSON.parse(usuario);
@@ -1506,30 +1502,26 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       tipo = {};
     }
 
-    // 3. Gerenciamento de Foto (S3)
     const usuarioAtual = await prisma.usuario.findUnique({
       where: { id },
       select: { foto: true },
     });
 
-    const file = req.file as any; // Multer-S3
+    const file = req.file as any; 
     let fotoFinal: string | null = usuarioAtual?.foto ?? null;
 
     if (file && file.location) {
       fotoFinal = file.location;
-      // Deleta a antiga se existir
       if (usuarioAtual?.foto && usuarioAtual.foto.includes("amazonaws.com")) {
         await deleteFromS3(usuarioAtual.foto);
       }
     } else if (usuario.foto === null) {
-      // Usuário removeu a foto explicitamente
       fotoFinal = null;
       if (usuarioAtual?.foto && usuarioAtual.foto.includes("amazonaws.com")) {
         await deleteFromS3(usuarioAtual.foto);
       }
     }
 
-    // 4. Validação de Nome de Usuário (Lower Case e Unicidade)
     const raw = typeof usuario?.nomeDeUsuario === "string" ? usuario.nomeDeUsuario.trim() : "";
     const novoUsername = raw ? raw.toLowerCase() : null;
 
@@ -1563,7 +1555,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       },
     });
 
-    // 6. Atualização das tabelas específicas via Switch
     const tipoKey = String(tipoUsuario).toLowerCase();
     const tipoNorm = tipoKey === "escolinha" ? "escola" : tipoKey;
 
@@ -1573,14 +1564,11 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         const rawClube = tipo.clubeId ?? tipo.clube ?? null;
         const escolinhaId = pickId(rawEscolinha);
         const clubeId = pickId(rawClube);
-
         const limparEscolinha = !rawEscolinha || String(rawEscolinha).toLowerCase() === "nenhum";
         const limparClube = !rawClube || String(rawClube).toLowerCase() === "nenhum";
-
         const rawProfessorMulti = tipo.professorIds ?? tipo.professoresIds ?? null;
         const rawProfessorSingle = tipo.professorId ?? tipo.professor ?? null;
         const professorIds = Array.from(new Set([...pickIds(rawProfessorMulti), ...(pickId(rawProfessorSingle) ? [pickId(rawProfessorSingle)!] : [])])).filter(Boolean);
-
         const data: any = {
           nome: tipo.nome,
           sobrenome: tipo.sobrenome,

@@ -11,10 +11,7 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-// ✅ no seu schema, TreinoProgramado tem createdAt
 const TREINO_PROGRAMADO_DATE_FIELD = "createdAt" as const;
-
-// ✅ no seu schema, SubmissaoTreino tem criadoEm (não tem createdAt)
 const SUBMISSAO_TREINO_DATE_FIELD = "criadoEm" as const;
 
 export async function getDashboardOrganizacao(req: any, res: Response) {
@@ -29,11 +26,7 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
       return res.status(400).json({ message: "ownerId é obrigatório" });
     }
 
-    // =========================
-    // ✅ AUTORIZAÇÃO: DONO OU ADMIN
-    // =========================
-    const ownerTipoLower = ownerTipo.toLowerCase(); // "clube" | "escolinha"
-
+    const ownerTipoLower = ownerTipo.toLowerCase(); 
     const tokenTipo = String(
       req.user?.tipo ??
         req.user?.tipoUsuario ??
@@ -50,20 +43,16 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
         ""
     );
 
-    // ✅ fallback por headers (você mandou no front)
     const headerTipo = String(req.headers["x-tipo-usuario"] ?? "").toLowerCase();
     const headerTipoId = String(req.headers["x-tipo-usuario-id"] ?? "");
-
     const finalTipo = (tokenTipo || headerTipo).toLowerCase();
     const finalTipoId = String(tokenTipoId || headerTipoId || "");
 
-    // admin por tipo no token/header
     let isAdmin =
       finalTipo === "admin" ||
       finalTipo === "administrador" ||
       finalTipo === "adm";
 
-    // ✅ admin por tabela Administrador (se existir no seu schema)
     if (!isAdmin && req.user?.id) {
       try {
         const adminRow = await prisma.administrador.findFirst({
@@ -72,7 +61,6 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
         });
         isAdmin = !!adminRow;
       } catch {
-        // se não existir model/tabela, ignora
       }
     }
 
@@ -90,24 +78,18 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
       });
     }
 
-    // =========================
-    // ✅ DADOS DO DASHBOARD
-    // =========================
     const now = new Date();
     const mesAtualStart = startOfMonth(now);
     const mesAtualEnd = endOfMonth(now);
 
-    // filtro por owner no TreinoProgramado
     const whereTreinoProgramado: any =
       ownerTipo === "Clube" ? { clubeId: ownerId } : { escolinhaId: ownerId };
 
-    // filtro por owner no TreinoAgendado via relação treinoProgramado
     const whereAgendado: any =
       ownerTipo === "Clube"
         ? { treinoProgramado: { clubeId: ownerId } }
         : { treinoProgramado: { escolinhaId: ownerId } };
 
-    // ✅ 1) KPIs
     const treinosLancadosTotal = await prisma.treinoProgramado.count({
       where: whereTreinoProgramado,
     });
@@ -134,7 +116,6 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
         } as any,
     });
 
-    // alunos ativos 30d (por submissões)
     const d30 = new Date();
     d30.setDate(d30.getDate() - 30);
 
@@ -149,11 +130,7 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
     });
 
     const alunosAtivos30d = ativos30d.length;
-
-    const taxaConclusaoMes =
-      agendamentosMes > 0 ? (concluidosMes / agendamentosMes) * 100 : 0;
-
-    // ✅ 2) Histórico por mês (ano inteiro)
+    const taxaConclusaoMes = agendamentosMes > 0 ? (concluidosMes / agendamentosMes) * 100 : 0;
     const historicoPorMes: Array<{
       mes: string;
       lancados: number;

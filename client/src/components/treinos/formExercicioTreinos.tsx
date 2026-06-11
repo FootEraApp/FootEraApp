@@ -76,7 +76,6 @@ function resolveMediaUrl(raw?: string | null) {
     return p;
   }
 
-  // Arquivos fixos do frontend: vídeos/imagens em /assets
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -89,7 +88,6 @@ function resolveMediaUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
   if (p.startsWith("/videos/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -102,7 +100,6 @@ function resolveMediaUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // Uploads/exercícios vindos do backend
   if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
     return `${API.BASE_URL}${p}`;
   }

@@ -12,7 +12,7 @@ export async function aplicarEstatisticasPosSubmissao(
     const sub = await tx.submissaoTreino.findUnique({
       where: { id: submissaoId },
       include: {
-        atleta: { select: { usuarioId: true } }, // ✅ precisa pra atualizar TreinoUsuario
+        atleta: { select: { usuarioId: true } }, 
         treinoAgendado: { include: { treinoProgramado: true } },
       },
     });
@@ -22,7 +22,6 @@ export async function aplicarEstatisticasPosSubmissao(
     const minutos = Number(duracaoMinutos ?? sub.duracaoMinutos ?? tp?.duracao ?? 0) || 0;
     const pontos = Number(tp?.pontuacao ?? 0) || 0;
 
-    // ✅ 1) aprova a submissão (você já fazia)
     await tx.submissaoTreino.update({
       where: { id: sub.id },
       data: {
@@ -35,9 +34,7 @@ export async function aplicarEstatisticasPosSubmissao(
       },
     });
 
-    // ✅ 2) AQUI É O PULO DO GATO:
-    // quando aprovou, marca o TreinoAgendado como concluído
-    const realAgendadoId = sub.treinoAgendadoId; // vem do banco, 100% correto
+    const realAgendadoId = sub.treinoAgendadoId; 
     if (realAgendadoId) {
       await tx.treinoAgendado.update({
         where: { id: realAgendadoId },
@@ -50,8 +47,6 @@ export async function aplicarEstatisticasPosSubmissao(
       });
     }
 
-    // ✅ 3) (recomendado) mantém TreinoUsuario consistente,
-    // porque em outras rotas você usa isso também.
     const usuarioId = sub.atleta?.usuarioId;
     if (usuarioId && realAgendadoId) {
       await tx.treinoUsuario.upsert({
@@ -67,7 +62,6 @@ export async function aplicarEstatisticasPosSubmissao(
       });
     }
 
-    // ... seu resto (estatisticaTreino, estatisticaAtleta, pontuacaoAtleta) continua igual
     const treinoProgramadoId = tp?.id;
     if (treinoProgramadoId) {
       await tx.estatisticaTreino.upsert({

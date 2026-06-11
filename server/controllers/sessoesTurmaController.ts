@@ -25,17 +25,13 @@ function assertInstrutor(req: AuthenticatedRequest) {
 }
 
 function getTodayRangeBRT() {
-  // "hoje" considerando BRT (-03)
   const now = new Date();
-
-  // converte para "data de calendário" BRT
   const br = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 
   const y = br.getFullYear();
   const m = br.getMonth();
   const d = br.getDate();
 
-  // cria intervalo no timezone -03:00
   const start = new Date(`${String(y).padStart(4, "0")}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}T00:00:00-03:00`);
   const end = new Date(`${String(y).padStart(4, "0")}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}T23:59:59.999-03:00`);
 
@@ -173,7 +169,6 @@ function parseDateInput(raw?: any): Date | null {
   const s = String(raw).trim();
   if (!s) return null;
 
-  // datetime-local sem timezone: "2026-02-24T19:00" ou "2026-02-24T19:00:00"
   const mLocal = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (mLocal) {
     const [, Y, M, D, h, mi, sec] = mLocal;
@@ -188,14 +183,12 @@ function parseDateInput(raw?: any): Date | null {
     );
   }
 
-  // só data "YYYY-MM-DD"
   const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mDate) {
     const [, Y, M, D] = mDate;
     return new Date(Number(Y), Number(M) - 1, Number(D), 0, 0, 0, 0);
   }
 
-  // ISO com timezone (Z ou -03:00 etc)
   const dt = new Date(s);
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
@@ -288,7 +281,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       where: { id: treinoProgramadoId },
       select: {
         id: true,
-        nome: true, // ✅ ADD
+        nome: true, 
         professorId: true,
         clubeId: true,
         escolinhaId: true,
@@ -345,7 +338,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       sessaoId: sessao.id,
       exercicioId: e.exercicioId ?? null,
       exercicioTemporarioId: e.exercicioTemporarioId ?? null,
-      exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null, // ✅ ADD
+      exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null, 
       ordem: e.ordem ?? idx + 1,
       concluido: false,
     }));
@@ -354,7 +347,6 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       await tx.sessaoTreinoTurmaExercicio.createMany({ data: dadosExercicios });
     }
 
-    // ✅ NOVO: criar TreinoAgendado para cada atleta da turma
     const turmaComMembros = await tx.turma.findUnique({
       where: { id: turmaId },
       select: {
@@ -410,7 +402,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 id: true,
                 exercicioId: true,
                 exercicioTemporarioId: true,
-                exercicioPersonalizadoId: true, // ✅ ADD
+                exercicioPersonalizadoId: true,
                 ordem: true,
                 repeticoes: true,
                 duracao:true,
@@ -422,7 +414,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
                 },
-                exercicioPersonalizado: { // ✅ ADD
+                exercicioPersonalizado: { 
                   select: {
                     id: true,
                     nome: true,
@@ -441,7 +433,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             id: true,
             exercicioId: true,
             exercicioTemporarioId: true,
-            exercicioPersonalizadoId: true, // ✅ ADD
+            exercicioPersonalizadoId: true, 
             ordem: true,
             concluido: true,
             concluidoEm: true,
@@ -451,7 +443,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
             },
-            exercicioPersonalizado: { // ✅ ADD
+            exercicioPersonalizado: { 
               select: {
                 id: true,
                 nome: true,
@@ -563,7 +555,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 id: true,
                 exercicioId: true,
                 exercicioTemporarioId: true,
-                exercicioPersonalizadoId: true, // ✅ ADD
+                exercicioPersonalizadoId: true, 
                 ordem: true,
                 repeticoes: true,
                 series: true,
@@ -575,7 +567,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
                 },
-                exercicioPersonalizado: { // ✅ ADD
+                exercicioPersonalizado: { 
                   select: {
                     id: true,
                     nome: true,
@@ -594,7 +586,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             id: true,
             exercicioId: true,
             exercicioTemporarioId: true,
-            exercicioPersonalizadoId: true, // ✅ ADD
+            exercicioPersonalizadoId: true, 
             ordem: true,
             concluido: true,
             concluidoEm: true,
@@ -604,7 +596,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
             },
-            exercicioPersonalizado: { // ✅ ADD
+            exercicioPersonalizado: { 
               select: {
                 id: true,
                 nome: true,
@@ -1294,7 +1286,7 @@ export async function salvarVideosExecucaoSessao(
   try {
     assertInstrutor(req);
 
-    const { id } = req.params; // sessaoId
+    const { id } = req.params; 
     const u: any = req.authUser || req.user;
     const usuarioId = String(u?.id || "");
     const tipoRaw = String(u?.tipo || "").toLowerCase();

@@ -1,5 +1,4 @@
 // server/config.ts
-
 const viteEnv =
   typeof import.meta !== "undefined" && (import.meta as any).env
     ? ((import.meta as any).env as Record<string, string | undefined>)
@@ -16,7 +15,6 @@ const isDev =
     : typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
 
 const strip = (s?: string) => (s ?? "").replace(/\/+$/, "");
-
 const env = (key: string): string | undefined => {
   return viteEnv?.[`VITE_${key}`] ?? viteEnv?.[key] ?? nodeEnv?.[key];
 };
@@ -102,11 +100,7 @@ const FRONTEND_BASE = strip(
 
 export const APP = {
   FRONTEND_BASE_URL: FRONTEND_BASE || "http://localhost:5173",
-
-  // Alias para arquivos novos que usam APP.FRONTEND_URL
   FRONTEND_URL: FRONTEND_BASE || "http://localhost:5173",
-
-  // Alias para arquivos novos que usam APP.BACKEND_URL
   BACKEND_URL: API_BASE || "http://localhost:3001",
 } as const;
 
@@ -126,7 +120,6 @@ export const FLAGS = {
   PAGAMENTOS_ENABLED: true,
   FORMADORES_ENABLED: false,
 
-  // Pagamentos
   PAGAMENTOS_SHOW_LEARNING_PLANS: true,
   PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS: true,
   PAGAMENTOS_SHOW_METODOLOGIAS_LEARNING: true,

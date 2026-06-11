@@ -8,6 +8,5 @@ declare module "*.png" {
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;
   readonly VITE_FRONTEND_URL: string;
-  readonly VITE_APP_URL?: string; // opcional se você nem sempre usa
-  // NÃO declare PROD/DEV aqui — o Vite já fornece via vite/client
+  readonly VITE_APP_URL?: string; 
 }

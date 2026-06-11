@@ -16,7 +16,7 @@ type DashboardResp = {
     agendamentosMes: number;
     concluidosMes: number;
     alunosAtivos30d: number;
-    taxaConclusaoMes: number; // 0..100
+    taxaConclusaoMes: number;
   };
   historicoPorMes: Array<{ mes: string; lancados: number; concluidos: number; agendados: number }>;
   topFrequencia: Array<{ atletaId: string; nome: string; foto?: string | null; presencasMes: number }>;
@@ -45,8 +45,8 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
   const headers = token
   ? {
       Authorization: `Bearer ${token}`,
-      "x-tipo-usuario": String(Storage.tipoSalvo || "").toLowerCase(), // garante "clube" | "escolinha" | "admin"
-      "x-tipo-usuario-id": String(Storage.tipoUsuarioId || ""),        // garante string
+      "x-tipo-usuario": String(Storage.tipoSalvo || "").toLowerCase(),
+      "x-tipo-usuario-id": String(Storage.tipoUsuarioId || ""),       
     }
   : undefined;
   const anoAtual = new Date().getFullYear();

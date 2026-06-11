@@ -1,7 +1,3 @@
-Política de Privacidade (Atualização 01 de junho de 2026)
-
-
-
 **Responsável pelo tratamento dos dados conforme LGPD:**
 
 FootEra

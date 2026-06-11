@@ -1,5 +1,3 @@
-//fixmetodologias
-
 import { prisma } from "../server/prisma.js";
 
 async function main() {

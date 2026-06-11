@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 
 declare global {
   interface Window {
@@ -19,6 +21,10 @@ function getGoogleClientId() {
   return import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 }
 
+function getGoogleAndroidClientId() {
+  return import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID || "";
+}
+
 function loadGoogleScript(): Promise<void> {
   if (googleScriptPromise) return googleScriptPromise;
 
@@ -29,13 +35,8 @@ function loadGoogleScript(): Promise<void> {
 
     if (existing) {
       if ((window as any).google?.accounts?.id) return resolve();
-
       existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Falha ao carregar script Google")),
-        { once: true }
-      );
+      existing.addEventListener("error", () => reject(new Error("Falha ao carregar script Google")), { once: true });
       return;
     }
 
@@ -60,7 +61,70 @@ export default function GoogleButton({
   const [erro, setErro] = useState("");
   const initializedRef = useRef(false);
 
+  const isNative = Capacitor.isNativePlatform();
+
+  async function handleNativeGoogleLogin() {
+    try {
+      setErro("");
+
+      const webClientId = getGoogleClientId();
+      const androidClientId = getGoogleAndroidClientId();
+
+      if (!androidClientId) {
+        setErro("VITE_GOOGLE_ANDROID_CLIENT_ID não configurado.");
+        return;
+      }
+
+      console.log("[GOOGLE NATIVE IDS]", { webClientId, androidClientId });
+
+      if (!webClientId) {
+        setErro("VITE_GOOGLE_CLIENT_ID não configurado.");
+        return;
+      }
+
+      console.log("[GOOGLE IDS]", JSON.stringify({
+        webClientId,
+        androidClientId,
+        isNative,
+      }));
+
+      await GoogleSignIn.initialize({
+        clientId: webClientId,
+      });
+
+      const result: any = await GoogleSignIn.signIn();
+
+      const credential = result?.idToken;
+
+      if (!credential) {
+        console.log("[GOOGLE NATIVE RESULT]", result);
+        setErro("Google não retornou idToken.");
+        return;
+      }
+
+      await onCredential(credential);
+    } catch (e: any) {
+      console.error("Erro no Google nativo:", e);
+
+      const msg = String(e?.message || e || "").toLowerCase();
+
+      if (
+        msg.includes("cancel") ||
+        msg.includes("canceled") ||
+        msg.includes("cancelled") ||
+        msg.includes("user canceled")
+      ) {
+        setErro("");
+        return;
+      }
+
+      setErro(e?.message || "Não foi possível entrar com Google.");
+    }
+  }
+
   useEffect(() => {
+    if (isNative) return;
+
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
 
@@ -166,21 +230,32 @@ export default function GoogleButton({
         resizeObserver.disconnect();
       }
     };
-  }, [text, onCredential]);
+  }, [text, onCredential, isNative]);
 
   return (
     <div className="w-full min-w-0 overflow-hidden">
-      <div
-        className={[
-          "relative mx-auto w-full min-w-0 overflow-hidden",
-          disabled ? "pointer-events-none opacity-60" : "",
-        ].join(" ")}
-      >
+      {isNative ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={handleNativeGoogleLogin}
+          className="flex min-h-[44px] w-full min-w-0 items-center justify-center rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
+        >
+          Continuar com Google
+        </button>
+      ) : (
         <div
-          ref={divRef}
-          className="mx-auto flex min-h-[44px] items-center justify-center"
-        />
-      </div>
+          className={[
+            "relative mx-auto w-full min-w-0 overflow-hidden",
+            disabled ? "pointer-events-none opacity-60" : "",
+          ].join(" ")}
+        >
+          <div
+            ref={divRef}
+            className="mx-auto flex min-h-[44px] items-center justify-center"
+          />
+        </div>
+      )}
 
       {erro ? (
         <p className="mt-2 text-center text-xs text-red-600">{erro}</p>

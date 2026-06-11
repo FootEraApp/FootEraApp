@@ -590,7 +590,6 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       });
     }
 
-    // 4) Professor + Professor -> ProfessorProfessor
     if (!ids.atletaId && ids.professorId && !ids.clubeId && !ids.escolinhaId) {
       const idsProf = [idsRem.professorId, idsDes.professorId].filter(
         (id): id is string => Boolean(id)
@@ -629,7 +628,6 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       }
     }
 
-    // 4) Atleta + exatamente um responsável -> RelacaoTreinamento
     const owners = [ids.professorId, ids.clubeId, ids.escolinhaId].filter(Boolean);
 
     if (!ids.atletaId || owners.length !== 1) {
@@ -858,7 +856,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
     const idsAlvo = await getIdsByTipo(uAlvo.id, uAlvo.tipo);
     const tipos = [uMe.tipo, uAlvo.tipo].sort();
 
-    // 1) Professor + Professor
     if (tipos[0] === "Professor" && tipos[1] === "Professor") {
       const idsProf = [idsMe.professorId, idsAlvo.professorId].filter(
         (id): id is string => Boolean(id)
@@ -889,7 +886,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       });
     }
 
-    // 2) Professor + Clube
     if (
       (uMe.tipo === "Professor" && uAlvo.tipo === "Clube") ||
       (uMe.tipo === "Clube" && uAlvo.tipo === "Professor")
@@ -919,7 +915,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       });
     }
 
-    // 3) Professor + Escolinha
     if (
       (uMe.tipo === "Professor" && uAlvo.tipo === "Escolinha") ||
       (uMe.tipo === "Escolinha" && uAlvo.tipo === "Professor")
@@ -949,7 +944,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       });
     }
 
-    // 4) Casos com atleta -> RelacaoTreinamento
     const atletaId = idsMe.atletaId || idsAlvo.atletaId;
     const professorId = idsMe.professorId || idsAlvo.professorId;
     const clubeId = idsMe.clubeId || idsAlvo.clubeId;

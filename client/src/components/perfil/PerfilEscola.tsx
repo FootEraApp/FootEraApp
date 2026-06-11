@@ -256,7 +256,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         { headers }
       );
 
-      // mesmo padrão do ProfileHeader.tsx
       const performance = Number(data?.performance) || 0;
       const disciplina = Number(data?.disciplina) || 0;
       const responsabilidade = Number(data?.responsabilidade) || 0;
@@ -484,8 +483,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         );
 
         const base = Array.isArray(resp?.atletas) ? resp.atletas : [];
-
-        // ✅ sobrescreve pontuação com a "oficial" do perfil
         const comPontuacaoReal = await Promise.all(
           base.map(async (a) => {
             const uid = String(a.usuarioId || "").trim();
@@ -581,7 +578,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   async function loadProfessores() {
     if (!token) return;
 
-    // ✅ /api/gerenciar/professores usa o USER ID da entidade (igual no GerenciarProfessores)
     if (!entidadeUsuarioId) {
       setProfessores([]);
       return;
@@ -593,15 +589,13 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         headers,
         params: {
           vinculo: "escolinha",
-          id: entidadeUsuarioId, // ✅ USER ID da escolinha
+          id: entidadeUsuarioId, 
           limit: 200,
         },
       });
 
       let lista = (res.data?.professores || res.data || []) as any[];
 
-      // 🧯 fallback opcional (se quiser manter compatível)
-      // Se vier vazio, tenta um endpoint mais genérico
       if (!lista.length && escolinhaId) {
         const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
           headers,

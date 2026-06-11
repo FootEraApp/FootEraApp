@@ -144,14 +144,13 @@ type MetodologiaCard = {
   capaUrl?: string | null;
   criadorNome?: string | null;
   totalAssinantes?: number | null;
-  // ✅ novos:
   videoCount?: number;
   treinoCount?: number;
   nivel?: "Base" | "Avancado" | "Performance" | string | null;
   jaAssinada?: boolean;
   tags?: string[];
-  mediaAvaliacao: number;     // 0..5
-  notaCount: number;     // quantidade de avaliações
+  mediaAvaliacao: number;   
+  notaCount: number;    
   pontos: number; 
   publicoAlvo?: MetodologiaPublico | null;
   totalReviews?: number | null;
@@ -172,7 +171,6 @@ type SessaoDeHoje = {
   exercicios?: any[];
   presencas?: any[];
   startedAt?: string | null;
-  // ✅ adicionar
   duracaoMinutosReal?: number | null;
   penalidadeAtraso?: boolean;
   presentes?: any[];
@@ -180,11 +178,11 @@ type SessaoDeHoje = {
 };
 
 type StartWindowInfo = {
-  hasTime: boolean;     // se a data tem hora marcada (ex: 21:00)
-  canStart: boolean;    // se pode iniciar agora
-  isLate: boolean;      // se já passou do limite e virou "faltou"
-  startAt: Date;        // momento "alvo" (hora marcada ou meio-dia do dia)
-  lateAt: Date;         // momento em que vira "faltou"
+  hasTime: boolean;    
+  canStart: boolean; 
+  isLate: boolean;     
+  startAt: Date;       
+  lateAt: Date;       
 };
 
 function parseDateSafe(raw: any): Date | null {
@@ -194,7 +192,6 @@ function parseDateSafe(raw: any): Date | null {
   const s = String(raw).trim();
   if (!s) return null;
 
-  // datetime-local sem timezone: 2026-02-24T19:00 ou 2026-02-24T19:00:00
   const mLocal = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (mLocal) {
     const [, Y, M, D, h, mi, sec] = mLocal;
@@ -209,21 +206,18 @@ function parseDateSafe(raw: any): Date | null {
     );
   }
 
-  // só data YYYY-MM-DD
   const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mDate) {
     const [, Y, M, D] = mDate;
     return new Date(Number(Y), Number(M) - 1, Number(D), 0, 0, 0, 0);
   }
 
-  // ISO com timezone
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
 
 function hasHoraMarcada(d: Date | null) {
   if (!d) return false;
-  // se no horário BRT não for 00:00, considera "tem hora"
   const hh = Number(
     new Intl.DateTimeFormat("pt-BR", {
       timeZone: "America/Sao_Paulo",
@@ -245,11 +239,10 @@ function getStartWindowInfo(d: Date | null): StartWindowInfo | null {
 
   const now = new Date();
 
-  // ✅ se tem hora marcada: libera 1h antes; passa 30min depois => faltou
   if (hasHoraMarcada(d)) {
     const startAt = d;
-    const canStartFrom = new Date(startAt.getTime() - 60 * 60 * 1000); // 1h antes
-    const lateAt = new Date(startAt.getTime() + 60 * 60 * 1000);       // 30min depois
+    const canStartFrom = new Date(startAt.getTime() - 60 * 60 * 1000); 
+    const lateAt = new Date(startAt.getTime() + 60 * 60 * 1000);       
 
     const canStart = now >= canStartFrom && now <= lateAt;
     const isLate = now > lateAt;
@@ -257,13 +250,11 @@ function getStartWindowInfo(d: Date | null): StartWindowInfo | null {
     return { hasTime: true, canStart, isLate, startAt, lateAt };
   }
 
-  // ✅ se NÃO tem hora: libera apenas no dia (BRT); depois do dia acabar => faltou
   const startDay = startOfDayBRT(d);
   const endDay = endOfDayBRT(d);
   const canStart = now >= startDay && now <= endDay;
   const isLate = now > endDay;
 
-  // startAt aqui é só referência (pode ser o próprio startDay)
   return { hasTime: false, canStart, isLate, startAt: startDay, lateAt: endDay };
 }
 
@@ -333,7 +324,6 @@ function resolveUploadUrl(raw?: string | null) {
     return p;
   }
 
-  // Arquivos fixos do frontend: vídeos/imagens em /assets
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -346,7 +336,6 @@ function resolveUploadUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
   if (p.startsWith("/videos/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -359,7 +348,6 @@ function resolveUploadUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // Uploads/exercícios vindos do backend
   if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
     return `${API.BASE_URL}${p}`;
   }
@@ -400,13 +388,12 @@ function getHoraHHMM(d: Date) {
 }
 
 function getYMDInBRT(d: Date) {
-  // pega “ano/mês/dia” no calendário do Brasil
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(d); // YYYY-MM-DD
+  }).format(d); 
   const [Y, M, D] = parts.split("-").map(Number);
   return { Y, M, D };
 }
@@ -465,7 +452,6 @@ function getOwnerIdsFromTreino(tr: any) {
     pickFirstId(professorObj, ["id", "professorId", "professor_id", "usuarioId"]) ||
     pickFirstId(tr?.criador, ["professorId", "professor_id", "usuarioId"]);
 
-  // ✅ FALLBACK PRINCIPAL: quando o backend manda { autor: { tipo, id, nome } }
   const autorTipo = String(tr?.autor?.tipo ?? "").trim().toLowerCase();
   const autorId = pickId(tr?.autor?.id);
 
@@ -496,7 +482,6 @@ function getTipoUsuarioIdFromMe(tipo: string, me: any): string {
   const adminId =
     pickId(me?.admin?.id) || pickId(me?.Administrador?.id) || pickId(me?.adminId) || pickId(me?.administradorId);
 
-  // se o backend já devolve tipoUsuarioId certo, aproveita
   const tipoUsuarioId = pickId(me?.tipoUsuarioId) || pickId(me?.tipoUsuario?.id);
 
   if (t === "clube") return clubeId || tipoUsuarioId;
@@ -568,8 +553,6 @@ export default function TreinosInstrutores({
   const [metodologias, setMetodologias] = useState<MetodologiaCard[]>([]);
   const [loadingMetodologias, setLoadingMetodologias] = useState(false);
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
-  // filtros selecionados (chips)
-  const [filtrosSelecionados, setFiltrosSelecionados] = useState<string[]>([]);
   type FiltroConteudo = "TODOS" | "VIDEOS_TREINOS" | "VIDEOS" | "TREINOS";
 
   function getExerciseVideoKey(ex: ExercicioSessaoDetalhe) {
@@ -854,7 +837,7 @@ export default function TreinosInstrutores({
     setErroMetodologias(null);
 
     try {
-      const publicoParam = filtroPublico; // já é "TODOS" | "ATLETAS" | "PROFISSIONAIS" | "AMBOS"
+      const publicoParam = filtroPublico; 
 
       const r = await fetch(
         `${API.BASE_URL}/api/metodologias/visiveis?publico=${encodeURIComponent(publicoParam)}`,
@@ -872,7 +855,6 @@ export default function TreinosInstrutores({
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
         descricao: m.descricao ?? null,
-        // ✅ capa correta (evita 404 em localhost:5173/uploads/...)
         capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
         publicoAlvo: m.publicoAlvo ?? "AMBOS",
         nivel: m.nivel ?? null,
@@ -884,7 +866,6 @@ export default function TreinosInstrutores({
         mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
         notaCount: Number(m.totalReviews ?? m.notaCount ?? 0),
         totalReviews: Number(m.totalReviews ?? m.notaCount ?? 0),
-        // ⚠️ a lista normalmente NÃO vem com pontos -> vamos preencher depois via detalhe
         pontos: Number(m.pontosTotal ?? m.pontos ?? m.pontuacao ?? 0),
         criadorNome:
           m.criadorNome ??
@@ -895,7 +876,6 @@ export default function TreinosInstrutores({
           null,
       }));
 
-      // ✅ ENRIQUECE (pontos + capa garantida) usando /detalhe
       const detalhadas = await Promise.all(
         normalizadas.map(async (card) => {
           try {
@@ -907,21 +887,17 @@ export default function TreinosInstrutores({
             const jj = await rr.json().catch(() => null);
             if (!rr.ok || !jj) return card;
 
-            // 1) tenta vir pronto do backend
             let pontosTotal = Number(jj.pontosTotal ?? 0);
 
-            // 2) fallback: soma pontos dos itens (MetodologiaItem.pontos)
             if (!pontosTotal && Array.isArray(jj.itens)) {
               pontosTotal = jj.itens
                 .filter((it: any) => it?.publicado !== false)
                 .reduce((acc: number, it: any) => acc + Number(it?.pontos ?? 0), 0);
             }
 
-            // (opcional) melhora contagem de itens se o detalhe vier com itens
             const itens = Array.isArray(jj.itens) ? jj.itens : [];
             const videoCount = itens.filter((it: any) => String(it?.tipo).toUpperCase() === "VIDEO" && it?.publicado !== false).length;
             const treinoCount = itens.filter((it: any) => String(it?.tipo).toUpperCase() === "TREINO" && it?.publicado !== false).length;
-
             const nomeCriador =
               jj?.criadorNome ??
               jj?.criadorUsuario?.nome ??
@@ -1102,15 +1078,12 @@ export default function TreinosInstrutores({
         return;
       }
 
-      // UPDATE_OFFICIAL sem vídeo antigo:
       if (!existingUrl) {
         alert(`Vídeo selecionado para virar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
         fecharCameraModal();
         return;
       }
 
-      // Se já existe vídeo antigo, não fecha.
-      // A comparação entre vídeo atual e novo continua aberta.
     } catch (error: any) {
       console.error(error);
       alert(error?.message || "Erro ao enviar vídeo.");
@@ -1415,18 +1388,15 @@ export default function TreinosInstrutores({
       return;
     }
 
-    // sempre trabalhar com let (nunca const) porque vamos setar depois
     let alunos: AtletaVinculado[] = [];
 
     try {
-      // ✅ usa SEMPRE /turma/:id/alunos
       const res = await fetch(`${API.BASE_URL}/api/turmas/${turmaIdOk}/alunos`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
         console.warn("[treinos] falha ao buscar alunos da turma", turmaIdOk, res.status);
-        // abre modal vazio mesmo, pra não travar o fluxo
         setAlunosDaSessao([]);
         setPresentesSelecionados([]);
         setModalSessaoId(sessaoId);
@@ -1436,12 +1406,9 @@ export default function TreinosInstrutores({
       const data = await res.json();
       const arr = Array.isArray(data?.alunos) ? data.alunos : data;
       const listaBruta = Array.isArray(arr) ? arr : [];
-      // ✅ mantém apenas quem realmente está na turma
       const lista = listaBruta.filter((a: any) => {
-        // se o backend informar inTurma, respeita
         if (typeof a?.inTurma === "boolean") return a.inTurma === true;
 
-        // fallback: se veio usuarioId/atletaId já vinculado, mantém
         return Boolean(a?.usuarioId || a?.usuario?.id || a?.atletaId || a?.id);
       });
 
@@ -1474,7 +1441,6 @@ export default function TreinosInstrutores({
       });
 
       setAlunosDaSessao(alunos);
-      // ✅ padrão: todos marcados como presentes (igual seu código atual fazia)
       setPresentesSelecionados(alunos.map((a) => a.id));
       setModalSessaoId(sessaoId);
     } catch (e) {
@@ -1541,8 +1507,6 @@ export default function TreinosInstrutores({
     if (!res.ok) throw new Error("Falha ao buscar sessões");
 
     const data = await res.json();
-
-    // ✅ pega a lista independente do formato que o backend retornar
     const items: any[] =
       Array.isArray(data) ? data :
       Array.isArray(data?.items) ? data.items :
@@ -1849,7 +1813,7 @@ async function salvarProgressoSessao(sessaoId: string) {
   const listaParaExibir =
     usuario?.tipo === "admin"
       ? treinos
-      : treinos; // ✅ sempre usa a lista completa; depois você separa em "meus" e "vinculados"
+      : treinos; 
 
   const listaOrdenadaParaExibir = useMemo(() => {
     const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
@@ -2145,7 +2109,6 @@ async function salvarProgressoSessao(sessaoId: string) {
 
         setTreinos(normTreinos);
 
-        // stats (se existir no backend)
         try {
           const ids = normTreinos.map((t) => t.id).filter(Boolean);
           if (ids.length) {
@@ -2171,7 +2134,6 @@ async function salvarProgressoSessao(sessaoId: string) {
           setExerciciosCountByTreinoId({});
         }
 
-        // outras cargas necessárias
         if (
           ["professor", "admin", "escola", "escolinha", "clube"].includes(String(usuarioReady.tipoOk || "").toLowerCase())
         ) {
@@ -2359,7 +2321,7 @@ async function salvarProgressoSessao(sessaoId: string) {
         const professorNomes = Array.from(
           new Set(
             [
-              ...splitNomes(professorNomeSingular), // 🔥 quebra "A, B" em ["A","B"]
+              ...splitNomes(professorNomeSingular), 
               ...professorNomesDireto,
               ...nomesFromIds,
             ]
@@ -2579,7 +2541,6 @@ async function salvarProgressoSessao(sessaoId: string) {
 
     if (!meuTipo) return false;
 
-    // IDs possíveis para comparar (caso tipoUsuarioId venha errado)
     const meusIds = Array.from(new Set([meuTipoUsuarioId, meuUsuarioId].filter(Boolean)));
     const tProfessorId = String(t.professorId ?? "").trim();
     const tClubeId = String(t.clubeId ?? "").trim();
@@ -2599,13 +2560,13 @@ async function salvarProgressoSessao(sessaoId: string) {
 
   const meusTreinosLista = useMemo(() => {
     if (!usuario) return [];
-    if (String(usuario.tipo).toLowerCase() === "admin") return listaOrdenadaParaExibir; // admin vê tudo como lista única
+    if (String(usuario.tipo).toLowerCase() === "admin") return listaOrdenadaParaExibir;
     return (listaOrdenadaParaExibir || []).filter((t) => isTreinoMeuDeVerdade(t, usuario));
   }, [listaOrdenadaParaExibir, usuario]);
 
   const treinosVinculadosLista = useMemo(() => {
     if (!usuario) return [];
-    if (String(usuario.tipo).toLowerCase() === "admin") return []; // admin não precisa de bloco “vinculados”
+    if (String(usuario.tipo).toLowerCase() === "admin") return []; 
     return (listaOrdenadaParaExibir || []).filter((t) => !isTreinoMeuDeVerdade(t, usuario));
   }, [listaOrdenadaParaExibir, usuario]);
 
@@ -2675,10 +2636,8 @@ async function salvarProgressoSessao(sessaoId: string) {
               className="p-2 rounded-lg border hover:bg-gray-50"
               title="Editar treino"
               onClick={() => {
-                // 1) guarda a tela de origem (essa)
                 sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
 
-                // 2) navega para edição no admin, passando returnTo também (mais confiável)
                 navigate(
                   `/admin/treinos/create?id=${encodeURIComponent(treino.id)}&returnTo=${encodeURIComponent(
                     window.location.pathname + window.location.search
@@ -3145,11 +3104,10 @@ async function salvarProgressoSessao(sessaoId: string) {
                             : [turmaLocal?.professorNome ?? ""];
 
                           const nomesTurmaLocal = baseTurma
-                            .flatMap(splitNomes) // 🔥 quebra qualquer "A, B" dentro do array
+                            .flatMap(splitNomes) 
                             .map((x) => String(x || "").trim())
                             .filter(Boolean);
 
-                          // ✅ junta tudo e deduplica por normalização
                           const profs = uniqByNorm([...nomesSessao, ...nomesTurmaLocal]).join(", ");
 
                           return (
@@ -3332,7 +3290,6 @@ async function salvarProgressoSessao(sessaoId: string) {
           ? (sessao.treino!.exercicios as any[])
           : [];
 
-        // chave estável pra “bater” treino.exercicios com sessao.exercicios
         const keyOf = (x: any) =>
           x?.exercicioId
             ? `E:${String(x.exercicioId)}`
@@ -3342,22 +3299,18 @@ async function salvarProgressoSessao(sessaoId: string) {
                 ? `P:${String(x.exercicioPersonalizadoId)}`
                 : `ID:${String(x?.id ?? "")}`;
 
-        // mapa do que foi concluído/marcado na sessão
         const sessaoByKey = new Map<string, ExercicioSessaoDetalhe>();
         for (const se of exerciciosSessao) sessaoByKey.set(keyOf(se), se);
 
-        // ✅ lista final pra render (prioriza dados “completos” do treino)
         const exercicios: ExercicioSessaoDetalhe[] =
           exerciciosDoTreino.length > 0
             ? exerciciosDoTreino.map((te: any) => {
                 const se = sessaoByKey.get(keyOf(te));
                 return {
-                  // id: usa o id da linha da sessão se existir (pra marcar concluído pelo id correto)
                   id: se?.id ?? String(te.id),
                   exercicioId: te.exercicioId ?? null,
                   exercicioTemporarioId: te.exercicioTemporarioId ?? null,
                   exercicioPersonalizadoId: te.exercicioPersonalizadoId ?? null,
-                  // relações completas (nome/descrição/vídeo)
                   exercicio: te.exercicio ?? null,
                   exercicioTemporario: te.exercicioTemporario ?? null,
                   exercicioPersonalizado: te.exercicioPersonalizado ?? null,
@@ -3380,16 +3333,13 @@ async function salvarProgressoSessao(sessaoId: string) {
                     te.descanso != null
                       ? String(te.descanso)
                       : (se?.descanso ?? null),
-                  // estado da sessão
                   concluido: Boolean(se?.concluido),
-                  // se backend já “achatou” videoDemonstrativoUrl, mantém também
                   videoDemonstrativoUrl:
                     se?.videoDemonstrativoUrl ??
                     te?.exercicio?.videoDemonstrativoUrl ??
                     te?.exercicioTemporario?.videoDemonstrativoUrl ??
                     te?.exercicioPersonalizado?.videoDemonstrativoUrl ??
                     null,
-                  // extras
                   nome: null,
                   detalhes: null,
                 } as ExercicioSessaoDetalhe;
@@ -3424,7 +3374,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                       sessao.status === "em_andamento" ||
                       (!!startedAtISO && sessao.status !== "finalizada");
                    
-                      if (!emAndamento) return null; // topo fica “só comando”; se não estiver em andamento, fica vazio
+                      if (!emAndamento) return null; 
 
                     const tempoStr = formatElapsed(startedAtISO, clockNow);
 

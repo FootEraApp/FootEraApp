@@ -260,7 +260,7 @@ export async function criarVinculoGestor(req: AuthenticatedRequest, res: Respons
       return res.status(403).json({ error: "Sem permissão." });
     }
 
-    const tipo = String(req.body?.tipo || "").toUpperCase(); // CLUBE | ESCOLINHA
+    const tipo = String(req.body?.tipo || "").toUpperCase(); 
     const ownerId = String(req.body?.ownerId || "").trim();
     const professorId = String(req.body?.professorId || "").trim();
     const papel = req.body?.papel ? String(req.body.papel) : null;
@@ -286,7 +286,6 @@ export async function criarVinculoGestor(req: AuthenticatedRequest, res: Respons
     });
     if (!prof) return res.status(404).json({ error: "Professor não encontrado." });
 
-    // ⚠️ esse "where" só funciona se você tiver o @@unique([tipo, ownerId, professorId])
     const created = await prisma.organizacaoGestor.upsert({
       where: {
         tipo_ownerId_professorId: {
@@ -383,7 +382,6 @@ export async function desativarVinculoGestor(req: AuthenticatedRequest, res: Res
   }
 }
 
-// 👇 adicione no seu controller (mesmo arquivo)
 function canManageOwnerOrAdmin(tipoUsuario: string, myOwnerId: string | null, tipo: string, ownerId: string) {
   if (tipoUsuario === "Admin") return true;
   if (!myOwnerId) return false;
@@ -465,7 +463,6 @@ async function sincronizarVinculosProfessorOrganizacao(professorId: string) {
 
   if (!professor) return;
 
-  // 1) vínculo direto em Professor -> garantir pivot + gestor
   if (professor.clubeId) {
     await prisma.professorClube.upsert({
       where: {
@@ -512,7 +509,6 @@ async function sincronizarVinculosProfessorOrganizacao(professorId: string) {
     });
   }
 
-  // 2) vínculo em OrganizacaoGestor -> garantir pivot e campo direto em Professor
   const gestores = await prisma.organizacaoGestor.findMany({
     where: { professorId, ativo: true },
     select: { tipo: true, ownerId: true },
@@ -566,7 +562,6 @@ async function sincronizarVinculosProfessorOrganizacao(professorId: string) {
     }
   }
 
-  // 3) vínculo em pivot -> garantir OrganizacaoGestor
   const [clubesPivot, escolinhasPivot] = await Promise.all([
     prisma.professorClube.findMany({
       where: { professorId },
@@ -597,7 +592,7 @@ async function sincronizarVinculosProfessorOrganizacao(professorId: string) {
 
 export async function listarGestores(req: AuthenticatedRequest, res: Response) {
   try {
-    const tipo = String(req.query?.tipo || "").toUpperCase(); // CLUBE | ESCOLINHA
+    const tipo = String(req.query?.tipo || "").toUpperCase(); 
     const ownerId = String(req.query?.ownerId || "").trim();
 
     if (!["CLUBE", "ESCOLINHA"].includes(tipo)) {
@@ -729,7 +724,6 @@ export async function criarGestor(req: AuthenticatedRequest, res: Response) {
       return res.status(403).json({ error: "Sem permissão." });
     }
 
-    // garante owner existe
     if (tipo === "CLUBE") {
       const clube = await prisma.clube.findUnique({ where: { id: ownerId }, select: { id: true } });
       if (!clube) return res.status(404).json({ error: "Clube não encontrado." });
@@ -741,7 +735,6 @@ export async function criarGestor(req: AuthenticatedRequest, res: Response) {
     const prof = await prisma.professor.findUnique({ where: { id: professorId }, select: { id: true } });
     if (!prof) return res.status(404).json({ error: "Professor não encontrado." });
 
-    // ✅ se não tiver @@unique([tipo, ownerId, professorId]) use findFirst
     const existente = await prisma.organizacaoGestor.findFirst({
       where: { tipo: tipo as any, ownerId, professorId },
       select: { id: true },
@@ -856,7 +849,6 @@ export async function removerGestor(req: AuthenticatedRequest, res: Response) {
       return res.status(403).json({ error: "Sem permissão." });
     }
 
-    // seu front espera DELETE. Vamos desativar (soft delete)
     await prisma.organizacaoGestor.update({ where: { id }, data: { ativo: false } });
     return res.json({ ok: true });
   } catch (e: any) {
