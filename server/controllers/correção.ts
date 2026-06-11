@@ -1,52 +1,7 @@
 
-import { Request, Response } from "express";
-import { Categoria, PosicaoCampo } from "@prisma/client";
+import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
-import { requireUsage } from "server/lib/usage.js";
-import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
 import { prisma } from "../prisma.js";
-import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
-import { deleteFromS3 } from "../middlewares/s3Upload.js";
-
-type AtividadeUI = {
-  id: string;
-  tipo: string;         
-  titulo: string;      
-  createdAt: string;    
-  imagemUrl?: string | null;
-  link?: string | null; 
-};
-
-const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
-
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3001";
-const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
-
-function absUrl(path?: string | null) {
-  const s = typeof path === "string" ? path.trim() : "";
-  if (!s) return null;
-  if (/^https?:\/\//i.test(s)) return s;
-  return `${s.startsWith("/uploads") ? API_BASE_URL : FRONTEND_URL}${s}`;
-}
-
-function readPrivacidadeFlags(config: any) {
-  const c = (config && typeof config === "object") ? config : {};
-  return {
-    perfilVisivel: c.perfilVisivel !== false,         
-    mostrarEmail: c.mostrarEmail === true,            
-    permitirMensagens: c.permitirMensagens !== false, 
-  };
-}
-
-function isAdminFromReq(req: any) {
-  const t = String(req?.user?.tipo ?? req?.authUser?.tipo ?? "").toLowerCase();
-  return t === "admin";
-}
-
-function withDefaultImg(v: any) {
-  const s = typeof v === "string" ? v.trim() : "";
-  return s ? s : DEFAULT_AVATAR;
-}
 
 async function ensureSolicitacaoVinculo(
   tx: any,
@@ -103,19 +58,6 @@ function pickIds(raw: any): string[] {
   return one ? [one] : [];
 }
 
-function pontosDesafioInd(s: any) {
-  const cand = [
-    s?.pontosCreditados,   
-    s?.pontuacaoSnapshot,   
-    s?.pontuacao,           
-    s?.desafio?.pontuacao, 
-  ];
-  const n = cand
-    .map(v => Number(v))
-    .find(v => Number.isFinite(v) && v > 0);
-  return n ?? 0;
-}
-
 function pontosGrupo(p: any): number {
   const baseCandidates = [
     p?.pontosGanhos,                            
@@ -132,46 +74,6 @@ function pontosGrupo(p: any): number {
   return base + (bonusDado ? bonus : 0);
 }
 
-async function getParticipacoesGrupo(usuarioId: string, atletaId: string) {
-  try {
-    return await prisma.submissaoDesafioEmGrupo.findMany({
-      where: {
-        OR: [
-          { usuarioId },                            
-          { submissaoDesafio: { atletaId } },    
-        ],
-      },
-      include: {
-        desafioEmGrupo: {
-          include: {
-            grupo: true,
-            desafioOficial: true,
-          },
-        },
-      },
-      orderBy: { dataEnvio: "desc" },
-    });
-  } catch {
-    return [];
-  }
-}
-
-function mapGrupoToAtividade(p: any) {
-  const g = p.desafioEmGrupo;
-  const desafio = g?.desafioOficial;
-  return {
-    id: `g-${p.id}`,
-    tipo: "Desafio" as const,
-    imagemUrl: desafio?.imagemUrl ?? null,
-    nome: desafio?.titulo ?? g?.grupo?.nome ?? "Desafio em grupo",
-    data: p.dataEnvio ?? g?.dataCriacao,
-    duracao: undefined,
-    pontuacao: pontosGrupo(p),
-  };
-}
-
-
-
 export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const userIdFromToken = req.userId;
@@ -186,18 +88,15 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
   const file = (req as any).file as Express.Multer.File | undefined;
   const fotoFinal: string | null = file ? `/uploads/${file.filename}` : (usuario.foto ?? null);
-
   const raw = typeof usuario?.nomeDeUsuario === "string" ? usuario.nomeDeUsuario.trim() : "";
   const novoUsername = raw ? raw.toLowerCase() : null;
 
-  // valida formato (mesma regra do front)
   if (novoUsername && !/^[a-z0-9._]{3,30}$/.test(novoUsername)) {
     return res.status(400).json({
       error: "Nome de usuário inválido. Use letras, números, ponto e underline (3–30).",
     });
   }
 
-  // checa duplicado (evita conflito)
   if (novoUsername) {
     const existe = await prisma.usuario.findFirst({
       where: {
@@ -220,7 +119,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       data: {
         nome: usuario.nome,
         email: usuario.email,
-        nomeDeUsuario: novoUsername ?? undefined, // ✅ garante lowercase
+        nomeDeUsuario: novoUsername ?? undefined,
         foto: fotoFinal,
         cep: cepDigits ? cepDigits : null,
         cidade: usuario.cidade,
@@ -242,7 +141,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           null;
 
         const rawClube = tipo.clubeId ?? tipo.clube ?? null;
-        
         const escolinhaId = pickId(rawEscolinha);
         const clubeId = pickId(rawClube);
 

@@ -211,9 +211,6 @@ export async function criarSubmissaoTreinoUpload(
       });
     }
 
-    // =========================
-    // FLUXO NORMAL COM ATLETA
-    // =========================
     const usuarioIdForActivity = await resolveUsuarioIdForActivity(
       req.user?.id,
       atletaId
@@ -255,7 +252,6 @@ export async function criarSubmissaoTreinoUpload(
       select: { id: true, criadoEm: true },
     });
 
-        // marcar treino concluído
     await prisma.treinoAgendado.update({
       where: { id: treinoAgendadoId },
       data: {
@@ -264,7 +260,6 @@ export async function criarSubmissaoTreinoUpload(
       },
     });
 
-    // criar atividade recente
     const usuarioId = await resolveUsuarioIdForActivity(undefined, atletaId);
 
     if (usuarioId && !existing) {
@@ -282,7 +277,6 @@ export async function criarSubmissaoTreinoUpload(
       });
     }
 
-    // recalcular pontuação total
     await recomputePontuacaoAtleta(atletaId);
 
     const isFirst = !existing;

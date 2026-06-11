@@ -108,7 +108,6 @@ export default function GoogleButton({
 
       const msg = String(e?.message || e || "").toLowerCase();
 
-      // Quando o usuário fecha/cancela o popup do Google, não mostra erro na tela.
       if (
         msg.includes("cancel") ||
         msg.includes("canceled") ||

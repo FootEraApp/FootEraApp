@@ -50,7 +50,6 @@ router.post(
   uploadMetodologiaS3
 );
 
-// específicas
 router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
@@ -58,7 +57,6 @@ router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/eventos-ao-vivo/visiveis", authenticateToken, listEventosAoVivoVisiveis);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
 
-// criação completa normal
 router.post(
   "/completa",
   authenticateToken,
@@ -66,7 +64,6 @@ router.post(
   createMetodologiaCompleta
 );
 
-// AVULSAS — ANTES DAS ROTAS /:id
 router.post(
   "/metodologias-avulsas/completa",
   authenticateToken,
@@ -108,11 +105,8 @@ router.post(
   concluirItemMetodologia
 );
 
-// legado
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
-
-// estruturas
 router.post("/:metodologiaId/estruturas", authenticateToken, requireMetodologiaOwnership, createMetodologiaEstruturas);
 router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, updateMetodologiaEstrutura);
 router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstrutura);
@@ -154,18 +148,13 @@ router.post(
   migrarMetodologiaAvulsaParaLearning
 );
 
-// detalhe/assinatura
 router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
 router.post("/:id/assinar", authenticateToken, assinarMetodologia);
 router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
 router.post("/metodologias-avulsas/:id/concluir-item", authenticateToken, concluirItemMetodologia);
-
-// por id por último
 router.get("/:id", authenticateToken, getMetodologiaById);
 router.put("/:id", authenticateToken, requireMetodologiaOwnership, updateMetodologia);
 router.delete("/:id", authenticateToken, requireMetodologiaOwnership, deleteMetodologia);
-
-// CRUD padrão
 router.get("/", authenticateToken, listMetodologias);
 router.post("/", authenticateToken, requireMetodologiaCreateAccess, createMetodologia);
 

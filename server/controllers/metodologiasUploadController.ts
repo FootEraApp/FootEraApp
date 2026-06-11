@@ -10,8 +10,8 @@ export async function uploadMetodologiaS3(req: Request, res: Response) {
 
     return res.status(201).json({
       ok: true,
-      url: file.location, // URL pública do S3 gerada pelo multer-s3
-      key: file.key,      // Caminho interno (ex: metodologias/videos/123.mp4)
+      url: file.location, 
+      key: file.key,      
       mimetype: file.mimetype
     });
   } catch (error) {

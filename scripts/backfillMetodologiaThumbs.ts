@@ -4,7 +4,6 @@ dotenv.config({ path: path.resolve(process.cwd(), "server", ".env") });
 
 import { spawn } from "child_process";
 import fs from "fs";
-import ffmpegPath from "ffmpeg-static";
 import { PrismaClient, MetodologiaConteudoTipo, Prisma } from "@prisma/client";
 import ffmpegStatic from "ffmpeg-static";
 
@@ -19,11 +18,8 @@ const prisma = new PrismaClient();
 
 const PROJECT_ROOT = process.cwd();
 const UPLOADS_ROOT = path.resolve(PROJECT_ROOT, "uploads");
-
-// ✅ thumbs devem ir pra uploads/thumbs/metodologias
 const OUT_DIR = path.join(UPLOADS_ROOT, "thumbs", "metodologias");
 const PUBLIC_PREFIX = "/uploads/thumbs/metodologias";
-
 const BATCH_SIZE = 50;
 const MAX_ITEMS = Number(process.env.MAX_ITEMS ?? "0") || null;
 const START_AT_SECONDS = Number(process.env.THUMB_SS ?? "1");
@@ -42,7 +38,6 @@ function normalizeVideoUrl(videoUrl: string) {
     .replace("C:\\Ussers\\", "C:\\Users\\");
 }
 
-// tenta achar um arquivo pelo nome dentro de uploads/metodologias/videos
 function tryFindInUploadsByBasename(videoUrlOrPath: string) {
   const base = path.basename(videoUrlOrPath);
   const candidate = path.join(UPLOADS_ROOT, "metodologias", "videos", base);
@@ -56,18 +51,15 @@ function resolveVideoInput(videoUrlRaw: string) {
 
   if (isHttpUrl(videoUrl)) return videoUrl;
 
-  // 1) /uploads/... -> ./uploads/...
   if (videoUrl.startsWith("/uploads/")) {
     const rel = videoUrl.replace("/uploads/", "");
     return path.join(UPLOADS_ROOT, rel);
   }
 
-  // 2) /assets/... -> client/public/assets/...
   if (videoUrl.startsWith("/assets/")) {
     const rel = videoUrl.replace("/assets/", "");
     const p = path.join(PROJECT_ROOT, "client", "public", "assets", rel);
 
-    // se não existir no assets, tenta procurar pelo nome em uploads/metodologias/videos
     if (!fs.existsSync(p)) {
       const found = tryFindInUploadsByBasename(videoUrl);
       if (found) return found;
@@ -75,7 +67,6 @@ function resolveVideoInput(videoUrlRaw: string) {
     return p;
   }
 
-  // 3) caminho absoluto salvo errado com /server/uploads/... -> remapeia para ./uploads/...
   const marker = `${path.sep}server${path.sep}uploads${path.sep}`;
   if (videoUrl.includes(marker)) {
     const idx = videoUrl.indexOf(marker);
@@ -88,13 +79,11 @@ function resolveVideoInput(videoUrlRaw: string) {
     return p;
   }
 
-  // 4) uploads/... -> ./uploads/...
   if (videoUrl.startsWith("uploads/")) {
     const rel = videoUrl.replace(/^uploads\//, "");
     return path.join(UPLOADS_ROOT, rel);
   }
 
-  // fallback + tentativa por basename
   if (!fs.existsSync(videoUrl)) {
     const found = tryFindInUploadsByBasename(videoUrl);
     if (found) return found;

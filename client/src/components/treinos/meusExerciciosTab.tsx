@@ -114,8 +114,6 @@ export default function MeusExerciciosTab() {
       }
 
       setItems((prev) => {
-        // se estiver na aba Favoritos e o item foi desfavoritado,
-        // ele some imediatamente da lista
         if (somenteFavoritos && !novoFavorito) {
           return prev.filter((item) => item.id !== id);
         }

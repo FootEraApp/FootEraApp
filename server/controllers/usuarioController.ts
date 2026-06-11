@@ -110,14 +110,10 @@ export const getUsuarioChallenges = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/usuarios/:id/parceiro
 export const getUsuarioParceiro = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    // 👇 IMPORTANTE:
-    // authenticateToken precisa colocar o usuário do token em req.user (ou semelhante)
-    // Vou tentar cobrir os nomes mais comuns.
     const authUserId =
       (req as any).user?.id ||
       (req as any).userId ||
@@ -129,8 +125,6 @@ export const getUsuarioParceiro = async (req: Request, res: Response) => {
       (req as any).tipo ||
       null;
 
-    // 🔒 Segurança: só deixa consultar seu próprio ID
-    // (ou admin, se você quiser permitir)
     const isAdmin = authUserTipo === "Admin" || authUserTipo === "ADMIN";
 
     if (!authUserId) {
@@ -149,8 +143,6 @@ export const getUsuarioParceiro = async (req: Request, res: Response) => {
         parceiroInfo: {
           select: {
             id: true,
-            // coloque aqui campos que você quiser retornar do Parceiro
-            // ex: status: true, plano: true, etc (depende do seu model Parceiro)
           },
         },
       },
@@ -171,7 +163,6 @@ export const getUsuarioParceiro = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/usuarios/:id/assinatura
 export const getUsuarioAssinatura = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -197,7 +188,6 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Não autenticado" });
     }
 
-    // 🔒 Segurança: só pode consultar a própria assinatura (ou admin)
     if (authUserId !== id && !isAdmin) {
       return res
         .status(403)
@@ -227,7 +217,6 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
       },
     });
 
-    // Sem assinatura => não é PRO
     if (!assinatura) {
       return res.json({
         hasAssinatura: false,
@@ -239,7 +228,6 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
 
     const now = new Date();
 
-    // Bloqueio administrativo => não PRO
     if (assinatura.bloqueadoEm) {
       return res.json({
         hasAssinatura: true,
@@ -249,7 +237,6 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
       });
     }
 
-    // Cancelada/inativa => não PRO
     if (!assinatura.ativo) {
       return res.json({
         hasAssinatura: true,
@@ -259,25 +246,17 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
       });
     }
 
-    // ✅ Regras de validade:
-    const renovaEmOk =
-      assinatura.renovaEm && new Date(assinatura.renovaEm) > now;
+    const renovaEmOk = assinatura.renovaEm && new Date(assinatura.renovaEm) > now;
 
     const trialOk =
       assinatura.status === "TRIAL" &&
       (
-        // se tiver trialEndsAt, respeita
         (assinatura.trialEndsAt && new Date(assinatura.trialEndsAt) > now)
-        // se não tiver trialEndsAt, cai pro renovaEm (se você usa renovaEm no trial)
         || (!assinatura.trialEndsAt && renovaEmOk)
       );
 
-    const ativaOk =
-      assinatura.status === "ATIVA" && renovaEmOk;
-
-    // ✅ PRO se ATIVA válida ou TRIAL válido
+    const ativaOk = assinatura.status === "ATIVA" && renovaEmOk;
     const isPro = Boolean(ativaOk || trialOk);
-
 
     return res.json({
       hasAssinatura: true,

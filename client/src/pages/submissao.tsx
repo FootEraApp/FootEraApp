@@ -733,8 +733,6 @@ export default function PaginaSubmissao() {
       if (!r.ok) {
         console.warn("[metodologia] falha ao concluir item:", j);
 
-        // se a submissão já foi salva e a tela já marca como concluído,
-        // não queremos quebrar o fluxo só por causa dessa chamada extra
         return false;
       }
 
@@ -839,7 +837,6 @@ export default function PaginaSubmissao() {
         return;
       }
 
-      // desafio da metodologia
       if (metodologiaId && estruturaId && metodologiaItemId && isDesafio) {
         const metodologiaFormData = new FormData();
         metodologiaFormData.append("observacao", observacao);
@@ -906,7 +903,6 @@ export default function PaginaSubmissao() {
         return;
       }
 
-      // fluxo normal
       const res = await fetch(url, {
         method: "POST",
         body: formData,

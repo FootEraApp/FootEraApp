@@ -1,17 +1,12 @@
 // client/src/pages/landingPage.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Instagram, Facebook } from "lucide-react";
 import Atualizacoes from "../components/Atualizacoes";
 
-// ✅ Liga/desliga redes sociais
 const SHOW_SOCIALS = false;
-
-// ✅ Ajuste se sua logo estiver em outro caminho
-const LOGO_SRC = "/assets/usuarios/footera-logo.png"; // logo com o fundo transparente
-const LOGOV_SRC = "/assets/usuarios/footera-logo-fundo-verde.png"; // logo verde
-const LOGOCL_SRC = "/assets/usuarios/footera-contentlab-logo.png"; // logo do content lab
-
+const LOGO_SRC = "/assets/usuarios/footera-logo.png"; 
+const LOGOV_SRC = "/assets/usuarios/footera-logo-fundo-verde.png"; 
 const LOGO_LANDING_VERDE = "/assets/usuarios/2.png";
 const LOGO_LANDING_PRETO = "/assets/usuarios/3.png";
 
@@ -30,9 +25,6 @@ const HERO_SLIDES = [
     subtitle: "Em breve novidades e conteúdos especiais para a comunidade.",
     href: "/content-lab",
   },
-
-  // se quiser adicionar mais imagens ao carrosel é só adicionar aqui
-
 ];
 
 type LandingPageProps = {

@@ -5,7 +5,6 @@ import {
   listarMinhasOrganizacoesGerenciaveis,
   criarVinculoGestor,
   desativarVinculoGestor,
-  // NOVO
   listarGestores,
   criarGestor,
   atualizarGestor,

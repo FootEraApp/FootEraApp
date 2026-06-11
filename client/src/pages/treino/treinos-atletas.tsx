@@ -125,21 +125,16 @@ type MetodologiaCatalogo = {
   capaUrl?: string | null;
   nivel?: string | null;
   publicoAlvo?: MetodologiaPublicoAlvo;
-  pontosTotal?: number | null; // se você usa pontos
-  pontosBadge?: string | null; // texto curto, tipo "150 pts" ou "Novo"
-  pontosPorSemanaLabel?: string | null; // texto curto, tipo "50 pts/semana"
-  // catálogo
+  pontosTotal?: number | null; 
+  pontosBadge?: string | null;
+  pontosPorSemanaLabel?: string | null; 
   totalAssinantes?: number | null;
   mediaAvaliacao?: number | null;
   totalAvaliacoes?: number | null;
-  // pontos (se você usa)
   pontosPorSemana?: number | null;
-  // criador
   criadorNome?: string | null;
   criadorTipo?: "Professor" | "Clube" | "Escolinha" | string | null;
-  // assinatura
   assinada?: boolean | null;
-  // plano/label se você usa
   planoMinimo?: string | null;
   hasVideo?: boolean;
   hasTreino?: boolean;
@@ -182,19 +177,17 @@ function getStartWindowInfo(t: TreinoAgendado) {
     return { canStart: false, isLate: false };
   }
 
-  // ✅ Se tem hora marcada: libera 1h antes e até 1h depois
   if (hasHoraMarcada(d)) {
     const start = new Date(d.getTime() - 60 * 60 * 1000);
     const end = new Date(d.getTime() + 60 * 60 * 1000);
 
     const canStart = now >= start && now <= end;
-    const isLate = now > end; // passou 1h depois => faltou
+    const isLate = now > end; 
     return { canStart, isLate };
   }
 
-  // ✅ Se NÃO tem hora: libera o dia inteiro daquele dia
   const canStart = sameDay(d, hoje);
-  const isLate = now > endOfDay(d); // passou o dia => faltou
+  const isLate = now > endOfDay(d); 
   return { canStart, isLate };
 }
 
@@ -230,7 +223,6 @@ function resolveUploadUrl(raw?: string | null) {
     return p;
   }
 
-  // vídeos/imagens fixos do frontend
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -243,7 +235,6 @@ function resolveUploadUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // uploads/exercícios vindos do backend
   if (p.startsWith("/exercicios/")) {
     return `${API.BASE_URL}${p}`;
   }
@@ -293,25 +284,6 @@ function toYouTubeEmbed(u: string) {
   return u;
 }
 
-function formatSerieXReps(
-  series?: number | null,
-  repeticoes?: string | number | null
-) {
-  const reps = String(repeticoes ?? "").trim();
-  if (!reps) return "";
-
-  // Se já veio "3x12" do banco, não duplica
-  if (/\d+\s*x\s*\d+/i.test(reps)) {
-    return reps;
-  }
-
-  if (series && series > 0) {
-    return `${series}x${reps}`;
-  }
-
-  return reps;
-}
-
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -334,7 +306,7 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
 
 function StarsRating({ value }: { value: number }) {
   const v = Math.max(0, Math.min(5, Number(value || 0)));
-  const half = Math.round(v * 2) / 2; // 0.5 steps
+  const half = Math.round(v * 2) / 2; 
   const full = Math.floor(half);
   const hasHalf = half - full === 0.5;
 
@@ -405,9 +377,7 @@ const getToken = () =>
 
 function getDataExibicaoTreino(t: TreinoAgendado): Date | null {
   return (
-    // ✅ data/hora do agendamento deve mandar na exibição
     parseDateSafe(t.dataTreino) ||
-    // ✅ se não tiver dataTreino, aí sim tenta prazoEnvio como fallback
     parseDateSafe(t.prazoEnvio) ||
     parseDateSafe(t.treinoProgramado?.dataAgendada ?? null) ||
     null
@@ -415,7 +385,6 @@ function getDataExibicaoTreino(t: TreinoAgendado): Date | null {
 }
 
 function getDataExibicaoTreinoRaw(t: TreinoAgendado): string | null {
-  // ✅ mesma ordem do helper acima
   return (t.dataTreino || t.prazoEnvio || t.treinoProgramado?.dataAgendada || null) as any;
 }
 
@@ -459,8 +428,6 @@ function formatInputDateTimeSP(d: Date) {
 }
 
 function inputDateTimeSPToIso(value: string) {
-  // value vem assim: 2026-06-09T15:30
-  // salvando como horário de São Paulo
   if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
     return null;
   }
@@ -473,7 +440,6 @@ function getHoraHHMM(d?: Date | null) {
   const hh = d.getHours();
   const mm = d.getMinutes();
 
-  // se não tem horário (ou veio como meia-noite), não mostra
   if (hh === 0 && mm === 0) return "";
 
   return d.toLocaleTimeString("pt-BR", {
@@ -570,7 +536,6 @@ function StarRating({
   return (
     <div className="flex items-center">
       {Array.from({ length: 5 }).map((_, i) => {
-        // 0..1 (quanto dessa estrela fica preenchida)
         const frac = Math.max(0, Math.min(1, v - i));
         const pct = `${Math.round(frac * 100)}%`;
 
@@ -596,18 +561,17 @@ function StarRating({
 
 export default function TreinosAtletas() {
   const [location, navigate] = useLocation();
-  // ✅ Querystring vindo da metodologia
+
   const qs = React.useMemo(() => {
     const raw = typeof window !== "undefined" ? window.location.search : "";
     return new URLSearchParams(raw);
   }, [location]);
 
-  const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId"); // treinoProgramadoId
+  const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId"); 
   const qsMetodologiaId = qs.get("metodologiaId");
   const qsEstruturaId = qs.get("estruturaId");
   const qsMetodologiaItemId = qs.get("metodologiaItemId");
 
-  // ✅ chave pra guardar o vínculo metodologia <-> treino agendado
   const METODOLOGIA_LINK_KEY = (treinoAgendadoId: string) =>
     `footera:metodologiaLink:${treinoAgendadoId}`;
 
@@ -624,9 +588,9 @@ export default function TreinosAtletas() {
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const [filtroNivel, setFiltroNivel] = useState<string>("TODOS");
 
-function normalizeAssetUrl(raw?: string | null) {
-  return resolveUploadUrl(raw);
-}
+  function normalizeAssetUrl(raw?: string | null) {
+    return resolveUploadUrl(raw);
+  }
 
   function normNome(n?: string | null) {
     return String(n || "")
@@ -690,7 +654,6 @@ function normalizeAssetUrl(raw?: string | null) {
 
       const arr: any[] = Array.isArray(js) ? js : js.items ?? js.metodologias ?? [];
 
-      // 1) normaliza o que vier do /visiveis
       const normalizadas: MetodologiaCatalogo[] = arr.map((m: any) => ({
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
@@ -713,7 +676,6 @@ function normalizeAssetUrl(raw?: string | null) {
         pontosTotal: Number(m.pontosTotal ?? m.pontos ?? m.pontuacao ?? 0),
       }));
 
-      // 2) enriquece com /detalhe (pontos + descricao + capa)
       const detalhadas = await Promise.all(
         normalizadas.map(async (card) => {
           try {
@@ -725,7 +687,6 @@ function normalizeAssetUrl(raw?: string | null) {
             const jj = await rr.json().catch(() => null);
             if (!rr.ok || !jj) return card;
 
-            // itens publicados
             const itensPub: any[] = Array.isArray(jj.itens)
               ? jj.itens.filter((it: any) => it?.publicado !== false)
               : [];
@@ -734,10 +695,8 @@ function normalizeAssetUrl(raw?: string | null) {
             const hasVideo = tipos.includes("VIDEO");
             const hasTreino = tipos.includes("TREINO");
 
-            // tenta vir pronto do backend
             let pontosTotal = Number(jj.pontosTotal ?? 0);
 
-            // fallback: soma pontos dos itens
             if (!pontosTotal && itensPub.length) {
               pontosTotal = itensPub.reduce(
                 (acc: number, it: any) => acc + Number(it?.pontos ?? 0),
@@ -762,7 +721,6 @@ function normalizeAssetUrl(raw?: string | null) {
               capaUrl:
                 normalizeAssetUrl(jj.capaUrl ?? jj.logoUrl ?? jj.imagemUrl ?? null) ||
                 card.capaUrl,
-              // ✅ AQUI: nota vem do detalhe também
               mediaAvaliacao: Number.isFinite(mediaAvaliacao) ? mediaAvaliacao : (card.mediaAvaliacao ?? 0),
               totalAvaliacoes: Number.isFinite(totalAvaliacoes) ? totalAvaliacoes : (card.totalAvaliacoes ?? 0),
               criadorNome:
@@ -831,7 +789,6 @@ useEffect(() => {
 
   if (!alvo?.id) return;
 
-  // guarda vínculo da metodologia com esse treino agendado
   if (qsMetodologiaId && qsEstruturaId && qsMetodologiaItemId) {
     localStorage.setItem(
       METODOLOGIA_LINK_KEY(alvo.id),
@@ -843,11 +800,9 @@ useEffect(() => {
     );
   }
 
-  // abre o treino diretamente igual à tela detalhada
   setExpandedId(alvo.id);
   setFullscreenId(alvo.id);
 
-  // limpa a query da URL depois de abrir
   const next = new URLSearchParams(window.location.search);
   next.delete("openAgendadoByProgramadoId");
   next.delete("metodologiaId");
@@ -908,7 +863,6 @@ function abrirMidiaExercicioDireto(
   const [mainTab, setMainTab] = useState<MainTab>("treinos");
   const [buscaMetodologia, setBuscaMetodologia] = useState("");
 
-  // dropdown do “Adicionar filtro”
   const [addFiltroOpen, setAddFiltroOpen] = useState(false);
   const [metodologias, setMetodologias] = useState<MetodologiaCatalogo[]>([]);
   const [metodologiasLoading, setMetodologiasLoading] = useState(false);
@@ -1018,11 +972,9 @@ function abrirMidiaExercicioDireto(
       const token = getToken();
       if (!token) return;
 
-      // ✅ range do mês atual (inclui eventos no começo do mês)
       const now = new Date();
       const from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
       const qs = new URLSearchParams();
       qs.set("from", from.toISOString());
       qs.set("to", to.toISOString());
@@ -1034,9 +986,6 @@ function abrirMidiaExercicioDireto(
       if (!r.ok) throw new Error("Falha ao buscar agenda");
 
       const js = await r.json();
-
-      // O endpoint minha-agenda retorna itens no formato { id, tipo, titulo, inicio, ... }
-      // A gente filtra só os de origem EVENTO/CONVOCACAO pra preencher eventosAtleta.
       const eventos = (Array.isArray(js) ? js : []).filter((it: any) => {
         const origem = String(it?.origem || "").toUpperCase();
         return origem === "EVENTO" || origem === "CONVOCACAO";
@@ -1137,14 +1086,12 @@ function abrirMidiaExercicioDireto(
                   (tp.exercicios ?? []).map((ex: any, idx: number) => {
                     const exNormal = ex.exercicio ?? null;
                     const exTemp = ex.exercicioTemporario ?? ex.exercicio_temporario ?? null;
-                    // ✅ NOVO: personalizado (camelCase e snake_case)
                     const exPers =
                       ex.exercicioPersonalizado ??
                       ex.exercicio_personalizado ??
-                      ex.exercicioPersonalizadoRef ?? // se você tiver algum nome diferente
+                      ex.exercicioPersonalizadoRef ?? 
                       null;
 
-                    // ✅ id único SEMPRE (normal > temporário > personalizado > fallback)
                     const resolvedId =
                       exNormal?.id
                         ? String(exNormal.id)
@@ -1154,7 +1101,6 @@ function abrirMidiaExercicioDireto(
                             ? `pers:${String(exPers.id)}`
                             : `tempidx:${String(tp.id)}:${idx}`;
 
-                    // ✅ nome SEMPRE (normal > temporário > personalizado > "Exercício")
                     const resolvedNome =
                       exNormal?.nome ??
                       exTemp?.nome ??
@@ -1163,7 +1109,6 @@ function abrirMidiaExercicioDireto(
                       exPers?.titulo ??
                       "Exercício";
 
-                    // ✅ mídia (normal > temporário > personalizado)
                     const resolvedVideo =
                       exNormal?.videoDemonstrativoUrl ??
                       exNormal?.videoUrl ??
@@ -1173,7 +1118,6 @@ function abrirMidiaExercicioDireto(
                       exPers?.videoUrl ??
                       null;
 
-                    // ✅ imagem/poster (se quiser usar poster como “img”)
                     const resolvedImg =
                       exNormal?.imgDemonstrativaUrl ??
                       exNormal?.imagemUrl ??
@@ -1192,7 +1136,6 @@ function abrirMidiaExercicioDireto(
                         nome: resolvedNome,
                         videoDemonstrativoUrl: resolvedVideo,
                         imgDemonstrativaUrl: resolvedImg,
-                        // ✅ opcional: se você quiser usar em algum lugar depois
                         descricao:
                           exNormal?.descricao ?? 
                           exNormal?.objetivo ??
@@ -1240,17 +1183,14 @@ function abrirMidiaExercicioDireto(
         };
       });
 
-      // ✅ remove duplicados: mesmo dia + mesmo título
       const dedupMap = new Map<string, TreinoAgendado>();
 
       for (const t of listaAdaptada) {
         const rawDate = t.dataTreino ? new Date(t.dataTreino) : null;
-
         const dateKey = rawDate
           ? `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, "0")}-${String(rawDate.getDate()).padStart(2, "0")}`
           : "sem-data";
 
-        // ✅ inclui horário na chave
         const timeKey = rawDate
           ? `${String(rawDate.getHours()).padStart(2, "0")}:${String(rawDate.getMinutes()).padStart(2, "0")}`
           : "sem-hora";
@@ -1262,7 +1202,6 @@ function abrirMidiaExercicioDireto(
 
         const key = `${dateKey} ${timeKey}::${titleKey}`;
 
-        // se já existir um, mantém o primeiro (ou troque a regra se preferir)
         if (!dedupMap.has(key)) dedupMap.set(key, t);
       }
 
@@ -1346,14 +1285,10 @@ function abrirMidiaExercicioDireto(
     );
 
     if (!alvo) {
-      // se não existir treino agendado ainda, você pode:
-      // 1) avisar o usuário
-      // 2) ou agendar automaticamente (se você tiver endpoint pra isso)
       alert("Esse treino ainda não está nos seus treinos agendados. Agende primeiro e tente novamente.");
       return;
     }
 
-    // ✅ salva o vínculo (treinoAgendado -> metodologia/item)
     try {
       localStorage.setItem(
         METODOLOGIA_LINK_KEY(alvo.id),
@@ -1365,10 +1300,8 @@ function abrirMidiaExercicioDireto(
       );
     } catch {}
 
-    // ✅ abre o treino
     setFullscreenId(alvo.id);
 
-    // ✅ limpa a URL (opcional, mas recomendado pra não reabrir sempre ao recarregar)
     try {
       const clean = new URL(window.location.href);
       clean.searchParams.delete("openAgendadoByProgramadoId");
@@ -1610,7 +1543,6 @@ function abrirMidiaExercicioDireto(
       const t = e.target as HTMLElement | null;
       if (!t) return;
 
-      // fecha quando clicar fora de um botão/menu
       const isInside = t.closest?.("[data-filtro-menu='1']");
       if (!isInside) setAddFiltroOpen(false);
     };
@@ -1947,37 +1879,6 @@ function abrirMidiaExercicioDireto(
       </div>
     );
   }
-
-  const metodologiasFiltradas = React.useMemo(() => {
-    const q = normNome(buscaMetodologia);
-
-    return metodologias.filter((m) => {
-      // busca
-      if (q) {
-        const hay = normNome(
-          `${m.titulo ?? ""} ${m.descricao ?? ""} ${m.criadorNome ?? ""}`
-        );
-        if (!hay.includes(q)) return false;
-      }
-
-      // nível
-      if (filtroNivel !== "TODOS") {
-        const nv = String(m.nivel ?? "").toUpperCase();
-        if (nv !== filtroNivel) return false;
-      }
-
-      // tipo (o que você pediu)
-      const hv = m.hasVideo === true;
-      const ht = m.hasTreino === true;
-
-      if (filtroTipo === "TODOS") return true;
-      if (filtroTipo === "VIDEOS_TREINOS") return hv && ht;
-      if (filtroTipo === "VIDEOS") return hv && !ht;
-      if (filtroTipo === "TREINOS") return ht && !hv;
-
-      return true;
-    });
-  }, [metodologias, buscaMetodologia, filtroNivel, filtroTipo]);
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24 overflow-x-hidden">
@@ -2669,11 +2570,8 @@ function abrirMidiaExercicioDireto(
             }
 
             const windowInfo = getStartWindowInfo(t);
-            // ✅ Se já está atrasado pela regra (1h depois / ou passou do dia), trata como faltou
             const missedByRule = !isCompletedTreino && windowInfo.isLate;
-            // ✅ Somando suas regras atuais + a nova regra
             const finalIsMissed = isMissedTreino || missedByRule;
-            // ✅ Bloqueia iniciar fora da janela (apenas quando ainda está pendente)
             const blockStartByTime =
               (!st || st === "PENDING") && !windowInfo.canStart;
             const disabledCentral =
@@ -2696,9 +2594,8 @@ function abrirMidiaExercicioDireto(
               }
 
               if (!st || st === "PENDING") {
-                // ✅ só inicia dentro da janela permitida
                 if (!windowInfo.canStart) {
-                  handleMissedClick(t.id); // ou só dá um alert, se preferir
+                  handleMissedClick(t.id);
                   return;
                 }
                 iniciar(t.id);
@@ -2735,7 +2632,6 @@ function abrirMidiaExercicioDireto(
                 params.set("treinoAgendadoId", t.id);
                 if (elapsed > 0) params.set("tempoSeg", String(elapsed));
 
-                // ✅ repassa metodologiaId/metodologiaItemId pra tela de submissão (se existir vínculo)
                 try {
                   const raw = localStorage.getItem(METODOLOGIA_LINK_KEY(t.id));
                   if (raw) {

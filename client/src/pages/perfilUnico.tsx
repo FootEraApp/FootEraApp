@@ -79,7 +79,6 @@ export default function PerfilUnico() {
           );
         }
       } catch {
-        // tenta o próximo endpoint
       }
     }
 
@@ -230,7 +229,7 @@ export default function PerfilUnico() {
       )}
 
       <div className="h-16" aria-hidden="true" />
-      
+
       <BottomNav />
     </div>
   );

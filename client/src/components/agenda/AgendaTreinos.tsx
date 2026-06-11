@@ -25,7 +25,6 @@ export type TreinoAgendadoItem = {
   execucaoStatus?: string | null;
   submissaoTreinoId?: string | null;
   submissaoFeita?: boolean;
-    // ✅ usado quando a lista foi agrupada pra turma
   alunosCount?: number | null;
   turmaNome?: string | null;
   atleta?: {
@@ -45,9 +44,9 @@ export type TreinoProgramadoExercicioItem = {
   descanso?: string | null;
   exercicioId?: string | null;
   exercicioTemporarioId?: string | null;
-  exercicioPersonalizadoId?: string | null; // ✅ ADD
+  exercicioPersonalizadoId?: string | null; 
   exercicio?: {
-    tipo: "catalogo" | "temporario" | "personalizado"; // ✅ ADD
+    tipo: "catalogo" | "temporario" | "personalizado"; 
     id: string;
     codigo?: string | null;
     nome: string;
@@ -55,7 +54,7 @@ export type TreinoProgramadoExercicioItem = {
     nivel?: string | null;
     categorias?: string[];
     videoUrl?: string | null;
-    videoPosterUrl?: string | null; // ✅ opcional
+    videoPosterUrl?: string | null; 
   } | null;
 };
 
@@ -92,7 +91,7 @@ export type AgendaFetchProgramados = () => Promise<any>;
 export type AgendaOnAgendar = (args: {
   selectedDays: string[];
   treinoProgramadoId: string;
-  selectedTime: string; // "HH:mm"
+  selectedTime: string; 
 }) => Promise<void>;
 
 export type AgendaRenderItemActions = (t: TreinoAgendadoItem) => React.ReactNode;
@@ -108,7 +107,6 @@ export type AgendaTreinosProps = {
   renderItemActions?: AgendaRenderItemActions;
   initialMonth?: Date;
   turmaId?: string;
-  // ✅ quando true, a agenda agrupa por treino/dia (pra não repetir por aluno)
   groupByTreinoPerDay?: boolean;
 };
 
@@ -125,7 +123,7 @@ function hhmmNow() {
   const now = new Date();
   const h = String(now.getHours()).padStart(2, "0");
   const m = String(now.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`; // "HH:mm"
+  return `${h}:${m}`;
 }
 
 function todayISO() {
@@ -292,7 +290,6 @@ function agruparAgendadosPorTreinoEDia(
   list: TreinoAgendadoItem[],
   turmaNome?: string
 ) {
-  // chave = dia + treinoProgramadoId (ou titulo)
   const byKey = new Map<string, TreinoAgendadoItem & { _count: number }>();
 
   for (const t of list) {
@@ -310,19 +307,16 @@ function agruparAgendadosPorTreinoEDia(
     if (!prev) {
       byKey.set(key, { ...t, _count: 1 });
     } else {
-      // só soma a quantidade (um por aluno)
       byKey.set(key, { ...prev, _count: (prev._count ?? 1) + 1 });
     }
   }
 
-  // devolve itens “únicos” com alunosCount preenchido
   return Array.from(byKey.values()).map((x) => {
     const { _count, ...rest } = x;
     return {
       ...rest,
       alunosCount: _count,
       turmaNome: turmaNome ?? rest.turmaNome ?? null,
-      // remove atleta pra não parecer “de um aluno”
       atleta: null,
     } as TreinoAgendadoItem;
   });
@@ -353,7 +347,6 @@ function addMinutes(date: Date, minutes: number) {
 }
 
 function isLost(t: TreinoAgendadoItem) {
-  // 1) se backend já marcou como expirado/perdido, respeita
   if (
     isExpiredStatus(t.meuStatus) ||
     isExpiredStatus(t.execucaoStatus) ||
@@ -366,7 +359,6 @@ function isLost(t: TreinoAgendadoItem) {
   const concluido = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
   if (concluido) return false;
 
-  // 2) regra nova: passou 1h do horário agendado => perdido
   const limite = addMinutes(dt, LOST_GRACE_MINUTES);
   return new Date().getTime() > limite.getTime();
 }
@@ -403,15 +395,12 @@ function normalizeProgramadosPayload(payload: any): {
         const cat = e?.exercicio ?? null;
         const tmp = e?.exercicioTemporario ?? e?.exercicio_temporario ?? null;
         const per = e?.exercicioPersonalizado ?? e?.exercicio_personalizado ?? null;
-
-        // ✅ fallback “flat” (quando o item já vem com nome/descricao/video...)
         const flat =
           !cat && !tmp && !per && (e?.nome || e?.descricao || e?.videoDemonstrativoUrl || e?.videoUrl)
             ? e
             : null;
 
         const resolved = cat || tmp || per || flat;
-
         const tipoResolvido: "catalogo" | "temporario" | "personalizado" =
           cat ? "catalogo"
           : tmp ? "temporario"
@@ -434,7 +423,7 @@ function normalizeProgramadosPayload(payload: any): {
           repeticoes: e?.repeticoes ?? null,
           exercicioId: e?.exercicioId ?? null,
           exercicioTemporarioId: e?.exercicioTemporarioId ?? null,
-          exercicioPersonalizadoId: e?.exercicioPersonalizadoId ?? null, // ✅ ADD
+          exercicioPersonalizadoId: e?.exercicioPersonalizadoId ?? null, 
           exercicio: resolved
             ? {
                 tipo: tipoResolvido,
@@ -445,7 +434,7 @@ function normalizeProgramadosPayload(payload: any): {
                 nivel: resolved?.nivel ?? null,
                 categorias: Array.isArray(resolved?.categorias) ? resolved.categorias : [],
                 videoUrl,
-                videoPosterUrl: resolved?.videoPosterUrl ?? null, // ✅ opcional
+                videoPosterUrl: resolved?.videoPosterUrl ?? null, 
               }
             : null,
         };
@@ -507,7 +496,7 @@ export function useAgendaTreinos({
   additionalItems,
   groupByTreinoPerDay,
   title,
-  turmaId, // ✅ ADD
+  turmaId, 
 }: Pick<
   AgendaTreinosProps,
   | "open"
@@ -517,7 +506,7 @@ export function useAgendaTreinos({
   | "additionalItems"
   | "groupByTreinoPerDay"
   | "title"
-  | "turmaId" // ✅ ADD
+  | "turmaId" 
 >) {
   const [cursorMonth, setCursorMonth] = useState<Date>(() =>
     startOfMonth(initialMonth ?? new Date())
@@ -550,12 +539,9 @@ export function useAgendaTreinos({
 
       const payload = await fetchProgramados();
       const { meus } = normalizeProgramadosPayload(payload);
-
-      // ✅ dono logado (vem do Storage)
-      const tipoRaw = String((Storage as any)?.tipoSalvo ?? "").toLowerCase(); // "clube" | "escolinha" | "professor"
+      const tipoRaw = String((Storage as any)?.tipoSalvo ?? "").toLowerCase();
       const ownerId = String((Storage as any)?.tipoUsuarioId ?? "");
 
-      // normaliza o "tipo" para comparar com o autor.tipo ("Clube"/"Escolinha"/"Professor")
       const tipoAutorEsperado =
         tipoRaw === "clube"
           ? "clube"
@@ -565,12 +551,9 @@ export function useAgendaTreinos({
               ? "professor"
               : "";
 
-      // ✅ filtra para ficar somente os treinos do dono logado
-      // - se vier autor completo, usa ele
-      // - se NÃO vier autor (alguns endpoints não mandam), mantém (pra não sumir “seus treinos”)
       const filtrados = meus.filter((t) => {
-        if (!ownerId || !tipoAutorEsperado) return true; // sem info do dono -> não filtra
-        if (!t.autor?.id || !t.autor?.tipo) return true; // sem autor -> não filtra (evita sumir treinos)
+        if (!ownerId || !tipoAutorEsperado) return true; 
+        if (!t.autor?.id || !t.autor?.tipo) return true;
         return (
           String(t.autor.id) === ownerId &&
           String(t.autor.tipo).toLowerCase() === tipoAutorEsperado
@@ -611,7 +594,7 @@ export function useAgendaTreinos({
         const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
         setAgendados(list);
       } catch {}
-    }, 8000); // 8s (pode por 5s se quiser mais agressivo)
+    }, 8000); 
 
     return () => clearInterval(id);
   }, [open, cursorMonth, fetchAgendados]);
@@ -641,10 +624,7 @@ export function useAgendaTreinos({
 
     const agendadosPorDia = useMemo(() => {
       const map = new Map<string, TreinoAgendadoItem[]>();
-
       const baseBruta = [...(agendados ?? []), ...(additionalItems ?? [])];
-
-      // ✅ se vier em “modo turma”, agrupa por treino/dia pra não repetir por aluno
       const base = groupByTreinoPerDay
         ? agruparAgendadosPorTreinoEDia(baseBruta, title)
         : baseBruta;
@@ -678,7 +658,7 @@ export function useAgendaTreinos({
   async function carregarAlunosDoTreinoTurma(args: {
     dayISO: string;
     treinoProgramadoId: string;
-    treinoKey: string; // ✅ ADD
+    treinoKey: string; 
   }) {
 
     if (!turmaId || !args.treinoProgramadoId) return;
@@ -767,7 +747,7 @@ export default function AgendaTreinos({
   const [selectedTime, setSelectedTime] = useState<string>("12:00");
   const [selectedTimeInput, setSelectedTimeInput] = useState<string>("12:00");
   const [proLoading, setProLoading] = useState(false);
-  const [isPro, setIsPro] = useState(true); // default true pra não piscar bloqueio antes de checar
+  const [isPro, setIsPro] = useState(true);
   const [proGateChecked, setProGateChecked] = useState(false);
   const parceirosCacheRef = useRef<TreinoProgramadoItem[]>([]);
   
@@ -822,7 +802,6 @@ export default function AgendaTreinos({
       setProGateChecked(true);
       return ok;
     } catch (e) {
-      // se falhar, trava por segurança
       setIsPro(false);
       setProGateChecked(true);
       return false;
@@ -850,7 +829,6 @@ export default function AgendaTreinos({
     setTreinoProgramadoId,
     setAgendados,
     setTreinosFootera,
-    // ✅ ADD ESTES:
     alunosOpenKey,
     setAlunosOpenKey,
     alunosLoading,
@@ -884,12 +862,9 @@ export default function AgendaTreinos({
     setSelectedTimeInput(selectedTime);
   }, [selectedTime]);
 
-  // ✅ checar assinatura quando entrar na aba FootEra
   useEffect(() => {
     if (!open) return;
     if (abaTreinos !== "footera") return;
-
-    // só checa uma vez por abertura (evita spam)
     if (proGateChecked) return;
 
     checkIsPro();
@@ -902,14 +877,12 @@ export default function AgendaTreinos({
 
   const minTimeToday = useMemo(() => {
     return hhmmNow();
-  }, [hasTodaySelected]); // recalcula quando renderiza
-
-  // ✅ buscar treinos dos professores parceiros SOMENTE quando clicar na aba FootEra
+  }, [hasTodaySelected]); 
+  
   useEffect(() => {
     if (!open) return;
     if (abaTreinos !== "footera") return;
     if (footeraLoaded && treinosFootera.length) return;
-
 
     (async () => {
       try {
@@ -986,7 +959,7 @@ export default function AgendaTreinos({
                     repeticoes: e?.repeticoes ?? null,
                     exercicioId: e?.exercicioId ?? null,
                     exercicioTemporarioId: e?.exercicioTemporarioId ?? null,
-                    exercicioPersonalizadoId: e?.exercicioPersonalizadoId ?? null, // ✅ ADD
+                    exercicioPersonalizadoId: e?.exercicioPersonalizadoId ?? null, 
                     exercicio: resolved
                       ? {
                           tipo: tipoResolvido,
@@ -997,7 +970,7 @@ export default function AgendaTreinos({
                           nivel: resolved?.nivel ?? null,
                           categorias: Array.isArray(resolved?.categorias) ? resolved.categorias : [],
                           videoUrl,
-                          videoPosterUrl: resolved?.videoPosterUrl ?? null, // ✅ opcional
+                          videoPosterUrl: resolved?.videoPosterUrl ?? null, 
                         }
                       : null,
                   };
@@ -1045,7 +1018,6 @@ export default function AgendaTreinos({
 
     setSalvandoAgenda(true);
     try {
-      // garante que o valor digitado foi “confirmado”
       if (isValidHHMM(selectedTimeInput) && selectedTimeInput !== selectedTime) {
         const fixed = clampToMinIfToday(selectedTimeInput, selectedDays.includes(todayISO()));
         setSelectedTime(fixed);
@@ -1504,25 +1476,20 @@ export default function AgendaTreinos({
                     placeholder="HH:mm"
                     value={selectedTimeInput}
                     onChange={(e) => {
-                      // deixa digitar livre, só “limpa” caracteres estranhos
                       let v = e.target.value.replace(/[^\d:]/g, "");
-                      // opcional: auto-coloca ":" quando digitar 4 dígitos (ex: 1420 -> 14:20)
                       const onlyDigits = v.replace(":", "");
                       if (!v.includes(":") && onlyDigits.length >= 3) {
                         v = `${onlyDigits.slice(0, 2)}:${onlyDigits.slice(2, 4)}`;
                       }
-                      // limita tamanho
                       if (v.length > 5) v = v.slice(0, 5);
                       setSelectedTimeInput(v);
                     }}
                     onBlur={() => {
                       const v = selectedTimeInput;
-                      // se não completou HH:mm, volta pro último válido
                       if (!isValidHHMM(v)) {
                         setSelectedTimeInput(selectedTime);
                         return;
                       }
-                      // se hoje está selecionado, “trava” pro mínimo ao sair do campo
                       const fixed = clampToMinIfToday(v, hasTodaySelected);
                       if (fixed !== v) {
                         alert(`Para hoje, escolha um horário a partir de ${hhmmNow()}.`);

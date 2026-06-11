@@ -562,7 +562,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
     const emailNorm = String(email).trim().toLowerCase();
     const usernameFinal = String(nomeDeUsuario).trim().toLowerCase();
-    // ✅ nome agora é opcional: se não vier, usa o username como nome
     const nomeFinal = String(nome ?? "").trim() || usernameFinal;
     const [jaEmail, jaUser] = await Promise.all([
       prisma.usuario.findUnique({ where: { email: emailNorm } }),

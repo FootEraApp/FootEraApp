@@ -9,7 +9,7 @@ import axios from "axios";
 import Storage from "../utils/storage.js"
 import LearningCard from "../components/learning/LearningCard.js";
 import { Pencil, Trash2 } from "lucide-react";
-// <-- ajuste o caminho correto do seu storage.ts do CLIENT
+
 type Tab =
   | "dashboard"
   | "usuarios"
@@ -174,7 +174,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return v;
   }
 
-  // Arquivos fixos do frontend: imagens e vídeos em /assets
   if (v.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${v}`
@@ -187,7 +186,6 @@ function toAbsoluteUrl(raw?: string | null) {
       : `/${v}`;
   }
 
-  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
   if (v.startsWith("/videos/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${v}`
@@ -200,7 +198,6 @@ function toAbsoluteUrl(raw?: string | null) {
       : `/${v}`;
   }
 
-  // Caso antigo: /exercicios/... normalmente vem do backend
   if (v.startsWith("/exercicios/")) {
     return `${API.BASE_URL}${v}`;
   }
@@ -209,7 +206,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return `${API.BASE_URL}/${v}`;
   }
 
-  // Uploads do backend
   if (v.startsWith("/uploads/") || v.startsWith("/upload/")) {
     return `${API.BASE_URL}${v}`;
   }
@@ -218,7 +214,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return `${API.BASE_URL}/${v}`;
   }
 
-  // ID puro do YouTube
   if (/^[\w-]{11}$/.test(v)) {
     return `https://www.youtube.com/watch?v=${v}`;
   }
@@ -417,8 +412,6 @@ export default function AdminDashboard() {
       id: string;
       nome: string;
       codigo: string;
-
-      // ✅ ADICIONAR:
       descricao?: string | null;
       exercicios?: Array<{
         id: string;
@@ -496,8 +489,6 @@ export default function AdminDashboard() {
         nome: string;
         codigo: string;
         descricao?: string | null;
-
-        // ✅ ADICIONAR:
         exercicios?: Array<{
           id: string;
           ordem?: number | null;
@@ -721,7 +712,6 @@ async function ativarMetodologiaAdmin(
       `Metodologia "${titulo || "sem título"}" ativada com sucesso.`
     );
 
-    // opcional: recarrega também a aba "todas"
     carregarTodasMetodologiasAdmin(metTodasPage);
   } catch (e: any) {
     showToast("error", e?.message || "Erro ao ativar metodologia.");
@@ -946,7 +936,7 @@ async function excluirContaPermanente(usuario: any) {
   }
 
   try {
-    const token = Storage.token; // <- aqui é onde seu TS estava quebrando
+    const token = Storage.token; 
     if (!token) {
       alert("Sessão expirada. Faça login novamente.");
       return;
@@ -958,10 +948,8 @@ async function excluirContaPermanente(usuario: any) {
 
     alert("Conta excluída permanentemente.");
 
-    // Atualiza a lista na tela
     setUsuarios((prev: any[]) => prev.filter((u) => u.id !== usuario.id));
 
-    // Se o modal/detalhe estiver aberto para o mesmo usuário, feche
     if (userSelecionado?.id === usuario.id) {
       setUserSelecionado(null);
       setDetalheAberto(false);
@@ -1203,12 +1191,10 @@ useEffect(() => {
 
       showToast("success", ativo ? "Metodologia ativada ✅" : "Metodologia desativada ✅");
 
-      // remove da lista (porque essa aba é só pendentes)
       if (ativo) {
         setMetPendentes((prev) => prev.filter((m) => m.id !== id));
         setMetTotal((prev) => Math.max(0, prev - 1));
       } else {
-        // se desativou de novo, mantém na lista
         await carregarMetodologiasPendentes(metPage);
       }
     } catch (e: any) {
@@ -3537,9 +3523,8 @@ async function confirmarExcluirProfessor() {
 
                 <ToggleSwitch
                   checked={!!configuracoes?.[item.key]}
-                  disabled={false} // ou coloque seu loading/busy aqui se quiser travar durante o PATCH
+                  disabled={false} 
                   onChange={async (next) => {
-                    // otimista
                     setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: next }));
 
                     try {

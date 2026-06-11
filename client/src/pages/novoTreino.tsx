@@ -96,14 +96,10 @@ function formatSerieXReps(series?: number | null, repsRaw?: string | number | nu
   const reps = String(repsRaw ?? "").trim();
   if (!reps) return null;
 
-  // Se o cara já digitou "3x12", "4 x 10", etc, não mexe
   const jaTemX = /\d+\s*x\s*\d+/i.test(reps);
   if (jaTemX) return reps.replace(/\s+/g, " ").trim();
-
-  // Se tem séries, monta "SxREPS"
   if (s) return `${s}x${reps}`;
 
-  // Se não tem séries, fica só reps mesmo
   return reps;
 }
 
@@ -139,11 +135,7 @@ function montarPayloadSomenteInfoEExercicios(params: {
 
   const exercicios = (exerciciosSelecionados ?? [])
     .map((it: any, idx: number) => {
-      // ✅ IMPORTANTE:
-      // - NUNCA use it.id (id local) como exercicioId
-      // - exercicioId só pode vir do catálogo (it.exercicioId ou it.idCatalogo)
       const exercicioId = String(it.exercicioId ?? it.idCatalogo ?? "").trim();
-      // ✅ se for um personalizado existente, vem com exercicioPersonalizadoId
       const exercicioPersonalizadoId = String(it.exercicioPersonalizadoId ?? "").trim();
       const nomeCustom = String(it.nome ?? "").trim();
       const descCustom = String(it.descricao ?? "").trim();
@@ -186,7 +178,6 @@ function montarPayloadSomenteInfoEExercicios(params: {
         };
       }
 
-      // ✅ personalizado NOVO (linha adicionada) — TEM que ir NO ROOT (o backend lê assim)
       if (nomeCustom) {
         return {
           ...base,
@@ -194,7 +185,6 @@ function montarPayloadSomenteInfoEExercicios(params: {
           descricao: descCustom || null,
           videoDemonstrativoUrl: it.videoUrl ?? null,
           videoPosterUrl: it.videoPosterUrl ?? null,
-          // (opcional) se você tiver esses campos na UI
           nivel: it.nivel ?? nivel,
           duracao: it.tipoExecucao === "duracao" ? it.duracao : null,
           categorias: Array.isArray(it.categorias) ? it.categorias : (Array.isArray(categoria) ? categoria : []),
@@ -293,8 +283,7 @@ function toISOWithLocalOffset(date: Date): string {
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
   const ss = String(date.getSeconds()).padStart(2, "0");
-
-  const offsetMin = -date.getTimezoneOffset(); // ex.: Brasil = -180 => +(-180 invertido) = -03:00
+  const offsetMin = -date.getTimezoneOffset();
   const sign = offsetMin >= 0 ? "+" : "-";
   const abs = Math.abs(offsetMin);
   const offH = String(Math.floor(abs / 60)).padStart(2, "0");
@@ -351,7 +340,6 @@ function resolveMediaUrl(raw?: string | null) {
     return p;
   }
 
-  // imagens/vídeos fixos dentro de /assets
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -382,7 +370,6 @@ function resolveVideoUrl(raw?: string | null) {
     return p;
   }
 
-  // vídeos fixos de exercício
   if (p.startsWith("/assets/videos/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -395,7 +382,6 @@ function resolveVideoUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // qualquer outro /assets também pode ir para CDN no app
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -670,8 +656,8 @@ async function apiListarTreinosSalvos(
     `&_ts=${Date.now()}`;
 
     const r = await fetch(url, {
-      headers,          // ✅ não manda Cache-Control como header
-      cache: "no-store" // ✅ isso já força não-cache sem preflight de CORS
+      headers,         
+      cache: "no-store" 
     });
   await assertOk(r, "Falha ao listar treinos salvos");
 
@@ -691,7 +677,7 @@ async function apiDeletarTreinoSalvo(id: string) {
     `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}?_ts=${Date.now()}`,
     {
       method: "DELETE",
-      headers,          // ✅ não manda Cache-Control como header
+      headers,         
       cache: "no-store",
     },
   );
@@ -725,7 +711,6 @@ async function tentarSalvarComoTreinoSalvo(
   if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
 
   try {
-    // ✅ valida antes de tudo
     if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
       console.warn("[Gaveta] pulou: treino sem exercícios no payload");
       return { saved: false, reason: "sem-exercicios" as const };
@@ -735,18 +720,15 @@ async function tentarSalvarComoTreinoSalvo(
       ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
       : [];
 
-    // ✅ sempre pega a lista mais recente (evita “treino antigo que já apaguei”)
     let meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
 
     const formatarData = (iso?: string | null) => {
       if (!iso) return "";
       const d = new Date(iso);
       if (Number.isNaN(d.getTime())) return "";
-      // dd/mm/aaaa hh:mm
       return d.toLocaleString("pt-BR");
     };
 
-    // ✅ enquanto estiver cheio, obriga liberar espaço
     while (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
       const lista = meus
         .map((m, i) => {
@@ -761,34 +743,26 @@ async function tentarSalvarComoTreinoSalvo(
           `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n` +
           `${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`,
       );
-
       const idx = Number(escolha);
 
-      // ✅ usuário desistiu
       if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
         return { saved: false, reason: "usuario-pulou" as const };
       }
 
       const apagar = meus[idx - 1];
-
-      // ✅ remove da lista local já (evita o prompt “mostrar apagado”)
       meus = meus.filter((t) => t.id !== apagar.id);
 
       try {
         await apiDeletarTreinoSalvo(apagar.id);
       } catch (err) {
-        // ✅ se falhar, refaz listagem pra não ficar desincronizado
         meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
         alert("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
         return { saved: false, reason: "falha-apagar" as const };
       }
 
-      // ✅ refetch “de verdade” depois do delete (resolve seu bug do 5 continuar preso)
       meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
 
-      // ✅ se por algum motivo ainda está cheio, continua o loop e pede para apagar mais um
       if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
-        // aqui não retorna: volta pro prompt do while
         continue;
       }
     }
@@ -1856,7 +1830,7 @@ export default function NovoTreino() {
              if (dtRaw) {
                const d = new Date(String(dtRaw));
                if (!Number.isNaN(d.getTime())) {
-                 dia = dateKeyLocal(d); // ✅ yyyy-mm-dd
+                 dia = dateKeyLocal(d); 
                }
              }
 
@@ -2481,10 +2455,8 @@ export default function NovoTreino() {
     setCapaUrl(String(t.imagemUrl ?? t.capaUrl ?? t.capa ?? t.foto ?? ""));
     const cats = t.categoria ?? t.categorias ?? [];
     setCategorias(Array.isArray(cats) ? cats.map(String) : cats ? [String(cats)] : []);
-    // ✅ se vier do backend como publico/parceiro
     setTreinoFootera(Boolean(t.publico ?? t.parceiro ?? t.isFootera ?? false));
 
-    // professores colaboradores (pode vir professoresIds, colaboradores, criadores etc)
     const profIds =
       t.professoresIds ??
       t.colaboradoresProfessorIds ??
@@ -2986,7 +2958,6 @@ export default function NovoTreino() {
     setExerciciosSelecionados((prev) => {
       const copia = [...prev];
 
-      // ✅ NORMALIZA series para number | null
       if (campo === "series") {
         const n = parseInt(String(valor), 10);
         (copia[index] as any).series = Number.isFinite(n) && n > 0 ? n : null;
@@ -3238,11 +3209,8 @@ export default function NovoTreino() {
       const body = {
         treinoProgramadoId,
         datas: datasLocal,
-        // se tiver atleta selecionado, manda
         atletaIds: alvoTemAtletas ? atletasSelecionados.map(String).filter(Boolean) : [],
-        // ✅ TURMA: manda no campo correto
         turmaIds: alvoTemTurma ? [String(turmaSelecionada)] : [],
-        // ✅ opcional: deixa vazio pra não confundir com Elenco
         elencosIds: [],
         incluirObservados: false,
         tituloPadrao: nome || "Treino",
@@ -3427,14 +3395,13 @@ export default function NovoTreino() {
                 : typeof (e as any).objetivo === "string" && (e as any).objetivo.trim()
                 ? (e as any).objetivo.trim()
                 : null,
-            videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null, // ✅ mantém vídeo também
+            videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? (e as any).videoUrl ?? null,
             repeticoes:
               e.repeticoes ??
               e.repeticoesStr ??
               e.repeticoesTexto ??
               e.repeticoesString ??
               null,
-            // ✅ mantém séries
             series:
               typeof e.series === "number"
                 ? e.series
@@ -3449,7 +3416,7 @@ export default function NovoTreino() {
         tipoTreino,
         dataAgendada: dataAgendadaISO,
         exerciciosSelecionados: exerciciosNormalizados,
-        titulo: nome + " " + Date.now(), // Adicionar timestamp para evitar duplicatas
+        titulo: nome + " " + Date.now(),
         nivel,
         descricao,
         duracaoMinutos: duracao,
@@ -3497,7 +3464,6 @@ export default function NovoTreino() {
             ? String(e.repeticoes)
             : "";
 
-        // ✅ pega vídeo/poster (e ignora blob:)
         const videoRaw = e.videoDemonstrativoUrl ?? e.videoUrl ?? null;
         const videoFinal =
           videoRaw && typeof videoRaw === "string" && videoRaw.startsWith("blob:")
@@ -3540,7 +3506,6 @@ export default function NovoTreino() {
             ""
           ).trim() || null;
 
-        // Se tem exercicioId (catálogo), sempre envia — independente de ter vídeo/personalizado
         if (e.exercicioId) {
           return {
             exercicioId: String(e.exercicioId),
@@ -3560,7 +3525,6 @@ export default function NovoTreino() {
           };
         }
 
-        // Exercício personalizado ou novo customizado
         return {
           exercicioId: null,
           nome: String(e.nome || "").trim(),
@@ -3596,11 +3560,9 @@ export default function NovoTreino() {
         ? await TreinosApi.atualizar(editProgramadoId || editId, payload)
         : await TreinosApi.criar(payload);
 
-      // ✅ Se você manteve validateStatus, resp SEMPRE vem aqui (até 400).
       const status = (resp as any)?.status;
       const data = (resp as any)?.data;
 
-      // ✅ 1) LIMITE DE TREINOS PROGRAMADOS (o alert correto)
       if (!isEditing && status === 400 && data?.code === "LIMIT_TREINOS_PROGRAMADOS" && Array.isArray(data?.meus)) {
         const meus = data.meus as Array<{ id: string; nome: string; createdAt?: string }>;
         const lista = meus
@@ -3613,12 +3575,10 @@ export default function NovoTreino() {
 
         const idx = Number(escolha);
         if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
-          // cancelou -> NÃO navega e NÃO limpa progresso
           return;
         }
 
         const apagar = meus[idx - 1];
-
         const resp2 = await TreinosApi.criar({
           ...(payload as any),
           apagarTreinoProgramadoId: apagar.id,
@@ -3632,21 +3592,18 @@ export default function NovoTreino() {
           return;
         }
 
-        // ✅ agora sim: sucesso real -> limpa e navega
         showToast("Treino criado! Um treino antigo foi apagado.", "success");
-        limparProgressoETela(); // (se você já tiver helper, usa ele)
+        limparProgressoETela(); 
         setTimeout(() => navigate("/treinos"), 300);
         return;
       }
 
-      // ✅ 2) Qualquer outro erro 4xx/5xx
       if (status >= 400) {
         console.error("Erro ao criar treino:", status, data);
         showToast(data?.message || "Falha ao criar treino.", "error");
         return;
       }
 
-      // ✅ 3) Sucesso real (2xx)
       const criado = data;
 
       let qtdAgendados = 0;
@@ -3661,7 +3618,6 @@ export default function NovoTreino() {
         try {
           const token = getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
           const rr = await fetch(
             `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
               String(treinoProgramadoId),
@@ -3681,15 +3637,11 @@ export default function NovoTreino() {
       }
 
       const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
-
       const atletasDoTreino = atletasVinculados.filter((a) =>
         atletasSelecionados.includes(a.id),
       );
       const nomesAtletas = atletasDoTreino.map((a) => a.nome);
-
-      const datasBase =
-        datasAgendamento.length > 0 ? datasAgendamento : dataTreino ? [dataTreino] : [];
-
+      const datasBase = datasAgendamento.length > 0 ? datasAgendamento : dataTreino ? [dataTreino] : [];
       const datasLabel = datasBase.length
         ? datasBase
             .slice()
@@ -3747,24 +3699,20 @@ export default function NovoTreino() {
     } catch (e: any) {
       const data = e?.response?.data;
 
-      // ✅ estourou limite de treinos programados (5) -> oferece apagar 1
       if (data?.code === "LIMIT_TREINOS_PROGRAMADOS" && Array.isArray(data?.meus)) {
         const meus = data.meus as Array<{ id: string; nome: string }>;
         const lista = meus.map((m, i) => `${i + 1}) ${m.nome}`).join("\n");
         const escolha = window.prompt(
           `Você atingiu o limite de 5 treinos.\n\nEscolha um número para apagar e liberar espaço:\n${lista}\n\nDigite 1-${meus.length} (ou deixe vazio para cancelar).`
         );
-
         const idx = Number(escolha);
 
-        // cancelou
         if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
           return;
         }
 
         const apagar = meus[idx - 1];
 
-        // ✅ reenvia o POST com apagarTreinoProgramadoId
         await TreinosApi.criar({
           ...(payloadOriginal || {}),
           apagarTreinoProgramadoId: apagar.id,
@@ -3813,9 +3761,7 @@ export default function NovoTreino() {
         return;
       }
 
-      const prazoComSegundos =
-        prazoSelecionadoRaw.length === 16 ? `${prazoSelecionadoRaw}:00` : prazoSelecionadoRaw;
-
+      const prazoComSegundos = prazoSelecionadoRaw.length === 16 ? `${prazoSelecionadoRaw}:00` : prazoSelecionadoRaw;
       const quando = new Date(prazoComSegundos);
 
       if (isNaN(quando.getTime())) {
@@ -3823,7 +3769,7 @@ export default function NovoTreino() {
         return;
       }
 
-      const diaEscolhido = dateKeyLocal(quando); // yyyy-mm-dd (local)
+      const diaEscolhido = dateKeyLocal(quando); 
       const bloqueadas = datasAgendadasPorTreino.get(String(t.id));
 
       if (bloqueadas?.has(diaEscolhido)) {
@@ -3834,7 +3780,6 @@ export default function NovoTreino() {
       const expira = new Date(quando.getTime() + 3 * 24 * 60 * 60 * 1000);
       const dataTreinoLocal = toISOWithLocalOffset(quando);
       const dataExpiracaoLocal = toISOWithLocalOffset(expira);
-
       const res = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",
         headers: {
@@ -3865,8 +3810,7 @@ export default function NovoTreino() {
       setDatasAgendadasPorTreino((prev) => {
         const next = new Map(prev);
         const treinoId = String(novo.treinoProgramadoId ?? t.id);
-        const dia = dateKeyLocal(quando); // usa o "quando" que você já calculou
-
+        const dia = dateKeyLocal(quando); 
         const set = next.get(treinoId) ?? new Set<string>();
         set.add(dia);
         next.set(treinoId, set);
@@ -4126,8 +4070,6 @@ export default function NovoTreino() {
                 }}
                 onChange={(e) => {
                   const val = e.target.value;
-
-                  // datetime-local vem "YYYY-MM-DDTHH:mm" (sem segundos)
                   const valComSeg = val && val.length === 16 ? `${val}:00` : val;
                   const d = valComSeg ? new Date(valComSeg) : new Date(NaN);
 
@@ -4141,7 +4083,6 @@ export default function NovoTreino() {
 
                   if (bloqueadas?.has(dia)) {
                     alert("Você já tem esse treino agendado nessa data. Escolha outro dia.");
-                    // mantém o valor anterior (não deixa aplicar essa data)
                     return;
                   }
 
@@ -5613,7 +5554,6 @@ export default function NovoTreino() {
                           return;
                         }
 
-                        // se tem "hoje" nas datas, trava para >= agora
                         const temHoje = datasAgendamento.some(isTodayYMD);
                         if (temHoje) {
                           const minNow = hhmmNow();

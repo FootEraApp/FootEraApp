@@ -85,7 +85,6 @@ type LocalItem = LearningEstruturaItemInput & {
   videoModalOpen?: boolean;
   materialFileName?: string | null;
   materialPreviewUrl?: string | null;
-
   aulaAoVivo?: {
     id?: string;
     inscricaoInicio?: string;
@@ -96,13 +95,9 @@ type LocalItem = LearningEstruturaItemInput & {
     gravacaoAtiva: boolean;
     replayDisponivel?: boolean;
     status?: "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
-
-    // legado, pode manter para compatibilidade
     convidadoUsuarioId?: string;
     convidadoNome?: string;
     convidadoDescricao?: string;
-
-    // novo
     convidados?: Array<{
       localId: string;
       usuarioId?: string;
@@ -1426,16 +1421,15 @@ export default function LearningCreatePage() {
 
         const hoje = startOfToday();
         const minInicio = hoje;
-        const maxInicio = addDays(hoje, 42); // 6 semanas
-        const minFinal = addDays(hoje, 14);  // 2 semanas
-        const maxFinal = addDays(hoje, 56);  // 8 semanas
+        const maxInicio = addDays(hoje, 42);
+        const minFinal = addDays(hoje, 14); 
+        const maxFinal = addDays(hoje, 56); 
 
         const semanas = Number(estrutura.duracaoSemanas || 0);
         const prazoEsperadoMs = semanas * 7 * 24 * 60 * 60 * 1000;
         const toleranciaMs = 7 * 24 * 60 * 60 * 1000;
 
         if (modo === "LIVRE") {
-          // não exige prazo
         }
 
         if (modo === "PRAZO_SUGERIDO") {
@@ -1784,7 +1778,7 @@ export default function LearningCreatePage() {
       if (origemAtual === "avulsa" && destinoMetodologia === "AVULSA") {
         await updateMetodologiaAvulsa(editMetodologiaId, {
           ...payloadBase,
-          ativo: false, // força inativo para revisão do time antes de publicar
+          ativo: false,
           precoAssinaturaMensal: Number(precoAssinaturaMensal),
         });
 
@@ -1863,7 +1857,6 @@ export default function LearningCreatePage() {
         return;
       }
 
-      // mantém fluxo atual só para edição
       const metodologiaResp = await updateMetodologia(editMetodologiaId, {
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,

@@ -3,8 +3,6 @@ import { getDashboardOrganizacao } from "../controllers/dashboardOrganizacaoCont
 
 const router = Router();
 
-// GET /api/dashboard/organizacao?ownerTipo=Clube&ownerId=...&ano=2026
-// o index está com /api/dashboard
 router.get("/organizacao", getDashboardOrganizacao);
 
 export default router;

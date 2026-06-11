@@ -15,8 +15,6 @@ type ExPayloadTemporario = {
   series: string | null;
   repeticoes: string | null;
   ordem: number;
-
-  // ✅ novos (para salvar ExercicioPersonalizado com mídia)
   exercicioPersonalizadoId?: string | null;
   videoDemonstrativoUrl?: string | null;
   videoPosterUrl?: string | null;
@@ -53,8 +51,6 @@ export function montarExerciciosParaPayload(lista: ExItemUI[]): ExPayload[] {
     .map<ExPayloadOrNull>((item, idx) => {
       const ordem = idx + 1;
       const repsTexto = montarRepsTexto(item);
-
-      // ✅ se o item tiver exercicioPersonalizadoId, NÃO trata como catálogo
       const persId = normalizeText((item as any).exercicioPersonalizadoId);
 
       if (item.exercicioId && !persId) {
@@ -76,10 +72,7 @@ export function montarExerciciosParaPayload(lista: ExItemUI[]): ExPayload[] {
         series: seriesRaw || null,
         repeticoes: repsTexto || null,
         ordem,
-
         exercicioPersonalizadoId: persId || null,
-
-        // ✅ aceita tanto videoDemonstrativoUrl quanto videoUrl
         videoDemonstrativoUrl:
           normalizeText((item as any).videoDemonstrativoUrl || (item as any).videoUrl) ||
           null,

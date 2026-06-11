@@ -207,16 +207,12 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
             foto: true,
             verified: true,
             tipo: true,
-
-            // campos que existem no Usuario
             cep: true,
             pais: true,
             estado: true,
             cidade: true,
             logradouro: true,
             cpf: true,
-
-            // relações/perfis originais
             clube: true,
             professor: true,
             escolinha: true,

@@ -11,9 +11,7 @@ var vite_config_default = defineConfig({
     VitePWA({
       strategies: "generateSW",
       registerType: "autoUpdate",
-      // você registra no main.tsx (somente PROD)
       injectRegister: false,
-      // NÃO habilita SW no dev
       devOptions: { enabled: false },
       workbox: {
         maximumFileSizeToCacheInBytes: 5e6,

@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { probeVideo } from "../services/mediaMetadata.js";
-import { deleteFromS3 } from "../middlewares/s3Upload.js"; // ✅ Importando a função de apagar do S3
+import { deleteFromS3 } from "../middlewares/s3Upload.js"; 
 
 function getAuthUserId(req: Request): string | null {
   return (req as any)?.user?.id || null;
@@ -66,7 +66,6 @@ function normalizarFaixasEtarias(value: unknown): string[] {
     .filter(Boolean);
 }
 
-// ✅ Limpeza do S3 se precisar remover um vídeo
 async function removePublicFileIfExists(fileUrl?: string | null) {
   if (!fileUrl) return;
   if (fileUrl.includes("amazonaws.com")) {
@@ -105,7 +104,6 @@ async function mapUsoEmTreinos(exercicioIds: string[]) {
         }
         break;
       } catch {
-        // Ignora se falhar
       }
     }
   }
@@ -262,10 +260,8 @@ export const criarExercicio = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Usuário não autenticado." });
     }
 
-    // ✅ Agora o arquivo vem no req.file, e já está no S3
     const videoFile = req.file as any;
     const videoDemonstrativoUrl = videoFile ? videoFile.location : null;
-
     const {
       codigo,
       nome,
@@ -331,13 +327,12 @@ export const criarExercicio = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Espaço necessário inválido." });
     }
 
-    // ✅ Validação de duração LENDO DIRETO DA URL DO S3
     if (videoDemonstrativoUrl) {
       try {
         const metadata = await probeVideo(videoDemonstrativoUrl);
 
         if (metadata?.durationSec != null && metadata.durationSec > 60) {
-          await deleteFromS3(videoDemonstrativoUrl); // Apaga do S3 se for muito longo
+          await deleteFromS3(videoDemonstrativoUrl); 
           return res.status(400).json({ message: "Esse vídeo é muito longo. O máximo permitido é 60 segundos." });
         }
       } catch (err) {
@@ -483,10 +478,8 @@ export const editarExercicio = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Você não pode editar esse exercício." });
     }
 
-    // ✅ Pega a URL do S3 caso um novo arquivo tenha sido enviado
     const videoFile = req.file as any;
     const novaVideoUrl = videoFile ? videoFile.location : null;
-
     const {
       codigo,
       nome,
@@ -545,7 +538,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
         message: "Você já possui um exercício personalizado com esse nome.",
       });
     }
-    // ✅ Validação de duração LENDO DIRETO DA URL DO S3
+
     if (novaVideoUrl) {
       try {
         const metadata = await probeVideo(novaVideoUrl);
@@ -561,7 +554,6 @@ export const editarExercicio = async (req: Request, res: Response) => {
 
     const deveRemoverVideo = String(removerVideo) === "true";
 
-    // ✅ Deleta do S3 o vídeo antigo se for substituído ou removido explicitamente
     if ((novaVideoUrl || deveRemoverVideo) && (exercicioAtual as any).videoDemonstrativoUrl) {
       await removePublicFileIfExists((exercicioAtual as any).videoDemonstrativoUrl);
     }

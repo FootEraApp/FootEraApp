@@ -1185,7 +1185,6 @@ export default function PaginaMensagens() {
       alert("Você saiu do grupo.");
       setGrupoDetalhe(null);
       setMostrarInfoGrupo(false);
-      // aqui você pode limpar o grupo selecionado ou voltar pra lista
     } catch (err: any) {
       alert(err.message || "Erro ao sair do grupo");
     }

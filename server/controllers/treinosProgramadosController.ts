@@ -397,16 +397,13 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           e?.descanso === null || e?.descanso === undefined
             ? null
             : String(e.descanso).trim() || null;
-        // ✅ IDs vindos do front (prioridade)
         const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
         const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
         const exercicioIdCatalogo = String(e?.exercicioId ?? "").trim();
-        // ✅ fallback que muita tela manda como "id"
         const idGenerico = String(e?.id ?? "").trim();
-        const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
+        const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase();
         const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
 
-        // 1) Se veio explícito, usa explícito
         if (exercicioPersonalizadoId) {
           const personalizado = await prisma.exercicioPersonalizado.findUnique({
             where: { id: exercicioPersonalizadoId },
@@ -556,8 +553,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
 
         const nomeOriginal = String(e?.nome ?? "").trim();
         const nomeNormalizado = normalizarNomeExercicio(nomeOriginal);
-        
-        // 🔥 PROTEÇÃO ANTI-DUPLICAÇÃO (CATÁLOGO)
         const existenteCatalogo = await prisma.exercicio.findFirst({
           where: {
             OR: [
@@ -583,11 +578,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           throw new Error("Nome do exercício personalizado não informado.");
         }
         const descricao = e?.descricao != null ? String(e.descricao) : null;
-        // opcional
-        const videoDemonstrativoUrl =
-          e?.videoDemonstrativoUrl != null ? String(e.videoDemonstrativoUrl) : null;
+        const videoDemonstrativoUrl = e?.videoDemonstrativoUrl != null ? String(e.videoDemonstrativoUrl) : null;
         const videoPosterUrl = e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
-        // se vier nivel/categorias no treino, dá pra salvar junto
         const nivelDoExercicio = e?.nivel ? normNivel(e.nivel) : null;
         const categoriasDoExercicio: Categoria[] = Array.isArray(e?.categorias)
           ? (e.categorias.map(normCategoria) as Categoria[])
@@ -772,7 +764,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           },
         });
 
-        // ✅ AUDIT
         await audit(req, {
           acao: "PRESCREVER_TREINO",
           entidade: "TreinoProgramado",
@@ -781,9 +772,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           meta: { nome, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
         });
 
-        // ✅ STATS (só se fizer sentido pro professor)
-        const professorIdForStats =
-          normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
+        const professorIdForStats = normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
 
         const exerciciosOficiaisIds = (itens || [])
           .map((i: any) => i?.exercicioId)
@@ -799,7 +788,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           )
         );
 
-        // ✅ AGENDAR ATLETAS (continua dentro do mesmo try)
         try {
           const elencosParaBuscar = [
             ...new Set([
@@ -981,15 +969,12 @@ export async function updateTreino(req: Request, res: Response) {
           e?.descanso === null || e?.descanso === undefined
             ? null
             : String(e.descanso).trim() || null;
-        // ✅ IDs vindos do front (prioridade)
+
         const exercicioPersonalizadoId = String(e?.exercicioPersonalizadoId ?? "").trim();
         const exercicioTemporarioId = String(e?.exercicioTemporarioId ?? "").trim();
         const exercicioIdCatalogo = String(e?.exercicioId ?? "").trim();
-
-        // ✅ fallback que muita tela manda como "id"
         const idGenerico = String(e?.id ?? "").trim();
-        const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); // "catalogo" | "temporario" | "personalizado"
-
+        const tipo = String(e?.tipo ?? e?.exercicio?.tipo ?? "").toLowerCase(); 
         const descricaoExercicio = e?.descricao != null && String(e.descricao).trim() ? String(e.descricao).trim() : null;
 
         if (exercicioPersonalizadoId) {
@@ -1133,8 +1118,6 @@ export async function updateTreino(req: Request, res: Response) {
 
         const nomeOriginal = String(e?.nome ?? "").trim();
         const nomeNormalizado = normalizarNomeExercicio(nomeOriginal);
-
-        // 🔥 PROTEÇÃO ANTI-DUPLICAÇÃO (CATÁLOGO)
         const existenteCatalogo = await prisma.exercicio.findFirst({
           where: {
             OR: [
@@ -1411,24 +1394,19 @@ export const getAllTreinos = async (req: Request, res: Response) => {
 
     const where: any = {};
 
-    // 1) filtro explícito: quero os treinos "do professor X"
     if (professorId) {
       const pid = String(professorId);
       const incluirColabsBool = String(incluirColabs ?? "") === "1";
 
       if (incluirColabsBool) {
-        // ✅ dono OU colaborador
         where.OR = [
           { professorId: pid },
           { professores: { some: { professorId: pid } } },
         ];
       } else {
-        // ✅ só dono (comportamento atual)
         where.professorId = pid;
       }
 
-      // se você quer forçar "somente treinos do professor (não do clube/escolinha)",
-      // mantenha essa regra SÓ quando for modo apenasCriador:
       const dono = normalizarTipoUsuario(ownerTipo);
       if (!incluirColabsBool && (dono === "Professor" || apenasCriador === "1")) {
         where.clubeId = null;
@@ -1436,7 +1414,6 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       }
     }
 
-    // 2) compatibilidade com o seu modo "onlyMine" (caso você use em outras telas)
     const onlyMineBool = String(onlyMine ?? "").toLowerCase() === "true";
     const ownerWhere = ownerWhereFrom(tipoUsuario, tipoUsuarioId);
     if (onlyMineBool && ownerWhere) {
@@ -1462,7 +1439,6 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           ...(isEscolinha ? [{ escolinhaId: viewerId }] : []),
           ...(isProfessor ? [{ professores: { some: { professorId: viewerId } } }] : []),
 
-          // públicos de parceiro (seu requisito)
           { parceiro: true, professorId: { not: null } },
         ],
       };

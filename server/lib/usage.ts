@@ -181,7 +181,6 @@ export async function requireUsage(
     return false;
   }
 
-  // ✅ para Professor/Clube/Escolinha, o limite deve ser por organização
   const subjectIdFromBody =
     String((req as any)?.body?.tipoUsuarioId || "").trim() || null;
 
@@ -195,7 +194,6 @@ export async function requireUsage(
       (req.user as any)?.professorId ||
       authUserId
     );
-    // ✅ TREINOS_PROGRAMADOS_MES (na prática: limite por quantidade no banco, não por tentativas)
   if (key === "treinos_programados_mes") {
     const tipoRaw = String(
       (req as any)?.body?.tipoUsuario ??
@@ -205,7 +203,6 @@ export async function requireUsage(
       (req.user as any)?.usuarioTipoRaw ??
       ""
     ).trim().toLowerCase();
-    // conta treinos do dono (clube/escolinha/professor); fallback: criadorUsuarioId
     const where: any = (() => {
       if (tipoRaw.includes("clube")) return { clubeId: subjectId };
       if (tipoRaw.includes("escolinha") || tipoRaw.includes("escola")) return { escolinhaId: subjectId };
@@ -215,7 +212,7 @@ export async function requireUsage(
 
     const used = await prisma.treinoProgramado.count({ where });
     const remaining = Math.max(0, Number(limit) - used);
-    const allowed = used < Number(limit); // ✅ se já tem 5, não deixa criar o 6º
+    const allowed = used < Number(limit); 
 
     if (!allowed) {
       const capability = CAPABILITY_BY_KEY[key] ?? key;
@@ -229,7 +226,6 @@ export async function requireUsage(
         reason: "USAGE_LIMIT",
       });
 
-      // ✅ manda lista para o front escolher 1 pra apagar
       const meus = await prisma.treinoProgramado.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -296,14 +292,12 @@ export async function incAndCheck(
 
     const usedNow = existing?.count ?? 0;
 
-    // ✅ se já bateu o limite, não incrementa
     if (Number.isFinite(limit) && usedNow >= limit) {
       const used = usedNow;
       const remaining = 0;
       return { allowed: false, used, remaining, limit, window: win, periodRef };
     }
 
-    // ✅ agora sim incrementa (ou cria)
     const row = await tx.usageCounter.upsert({
       where: {
         userId_key_windowKind_windowStart: { userId, key, windowKind, windowStart },

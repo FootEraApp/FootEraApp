@@ -589,9 +589,6 @@ export default function CreatorNovoEventoPage() {
 
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // 1) Se está editando evento normal, salva no controller de eventos.
-      // Mesmo se o tipo for AULA_AO_VIVO, ele continua sendo evento normal,
-      // não vira metodologia.
       if (isEditandoEventoNormal) {
         await axios.put(`${API.BASE_URL}/api/eventos/creator/${eventoId}`, body, {
           headers,
@@ -602,7 +599,6 @@ export default function CreatorNovoEventoPage() {
         return;
       }
 
-      // 2) Se está editando uma aula avulsa, salva direto na AulaAoVivo.
       if (isEditandoAulaAvulsa) {
         await axios.put(
           `${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}`,
@@ -635,8 +631,6 @@ export default function CreatorNovoEventoPage() {
         return;
       }
 
-      // 3) Se é online e NÃO é edição, cria uma aula ao vivo avulsa.
-      // Isso NÃO cria metodologia.
       if (isOnline) {
         await axios.post(
           `${API.BASE_URL}/api/aulas-ao-vivo`,
@@ -669,7 +663,6 @@ export default function CreatorNovoEventoPage() {
         return;
       }
 
-      // 4) Se não é online, cria evento normal.
       await axios.post(`${API.BASE_URL}/api/eventos/creator`, body, {
         headers,
       });

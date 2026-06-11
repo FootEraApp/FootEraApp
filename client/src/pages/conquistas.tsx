@@ -1,4 +1,3 @@
-//conquistas.tsx
 import { useEffect, useMemo, useState } from "react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
