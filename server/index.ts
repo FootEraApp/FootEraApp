@@ -12,15 +12,15 @@ import { createRequire } from "module";
 import ffmpeg from "fluent-ffmpeg";
 import "./loadEnv.js";
 
-console.log("[ENV] NODE_ENV:", process.env.NODE_ENV);
-console.log("[ENV] GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
-console.log("[ENV] FRONTEND_URL:", process.env.FRONTEND_URL);
-console.log("[ENV] API_BASE_URL:", process.env.API_BASE_URL);
-console.log("[ENV] JWT_SECRET exists:", !!process.env.JWT_SECRET);
-console.log("[ENV] GOOGLE_CLIENT_ID exists:", !!process.env.GOOGLE_CLIENT_ID);
+if (process.env.NODE_ENV !== "production") {
+  console.log("[ENV] NODE_ENV:", process.env.NODE_ENV);
+  console.log("[ENV] FRONTEND_URL:", process.env.FRONTEND_URL);
+  console.log("[ENV] API_BASE_URL:", process.env.API_BASE_URL);
+  console.log("[ENV] JWT_SECRET exists:", !!process.env.JWT_SECRET);
+  console.log("[ENV] GOOGLE_CLIENT_ID exists:", !!process.env.GOOGLE_CLIENT_ID);
+}
 
 const require = createRequire(import.meta.url);
-
 const ffmpegStatic = require("ffmpeg-static") as string | null;
 const ffprobeStatic = require("ffprobe-static") as { path: string } | null;
 
