@@ -180,15 +180,12 @@ function pickPontuacao(raw: any): number | null {
 function pickPontuacaoFromPerfilPontuacaoEndpoint(raw: any): number | null {
   if (!raw) return null;
 
-  // alguns backends já devolvem um "total"
   const totalDireto = pickPontuacao(raw);
   if (typeof totalDireto === "number") return totalDireto;
 
-  // igual o ProfileHeader: performance + disciplina + responsabilidade
   const performance = Number(raw?.performance) || 0;
   const disciplina = Number(raw?.disciplina) || 0;
   const responsabilidade = Number(raw?.responsabilidade) || 0;
-
   const total = performance + disciplina + responsabilidade;
   return Number.isFinite(total) ? total : null;
 }
@@ -585,7 +582,6 @@ export default function PerfilProfessor({
       return true;
     });
 
-    // ✅ agora traz a pontuação real do mesmo jeito que o ProfileHeader
     const enriched = await Promise.all(
       unique.map(async (a) => {
         const uid = String(a.usuarioId || a.id || "").trim();

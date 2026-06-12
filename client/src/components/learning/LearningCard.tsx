@@ -10,19 +10,11 @@ function normalizeMediaUrl(raw?: string | null) {
 
   const u = String(raw).trim();
   if (!u) return AVATAR_FALLBACK;
-
-  // URL absoluta
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
-
-  // uploads servidos pelo backend
   if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
   if (u.startsWith("uploads/")) return `${API.BASE_URL}/${u}`;
-
-  // assets do frontend
   if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
   if (u.startsWith("assets/")) return `${APP.FRONTEND_BASE_URL}/${u}`;
-
-  // outros caminhos absolutos do frontend
   if (u.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${u}`;
 
   return u;

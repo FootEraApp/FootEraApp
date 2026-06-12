@@ -1157,7 +1157,6 @@ return (
           const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
           const usernameFinal = rawUsername ? rawUsername.toLowerCase() : "";
 
-          // 1. Validação de Username
           if (usernameFinal) {
             if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
               alert("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
@@ -1168,12 +1167,10 @@ return (
           try {
             const formData = new FormData();
 
-            // 2. Tratamento da Foto (Se for arquivo, vai pro FormData)
             if (dadosUsuario.foto instanceof File) {
               formData.append("foto", dadosUsuario.foto);
             }
 
-            // 3. Preparação do objeto 'tipo' (Lógica específica de cada categoria)
             const tipo: any = { ...dadosTipo };
 
             if (typeof tipo.cnpj === "string") {
@@ -1249,19 +1246,17 @@ return (
               .replace(/^escolinha$/, "escola")
             );
 
-            // 5. Única requisição PUT para o Perfil
             await axios.put(
               `${API.BASE_URL}/api/perfil/${usuarioId}`,
               formData,
               { 
                 headers: { 
                   Authorization: `Bearer ${token}`,
-                  "Content-Type": "multipart/form-data" // Necessário para enviar arquivos
+                  "Content-Type": "multipart/form-data" 
                 } 
               }
             );
 
-            // 6. Lógica extra para Olheiro (se necessário manter separado)
             if (tipoRender === "olheiro") {
               const olheiroId = dadosTipo?.id ?? Storage.tipoUsuarioId;
               if (olheiroId) {

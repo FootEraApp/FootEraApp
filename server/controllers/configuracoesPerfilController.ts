@@ -275,8 +275,6 @@ export async function unlinkGoogle(req: Request, res: Response) {
       return res.status(400).json({ message: "Sua conta não está vinculada ao Google." });
     }
 
-    // segurança: não deixar conta ficar sem forma de login
-    // no seu caso, como senhaHash é obrigatório no schema, tudo bem permitir desvincular.
     const novoProvider =
       usuario.authProvider === AuthProvider.LOCAL_GOOGLE
         ? AuthProvider.LOCAL

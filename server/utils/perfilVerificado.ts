@@ -1,4 +1,3 @@
-// server/utils/perfilVerificado.ts
 import { StatusCref, TipoUsuario } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -103,7 +102,6 @@ export function calcularPerfilVerificado(input: {
 }) {
   const u = input.usuario;
 
-  // base do usuário
   const baseOk =
     hasText(u?.nome) &&
     hasText(u?.nomeDeUsuario) &&

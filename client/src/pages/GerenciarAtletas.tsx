@@ -216,7 +216,6 @@ const formatRelativo = (iso: string) => {
   return `há ${dias} d`;
 };
 
-// ✅ cache para não bater na API toda hora
 const pontuacaoCacheRef = { current: new Map<string, { total: number; ts: number }>() };
 
 function invalidatePontuacaoCache(usuarioId?: string | null) {
@@ -224,7 +223,7 @@ function invalidatePontuacaoCache(usuarioId?: string | null) {
   if (!uid) return;
   pontuacaoCacheRef.current.delete(uid);
 }
-// ✅ mesma lógica do ProfileHeader: soma performance + disciplina + responsabilidade
+
 async function fetchPontuacaoTotalPorUsuarioId(
   usuarioId: string,
   headers: any
@@ -241,8 +240,6 @@ async function fetchPontuacaoTotalPorUsuarioId(
 
     if (!r.ok) return null;
     const data: any = await r.json();
-
-    // mesma soma do ProfileHeader
     const performance = Number(data?.performance) || 0;
     const disciplina = Number(data?.disciplina) || 0;
     const responsabilidade = Number(data?.responsabilidade) || 0;
@@ -277,8 +274,6 @@ const AprovacaoPill: React.FC<{ value: boolean | null }> = ({ value }) => {
 
 const PontosPill: React.FC<{ pontos?: number | null; aprovado?: boolean | null }> = ({ pontos, aprovado }) => {
   if (typeof pontos !== "number") return null;
-
-  // se quiser mostrar só quando aprovado:
   if (aprovado !== true) return null;
 
   return (
@@ -406,13 +401,10 @@ const GerenciarAtletas: React.FC = () => {
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
   const [detalheAtivo, setDetalheAtivo] = useState(false);
 
-  const orgTipoQS = params.get("orgTipo"); // "CLUBE" | "ESCOLINHA" | null
-  const orgIdQS = params.get("orgId");     // string | null
-
-  // ✅ lê sessão (persistência real)
+  const orgTipoQS = params.get("orgTipo");
+  const orgIdQS = params.get("orgId");  
   const gestorCtx = loadGestorContext();
 
-  // ✅ se não vier QS na URL, mas tiver sessão, usa sessão
   const orgTipoEfetivo = (orgTipoQS && String(orgTipoQS).trim())
     ? String(orgTipoQS).trim().toUpperCase()
     : (gestorCtx.enabled && gestorCtx.org ? String(gestorCtx.org.tipo).toUpperCase() : "");
@@ -421,14 +413,11 @@ const GerenciarAtletas: React.FC = () => {
     ? String(orgIdQS).trim()
     : (gestorCtx.enabled && gestorCtx.org ? String(gestorCtx.org.ownerId).trim() : "");
 
-  // ✅ modo gestor efetivo
   const modoGestor = !!orgIdEfetivo;
-
-  // contexto efetivo (se tiver org na URL, manda como Clube/Escola)
   const contextoTipo = useMemo<"Escola" | "Clube" | "Professor" | null>(() => {
     if (!modoGestor) return tipo;
     if (String(orgTipoEfetivo || "").toUpperCase() === "CLUBE") return "Clube";
-    return "Escola"; // ESCOLINHA
+    return "Escola"; 
   }, [modoGestor, orgTipoEfetivo, tipo]);
 
   const contextoTipoUsuarioId = useMemo<string | null>(() => {
@@ -440,13 +429,10 @@ const GerenciarAtletas: React.FC = () => {
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
   const limparOrg = () => {
-    clearGestorContext(); // limpa sessão gestor
-
-    // limpa estados da tela
+    clearGestorContext(); 
     setFocado(null);
     setDetalheAtivo(false);
     setCarreiraOpen(false);
-
     setLocation(`/perfil/GerenciarProfessores?tab=organizacoes`);
   };
 
@@ -550,7 +536,7 @@ const GerenciarAtletas: React.FC = () => {
           foto: a.foto ?? a.usuario?.foto ?? null,
           posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
           categoria: apiToUiCategoria(a.categoria),
-          pontuacao: a.pontuacao ?? null, // (vai ser sobrescrito abaixo com o cálculo real)
+          pontuacao: a.pontuacao ?? null,
           ativoRecentemente: !!a.ativoRecentemente,
           clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
           escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
@@ -562,10 +548,8 @@ const GerenciarAtletas: React.FC = () => {
         };
       });
 
-      // ✅ seta rápido (UI não fica vazia)
       setAtletas(normalizados);
 
-      // ✅ agora resolve pontuação REAL igual ProfileHeader (p/ cada atleta)
       const withRealScore = await Promise.all(
         normalizados.map(async (at) => {
           const total = await fetchPontuacaoTotalPorUsuarioId(at.usuarioId, {
@@ -588,7 +572,6 @@ const GerenciarAtletas: React.FC = () => {
   };
 
   const carregarProfessores = async () => {
-    // ✅ se contexto efetivo for Professor, não carrega lista institucional
     if (!contextoTipo || contextoTipo === "Professor" || !usuarioIdEntidade) return;
 
     try {
@@ -603,7 +586,7 @@ const GerenciarAtletas: React.FC = () => {
       }
 
       const params: any = {
-        vinculo: tipoParaVinculo(contextoTipo), // 👈 usa o contexto
+        vinculo: tipoParaVinculo(contextoTipo), 
         id: entidadeIdReal,
         tipoUsuarioId: entidadeIdReal,
         search: q.trim() || undefined,
@@ -900,7 +883,7 @@ const GerenciarAtletas: React.FC = () => {
       if (diffDays <= 6) idx = 3;
       else if (diffDays <= 13) idx = 2;
       else if (diffDays <= 20) idx = 1;
-      else idx = 0; // 21..27
+      else idx = 0;
 
       if (s.tipo === "treino") bins[idx].treinos += 1;
       else bins[idx].desafios += 1;
@@ -911,7 +894,7 @@ const GerenciarAtletas: React.FC = () => {
 
   const submissoesMes = useMemo(() => {
     const now = Date.now();
-    const cutoff = now - 30 * 86_400_000; // 30 dias
+    const cutoff = now - 30 * 86_400_000;
 
     return submissoes
       .filter((s) => {
@@ -920,7 +903,7 @@ const GerenciarAtletas: React.FC = () => {
         return t >= cutoff;
       })
       .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
-      .slice(0, 20); // opcional: limita pra não ficar gigante (ajuste como quiser)
+      .slice(0, 20); 
   }, [submissoes]);
 
   const agendadosPorDia = useMemo(() => {
@@ -1672,7 +1655,6 @@ async function salvarAvaliacao() {
             : undefined
         }
         professorId={
-          // ✅ professor normal: usa o id do professor
           contextoTipo === "Professor"
             ? (tipoUsuarioIdEntidade || undefined)
             : (turmasProfessorId || undefined)
@@ -1766,8 +1748,8 @@ async function salvarAvaliacao() {
                   const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
                     headers,
                     params: {
-                      vinculo: tipoParaVinculo(contextoTipo), // ✅ contexto
-                      id: entidadeIdReal,                    // ✅ id da org no modo gestor
+                      vinculo: tipoParaVinculo(contextoTipo),
+                      id: entidadeIdReal,                 
                       tipoUsuarioId: entidadeIdReal,
                       debug: "1",
                     },
@@ -1781,7 +1763,7 @@ async function salvarAvaliacao() {
 
                   if (!autorId || !autorTipo) throw new Error("Autor inválido");
 
-                  const time = String(selectedTime || "12:00"); // fallback
+                  const time = String(selectedTime || "12:00");
 
                   await Promise.all(
                     selectedDays.map((day) =>
@@ -1790,7 +1772,6 @@ async function salvarAvaliacao() {
                         {
                           atletaId: focado!.id,
                           treinoProgramadoId,
-                          // ✅ agora vai dia + hora:
                           dataTreino: `${day}T${time}:00`,
                           autorId,
                           autorTipo,

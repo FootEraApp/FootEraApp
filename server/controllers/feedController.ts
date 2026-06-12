@@ -27,7 +27,7 @@ async function carregarCadeiaRepost(post: any): Promise<any> {
 
   let atual = post;
   let depth = 0;
-  const MAX_DEPTH = 20; // evita loop infinito se houver dado inconsistente
+  const MAX_DEPTH = 20; 
 
   while (atual?.repostOfId && depth < MAX_DEPTH) {
     const pai = await prisma.postagem.findUnique({
@@ -294,8 +294,6 @@ export const postar: RequestHandler = async (req, res) => {
 
   const { conteudo, descricao, imagemUrl: imagemUrlBody, videoUrl: videoUrlBody } = req.body;
   const texto = (descricao && descricao.length ? descricao : conteudo) || "";
-  
-  // O multer-s3 adiciona a propriedade 'location' ao file
   const file = req.file as any; 
 
   try {
@@ -303,18 +301,16 @@ export const postar: RequestHandler = async (req, res) => {
     let imagemUrl: string | undefined;
     let videoUrl: string | undefined;
 
-    // --- LÓGICA DO S3 AQUI ---
     if (file && file.location) {
       const isVideo = file.mimetype?.startsWith("video");
       if (isVideo) {
         tipoMidia = "Video";
-        videoUrl = file.location; // A URL direta do Amazon S3
+        videoUrl = file.location; 
       } else {
         tipoMidia = "Imagem";
-        imagemUrl = file.location; // A URL direta do Amazon S3
+        imagemUrl = file.location; 
       }
     } else {
-      // Se o usuário não mandou arquivo, mas mandou uma URL por texto (seu código antigo)
       if (imagemUrlBody) {
         imagemUrl = imagemUrlBody;
         tipoMidia = "Imagem";
@@ -329,7 +325,6 @@ export const postar: RequestHandler = async (req, res) => {
       return res.status(400).json({ message: "Conteúdo ou mídia obrigatória." });
     }
 
-    // Salva no banco de dados com a URL da Amazon
     const postagem = await prisma.postagem.create({
       data: {
         conteudo: texto,
@@ -341,9 +336,6 @@ export const postar: RequestHandler = async (req, res) => {
       },
     });
 
-    // ... (o resto da sua função continua igual: emissão de socket, etc.)
-    
-    // Vou colocar a parte do Socket aqui só para não cortar seu código
     const postForEmit = await prisma.postagem.findUnique({
       where: { id: postagem.id },
       include: {
@@ -379,15 +371,14 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
   }
 
   try {
-    // 1. Buscamos o post incluindo as URLs das mídias
     const post = await prisma.postagem.findUnique({
       where: { id },
       select: { 
         id: true, 
         usuarioId: true, 
         repostOfId: true,
-        imagemUrl: true,   // Adicionado
-        videoUrl: true     // Adicionado
+        imagemUrl: true,   
+        videoUrl: true     
       },
     });
 
@@ -399,8 +390,6 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
       return res.status(403).json({ mensagem: "Não autorizado." });
     }
 
-    // 2. Lógica de mídias: Deletar arquivos do S3 se existirem
-    // Verificamos se a URL contém "amazonaws" para evitar tentar deletar assets locais antigos
     if (post.imagemUrl && post.imagemUrl.includes("amazonaws.com")) {
       await deleteFromS3(post.imagemUrl);
     }
@@ -408,7 +397,6 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
       await deleteFromS3(post.videoUrl);
     }
 
-    // 3. Lógica de Reposts (sua lógica original mantida)
     if (post.repostOfId) {
       let rootId = post.repostOfId;
       let cursor = await prisma.postagem.findUnique({
@@ -430,7 +418,6 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
       }).catch(() => {});
     }
 
-    // 4. Deletar do Banco de Dados
     await prisma.postagem.delete({ where: { id } });
 
     return res.json({ mensagem: "Postagem e arquivos excluídos com sucesso." });

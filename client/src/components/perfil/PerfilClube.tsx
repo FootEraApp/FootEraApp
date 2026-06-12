@@ -146,8 +146,8 @@ type AtividadeRecente = {
   id: string;
   tipo: AtividadeRecenteTipo | string;
   titulo: string;
-  createdAt?: string | null;   // ✅ nome certo
-  criadoEm?: string | null;    // ✅ opcional, caso algum endpoint antigo use
+  createdAt?: string | null;   
+  criadoEm?: string | null;   
   imagemUrl?: string | null;
   link?: string | null;
 };
@@ -220,7 +220,7 @@ async function fetchPontuacaoTotalByUsuarioId(
     const disciplina = Number(data?.disciplina) || 0;
     const responsabilidade = Number(data?.responsabilidade) || 0;
 
-    return performance + disciplina + responsabilidade; // ✅ igual ProfileHeader
+    return performance + disciplina + responsabilidade;
   } catch {
     return null;
   }
@@ -407,7 +407,7 @@ export default function PerfilClube({
 
     let cancel = false;
     (async () => {
-      const idEntidade = clubeId; // ✅ clubeId mesmo
+      const idEntidade = clubeId; 
       if (!idEntidade) {
         if (!cancel) {
           setAtletasHeaderCount(0);
@@ -441,9 +441,7 @@ export default function PerfilClube({
 
         setAtletasHeaderCount(rows.length);
 
-        // ✅ Só pro preview (5) — busca a pontuação REAL igual ao ProfileHeader
         const top5 = rows.slice(0, 5);
-
         const mapped = await Promise.all(
           top5.map(async (r) => {
             const usuarioIdRow =
@@ -462,8 +460,6 @@ export default function PerfilClube({
               foto: r.foto ?? null,
               posicao: r.posicao ?? null,
               categoria: r.categoria ?? null,
-
-              // ✅ aqui é o que você quer: mesmo número do ProfileHeader (ex.: 171)
               pontuacao:
                 (typeof pontuacaoTotal === "number" ? pontuacaoTotal : null) ??
                 (typeof r.pontuacao === "number" ? r.pontuacao : null) ??
@@ -487,7 +483,7 @@ export default function PerfilClube({
     return () => {
       cancel = true;
     };
-  }, [token, clubeId, refreshVinculosKey]); // ✅ dependências corretas
+  }, [token, clubeId, refreshVinculosKey]);
 
   useEffect(() => {
     setAtividades(null);
@@ -553,14 +549,12 @@ export default function PerfilClube({
         if (cancel.v) return;
 
         const arr = Array.isArray(itens) ? itens : [];
-
-        // ✅ normaliza a data para sempre cair em createdAt
         const normalized: AtividadeRecente[] = arr.map((it: any) => ({
           ...it,
           createdAt:
             it?.createdAt ??
             it?.criadoEm ??
-            it?.createAt ??      // caso algum lugar antigo ainda mande assim
+            it?.createAt ??   
             it?.created_at ??
             null,
         }));
@@ -662,10 +656,6 @@ export default function PerfilClube({
 
   async function loadProfessores() {
     if (!token) return;
-
-    // ⚠️ IMPORTANTE:
-    // /api/gerenciar/professores usa o USER ID da entidade (igual no GerenciarProfessores),
-    // NÃO o clubeId (tipoUsuarioId).
     if (!entidadeUsuarioId) {
       setProfessores([]);
       return;
@@ -674,20 +664,17 @@ export default function PerfilClube({
     setProfessoresLoading(true);
 
     try {
-      // ✅ IGUAL AO GERENCIAR PROFESSORES
       const res = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
         headers,
         params: {
           vinculo: "clube",
-          id: entidadeUsuarioId, // ✅ user id do clube
+          id: entidadeUsuarioId, 
           limit: 200,
         },
       });
 
       let lista = (res.data?.professores || res.data || []) as any[];
 
-      // 🧯 fallback opcional: se vier vazio, tenta o endpoint antigo
-      // (pode remover se quiser 100% igual ao GerenciarProfessores)
       if (!lista.length && clubeId) {
         const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
           headers,

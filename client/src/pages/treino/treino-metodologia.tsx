@@ -74,7 +74,6 @@ function resolveUploadUrl(raw?: string | null) {
     return p;
   }
 
-  // Arquivos fixos do frontend: vídeos/imagens em /assets
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -87,7 +86,6 @@ function resolveUploadUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // Caso antigo: /videos/... também pode ser arquivo fixo do frontend
   if (p.startsWith("/videos/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -100,7 +98,6 @@ function resolveUploadUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // Uploads/exercícios vindos do backend
   if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
     return `${API.BASE_URL}${p}`;
   }
@@ -504,7 +501,6 @@ export default function TreinoMetodologiaPage() {
       params.set("origemTipo", origemTipo);
     }
 
-    // fallback para avulsa, caso a URL venha só com origem=avulsa
     if (!origemTipo && origem === "avulsa") {
       params.set("origemTipo", "AVULSA");
     }

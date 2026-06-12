@@ -12,16 +12,15 @@ import { createRequire } from "module";
 import ffmpeg from "fluent-ffmpeg";
 import "./loadEnv.js";
 
-console.log("[ENV] NODE_ENV:", process.env.NODE_ENV);
-console.log("[ENV] GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
-console.log("[ENV] FRONTEND_URL:", process.env.FRONTEND_URL);
-console.log("[ENV] API_BASE_URL:", process.env.API_BASE_URL);
-console.log("[ENV] JWT_SECRET exists:", !!process.env.JWT_SECRET);
-console.log("[ENV] GOOGLE_CLIENT_ID exists:", !!process.env.GOOGLE_CLIENT_ID);
+if (process.env.NODE_ENV !== "production") {
+  console.log("[ENV] NODE_ENV:", process.env.NODE_ENV);
+  console.log("[ENV] FRONTEND_URL:", process.env.FRONTEND_URL);
+  console.log("[ENV] API_BASE_URL:", process.env.API_BASE_URL);
+  console.log("[ENV] JWT_SECRET exists:", !!process.env.JWT_SECRET);
+  console.log("[ENV] GOOGLE_CLIENT_ID exists:", !!process.env.GOOGLE_CLIENT_ID);
+}
 
 const require = createRequire(import.meta.url);
-
-// força tipagem correta (resolve o erro ts2345)
 const ffmpegStatic = require("ffmpeg-static") as string | null;
 const ffprobeStatic = require("ffprobe-static") as { path: string } | null;
 
@@ -131,7 +130,6 @@ import estatisticasRoutes from "./routes/estatisticas.js";
 import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 import presencaRoutes from "./routes/presenca.js";
 import metodologiasRoutes from "./routes/metodologiasRoutes.js";
-//import metodologiasUploadRoutes from "./routes/uploadMetodologias.js";
 import adminMetodologiasRoutes from "./routes/adminMetodologiasRoutes.js";
 import permissoesRoutes from "./routes/permissoesRoutes.js";
 import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js";
@@ -150,7 +148,6 @@ const prisma = new PrismaClient();
 const app = express();
 app.set("trust proxy", 1);
 const server = http.createServer(app);
-const io = setupSocket(server);
 
 ensureUploadDirs();
 startExpiredTrainingsJob();
@@ -181,12 +178,10 @@ const ALLOWED = new Set(
     "http://127.0.0.1:5173",
     "http://localhost:3000",
 
-    // Android Emulator / Capacitor
     "http://10.0.2.2",
     "http://10.0.2.2:3001",
     "http://10.0.2.2:5173",
 
-    // Produção
     "https://footera.app.br",
     "https://www.footera.app.br",
     "https://api.footera.app.br",
@@ -341,11 +336,7 @@ app.use("/api/submissoes", authenticateToken, submissoesRoutes);
 app.use("/api/treinos", authenticateToken, treinoRoutes);
 app.use("/api/treino-unico", authenticateToken, treinoUnicoRoutes);
 app.use("/api/treinosprogramados", authenticateToken, treinoProgramadoRoutes);
-
-//app.use("/api/upload/metodologias", metodologiasUploadRoutes);
-
 app.use("/api/aulas-ao-vivo", aulasAoVivoRoutes);
-
 app.use("/api/upload", authenticateToken, uploadRoutes);
 app.use("/api/vinculo", authenticateToken, vinculoRoutes);
 app.use("/api/vinculos", authenticateToken, vinculoRoutes);

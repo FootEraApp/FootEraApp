@@ -23,7 +23,6 @@ export type OrgGestorItem = {
   papel?: string | null;
   permissoes?: any | null;
   ativo: boolean;
-
   nome?: string | null;
   logo?: string | null;
   cidade?: string | null;
@@ -44,28 +43,23 @@ type GestorItem = {
   ativo: boolean;
   papel?: string | null;
   permissoes?: any | null;
-
   professorNome?: string | null;
   professorCref?: string | null;
   professorFoto?: string | null;
 };
 
 type OwnerTurma = { tipo: "Clube" | "Escolinha"; id: string };
-
 type PermState = { atletasTurmas: boolean; professores: boolean };
 
 function normalizePermissoes(raw: any | null | undefined): PermState {
   const obj = raw && typeof raw === "object" ? raw : {};
-  // aceita formatos antigos também (turmas/atletas etc.)
-  const atletasTurmas =
-    !!obj.atletasTurmas || !!obj.atletas_turmas || !!obj.turmas || !!obj.atletas;
+  const atletasTurmas = !!obj.atletasTurmas || !!obj.atletas_turmas || !!obj.turmas || !!obj.atletas;
   const professores = !!obj.professores || !!obj.professor || !!obj.turmasProfessores;
 
   return { atletasTurmas, professores };
 }
 
 function permsToPayload(p: PermState) {
-  // payload padronizado no backend (JSON)
   return { atletasTurmas: !!p.atletasTurmas, professores: !!p.professores };
 }
 
@@ -139,20 +133,14 @@ function PermissoesPicker({
 type Props = {
   tipo: TipoEntidade;
   headers?: any;
-
-  // professor -> organizações (NOVO formato)
   orgs?: OrgGestorItem[];
   orgsLoading?: boolean;
   orgsError?: string | null;
   onSelectOrg?: (o: OrgGestorItem) => void;
-
-  // professor -> organizações (SEU formato atual)
   orgSelecionada?: OrgGestorItem | null;
   setOrgSelecionada?: React.Dispatch<React.SetStateAction<OrgGestorItem | null>>;
   selecionarOrg?: (o: OrgGestorItem) => void;
   limparOrg?: () => void;
-
-  // clube/escola -> responsáveis
   owner?: OwnerTurma;
   professores: ProfessorMin[];
   profLoading?: boolean;
@@ -162,38 +150,28 @@ type Props = {
 export default function GerenciarOrganizacao({
   tipo,
   headers,
-
-  // NOVO (opcional)
   orgs = [],
   orgsLoading = false,
   orgsError = null,
   onSelectOrg,
-
-  // SEU formato atual (opcional)
   selecionarOrg,
-  orgSelecionada,
-  setOrgSelecionada,
-  limparOrg,
-
   owner,
   professores,
   profLoading,
   profError,
 }: Props) {
-  // ======= clube/escolinha: gestores (responsáveis) =======
+
   const [gestores, setGestores] = useState<GestorItem[]>([]);
   const [gestoresLoading, setGestoresLoading] = useState(false);
   const [gestoresError, setGestoresError] = useState<string | null>(null);
-
   const [novoProfessorId, setNovoProfessorId] = useState("");
   const [novoPapel, setNovoPapel] = useState("");
   const [novoPerms, setNovoPerms] = useState<PermState>({
-    atletasTurmas: true, // default ON (já que ele “precisa” disso normalmente)
+    atletasTurmas: true, 
     professores: false,
   });
 
   const [saving, setSaving] = useState(false);
-
   const tipoApi = useMemo(() => {
     if (!owner) return null;
     return owner.tipo === "Clube" ? "CLUBE" : "ESCOLINHA";
@@ -296,7 +274,6 @@ export default function GerenciarOrganizacao({
       await carregarGestores();
       alert("Responsável removido!");
     } catch (e: any) {
-      // fallback: desativa
       try {
         await salvarGestor(g, { ativo: false });
       } catch {}
@@ -306,12 +283,10 @@ export default function GerenciarOrganizacao({
   };
 
   useEffect(() => {
-    // carrega gestores automaticamente quando entrar como clube/escola
     if (tipo !== "Professor" && owner) carregarGestores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo, owner?.id, tipoApi]);
 
-  // ======= UI: PROFESSOR -> LISTA ORGS =======
   if (tipo === "Professor") {
     return (
       <div className="rounded-2xl border border-zinc-200 bg-white overflow-visible">
@@ -370,7 +345,6 @@ export default function GerenciarOrganizacao({
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <button
                         onClick={() => {
-                          // ✅ salva no sessionStorage (permanece ao trocar de aba/rota)
                           setGestorOrg({
                             id: String(o.id),
                             tipo: o.tipo,
@@ -384,7 +358,6 @@ export default function GerenciarOrganizacao({
                             ativo: !!o.ativo,
                           });
 
-                          // ✅ mantém o comportamento atual
                           (selecionarOrg ?? onSelectOrg)?.(o);
                         }}
                         className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"

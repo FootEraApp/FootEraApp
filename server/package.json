@@ -19,7 +19,15 @@
     "postinstall": "prisma generate",
     "seed:ex": "tsx prisma/seed_exercicios.ts",
     "seed:base": "tsx prisma/seed.ts",
-    "seed:all": "npm run seed:ex && npm run seed:base"
+    "seed:all": "npm run seed:ex && npm run seed:base",
+    "release:check": "node scripts/release-check.mjs",
+    "check:prisma": "prisma validate",
+    "check:server": "npm run build",
+    "check:client": "npm run build --prefix ../client",
+    "release:full": "npm run release:check && npm run check:prisma && npm run check:server && npm run check:client",
+    "zip:release": "node scripts/make-eb-zip.mjs",
+    "zip:check": "node scripts/check-eb-zip.mjs",
+    "release:deploy-check": "npm run release:full && npm run zip:release && npm run zip:check"
   },
   "dependencies": {
     "@aws-sdk/client-ivs": "^3.1047.0",

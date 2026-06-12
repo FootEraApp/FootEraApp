@@ -651,11 +651,10 @@ const storageRoleToUIRole: Record<string, RoleUI> = {
 };
 
 const FALLBACK_PLANS: Record<string, Plan> = {
-  // ✅ ATLETA
   ATLETA_PRO: {
     id: "ATLETA_PRO",
     title: "Atleta Pro",
-    monthly: 19.9,          // <- mantenha o valor que você já usa no backend
+    monthly: 19.9,         
     annual: null,
     benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais", "Quantidade ilimitada de treinos agendados por semana"],
   },
@@ -673,19 +672,17 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     annual: null,
     benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais", "Escolher até 3 metodologias por mês"],
   },
-
-  // ✅ PROFESSOR
   PROFESSOR_PRO: {
     id: "PROFESSOR_PRO",
     title: "Professor Pro",
-    monthly: 39.9,          // <- você falou “em torno de 59,90”
+    monthly: 39.9,         
     annual: null,
     benefits: ["Sem anúncios", "Poder criar mais de 5 treinos", "Poder criar treino para daqui a mais de 30 dias", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
   PROFESSOR_LEARNING_1: {
     id: "PROFESSOR_LEARNING_1",
     title: "Professor Learning 1",
-    monthly: 59.9,          // se for diferente do Pro, troque aqui
+    monthly: 59.9,         
     annual: null,
     benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher 1 metodologia por mês", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
@@ -696,12 +693,10 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     annual: null,
     benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher até 3 metodologias por mês", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
-
-  // ✅ ORGANIZAÇÕES
   ORGANIZACOES_PRO: {
     id: "ORGANIZACOES_PRO",
     title: "Organizações Pro",
-    monthly: 79.9,          // mantenha ou ajuste
+    monthly: 79.9,        
     annual: null,
     benefits: ["Sem anúncios", "Poder criar mais de 5 treinos", "Poder criar treino para daqui a mais de 30 dias", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os membros da organização"],
   },
@@ -712,8 +707,6 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     annual: null,
     benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Escolher até 3 metodologias por mês", "Você pode criar metodologias e disponibilizar para os membros da organização"],
   },
-
-  // ✅ OLHEIRO (mantém)
   OLHEIRO_PRO: {
     id: "OLHEIRO_PRO",
     title: "Olheiro Pro",
@@ -863,14 +856,12 @@ export default function PagamentosPage() {
 
   useEffect(() => {
     if (!billingState?.precisaEscolherPagamento) return;
-    // ✅ força reescolher
     setPickMetods({});
   }, [billingState?.precisaEscolherPagamento]);
 
   useEffect(() => {
     if (!hydrated) return;
 
-    // se mudou o tipo e o plano selecionado não existe mais, zera
     const validIdsForRole = (() => {
       if (roleSelected === "Olheiro") return ["OLHEIRO_PRO"];
       if (roleSelected === "Professor") return [
@@ -918,19 +909,15 @@ export default function PagamentosPage() {
     const pApi = findApiPlan(planoId);
     const pFallback = FALLBACK_PLANS[planoId];
 
-    // Se veio do backend, mescla com fallback:
     if (pApi) {
-      const apiBenefits = Array.isArray(pApi.benefits) ? pApi.benefits : [];
-      const fallbackBenefits = pFallback?.benefits ?? [];
 
       return {
-        ...(pFallback ?? {}),   // fallback como base (inclui benefits bonitinho)
-        ...pApi,                // backend sobrescreve preços, título etc
-        benefits: pFallback?.benefits ?? pApi.benefits ?? [], // <- aqui é o pulo do gato
+        ...(pFallback ?? {}), 
+        ...pApi,            
+        benefits: pFallback?.benefits ?? pApi.benefits ?? [],
       } as Plan;
     }
 
-    // Sem backend, usa fallback
     if (pFallback) return pFallback;
 
     return undefined;
@@ -951,7 +938,6 @@ export default function PagamentosPage() {
   function buildCart(): CartItem[] {
     const items: CartItem[] = [];
 
-    // ✅ plano principal (mensal sempre)
     if (selectedMain) {
       const price = getPrice(selectedMain, "Mensal");
       items.push({
@@ -959,7 +945,7 @@ export default function PagamentosPage() {
         periodicidade: "Mensal",
         label: getPlan(selectedMain)?.title ?? selectedMain,
         price,
-        categoria: "PRO", // pode deixar "PRO" ou criar categoria "MAIN"
+        categoria: "PRO",
       });
     }
 
@@ -1007,9 +993,9 @@ export default function PagamentosPage() {
       roleSelected,
       periodPro, periodLearning, periodPlus,
       apiPlans,
-      metodologiasAvulsas, // ✅ ESSENCIAL
-      aulasAoVivoPagas, // ✅ ESSENCIAL
-      pickAulasAoVivo, // ✅ ESSENCIAL
+      metodologiasAvulsas,  
+      aulasAoVivoPagas, 
+      pickAulasAoVivo, 
     ]
   );
 
@@ -1175,7 +1161,6 @@ export default function PagamentosPage() {
 
     appliedUrlPlanRef.current = true;
 
-    // Limpa seleções antigas para a URL mandar no que deve estar selecionado
     setSelectedMain(null);
     setPickPro(false);
     setPickLearning(false);
@@ -1207,8 +1192,6 @@ export default function PagamentosPage() {
       return;
     }
 
-    // Caso 2: aula ao vivo avulsa
-    // Exemplo: /pagamentos?planoId=AULA_AO_VIVO:46fa5483...
     if (plano.startsWith("AULA_AO_VIVO:")) {
       const aulaId = plano.replace("AULA_AO_VIVO:", "").trim();
 
@@ -1227,9 +1210,6 @@ export default function PagamentosPage() {
       return;
     }
 
-    // Caso 3: metodologia Learning normal
-    // Exemplo: /pagamentos?planoId=METODOLOGIA:abc...
-    // Aqui você não seleciona uma metodologia avulsa. Você seleciona um plano Learning.
     if (plano.startsWith("METODOLOGIA:")) {
       const preferredLearningPlan =
         roleSelected === "Professor"
@@ -1251,8 +1231,6 @@ export default function PagamentosPage() {
       return;
     }
 
-    // Caso 4: plano comum vindo direto na URL
-    // Exemplo: /pagamentos?planoId=ATLETA_PRO
     setSelectedMain(plano);
     setOpenPagamentoModal(true);
 
@@ -1362,7 +1340,6 @@ export default function PagamentosPage() {
       const v = Number(m.videoCount ?? 0);
       const t = Number(m.treinoCount ?? 0);
 
-      // ✅ CONTEÚDO (exclusivo do jeito que você pediu)
       if (filtroConteudoMetod !== "TODOS") {
         if (filtroConteudoMetod === "VIDEOS") {
           if (!(v > 0 && t === 0)) return false;
@@ -1375,9 +1352,8 @@ export default function PagamentosPage() {
         }
       }
 
-      // ✅ PÚBLICO
       if (filtroPublicoMetod !== "TODOS") {
-        const pub = String(m.publicoAlvo ?? "").toUpperCase(); // ATLETAS | PROFISSIONAIS | AMBOS
+        const pub = String(m.publicoAlvo ?? "").toUpperCase(); 
         if (pub !== filtroPublicoMetod) return false;
       }
 
@@ -1388,7 +1364,7 @@ export default function PagamentosPage() {
     buscaMetod,
     filtroNivelMetod,
     filtroConteudoMetod,
-    filtroPublicoMetod, // ✅ IMPORTANTE
+    filtroPublicoMetod, 
   ]);
 
   const checkoutError = useMemo(() => {

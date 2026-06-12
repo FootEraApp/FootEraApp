@@ -1,9 +1,9 @@
 export type GestorContext = {
-  enabled: boolean; // modo gestor ligado
+  enabled: boolean; 
   org: {
-    id: string;        // id do vínculo (OrgGestorItem.id)
+    id: string;        
     tipo: "CLUBE" | "ESCOLINHA";
-    ownerId: string;   // id real do clube/escolinha
+    ownerId: string;   
     nome?: string | null;
     logo?: string | null;
     cidade?: string | null;

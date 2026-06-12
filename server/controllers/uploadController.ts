@@ -84,10 +84,9 @@ export const uploadMidia = [
         clubeId,
         submissaoDesafioId,
         submissaoTreinoId,
-        exercicioPersonalizadoId, // opcional
+        exercicioPersonalizadoId, 
       } = (req.body || {}) as any;
 
-      // detecta tipo
       let tipoMidia: TipoMidia;
       if (tipo === "Imagem" || tipo === "Video" || tipo === "Documento") {
         tipoMidia = tipo as TipoMidia;
@@ -99,7 +98,6 @@ export const uploadMidia = [
         tipoMidia = TipoMidia.Documento;
       }
 
-      // metadata
       let meta: {
         durationSec: number | null;
         width: number | null;
@@ -143,8 +141,6 @@ export const uploadMidia = [
       const publicUrl = `/uploads/${filename}`;
       const base = baseUrlFromReq(req);
       const urlAbsLocal = `${base}${publicUrl}`;
-
-      // cria midia
       const midia = await prisma.midia.create({
         data: {
           url: urlAbsLocal,
@@ -168,7 +164,6 @@ export const uploadMidia = [
         },
       });
 
-      // thumb local (fallback rápido)
       let thumbAbsLocal: string | null = null;
       if (tipoMidia === TipoMidia.Video) {
         try {
@@ -183,7 +178,6 @@ export const uploadMidia = [
         }
       }
 
-      // transcode + S3
       let processedUrl: string | null = null;
       let posterUrl: string | null = null;
 
@@ -194,12 +188,11 @@ export const uploadMidia = [
           posterUrl = out.thumbUrl ?? null;
         } catch (e: any) {
           console.warn("[uploadMidia] transcode/S3 falhou, seguindo com URLs locais:", e?.message || e);
-          processedUrl = null; // mantém midia.url (local) como final
-          posterUrl = null;    // mantém thumbAbsLocal como fallback
+          processedUrl = null; 
+          posterUrl = null;    
         }
       }
 
-      // ✅ Se quiser salvar direto no exercício (OPCIONAL):
       const exId = String(exercicioPersonalizadoId || "").trim();
       if (exId && tipoMidia === TipoMidia.Video) {
         await prisma.exercicioPersonalizado.update({
@@ -225,23 +218,16 @@ export const uploadMidia = [
         },
       });
 
-      // ✅ IMPORTANTÍSSIMO:
-      // retorna `url` já como a URL FINAL (processedUrl) pro seu front salvar certo no banco
-      const finalVideoUrl = processedUrl ?? midia.url;
-      const finalPosterUrl = posterUrl ?? thumbAbsLocal;
-
-      // ✅ url deve ser a FINAL quando for vídeo
       const finalUrl = (processedUrl ?? midia.url);
 
       return res.status(201).json({
         ok: true,
         midiaId: midia.id,
-        url: finalUrl,              // ⭐ agora o front pega certo
+        url: finalUrl,              
         relativeUrl: publicUrl,
-
-        videoUrl: processedUrl,     // mantém compat
-        posterUrl: posterUrl,       // thumb do S3
-        thumbUrl: posterUrl ?? thumbAbsLocal, // fallback
+        videoUrl: processedUrl,    
+        posterUrl: posterUrl,      
+        thumbUrl: posterUrl ?? thumbAbsLocal, 
       });
     } catch (err: any) {
       console.error("[uploadMidia] error:", err);

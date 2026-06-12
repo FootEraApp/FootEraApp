@@ -27,29 +27,21 @@ export const uploadToS3 = multer({
         : (isVideo ? ".mp4" : ".png");
       
       const timestamp = Date.now();
-      
-      // 1. Identificando a origem da requisição pelas rotas
       const isMetodologia = req.originalUrl.includes("metodologias");
       const isExercicio = req.originalUrl.includes("exercicios");
 
-      // 2. Roteamento para Pastas Específicas
       if (isMetodologia) {
-        // Vai para: metodologias/videos/ ou metodologias/capas/
         const subPasta = isVideo ? "videos" : "capas";
         return cb(null, `metodologias/${subPasta}/${timestamp}${ext}`);
       }
 
       if (isExercicio) {
-        // Vai para: exercicios/videos/
-        // (Se um dia tiver foto de exercício, podemos colocar um if aqui também)
         return cb(null, `exercicios/videos/${timestamp}${ext}`);
       }
 
-      // 3. Lógica padrão para Posts e Cards do Feed
       const body = req.body || {};
       const texto = (body.descricao && body.descricao.length ? body.descricao : body.conteudo) || "";
-      const isCard = /Meu Card FOOTERA/i.test(texto);
-      
+      const isCard = /Meu Card FOOTERA/i.test(texto);      
       const subPastaGeral = isVideo ? "videos" : isCard ? "cards" : "posts";
       const fileName = `${timestamp}${!isVideo && isCard ? "-card" : ""}${ext}`;
       

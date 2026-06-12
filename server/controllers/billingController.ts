@@ -277,7 +277,7 @@ const METODOLOGIA_POR_SEMANA = 2.5;
 const METODOLOGIA_POR_ITEM = 1.0;
 const METODOLOGIA_POR_VIDEO = 2.0;
 const METODOLOGIA_POR_TREINO = 2.0;
-const METODOLOGIA_POR_PONTO = 0.1; // opcional
+const METODOLOGIA_POR_PONTO = 0.1;
 const METODOLOGIA_MIN = 20.9;
 const METODOLOGIA_MAX = 249.9;
 
@@ -312,7 +312,6 @@ export async function processExpiringSubscriptions() {
     const months = monthsForPeriodicidade(a.periodicidade);
     const dataLimite = dataBase ? addMonths(new Date(dataBase), months) : null;
 
-    // 1) AVISO COM 7 DIAS
     if (dataLimite && a.lembreteEnviado === false) {
       const dias = diffDays(dataLimite, now);
 
@@ -339,7 +338,6 @@ export async function processExpiringSubscriptions() {
       }
     }
 
-    // 2) TRIAL VENCIDO => BLOQUEIA
     if (a.status === "TRIAL" && dataLimite && now > dataLimite) {
       await (prisma as any).assinatura.update({
         where: { id: a.id },
@@ -366,7 +364,6 @@ export async function processExpiringSubscriptions() {
       continue;
     }
 
-    // 3) ASSINATURA ATIVA VENCIDA SEM NOVO PAGAMENTO => BLOQUEIA
     if (a.status === "ATIVA" && dataLimite && now > dataLimite) {
       await (prisma as any).assinatura.update({
         where: { id: a.id },
@@ -391,7 +388,6 @@ export async function processExpiringSubscriptions() {
       continue;
     }
 
-    // 4) CANCELADA E JÁ PASSOU O CICLO => DESATIVA DE VEZ
     if (a.status === "CANCELADA" && dataLimite && now > dataLimite && a.ativo) {
       await (prisma as any).assinatura.update({
         where: { id: a.id },
@@ -421,21 +417,14 @@ function roundToDot90Ceil(value: number) {
 }
 
 const PLANS = [
-  // ATLETA
   { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: null, benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais", "Quantidade ilimitada de treinos agendados por semana"] },
   { id: "ATLETA_LEARNING_1", title: "Atleta Learning 1", monthly: 44.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher 1 metodologia por mês"] },
   { id: "ATLETA_LEARNING_3", title: "Atleta Learning 3", monthly: 64.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"] },
-  
-  // PROFESSOR
   { id: "PROFESSOR_PRO", title: "Professor Pro", monthly: 39.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais"] },
   { id: "PROFESSOR_LEARNING_1", title: "Professor Learning 1", monthly: 59.9, annual: null, benefits: ["Tudo do Professor Pro", "Escolher 1 metodologia por mês"] },
   { id: "PROFESSOR_LEARNING_3", title: "Professor Learning 3", monthly: 79.9, annual: null, benefits: ["Tudo do Professor Pro", "Escolher até 3 metodologias por mês"] },
-
-  // ORGANIZAÇÕES
   { id: "ORGANIZACOES_PRO", title: "Organizações Pro", monthly: 79.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"] },
   { id: "ORGANIZACOES_LEARNING_3", title: "Organizações Learning", monthly: 149.9, annual: null, benefits: ["Tudo do Pro", "Escolher até 3 metodologias por mês"] },
-
-  // OLHEIRO
   { id: "OLHEIRO_PRO", title: "Olheiro Pro", monthly: 24.9, annual: null, benefits: ["Sem anúncios", "Ferramentas Pro do olheiro", "Mais limites operacionais"] },
 ] as const;
 
@@ -602,18 +591,15 @@ async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<
 function metodologiaLimitFromPlano(planoId: string | null | undefined): number {
   const p = String(planoId || "").toUpperCase();
 
-  // 0 metodologias
   if (!p) return 0;
   if (p === "ATLETA_PRO") return 0;
   if (p === "PROFESSOR_PRO") return 0;
   if (p === "ORGANIZACOES_PRO") return 0;
   if (p === "OLHEIRO_PRO") return 0;
 
-  // 1 metodologia/mês
   if (p === "ATLETA_LEARNING_1") return 1;
   if (p === "PROFESSOR_LEARNING_1") return 1;
 
-  // 3 metodologias/mês
   if (p === "ATLETA_LEARNING_3") return 3;
   if (p === "PROFESSOR_LEARNING_3") return 3;
   if (p === "ORGANIZACOES_LEARNING_3") return 3;
@@ -1699,7 +1685,6 @@ export async function startCheckout(req: Request, res: Response) {
       isMetodologiaLearning(planoNorm) ||
       isAulaAoVivo(planoNorm)
     ) {
-      // produto especial: metodologia, metodologia avulsa ou aula ao vivo única
     } else {
       const plan = findPlan(planoNorm);
       if (!plan) {
@@ -2620,7 +2605,6 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
           ? a.trialEndsAt
           : a.renovaEm;
 
-      // aviso de 7 dias
       if (
         dataLimite &&
         a.lembreteEnviado === false
@@ -2639,7 +2623,6 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
         }
       }
 
-      // trial vencido
       if (a.status === "TRIAL" && a.trialEndsAt && now > a.trialEndsAt) {
         await (prisma as any).assinatura.update({
           where: { id: a.id },
@@ -2654,7 +2637,6 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
         continue;
       }
 
-      // assinatura ativa vencida
       if (a.status === "ATIVA" && a.renovaEm && now > a.renovaEm) {
         await (prisma as any).assinatura.update({
           where: { id: a.id },
@@ -2669,7 +2651,6 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
         continue;
       }
 
-      // cancelada e já passou da renovação
       if (a.status === "CANCELADA" && a.renovaEm && now > a.renovaEm && a.ativo) {
         await (prisma as any).assinatura.update({
           where: { id: a.id },

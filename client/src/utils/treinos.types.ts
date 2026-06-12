@@ -49,7 +49,5 @@ export type ExItemUI = {
   exercicioPersonalizadoId?: string | null;
   videoDemonstrativoUrl?: string | null;
   videoPosterUrl?: string | null;
-
-  // se você usa "videoUrl" em algum lugar do UI:
   videoUrl?: string | null;
 };

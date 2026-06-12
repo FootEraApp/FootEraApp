@@ -76,7 +76,6 @@ export default function AvaliarMetodologia() {
         const token = getToken();
         if (!token) return;
 
-        // ✅ prefira o /detalhe pq você já tem ele no backend
         const candidates = isAvulsa
           ? [
               `${API.BASE_URL}/api/metodologias/metodologias-avulsas/${metodologiaId}`,
@@ -92,8 +91,6 @@ export default function AvaliarMetodologia() {
 
             const js = await r.json().catch(() => null);
 
-            // /detalhe retorna { titulo: ... }
-            // /:id retorna { item: { titulo: ... } }
             const t = js?.titulo ?? js?.item?.titulo ?? js?.metodologia?.titulo;
             if (t) {
             setTitulo(String(t));

@@ -1,8 +1,7 @@
-// server/routes/feed.ts (ou index.ts do feed)
+// server/routes/feed.ts 
 import express, { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import { adminAuth } from "../middlewares/admin-auth.js";
-// IMPORTANTE: Importe o novo middleware que criamos
 import { uploadToS3 } from "../middlewares/s3Upload.js"; 
 import {
   getFeedPosts,
@@ -26,11 +25,8 @@ router.post("/:postId/like", curtirPostagem);
 router.get("/perfil/:id", getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);
-
-// Trocamos 'upload.single' por 'uploadToS3.single'
 router.post("/postar", uploadToS3.single("arquivo"), postar);
 router.post("/post", uploadToS3.single("arquivo"), postar);
-
 router.get("/post/visualizar/:id", getPostById);
 router.post("/post/:id/compartilhar", compartilharPost);
 router.delete("/posts/:id", deletarPostagem);

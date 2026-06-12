@@ -1,27 +1,27 @@
 // client/src/pages/tutorial
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
 
-import cadastroFooteraVideo from "@/components/tutorial/cadastro footera.mp4";
-import configuracoesAssinaturasVideo from "@/components/tutorial/configuracoes e assinaturas.mp4";
-import criarAgendarTreinoTurmaVideo from "@/components/tutorial/criar e agendar treino p turma.mp4";
-import criarEditarMeusExercicioVideo from "@/components/tutorial/criar e editar meus exercicio.mp4";
-import criarEditarTreinoVideo from "@/components/tutorial/criar e editar treino.mp4";
-import criarMetodologiaCursoVideo from "@/components/tutorial/criar metodologia curso.mp4";
-import criarMetodologiaTrilhaVideo from "@/components/tutorial/criar metodologia trilha.mp4";
-import explorarMensagensVideo from "@/components/tutorial/explorar e mensagens.mp4";
-import feedVideo from "@/components/tutorial/feed.mp4";
-import loginFooteraVideo from "@/components/tutorial/login footera.mp4";
-import paginaMetodologiaVideo from "@/components/tutorial/pagina metodologia.mp4";
-import paginaTreinoClubeRealizarTreinoTurma from "@/components/tutorial/pagina treino clube-realizar treino turma.mp4";
-import paginasGerenciarClubeEscolinhaVideo from "@/components/tutorial/paginas gerenciar clube-escolinha.mp4";
-import paginasGerenciarProfessorVideo from "@/components/tutorial/paginas gerenciar professor.mp4";
-import perfilClubeVideo from "@/components/tutorial/perfil clube.mp4";
-import perfilOlheiroVideo from "@/components/tutorial/perfil olheiro.mp4";
-import perfilPrincipalAtletaVideo from "@/components/tutorial/perfil principal atleta.mp4";
-import postagemVideo from "@/components/tutorial/postagem.mp4";
-import treinosAtletaVideo from "@/components/tutorial/treinos atleta.mp4";
+const cadastroFooteraVideo = "";
+const configuracoesAssinaturasVideo = "";
+const criarAgendarTreinoTurmaVideo = "";
+const criarEditarMeusExercicioVideo = "";
+const criarEditarTreinoVideo = "";
+const criarMetodologiaCursoVideo = "";
+const criarMetodologiaTrilhaVideo = "";
+const explorarMensagensVideo = "";
+const feedVideo = "";
+const loginFooteraVideo = "";
+const paginaMetodologiaVideo = "";
+const paginaTreinoClubeRealizarTreinoTurma = "";
+const paginasGerenciarClubeEscolinhaVideo = "";
+const paginasGerenciarProfessorVideo = "";
+const perfilClubeVideo = "";
+const perfilOlheiroVideo = "";
+const perfilPrincipalAtletaVideo = "";
+const postagemVideo = "";
+const treinosAtletaVideo = "";
 
 type VideoSource =
   | { kind: "youtube"; url: string }

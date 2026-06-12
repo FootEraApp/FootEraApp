@@ -453,7 +453,6 @@ router.delete("/:id", async (req, res) => {
       where: { id: String(id) },
     });
 
-    // opcional: decrementa contador do olheiro
     await prisma.olheiro.update({
       where: { id: olheiroId },
       data: {
@@ -461,7 +460,6 @@ router.delete("/:id", async (req, res) => {
       },
     }).catch(() => null);
 
-    // opcional: apaga notificações ligadas a essa indicação
     await prisma.notificacao.deleteMany({
       where: {
         OR: [
@@ -471,7 +469,6 @@ router.delete("/:id", async (req, res) => {
       },
     }).catch(() => null);
 
-    // atualiza badge do destino, se existir
     if (indicacao.clube?.usuarioId) {
       await recomputeAndEmitBadge(indicacao.clube.usuarioId);
     }

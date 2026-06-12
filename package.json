@@ -21,6 +21,7 @@
     "seed:ex": "tsx server/prisma/seed_exercicios.ts",
     "seed:base": "tsx server/prisma/seed.ts",
     "seed:all": "npm run seed:ex && npm run seed:base",
+    "release:check": "node scripts/release-check.mjs",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
     "e2e:server": "npm --prefix server run dev",

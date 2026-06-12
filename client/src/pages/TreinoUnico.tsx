@@ -106,7 +106,6 @@ function mediaUrl(raw?: string | null) {
     return p;
   }
 
-  // vídeos/imagens fixos do frontend
   if (p.startsWith("/assets/")) {
     return isNativeApp()
       ? `${ASSETS_CDN_BASE}${p}`
@@ -119,7 +118,6 @@ function mediaUrl(raw?: string | null) {
       : `/${p}`;
   }
 
-  // uploads vindos do backend
   if (p.startsWith("/uploads/") || p.startsWith("/upload/")) {
     return `${API.BASE_URL}${p}`;
   }
@@ -184,12 +182,11 @@ export default function TreinoUnico() {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           });
           if (!res.ok) throw new Error(`(${res.status}) ${await res.text()}`);
-          const json = await res.json(); // já vem no formato TreinoUnicoPayload
+          const json = await res.json();
           setTreino(json);
           return;
         }
 
-        // ✅ 2) SE FOR AGENDADO: mantém seu endpoint atual
         const qs = `agendadoId=${encodeURIComponent(agendadoId || "")}`;
         const res = await fetch(`${API.BASE_URL}/api/treino-unico?${qs}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},

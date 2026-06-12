@@ -28,7 +28,6 @@ type TurmaMin = {
   professorNomes?: string[];
   professorNome?: string | null;
   alunosCount?: number;
-  // ✅ NOVO (vem do backend)
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
   criadoPorProfessorId?: string | null;
@@ -118,7 +117,6 @@ export default function TurmasManager({
   }
 
   function readUserObj(): any | null {
-    // tenta achar "user" ou "usuario" em ambos storages
     return (
       safeJsonParse(localStorage.getItem("user")) ??
       safeJsonParse(sessionStorage.getItem("user")) ??
@@ -130,11 +128,8 @@ export default function TurmasManager({
 
   const token = getToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
   const professorAlvoId = String(professorId ?? "").trim();
-
   const userObj = readUserObj();
-
   const meuProfessorId =
     String(
       (Storage as any)?.professor?.id ||
@@ -217,12 +212,10 @@ export default function TurmasManager({
       String(x).trim()
     );
 
-    // Professor pode editar/excluir qualquer turma onde ele esteja vinculado
     if (!owner && meuProfessorId) {
       return professorIds.includes(String(meuProfessorId).trim());
     }
 
-    // Clube/Escolinha pode editar/excluir qualquer turma que pertence a ele
     if (owner?.id && turmaSelecionada.ownerId) {
       return String(owner.id).trim() === String(turmaSelecionada.ownerId).trim();
     }
@@ -230,8 +223,7 @@ export default function TurmasManager({
     return false;
   }, [turmaSelecionada, owner?.id, meuProfessorId]);
 
-  const podeExcluirTurma = podeGerenciarTurma; // (ou admin, se você tiver flag)
-
+  const podeExcluirTurma = podeGerenciarTurma; 
   const podeSairDaTurma = useMemo(() => {
     if (!meuProfessorId) return false;
     if (!turmaSelecionada) return false;
@@ -239,10 +231,7 @@ export default function TurmasManager({
     const ids = (turmaSelecionada.professorIds ?? []).map((x) => String(x).trim());
     const match = ids.includes(String(meuProfessorId).trim());
 
-    // ✅ regra normal
     if (tipoUsuarioLogado === "professor") return match && !podeGerenciarTurma;
-
-    // ✅ fallback: se o tipo veio vazio, mas match é true, libera
     if (!tipoUsuarioLogado) return match && !podeGerenciarTurma;
 
     return false;
@@ -396,7 +385,6 @@ export default function TurmasManager({
   useEffect(() => {
     if (!open) return;
 
-    // trava scroll do body e mantém a posição (melhor que só overflow hidden)
     const scrollY = window.scrollY;
     const prevOverflow = document.body.style.overflow;
     const prevPosition = document.body.style.position;
@@ -470,7 +458,6 @@ export default function TurmasManager({
       };
     });
 
-    // ✅ SE ESTIVER EM MODO "COMO PROFESSOR" (sem owner), monta a lista de profs a partir das turmas
     if (!o) {
       const map = new Map<string, string>();
 
@@ -511,7 +498,6 @@ export default function TurmasManager({
     setConfirmLeaveOpen(false);
     setLeaveAware(false);
 
-    // ✅ usa a turma recebida (garante professorIds preenchido)
     const turma = turmaFromList ?? turmas.find((t) => t.id === id);
 
     setEditNomeTurma(turma?.nome || "");
@@ -643,7 +629,6 @@ export default function TurmasManager({
         totalAlunosAtualizado = Number(r.data?.total ?? alunosSelecionados.length);
       }
 
-      // atualiza o contador visual imediatamente
       setTurmas((prev) =>
         prev.map((t) =>
           String(t.id) === String(selecionada)
@@ -668,11 +653,9 @@ export default function TurmasManager({
       const lista = await carregarTurmas(owner, filtroProf);
       const turmaAtualizada = lista.find((t) => String(t.id) === String(selecionada));
 
-      // se a turma ainda aparece para esse usuário, reabre com dados novos
       if (turmaAtualizada) {
         await abrirTurma(selecionada, turmaAtualizada);
       } else {
-        // se removeu o próprio professor, ela some da lista
         setSelecionada("");
         setProfSelecionados([]);
         setAlunosSelecionados([]);
@@ -711,7 +694,6 @@ export default function TurmasManager({
     try {
       setLeavingTurma(true);
 
-      // remove você da lista atual de professores da turma
       const novos = (profSelecionados || []).filter((id) => String(id) !== String(meuProfessorId));
 
       await axios.put(
@@ -722,7 +704,6 @@ export default function TurmasManager({
 
       alert("Você foi removido da turma. Ela não aparecerá mais para você.");
 
-      // recarrega lista e seleciona outra turma (ou limpa)
       const lista = await carregarTurmas(undefined, filtroProf);
       const primeira = lista?.[0]?.id;
 
@@ -855,10 +836,8 @@ export default function TurmasManager({
         const fromTurma = turmaAlunosMap.get(uid);
         if (fromTurma) return fromTurma;
 
-        // fallback: ainda não veio do backend, mas o usuário marcou agora
         const base = alunosMap.get(uid);
         const nome = String(base?.nome ?? "Atleta").trim();
-
         const naoVinculado = naoVincSet.has(uid);
 
         return {
@@ -867,7 +846,6 @@ export default function TurmasManager({
           nome,
           sobrenome: base?.sobrenome,
           foto: null,
-
           vinculado: !naoVinculado,
           vinculoTipo: naoVinculado ? "NENHUM" : "RELACAO_INSTITUICAO",
           vinculoProfessorId: null,

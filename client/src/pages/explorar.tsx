@@ -455,9 +455,7 @@ function Explorar() {
   const [selectedEvento, setSelectedEvento] = useState<EventoItem | null>(null);
   const [showEventoModal, setShowEventoModal] = useState(false);
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
-  const [erroEvento, setErroEvento] = useState<string | null>(null);
-
-    // ✅ cache local dos pontos totais corretos por usuarioId
+  const [erroEvento, setErroEvento] = useState<string | null>(null)
   const [pontosCache, setPontosCache] = useState<Record<string, number>>({});
 
   function getUserIdFromAtleta(a: AtletaItem): string {
@@ -474,8 +472,6 @@ function Explorar() {
   async function fetchPontuacaoTotalCorreta(usuarioId: string): Promise<number | null> {
     const id = String(usuarioId || "").trim();
     if (!id) return null;
-
-    // já temos no cache
     if (typeof pontosCache[id] === "number") return pontosCache[id];
 
     const token = Storage?.token || "";
@@ -572,16 +568,13 @@ function Explorar() {
       (a as any)?.total ??
       (a as any)?.pontuacaoTotal ??
       null;
-        const uidLocal = getUserIdFromAtleta(a);
-
+    const uidLocal = getUserIdFromAtleta(a);
     const pontuacaoFallback =
       typeof pontuacaoRaw === "number"
         ? pontuacaoRaw
         : pontuacaoRaw != null && !Number.isNaN(Number(pontuacaoRaw))
         ? Number(pontuacaoRaw)
         : null;
-
-    // ✅ se já buscamos a pontuação correta (igual no ProfileHeader), usa ela
     const pontuacao =
       uidLocal && typeof pontosCache[uidLocal] === "number"
         ? pontosCache[uidLocal]
@@ -872,7 +865,6 @@ function Explorar() {
       });
   }, []);
 
-    // ✅ Pré-carrega pontuação correta (mesma lógica do ProfileHeader) pros atletas visíveis
   useEffect(() => {
     if (aba !== "atletas") return;
 
@@ -890,7 +882,6 @@ function Explorar() {
     let cancelled = false;
 
     (async () => {
-      // leve controle de concorrência (não estoura requests)
       const CHUNK = 8;
       for (let i = 0; i < missing.length; i += CHUNK) {
         if (cancelled) return;

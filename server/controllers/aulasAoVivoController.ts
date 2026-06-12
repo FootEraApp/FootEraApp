@@ -186,18 +186,12 @@ function sanitizeAulaForResponse(aula: any, isOwner: boolean) {
 
   return {
     ...aula,
-
     metodologiaId: aula.metodologiaId || aula.metodologia?.id || null,
     metodologiaAvulsaId: aula.metodologiaAvulsaId || aula.metodologiaAvulsa?.id || null,
-
     estruturaId: aula.estruturaId || aula.estrutura?.id || null,
     estruturaAvulsaId: aula.estruturaAvulsaId || aula.estruturaAvulsa?.id || null,
-
     itemId: aula.itemId || aula.item?.id || null,
     itemAvulsaId: aula.itemAvulsaId || aula.itemAvulsa?.id || null,
-
-    // Nunca manda streamKey na rota pública de detalhe.
-    // A streamKey só sai pelo endpoint /broadcast-config e só para o dono.
     streamKey: isOwner ? aula.streamKey : undefined,
   };
 }
@@ -1435,10 +1429,8 @@ function montarUrlS3Publica(bucket: string, key: string) {
 }
 
 function extrairRecordingIdDoMasterKey(masterKey: string) {
-  // Exemplo:
   // ivs/v1/account/channel/2026/5/18/20/55/RECORDING_ID/media/hls/master.m3u8
   const partes = masterKey.split("/");
-
   const mediaIndex = partes.indexOf("media");
 
   if (mediaIndex <= 0) return null;

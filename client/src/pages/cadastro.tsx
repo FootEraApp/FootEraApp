@@ -108,12 +108,12 @@ type CamposVinculo = {
   desejaVinculo: boolean;
   tipoAlvo: "Atleta" | "Professor" | "Escolinha" | "Clube" | "";
   alvoBusca: string;
-  destinatarioId: string;       // Usuario.id -> usado em SolicitacaoTreino
-  destinatarioEntidadeId: string; // Professor.id / Clube.id / Escolinha.id
+  destinatarioId: string;      
+  destinatarioEntidadeId: string;
 };
 type ResultadoBusca = {
-  id: string; // id da entidade
-  usuarioId: string; // id da tabela Usuario
+  id: string;
+  usuarioId: string; 
   tipo: "Atleta" | "Professor" | "Escolinha" | "Clube";
   nome: string;
   username: string;
@@ -583,8 +583,6 @@ export default function Cadastro() {
     if (cep && (!CEP_RE.test(cep) || !cidade || !estado)) {
       return setErro("CEP inválido: informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente).");
     }
-    // ✅ CEP/Localização deixa de ser obrigatório.
-    // (se o usuário preencher, você pode validar depois, mas não bloqueia mais)
     setErro("");
     return true;
   };
@@ -763,8 +761,6 @@ export default function Cadastro() {
       if (tipoPerfil === "Federacao" || tipoPerfil === "Marca") {
         Object.assign(payload, {
           nomeOrganizacao: clube.nomeClube.trim() || undefined,
-
-          // mantém esses aliases porque o backend já reaproveita campos de clube/escolinha
           nomeClube: clube.nomeClube.trim() || undefined,
           cnpjClube: clube.cnpjClube || undefined,
           telefone1Clube: clube.telefone1Clube || undefined,
@@ -1974,8 +1970,8 @@ export default function Cadastro() {
                                     onClick={() =>
                                       setVinculo((p) => ({
                                         ...p,
-                                        destinatarioId: u.usuarioId,          // Usuario.id
-                                        destinatarioEntidadeId: u.id,         // id da entidade
+                                        destinatarioId: u.usuarioId,     
+                                        destinatarioEntidadeId: u.id,     
                                         alvoBusca: u.nome,
                                       }))
                                     }>

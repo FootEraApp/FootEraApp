@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
 import Avatar from "../components/shared/Avatar.js";
 import BottomNav from "@/components/layout/BottomNav.js";
@@ -43,6 +43,22 @@ type TurmaItem = {
   professorNome?: string | null;
   alunosCount?: number | null;
 };
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function fotoPerfilOuFallback(foto?: string | null) {
+  const valor = String(foto ?? "").trim();
+
+  if (
+    !valor ||
+    valor === "null" ||
+    valor === "undefined"
+  ) {
+    return AVATAR_FALLBACK;
+  }
+
+  return valor;
+}
 
 function canVerAbaProfessores(org: any | null) {
   if (!org) return false;
@@ -142,7 +158,7 @@ const GerenciarProfessores: React.FC = () => {
       ownerId: String(ctx.org.ownerId),
       tipo: String(ctx.org.tipo).toUpperCase() as any,
       nome: ctx.org.nome ?? null,
-      logo: ctx.org.logo ?? null,
+      logo: fotoPerfilOuFallback(ctx.org.logo ?? null),
       papel: ctx.org.papel ?? null,
       permissoes: ctx.org.permissoes ?? null,
       ativo: !!ctx.org.ativo,
@@ -202,7 +218,7 @@ const GerenciarProfessores: React.FC = () => {
           permissoes: o.permissoes ?? null,
           ativo: !!o.ativo,
           nome: o.nome ?? null,
-          logo: o.logo ?? null,
+          logo: fotoPerfilOuFallback(o.logo ?? null),
           cidade: o.cidade ?? null,
           estado: o.estado ?? null,
         }))
@@ -339,7 +355,7 @@ const GerenciarProfessores: React.FC = () => {
         tipo: next.tipo as any,
         ownerId: String(next.ownerId),
         nome: next.nome ?? null,
-        logo: next.logo ?? null,
+        logo: fotoPerfilOuFallback(next.logo ?? null),
         cidade: next.cidade ?? null,
         estado: next.estado ?? null,
         papel: next.papel ?? null,
@@ -358,7 +374,7 @@ const GerenciarProfessores: React.FC = () => {
           ownerId: String(ctx.org.ownerId),
           tipo: String(ctx.org.tipo).toUpperCase() as any,
           nome: ctx.org.nome ?? null,
-          logo: ctx.org.logo ?? null,
+          logo: fotoPerfilOuFallback(ctx.org.logo ?? null),
           papel: ctx.org.papel ?? null,
           permissoes: ctx.org.permissoes ?? null,
           ativo: !!ctx.org.ativo,
@@ -399,7 +415,7 @@ const GerenciarProfessores: React.FC = () => {
       tipo: found.tipo as any,
       ownerId: String(found.ownerId),
       nome: found.nome ?? null,
-      logo: found.logo ?? null,
+      logo: fotoPerfilOuFallback(found.logo ?? null),
       cidade: found.cidade ?? null,
       estado: found.estado ?? null,
       papel: found.papel ?? null,
@@ -455,7 +471,7 @@ const GerenciarProfessores: React.FC = () => {
         usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
         nome: p.nome ?? p.usuario?.nome ?? "Professor",
         cref: p.cref ?? null,
-        foto: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
+        foto: fotoPerfilOuFallback(p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null),
         turmas: p._count?.turmas ?? p.turmasCount ?? 0,
       }));
 
@@ -664,7 +680,7 @@ const GerenciarProfessores: React.FC = () => {
       tipo: o.tipo as any,
       ownerId: String(o.ownerId),
       nome: o.nome ?? null,
-      logo: o.logo ?? null,
+      logo: fotoPerfilOuFallback(o.logo ?? null),
       cidade: o.cidade ?? null,
       estado: o.estado ?? null,
       papel: o.papel ?? null,
@@ -705,7 +721,7 @@ const GerenciarProfessores: React.FC = () => {
               <div className="flex items-start gap-3 min-w-0">
                 <div className="shrink-0 translate-y-4">
                   <Avatar
-                    foto={orgSelecionada.logo ?? null}
+                    foto={fotoPerfilOuFallback(orgSelecionada.logo)}
                     alt={orgSelecionada.nome ?? "Organização"}
                     className="
                       h-16 w-16
@@ -1011,7 +1027,7 @@ const GerenciarProfessores: React.FC = () => {
                   <div key={p.id} className="p-4">
                     <div className="flex items-start gap-3">
                       <Avatar
-                        foto={p.foto ?? null}
+                        foto={fotoPerfilOuFallback(p.foto)}
                         alt={p.nome}
                         className="h-12 w-12 shrink-0"
                       />
@@ -1078,7 +1094,7 @@ const GerenciarProfessores: React.FC = () => {
                       <tr key={p.id} className="border-t border-zinc-100 hover:bg-zinc-50">
                         <td className="p-3">
                           <Avatar
-                            foto={p.foto ?? null}
+                            foto={fotoPerfilOuFallback(p.foto)}
                             alt={p.nome}
                             className="h-10 w-10"
                           />

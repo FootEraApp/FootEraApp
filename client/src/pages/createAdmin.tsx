@@ -101,11 +101,8 @@ export default function CreateAdmin() {
       email: email.trim(),
       senha,
       nomeDeUsuario: username.trim(),
-      // ✅ se seu backend exige "nome", manda fallback com username
       nome: (nome || "").trim() || username.trim(),
-      // ✅ só manda dataNascimento se tiver preenchida
       ...(nascimento ? { dataNascimento: nascimento } : {}),
-      // ✅ só manda endereço se o usuário tiver preenchido algo
       ...((cep || cidade || estado || bairro || pais) ? {
         endereco: {
           ...(cep ? { cep } : {}),

@@ -12,7 +12,6 @@ function normalizarNomeExercicio(nome: string) {
 async function main() {
   console.log("Iniciando deduplicação de exercícios...");
 
-  // 1) preencher nomeNormalizado que estiver nulo
   const exercicios = await prisma.exercicio.findMany({
     select: { id: true, nome: true, nomeNormalizado: true, createdAt: true },
     orderBy: { createdAt: "asc" },
@@ -43,7 +42,6 @@ async function main() {
     }
   }
 
-  // 2) recarrega já normalizados
   const exerciciosAtualizados = await prisma.exercicio.findMany({
     select: { id: true, nome: true, nomeNormalizado: true, createdAt: true },
     orderBy: { createdAt: "asc" },
@@ -54,7 +52,6 @@ async function main() {
     orderBy: { criadoEm: "asc" },
   });
 
-  // 3) deduplicar dentro de Exercicio (mantém o mais antigo)
   const vistosExercicio = new Map<string, string>();
   for (const ex of exerciciosAtualizados) {
     const chave = ex.nomeNormalizado;
@@ -69,7 +66,6 @@ async function main() {
     await prisma.exercicio.delete({ where: { id: ex.id } });
   }
 
-  // 4) deduplicar dentro de ExercicioPersonalizado (mantém o mais antigo)
   const vistosPersonalizado = new Map<string, string>();
   for (const ex of personalizadosAtualizados) {
     const chave = ex.nomeNormalizado;
@@ -84,7 +80,6 @@ async function main() {
     await prisma.exercicioPersonalizado.delete({ where: { id: ex.id } });
   }
 
-  // 5) apagar personalizados que conflitam com Exercicio
   const exerciciosFinais = await prisma.exercicio.findMany({
     select: { nomeNormalizado: true },
   });

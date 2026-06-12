@@ -686,25 +686,20 @@ function criarProgramaIvsStream(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (telaVideo) {
-      // Tela compartilhada vira o foco principal e cobre tudo.
       desenharCover(ctx, telaVideo, 0, 0, canvas.width, canvas.height);
     } else if (cameraVideo) {
       desenharCover(ctx, cameraVideo, 0, 0, canvas.width, canvas.height);
     } else {
       ctx.fillStyle = "#0b4a2f";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       ctx.fillStyle = "#f5f2e8";
       ctx.textAlign = "center";
       ctx.font = "bold 72px Arial";
       ctx.fillText("FootEra Learning", canvas.width / 2, canvas.height / 2 - 45);
-
       ctx.font = "40px Arial";
       ctx.fillText("Transmissão sem câmera ativa", canvas.width / 2, canvas.height / 2 + 25);
     }
 
-    // Câmera só aparece no canto se for câmera real.
-    // Placeholder NÃO entra aqui.
     if (telaVideo && cameraVideo) {
       const pipW = 420;
       const pipH = 236;
@@ -859,8 +854,6 @@ async function inicializarDispositivos() {
       );
     }
 
-    // Pede permissão inicial só para áudio.
-    // Não pedimos vídeo aqui porque câmera virtual/OBS pode travar e dar timeout.
     try {
       const permissaoAudio = await navigator.mediaDevices.getUserMedia({
         video: false,
@@ -873,7 +866,6 @@ async function inicializarDispositivos() {
     }
 
     const dispositivos = await navigator.mediaDevices.enumerateDevices();
-
     const cams = dispositivos.filter((d) => d.kind === "videoinput");
     const mics = dispositivos.filter((d) => d.kind === "audioinput");
 
@@ -894,7 +886,6 @@ async function inicializarDispositivos() {
     let abriuCameraReal = false;
     let abriuMicrofone = false;
 
-    // 1. Tenta abrir câmera real, mas se falhar usa placeholder.
     if (cams.length > 0) {
       try {
         const novoVideoStream = await navigator.mediaDevices.getUserMedia({
@@ -943,7 +934,6 @@ async function inicializarDispositivos() {
 
       setUsandoPlaceholderCamera(true);
       pararStream(cameraStreamRef.current);
-
       setCameraStream(placeholder);
       cameraStreamRef.current = placeholder;
 
@@ -955,7 +945,6 @@ async function inicializarDispositivos() {
       setCameraEnabled(false);
     }
 
-    // 2. Tenta abrir microfone separado.
     if (mics.length > 0) {
       try {
         const novoAudioStream = await navigator.mediaDevices.getUserMedia({
@@ -1350,8 +1339,6 @@ async function iniciarMonitoramentoMicrofone(micId?: string) {
 
     analyser.fftSize = 512;
     analyser.smoothingTimeConstant = 0.75;
-
-    // Começa mutado para não dar retorno automaticamente.
     gain.gain.value = 0;
 
     source.connect(analyser);
@@ -1445,7 +1432,6 @@ async function toggleEscutarMicrofoneTeste() {
     const next = !micTestListening;
 
     if (micTestGainRef.current) {
-      // Volume baixo para evitar microfonia. Use fone de ouvido.
       micTestGainRef.current.gain.value = next ? micMonitorVolume / 100 : 0;
     }
 
@@ -1607,7 +1593,6 @@ async function toggleCamera() {
       }
 
     } catch {
-      // usuário cancelou
     }
   }
   
@@ -1668,33 +1653,15 @@ console.log("🚨 TESTE NOVO CÓDIGO LIVE STUDIO 1080P - ENTROU AQUI 🚨");
     throw new Error("IVS Broadcast SDK não carregou corretamente.");
   }
 
-//  const streamConfig =
-//    IVSBroadcastClient.BASIC_FULL_HD_LANDSCAPE ||
-//    mod.BASIC_FULL_HD_LANDSCAPE ||
-//    IVSBroadcastClient.STANDARD_LANDSCAPE ||
-//    mod.STANDARD_LANDSCAPE ||
-//    IVSBroadcastClient.BASIC_LANDSCAPE ||
-//    mod.BASIC_LANDSCAPE ||
-//    {
-//      maxResolution: {
-//        width: VIDEO_FULL_HD.width,
-//        height: VIDEO_FULL_HD.height,
-//      },
-//      maxFramerate: 30,
-//      maxBitrate: 6000,
-//    };
+  const streamConfig = {
+    maxResolution: {
+      width: VIDEO_FULL_HD.width,
+      height: VIDEO_FULL_HD.height,
+    },
+    maxFramerate: 30,
+    maxBitrate: 8500,
+  };
 
-const streamConfig = {
-  maxResolution: {
-    width: VIDEO_FULL_HD.width,
-    height: VIDEO_FULL_HD.height,
-  },
-  maxFramerate: 30,
-  maxBitrate: 8500,
-};
-
-console.log("[IVS DEBUG] streamConfig FINAL usado:", streamConfig);
-console.log("[IVS DEBUG] VIDEO_FULL_HD:", VIDEO_FULL_HD);
 
   const endpointIvs = normalizarIvsIngestEndpoint(config.ingestEndpoint);
   const streamKeyLimpa = String(config.streamKey || "").trim();
@@ -1707,7 +1674,6 @@ console.log("[IVS DEBUG] VIDEO_FULL_HD:", VIDEO_FULL_HD);
     throw new Error("Stream key do IVS não informada.");
   }
 
-  // Para o teste, força a câmera ligada se ela for a fonte principal.
   if (
     !screenStream?.getVideoTracks().length &&
     cameraStream?.getVideoTracks().length &&
@@ -1720,7 +1686,6 @@ console.log("[IVS DEBUG] VIDEO_FULL_HD:", VIDEO_FULL_HD);
     setCameraEnabled(true);
   }
 
-  // Para o teste, força o microfone ligado.
   if (micStream?.getAudioTracks().length) {
     micStream.getAudioTracks().forEach((track) => {
       track.enabled = true;
