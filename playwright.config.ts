@@ -32,12 +32,13 @@ export default defineConfig({
       timeout: 120_000,
     },
   ],
-  projects: [
+    projects: [
     {
       name: "public",
       testMatch: /routes-public\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
+
     {
       name: "setup-admin",
       testMatch: /auth\.setup\.ts/,
@@ -50,6 +51,89 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         storageState: "tests/e2e/.auth/admin.json",
+      },
+    },
+
+    {
+      name: "setup-users",
+      testMatch: /user\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+
+    {
+      name: "atleta",
+      testMatch: /user\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/atleta.json",
+      },
+    },
+
+    {
+      name: "professor",
+      testMatch: /user\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/professor.json",
+      },
+    },
+    {
+      name: "professor-creator",
+      testMatch: /creator\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/professor.json",
+      },
+    },
+
+    {
+      name: "clube",
+      testMatch: /user\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/clube.json",
+      },
+    },
+    {
+      name: "clube-creator",
+      testMatch: /creator\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/clube.json",
+      },
+    },
+
+    {
+      name: "escola",
+      testMatch: /user\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/escola.json",
+      },
+    },
+    {
+      name: "escola-creator",
+      testMatch: /creator\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/escola.json",
+      },
+    },
+
+    {
+      name: "olheiro",
+      testMatch: /user\.smoke\.spec\.ts/,
+      dependencies: ["setup-users"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/olheiro.json",
       },
     },
   ],
