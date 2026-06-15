@@ -151,7 +151,6 @@ async function seedConquistasCatalog() {
     { id: "clu_evento_10", entity: "Clube", title: "Clube Ativo", description: "Organizou 10 eventos.", icon: "🎟️", tier: "ouro", group: "Eventos", meta: 10 },
     { id: "clu_evento_25", entity: "Clube", title: "Agenda Lotada", description: "Organizou 25 eventos.", icon: "🏟️", tier: "platina", group: "Eventos", meta: 25 },
 
-    // LEARNING
     {
       id: "learn_first_course",
       entity: "Learning",
@@ -193,7 +192,6 @@ async function seedConquistasCatalog() {
       meta: 1,
     },
 
-    // MARCA
     {
       id: "brand_profile_complete",
       entity: "Marca",
@@ -245,7 +243,6 @@ async function seedConquistasCatalog() {
       meta: 5,
     },
 
-    // FEDERAÇÃO
     {
       id: "fed_profile_complete",
       entity: "Federacao",
