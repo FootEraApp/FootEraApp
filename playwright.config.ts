@@ -1,23 +1,56 @@
-import { defineConfig } from "@playwright/test";
-import path from "node:path";
-
-const authDir = path.join(process.cwd(), "tests", "e2e", ".auth");
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: path.join(process.cwd(), "tests", "e2e"),
+  testDir: "./tests/e2e",
+  timeout: 45_000,
+  expect: {
+    timeout: 15_000,
+  },
+  fullyParallel: false,
+  retries: 0,
+  reporter: [
+    ["list"],
+    ["html", { open: "never" }],
+  ],
   use: {
-    baseURL: process.env.E2E_BASE_URL || "http://localhost:5173",
+    baseURL: "http://localhost:5173",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
+  webServer: [
+    {
+      command: "npm run dev:server",
+      url: "http://localhost:3001/api/health",
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+    {
+      command: "npm run dev:client",
+      url: "http://localhost:5173",
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+  ],
   projects: [
-    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "public",
+      testMatch: /routes-public\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "setup-admin",
+      testMatch: /auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
     {
       name: "admin",
-      dependencies: ["setup"],
-      testIgnore: /auth\.setup\.ts/,
-      use: { storageState: path.join(authDir, "admin.json") },
+      testMatch: /admin\.smoke\.spec\.ts/,
+      dependencies: ["setup-admin"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "tests/e2e/.auth/admin.json",
+      },
     },
   ],
 });

@@ -1,12 +1,31 @@
 {
-  "cookies": [],
+  "cookies": [
+    {
+      "name": "g_state",
+      "value": "{\"i_l\":0,\"i_ll\":1781558772929,\"i_b\":\"Q/VREN/gYPiQ+Jhh5fiz0U8c4DMRBP1pfFUcII8RUh8\",\"i_e\":{\"enable_itp_optimization\":24},\"i_et\":1781558772929}",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1797110772,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
   "origins": [
     {
       "origin": "http://localhost:5173",
       "localStorage": [
         {
+          "name": "usuarioTipoRaw",
+          "value": "admin"
+        },
+        {
           "name": "token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImViMDJmZmZjLTQ1YmItNDY1ZS1iNjc2LTRlMTFmNGFkODI0ZSIsInRpcG8iOiJBZG1pbiIsImlhdCI6MTc2NTU1NTQzNSwiZXhwIjoxNzY2MTYwMjM1fQ.eIlRYy3DJGo-aZUxpZAWb4ElEVzHDUbTnXcD5p-m_3Q"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjMxODk0NmM1LTExNTktNDUxMy1iNzIzLWUxNGMzMTdkOGY1YiIsInRpcG8iOiJBZG1pbiIsInRva2VuVmVyc2lvbiI6MCwiaWF0IjoxNzgxNTU4NzczLCJleHAiOjE3ODIxNjM1NzN9.C9BMZVWGPWtIHDKImnC4cOBFypdf5ObucQlh8ZvD-yQ"
+        },
+        {
+          "name": "tipoUsuarioId",
+          "value": "72356231-e392-4a8c-945c-227e68f31270"
         },
         {
           "name": "tipoUsuario",
@@ -22,7 +41,7 @@
         },
         {
           "name": "usuarioId",
-          "value": "eb02fffc-45bb-465e-b676-4e11f4ad824e"
+          "value": "318946c5-1159-4513-b723-e14c317d8f5b"
         }
       ]
     }
