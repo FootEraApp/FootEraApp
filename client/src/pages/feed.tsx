@@ -33,6 +33,7 @@ import socket from "../services/socket.js";
 import { http } from "../services/http.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import Avatar from "../components/shared/Avatar.js";
 
 interface Usuario {
   id: string;
@@ -364,24 +365,8 @@ function BottomSheet({
   );
 }
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
-function avatarSrc(foto?: string | null) {
-  return publicImgUrl(foto) || AVATAR_FALLBACK;
-}
-
 function cleanText(s?: string | null) {
   return String(s ?? "").replace(/\u200B/g, "").trim();
-}
-
-function getRootPost(p: PostagemComUsuario): PostagemComUsuario {
-  let cur: any = p;
-  while (cur?.repostOf) cur = cur.repostOf;
-  return cur as PostagemComUsuario;
-}
-
-function getParentPost(p: PostagemComUsuario): PostagemComUsuario | null {
-  return (p as any).repostOf ?? null;
 }
 
 function username(u?: any) {
@@ -810,11 +795,10 @@ function PaginaFeed(): JSX.Element {
                   title={`Ver perfil de ${post.usuario.nome}`}
                   className="shrink-0"
                 >
-                  <img
-                    src={avatarSrc(post.usuario.foto)}
-                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
+                  <Avatar
+                    foto={post.usuario.foto}
                     alt={post.usuario.nome}
-                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                    className="w-10 h-10 cursor-pointer"
                   />
                 </Link>
                 <div>
@@ -883,13 +867,10 @@ function PaginaFeed(): JSX.Element {
                                   title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
                                   className="shrink-0"
                                 >
-                                  <img
-                                    src={avatarSrc(root.usuario?.foto)}
-                                    onError={(e) =>
-                                      ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)
-                                    }
+                                  <Avatar
+                                    foto={root.usuario?.foto}
                                     alt={root.usuario?.nome || "avatar original"}
-                                    className="w-7 h-7 rounded-full object-cover cursor-pointer"
+                                    className="w-7 h-7 cursor-pointer"
                                   />
                                 </Link>
 
@@ -1035,11 +1016,10 @@ function PaginaFeed(): JSX.Element {
                           title={`Ver perfil de ${comentario.usuario?.nome ?? "Usuário"}`}
                           className="shrink-0"
                         >
-                          <img
-                            src={avatarSrc(comentario.usuario?.foto)}
-                            onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
+                          <Avatar
+                            foto={comentario.usuario?.foto}
                             alt={comentario.usuario?.nome || "avatar"}
-                            className="w-8 h-8 rounded-full object-cover cursor-pointer"
+                            className="w-8 h-8 cursor-pointer"
                           />
                         </Link>
                         <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
@@ -1096,7 +1076,6 @@ function PaginaFeed(): JSX.Element {
             )}
             {usuariosMutuos.map((u) => {
               const selecionado = selecionados.has(u.id);
-              const fotoSrc = avatarSrc(u.foto);
               return (
                 <button
                   key={u.id}
@@ -1106,11 +1085,10 @@ function PaginaFeed(): JSX.Element {
                     selecionado ? "border-green-600" : "border-transparent"
                   }`}
                 >
-                  <img
-                    src={fotoSrc}
-                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
+                  <Avatar
+                    foto={u.foto}
                     alt={u.nome}
-                    className="w-14 h-14 rounded-full object-cover"
+                    className="w-14 h-14"
                   />
                   {selecionado && (
                     <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
@@ -1224,11 +1202,10 @@ function PaginaFeed(): JSX.Element {
                       }`}
                       className="shrink-0"
                     >
-                      <img
-                        src={avatarSrc(comentario.usuario?.foto)}
-                        onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
+                      <Avatar
+                        foto={comentario.usuario?.foto}
                         alt={comentario.usuario?.nome || "avatar"}
-                        className="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer"
+                        className="w-9 h-9 flex-shrink-0 cursor-pointer"
                       />
                     </Link>
                     <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">

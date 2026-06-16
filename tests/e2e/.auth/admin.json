@@ -2,13 +2,23 @@
   "cookies": [
     {
       "name": "g_state",
-      "value": "{\"i_l\":0,\"i_ll\":1781632540241,\"i_b\":\"gIpglOmBDv4EnSy8kXothIKLfk88frOFFCgA3nHBmY0\",\"i_e\":{\"enable_itp_optimization\":24},\"i_et\":1781632540241}",
+      "value": "{\"i_l\":0,\"i_ll\":1781637035014,\"i_b\":\"JHNtXVscdUsgtfoTkOImYZ4lkFB8SZW2mgJ93a8RHA4\",\"i_e\":{\"enable_itp_optimization\":24},\"i_et\":1781637035014}",
       "domain": "localhost",
       "path": "/",
-      "expires": 1797184540,
+      "expires": 1797189035,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
+    },
+    {
+      "name": "NID",
+      "value": "532=aYgNEZACaxE-2VyCE8F3AlIfcFh-ToXelaBqOXR-lbApfTomc9Aa22fE83vm-d2OWRHnrDz59Mg06U7Oe-0Lb8mGqEFTxp28JH9a5nfKHzT_fhoTvODAQMS3GhB-gy1Myp5O2uA79D3pzBZ8jSvy1q8ETi_Hs2yqzm6Qkb3R-LLLYjYEXpXACFHIATLkYYXlsOq4",
+      "domain": ".google.com",
+      "path": "/",
+      "expires": 1797448235.687154,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
     }
   ],
   "origins": [
@@ -21,7 +31,7 @@
         },
         {
           "name": "token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjMxODk0NmM1LTExNTktNDUxMy1iNzIzLWUxNGMzMTdkOGY1YiIsInRpcG8iOiJBZG1pbiIsInRva2VuVmVyc2lvbiI6MCwiaWF0IjoxNzgxNjMyNTQwLCJleHAiOjE3ODIyMzczNDB9.W2ZcjqC7BlYtAzkjtvxxvHa7-dXbq5T3dzL_OS3FvjU"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjMxODk0NmM1LTExNTktNDUxMy1iNzIzLWUxNGMzMTdkOGY1YiIsInRpcG8iOiJBZG1pbiIsInRva2VuVmVyc2lvbiI6MCwiaWF0IjoxNzgxNjM3MDM1LCJleHAiOjE3ODIyNDE4MzV9.v5Z3y6VVmuMX33RcBrxFUkXFt6_NwrK4XFEP-oy4Lzo"
         },
         {
           "name": "tipoUsuarioId",

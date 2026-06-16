@@ -71,6 +71,13 @@ const forbidden = [
   ".env.development",
   "node_modules",
   "uploads",
+  "client",
+  "tests",
+  "playwright-report",
+  "test-results",
+  ".auth",
+  ".eb-release-staging",
+  ".zip-check-temp",
 ];
 
 for (const item of forbidden) {

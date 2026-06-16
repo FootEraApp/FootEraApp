@@ -19,6 +19,15 @@ test.describe("FootEra - usuário logado", () => {
     );
   });
 
+  test("abre /explorar logado", async ({ page }) => {
+    await page.goto("/explorar", { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(/\/explorar/);
+    await expect(page.locator("body")).toContainText(
+      /Explorar|Atletas|Escolas|Clubes|Profissionais|Outros/i
+    );
+  });
+
   test("abre /treinos logado", async ({ page }) => {
     await page.goto("/treinos", { waitUntil: "domcontentloaded" });
 

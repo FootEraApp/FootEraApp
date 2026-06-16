@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
 import Avatar from "../components/shared/Avatar.js";
 import BottomNav from "@/components/layout/BottomNav.js";
@@ -44,17 +44,11 @@ type TurmaItem = {
   alunosCount?: number | null;
 };
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
 function fotoPerfilOuFallback(foto?: string | null) {
   const valor = String(foto ?? "").trim();
 
-  if (
-    !valor ||
-    valor === "null" ||
-    valor === "undefined"
-  ) {
-    return AVATAR_FALLBACK;
+  if (!valor || valor === "null" || valor === "undefined") {
+    return null;
   }
 
   return valor;

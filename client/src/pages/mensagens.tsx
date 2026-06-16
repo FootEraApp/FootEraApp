@@ -16,12 +16,6 @@ import { ModalAdicionarMembrosGrupo } from "../components/mensagens/ModalAdicion
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-function getAvatarSrc(foto?: string | null) {
-  if (!foto || !foto.trim()) return AVATAR_FALLBACK;
-  if (foto.startsWith("http://") || foto.startsWith("https://")) return foto;
-  return `${API.BASE_URL}${foto}`;
-}
-
 interface Usuario {
   id: string;
   nome: string;
@@ -2011,14 +2005,10 @@ function stripConvocacaoTag(text: string) {
                           className="shrink-0"
                           title={`Ver perfil de ${membro.nome}`}
                         >
-                          <img
-                            src={getAvatarSrc(membro.foto)}
-                            alt={membro.nome}
-                            className="w-10 h-10 rounded-full object-cover border"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = AVATAR_FALLBACK;
-                            }}
+                          <Avatar
+                            src={membro.foto}
+                            name={membro.nome}
+                            className="w-10 h-10"
                           />
                         </button>
 

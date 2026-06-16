@@ -10,6 +10,7 @@ import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { ArrowLeft, Plus, X, ListFilter, Trash2 } from "lucide-react";
+import Avatar from "../components/shared/Avatar.js";
 
 const ELENCOS_BASE = `${API.BASE_URL}/api/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
@@ -352,16 +353,10 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => {
 
   return (
     <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3 will-change-transform">
-      <img
-        src={resolveFoto(atleta.foto)}
+      <Avatar
+        foto={atleta.foto}
         alt={atleta.nome}
-        className="w-10 h-10 rounded-full object-cover"
-        onError={(e) => {
-          const img = e.currentTarget;
-          if (img.dataset.fallbackApplied) return;
-          img.dataset.fallbackApplied = "1";
-          img.src = FALLBACK_AVATAR;
-        }}
+        className="w-10 h-10"
       />
 
       <div className="min-w-0 flex-1">
@@ -1546,16 +1541,10 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                   {reservas.map((a) => (
                     <div key={a.atletaId} className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <img
-                          src={a.foto ? `${a.foto}` : FALLBACK_AVATAR}
+                        <Avatar
+                          foto={a.foto}
                           alt={a.nome}
-                          className="w-10 h-10 rounded-full object-cover"
-                          onError={(e) => {
-                            const img = e.currentTarget;
-                            if (img.dataset.fallbackApplied) return;
-                            img.dataset.fallbackApplied = "1";
-                            img.src = FALLBACK_AVATAR;
-                          }}
+                          className="w-10 h-10"
                         />
                         <div className="min-w-0">
                           <div className="text-xs font-semibold truncate">{a.nome}</div>

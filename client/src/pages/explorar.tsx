@@ -18,22 +18,12 @@ import {
   Ticket,
   CheckCircle2,
 } from "lucide-react";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
-import { publicImgUrl } from "../utils/publicUrl.js";
+import Avatar from "../components/shared/Avatar.js";
 
 const ENABLE_EVENTOS_TAB = false; 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
-function avatarSrc(foto?: string | null) {
-  return publicImgUrl(foto) || AVATAR_FALLBACK;
-}
-
-function onAvatarError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
-  const img = e.currentTarget;
-  if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
-}
 
 type UsuarioBasic = {
   id: string;
@@ -1659,11 +1649,10 @@ function Explorar() {
                       <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                           <div className="relative">
-                            <img
-                              src={avatarSrc(rawFoto)}
-                              onError={onAvatarError}
+                            <Avatar
+                              foto={rawFoto}
                               alt={`${nome} profile`}
-                              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                              className="w-20 h-20 sm:w-24 sm:h-24 border"
                             />
                             {shouldShowProBadgeOnAvatar(a) && (
                               <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
@@ -1728,11 +1717,10 @@ function Explorar() {
                         <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
                           <div className="min-w-[130px] sm:min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
                             <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
-                            <img
-                              src={avatarSrc(foto)}
-                              onError={onAvatarError}
-                              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border"
+                            <Avatar
+                              foto={foto}
                               alt={r.usuario.nome}
+                              className="w-14 h-14 sm:w-16 sm:h-16 border"
                             />
                             <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
                             <div className="text-xs mt-1">❤️ {r.total}</div>
@@ -1754,11 +1742,10 @@ function Explorar() {
                       <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
                           <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">{rotulo}</div>
-                          <img
-                            src={avatarSrc(foto)}
-                            onError={onAvatarError}
-                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border"
+                          <Avatar
+                            foto={foto}
                             alt={top.usuario.nome}
+                            className="w-9 h-9 sm:w-10 sm:h-10 border"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{top.usuario.nome}</div>
@@ -1785,11 +1772,10 @@ function Explorar() {
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border bg-white flex items-center justify-center overflow-hidden">
-                        <img
-                          src={avatarSrc(rawLogo)}
-                          onError={onAvatarError}
+                        <Avatar
+                          foto={rawLogo}
                           alt="Logo da escola"
-                          className="w-full h-full object-contain"
+                          className="w-full h-full"
                         />
                       </div>
 
@@ -1867,11 +1853,10 @@ function Explorar() {
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border bg-white flex items-center justify-center overflow-hidden">
-                        <img
-                          src={avatarSrc(rawLogo)}
-                          onError={onAvatarError}
+                        <Avatar
+                          foto={rawLogo}
                           alt="Logo do clube"
-                          className="w-full h-full object-contain"
+                          className="w-full h-full"
                         />
                       </div>
 
@@ -1948,11 +1933,10 @@ function Explorar() {
                     <Link href={href} key={`${p.role}-${p.id}`}>
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <div className="relative">
-                          <img
-                            src={avatarSrc(rawFoto)}
-                            onError={onAvatarError}
+                          <Avatar
+                            foto={rawFoto}
                             alt="Foto do usuário"
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                            className="w-20 h-20 sm:w-24 sm:h-24 border"
                           />
                           {shouldShowProBadgeOnAvatar(p) && (
                             <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
@@ -2045,11 +2029,10 @@ function Explorar() {
                     <Link href={`/perfil/${uid}`} key={`${item.tipoOutro}-${item.id}`}>
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <div className="relative">
-                          <img
-                            src={avatarSrc(rawFoto)}
-                            onError={onAvatarError}
+                          <Avatar
+                            foto={rawFoto}
                             alt="Foto do usuário"
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                            className="w-20 h-20 sm:w-24 sm:h-24 border"
                           />
 
                           {shouldShowProBadgeOnAvatar(item) && (
@@ -2247,11 +2230,10 @@ function Explorar() {
             {(selectedEvento.clube || (selectedEvento as any).escolinha) && (
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-full border bg-white flex items-center justify-center overflow-hidden">
-                  <img
-                    src={avatarSrc(rawLogoOrg)}
-                    onError={onAvatarError}
+                  <Avatar
+                    foto={rawLogoOrg}
                     alt="Logo do organizador"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full"
                   />
                 </div>
                 <div className="text-xs text-gray-700">

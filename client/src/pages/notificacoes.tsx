@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { ArrowLeft, X } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
+import Avatar from "../components/shared/Avatar.js";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -71,8 +71,6 @@ function isConvocacao(n: { titulo: string; mensagem: string }) {
     t.includes("voce foi convoc")
   );
 }
-
-const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
@@ -323,18 +321,6 @@ export default function PaginaNotificacoes() {
             const isFollow = String(n.tipo || "").toUpperCase() === "FOLLOW";
             const actor = n.actor;
             const actorId = actor?.id || n.actorId || null;
-
-            const actorFotoRaw = String(actor?.foto ?? "").trim();
-            const actorFotoOk =
-              actorFotoRaw &&
-              actorFotoRaw !== "null" &&
-              actorFotoRaw !== "undefined" &&
-              actorFotoRaw !== "0";
-
-            const actorFotoSrc = actorFotoOk
-              ? formatarUrlFoto(actorFotoRaw, "usuarios")
-              : FALLBACK_AVATAR;
-
             const actorLabel = actor?.nomeDeUsuario ? `@${actor.nomeDeUsuario}` : "Usuário";
 
             if (isFollow && actorId) {
@@ -357,16 +343,10 @@ export default function PaginaNotificacoes() {
                   </button>
 
                   <div className="flex items-center gap-3 pr-10">
-                    <img
-                      src={actorFotoSrc}
+                    <Avatar
+                      foto={n.actor?.foto}
                       alt={`Foto de ${actorLabel}`}
-                      className="w-12 h-12 rounded-full object-cover bg-white"
-                      onError={(e) => {
-                        const img = e.currentTarget as HTMLImageElement & { dataset: any };
-                        if (img.dataset?.fallbackApplied) return;
-                        img.dataset.fallbackApplied = "1";
-                        img.src = FALLBACK_AVATAR;
-                      }}
+                      className="w-12 h-12 bg-white"
                     />
 
                     <div className="flex-1">
@@ -665,10 +645,6 @@ export default function PaginaNotificacoes() {
               fotoRaw !== "undefined" &&
               fotoRaw !== "0";
 
-            const fotoSrc = temFotoValida
-              ? formatarUrlFoto(fotoRaw, "usuarios")
-              : FALLBACK_AVATAR;
-
             const podeResponder =
               solicitacao.status === "pendente" ||
               solicitacao.status === "ativa";
@@ -696,18 +672,10 @@ export default function PaginaNotificacoes() {
                 </button>
 
                 <div className="flex items-center gap-4 pr-10">
-                  <img
-                    src={fotoSrc}
+                  <Avatar
+                    foto={solicitacao.remetente.foto}
                     alt={`Foto de ${solicitacao.remetente.nomeDeUsuario}`}
-                    className="w-12 h-12 rounded-full object-cover bg-white"
-                    onError={(e) => {
-                      const img = e.currentTarget as HTMLImageElement & {
-                        dataset: any;
-                      };
-                      if (img.dataset?.fallbackApplied) return;
-                      img.dataset.fallbackApplied = "1";
-                      img.src = FALLBACK_AVATAR;
-                    }}
+                    className="w-12 h-12 bg-white"
                   />
 
                   <div>

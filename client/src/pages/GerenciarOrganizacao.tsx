@@ -326,7 +326,7 @@ export default function GerenciarOrganizacao({
                 return (
                   <li key={o.id} className="rounded-2xl border border-zinc-200 bg-white p-4">
                     <div className="flex items-center gap-3">
-                      <Avatar foto={o.logo ?? null} alt={nome} className="h-12 w-12" />
+                      <Avatar foto={o.logo ?? null} alt={nome} className="h-12 w-12 shrink-0" />
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-zinc-900">{nome}</div>
                         <div className="text-xs text-zinc-500">
@@ -506,7 +506,7 @@ export default function GerenciarOrganizacao({
                     <div key={g.id} className="p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">
-                          <Avatar foto={foto} alt={nome} className="h-10 w-10" />
+                          <Avatar foto={foto} alt={nome} className="h-10 w-10 shrink-0" />
                           <div>
                             <div className="text-sm font-semibold text-zinc-900">{nome}</div>
                             <div className="text-xs text-zinc-500">

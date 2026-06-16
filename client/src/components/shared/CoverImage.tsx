@@ -1,0 +1,68 @@
+import { useMemo, useState, useEffect } from "react";
+import { APP } from "@/config.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+
+type Props = {
+  src?: string | File | null;
+  alt?: string;
+  className?: string;
+  pasta?: string;
+};
+
+const COVER_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function isEmptySrc(value: unknown) {
+  const v = String(value ?? "").trim();
+  return !v || v === "null" || v === "undefined";
+}
+
+export default function CoverImage({
+  src,
+  alt = "",
+  className = "w-full h-full",
+  pasta = "metodologias",
+}: Props) {
+  const srcInicial = useMemo(() => {
+    if (isEmptySrc(src)) return COVER_FALLBACK;
+
+    if (typeof File !== "undefined" && src instanceof File) {
+      return URL.createObjectURL(src);
+    }
+
+    return formatarUrlFoto(String(src), pasta) || COVER_FALLBACK;
+  }, [src, pasta]);
+
+  const [currentSrc, setCurrentSrc] = useState(srcInicial);
+
+  useEffect(() => {
+    setCurrentSrc(srcInicial);
+  }, [srcInicial]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof File !== "undefined" && src instanceof File) {
+        try {
+          URL.revokeObjectURL(srcInicial);
+        } catch {}
+      }
+    };
+  }, [src, srcInicial]);
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className={[
+        "block object-cover object-center bg-emerald-900",
+        className,
+      ].join(" ")}
+      onError={() => {
+        if (currentSrc !== COVER_FALLBACK) {
+          setCurrentSrc(COVER_FALLBACK);
+        }
+      }}
+    />
+  );
+}

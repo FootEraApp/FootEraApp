@@ -1,7 +1,6 @@
 // client/src/pages/admin-page
 import React, { useEffect, useState, useMemo } from "react";
 import { API, APP } from "../config.js";
-import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
 import ToggleSwitch from "../components/ToggleSwitch";
@@ -9,6 +8,8 @@ import axios from "axios";
 import Storage from "../utils/storage.js"
 import LearningCard from "../components/learning/LearningCard.js";
 import { Pencil, Trash2 } from "lucide-react";
+import Avatar from "../components/shared/Avatar.js";
+import CoverImage from "../components/shared/CoverImage.js";
 
 type Tab =
   | "dashboard"
@@ -116,7 +117,6 @@ interface UsuarioDetalhe extends UsuarioAdmin {
 }
 
 const USERS_ENDPOINT = `${API.BASE_URL}/api/admin/usuarios`;
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 const EMPTY_DASH = {
   totalUsuarios: 0,
@@ -226,20 +226,9 @@ function toAbsoluteUrl(raw?: string | null) {
   return `${API.BASE_URL}/${v}`;
 }
 
-function avatarSrc(raw?: string | null) {
-  const v = formatarUrlFoto(raw, "usuarios");
-  return v && String(v).trim() ? v : AVATAR_FALLBACK;
-}
-
 function irParaPerfilUsuario(usuarioId?: string | null) {
   if (!usuarioId) return;
   window.location.href = `/perfil/${usuarioId}`;
-}
-
-function onAvatarError(e: React.SyntheticEvent<HTMLImageElement>) {
-  const img = e.currentTarget;
-  if (img.src.includes("footera-logo-fundo-verde.png")) return;
-  img.src = AVATAR_FALLBACK;
 }
 
 function resolveVideoUrl(ex: any) {
@@ -2383,7 +2372,6 @@ async function confirmarExcluirProfessor() {
                 <tbody>
                   {usuariosOrdenados.map((u) => {
                     const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
-                    const foto = avatarSrc(u.foto);
                     return (
                       <tr key={u.id} className="border-t">
                         <td className="px-3 py-2">
@@ -2396,11 +2384,10 @@ async function confirmarExcluirProfessor() {
                                       focus:outline-none focus:ring-2 focus:ring-green-700"
                             title="Abrir perfil do usuário"
                           >
-                            <img
-                              src={foto}
-                              onError={onAvatarError}
-                              className="w-full h-full rounded-full object-contain p-[2px]"
+                            <Avatar
+                              foto={u.foto}
                               alt={nome}
+                              className="w-full h-full"
                             />
                           </button>
 
@@ -2785,7 +2772,6 @@ async function confirmarExcluirProfessor() {
                 const nome = p.nome ?? p.usuario?.nome ?? "(sem nome)";
                 const cref = p.cref ?? p.usuario?.cref ?? "—";
                 const area = p.areaFormacao ?? p.formacao ?? "—";
-                const foto = avatarSrc(p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null);
                 const professorUsuarioId = p.usuarioId ?? p.usuario?.id ?? null;
 
                 const qualificacoes = Array.isArray(p.qualificacoes) ? p.qualificacoes : [];
@@ -2807,11 +2793,10 @@ async function confirmarExcluirProfessor() {
                         className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-green-700 disabled:cursor-not-allowed"
                         title={professorUsuarioId ? "Abrir perfil do professor" : "Usuário do professor não encontrado"}
                       >
-                        <img
-                          src={foto}
-                          onError={onAvatarError}
-                          className="w-12 h-12 rounded-full object-cover border"
+                        <Avatar
+                          foto={p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null}
                           alt={nome}
+                          className="w-12 h-12 border"
                         />
                       </button>
                       <div>
@@ -3278,15 +3263,14 @@ async function confirmarExcluirProfessor() {
 
                   <tbody>
                     {modPendentes.map((it) => {
-                      const fotoAtleta = avatarSrc(it.atleta.foto);
                       return (
                         <tr key={it.id} className="border-t">
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <img
-                                src={fotoAtleta}
-                                onError={onAvatarError}
-                                className="w-8 h-8 rounded-full object-cover border"
+                              <Avatar
+                                foto={it.atleta.foto}
+                                alt={it.atleta.nome}
+                                className="w-8 h-8 border"
                               />
                               <div className="font-medium">{it.atleta.nome}</div>
                             </div>
@@ -3424,7 +3408,6 @@ async function confirmarExcluirProfessor() {
                   {assinantesOrdenados.map((a) => {
                     const u = a.usuario;
                     const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
-                    const foto = avatarSrc(u.foto);
                     return (
                       <tr key={a.id} className="border-t">
                         <td className="px-3 py-2">
@@ -3437,11 +3420,10 @@ async function confirmarExcluirProfessor() {
                                           focus:outline-none focus:ring-2 focus:ring-green-700"
                                 title="Abrir perfil do usuário"
                               >
-                                <img
-                                  src={avatarSrc(a.usuario.foto)}
-                                  onError={onAvatarError}
-                                  className="w-full h-full rounded-full object-contain p-[2px]"
+                                <Avatar
+                                  foto={a.usuario.foto}
                                   alt={a.usuario.nome ?? "Usuário"}
+                                  className="w-full h-full"
                                 />
                               </button>
                             <div className="min-w-0">
@@ -3857,15 +3839,12 @@ async function confirmarExcluirProfessor() {
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
                   <div className="w-28 h-28 rounded bg-gray-100 overflow-hidden border flex items-center justify-center">
-                    {toAbsoluteUrl(metDetail.capaUrl) ? (
-                      <img
-                        src={toAbsoluteUrl(metDetail.capaUrl)!}
-                        className="w-full h-full object-cover"
-                        onError={(e) => ((e.currentTarget.style.display = "none"), void 0)}
-                      />
-                    ) : (
-                      <span className="text-gray-400 text-xs">sem capa</span>
-                    )}
+                    <CoverImage
+                      src={metDetail.capaUrl}
+                      alt={metDetail.titulo ?? "Capa da metodologia"}
+                      pasta="metodologias"
+                      className="w-full h-full"
+                    />
                   </div>
 
                   <div className="flex-1">
@@ -4133,12 +4112,11 @@ async function confirmarExcluirProfessor() {
                           className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-700"
                           title="Abrir perfil do usuário"
                         >
-                          <img
-                            src={avatarSrc(userSelecionado.foto)}
-                            onError={onAvatarError}
-                            className="w-12 h-12 rounded-full object-cover border"
-                            alt={userSelecionado.nome ?? "Usuário"}
-                          />
+                        <Avatar
+                          foto={userSelecionado.foto}
+                          alt={userSelecionado.nome ?? "Usuário"}
+                          className="w-12 h-12 border"
+                        />
                         </button>
                         <div>
                           <button
