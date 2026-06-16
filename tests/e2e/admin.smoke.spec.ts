@@ -20,4 +20,15 @@ test.describe("FootEra - admin logado", () => {
       /Professor|Criar|Cadastro|Admin/i
     );
   });
+
+  test("admin consegue abrir diagnóstico", async ({ page }) => {
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+
+    await page.getByRole("button", { name: /Diagnóstico/i }).click();
+
+    await expect(page.locator("body")).toContainText(/Diagnóstico FootEra/i);
+    await expect(page.locator("body")).toContainText(/Health da API/i);
+    await expect(page.locator("body")).toContainText(/Diagnóstico backend/i);
+    await expect(page.locator("body")).toContainText(/Dashboard admin/i);
+  });
 });

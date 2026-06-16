@@ -23,7 +23,8 @@ type Tab =
   | "analises"
   | "configuracoes"
   | "assinaturas"
-  | "feedback";
+  | "feedback"
+  | "diagnostico";
 
 interface Treinos {
   id: string;
@@ -331,9 +332,24 @@ export default function AdminDashboard() {
     "assinaturas",
     "feedback",
     "analises",
+    "diagnostico",
     "configuracoes",
   ];
 
+  type DiagnosticoStatus = "ok" | "erro" | "carregando";
+
+  type DiagnosticoItem = {
+    nome: string;
+    url: string;
+    status: DiagnosticoStatus;
+    httpStatus?: number;
+    tempoMs?: number;
+    detalhes?: string;
+  };
+
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagUltimaExecucao, setDiagUltimaExecucao] = useState<string | null>(null);
+  const [diagItems, setDiagItems] = useState<DiagnosticoItem[]>([]);
   const [dados, setDados] = useState<any>(EMPTY_DASH);
   const [dashLoading, setDashLoading] = useState(true);
   const [exercicios, setExercicios] = useState<any[]>([]);
@@ -589,7 +605,6 @@ const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
 const [profParceiroBusyId, setProfParceiroBusyId] = useState<string | null>(null);
-
 const [expandedTreinoItemId, setExpandedTreinoItemId] = useState<string | null>(null);
 
  function safeJsonParse(txt: string) {
@@ -1008,41 +1023,41 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
   }
 }
 
-useEffect(() => {
-  const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
-  return () => clearTimeout(h);
-}, [assQ]);
+  useEffect(() => {
+    const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
+    return () => clearTimeout(h);
+  }, [assQ]);
 
-useEffect(() => {
-  const h = setTimeout(() => setExDebQ(exQ.trim()), 300);
-  return () => clearTimeout(h);
-}, [exQ]);
+  useEffect(() => {
+    const h = setTimeout(() => setExDebQ(exQ.trim()), 300);
+    return () => clearTimeout(h);
+  }, [exQ]);
 
-useEffect(() => {
-  const h = setTimeout(() => setTrDebQ(trQ.trim()), 300);
-  return () => clearTimeout(h);
-}, [trQ]);
+  useEffect(() => {
+    const h = setTimeout(() => setTrDebQ(trQ.trim()), 300);
+    return () => clearTimeout(h);
+  }, [trQ]);
 
-useEffect(() => {
-  if (aba !== "assinaturas") return;
-  void carregarAssinantes(1);
-  void carregarAssOverview();
-}, [aba, assPlano, assAtivo, assDebQ, assTipo]);
+  useEffect(() => {
+    if (aba !== "assinaturas") return;
+    void carregarAssinantes(1);
+    void carregarAssOverview();
+  }, [aba, assPlano, assAtivo, assDebQ, assTipo]);
 
-useEffect(() => {
-  if (aba !== "feedback") return;
-  void carregarFeedback();
-}, [aba, fbTipo, fbFrom, fbOnlyUnread]);
+  useEffect(() => {
+    if (aba !== "feedback") return;
+    void carregarFeedback();
+  }, [aba, fbTipo, fbFrom, fbOnlyUnread]);
 
-useEffect(() => {
-  if (aba !== "exercicios") return;
+  useEffect(() => {
+    if (aba !== "exercicios") return;
 
-  const id = window.setInterval(() => {
-    void carregarExercicios();
-  }, 8000); 
+    const id = window.setInterval(() => {
+      void carregarExercicios();
+    }, 8000); 
 
-  return () => window.clearInterval(id);
-}, [aba]);
+    return () => window.clearInterval(id);
+  }, [aba]);
 
   useEffect(() => {
     const h = setTimeout(() => setProfDebQ(profQ.trim()), 350);
@@ -1054,6 +1069,12 @@ useEffect(() => {
     void carregarProfessores(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, profDebQ]);
+
+  useEffect(() => {
+    if (aba !== "diagnostico") return;
+    void rodarDiagnostico();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba]);
 
   async function carregarProfessores(page: number) {
     setProfLoading(true);
@@ -1558,30 +1579,6 @@ useEffect(() => {
     await carregarPendentes(modPage);
   }
 
-  async function criarAdminViaPrompt() {
-    if (!canManageAdmins) return alert("Ação restrita ao super admin.");
-
-    const email = prompt("Email do novo admin:");
-    if (!email) return;
-    const senha = prompt("Senha inicial do novo admin:");
-    if (!senha) return;
-    const nome = prompt("Nome (opcional):") ?? "";
-
-    const resp = await fetch(`${API.BASE_URL}/api/admin/admins`, {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ email, senha, nome }),
-    });
-
-    if (!resp.ok) {
-      const t = await resp.text();
-      alert(`Erro ao criar admin: ${t}`);
-      return;
-    }
-    alert("Administrador criado com sucesso! Ele já pode acessar /admin/login com o email/senha definidos.");
-    await carregarUsuarios(1);
-  }
-
   async function deletarAdmin(id: string) {
     if (!canManageAdmins) return alert("Ação restrita ao super admin.");
     if (meId && id === meId) return alert("Você não pode deletar sua própria conta.");
@@ -1861,7 +1858,7 @@ async function confirmarExcluirProfessor() {
     }
   }
 
-    function handleLogout() {
+  function handleLogout() {
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.clear();
@@ -1878,6 +1875,82 @@ async function confirmarExcluirProfessor() {
     } finally {
       window.location.href = "/admin/login";
     }
+  }
+
+  async function testarEndpoint(nome: string, path: string): Promise<DiagnosticoItem> {
+    const url = `${API.BASE_URL}${path}`;
+    const inicio = performance.now();
+
+    try {
+      const res = await fetch(url, {
+        headers: authHeaders(),
+      });
+
+      const tempoMs = Math.round(performance.now() - inicio);
+      const txt = await res.text().catch(() => "");
+
+      let detalhes = "";
+      if (!res.ok) {
+        detalhes = txt.slice(0, 280) || res.statusText || "Erro sem corpo de resposta.";
+      } else {
+        detalhes = txt ? "Resposta OK" : "Resposta vazia, mas HTTP OK.";
+      }
+
+      return {
+        nome,
+        url,
+        status: res.ok ? "ok" : "erro",
+        httpStatus: res.status,
+        tempoMs,
+        detalhes,
+      };
+    } catch (e: any) {
+      const tempoMs = Math.round(performance.now() - inicio);
+
+      return {
+        nome,
+        url,
+        status: "erro",
+        tempoMs,
+        detalhes: e?.message || "Falha de rede.",
+      };
+    }
+  }
+
+  async function rodarDiagnostico() {
+    setDiagLoading(true);
+
+    const endpoints = [
+      { nome: "Health da API", path: "/api/health" },
+      { nome: "Diagnóstico backend", path: "/api/admin/diagnostico" },
+      { nome: "Dashboard admin", path: "/api/admin" },
+      { nome: "Admin logado", path: "/api/admin/me" },
+      { nome: "Configurações", path: "/api/configuracoes" },
+      { nome: "Professores", path: "/api/professores?page=1&pageSize=1" },
+      { nome: "Exercícios", path: "/api/exercicios" },
+      { nome: "Treinos programados", path: "/api/treinos/programados" },
+      { nome: "Metodologias pendentes", path: "/api/admin/metodologias/pendentes?page=1&pageSize=1" },
+      { nome: "Assinaturas overview", path: "/api/admin/assinantes/overview" },
+    ];
+
+    setDiagItems(
+      endpoints.map((e) => ({
+        nome: e.nome,
+        url: `${API.BASE_URL}${e.path}`,
+        status: "carregando",
+      }))
+    );
+
+    const resultados: DiagnosticoItem[] = [];
+
+    for (const endpoint of endpoints) {
+      const resultado = await testarEndpoint(endpoint.nome, endpoint.path);
+      resultados.push(resultado);
+      setDiagItems([...resultados]);
+    }
+
+    setDiagUltimaExecucao(new Date().toLocaleString("pt-BR"));
+    setDiagLoading(false);
   }
 
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
@@ -2015,6 +2088,8 @@ async function confirmarExcluirProfessor() {
               ? "Validar desafios"
               : t === "metodologias"
               ? "Metodologias"
+              : t == "diagnostico"
+              ? "Diagnóstico"
               : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
@@ -2033,6 +2108,146 @@ async function confirmarExcluirProfessor() {
       )}
 
       <div className="p-4">
+        {aba === "diagnostico" && (
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-green-100 bg-white shadow-sm p-5">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl font-bold text-green-900">
+                    Diagnóstico FootEra
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Verifica rapidamente se as principais rotas do backend e do admin estão respondendo.
+                  </p>
+                  {diagUltimaExecucao && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Última execução: {diagUltimaExecucao}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={rodarDiagnostico}
+                  disabled={diagLoading}
+                  className="rounded-xl bg-green-800 px-4 py-2 text-white font-semibold disabled:opacity-60"
+                >
+                  {diagLoading ? "Verificando..." : "Rodar diagnóstico novamente"}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-gray-500">
+                  API Base URL
+                </div>
+                <div className="mt-1 font-semibold text-green-900 break-all">
+                  {API.BASE_URL}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-gray-500">
+                  Frontend
+                </div>
+                <div className="mt-1 font-semibold text-green-900 break-all">
+                  {APP.FRONTEND_BASE_URL}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-gray-500">
+                  Ambiente
+                </div>
+                <div className="mt-1 font-semibold text-green-900">
+                  {import.meta.env.MODE}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b">
+                <h4 className="font-bold text-green-900">Checks principais</h4>
+              </div>
+
+              <div className="divide-y">
+                {diagItems.length === 0 && (
+                  <div className="p-5 text-sm text-gray-600">
+                    Clique em "Rodar diagnóstico novamente" para iniciar.
+                  </div>
+                )}
+
+                {diagItems.map((item) => {
+                  const isOk = item.status === "ok";
+                  const isLoading = item.status === "carregando";
+
+                  return (
+                    <div key={item.nome} className="p-5 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex h-3 w-3 rounded-full ${
+                              isLoading
+                                ? "bg-yellow-400"
+                                : isOk
+                                ? "bg-green-500"
+                                : "bg-red-500"
+                            }`}
+                          />
+                          <div className="font-semibold text-gray-900">
+                            {item.nome}
+                          </div>
+                        </div>
+
+                        <div className="mt-1 text-xs text-gray-500 break-all">
+                          {item.url}
+                        </div>
+
+                        {item.detalhes && (
+                          <div
+                            className={`mt-2 text-sm ${
+                              isOk ? "text-gray-600" : "text-red-700"
+                            }`}
+                          >
+                            {item.detalhes}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 md:justify-end">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${
+                            isLoading
+                              ? "bg-yellow-50 text-yellow-800"
+                              : isOk
+                              ? "bg-green-50 text-green-800"
+                              : "bg-red-50 text-red-800"
+                          }`}
+                        >
+                          {isLoading ? "Carregando" : isOk ? "OK" : "Erro"}
+                        </span>
+
+                        {item.httpStatus && (
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                            HTTP {item.httpStatus}
+                          </span>
+                        )}
+
+                        {typeof item.tempoMs === "number" && (
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                            {item.tempoMs}ms
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
         {aba === "dashboard" && (
           <div>
             <h3 className="text-xl font-bold mb-4">Dashboard Administrativo</h3>
