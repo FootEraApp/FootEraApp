@@ -14,6 +14,7 @@ import {
   Shield,
   Heart,
   CalendarClock,
+  Star,
   Users,
   Ticket,
   CheckCircle2,
@@ -447,9 +448,36 @@ function Explorar() {
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
   const [erroEvento, setErroEvento] = useState<string | null>(null)
   const [pontosCache, setPontosCache] = useState<Record<string, number>>({});
+  const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
+  const [favoritosPerfilIds, setFavoritosPerfilIds] = useState<string[]>([]);
 
   function getUserIdFromAtleta(a: AtletaItem): string {
     return String(a?.usuario?.id ?? a?.usuarioId ?? a?.id ?? "").trim();
+  }
+
+  function getUserIdFromProfessor(p: ProfessorItem): string {
+    return String(p?.usuario?.id ?? "").trim();
+  }
+
+  function getUserIdFromOlheiro(o: OlheiroItem): string {
+    return String(o?.usuario?.id ?? "").trim();
+  }
+
+  function getUserIdFromClube(c: ClubeItem): string {
+    return String(c?.usuario?.id ?? c?.usuarioId ?? "").trim();
+  }
+
+  function getUserIdFromEscola(e: EscolaItem): string {
+    return String(e?.usuario?.id ?? e?.usuarioId ?? "").trim();
+  }
+
+  function getUserIdFromOutro(o: OutroItem): string {
+    return String(o?.usuario?.id ?? o?.usuarioId ?? "").trim();
+  }
+
+  function isPerfilFavorito(usuarioId?: string | null) {
+    const id = String(usuarioId || "").trim();
+    return !!id && favoritosPerfilIds.includes(id);
   }
 
   function calcTotalFromPontuacaoPayload(data: any): number {
@@ -483,6 +511,50 @@ function Explorar() {
       return null;
     }
   }
+
+  useEffect(() => {
+    let alive = true;
+
+    async function carregarFavoritosPerfil() {
+      const token = Storage?.token || "";
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/favoritos`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const data = await res.json().catch(() => []);
+
+        if (!res.ok) return;
+
+        const ids = Array.isArray(data)
+          ? data.map(String)
+          : Array.isArray(data?.ids)
+          ? data.ids.map(String)
+          : Array.isArray(data?.items)
+          ? data.items
+              .map((item: any) => item?.favoritoUsuarioId || item?.usuarioId || item?.id)
+              .filter(Boolean)
+              .map(String)
+          : [];
+
+        if (alive) setFavoritosPerfilIds(Array.from(new Set(ids)));
+      } catch (e) {
+        console.warn("[explorar] erro ao carregar favoritos", e);
+      }
+    }
+
+    carregarFavoritosPerfil();
+
+    const onFocus = () => carregarFavoritosPerfil();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
 
   useEffect(() => {
     setShowFilters(false);
@@ -583,6 +655,10 @@ function Explorar() {
     const q = normText(busca);
 
     const base = (dados.atletas || []).filter((a) => {
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromAtleta(a))) {
+        return false;
+      }
+
       const m = getAtletaMeta(a);
 
       if (f.categoria) {
@@ -620,7 +696,7 @@ function Explorar() {
     });
 
     return sortProThenName(base, (a) => (a as any)?.usuario?.nome ?? "");
-  }, [dados.atletas, filtrosKey, busca, pontosCache]);
+  }, [dados.atletas, filtrosKey, busca, pontosCache, mostrarFavoritos, favoritosPerfilIds]);
 
   const eventosFiltrados = useMemo(() => {
     const q = (busca || "").toLowerCase();
@@ -653,6 +729,10 @@ function Explorar() {
     const f = filtrosOrgs;
 
     const base = (dados.escolas || []).filter((e) => {
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromEscola(e))) {
+        return false;
+      }
+
       if (f.estado && !includesText(e.estado, f.estado)) return false;
       if (f.cidade && !includesText(e.cidade, f.cidade)) return false;
 
@@ -670,13 +750,18 @@ function Explorar() {
     });
 
     return sortProThenName(base, (e) => (e as any)?.nome ?? "");
-  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs)]);
+  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs), mostrarFavoritos, favoritosPerfilIds]);
 
   const clubesFiltrados = useMemo(() => {
     const q = normText(busca);
     const f = filtrosOrgs;
 
     const base = (dados.clubes || []).filter((c) => {
+
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromClube(c))) {
+        return false;
+      }
+
       if (f.estado && !includesText(c.estado, f.estado)) return false;
       if (f.cidade && !includesText(c.cidade, f.cidade)) return false;
 
@@ -689,13 +774,22 @@ function Explorar() {
     });
 
     return sortProThenName(base, (c) => (c as any)?.nome ?? "");
-  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs)]);
+  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs), favoritosPerfilIds, mostrarFavoritos]);
 
   const profissionaisFiltrados = useMemo(() => {
     const q = normText(busca);
     const f = filtrosProf;
 
     const base = (profissionais || []).filter((p: any) => {
+
+      const uid = p.role === "Olheiro"
+        ? getUserIdFromOlheiro(p)
+        : getUserIdFromProfessor(p);
+
+      if (mostrarFavoritos && !isPerfilFavorito(uid)) {
+        return false;
+      }
+
       const m = getProfMeta(p);
 
       if (f.papel && f.papel !== "Ambos") {
@@ -717,7 +811,7 @@ function Explorar() {
     });
 
     return sortProThenName(base, (p) => (p as any)?.usuario?.nome ?? "");
-  }, [profissionais, busca, JSON.stringify(filtrosProf)]);
+  }, [profissionais, busca, JSON.stringify(filtrosProf), mostrarFavoritos, favoritosPerfilIds]);
 
   const outrosFiltrados = useMemo(() => {
     const todos = [
@@ -730,6 +824,11 @@ function Explorar() {
     const q = normText(busca);
 
     const filtrados = todos.filter((item) => {
+
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromOutro(item))) {
+        return false;
+      }
+
       const nome =
         item.nome ??
         item.usuario?.nome ??
@@ -770,16 +869,45 @@ function Explorar() {
     dados.federacoes,
     busca,
     JSON.stringify(filtrosOutros),
+    mostrarFavoritos,
+    favoritosPerfilIds
   ]);
 
-  useEffect(() => setShowCountAtletas(BATCH), [busca, filtrosKey, dados.atletas.length]);
-  useEffect(() => setShowCountEscolas(BATCH), [busca, escolasFiltradas.length]);
-  useEffect(() => setShowCountClubes(BATCH), [busca, clubesFiltrados.length]);
-  useEffect(() => setShowCountProfs(BATCH), [busca, profissionaisFiltrados.length]);
+  useEffect(() => setShowCountAtletas(BATCH), [
+    busca,
+    filtrosKey,
+    dados.atletas.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => setShowCountEscolas(BATCH), [
+    busca,
+    escolasFiltradas.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => setShowCountClubes(BATCH), [
+    busca,
+    clubesFiltrados.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => setShowCountProfs(BATCH), [
+    busca,
+    profissionaisFiltrados.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
   useEffect(() => setShowCountOutros(BATCH), [
     busca,
     outrosFiltrados.length,
     JSON.stringify(filtrosOutros),
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
   ]);
 
   useEffect(() => {
@@ -1077,6 +1205,59 @@ function Explorar() {
 
   const rawLogoOrg = selectedEvento?.clube?.logo || (selectedEvento as any)?.escolinha?.logo || null;
 
+  const favoritosNaAbaAtual = useMemo(() => {
+    if (aba === "atletas") {
+      return (dados.atletas || []).filter((a) =>
+        isPerfilFavorito(getUserIdFromAtleta(a))
+      ).length;
+    }
+
+    if (aba === "escolas") {
+      return (dados.escolas || []).filter((e) =>
+        isPerfilFavorito(getUserIdFromEscola(e))
+      ).length;
+    }
+
+    if (aba === "clubes") {
+      return (dados.clubes || []).filter((c) =>
+        isPerfilFavorito(getUserIdFromClube(c))
+      ).length;
+    }
+
+    if (aba === "profissionais") {
+      return (profissionais || []).filter((p: any) => {
+        const uid =
+          p.role === "Olheiro"
+            ? getUserIdFromOlheiro(p)
+            : getUserIdFromProfessor(p);
+
+        return isPerfilFavorito(uid);
+      }).length;
+    }
+
+    if (aba === "outros") {
+      const todos = [
+        ...(dados.learning || []),
+        ...(dados.marcas || []),
+        ...(dados.federacoes || []),
+      ];
+
+      return todos.filter((item) => isPerfilFavorito(getUserIdFromOutro(item))).length;
+    }
+
+    return 0;
+  }, [
+    aba,
+    dados.atletas,
+    dados.escolas,
+    dados.clubes,
+    dados.learning,
+    dados.marcas,
+    dados.federacoes,
+    profissionais,
+    favoritosPerfilIds,
+  ]);
+
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
       <div className="h-16 sm:h-20 bg-green-900 text-white flex items-center">
@@ -1098,6 +1279,36 @@ function Explorar() {
               className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white text-sm sm:text-base"
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setMostrarFavoritos((prev) => !prev)}
+            className={`relative shrink-0 px-3 py-2 rounded-xl border inline-flex items-center gap-2 text-sm font-semibold ${
+              mostrarFavoritos
+                ? "bg-amber-50 text-amber-700 border-amber-300"
+                : "bg-white text-green-800 border-green-200 hover:bg-emerald-50"
+            }`}
+            title={
+              mostrarFavoritos
+                ? "Mostrar todos os perfis"
+                : "Mostrar somente perfis favoritos"
+            }
+          >
+            <Star
+              size={16}
+              fill={mostrarFavoritos ? "currentColor" : "none"}
+            />
+
+            <span className="hidden sm:inline">
+              {mostrarFavoritos ? "Favoritos" : "Favoritos"}
+            </span>
+
+            {favoritosNaAbaAtual > 0 && (
+              <span className="inline-flex min-w-5 h-5 px-1 items-center justify-center rounded-full bg-amber-100 text-amber-800 text-[11px] border border-amber-200">
+                {favoritosNaAbaAtual}
+              </span>
+            )}
+          </button>
 
           {aba !== "eventos" && (
             <>
@@ -1835,8 +2046,12 @@ function Explorar() {
               {!hasMoreEscolas && dados.escolas.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2"></div>
               )}
-              {dados.escolas.length === 0 && !carregandoDados && (
-                <div className="text-sm text-gray-600 mt-2">Nenhuma escola encontrada</div>
+              {escolasFiltradas.length === 0 && !carregandoDados && (
+                <div className="text-sm text-gray-600 mt-2">
+                  {mostrarFavoritos
+                    ? "Nenhuma escola favorita encontrada."
+                    : "Nenhuma escola encontrada"}
+                </div>
               )}
             </div>
           </>
@@ -1912,8 +2127,12 @@ function Explorar() {
               {!hasMoreClubes && dados.clubes.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2"></div>
               )}
-              {dados.clubes.length === 0 && !carregandoDados && (
-                <div className="text-sm text-gray-600 mt-2">Nenhum clube encontrado</div>
+              {clubesFiltrados.length === 0 && !carregandoDados && (
+                <div className="text-sm text-gray-600 mt-2">
+                  {mostrarFavoritos
+                    ? "Nenhum clube favorito encontrado."
+                    : "Nenhum clube encontrado"}
+                </div>
               )}
             </div>
           </>
@@ -1922,7 +2141,7 @@ function Explorar() {
         {aba === "profissionais" && (
           <>
             <h2 className="text-base sm:text-lg font-bold my-4">Professores e Olheiros</h2>
-            {profissionais.length > 0 ? (
+            {profissionaisFiltrados.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {profissionaisFiltrados.slice(0, showCountProfs).map((p) => {
                   const rawFoto = p.foto ?? p.usuario?.foto;
@@ -1956,8 +2175,6 @@ function Explorar() {
                               <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
                             </Pill>
                           )}
-
-                          
                         </div>
 
                         {(() => {
@@ -1984,7 +2201,11 @@ function Explorar() {
                 })}
               </div>
             ) : (
-              <p className="text-center text-gray-600">Nenhum profissional encontrado</p>
+              <p className="text-center text-gray-600">
+                {mostrarFavoritos
+                  ? "Nenhum profissional favorito encontrado."
+                  : "Nenhum profissional encontrado."}
+              </p>
             )}
 
           </>
@@ -2070,7 +2291,9 @@ function Explorar() {
               </div>
             ) : (
               <div className="text-sm text-gray-600 mt-2">
-                Nenhum perfil encontrado em Outros.
+                {mostrarFavoritos
+                  ? "Nenhum perfil favorito encontrado em Outros."
+                  : "Nenhum perfil encontrado em Outros."}
               </div>
             )}
 
