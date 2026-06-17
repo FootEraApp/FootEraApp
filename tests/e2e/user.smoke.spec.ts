@@ -28,13 +28,26 @@ test.describe("FootEra - usuário logado", () => {
     );
   });
 
-  test("abre /treinos logado", async ({ page }) => {
+  test("abre /treinos logado", async ({ page }, testInfo) => {
     await page.goto("/treinos", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/treinos/);
     await expect(page.locator("body")).toContainText(
-      /Treinos|FootEra|Exercícios|Atleta|Professor|metodologia/i
+      /Treinos|FootEra|Exercícios|Atleta|Professor|metodologia|Hoje|Learning/i
     );
+
+    const projectName = testInfo.project.name.toLowerCase();
+
+    const deveTerFavoritos =
+      projectName === "professor" ||
+      projectName === "clube" ||
+      projectName === "escola";
+
+    if (deveTerFavoritos) {
+      await expect(page.locator("body")).toContainText(
+        /Mostrar favoritos|Mostrando favoritos|Favoritos/i
+      );
+    }
   });
 
   test("abre /learning logado", async ({ page }) => {
@@ -43,6 +56,10 @@ test.describe("FootEra - usuário logado", () => {
     await expect(page).toHaveURL(/\/learning/);
     await expect(page.locator("body")).toContainText(
       /Learning|Metodologia|Aulas|Eventos|FootEra|Treinos/i
+    );
+
+    await expect(page.locator("body")).toContainText(
+      /Favoritos|Favoritas|Mostrar favoritos|Todos/i
     );
   });
 

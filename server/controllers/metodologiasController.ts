@@ -13,6 +13,7 @@ import {
   MetodologiaItemTipo,
   MetodologiaProgressoStatus,
   SentimentoAvaliacao,
+  LearningFavoritoTipo,
 } from "@prisma/client";
 import {
   ensureConquistaTemplateMetodologia,
@@ -6941,6 +6942,189 @@ export async function deleteMetodologiaAvulsaEstruturaItens(req: Request, res: R
   } catch (e: any) {
     return res.status(500).json({
       message: "Erro ao excluir itens da estrutura avulsa.",
+      detail: e?.message,
+    });
+  }
+}
+
+function normalizarTipoFavorito(value: any): LearningFavoritoTipo | null {
+  const tipo = String(value || "").trim().toUpperCase();
+
+  if (tipo === "METODOLOGIA") return LearningFavoritoTipo.METODOLOGIA;
+  if (tipo === "METODOLOGIA_AVULSA") return LearningFavoritoTipo.METODOLOGIA_AVULSA;
+  if (tipo === "AULA_AO_VIVO") return LearningFavoritoTipo.AULA_AO_VIVO;
+
+  return null;
+}
+
+async function validarAlvoFavorito(tipo: LearningFavoritoTipo, alvoId: string) {
+  if (tipo === LearningFavoritoTipo.METODOLOGIA) {
+    const item = await prisma.metodologia.findUnique({
+      where: { id: alvoId },
+      select: { id: true },
+    });
+
+    return !!item;
+  }
+
+  if (tipo === LearningFavoritoTipo.METODOLOGIA_AVULSA) {
+    const item = await prisma.metodologiaAvulsa.findUnique({
+      where: { id: alvoId },
+      select: { id: true },
+    });
+
+    return !!item;
+  }
+
+  if (tipo === LearningFavoritoTipo.AULA_AO_VIVO) {
+    const item = await prisma.aulaAoVivo.findUnique({
+      where: { id: alvoId },
+      select: { id: true },
+    });
+
+    return !!item;
+  }
+
+  return false;
+}
+
+export async function listarFavoritosLearning(req: Request, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const favoritos = await prisma.learningFavorito.findMany({
+      where: { usuarioId },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    const items = favoritos.map((f) => ({
+      id: f.alvoId,
+      tipo: f.tipo,
+      key: `${f.tipo}:${f.alvoId}`,
+      criadoEm: f.criadoEm,
+    }));
+
+    return res.json({
+      items,
+      keys: items.map((item) => item.key),
+    });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao listar favoritos do Learning.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function alternarFavoritoLearning(req: Request, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const tipo = normalizarTipoFavorito(req.body?.tipo);
+    const alvoId = String(req.body?.id || req.body?.alvoId || "").trim();
+
+    if (!tipo || !alvoId) {
+      return res.status(400).json({
+        message: "Informe tipo e id do favorito.",
+      });
+    }
+
+    const existeAlvo = await validarAlvoFavorito(tipo, alvoId);
+
+    if (!existeAlvo) {
+      return res.status(404).json({
+        message: "Item para favoritar não encontrado.",
+      });
+    }
+
+    const existente = await prisma.learningFavorito.findUnique({
+      where: {
+        usuarioId_tipo_alvoId: {
+          usuarioId,
+          tipo,
+          alvoId,
+        },
+      },
+    });
+
+    if (existente) {
+      await prisma.learningFavorito.delete({
+        where: { id: existente.id },
+      });
+
+      return res.json({
+        favorito: false,
+        tipo,
+        id: alvoId,
+        key: `${tipo}:${alvoId}`,
+      });
+    }
+
+    await prisma.learningFavorito.create({
+      data: {
+        usuarioId,
+        tipo,
+        alvoId,
+      },
+    });
+
+    return res.json({
+      favorito: true,
+      tipo,
+      id: alvoId,
+      key: `${tipo}:${alvoId}`,
+    });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao alternar favorito.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function removerFavoritoLearning(req: Request, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    const tipo = normalizarTipoFavorito(req.params.tipo);
+    const alvoId = String(req.params.id || "").trim();
+
+    if (!tipo || !alvoId) {
+      return res.status(400).json({
+        message: "Favorito inválido.",
+      });
+    }
+
+    await prisma.learningFavorito.deleteMany({
+      where: {
+        usuarioId,
+        tipo,
+        alvoId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      favorito: false,
+      tipo,
+      id: alvoId,
+      key: `${tipo}:${alvoId}`,
+    });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: "Erro ao remover favorito.",
       detail: e?.message,
     });
   }

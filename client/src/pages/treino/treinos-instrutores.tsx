@@ -12,6 +12,7 @@ import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
+import Avatar from "../../components/shared/Avatar.js";
 
 const Storage = {
   get token() {
@@ -290,8 +291,6 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
-
 const ASSETS_CDN_BASE =
   import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
 
@@ -499,36 +498,54 @@ const getToken = () =>
   sessionStorage.getItem("token") ??
   "";
 
-function normalizeAssetUrl(raw?: string | null) {
-  return resolveUploadUrl(raw);
+async function listarFavoritosTreinosApi(): Promise<string[]> {
+  const token = getToken();
+
+  const res = await fetch(`${API.BASE_URL}/api/treinos/favoritos`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json?.message || "Erro ao carregar favoritos de treinos.");
+  }
+
+  if (Array.isArray(json?.ids)) return json.ids.map(String);
+
+  if (Array.isArray(json?.items)) {
+    return json.items
+      .map((item: any) => item?.treinoProgramadoId || item?.id)
+      .filter(Boolean)
+      .map(String);
+  }
+
+  return [];
 }
 
-function isUsuarioFree() {
-  try {
-    const planoRaw =
-      (Storage as any).assinaturaPlano ??
-      (Storage as any).plano ??
-      localStorage.getItem("assinaturaPlano") ??
-      localStorage.getItem("plano") ??
-      sessionStorage.getItem("assinaturaPlano") ??
-      sessionStorage.getItem("plano") ??
-      "";
+async function alternarFavoritoTreinoApi(treinoProgramadoId: string) {
+  const token = getToken();
 
-    const normalized = String(planoRaw || "").toLowerCase();
+  const res = await fetch(`${API.BASE_URL}/api/treinos/favoritos/toggle`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ treinoProgramadoId }),
+  });
 
-    if (!normalized) return true;
+  const json = await res.json().catch(() => ({}));
 
-    if (
-      normalized.includes("pro") ||
-      normalized.includes("elite") ||
-      normalized.includes("premium")
-    ) {
-      return false;
-    }
-    return true;
-  } catch {
-    return true;
+  if (!res.ok) {
+    throw new Error(json?.message || "Erro ao favoritar treino.");
   }
+
+  return json as {
+    favorito: boolean;
+    id: string;
+    treinoProgramadoId: string;
+  };
 }
 
 export default function TreinosInstrutores({
@@ -544,6 +561,10 @@ export default function TreinosInstrutores({
   >("exercicios");
   const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
+  const [treinosFavoritos, setTreinosFavoritos] = useState<string[]>([]);
+  const [filtroTreinosFavoritos, setFiltroTreinosFavoritos] = useState<
+    "TODOS" | "FAVORITOS"
+  >("TODOS");
   const [profNomeById, setProfNomeById] = useState<Record<string, string>>({});
   const [submissoesPendentes, setSubmissoesPendentes] = useState<
     SubmissaoParaValidacao[]
@@ -553,7 +574,6 @@ export default function TreinosInstrutores({
   const [metodologias, setMetodologias] = useState<MetodologiaCard[]>([]);
   const [loadingMetodologias, setLoadingMetodologias] = useState(false);
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
-  type FiltroConteudo = "TODOS" | "VIDEOS_TREINOS" | "VIDEOS" | "TREINOS";
 
   function getExerciseVideoKey(ex: ExercicioSessaoDetalhe) {
     if (ex.exercicioId) return `catalogo:${ex.exercicioId}`;
@@ -826,6 +846,26 @@ export default function TreinosInstrutores({
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const ids = await listarFavoritosTreinosApi();
+        if (alive) setTreinosFavoritos(ids);
+      } catch (e) {
+        console.error("[treinos favoritos] erro ao carregar", e);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   async function carregarMetodologias() {
     const token = getToken();
     if (!token) {
@@ -855,7 +895,7 @@ export default function TreinosInstrutores({
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
         descricao: m.descricao ?? null,
-        capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
+        capaUrl: m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null,
         publicoAlvo: m.publicoAlvo ?? "AMBOS",
         nivel: m.nivel ?? null,
         tipo: m.tipo ?? null,
@@ -921,7 +961,7 @@ export default function TreinosInstrutores({
               ...card,
               criadorNome: card.criadorNome || (nomeCriador ? String(nomeCriador) : null),
               pontos: Number.isFinite(pontosTotal) ? pontosTotal : card.pontos,
-              capaUrl: normalizeAssetUrl(jj.capaUrl ?? card.capaUrl) ?? card.capaUrl,
+              capaUrl: jj.capaUrl ?? card.capaUrl,
               videoCount: videoCount || card.videoCount,
               treinoCount: treinoCount || card.treinoCount,
               mediaAvaliacao: Number.isFinite(mediaAvaliacao) ? mediaAvaliacao : (card.mediaAvaliacao ?? 0),
@@ -1494,231 +1534,231 @@ export default function TreinosInstrutores({
     }
   }
 
- async function carregarSessoesDeHoje() {
-  const token = getToken();
-  if (!token) return;
+  async function carregarSessoesDeHoje() {
+    const token = getToken();
+    if (!token) return;
 
-  try {
-    const res = await fetch(
-      `${API.BASE_URL}/api/sessoes-turma/minhas?onlyToday=1&onlyTurma=1`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/sessoes-turma/minhas?onlyToday=1&onlyTurma=1`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    if (!res.ok) throw new Error("Falha ao buscar sessões");
+      if (!res.ok) throw new Error("Falha ao buscar sessões");
 
-    const data = await res.json();
-    const items: any[] =
-      Array.isArray(data) ? data :
-      Array.isArray(data?.items) ? data.items :
-      Array.isArray(data?.sessoes) ? data.sessoes :
-      [];
+      const data = await res.json();
+      const items: any[] =
+        Array.isArray(data) ? data :
+        Array.isArray(data?.items) ? data.items :
+        Array.isArray(data?.sessoes) ? data.sessoes :
+        [];
 
-    const norm: SessaoDeHoje[] = (items ?? []).map((s: any) => {
-      const dataSessao = parseDateSafe(s.data);
-      const win = getStartWindowInfo(dataSessao);
-      const faltou = s.status === "AGENDADO" && Boolean(win?.isLate);
-      const podeIniciar =
-        s.status === "AGENDADO" && Boolean(win?.canStart) && !Boolean(win?.isLate);
-      const statusVisual: SessaoDeHoje["status"] =
-        s.status === "EM_ANDAMENTO"
-          ? "em_andamento"
-          : s.status === "FINALIZADO"
-          ? "finalizada"
-          : s.status === "CANCELADO"
-          ? "cancelada"
-          : faltou
-          ? "faltou"
-          : "nao_iniciada";
+      const norm: SessaoDeHoje[] = (items ?? []).map((s: any) => {
+        const dataSessao = parseDateSafe(s.data);
+        const win = getStartWindowInfo(dataSessao);
+        const faltou = s.status === "AGENDADO" && Boolean(win?.isLate);
+        const podeIniciar =
+          s.status === "AGENDADO" && Boolean(win?.canStart) && !Boolean(win?.isLate);
+        const statusVisual: SessaoDeHoje["status"] =
+          s.status === "EM_ANDAMENTO"
+            ? "em_andamento"
+            : s.status === "FINALIZADO"
+            ? "finalizada"
+            : s.status === "CANCELADO"
+            ? "cancelada"
+            : faltou
+            ? "faltou"
+            : "nao_iniciada";
 
-      const persistedStartedAt =
-        s.startedAt ??
-        s.iniciadoEm ??
-        sessionStorage.getItem(getStartedAtStorageKey(String(s.id))) ??
-        null;
+        const persistedStartedAt =
+          s.startedAt ??
+          s.iniciadoEm ??
+          sessionStorage.getItem(getStartedAtStorageKey(String(s.id))) ??
+          null;
 
-      return {
-        id: String(s.id),
-        data: String(s.data),
-        treino: s.treino,
-        turma: s.turma,
-        treinoAgendadoId: s.treinoAgendadoId ?? s.treino?.agendadoId ?? s.agendadoId ?? null,
-        exercicios: s.exercicios,
-        presencas: s.presencas,
-        presentes: s.presentes ?? [],
-        presentesNomes: Array.isArray(s.presentesNomes) ? s.presentesNomes : [],
-        statusRaw: String(s.status),
-        status: statusVisual,
-        dataSessao,
-        win,
-        faltou,
-        podeIniciar,
-        startedAt: persistedStartedAt,
-        duracaoMinutosReal:
-          s.duracaoMinutosReal == null ? null : Number(s.duracaoMinutosReal),
-        penalidadeAtraso: Boolean(s.penalidadeAtraso),
-      };
-    });
-
-    setSessoesDeHoje(norm);
-    setExerciciosMarcadosBySessao((prev) => {
-      const next: Record<string, string[]> = { ...prev };
-      norm.forEach((sessao) => {
-        const marcados =
-          sessao.exercicios
-            ?.filter((e: ExercicioSessaoDetalhe) => e.concluido)
-            .map((e: ExercicioSessaoDetalhe) => e.id) ?? [];
-        if (marcados.length) {
-          next[sessao.id] = marcados;
-        }
+        return {
+          id: String(s.id),
+          data: String(s.data),
+          treino: s.treino,
+          turma: s.turma,
+          treinoAgendadoId: s.treinoAgendadoId ?? s.treino?.agendadoId ?? s.agendadoId ?? null,
+          exercicios: s.exercicios,
+          presencas: s.presencas,
+          presentes: s.presentes ?? [],
+          presentesNomes: Array.isArray(s.presentesNomes) ? s.presentesNomes : [],
+          statusRaw: String(s.status),
+          status: statusVisual,
+          dataSessao,
+          win,
+          faltou,
+          podeIniciar,
+          startedAt: persistedStartedAt,
+          duracaoMinutosReal:
+            s.duracaoMinutosReal == null ? null : Number(s.duracaoMinutosReal),
+          penalidadeAtraso: Boolean(s.penalidadeAtraso),
+        };
       });
-      return next;
-    });
-  } catch (e) {
-    console.error("Erro ao carregar sessões:", e);
-  }
-}
 
-function getStartedAtStorageKey(sessaoId: string) {
-  return `treino_startedAt_${sessaoId}`;
-}
-
-async function remarcarSessao(
-  sessaoId: string,
-  dataISO: string,
-  hora?: string,
-) {
-  const token = getToken();
-  if (!token) return;
-
-  if (!dataISO) {
-    alert("Escolha uma data para remarcar o treino.");
-    return;
+      setSessoesDeHoje(norm);
+      setExerciciosMarcadosBySessao((prev) => {
+        const next: Record<string, string[]> = { ...prev };
+        norm.forEach((sessao) => {
+          const marcados =
+            sessao.exercicios
+              ?.filter((e: ExercicioSessaoDetalhe) => e.concluido)
+              .map((e: ExercicioSessaoDetalhe) => e.id) ?? [];
+          if (marcados.length) {
+            next[sessao.id] = marcados;
+          }
+        });
+        return next;
+      });
+    } catch (e) {
+      console.error("Erro ao carregar sessões:", e);
+    }
   }
 
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
-  const diaSelecionado = new Date(`${dataISO}T00:00:00`);
-  if (diaSelecionado < hoje) {
-    alert("Você não pode remarcar um treino para uma data que já passou.");
-    return;
+  function getStartedAtStorageKey(sessaoId: string) {
+    return `treino_startedAt_${sessaoId}`;
   }
 
-  let novaDataISO: string;
-  if (hora && /^\d{2}:\d{2}$/.test(hora)) {
-    const [h, m] = hora.split(":").map(Number);
-    const d = new Date(diaSelecionado);
-    d.setHours(h, m, 0, 0);
-    novaDataISO = d.toISOString();
-  } else {
-    novaDataISO = `${dataISO}T12:00:00.000Z`;
-  }
+  async function remarcarSessao(
+    sessaoId: string,
+    dataISO: string,
+    hora?: string,
+  ) {
+    const token = getToken();
+    if (!token) return;
 
-  try {
-    const res = await fetch(
-      `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(
-        sessaoId,
-      )}/remarcar`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ novaDataISO }),
-      },
-    );
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.error("[treinos] erro ao remarcar sessão:", res.status, txt);
-      alert("Não foi possível remarcar esse treino.");
+    if (!dataISO) {
+      alert("Escolha uma data para remarcar o treino.");
       return;
     }
 
-    alert("Treino remarcado com sucesso!");
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
 
-    setSessaoEmRemarcacaoId(null);
-    await carregarSessoesDeHoje();
-  } catch (e) {
-    console.error("[treinos] erro inesperado ao remarcar sessão:", e);
-    alert("Erro inesperado ao remarcar o treino.");
-  }
-}
-
-async function salvarVideosDaSessao(sessaoId: string) {
-  const token = getToken();
-
-  const updates = Object.values(exerciseVideoDrafts).filter(
-    (item) =>
-      item.sessaoId === sessaoId &&
-      item.uploadedUrl &&
-      item.saveMode &&
-      (
-        item.saveMode === "SESSION_ONLY" ||
-        (
-          item.saveMode === "UPDATE_OFFICIAL" &&
-          item.officialChoice &&
-          item.selectedUrl
-        )
-      )
-  );
-
-  if (!updates.length) return;
-
-  const res = await fetch(
-    `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}/videos-execucao`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ updates }),
+    const diaSelecionado = new Date(`${dataISO}T00:00:00`);
+    if (diaSelecionado < hoje) {
+      alert("Você não pode remarcar um treino para uma data que já passou.");
+      return;
     }
-  );
 
-  const data = await res.json().catch(() => ({}));
+    let novaDataISO: string;
+    if (hora && /^\d{2}:\d{2}$/.test(hora)) {
+      const [h, m] = hora.split(":").map(Number);
+      const d = new Date(diaSelecionado);
+      d.setHours(h, m, 0, 0);
+      novaDataISO = d.toISOString();
+    } else {
+      novaDataISO = `${dataISO}T12:00:00.000Z`;
+    }
 
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || "Erro ao salvar vídeos da sessão.");
-  }
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(
+          sessaoId,
+        )}/remarcar`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ novaDataISO }),
+        },
+      );
 
-  setExerciseVideoDrafts((prev) => {
-    const next = { ...prev };
-    for (const [key, value] of Object.entries(next)) {
-      if (value.sessaoId === sessaoId) {
-        delete next[key];
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        console.error("[treinos] erro ao remarcar sessão:", res.status, txt);
+        alert("Não foi possível remarcar esse treino.");
+        return;
       }
+
+      alert("Treino remarcado com sucesso!");
+
+      setSessaoEmRemarcacaoId(null);
+      await carregarSessoesDeHoje();
+    } catch (e) {
+      console.error("[treinos] erro inesperado ao remarcar sessão:", e);
+      alert("Erro inesperado ao remarcar o treino.");
     }
-    return next;
-  });
-}
+  }
 
-async function salvarProgressoSessao(sessaoId: string) {
-  const token = getToken();
-  if (!token) return;
+  async function salvarVideosDaSessao(sessaoId: string) {
+    const token = getToken();
 
-  const ids = exerciciosMarcadosBySessao[sessaoId] ?? [];
+    const updates = Object.values(exerciseVideoDrafts).filter(
+      (item) =>
+        item.sessaoId === sessaoId &&
+        item.uploadedUrl &&
+        item.saveMode &&
+        (
+          item.saveMode === "SESSION_ONLY" ||
+          (
+            item.saveMode === "UPDATE_OFFICIAL" &&
+            item.officialChoice &&
+            item.selectedUrl
+          )
+        )
+    );
 
-  try {
-    await fetch(
-      `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(
-        sessaoId,
-      )}/progresso`,
+    if (!updates.length) return;
+
+    const res = await fetch(
+      `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}/videos-execucao`,
       {
-        method: "PATCH",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ exerciciosConcluidosIds: ids }),
-      },
+        body: JSON.stringify({ updates }),
+      }
     );
-  } catch (e) {
-    console.error("Erro ao salvar progresso da sessão:", e);
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data?.error || data?.message || "Erro ao salvar vídeos da sessão.");
+    }
+
+    setExerciseVideoDrafts((prev) => {
+      const next = { ...prev };
+      for (const [key, value] of Object.entries(next)) {
+        if (value.sessaoId === sessaoId) {
+          delete next[key];
+        }
+      }
+      return next;
+    });
   }
-}
+
+  async function salvarProgressoSessao(sessaoId: string) {
+    const token = getToken();
+    if (!token) return;
+
+    const ids = exerciciosMarcadosBySessao[sessaoId] ?? [];
+
+    try {
+      await fetch(
+        `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(
+          sessaoId,
+        )}/progresso`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ exerciciosConcluidosIds: ids }),
+        },
+      );
+    } catch (e) {
+      console.error("Erro ao salvar progresso da sessão:", e);
+    }
+  }
 
   useEffect(() => {
     if (abaProfessor === "sessoes") carregarSessoesDeHoje();
@@ -2558,6 +2598,68 @@ async function salvarProgressoSessao(sessaoId: string) {
     return adminPodeTudo || souDono || souColaborador;
   }
 
+  function isTreinoFavorito(treinoId?: string | null) {
+    if (!treinoId) return false;
+    return treinosFavoritos.includes(String(treinoId));
+  }
+
+  async function toggleTreinoFavorito(treinoId?: string | null) {
+    if (!treinoId) return;
+
+    const id = String(treinoId);
+    const estavaFavorito = isTreinoFavorito(id);
+
+    setTreinosFavoritos((prev) =>
+      estavaFavorito
+        ? prev.filter((item) => item !== id)
+        : Array.from(new Set([...prev, id]))
+    );
+
+    try {
+      const result = await alternarFavoritoTreinoApi(id);
+      const resultId = String(result.treinoProgramadoId || result.id || id);
+
+      setTreinosFavoritos((prev) => {
+        const semAtual = prev.filter((item) => item !== resultId);
+        return result.favorito ? [...semAtual, resultId] : semAtual;
+      });
+    } catch (e: any) {
+      setTreinosFavoritos((prev) =>
+        estavaFavorito
+          ? Array.from(new Set([...prev, id]))
+          : prev.filter((item) => item !== id)
+      );
+
+      alert(e?.message || "Erro ao atualizar favorito.");
+    }
+  }
+
+  function BotaoFavoritoTreino({ treinoId }: { treinoId: string }) {
+    const favorito = isTreinoFavorito(treinoId);
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleTreinoFavorito(treinoId);
+        }}
+        className={`p-2 rounded-lg border ${
+          favorito
+            ? "border-amber-300 bg-amber-50 text-amber-600 hover:bg-amber-50"
+            : "border-slate-300 bg-white text-slate-500 hover:bg-gray-50"
+        }`}
+        title={favorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+      >
+        <StarIcon
+          className="w-4 h-4"
+          fill={favorito ? "currentColor" : "none"}
+        />
+      </button>
+    );
+  }
+
   const meusTreinosLista = useMemo(() => {
     if (!usuario) return [];
     if (String(usuario.tipo).toLowerCase() === "admin") return listaOrdenadaParaExibir;
@@ -2569,6 +2671,37 @@ async function salvarProgressoSessao(sessaoId: string) {
     if (String(usuario.tipo).toLowerCase() === "admin") return []; 
     return (listaOrdenadaParaExibir || []).filter((t) => !isTreinoMeuDeVerdade(t, usuario));
   }, [listaOrdenadaParaExibir, usuario]);
+
+  const listaOrdenadaParaExibirFiltrada = useMemo(() => {
+    if (filtroTreinosFavoritos !== "FAVORITOS") return listaOrdenadaParaExibir;
+
+    return listaOrdenadaParaExibir.filter((t) => isTreinoFavorito(t.id));
+  }, [listaOrdenadaParaExibir, filtroTreinosFavoritos, treinosFavoritos]);
+
+  const meusTreinosListaFiltrada = useMemo(() => {
+    if (filtroTreinosFavoritos !== "FAVORITOS") return meusTreinosLista;
+
+    return meusTreinosLista.filter((t) => isTreinoFavorito(t.id));
+  }, [meusTreinosLista, filtroTreinosFavoritos, treinosFavoritos]);
+
+  const treinosVinculadosListaFiltrada = useMemo(() => {
+    if (filtroTreinosFavoritos !== "FAVORITOS") return treinosVinculadosLista;
+
+    return treinosVinculadosLista.filter((t) => isTreinoFavorito(t.id));
+  }, [treinosVinculadosLista, filtroTreinosFavoritos, treinosFavoritos]);
+
+  const totalTreinosExibidosFiltrado = useMemo(() => {
+    if (String(usuario?.tipo || "").toLowerCase() === "admin") {
+      return listaOrdenadaParaExibirFiltrada.length;
+    }
+
+    return meusTreinosListaFiltrada.length + treinosVinculadosListaFiltrada.length;
+  }, [
+    usuario?.tipo,
+    listaOrdenadaParaExibirFiltrada,
+    meusTreinosListaFiltrada,
+    treinosVinculadosListaFiltrada,
+  ]);
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
     const podeEditar = isTreinoMeuDeVerdade(treino, usuario);
@@ -2630,33 +2763,37 @@ async function salvarProgressoSessao(sessaoId: string) {
           Clique no nome do treino para ver os detalhes completos.
         </div>
 
-        {podeEditar && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              className="p-2 rounded-lg border hover:bg-gray-50"
-              title="Editar treino"
-              onClick={() => {
-                sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <BotaoFavoritoTreino treinoId={treino.id} />
 
-                navigate(
-                  `/admin/treinos/create?id=${encodeURIComponent(treino.id)}&returnTo=${encodeURIComponent(
-                    window.location.pathname + window.location.search
-                  )}`
-                );
-              }}
-            >
-              <Pencil className="w-4 h-4 text-green-800" />
-            </button>
+          {podeEditar && (
+            <>
+              <button
+                className="p-2 rounded-lg border hover:bg-gray-50"
+                title="Editar treino"
+                onClick={() => {
+                  sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
 
-            <button
-              className="p-2 rounded-lg border hover:bg-red-50"
-              title="Excluir treino"
-              onClick={() => deletarTreinoProgramado(treino.id)}
-            >
-              <Trash2 className="w-4 h-4 text-red-600" />
-            </button>
-          </div>
-        )}
+                  navigate(
+                    `/admin/treinos/create?id=${encodeURIComponent(treino.id)}&returnTo=${encodeURIComponent(
+                      window.location.pathname + window.location.search
+                    )}`
+                  );
+                }}
+              >
+                <Pencil className="w-4 h-4 text-green-800" />
+              </button>
+
+              <button
+                className="p-2 rounded-lg border hover:bg-red-50"
+                title="Excluir treino"
+                onClick={() => deletarTreinoProgramado(treino.id)}
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
       </div>
     );
@@ -2783,8 +2920,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                 <>
                   <ul className="space-y-3">
                     {submissoesPendentes.map((s) => {
-                      const foto = resolveUploadUrl(s.atleta?.foto) ?? PLACEHOLDER_USER;
-
                       const midias = (Array.isArray(s.midias) ? s.midias : [])
                         .map(resolveUploadUrl)
                         .filter((x): x is string => Boolean(x));
@@ -2795,15 +2930,10 @@ async function salvarProgressoSessao(sessaoId: string) {
                           className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
                         >
                           <div className="flex items-start gap-3 sm:gap-4">
-                            <img
-                              src={resolveUploadUrl(foto) ?? PLACEHOLDER_USER}
+                            <Avatar
+                              foto={s.atleta?.foto}
                               alt={s.atleta?.nome ?? "Atleta"}
-                              className="w-12 h-12 rounded-full object-cover"
-                              onError={(e) => {
-                                const el = e.currentTarget as HTMLImageElement;
-                                el.onerror = null;
-                                el.src = PLACEHOLDER_USER;
-                              }}
+                              className="w-12 h-12"
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -2924,22 +3054,48 @@ async function salvarProgressoSessao(sessaoId: string) {
                     ? "Todos os Treinos"
                     : "Treinos vinculados a mim"}
                 </h3>
+
                 <div className="text-xs text-gray-600">
-                  <strong>Treinos:</strong> {totalTreinosExibidos} •{" "}
+                  <strong>Treinos:</strong> {totalTreinosExibidosFiltrado} •{" "}
                   <strong>Exercícios:</strong> {totalExerciciosExibidos}
                 </div>
-                <button
-                  className="bg-green-800 text-white px-4 py-2 rounded-lg"
-                  onClick={() => {
-                    sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
-                    navigate("/treinos/novo");
-                  }}
-                >
-                  Criar novo treino
-                </button>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFiltroTreinosFavoritos((prev) =>
+                        prev === "FAVORITOS" ? "TODOS" : "FAVORITOS"
+                      )
+                    }
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 font-semibold ${
+                      filtroTreinosFavoritos === "FAVORITOS"
+                        ? "border-amber-300 bg-amber-50 text-amber-700"
+                        : "border-slate-300 bg-white text-slate-700"
+                    }`}
+                  >
+                    <StarIcon
+                      className="w-4 h-4"
+                      fill={filtroTreinosFavoritos === "FAVORITOS" ? "currentColor" : "none"}
+                    />
+                    {filtroTreinosFavoritos === "FAVORITOS"
+                      ? "Mostrando favoritos"
+                      : "Mostrar favoritos"}
+                  </button>
+
+                  <button
+                    className="bg-green-800 text-white px-4 py-2 rounded-lg"
+                    onClick={() => {
+                      sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
+                      navigate("/treinos/novo");
+                    }}
+                  >
+                    Criar novo treino
+                  </button>
+                </div>
               </div>
 
-              {(String(usuario?.tipo || "").toLowerCase() === "admin" || meusTreinosLista.length > 0) ? (
+              {(String(usuario?.tipo || "").toLowerCase() === "admin" || meusTreinosListaFiltrada.length > 0) ? (
                 <>
                   {String(usuario?.tipo || "").toLowerCase() !== "admin" && (
                     <h4 className="text-sm font-semibold text-green-900 mb-2">
@@ -2949,71 +3105,27 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {(String(usuario?.tipo || "").toLowerCase() === "admin"
-                      ? listaOrdenadaParaExibir
-                      : meusTreinosLista
+                      ? listaOrdenadaParaExibirFiltrada
+                      : meusTreinosListaFiltrada
                     ).map(renderTreinoCard)}
                   </div>
                 </>
               ) : (
                 <p className="text-gray-500">
-                  Você ainda não tem treinos (criador ou colaborador).
+                  {filtroTreinosFavoritos === "FAVORITOS"
+                    ? "Nenhum treino favorito encontrado nos seus treinos."
+                    : "Você ainda não tem treinos (criador ou colaborador)."}
                 </p>
               )}
 
-              {String(usuario?.tipo || "").toLowerCase() !== "admin" && treinosVinculadosLista.length > 0 && (
+              {String(usuario?.tipo || "").toLowerCase() !== "admin" && treinosVinculadosListaFiltrada.length > 0 && (
                 <div className="mt-6">
                   <h4 className="text-sm font-semibold text-green-900 mb-2">
                     Treinos vinculados
                   </h4>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {treinosVinculadosLista.map((t) => (
-                      <div key={t.id}>
-                        <div className="bg-white p-4 rounded-xl shadow-sm border">
-                          <div className="flex items-start justify-between gap-3">
-                            <h4
-                              className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-                              onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
-                              title="Abrir detalhes do treino"
-                            >
-                               <span>{t.nome}</span>
-
-                                {(() => {
-                                  const meuProfId = String(usuario?.tipoUsuarioId ?? "").trim();
-                                  const souCriador = String(t.professorId ?? "").trim() === meuProfId;
-
-                                  const souColab =
-                                    !souCriador &&
-                                    (t.professoresIds || []).map(String).includes(meuProfId);
-
-                                  <span className="text-xs font-medium text-green-800/80">
-                                    {souCriador ? "(Criador)" : souColab ? "(Colaborador)" : ""}
-                                  </span>
-
-                                  return null;
-                                })()}
-
-                            </h4>
-
-                            <div className="flex flex-col items-end">
-                              {typeof t.pontuacao === "number" && (
-                                <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
-                                  +{t.pontuacao} pts
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="mt-2 text-sm text-gray-700">
-                            <strong>Nível:</strong> {t.nivel || "—"}
-                          </div>
-
-                          <div className="mt-2 text-xs text-gray-500">
-                            Clique no nome do treino para ver os detalhes completos.
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                    {treinosVinculadosListaFiltrada.map(renderTreinoCard)}
                   </div>
                 </div>
               )}

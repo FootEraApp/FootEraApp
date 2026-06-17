@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Copy, Pencil, Star, Plus, Trash2, Play } from "lucide-react";
-import { API, APP } from "../../config.js";
+import { API } from "../../config.js";
+import CoverImage from "../shared/CoverImage.js";
 
 export type ExercicioItem = {
   id: string;
@@ -37,18 +38,45 @@ type Props = {
   onUsarNoTreino: (item: ExercicioItem) => void;
 };
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+function resolveVideoUrl(raw?: string | null) {
+  const media = String(raw || "").trim().replace(/\\/g, "/");
 
-function resolveMediaUrl(item: ExercicioItem) {
-  const media = item.capaUrl || item.videoDemonstrativoUrl;
+  if (!media || media === "null" || media === "undefined") return "";
 
-  if (!media) return AVATAR_FALLBACK;
-
-  if (media.startsWith("http://") || media.startsWith("https://")) {
+  if (
+    media.startsWith("blob:") ||
+    media.startsWith("data:") ||
+    media.startsWith("http://") ||
+    media.startsWith("https://")
+  ) {
     return media;
   }
 
-  return `${API.BASE_URL}${media}`;
+  if (media.startsWith("/assets/") || media.startsWith("assets/")) {
+    return media.startsWith("/") ? media : `/${media}`;
+  }
+
+  if (media.startsWith("/uploads/") || media.startsWith("/upload/")) {
+    return `${API.BASE_URL}${media}`;
+  }
+
+  if (media.startsWith("uploads/") || media.startsWith("upload/")) {
+    return `${API.BASE_URL}/${media}`;
+  }
+
+  if (media.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${media}`;
+  }
+
+  if (media.startsWith("exercicios/")) {
+    return `${API.BASE_URL}/${media}`;
+  }
+
+  if (media.startsWith("/")) {
+    return `${API.BASE_URL}${media}`;
+  }
+
+  return `${API.BASE_URL}/${media}`;
 }
 
 function formatarFaixas(faixas?: string[] | null) {
@@ -138,10 +166,11 @@ export default function ExercicioCard({
 
   const chipsUnicos = Array.from(new Set(chips)).slice(0, 6);
 
-  const mediaUrl = resolveMediaUrl(item);
+  const videoUrl = resolveVideoUrl(item.videoDemonstrativoUrl);
+  const capaUrl = item.capaUrl || null;
   const faixasFormatadas = formatarFaixas(item.faixaEtaria);
   const resumoExecucao = formatarResumoExecucao(item);
-  const temVideo = !!item.videoDemonstrativoUrl;
+  const temVideo = !!videoUrl;
   const mostrarMaisInfos = temMaisInformacoes(item);
 
   return (
@@ -151,32 +180,43 @@ export default function ExercicioCard({
           <div className="w-full shrink-0 sm:w-[190px]">
             <div className="relative h-[140px] w-full overflow-hidden rounded-[18px] border border-gray-100 bg-white">
               {temVideo ? (
-                <>
-                  <video
-                    src={mediaUrl}
-                    className="h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
+                  <>
+                    {capaUrl ? (
+                      <CoverImage
+                        src={capaUrl}
+                        alt={item.nome}
+                        pasta="exercicios"
+                        className="h-full w-full"
+                      />
+                    ) : (
+                      <video
+                        src={videoUrl}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setVideoModalAberto(true)}
+                      className="absolute inset-0 flex items-center justify-center bg-black/10"
+                      title="Ver vídeo"
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55 text-white">
+                        <Play size={22} fill="currentColor" />
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <CoverImage
+                    src={capaUrl}
+                    alt={item.nome}
+                    pasta="exercicios"
+                    className="h-full w-full"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setVideoModalAberto(true)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/10"
-                    title="Ver vídeo"
-                  >
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55 text-white">
-                      <Play size={22} fill="currentColor" />
-                    </span>
-                  </button>
-                </>
-              ) : (
-                <img
-                  src={mediaUrl}
-                  alt={item.nome}
-                  className="h-full w-full object-cover bg-[#0D6A43]"
-                />
-              )}
+                )}
             </div>
           </div>
 
@@ -324,7 +364,7 @@ export default function ExercicioCard({
             </div>
 
             <video
-              src={mediaUrl}
+              src={videoUrl}
               controls
               autoPlay
               className="max-h-[70vh] w-full rounded-xl bg-black"

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import CreatorCard from "../../components/CreatorCard";
 import ProfilePostsSection from "@/components/perfil/ProfilePostsSection";
+import CoverImage from "../../components/shared/CoverImage";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
 const FRONTEND_BASE_URL =
@@ -1027,13 +1028,11 @@ export default function CreatorProfile() {
                       className="rounded-2xl border bg-white overflow-hidden shadow-sm"
                     >
                       <div className="h-36 bg-emerald-50 overflow-hidden flex items-center justify-center">
-                        <img
-                          src={ev.imagem || AVATAR_FALLBACK}
+                        <CoverImage
+                          src={ev.imagem}
                           alt={ev.titulo}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = AVATAR_FALLBACK;
-                          }}
+                          pasta="metodologias"
+                          className="w-full h-full"
                         />
                       </div>
 

@@ -7,6 +7,7 @@ type Props = {
   alt?: string;
   className?: string;
   pasta?: string;
+  fit?: "cover" | "contain";
 };
 
 const COVER_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
@@ -21,15 +22,27 @@ export default function CoverImage({
   alt = "",
   className = "w-full h-full",
   pasta = "metodologias",
+  fit = "cover",
 }: Props) {
   const srcInicial = useMemo(() => {
     if (isEmptySrc(src)) return COVER_FALLBACK;
 
     if (typeof File !== "undefined" && src instanceof File) {
-      return URL.createObjectURL(src);
+        return URL.createObjectURL(src);
     }
 
-    return formatarUrlFoto(String(src), pasta) || COVER_FALLBACK;
+    const value = String(src).trim();
+
+    if (
+        value.startsWith("blob:") ||
+        value.startsWith("data:") ||
+        value.startsWith("http://") ||
+        value.startsWith("https://")
+    ) {
+        return value;
+    }
+
+    return formatarUrlFoto(value, pasta) || COVER_FALLBACK;
   }, [src, pasta]);
 
   const [currentSrc, setCurrentSrc] = useState(srcInicial);
@@ -55,7 +68,8 @@ export default function CoverImage({
       loading="lazy"
       referrerPolicy="no-referrer"
       className={[
-        "block object-cover object-center bg-emerald-900",
+        "block object-center bg-slate-100",
+        fit === "contain" ? "object-contain" : "object-cover",
         className,
       ].join(" ")}
       onError={() => {

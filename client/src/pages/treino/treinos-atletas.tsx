@@ -18,7 +18,8 @@ import {
 import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
-import BottomNav from "@/components/layout/BottomNav.js";
+import BottomNav from "../../components/layout/BottomNav.js";
+import Avatar from "../../components/shared/Avatar.js";
 
 type AgendaTipo =
   | "TREINO"
@@ -143,7 +144,6 @@ type MetodologiaCatalogo = {
 const now = new Date();
 const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 const TIMER_KEY = (id: string) => `footera:treinoTimerStart:${id}`;
 const CHECKLIST_KEY = (id: string) => `footera:treinoChecklist:${id}`;
 const VISIBLE_TREINOS = 6;
@@ -588,10 +588,6 @@ export default function TreinosAtletas() {
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const [filtroNivel, setFiltroNivel] = useState<string>("TODOS");
 
-  function normalizeAssetUrl(raw?: string | null) {
-    return resolveUploadUrl(raw);
-  }
-
   function normNome(n?: string | null) {
     return String(n || "")
       .trim()
@@ -658,7 +654,7 @@ export default function TreinosAtletas() {
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
         descricao: m.descricao ?? null,
-        capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
+        capaUrl: m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null,
         publicoAlvo: m.publicoAlvo ?? "AMBOS",
         nivel: m.nivel ?? null,
         totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
@@ -719,7 +715,9 @@ export default function TreinosAtletas() {
               hasVideo,
               hasTreino,
               capaUrl:
-                normalizeAssetUrl(jj.capaUrl ?? jj.logoUrl ?? jj.imagemUrl ?? null) ||
+                jj.capaUrl ??
+                jj.logoUrl ??
+                jj.imagemUrl ??
                 card.capaUrl,
               mediaAvaliacao: Number.isFinite(mediaAvaliacao) ? mediaAvaliacao : (card.mediaAvaliacao ?? 0),
               totalAvaliacoes: Number.isFinite(totalAvaliacoes) ? totalAvaliacoes : (card.totalAvaliacoes ?? 0),
@@ -2793,10 +2791,10 @@ function abrirMidiaExercicioDireto(
                         : "bg-white"
                     }`}
                   >
-                    <img
-                      src={resolveUploadUrl(u.foto || PLACEHOLDER_USER)}
-                      alt=""
-                      className="w-10 h-10 rounded-full object-cover border"
+                    <Avatar
+                      foto={u.foto}
+                      alt={u.nome || "Usuário"}
+                      className="w-10 h-10 border"
                     />
 
                     <div className="flex-1">

@@ -21,9 +21,9 @@ import {
   Copy,
 } from "lucide-react";
 import { API } from "@/config.js";
+import Avatar from "../../components/shared/Avatar";
 
 type AulaAoVivoStatus = "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
-
 type AulaAoVivoDetalhe = {
   id: string;
   titulo: string;
@@ -2625,17 +2625,11 @@ if (!iniciarRes.ok) {
                 {messages.length ? (
                   messages.map((msg) => (
                     <div key={msg.id} className="flex items-start gap-3">
-                      {msg.usuario?.foto ? (
-                        <img
-                          src={msg.usuario.foto}
-                          alt={msg.usuario.nome || "Usuário"}
-                          className="h-9 w-9 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-full bg-[#216c43] text-white flex items-center justify-center text-xs font-black">
-                          {getInitials(msg.usuario?.nome)}
-                        </div>
-                      )}
+                      <Avatar
+                        foto={msg.usuario?.foto}
+                        alt={msg.usuario?.nome || "Usuário"}
+                        className="h-9 w-9"
+                      />
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">

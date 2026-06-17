@@ -1,4 +1,5 @@
-import { BookOpen, Star, Users, BadgeCheck, Crown } from "lucide-react";
+import { Star, Users, BadgeCheck, Crown } from "lucide-react";
+import CoverImage from "./shared/CoverImage";
 
 type CreatorCardProps = {
   id: string;
@@ -40,13 +41,12 @@ export default function CreatorCard({
       className="w-full text-left rounded-2xl border border-emerald-100 bg-white shadow-sm overflow-hidden hover:shadow-md transition"
     >
       <div className="h-32 bg-emerald-50">
-        {capaUrl ? (
-          <img src={capaUrl} alt={titulo} className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center text-emerald-700">
-            <BookOpen size={34} />
-          </div>
-        )}
+        <CoverImage
+          src={capaUrl}
+          alt={titulo}
+          pasta="metodologias"
+          className="h-full w-full"
+        />
       </div>
 
       <div className="p-4">

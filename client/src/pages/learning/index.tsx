@@ -10,6 +10,7 @@ import {
   PlayCircle,
   CheckCircle2,
   XCircle,
+  Star,
 } from "lucide-react";
 import {
   listMetodologiasVisiveis,
@@ -22,9 +23,16 @@ import {
 import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningCard from "../../components/learning/LearningCard.js";
 import { API } from "@/config.js";
+import CoverImage from "../../components/shared/CoverImage.js";
 
 type TabKey = "explorar" | "minhas" | "criar";
+type FavoritoTipo = "METODOLOGIA" | "METODOLOGIA_AVULSA" | "AULA_AO_VIVO";
+type FiltroFavoritos = "TODOS" | "FAVORITOS";
 
+type FavoritoItem = {
+  tipo: FavoritoTipo;
+  id: string;
+};
 type LearningCriadasResponse = {
   items: any[];
   permissaoCriacao?: LearningPermissaoCriacao;
@@ -109,6 +117,52 @@ const FALLBACK_CRIADAS_RESPONSE: LearningCriadasResponse = {
 
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
+
+function favoritoKey(tipo: FavoritoTipo, id: string) {
+  return `${tipo}:${id}`;
+}
+
+async function listarFavoritosLearningApi(): Promise<string[]> {
+  const token = getToken();
+
+  const res = await fetch(`${API.BASE_URL}/api/metodologias/favoritos`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json?.message || "Erro ao carregar favoritos.");
+  }
+
+  return Array.isArray(json?.keys) ? json.keys.map(String) : [];
+}
+
+async function alternarFavoritoLearningApi(tipo: FavoritoTipo, id: string) {
+  const token = getToken();
+
+  const res = await fetch(`${API.BASE_URL}/api/metodologias/favoritos/toggle`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ tipo, id }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json?.message || "Erro ao favoritar.");
+  }
+
+  return json as {
+    favorito: boolean;
+    tipo: FavoritoTipo;
+    id: string;
+    key: string;
+  };
 }
 
 async function listMinhasAulasAoVivo(): Promise<{ items: AulaAoVivoResumo[] }> {
@@ -289,10 +343,14 @@ function EventoAoVivoExploreCard({
   aula,
   onVerEvento,
   onVerMetodologia,
+  favorito,
+  onToggleFavorito,
 }: {
   aula: AulaAoVivoResumo;
   onVerEvento: () => void;
   onVerMetodologia?: () => void;
+  favorito?: boolean;
+  onToggleFavorito?: () => void;
 }) {
   const statusInfo = getLiveStatusInfo(aula.status);
   const origemTipo = String(aula.origemTipo || "").toUpperCase();
@@ -339,15 +397,17 @@ function EventoAoVivoExploreCard({
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
       <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
         <div className="h-44 md:h-full min-h-[170px] overflow-hidden rounded-xl bg-emerald-950">
-          <img
+          <CoverImage
             src={imagem}
             alt={aula.titulo}
-            className="h-full w-full object-cover"
+            pasta="metodologias"
+            className="h-full w-full"
           />
         </div>
 
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold ${statusInfo.className}`}
             >
@@ -360,6 +420,26 @@ function EventoAoVivoExploreCard({
             >
               {origemBadge.label}
             </span>
+           </div>
+
+            {onToggleFavorito ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleFavorito();
+                }}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border ${
+                  favorito
+                    ? "border-amber-300 bg-amber-50 text-amber-600"
+                    : "border-slate-300 bg-white text-slate-500"
+                }`}
+                title={favorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              >
+                <Star className="w-4 h-4" fill={favorito ? "currentColor" : "none"} />
+              </button>
+            ) : null}
           </div>
 
           <h3 className="text-xl font-extrabold text-[#092f24] leading-tight">
@@ -449,10 +529,8 @@ export default function LearningPage() {
   const [explorar, setExplorar] = useState<any[]>([]);
   const [assinadas, setAssinadas] = useState<any[]>([]);
   const [criadas, setCriadas] = useState<any[]>([]);
-
   const [livesCriadas, setLivesCriadas] = useState<AulaAoVivoResumo[]>([]);
   const [eventosAoVivo, setEventosAoVivo] = useState<AulaAoVivoResumo[]>([]);
-
   const [buscaEvento, setBuscaEvento] = useState("");
   const [filtroOrigemEvento, setFiltroOrigemEvento] = useState<
     "TODOS" | "EVENTO_AVULSO" | "LEARNING" | "AVULSA" | "GRATUITO"
@@ -485,6 +563,9 @@ export default function LearningPage() {
     "TODOS" | "LEARNING" | "AVULSA"
   >("TODOS");
 
+  const [favoritos, setFavoritos] = useState<string[]>([]);
+  const [filtroFavoritosMetodologias, setFiltroFavoritosMetodologias] = useState<FiltroFavoritos>("TODOS");
+  const [filtroFavoritosEventos, setFiltroFavoritosEventos] = useState<FiltroFavoritos>("TODOS");
   const [busca, setBusca] = useState("");
   const [, navigate] = useLocation();
   const [permissaoCriacao, setPermissaoCriacao] = useState<{
@@ -553,9 +634,10 @@ export default function LearningPage() {
             ? Promise.resolve({ items: [] })
             : listMinhasAulasAoVivo(),
           listEventosAoVivoVisiveis(),
+          listarFavoritosLearningApi(),
         ] as const;
 
-        const [visiveisRes, assinadasRes, criadasRes, livesRes, eventosRes] = await Promise.allSettled(promises);
+        const [visiveisRes, assinadasRes, criadasRes, livesRes, eventosRes, favoritosRes,] = await Promise.allSettled(promises);
 
         if (!mounted) return;
 
@@ -573,6 +655,9 @@ export default function LearningPage() {
         );
         setEventosAoVivo(
           eventosRes.status === "fulfilled" ? eventosRes.value?.items || [] : []
+        );
+        setFavoritos(
+          favoritosRes.status === "fulfilled" ? favoritosRes.value || [] : []
         );
         if (!isAtleta) {
           setPermissaoCriacao(
@@ -596,6 +681,42 @@ export default function LearningPage() {
       mounted = false;
     };
   }, [isAtleta]);
+
+  function isFavorito(tipo: FavoritoTipo, id?: string | null) {
+    if (!id) return false;
+    return favoritos.includes(favoritoKey(tipo, String(id)));
+  }
+
+  async function toggleFavorito(tipo: FavoritoTipo, id?: string | null) {
+    if (!id) return;
+
+    const alvoId = String(id);
+    const key = favoritoKey(tipo, alvoId);
+    const estavaFavorito = favoritos.includes(key);
+
+    setFavoritos((prev) =>
+      estavaFavorito
+        ? prev.filter((item) => item !== key)
+        : [...prev, key]
+    );
+
+    try {
+      const result = await alternarFavoritoLearningApi(tipo, alvoId);
+
+      setFavoritos((prev) => {
+        const semAtual = prev.filter((item) => item !== result.key);
+        return result.favorito ? [...semAtual, result.key] : semAtual;
+      });
+    } catch (e: any) {
+      setFavoritos((prev) =>
+        estavaFavorito
+          ? Array.from(new Set([...prev, key]))
+          : prev.filter((item) => item !== key)
+      );
+
+      alert(e?.message || "Erro ao atualizar favorito.");
+    }
+  }
 
   const minhasCount = useMemo(
     () => (isAtleta ? assinadas.length : assinadas.length + criadas.length),
@@ -622,8 +743,62 @@ export default function LearningPage() {
     [assinadas]
   );
 
+  const assinadasLearningFiltradas = useMemo(
+    () =>
+      filtroFavoritosMetodologias === "FAVORITOS"
+        ? assinadasLearning.filter((item) => isFavorito("METODOLOGIA", item.id))
+        : assinadasLearning,
+    [assinadasLearning, filtroFavoritosMetodologias, favoritos]
+  );
+
+  const assinadasAvulsasFiltradas = useMemo(
+    () =>
+      filtroFavoritosMetodologias === "FAVORITOS"
+        ? assinadasAvulsas.filter((item) =>
+            isFavorito("METODOLOGIA_AVULSA", item.id)
+          )
+        : assinadasAvulsas,
+    [assinadasAvulsas, filtroFavoritosMetodologias, favoritos]
+  );
+
+  const criadasLearningFiltradas = useMemo(
+    () =>
+      filtroFavoritosMetodologias === "FAVORITOS"
+        ? criadasLearning.filter((item) => isFavorito("METODOLOGIA", item.id))
+        : criadasLearning,
+    [criadasLearning, filtroFavoritosMetodologias, favoritos]
+  );
+
+  const criadasAvulsasFiltradas = useMemo(
+    () =>
+      filtroFavoritosMetodologias === "FAVORITOS"
+        ? criadasAvulsas.filter((item) =>
+            isFavorito("METODOLOGIA_AVULSA", item.id)
+          )
+        : criadasAvulsas,
+    [criadasAvulsas, filtroFavoritosMetodologias, favoritos]
+  );
+
+  const livesCriadasFiltradas = useMemo(
+    () =>
+      filtroFavoritosEventos === "FAVORITOS"
+        ? livesCriadas.filter((aula) => isFavorito("AULA_AO_VIVO", aula.id))
+        : livesCriadas,
+    [livesCriadas, filtroFavoritosEventos, favoritos]
+  );
+
   const explorarFiltrado = useMemo(() => {
     let items = [...explorar];
+
+    if (filtroFavoritosMetodologias === "FAVORITOS") {
+      items = items.filter((item) => {
+        const origem = String(item?.origemRegistro || "").toUpperCase();
+        const tipoFavorito =
+          origem === "AVULSA" ? "METODOLOGIA_AVULSA" : "METODOLOGIA";
+
+        return isFavorito(tipoFavorito, String(item?.id || ""));
+      });
+    }
 
     if (filtroOrigem !== "TODOS") {
       items = items.filter(
@@ -687,6 +862,8 @@ export default function LearningPage() {
     filtroMaterial,
     filtroOrigem,
     busca,
+    filtroFavoritosMetodologias,
+    favoritos,
   ]);
 
   const explorarLearning = useMemo(
@@ -703,6 +880,12 @@ export default function LearningPage() {
     const hojeBR = getDiaBR(new Date().toISOString());
 
     let items = [...eventosAoVivo];
+  
+    if (filtroFavoritosEventos === "FAVORITOS") {
+      items = items.filter((item) =>
+        isFavorito("AULA_AO_VIVO", String(item?.id || ""))
+      );
+    }
 
     if (filtroStatusEvento === "FINALIZADA") {
       items = items.filter((item) => {
@@ -767,7 +950,7 @@ export default function LearningPage() {
 
       return da - db;
     });
-  }, [eventosAoVivo, buscaEvento, filtroOrigemEvento, filtroStatusEvento]);
+  }, [eventosAoVivo, buscaEvento, filtroOrigemEvento, filtroStatusEvento, filtroFavoritosEventos, favoritos]);
 
   function getMetodologiaEventoHref(aula: AulaAoVivoResumo) {
     if (aula.metodologiaAvulsa?.id) {
@@ -948,6 +1131,33 @@ export default function LearningPage() {
                     <option value="LEARNING">Só Learning</option>
                     <option value="AVULSA">Só Avulsas</option>
                   </select>
+
+                  <div className="md:col-span-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroFavoritosMetodologias("TODOS")}
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                        filtroFavoritosMetodologias === "TODOS"
+                          ? "bg-[#216c43] text-white border-[#216c43]"
+                          : "bg-white text-slate-700 border-slate-300"
+                      }`}
+                    >
+                      Todas
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFiltroFavoritosMetodologias("FAVORITOS")}
+                      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold ${
+                        filtroFavoritosMetodologias === "FAVORITOS"
+                          ? "bg-amber-50 text-amber-700 border-amber-300"
+                          : "bg-white text-slate-700 border-slate-300"
+                      }`}
+                    >
+                      <Star className="w-4 h-4" fill="currentColor" />
+                      Favoritas
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-3 flex sm:hidden flex-wrap items-center gap-2">
@@ -1020,6 +1230,33 @@ export default function LearningPage() {
                     <option value="AO_VIVO">Ao vivo agora</option>
                     <option value="FINALIZADA">Finalizados / replay</option>
                   </select>
+
+                  <div className="md:col-span-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroFavoritosEventos("TODOS")}
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                        filtroFavoritosEventos === "TODOS"
+                          ? "bg-[#216c43] text-white border-[#216c43]"
+                          : "bg-white text-slate-700 border-slate-300"
+                      }`}
+                    >
+                      Todos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFiltroFavoritosEventos("FAVORITOS")}
+                      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold ${
+                        filtroFavoritosEventos === "FAVORITOS"
+                          ? "bg-amber-50 text-amber-700 border-amber-300"
+                          : "bg-white text-slate-700 border-slate-300"
+                      }`}
+                    >
+                      <Star className="w-4 h-4" fill="currentColor" />
+                      Favoritos
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1056,6 +1293,8 @@ export default function LearningPage() {
                               ? () => navigate(metodologiaHref)
                               : undefined
                           }
+                          favorito={isFavorito("AULA_AO_VIVO", aula.id)}
+                          onToggleFavorito={() => toggleFavorito("AULA_AO_VIVO", aula.id)}
                         />
                       );
                     })
@@ -1082,6 +1321,31 @@ export default function LearningPage() {
                           item={item}
                           href={`/learning/${item.id}`}
                           actionLabel="Ver metodologia"
+                          extraActions={
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleFavorito("METODOLOGIA", item.id);
+                              }}
+                              className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                isFavorito("METODOLOGIA", item.id)
+                                  ? "border-amber-300 bg-amber-50 text-amber-600"
+                                  : "border-slate-300 bg-white text-slate-500"
+                              }`}
+                              title={
+                                isFavorito("METODOLOGIA", item.id)
+                                  ? "Remover dos favoritos"
+                                  : "Adicionar aos favoritos"
+                              }
+                            >
+                              <Star
+                                className="w-4 h-4"
+                                fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
+                              />
+                            </button>
+                          }
                         />
                       ))
                     ) : (
@@ -1108,6 +1372,31 @@ export default function LearningPage() {
                           item={item}
                           href={`/learning/${item.id}?origem=avulsa`}
                           actionLabel="Ver metodologia"
+                          extraActions={
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleFavorito("METODOLOGIA_AVULSA", item.id);
+                              }}
+                              className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                isFavorito("METODOLOGIA_AVULSA", item.id)
+                                  ? "border-amber-300 bg-amber-50 text-amber-600"
+                                  : "border-slate-300 bg-white text-slate-500"
+                              }`}
+                              title={
+                                isFavorito("METODOLOGIA", item.id)
+                                  ? "Remover dos favoritos"
+                                  : "Adicionar aos favoritos"
+                              }
+                            >
+                              <Star
+                                className="w-4 h-4"
+                                fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
+                              />
+                            </button>
+                          }
                         />
                       ))
                     ) : (
@@ -1154,6 +1443,43 @@ export default function LearningPage() {
                       Criar nova metodologia
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFiltroFavoritosMetodologias((prev) =>
+                        prev === "FAVORITOS" ? "TODOS" : "FAVORITOS"
+                      )
+                    }
+                    className={`inline-flex h-10 px-4 rounded-xl font-semibold items-center gap-2 border ${
+                      filtroFavoritosMetodologias === "FAVORITOS"
+                        ? "bg-amber-50 text-amber-700 border-amber-300"
+                        : "bg-white text-slate-700 border-slate-300"
+                    }`}
+                  >
+                    <Star className="w-4 h-4" fill="currentColor" />
+                    {filtroFavoritosMetodologias === "FAVORITOS"
+                      ? "Mostrando favoritos"
+                      : "Mostrar favoritos"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFiltroFavoritosEventos((prev) =>
+                        prev === "FAVORITOS" ? "TODOS" : "FAVORITOS"
+                      )
+                    }
+                    className={`inline-flex h-10 px-4 rounded-xl font-semibold items-center gap-2 border ${
+                      filtroFavoritosEventos === "FAVORITOS"
+                        ? "bg-amber-50 text-amber-700 border-amber-300"
+                        : "bg-white text-slate-700 border-slate-300"
+                    }`}
+                  >
+                    <Star className="w-4 h-4" fill="currentColor" />
+                    {filtroFavoritosEventos === "FAVORITOS"
+                      ? "Eventos favoritos"
+                      : "Mostrar eventos favoritos"}
+                  </button>
               </div>
               </div>
               <div>
@@ -1170,13 +1496,13 @@ export default function LearningPage() {
                       </div>
 
                       <div className="text-sm text-slate-500">
-                        {livesCriadas.length} {livesCriadas.length === 1 ? "live encontrada" : "lives encontradas"}
+                        {livesCriadasFiltradas.length} {livesCriadasFiltradas.length === 1 ? "live encontrada" : "lives encontradas"}
                       </div>
                     </div>
 
-                    {livesCriadas.length ? (
+                    {livesCriadasFiltradas.length ? (
                       <div className="space-y-3">
-                        {livesCriadas.map((aula) => {
+                        {livesCriadasFiltradas.map((aula) => {
                           const statusInfo = getLiveStatusInfo(aula.status);
                           const metodologiaTitulo =
                             aula.metodologia?.titulo ||
@@ -1184,9 +1510,10 @@ export default function LearningPage() {
                             "Metodologia";
 
                           const capa =
+                            aula.thumbUrl ||
                             aula.metodologia?.capaUrl ||
                             aula.metodologiaAvulsa?.capaUrl ||
-                            "/assets/usuarios/footera-logo.png";
+                            "/assets/usuarios/footera-logo-fundo-verde.png";
 
                           const eventoUrl = getEventoPublicoUrl(aula);
                             
@@ -1198,13 +1525,12 @@ export default function LearningPage() {
                               <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
                                 <div className="flex gap-4 min-w-0">
                                   <div className="h-20 w-20 rounded-2xl overflow-hidden bg-[#073b25] border border-slate-200 shrink-0">
-                                    <img
+                                    <CoverImage
                                       src={capa}
                                       alt={metodologiaTitulo}
-                                      className="h-full w-full object-cover"
-                                      onError={(e) => {
-                                        e.currentTarget.src = "/assets/usuarios/footera-logo.png";
-                                      }}
+                                      pasta="usuarios"
+                                      fit="cover"
+                                      className="h-full w-full bg-[#073b25]"
                                     />
                                   </div>
 
@@ -1248,6 +1574,25 @@ export default function LearningPage() {
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleFavorito("AULA_AO_VIVO", aula.id)}
+                                    className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border ${
+                                      isFavorito("AULA_AO_VIVO", aula.id)
+                                        ? "border-amber-300 bg-amber-50 text-amber-600"
+                                        : "border-slate-300 bg-white text-slate-500"
+                                    }`}
+                                    title={
+                                      isFavorito("AULA_AO_VIVO", aula.id)
+                                        ? "Remover dos favoritos"
+                                        : "Adicionar aos favoritos"
+                                    }
+                                  >
+                                    <Star
+                                      className="w-4 h-4"
+                                      fill={isFavorito("AULA_AO_VIVO", aula.id) ? "currentColor" : "none"}
+                                    />
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => navigate(`/learning/live-studio?aulaId=${aula.id}`)}
@@ -1304,8 +1649,8 @@ export default function LearningPage() {
                   <div>
                     <div className="text-base font-bold text-[#193b2e] mb-3">Criadas • Learning</div>
                       <div className="space-y-4">
-                        {criadasLearning.length ? (
-                          criadasLearning.map((item: any) => (
+                        {criadasLearningFiltradas.length ? (
+                          criadasLearningFiltradas.map((item: any) => (
                             <LearningCard
                               key={`cr_learning_${item.id}`}
                               item={item}
@@ -1318,6 +1663,30 @@ export default function LearningPage() {
                                     className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
                                   >
                                     Gerenciar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleFavorito("METODOLOGIA", item.id);
+                                    }}
+                                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                      isFavorito("METODOLOGIA", item.id)
+                                        ? "border-amber-300 bg-amber-50 text-amber-600"
+                                        : "border-slate-300 bg-white text-slate-500"
+                                    }`}
+                                    title={
+                                      isFavorito("METODOLOGIA", item.id)
+                                        ? "Remover dos favoritos"
+                                        : "Adicionar aos favoritos"
+                                    }
+                                  >
+                                    <Star
+                                      className="w-4 h-4"
+                                      fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
+                                    />
                                   </button>
 
                                   <button
@@ -1352,8 +1721,8 @@ export default function LearningPage() {
 
                       <div className="text-base font-bold text-[#193b2e] mb-3 mt-6">Criadas • Avulsas</div>
                       <div className="space-y-4">
-                        {criadasAvulsas.length ? (
-                          criadasAvulsas.map((item: any) => (
+                        {criadasAvulsasFiltradas.length ? (
+                          criadasAvulsasFiltradas.map((item: any) => (
                             <LearningCard
                               key={`cr_avulsa_${item.id}`}
                               item={item}
@@ -1366,6 +1735,30 @@ export default function LearningPage() {
                                     className="inline-flex h-10 px-4 rounded-xl bg-[#216c43] text-white font-semibold items-center"
                                   >
                                     Gerenciar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleFavorito("METODOLOGIA_AVULSA", item.id);
+                                    }}
+                                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                      isFavorito("METODOLOGIA_AVULSA", item.id)
+                                        ? "border-amber-300 bg-amber-50 text-amber-600"
+                                        : "border-slate-300 bg-white text-slate-500"
+                                    }`}
+                                    title={
+                                      isFavorito("METODOLOGIA_AVULSA", item.id)
+                                        ? "Remover dos favoritos"
+                                        : "Adicionar aos favoritos"
+                                    }
+                                  >
+                                    <Star
+                                      className="w-4 h-4"
+                                      fill={isFavorito("METODOLOGIA_AVULSA", item.id) ? "currentColor" : "none"}
+                                    />
                                   </button>
 
                                   <button
@@ -1402,8 +1795,8 @@ export default function LearningPage() {
               </div>
             <div className="text-base font-bold text-[#193b2e] mb-3">Assinadas • Learning</div>
               <div className="space-y-4">
-                {assinadasLearning.length ? (
-                  assinadasLearning.map((item: any) => (
+                {assinadasLearningFiltradas.length ? (
+                  assinadasLearningFiltradas.map((item: any) => (
                     <LearningCard
                       key={`ass_learning_${item.id}`}
                       item={item}
@@ -1412,6 +1805,31 @@ export default function LearningPage() {
                         String(item?.status || "").toUpperCase() === "CONCLUIDA" || !!item?.concluiuEm
                           ? "Ver conclusão"
                           : "Continuar"
+                      }
+                      extraActions={
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFavorito("METODOLOGIA", item.id);
+                          }}
+                          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                            isFavorito("METODOLOGIA", item.id)
+                              ? "border-amber-300 bg-amber-50 text-amber-600"
+                              : "border-slate-300 bg-white text-slate-500"
+                          }`}
+                          title={
+                            isFavorito("METODOLOGIA", item.id)
+                              ? "Remover dos favoritos"
+                              : "Adicionar aos favoritos"
+                          }
+                        >
+                          <Star
+                            className="w-4 h-4"
+                            fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
+                          />
+                        </button>
                       }
                     />
                   ))
@@ -1424,8 +1842,8 @@ export default function LearningPage() {
 
               <div className="text-base font-bold text-[#193b2e] mb-3 mt-6">Assinadas • Avulsas</div>
               <div className="space-y-4">
-                {assinadasAvulsas.length ? (
-                  assinadasAvulsas.map((item: any) => (
+                {assinadasAvulsasFiltradas.length ? (
+                  assinadasAvulsasFiltradas.map((item: any) => (
                     <LearningCard
                       key={`ass_avulsa_${item.id}`}
                       item={item}
@@ -1434,6 +1852,31 @@ export default function LearningPage() {
                         String(item?.status || "").toUpperCase() === "CONCLUIDA" || !!item?.concluiuEm
                           ? "Ver conclusão"
                           : "Continuar"
+                      }
+                      extraActions={
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFavorito("METODOLOGIA_AVULSA", item.id);
+                          }}
+                          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                            isFavorito("METODOLOGIA_AVULSA", item.id)
+                              ? "border-amber-300 bg-amber-50 text-amber-600"
+                              : "border-slate-300 bg-white text-slate-500"
+                          }`}
+                          title={
+                            isFavorito("METODOLOGIA_AVULSA", item.id)
+                              ? "Remover dos favoritos"
+                              : "Adicionar aos favoritos"
+                          }
+                        >
+                          <Star
+                            className="w-4 h-4"
+                            fill={isFavorito("METODOLOGIA_AVULSA", item.id) ? "currentColor" : "none"}
+                          />
+                        </button>
                       }
                     />
                   ))

@@ -33,6 +33,9 @@ import {
   deleteMetodologiaAvulsaEstruturaItens,
   criarSubmissaoMetodologiaItem,
   listEventosAoVivoVisiveis,
+  listarFavoritosLearning,
+  alternarFavoritoLearning,
+  removerFavoritoLearning,
 } from "../controllers/metodologiasController.js";
 import { uploadMetodologiaS3 } from "../controllers/metodologiasUploadController.js";
 import { uploadToS3 } from "../middlewares/s3Upload.js";
@@ -56,6 +59,9 @@ router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/eventos-ao-vivo/visiveis", authenticateToken, listEventosAoVivoVisiveis);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
+router.get("/favoritos", authenticateToken, listarFavoritosLearning);
+router.post("/favoritos/toggle", authenticateToken, alternarFavoritoLearning);
+router.delete("/favoritos/:tipo/:id", authenticateToken, removerFavoritoLearning);
 
 router.post(
   "/completa",

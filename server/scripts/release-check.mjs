@@ -215,6 +215,49 @@ if (exists(serverIndexPath)) {
     }
   }
 
+  const treinosRoutesPath = path.join(serverRoot, "routes", "treinos.ts");
+  const metodologiasRoutesPath = path.join(serverRoot, "routes", "metodologiasRoutes.ts");
+
+  if (exists(treinosRoutesPath)) {
+    const treinosRoutes = read(treinosRoutesPath);
+
+    const requiredTreinosRoutes = [
+      'router.get("/favoritos"',
+      'router.post("/favoritos/toggle"',
+      'router.delete("/favoritos/:id"',
+    ];
+
+    for (const route of requiredTreinosRoutes) {
+      if (treinosRoutes.includes(route)) {
+        ok(`treinos tem rota ${route}`);
+      } else {
+        fail(`treinos tem rota ${route}`, "Rota de favoritos de treinos não encontrada.");
+      }
+    }
+  } else {
+    fail("server/routes/treinos.ts existe", "Arquivo de rotas de treinos não encontrado.");
+  }
+
+  if (exists(metodologiasRoutesPath)) {
+    const metodologiasRoutes = read(metodologiasRoutesPath);
+
+    const requiredMetodologiasRoutes = [
+      'router.get("/favoritos"',
+      'router.post("/favoritos/toggle"',
+      'router.delete("/favoritos/:tipo/:id"',
+    ];
+
+    for (const route of requiredMetodologiasRoutes) {
+      if (metodologiasRoutes.includes(route)) {
+        ok(`metodologias tem rota ${route}`);
+      } else {
+        fail(`metodologias tem rota ${route}`, "Rota de favoritos do Learning não encontrada.");
+      }
+    }
+  } else {
+    fail("server/routes/metodologiasRoutes.ts existe", "Arquivo de rotas de metodologias não encontrado.");
+  }
+
   const dangerousLogs = [
     "console.log(\"[ENV] GOOGLE_CLIENT_ID:\", process.env.GOOGLE_CLIENT_ID",
     "console.log('[ENV] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID",
