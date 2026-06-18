@@ -442,6 +442,55 @@ export default function PaginaNotificacoes() {
                 ? "/pagamentos"
                 : n.link;
 
+            const tipoNotificacao = String(n.tipo || "").toUpperCase();
+            const linkStr = String(linkResolvido || "");
+            const tituloStr = String(n.titulo || "").toLowerCase();
+            const mensagemStr = String(n.mensagem || "").toLowerCase();
+
+            const isTreinoNotif =
+              tipoNotificacao.includes("TREINO") ||
+              linkStr.startsWith("/treinos") ||
+              linkStr.includes("/treino") ||
+              tituloStr.includes("treino") ||
+              mensagemStr.includes("treino");
+
+            const isMensagemNotif =
+              tipoNotificacao.includes("MENSAGEM") ||
+              linkStr.startsWith("/mensagens") ||
+              tituloStr.includes("mensagem");
+
+            const isPerfilNotif =
+              linkStr.startsWith("/perfil");
+
+            const isLearningNotif =
+              linkStr.startsWith("/learning") ||
+              tituloStr.includes("aula ao vivo") ||
+              mensagemStr.includes("aula ao vivo");
+
+            const textoAcao = isBillingWarning || isBillingBlocked
+              ? "Abrir pagamentos:"
+              : isTreinoNotif
+              ? "Visualizar treino:"
+              : isMensagemNotif
+              ? "Visualizar mensagem:"
+              : isPerfilNotif
+              ? "Visualizar perfil:"
+              : isLearningNotif
+              ? "Visualizar aula:"
+              : "Visualizar o evento:";
+
+            const textoBotao = isBillingWarning || isBillingBlocked
+              ? "Abrir pagamentos"
+              : isTreinoNotif
+              ? "Abrir treino"
+              : isMensagemNotif
+              ? "Abrir mensagem"
+              : isPerfilNotif
+              ? "Abrir perfil"
+              : isLearningNotif
+              ? "Abrir aula"
+              : "Abrir evento";
+
             const isIndicacaoOlheiro = String(n.tipo || "").toUpperCase() === "INDICACAO_OLHEIRO";
             const indicacaoId = getIndicacaoIdFromLink(n.link);
                     
@@ -613,15 +662,16 @@ export default function PaginaNotificacoes() {
                     {linkResolvido && (
                       <div className="mt-3">
                         <p className="text-sm text-gray-700">
-                          {isBillingWarning || isBillingBlocked ? "Abrir pagamentos:" : "Visualizar o evento:"}
+                          {textoAcao}
                         </p>
+
                         <Link
                           href={linkResolvido}
                           onClick={() => marcarComoLida(n.id)}
                           className="inline-flex mt-2 items-center justify-center rounded-lg bg-green-800
                             text-white text-sm px-4 py-2 hover:bg-green-900"
                         >
-                          {isBillingWarning || isBillingBlocked ? "Abrir pagamentos" : "Abrir evento"}
+                          {textoBotao}
                         </Link>
                       </div>
                     )}

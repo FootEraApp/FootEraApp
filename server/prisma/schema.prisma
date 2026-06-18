@@ -58,38 +58,38 @@ model Usuario {
   federacao                 Federacao?
   marca                     Marca?
 
-  amigosDe                        Amigo[]                    @relation("AmigoUsuario")
-  amigos                          Amigo[]                    @relation("UsuarioAmigo")
+  amigosDe                        Amigo[]                      @relation("AmigoUsuario")
+  amigos                          Amigo[]                      @relation("UsuarioAmigo")
   atividadesRecentes              AtividadeRecente[]
   atleta                          Atleta?
   certificadosMetodologia         CertificadoMetodologia[]
   clube                           Clube?
   comentarios                     Comentario[]
   curtidas                        Curtida[]
-  desafiosCriados                 DesafioEmGrupo[]           @relation("CriadorDesafioEmGrupo")
+  desafiosCriados                 DesafioEmGrupo[]             @relation("CriadorDesafioEmGrupo")
   escolinha                       Escolinha?
-  favoritadoPor                   FavoritoUsuario[]          @relation("UsuarioFavorito")
-  favoritos                       FavoritoUsuario[]          @relation("UsuarioFavoritador")
-  gruposDono                      Grupo[]                    @relation("GruposQuePossuo")
+  favoritadoPor                   FavoritoUsuario[]            @relation("UsuarioFavorito")
+  favoritos                       FavoritoUsuario[]            @relation("UsuarioFavoritador")
+  gruposDono                      Grupo[]                      @relation("GruposQuePossuo")
   logsErro                        LogErro[]
   MembroGrupo                     MembroGrupo[]
-  mensagensEnviadas               Mensagem[]                 @relation("MensagensEnviadas")
-  mensagensRecebidas              Mensagem[]                 @relation("MensagensRecebidas")
-  mensagensReferenciando          Mensagem[]                 @relation("UsuarioMensagemReferencia")
+  mensagensEnviadas               Mensagem[]                   @relation("MensagensEnviadas")
+  mensagensRecebidas              Mensagem[]                   @relation("MensagensRecebidas")
+  mensagensReferenciando          Mensagem[]                   @relation("UsuarioMensagemReferencia")
   MensagemGrupo                   MensagemGrupo[]
   olheiro                         Olheiro?
   PasswordReset                   PasswordReset[]
   postagens                       Postagem[]
   professor                       Professor?
-  seguidores                      Seguidor[]                 @relation("Seguido")
-  seguindo                        Seguidor[]                 @relation("Seguidor")
-  solicitacoesRecebidas           SolicitacaoTreino[]        @relation("SolicitacoesRecebidas")
-  solicitacoesEnviadas            SolicitacaoTreino[]        @relation("SolicitacoesEnviadas")
+  seguidores                      Seguidor[]                   @relation("Seguido")
+  seguindo                        Seguidor[]                   @relation("Seguidor")
+  solicitacoesRecebidas           SolicitacaoTreino[]          @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas            SolicitacaoTreino[]          @relation("SolicitacoesEnviadas")
   submissaoDesafios               SubmissaoDesafio[]
   submissaoEmGrupo                SubmissaoDesafioEmGrupo[]
   submissaoTreinos                SubmissaoTreino[]
   treinoRealizado                 TreinoRealizado[]
-  desafiosEmGrupo                 DesafioEmGrupo[]           @relation("MembrosDesafioEmGrupo")
+  desafiosEmGrupo                 DesafioEmGrupo[]             @relation("MembrosDesafioEmGrupo")
   Consentimento                   Consentimento[]
   Turmas                          TurmaUsuario[]
   TreinoUsuario                   TreinoUsuario[]
@@ -101,31 +101,33 @@ model Usuario {
   CupomResgate                    CupomResgate[]
   LogAuditoria                    LogAuditoria[]
   inscricoesEvento                InscricaoEvento[]
-  convitesEvento                  InscricaoEvento[]          @relation("ConvitesEvento")
+  convitesEvento                  InscricaoEvento[]            @relation("ConvitesEvento")
   feedbacks                       Feedback[]
   SessaoTreinoTurma               SessaoTreinoTurma[]
-  notificacoes                    Notificacao[]              @relation("NotificacaoUsuario")
-  notificacoesGeradas             Notificacao[]              @relation("NotificacaoActor")
+  notificacoes                    Notificacao[]                @relation("NotificacaoUsuario")
+  notificacoesGeradas             Notificacao[]                @relation("NotificacaoActor")
   AvaliacaoTreino                 AvaliacaoTreino[]
   AvaliacaoMetodologia            AvaliacaoMetodologia[]
-  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]      @relation("AulaAoVivoConvidadoUsuario")
-  treinosCriadosComoAdmin         TreinoProgramado[]         @relation("TreinoProgramadoCriadorUsuario")
-  aulasAoVivoComoConvidado        AulaAoVivo[]               @relation("AulaAoVivoConvidado")
+  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]        @relation("AulaAoVivoConvidadoUsuario")
+  treinosCriadosComoAdmin         TreinoProgramado[]           @relation("TreinoProgramadoCriadorUsuario")
+  aulasAoVivoComoConvidado        AulaAoVivo[]                 @relation("AulaAoVivoConvidado")
   creator                         Creator?
-  comprasCreator                  CreatorVenda[]             @relation("CreatorVendaComprador")
-  metodologiasCriadas             Metodologia[]              @relation("MetodologiaCriador")
+  comprasCreator                  CreatorVenda[]               @relation("CreatorVendaComprador")
+  metodologiasCriadas             Metodologia[]                @relation("MetodologiaCriador")
   metodologiasAssinadas           MetodologiaAssinante[]
-  metodologiasAvulsasCriadas      MetodologiaAvulsa[]        @relation("MetodologiaAvulsaCriador")
+  metodologiasAvulsasCriadas      MetodologiaAvulsa[]          @relation("MetodologiaAvulsaCriador")
   aulasAoVivoAcessos              AulaAoVivoAcesso[]
   LoginEvent                      LoginEvent[]
   ExercicioPersonalizado          ExercicioPersonalizado[]
   MetodologiaItemSubmissao        MetodologiaItemSubmissao[]
-  aulasAoVivoCriadas              AulaAoVivo[]               @relation("AulaAoVivoCriador")
-  aulasAoVivoMensagens            AulaAoVivoMensagem[]       @relation("AulaAoVivoMensagemUsuario")
-  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]       @relation("AulaAoVivoMensagemDeletadaPor")
-  aulasAoVivoPresencas            AulaAoVivoPresenca[]       @relation("AulaAoVivoPresencaUsuario")
+  aulasAoVivoCriadas              AulaAoVivo[]                 @relation("AulaAoVivoCriador")
+  aulasAoVivoMensagens            AulaAoVivoMensagem[]         @relation("AulaAoVivoMensagemUsuario")
+  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]         @relation("AulaAoVivoMensagemDeletadaPor")
+  aulasAoVivoPresencas            AulaAoVivoPresenca[]         @relation("AulaAoVivoPresencaUsuario")
   learningFavoritos               LearningFavorito[]
   treinosFavoritos                TreinoFavorito[]
+  pushSubscriptions               PushSubscription[]
+  lembretesNotificacaoEnviados    LembreteNotificacaoEnviado[]
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -3041,6 +3043,38 @@ model TreinoFavorito {
   @@unique([usuarioId, treinoProgramadoId])
   @@index([usuarioId])
   @@index([treinoProgramadoId])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  usuarioId String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+model LembreteNotificacaoEnviado {
+  id        String   @id @default(uuid())
+  usuarioId String
+  tipo      String
+  alvoId    String
+  janela    String
+  criadoEm  DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, tipo, alvoId, janela])
+  @@index([usuarioId])
+  @@index([tipo, alvoId])
+  @@index([criadoEm])
 }
 
 enum LearningFavoritoTipo {

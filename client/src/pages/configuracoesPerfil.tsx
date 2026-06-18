@@ -8,6 +8,7 @@ import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
 import GoogleButton from "../components/auth/GoogleButton";
+import { ativarPushNotifications, desativarPushNotifications, getPushDeviceStatus, type PushDeviceStatus } from "../services/pushNotifications.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 
@@ -22,6 +23,12 @@ export default function ConfiguracoesPerfil() {
   const [notifTreinos, setNotifTreinos] = useState(true);
   const [notifEventos, setNotifEventos] = useState(true);
   const [notifMarketing, setNotifMarketing] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [pushErr, setPushErr] = useState<string | null>(null);
+  const [pushDeviceStatus, setPushDeviceStatus] = useState<PushDeviceStatus | "checking">("checking");
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported" | null>(null);
+  const [pushHasSubscription, setPushHasSubscription] = useState(false);
   const [showEncerrarModal, setShowEncerrarModal] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState("");
   const [senhaNova, setSenhaNova] = useState("");
@@ -367,6 +374,65 @@ export default function ConfiguracoesPerfil() {
     }
   }
 
+  async function atualizarStatusPush(options?: { desativadoManual?: boolean }) {
+    try {
+      setPushDeviceStatus("checking");
+
+      const status = await getPushDeviceStatus();
+
+      setPushDeviceStatus(status.status);
+      setPushPermission(status.permission);
+      setPushHasSubscription(status.hasSubscription);
+
+      if (status.status === "subscribed") {
+        setPushMsg("Notificações ativadas neste dispositivo ✅");
+        setPushErr(null);
+        return;
+      }
+
+      if (status.status === "denied") {
+        setPushMsg(null);
+        setPushErr(
+          "Notificações bloqueadas no navegador. Para ativar, libere as notificações nas configurações do site."
+        );
+        return;
+      }
+
+      if (status.status === "unsupported") {
+        setPushMsg(null);
+        setPushErr("Este navegador/dispositivo não suporta notificações push.");
+        return;
+      }
+
+      if (status.status === "granted_without_subscription") {
+        setPushErr(null);
+
+        setPushMsg(
+          options?.desativadoManual
+            ? "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
+            : "Notificações do sistema ainda não estão ativas neste dispositivo. Clique em Ativar no celular para receber avisos fora do app/site."
+        );
+
+        return;
+      }
+
+      if (status.status === "default") {
+        setPushMsg(
+          "Notificações ainda não foram ativadas neste dispositivo. Clique em Ativar no celular para escolher."
+        );
+        setPushErr(null);
+        return;
+      }
+
+      setPushMsg(null);
+      setPushErr(null);
+    } catch (e: any) {
+      setPushDeviceStatus("default");
+      setPushMsg(null);
+      setPushErr(e?.message || "Não foi possível verificar o status das notificações.");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-transparent pb-24">
       
@@ -415,7 +481,11 @@ export default function ConfiguracoesPerfil() {
             type="button"
             onClick={async () => {
               setShowNotificacoesModal(true);
+              setPushMsg(null);
+              setPushErr(null);
+
               await carregarNotificacoes();
+              await atualizarStatusPush();
             }}
             className="text-green-800 font-semibold"
           >
@@ -900,6 +970,159 @@ export default function ConfiguracoesPerfil() {
                     salvarNotificacoes({ notifMarketing: v });
                   }}
                 />
+              </div>
+
+              <div className="mt-4 rounded-xl border border-green-100 bg-white p-4">
+                <p className="font-semibold text-green-900">Notificações no dispositivo</p>
+
+                <p className="text-sm text-gray-600 mt-1">
+                  Ative para receber avisos mesmo com o app/site fechado.
+                </p>
+
+                <div
+                  className={`mt-3 rounded-lg border p-3 text-sm ${
+                    pushDeviceStatus === "subscribed"
+                      ? "bg-green-50 border-green-200"
+                      : pushDeviceStatus === "denied" ||
+                        pushDeviceStatus === "unsupported" ||
+                        pushDeviceStatus === "granted_without_subscription"
+                      ? "bg-red-50 border-red-200"
+                      : "bg-amber-50 border-amber-200"
+                  }`}
+                >
+                  {pushDeviceStatus === "checking" && (
+                    <p className="text-gray-600">Verificando este dispositivo...</p>
+                  )}
+
+                  {pushDeviceStatus === "subscribed" && (
+                    <p className="text-green-700 font-medium">
+                      ✅ Este dispositivo já está ativado para receber notificações.
+                    </p>
+                  )}
+
+                  {pushDeviceStatus === "default" && (
+                    <p className="text-amber-700 font-medium">
+                      ⚠️ Você ainda não escolheu se permite notificações neste dispositivo.
+                    </p>
+                  )}
+
+                  {pushDeviceStatus === "denied" && (
+                    <div className="text-red-600">
+                      <p className="font-medium">
+                        ❌ Notificações bloqueadas neste navegador.
+                      </p>
+                      <p className="mt-1 text-xs">
+                        Para ativar, clique no cadeado ao lado da URL do site e libere
+                        notificações. Depois recarregue a página.
+                      </p>
+                    </div>
+                  )}
+
+                  {pushDeviceStatus === "unsupported" && (
+                    <p className="text-red-600 font-medium">
+                      ❌ Este navegador/dispositivo não suporta notificações push.
+                    </p>
+                  )}
+
+                  {pushDeviceStatus === "granted_without_subscription" && (
+                    <p className="text-red-600 font-medium">
+                      ⚠️ Notificações do sistema não estão ativas neste dispositivo.
+                    </p>
+                  )}
+
+                  <p className="text-xs text-gray-500 mt-2">
+                    Permissão do navegador:{" "}
+                    <span className="font-semibold">
+                      {pushPermission || "verificando"}
+                    </span>
+                    {" · "}
+                   Status no dispositivo:{" "}
+                    <span className="font-semibold">
+                      {pushHasSubscription ? "ativo" : "inativo"}
+                    </span>
+                  </p>
+                </div>
+
+                {pushMsg && (
+                  <p
+                    className={`text-sm mt-2 ${
+                      pushDeviceStatus === "subscribed"
+                        ? "text-green-700"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {pushMsg}
+                  </p>
+                )}
+
+                {pushErr && <p className="text-sm text-red-600 mt-2">{pushErr}</p>}
+                
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={pushLoading || pushDeviceStatus === "denied" || pushDeviceStatus === "unsupported"}
+                    onClick={async () => {
+                      try {
+                        setPushLoading(true);
+                        setPushMsg(null);
+                        setPushErr(null);
+
+                        await ativarPushNotifications();
+                        await atualizarStatusPush();
+
+                        setPushMsg("Notificações ativadas neste dispositivo ✅");
+                        setPushErr(null);
+                      } catch (e: any) {
+                        setPushMsg(null);
+                        setPushErr(e?.message || "Não foi possível ativar notificações.");
+                        await atualizarStatusPush();
+                      } finally {
+                        setPushLoading(false);
+                      }
+                    }}
+                    className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-60"
+                  >
+                    {pushLoading ? "Ativando..." : "Ativar no celular"}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading || pushDeviceStatus === "unsupported"}
+                    onClick={async () => {
+                      try {
+                        setPushLoading(true);
+                        setPushMsg(null);
+                        setPushErr(null);
+
+                        await desativarPushNotifications();
+                        await atualizarStatusPush({ desativadoManual: true });
+
+                        setPushMsg(
+                          "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
+                        );
+                        setPushErr(null);
+                      } catch (e: any) {
+                        setPushMsg(null);
+                        setPushErr(e?.message || "Não foi possível desativar notificações.");
+                        await atualizarStatusPush();
+                      } finally {
+                        setPushLoading(false);
+                      }
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Desativar neste dispositivo
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading}
+                    onClick={() => atualizarStatusPush()}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Verificar status
+                  </button>
+                </div>
               </div>
             </div>        
           </div>

@@ -8,7 +8,8 @@ import {
   TipoMidia,
   TreinoAgendadoStatus,
   Nivel,
-  Prisma
+  Prisma,
+  NotificacaoTipo,
 } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
@@ -32,6 +33,7 @@ import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 import { prisma } from "../prisma.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 
 type Request = ExpressRequest;
 type Response = ExpressResponse;
@@ -744,6 +746,19 @@ async function notificarNovoTreino(
     io.to(`u:${atleta.usuarioId}`).emit("novaMensagem", { ...saved, pending: false });
     io.to(deUsuarioId).emit("novaMensagem", { ...saved, pending: false });
     io.to(`u:${deUsuarioId}`).emit("novaMensagem", { ...saved, pending: false });
+  }
+
+  try {
+    await criarNotificacaoEEnviarPush({
+      usuarioId: atleta.usuarioId,
+      actorId: deUsuarioId,
+      tipo: NotificacaoTipo.TREINO,
+      titulo: "Novo treino agendado",
+      mensagem: `Um novo treino foi agendado para você: ${titulo}`,
+      link: `/treinos`,
+    });
+  } catch (e) {
+    console.warn("[notificarNovoTreino] falha ao criar push:", e);
   }
 }
 
@@ -5571,6 +5586,29 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
         usuarioId: req.userId!,
       },
     });
+
+    try {
+      const usuarioIdAtleta = sub.atleta?.usuarioId || null;
+      const treinoTitulo =
+        sub.treinoAgendado?.treinoProgramado?.nome ||
+        sub.treinoAgendado?.titulo ||
+        "treino";
+
+      if (usuarioIdAtleta) {
+        await criarNotificacaoEEnviarPush({
+          usuarioId: usuarioIdAtleta,
+          actorId: req.userId || null,
+          tipo: NotificacaoTipo.TREINO,
+          titulo: aprovado ? "Treino aprovado" : "Treino reprovado",
+          mensagem: aprovado
+            ? `Seu treino "${treinoTitulo}" foi aprovado.`
+            : `Seu treino "${treinoTitulo}" foi reprovado.`,
+          link: `/treinos`,
+        });
+      }
+    } catch (e) {
+      console.warn("[validarSubmissaoTreino] falha ao criar push:", e);
+    }
 
     try {
       await recomputePontuacaoAtleta(sub.atletaId);

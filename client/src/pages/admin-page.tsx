@@ -339,6 +339,11 @@ export default function AdminDashboard() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagUltimaExecucao, setDiagUltimaExecucao] = useState<string | null>(null);
   const [diagItems, setDiagItems] = useState<DiagnosticoItem[]>([]);
+  const [diagPushLoading, setDiagPushLoading] = useState(false);
+  const [diagPushResultado, setDiagPushResultado] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
   const [dados, setDados] = useState<any>(EMPTY_DASH);
   const [dashLoading, setDashLoading] = useState(true);
   const [exercicios, setExercicios] = useState<any[]>([]);
@@ -1906,6 +1911,55 @@ async function confirmarExcluirProfessor() {
     }
   }
 
+  async function testarPushDiagnostico() {
+    setDiagPushLoading(true);
+    setDiagPushResultado(null);
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/notificacoes/push/test`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+
+      const txt = await r.text().catch(() => "");
+      let json: any = null;
+
+      try {
+        json = txt ? JSON.parse(txt) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!r.ok) {
+        setDiagPushResultado({
+          type: "error",
+          msg:
+            json?.message ||
+            txt ||
+            `Erro ao testar push. HTTP ${r.status}`,
+        });
+        return;
+      }
+
+      const qtd = Number(json?.pushSubscriptions || 0);
+
+      setDiagPushResultado({
+        type: "success",
+        msg:
+          qtd > 0
+            ? "Push de teste enviado. Confira a central de notificações do navegador/celular e a página /notificacoes."
+            : "Notificação interna criada, mas este usuário não tem dispositivo push cadastrado. Ative em Configurações > Notificações.",
+      });
+    } catch (e: any) {
+      setDiagPushResultado({
+        type: "error",
+        msg: e?.message || "Falha de rede ao testar push.",
+      });
+    } finally {
+      setDiagPushLoading(false);
+    }
+  }
+
   async function rodarDiagnostico() {
     setDiagLoading(true);
 
@@ -1914,6 +1968,9 @@ async function confirmarExcluirProfessor() {
       { nome: "Diagnóstico backend", path: "/api/admin/diagnostico" },
       { nome: "Dashboard admin", path: "/api/admin" },
       { nome: "Admin logado", path: "/api/admin/me" },
+      { nome: "Push public key", path: "/api/notificacoes/push/public-key" },
+      { nome: "Notificações do usuário", path: "/api/notificacoes/me" },
+      { nome: "Badge de notificações", path: "/api/notificacoes/badge" },
       { nome: "Configurações", path: "/api/configuracoes" },
       { nome: "Professores", path: "/api/professores?page=1&pageSize=1" },
       { nome: "Exercícios", path: "/api/exercicios" },
@@ -2096,7 +2153,7 @@ async function confirmarExcluirProfessor() {
         </div>
       )}
 
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {aba === "diagnostico" && (
           <section className="space-y-4">
             <div className="rounded-2xl border border-green-100 bg-white shadow-sm p-5">
@@ -2105,9 +2162,12 @@ async function confirmarExcluirProfessor() {
                   <h3 className="text-2xl font-bold text-green-900">
                     Diagnóstico FootEra
                   </h3>
+
                   <p className="text-sm text-gray-600 mt-1">
-                    Verifica rapidamente se as principais rotas do backend e do admin estão respondendo.
+                    Verifica rapidamente se as principais rotas do backend, admin,
+                    notificações e configurações estão respondendo.
                   </p>
+
                   {diagUltimaExecucao && (
                     <p className="text-xs text-gray-500 mt-1">
                       Última execução: {diagUltimaExecucao}
@@ -2122,6 +2182,42 @@ async function confirmarExcluirProfessor() {
                   className="rounded-xl bg-green-800 px-4 py-2 text-white font-semibold disabled:opacity-60"
                 >
                   {diagLoading ? "Verificando..." : "Rodar diagnóstico novamente"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 shadow-sm p-5">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-bold text-amber-900">
+                    Teste de notificações push
+                  </h4>
+
+                  <p className="text-sm text-amber-800/80 mt-1">
+                    Envia uma notificação de teste para o admin logado. Use para confirmar
+                    VAPID, rota de push, dispositivo cadastrado e service worker.
+                  </p>
+
+                  {diagPushResultado && (
+                    <p
+                      className={`mt-2 text-sm font-medium ${
+                        diagPushResultado.type === "success"
+                          ? "text-green-700"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {diagPushResultado.msg}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={testarPushDiagnostico}
+                  disabled={diagPushLoading}
+                  className="rounded-xl bg-amber-600 px-4 py-2 text-white font-semibold disabled:opacity-60 hover:bg-amber-700"
+                >
+                  {diagPushLoading ? "Enviando..." : "Enviar push de teste"}
                 </button>
               </div>
             </div>

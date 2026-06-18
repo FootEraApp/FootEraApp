@@ -6,7 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import { getDailyUsage } from "../services/usage.js";
 import { audit } from "../services/audit.js"; 
-import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 import { NotificacaoTipo } from "@prisma/client";
 
 const ADS_CAP_PER_DAY = 5;
@@ -243,21 +243,17 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
     if (destNotif.notifMensagens) {
       try {
-        await prisma.notificacao.create({
-          data: {
-            usuarioId: paraId,
-            actorId: deId,
-            tipo: NotificacaoTipo.MENSAGEM,
-            titulo: "Nova mensagem",
-            mensagem: "Você recebeu uma nova mensagem.",
-            link: `/mensagens?otherId=${deId}`,
-          } as any,
+        await criarNotificacaoEEnviarPush({
+          usuarioId: paraId,
+          actorId: deId,
+          tipo: NotificacaoTipo.MENSAGEM,
+          titulo: "Nova mensagem",
+          mensagem: "Você recebeu uma nova mensagem.",
+          link: `/mensagens?otherId=${deId}`,
         });
       } catch (e) {
-        console.warn("[enviarMensagem] falha ao criar notificacao:", e);
+        console.warn("[enviarMensagem] falha ao criar notificacao/push:", e);
       }
-
-      await recomputeAndEmitBadge(paraId);
     }
 
     const payload = { ...saved, clientMsgId, pending: false };

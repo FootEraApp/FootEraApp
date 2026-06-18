@@ -38,7 +38,6 @@ console.log("[ffprobe] path:", ffprobeStatic?.path);
 import { requireAdmin } from "./middlewares/guards.js";
 import { processarRenovacoesDiarias } from "./services/billingscheduler.js";
 import { runColdStorageJob } from "./jobs/coldStorageJob.js";
-import { setupSocket } from "./socket.js";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
@@ -46,6 +45,7 @@ import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
 import { PrismaClient } from "@prisma/client";
 import { purgeDeletedAccounts } from "./jobs/purgeDeletedAccounts.js";
+import { startNotificationScheduler } from "./services/notificationScheduler.js";
 
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
@@ -151,6 +151,7 @@ const server = http.createServer(app);
 
 ensureUploadDirs();
 startExpiredTrainingsJob();
+startNotificationScheduler();
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 const PORT = Number(process.env.PORT) || 3001;

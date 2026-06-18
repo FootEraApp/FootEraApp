@@ -5,13 +5,13 @@ import {
   CreateChannelCommand,
   CreateStreamKeyCommand,
 } from "@aws-sdk/client-ivs";
-
 import {
   S3Client,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
-
 import { prisma } from "../lib/prisma.js";
+import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+import { NotificacaoTipo } from "@prisma/client";
 
 type AuthRequest = Request & {
   user?: {
@@ -179,6 +179,55 @@ function isDonoDaAula(aula: any, userId: string) {
     String(aula.metodologia?.criadorUsuarioId || "") === String(userId) ||
     String(aula.metodologiaAvulsa?.criadorUsuarioId || "") === String(userId)
   );
+}
+
+async function getDestinatariosPushAulaAoVivo(aula: any) {
+  const ids = new Set<string>();
+
+  if (aula.criadorUsuarioId) {
+    ids.add(String(aula.criadorUsuarioId));
+  }
+
+  if (aula.convidadoUsuarioId) {
+    ids.add(String(aula.convidadoUsuarioId));
+  }
+
+  if (Array.isArray(aula.convidados)) {
+    for (const convidado of aula.convidados) {
+      if (convidado?.usuarioId) ids.add(String(convidado.usuarioId));
+      if (convidado?.usuario?.id) ids.add(String(convidado.usuario.id));
+    }
+  }
+
+  if (aula.metodologiaId) {
+    const assinantes = await prisma.metodologiaAssinante.findMany({
+      where: {
+        metodologiaId: aula.metodologiaId,
+        status: "ATIVA",
+      },
+      select: { usuarioId: true },
+    });
+
+    for (const a of assinantes) {
+      if (a.usuarioId) ids.add(String(a.usuarioId));
+    }
+  }
+
+  if (aula.metodologiaAvulsaId) {
+    const assinantes = await prisma.metodologiaAssinante.findMany({
+      where: {
+        metodologiaAvulsaId: aula.metodologiaAvulsaId,
+        status: "ATIVA",
+      },
+      select: { usuarioId: true },
+    });
+
+    for (const a of assinantes) {
+      if (a.usuarioId) ids.add(String(a.usuarioId));
+    }
+  }
+
+  return Array.from(ids);
 }
 
 function sanitizeAulaForResponse(aula: any, isOwner: boolean) {
@@ -731,6 +780,36 @@ export async function iniciarAulaAoVivo(req: AuthRequest, res: Response) {
         mensagem: "A transmissão foi iniciada.",
       },
     });
+
+    try {
+      const tituloAula =
+        updated.titulo ||
+        updated.metodologia?.titulo ||
+        updated.metodologiaAvulsa?.titulo ||
+        "Aula ao vivo";
+
+      const aulaCompleta = await getAulaComOwner(id);
+      const destinatarios = await getDestinatariosPushAulaAoVivo(
+        aulaCompleta || updated
+      );
+
+      await Promise.allSettled(
+        destinatarios
+          .filter((uid) => uid && uid !== userId)
+          .map((uid) =>
+            criarNotificacaoEEnviarPush({
+              usuarioId: uid,
+              actorId: userId,
+              tipo: NotificacaoTipo.EVENTO,
+              titulo: "Aula ao vivo começou",
+              mensagem: `${tituloAula} está ao vivo agora.`,
+              link: `/learning/live?aulaId=${id}`,
+            })
+          )
+      );
+    } catch (e) {
+      console.warn("[iniciarAulaAoVivo] falha ao enviar push:", e);
+    }
 
     const metricas = await registrarPresencaInterna(id, userId);
 

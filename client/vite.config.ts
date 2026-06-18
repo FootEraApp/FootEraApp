@@ -19,7 +19,7 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         navigateFallbackDenylist: [/^\/api\//],
-
+        importScripts: ["/push-handler.js"],
         runtimeCaching: [
           {
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/"),
