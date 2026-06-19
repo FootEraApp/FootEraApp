@@ -3,39 +3,51 @@ const viteEnv =
     ? ((import.meta as any).env as Record<string, string | undefined>)
     : undefined;
 
-const isDev =
-  typeof import.meta !== "undefined" && (import.meta as any).env
-    ? !!(import.meta as any).env.DEV
-    : typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
-
 const strip = (s?: string) => (s ?? "").replace(/\/+$/, "");
 
+const mode = viteEnv?.MODE || "development";
+const isLocalMode = mode === "development" || mode === "local";
+
+function isCapacitorNative(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const w = window as any;
+  const platform = w.Capacitor?.getPlatform?.();
+
+  return (
+    window.location.protocol === "capacitor:" ||
+    platform === "android" ||
+    platform === "ios"
+  );
+}
+
 function inferApiFromHost(): string {
-  if (isDev) {
-    const isAndroid =
-      typeof navigator !== "undefined" &&
-      /Android/i.test(navigator.userAgent);
+  if (typeof window === "undefined") return "";
 
-    const isCapacitor =
-      typeof window !== "undefined" &&
-      !!(window as any).Capacitor;
+  const isNative = isCapacitorNative();
 
-    return isAndroid || isCapacitor
-      ? "https://api.footera.app.br"
+  if (isLocalMode) {
+    return isNative
+      ? "http://10.0.2.2:3001"
       : "http://localhost:3001";
   }
 
-  if (typeof window === "undefined") return "";
-
   const { protocol, hostname, host } = window.location;
 
-  if (/^api\./i.test(hostname)) return `${protocol}//${host}`;
+  if (/^api\./i.test(hostname)) {
+    return `${protocol}//${host}`;
+  }
 
   const root = hostname.replace(/^www\./i, "");
   return `${protocol}//api.${root}`;
 }
 
-let API_BASE = strip(viteEnv?.VITE_API_URL || inferApiFromHost());
+const envWebApi = strip(viteEnv?.VITE_API_URL);
+const envAndroidApi = strip(viteEnv?.VITE_ANDROID_API_URL);
+
+let API_BASE = isLocalMode && isCapacitorNative()
+  ? envAndroidApi || "http://10.0.2.2:3001"
+  : envWebApi || inferApiFromHost();
 
 const isLocalApi =
   /^http:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/i.test(API_BASE);
@@ -49,9 +61,12 @@ if (
   API_BASE = API_BASE.replace(/^http:\/\//i, "https://");
 }
 
-if (!isDev && !API_BASE) {
-  console.error("VITE_API_URL não definida e inferência falhou em produção.");
-}
+console.log("[CONFIG API]", {
+  mode,
+  isLocalMode,
+  isNative: typeof window !== "undefined" ? isCapacitorNative() : false,
+  API_BASE,
+});
 
 export const API = {
   BASE_URL: API_BASE,
@@ -63,7 +78,7 @@ const FRONTEND_BASE = strip(
   viteEnv?.VITE_FRONTEND_URL ??
     (typeof window !== "undefined"
       ? window.location.origin
-      : isDev
+      : isLocalMode
       ? "http://localhost:5173"
       : "https://footera.app.br")
 );

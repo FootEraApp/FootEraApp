@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
@@ -43,11 +43,10 @@ type AssinaturaLite = {
 
 export default function ProfilePage() {
   const { id: idDaUrl } = useParams<{ id?: string }>();
-
+  const [, navigate] = useLocation();
   const [tipo, setTipo] = useState<TipoPerfil | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [assinatura, setAssinatura] = useState<AssinaturaLite | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [hasCreator, setHasCreator] = useState(false);
@@ -56,6 +55,15 @@ export default function ProfilePage() {
 
   const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
+
+  function handleLogoutAndLogin() {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+
+    window.location.replace("/login");
+  }
 
   useEffect(() => {
     if (!usuarioId || !token) return;
@@ -85,7 +93,10 @@ export default function ProfilePage() {
   }, [usuarioId, token, tipo]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      window.location.replace("/login");
+      return;
+    }
 
     let cancelled = false;
 
@@ -150,10 +161,35 @@ export default function ProfilePage() {
     );
   }
 
-  if (!tipo || !usuarioId) {
+  if (!tipo || !usuarioId || String(tipo).toLowerCase() === "admin") {
     return (
-      <div className="text-center p-10 text-red-600">
-        Perfil não encontrado.
+      <div className="min-h-[100dvh] flex items-center justify-center bg-[#f7f4ea] px-5">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-lg border border-red-100">
+          <h1 className="text-lg font-bold text-red-600 mb-2">
+            Perfil não encontrado
+          </h1>
+
+          <p className="text-sm text-gray-600 mb-5">
+            Esta conta não possui um perfil público disponível. Saia para entrar
+            com outro usuário e continuar testando o app.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleLogoutAndLogin}
+            className="w-full rounded-xl bg-green-700 px-4 py-3 text-white font-semibold shadow-sm active:scale-[0.99]"
+          >
+            Sair e entrar com outro usuário
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="mt-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-700 font-semibold"
+          >
+            Voltar para o início
+          </button>
+        </div>
       </div>
     );
   }

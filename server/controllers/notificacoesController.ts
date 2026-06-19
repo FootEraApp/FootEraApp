@@ -4,6 +4,10 @@ import { getIO } from "../socket.js";
 import { prisma } from "../prisma.js";
 import webpush from "web-push";
 import { NotificacaoTipo } from "@prisma/client";
+import fs from "fs";
+import path from "path";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getMessaging, type SendResponse } from "firebase-admin/messaging";
 
 async function getNotifPrefs(userId: string) {
   const u = await prisma.usuario.findUnique({
@@ -21,6 +25,61 @@ async function getNotifPrefs(userId: string) {
 }
 
 let webPushConfigured = false;
+let firebaseConfigured = false;
+
+function configurarFirebaseAdmin() {
+  if (firebaseConfigured || getApps().length > 0) {
+    firebaseConfigured = true;
+    return true;
+  }
+
+  try {
+    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+    let serviceAccount: any = null;
+
+    if (serviceAccountJson) {
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } else if (serviceAccountPath) {
+      const candidatePaths = path.isAbsolute(serviceAccountPath)
+        ? [serviceAccountPath]
+        : [
+            path.resolve(process.cwd(), serviceAccountPath),
+            path.resolve(process.cwd(), "server", serviceAccountPath),
+          ];
+
+      const absolutePath = candidatePaths.find((p) => fs.existsSync(p));
+
+      if (!absolutePath) {
+        console.warn("[fcm] arquivo de service account não encontrado:", {
+          serviceAccountPath,
+          candidatePaths,
+          cwd: process.cwd(),
+        });
+        return false;
+      }
+
+      const raw = fs.readFileSync(absolutePath, "utf-8");
+      serviceAccount = JSON.parse(raw);
+    } else {
+      console.warn(
+        "[fcm] FIREBASE_SERVICE_ACCOUNT_PATH ou FIREBASE_SERVICE_ACCOUNT_JSON não configurado."
+      );
+      return false;
+    }
+
+    initializeApp({
+      credential: cert(serviceAccount),
+    });
+
+    firebaseConfigured = true;
+    return true;
+  } catch (e: any) {
+    console.warn("[fcm] erro ao configurar Firebase Admin:", e?.message);
+    return false;
+  }
+}
 
 function configurarWebPush() {
   if (webPushConfigured) return;
@@ -227,6 +286,15 @@ export async function criarNotificacaoEEnviarPush(params: {
   await recomputeAndEmitBadge(params.usuarioId);
 
   await enviarPushParaUsuario({
+    usuarioId: params.usuarioId,
+    titulo: params.titulo,
+    mensagem: params.mensagem,
+    tipo: params.tipo,
+    link: params.link,
+    notificacaoId: not.id,
+  });
+
+  await enviarPushNativoParaUsuario({
     usuarioId: params.usuarioId,
     titulo: params.titulo,
     mensagem: params.mensagem,
@@ -548,6 +616,15 @@ export async function testarPushAtual(req: AuthenticatedRequest, res: Response) 
       where: { usuarioId },
     });
 
+    const totalNativeTokens = await prisma.pushDeviceToken.count({
+      where: {
+        usuarioId,
+        ativo: true,
+      } as any,
+    });
+
+    const totalDispositivos = totalSubscriptions + totalNativeTokens;
+
     const not = await criarNotificacaoEEnviarPush({
       usuarioId,
       tipo: NotificacaoTipo.GENERICA,
@@ -561,9 +638,18 @@ export async function testarPushAtual(req: AuthenticatedRequest, res: Response) 
       ok: true,
       message: "Notificação de teste criada/enviada.",
       notificacaoId: not.id,
+
+      // Web/PWA
       pushSubscriptions: totalSubscriptions,
+
+      // Android nativo/FCM
+      nativePushTokens: totalNativeTokens,
+
+      // Total geral
+      totalDispositivos,
+
       aviso:
-        totalSubscriptions > 0
+        totalDispositivos > 0
           ? "Existe dispositivo cadastrado para push."
           : "Nenhum dispositivo push cadastrado para este usuário. A notificação interna foi criada, mas o push do sistema pode não aparecer.",
     });
@@ -610,4 +696,156 @@ export async function getPushStatusAtual(req: AuthenticatedRequest, res: Respons
       detail: e?.message,
     });
   }
+}
+
+export async function salvarPushNativeToken(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = req.userId;
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado." });
+
+    const token = String(req.body?.token || "").trim();
+    const platform = String(req.body?.platform || "android").trim();
+
+    if (!token) {
+      return res.status(400).json({ message: "Token FCM inválido." });
+    }
+
+    await prisma.pushDeviceToken.upsert({
+      where: { token },
+      create: {
+        usuarioId,
+        token,
+        platform,
+        ativo: true,
+        userAgent: String(req.headers["user-agent"] || ""),
+      } as any,
+      update: {
+        usuarioId,
+        platform,
+        ativo: true,
+        userAgent: String(req.headers["user-agent"] || ""),
+      } as any,
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[salvarPushNativeToken]", e);
+    return res.status(500).json({
+      message: "Erro ao salvar token FCM.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function removerPushNativeToken(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = req.userId;
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado." });
+
+    const token = String(req.body?.token || "").trim();
+
+    if (!token) {
+      return res.status(400).json({ message: "Token FCM inválido." });
+    }
+
+    await prisma.pushDeviceToken.updateMany({
+      where: { usuarioId, token },
+      data: { ativo: false } as any,
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[removerPushNativeToken]", e);
+    return res.status(500).json({
+      message: "Erro ao remover token FCM.",
+      detail: e?.message,
+    });
+  }
+}
+
+async function enviarPushNativoParaUsuario(params: {
+  usuarioId: string;
+  titulo: string;
+  mensagem: string;
+  link?: string | null;
+  tipo?: string | null;
+  notificacaoId?: string | null;
+}) {
+  if (!configurarFirebaseAdmin()) return;
+
+  const prefs = await getNotifPrefs(params.usuarioId);
+
+  if (
+    !categoriaHabilitadaPorPreferencia(
+      {
+        tipo: params.tipo,
+        titulo: params.titulo,
+        mensagem: params.mensagem,
+        link: params.link,
+      },
+      prefs
+    )
+  ) {
+    return;
+  }
+
+  const devices = await prisma.pushDeviceToken.findMany({
+    where: {
+      usuarioId: params.usuarioId,
+      ativo: true,
+    } as any,
+  });
+
+  const tokens = devices.map((d: any) => d.token).filter(Boolean);
+
+  if (!tokens.length) {
+    console.log("[fcm] usuário sem token nativo cadastrado", {
+      usuarioId: params.usuarioId,
+      tipo: params.tipo,
+    });
+    return;
+  }
+
+  const response = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: params.titulo || "FootEra",
+      body: params.mensagem || "Você tem uma nova notificação.",
+    },
+    data: {
+      url: params.link || "/notificacoes",
+      link: params.link || "/notificacoes",
+      tipo: params.tipo || "NOTIFICACAO",
+      notificacaoId: params.notificacaoId || "",
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "footera_default",
+      },
+    },
+  });
+
+  await Promise.all(
+    response.responses.map(async (r: SendResponse, index: number) => {
+      if (r.success) return;
+
+      const code = r.error?.code || "";
+      if (
+        code === "messaging/registration-token-not-registered" ||
+        code === "messaging/invalid-registration-token"
+      ) {
+        await prisma.pushDeviceToken.updateMany({
+          where: { token: tokens[index] } as any,
+          data: { ativo: false } as any,
+        });
+      }
+
+      console.warn("[fcm] falha ao enviar token:", {
+        token: tokens[index],
+        code,
+        message: r.error?.message,
+      });
+    })
+  );
 }

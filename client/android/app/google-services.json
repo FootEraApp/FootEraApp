@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "253015818",
+    "project_id": "footera",
+    "storage_bucket": "footera.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:253015818:android:5d220d2f0c0a45e3d22cf3",
+        "android_client_info": {
+          "package_name": "br.app.footera"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBz7o72WT5D9MBc1usb30g0KurE9UJp-V8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

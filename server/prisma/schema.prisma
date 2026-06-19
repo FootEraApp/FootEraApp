@@ -128,6 +128,7 @@ model Usuario {
   treinosFavoritos                TreinoFavorito[]
   pushSubscriptions               PushSubscription[]
   lembretesNotificacaoEnviados    LembreteNotificacaoEnviado[]
+  pushDeviceTokens                PushDeviceToken[]
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -3075,6 +3076,21 @@ model LembreteNotificacaoEnviado {
   @@index([usuarioId])
   @@index([tipo, alvoId])
   @@index([criadoEm])
+}
+
+model PushDeviceToken {
+  id        String   @id @default(cuid())
+  usuarioId String
+  token     String   @unique
+  platform  String   @default("android")
+  ativo     Boolean  @default(true)
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
 }
 
 enum LearningFavoritoTipo {

@@ -10,6 +10,9 @@ import LearningCard from "../components/learning/LearningCard.js";
 import { Pencil, Trash2 } from "lucide-react";
 import Avatar from "../components/shared/Avatar.js";
 import CoverImage from "../components/shared/CoverImage.js";
+import { ativarPushNotifications, desativarPushNotifications } from "../services/pushNotifications.js";
+import { Capacitor } from "@capacitor/core";
+import { ativarPushAndroidNativo } from "../services/nativePushNotifications.js";
 
 type Tab =
   | "dashboard"
@@ -342,6 +345,17 @@ export default function AdminDashboard() {
   const [diagPushLoading, setDiagPushLoading] = useState(false);
   const [diagPushResultado, setDiagPushResultado] = useState<{
     type: "success" | "error";
+    msg: string;
+  } | null>(null);
+  
+  type PushPermissaoStatus = "granted" | "denied" | "default" | "unsupported";
+
+  const [adminPushBusy, setAdminPushBusy] = useState(false);
+  const [adminPushAtivo, setAdminPushAtivo] = useState(false);
+  const [adminPushPermissao, setAdminPushPermissao] =
+    useState<PushPermissaoStatus>("default");
+  const [adminPushResultado, setAdminPushResultado] = useState<{
+    type: "success" | "error" | "info";
     msg: string;
   } | null>(null);
   const [dados, setDados] = useState<any>(EMPTY_DASH);
@@ -1520,6 +1534,10 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
   }, [aba, modStatus]);
 
   useEffect(() => {
+    void atualizarStatusPushAdmin();
+  }, []);
+
+  useEffect(() => {
     (async () => {
       try {
         const r = await fetch(`${API.BASE_URL}/api/admin/me`, { headers: authHeaders() });
@@ -1911,6 +1929,98 @@ async function confirmarExcluirProfessor() {
     }
   }
 
+  async function atualizarStatusPushAdmin() {
+    try {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        setAdminPushPermissao("unsupported");
+        setAdminPushAtivo(false);
+        return;
+      }
+
+      setAdminPushPermissao(Notification.permission as PushPermissaoStatus);
+
+      if (!("serviceWorker" in navigator)) {
+        setAdminPushAtivo(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = registration
+        ? await registration.pushManager.getSubscription()
+        : null;
+
+      setAdminPushAtivo(!!subscription);
+    } catch {
+      setAdminPushAtivo(false);
+    }
+  }
+
+  async function ativarNotificacoesAdmin() {
+    setAdminPushBusy(true);
+    setAdminPushResultado(null);
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await ativarPushAndroidNativo();
+
+        setAdminPushResultado({
+          type: "success",
+          msg: "Permissão nativa ativada no Android. O token FCM será salvo no backend.",
+        });
+
+        showToast("success", "Push nativo Android ativado.");
+        return;
+      }
+
+      await ativarPushNotifications();
+      await atualizarStatusPushAdmin();
+
+      setAdminPushResultado({
+        type: "success",
+        msg: "Notificações ativadas para este admin neste navegador.",
+      });
+
+      showToast("success", "Notificações do admin ativadas.");
+    } catch (e: any) {
+      await atualizarStatusPushAdmin();
+
+      setAdminPushResultado({
+        type: "error",
+        msg:
+          e?.message ||
+          "Não foi possível ativar notificações para este admin.",
+      });
+    } finally {
+      setAdminPushBusy(false);
+    }
+  }
+
+  async function desativarNotificacoesAdmin() {
+    setAdminPushBusy(true);
+    setAdminPushResultado(null);
+
+    try {
+      await desativarPushNotifications();
+      await atualizarStatusPushAdmin();
+
+      setAdminPushResultado({
+        type: "success",
+        msg: "Notificações desativadas para este admin neste navegador.",
+      });
+
+      showToast("success", "Notificações do admin desativadas.");
+    } catch (e: any) {
+      setAdminPushResultado({
+        type: "error",
+        msg:
+          e?.message ||
+          "Não foi possível desativar notificações para este admin.",
+      });
+    } finally {
+      setAdminPushBusy(false);
+    }
+  }
+
   async function testarPushDiagnostico() {
     setDiagPushLoading(true);
     setDiagPushResultado(null);
@@ -1948,7 +2058,7 @@ async function confirmarExcluirProfessor() {
         msg:
           qtd > 0
             ? "Push de teste enviado. Confira a central de notificações do navegador/celular e a página /notificacoes."
-            : "Notificação interna criada, mas este usuário não tem dispositivo push cadastrado. Ative em Configurações > Notificações.",
+            : "Notificação interna criada, mas este admin não tem dispositivo push cadastrado. Vá em Admin > Configurações > Notificações do admin e clique em Ativar notificações.",
       });
     } catch (e: any) {
       setDiagPushResultado({
@@ -3801,7 +3911,7 @@ async function confirmarExcluirProfessor() {
             <h3 className="text-xl font-bold mb-4">Configurações do Sistema</h3>
 
             <div className="mb-6">
-              <h4 className="font-semibold text-green-800 mb-2">🔍 Funcionalidades</h4>
+              <h4 className="font-semibold text-green-800 mb-2">🔍 hhbuiui Funcionalidades</h4>
               {[
                 { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
                 { key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
@@ -3866,6 +3976,102 @@ async function confirmarExcluirProfessor() {
                   });
                 }}
               />
+            </div>
+
+            <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="font-semibold text-green-800 mb-1">
+                    🔔 Notificações do admin
+                  </h4>
+
+                  <p className="text-sm text-gray-600">
+                    Ative as notificações neste navegador para conseguir testar push no
+                    Windows usando a aba Diagnóstico.
+                  </p>
+                </div>
+
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                    adminPushAtivo
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {adminPushAtivo ? "Ativas" : "Desativadas"}
+                </span>
+              </div>
+
+              <div className="mt-3 text-sm">
+                {adminPushPermissao === "unsupported" && (
+                  <p className="text-red-600 font-medium">
+                    Este navegador não suporta notificações push.
+                  </p>
+                )}
+
+                {adminPushPermissao === "denied" && (
+                  <p className="text-red-600 font-medium">
+                    A permissão foi bloqueada no navegador. Clique no cadeado ao lado da URL,
+                    vá em permissões do site e libere notificações para localhost.
+                  </p>
+                )}
+
+                {adminPushPermissao === "default" && (
+                  <p className="text-amber-700 font-medium">
+                    O navegador ainda não perguntou a permissão. Clique em Ativar notificações.
+                  </p>
+                )}
+
+                {adminPushPermissao === "granted" && !adminPushAtivo && (
+                  <p className="text-amber-700 font-medium">
+                    Permissão concedida, mas este navegador ainda não está cadastrado no backend.
+                  </p>
+                )}
+
+                {adminPushPermissao === "granted" && adminPushAtivo && (
+                  <p className="text-green-700 font-medium">
+                    Este navegador está cadastrado para receber push.
+                  </p>
+                )}
+              </div>
+
+              {adminPushResultado && (
+                <p
+                  className={`mt-3 text-sm font-medium ${
+                    adminPushResultado.type === "success"
+                      ? "text-green-700"
+                      : adminPushResultado.type === "error"
+                      ? "text-red-600"
+                      : "text-gray-700"
+                  }`}
+                >
+                  {adminPushResultado.msg}
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={ativarNotificacoesAdmin}
+                  disabled={
+                    adminPushBusy ||
+                    adminPushPermissao === "unsupported" ||
+                    adminPushPermissao === "denied"
+                  }
+                  className="rounded-xl bg-green-700 px-4 py-2 text-white font-semibold disabled:opacity-60"
+                >
+                  {adminPushBusy ? "Processando..." : "Ativar notificações"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={desativarNotificacoesAdmin}
+                  disabled={adminPushBusy || !adminPushAtivo}
+                  className="rounded-xl border border-red-200 bg-white px-4 py-2 text-red-600 font-semibold disabled:opacity-60"
+                >
+                  Desativar notificações
+                </button>
+              </div>
             </div>
 
             <div className="mt-4">

@@ -8,6 +8,8 @@ import {
   removerPushSubscription,
   testarPushAtual,
   getPushStatusAtual,
+  salvarPushNativeToken,
+  removerPushNativeToken
 } from "../controllers/notificacoesController.js";
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
@@ -19,6 +21,8 @@ const router = Router();
 router.delete("/:id", authenticateToken, deletarNotificacao);
 router.get("/me", authenticateToken, listarMinhasNotificacoes);
 router.get("/badge", authenticateToken, getBadge);
+router.post("/push/native/subscribe", authenticateToken, salvarPushNativeToken);
+router.post("/push/native/unsubscribe", authenticateToken, removerPushNativeToken);
 router.get("/push/public-key", authenticateToken, getPushPublicKey);
 router.post("/push/subscribe", authenticateToken, salvarPushSubscription);
 router.post("/push/unsubscribe", authenticateToken, removerPushSubscription);

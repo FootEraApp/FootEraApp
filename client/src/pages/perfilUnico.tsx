@@ -18,6 +18,7 @@ import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 
 type TipoPerfil =
   | "Atleta"
+  | "Admin"
   | "Professor"
   | "Olheiro"
   | "Clube"
@@ -44,6 +45,15 @@ export default function PerfilUnico() {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const [, navigate] = useLocation();
+
+  function handleLogoutAndLogin() {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+
+    window.location.replace("/login");
+  }
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -86,7 +96,15 @@ export default function PerfilUnico() {
   }
 
   useEffect(() => {
-    if (!id || !token) return;
+    if (!token) {
+      window.location.replace("/login");
+      return;
+    }
+
+    if (!id) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -171,10 +189,35 @@ export default function PerfilUnico() {
     );
   }
 
-  if (!tipo || !usuarioId) {
+  if (!tipo || !usuarioId || String(tipo).toLowerCase() === "admin") {
     return (
-      <div className="text-center p-10 text-red-600">
-        Perfil não encontrado.
+      <div className="min-h-[100dvh] flex items-center justify-center bg-[#f7f4ea] px-5">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-lg border border-red-100">
+          <h1 className="text-lg font-bold text-red-600 mb-2">
+            Perfil não encontrado
+          </h1>
+
+          <p className="text-sm text-gray-600 mb-5">
+            Esta conta não possui um perfil público disponível. Saia para entrar
+            com outro usuário e continuar testando o app.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleLogoutAndLogin}
+            className="w-full rounded-xl bg-green-700 px-4 py-3 text-white font-semibold shadow-sm active:scale-[0.99]"
+          >
+            Sair e entrar com outro usuário
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="mt-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-700 font-semibold"
+          >
+            Voltar para o início
+          </button>
+        </div>
       </div>
     );
   }
