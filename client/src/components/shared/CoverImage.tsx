@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect } from "react";
-import { APP } from "@/config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 type Props = {
@@ -10,7 +9,7 @@ type Props = {
   fit?: "cover" | "contain";
 };
 
-const COVER_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+const COVER_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 function isEmptySrc(value: unknown) {
   const v = String(value ?? "").trim();
@@ -28,18 +27,18 @@ export default function CoverImage({
     if (isEmptySrc(src)) return COVER_FALLBACK;
 
     if (typeof File !== "undefined" && src instanceof File) {
-        return URL.createObjectURL(src);
+      return URL.createObjectURL(src);
     }
 
     const value = String(src).trim();
 
     if (
-        value.startsWith("blob:") ||
-        value.startsWith("data:") ||
-        value.startsWith("http://") ||
-        value.startsWith("https://")
+      value.startsWith("blob:") ||
+      value.startsWith("data:") ||
+      value.startsWith("http://") ||
+      value.startsWith("https://")
     ) {
-        return value;
+      return value;
     }
 
     return formatarUrlFoto(value, pasta) || COVER_FALLBACK;
@@ -61,6 +60,8 @@ export default function CoverImage({
     };
   }, [src, srcInicial]);
 
+  const isFallback = currentSrc === COVER_FALLBACK;
+
   return (
     <img
       src={currentSrc}
@@ -68,8 +69,12 @@ export default function CoverImage({
       loading="lazy"
       referrerPolicy="no-referrer"
       className={[
-        "block object-center bg-slate-100",
-        fit === "contain" ? "object-contain" : "object-cover",
+        "block object-center",
+        isFallback
+          ? "object-contain bg-emerald-900 p-4"
+          : fit === "contain"
+          ? "object-contain bg-slate-100"
+          : "object-cover bg-slate-100",
         className,
       ].join(" ")}
       onError={() => {

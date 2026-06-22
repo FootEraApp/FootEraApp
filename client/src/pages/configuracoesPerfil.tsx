@@ -9,6 +9,9 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
 import GoogleButton from "../components/auth/GoogleButton";
 import { ativarPushNotifications, desativarPushNotifications, getPushDeviceStatus, type PushDeviceStatus } from "../services/pushNotifications.js";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
+import { ativarPushAndroidNativo } from "../services/nativePushNotifications.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 
@@ -78,6 +81,10 @@ export default function ConfiguracoesPerfil() {
       sessionStorage.getItem("token") ||
       ""
     );
+  }
+
+  function isNativePushApp() {
+    return Capacitor.isNativePlatform();
   }
 
   useEffect(() => {
@@ -378,6 +385,39 @@ export default function ConfiguracoesPerfil() {
     try {
       setPushDeviceStatus("checking");
 
+      if (isNativePushApp()) {
+        const perm = await PushNotifications.checkPermissions();
+
+        if (perm.receive === "granted") {
+          setPushDeviceStatus("subscribed");
+          setPushPermission("granted");
+          setPushHasSubscription(true);
+          setPushMsg("Notificações nativas ativadas neste app Android ✅");
+          setPushErr(null);
+          return;
+        }
+
+        if (perm.receive === "denied") {
+          setPushDeviceStatus("denied");
+          setPushPermission("denied");
+          setPushHasSubscription(false);
+          setPushMsg(null);
+          setPushErr(
+            "Notificações bloqueadas no Android. Para ativar, abra as configurações do app FootEra no sistema e libere as notificações."
+          );
+          return;
+        }
+
+        setPushDeviceStatus("default");
+        setPushPermission("default");
+        setPushHasSubscription(false);
+        setPushMsg(
+          "Notificações ainda não foram ativadas neste app. Clique em Ativar no celular para permitir."
+        );
+        setPushErr(null);
+        return;
+      }
+
       const status = await getPushDeviceStatus();
 
       setPushDeviceStatus(status.status);
@@ -406,13 +446,11 @@ export default function ConfiguracoesPerfil() {
 
       if (status.status === "granted_without_subscription") {
         setPushErr(null);
-
         setPushMsg(
           options?.desativadoManual
             ? "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
             : "Notificações do sistema ainda não estão ativas neste dispositivo. Clique em Ativar no celular para receber avisos fora do app/site."
         );
-
         return;
       }
 
@@ -1009,11 +1047,14 @@ export default function ConfiguracoesPerfil() {
                   {pushDeviceStatus === "denied" && (
                     <div className="text-red-600">
                       <p className="font-medium">
-                        ❌ Notificações bloqueadas neste navegador.
+                        {isNativePushApp()
+                          ? "❌ Notificações bloqueadas no Android."
+                          : "❌ Notificações bloqueadas neste navegador."}
                       </p>
                       <p className="mt-1 text-xs">
-                        Para ativar, clique no cadeado ao lado da URL do site e libere
-                        notificações. Depois recarregue a página.
+                        {isNativePushApp()
+                          ? "Para ativar, abra as configurações do app FootEra no Android e libere notificações."
+                          : "Para ativar, clique no cadeado ao lado da URL do site e libere notificações. Depois recarregue a página."}
                       </p>
                     </div>
                   )}
@@ -1031,7 +1072,7 @@ export default function ConfiguracoesPerfil() {
                   )}
 
                   <p className="text-xs text-gray-500 mt-2">
-                    Permissão do navegador:{" "}
+                    {isNativePushApp() ? "Permissão do Android:" : "Permissão do navegador:"}{" "}
                     <span className="font-semibold">
                       {pushPermission || "verificando"}
                     </span>
@@ -1060,26 +1101,40 @@ export default function ConfiguracoesPerfil() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={pushLoading || pushDeviceStatus === "denied" || pushDeviceStatus === "unsupported"}
+                    disabled={
+                      pushLoading ||
+                      pushDeviceStatus === "denied" ||
+                      (!isNativePushApp() && pushDeviceStatus === "unsupported")
+                    }
                     onClick={async () => {
-                      try {
-                        setPushLoading(true);
-                        setPushMsg(null);
-                        setPushErr(null);
+                    try {
+                      setPushLoading(true);
+                      setPushMsg(null);
+                      setPushErr(null);
 
-                        await ativarPushNotifications();
-                        await atualizarStatusPush();
-
-                        setPushMsg("Notificações ativadas neste dispositivo ✅");
+                      if (isNativePushApp()) {
+                        await ativarPushAndroidNativo();
+                        setPushDeviceStatus("subscribed");
+                        setPushPermission("granted");
+                        setPushHasSubscription(true);
+                        setPushMsg("Notificações nativas ativadas neste app Android ✅");
                         setPushErr(null);
-                      } catch (e: any) {
-                        setPushMsg(null);
-                        setPushErr(e?.message || "Não foi possível ativar notificações.");
-                        await atualizarStatusPush();
-                      } finally {
-                        setPushLoading(false);
+                        return;
                       }
-                    }}
+
+                      await ativarPushNotifications();
+                      await atualizarStatusPush();
+
+                      setPushMsg("Notificações ativadas neste dispositivo ✅");
+                      setPushErr(null);
+                    } catch (e: any) {
+                      setPushMsg(null);
+                      setPushErr(e?.message || "Não foi possível ativar notificações.");
+                      await atualizarStatusPush();
+                    } finally {
+                      setPushLoading(false);
+                    }
+                  }}
                     className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-60"
                   >
                     {pushLoading ? "Ativando..." : "Ativar no celular"}
@@ -1087,28 +1142,37 @@ export default function ConfiguracoesPerfil() {
 
                   <button
                     type="button"
-                    disabled={pushLoading || pushDeviceStatus === "unsupported"}
+                    disabled={pushLoading || (!isNativePushApp() && pushDeviceStatus === "unsupported")}
                     onClick={async () => {
-                      try {
-                        setPushLoading(true);
-                        setPushMsg(null);
-                        setPushErr(null);
+                    try {
+                      setPushLoading(true);
+                      setPushMsg(null);
+                      setPushErr(null);
 
-                        await desativarPushNotifications();
-                        await atualizarStatusPush({ desativadoManual: true });
-
+                      if (isNativePushApp()) {
                         setPushMsg(
-                          "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
+                          "No Android, para desativar notificações, use as configurações do sistema do app FootEra."
                         );
                         setPushErr(null);
-                      } catch (e: any) {
-                        setPushMsg(null);
-                        setPushErr(e?.message || "Não foi possível desativar notificações.");
                         await atualizarStatusPush();
-                      } finally {
-                        setPushLoading(false);
+                        return;
                       }
-                    }}
+
+                      await desativarPushNotifications();
+                      await atualizarStatusPush({ desativadoManual: true });
+
+                      setPushMsg(
+                        "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
+                      );
+                      setPushErr(null);
+                    } catch (e: any) {
+                      setPushMsg(null);
+                      setPushErr(e?.message || "Não foi possível desativar notificações.");
+                      await atualizarStatusPush();
+                    } finally {
+                      setPushLoading(false);
+                    }
+                  }}
                     className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                   >
                     Desativar neste dispositivo

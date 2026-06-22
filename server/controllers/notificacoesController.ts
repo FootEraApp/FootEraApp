@@ -674,18 +674,34 @@ export async function getPushStatusAtual(req: AuthenticatedRequest, res: Respons
 
     const endpoint = String(req.query.endpoint || "").trim();
 
-    const total = await prisma.pushSubscription.count({
+    const totalWeb = await prisma.pushSubscription.count({
       where: {
         usuarioId,
         ...(endpoint ? { endpoint } : {}),
       },
     });
 
+    const totalNative = await prisma.pushDeviceToken.count({
+      where: {
+        usuarioId,
+        ativo: true,
+      } as any,
+    });
+
+    const totalDispositivos = totalWeb + totalNative;
+
     return res.json({
       ok: true,
       endpointInformado: !!endpoint,
-      deviceSaved: total > 0,
-      total,
+
+      // compatibilidade com o código antigo
+      deviceSaved: totalDispositivos > 0,
+      total: totalWeb,
+
+      // novos campos
+      pushSubscriptions: totalWeb,
+      nativePushTokens: totalNative,
+      totalDispositivos,
     });
   } catch (e: any) {
     console.error("[getPushStatusAtual]", e);
@@ -727,7 +743,24 @@ export async function salvarPushNativeToken(req: AuthenticatedRequest, res: Resp
       } as any,
     });
 
-    return res.json({ ok: true });
+    const totalNativeTokens = await prisma.pushDeviceToken.count({
+      where: {
+        usuarioId,
+        ativo: true,
+      } as any,
+    });
+
+    console.log("[fcm] token nativo salvo", {
+      usuarioId,
+      platform,
+      totalNativeTokens,
+      tokenStart: token.slice(0, 16),
+    });
+
+    return res.json({
+      ok: true,
+      nativePushTokens: totalNativeTokens,
+    });
   } catch (e: any) {
     console.error("[salvarPushNativeToken]", e);
     return res.status(500).json({
@@ -824,6 +857,14 @@ async function enviarPushNativoParaUsuario(params: {
         channelId: "footera_default",
       },
     },
+  });
+
+  console.log("[fcm] envio concluído", {
+    usuarioId: params.usuarioId,
+    tipo: params.tipo,
+    totalTokens: tokens.length,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
   });
 
   await Promise.all(

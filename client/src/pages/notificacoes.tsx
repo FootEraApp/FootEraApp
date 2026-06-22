@@ -39,9 +39,15 @@ type NotificacaoItem = {
 
 function formatarDataCurta(iso?: string | null) {
   if (!iso) return "";
+
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(d);
 }
 
 function getIndicacaoIdFromLink(link?: string | null) {

@@ -114,24 +114,39 @@ function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+const APP_TIME_ZONE = "America/Sao_Paulo";
+
+function getSaoPauloParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
 }
 
 function hhmmNow() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2, "0");
-  const m = String(now.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  const p = getSaoPauloParts();
+  return `${p.hour}:${p.minute}`;
 }
 
 function todayISO() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const p = getSaoPauloParts();
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
 function isValidHHMM(v: string) {
@@ -146,9 +161,7 @@ function clampToMinIfToday(v: string, hasTodaySelected: boolean) {
 }
 
 function isPastDayISO(dayISO: string) {
-  const [y, m, d] = dayISO.split("-").map((n) => Number(n));
-  const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
-  return dt.getTime() < startOfToday().getTime();
+  return dayISO < todayISO();
 }
 
 function toISODateOnly(d: Date) {
@@ -1017,24 +1030,35 @@ export default function AgendaTreinos({
     if (salvandoAgenda) return;
 
     setSalvandoAgenda(true);
-    try {
-      if (isValidHHMM(selectedTimeInput) && selectedTimeInput !== selectedTime) {
-        const fixed = clampToMinIfToday(selectedTimeInput, selectedDays.includes(todayISO()));
-        setSelectedTime(fixed);
-        setSelectedTimeInput(fixed);
-      }
-
-      if (selectedDays.includes(todayISO())) {
-        const minNow = hhmmNow();
-        if (selectedTime < minNow) {
-          alert(`Para hoje, escolha um horário a partir de ${minNow}.`);
-          setSelectedTime(minNow);
+      try {
+        if (!isValidHHMM(selectedTimeInput)) {
+          alert("Digite o horário no formato HH:mm. Exemplo: 15:24.");
           return;
         }
-      }
 
-      await onAgendar({ selectedDays, treinoProgramadoId, selectedTime });
+        let horarioFinal = selectedTimeInput;
 
+        if (selectedDays.includes(todayISO())) {
+          const minNow = hhmmNow();
+
+          if (horarioFinal < minNow) {
+            alert(`Para hoje, escolha um horário a partir de ${minNow}.`);
+            horarioFinal = minNow;
+            setSelectedTime(minNow);
+            setSelectedTimeInput(minNow);
+            return;
+          }
+        }
+
+        setSelectedTime(horarioFinal);
+        setSelectedTimeInput(horarioFinal);
+
+        await onAgendar({
+          selectedDays,
+          treinoProgramadoId,
+          selectedTime: horarioFinal,
+        });
+        
       const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
       setAgendados(list);
       setSelectedDays([]);
@@ -1490,10 +1514,13 @@ export default function AgendaTreinos({
                         setSelectedTimeInput(selectedTime);
                         return;
                       }
-                      const fixed = clampToMinIfToday(v, hasTodaySelected);
+                      const minNow = hhmmNow();
+                      const fixed = hasTodaySelected && v < minNow ? minNow : v;
+
                       if (fixed !== v) {
-                        alert(`Para hoje, escolha um horário a partir de ${hhmmNow()}.`);
+                        alert(`Para hoje, escolha um horário a partir de ${minNow}.`);
                       }
+
                       setSelectedTime(fixed);
                       setSelectedTimeInput(fixed);
                     }}

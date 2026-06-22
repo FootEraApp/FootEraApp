@@ -13,6 +13,7 @@ import CoverImage from "../components/shared/CoverImage.js";
 import { ativarPushNotifications, desativarPushNotifications } from "../services/pushNotifications.js";
 import { Capacitor } from "@capacitor/core";
 import { ativarPushAndroidNativo } from "../services/nativePushNotifications.js";
+import { PushNotifications } from "@capacitor/push-notifications";
 
 type Tab =
   | "dashboard"
@@ -179,15 +180,11 @@ function toAbsoluteUrl(raw?: string | null) {
   }
 
   if (v.startsWith("/assets/")) {
-    return isNativeApp()
-      ? `${ASSETS_CDN_BASE}${v}`
-      : v;
+    return v;
   }
 
   if (v.startsWith("assets/")) {
-    return isNativeApp()
-      ? `${ASSETS_CDN_BASE}/${v}`
-      : `/${v}`;
+    return `/${v}`;
   }
 
   if (v.startsWith("/videos/")) {
@@ -1931,6 +1928,26 @@ async function confirmarExcluirProfessor() {
 
   async function atualizarStatusPushAdmin() {
     try {
+      if (Capacitor.isNativePlatform()) {
+        const perm = await PushNotifications.checkPermissions();
+
+        if (perm.receive === "granted") {
+          setAdminPushPermissao("granted");
+          setAdminPushAtivo(true);
+          return;
+        }
+
+        if (perm.receive === "denied") {
+          setAdminPushPermissao("denied");
+          setAdminPushAtivo(false);
+          return;
+        }
+
+        setAdminPushPermissao("default");
+        setAdminPushAtivo(false);
+        return;
+      }
+
       if (typeof window === "undefined" || !("Notification" in window)) {
         setAdminPushPermissao("unsupported");
         setAdminPushAtivo(false);
@@ -1962,10 +1979,11 @@ async function confirmarExcluirProfessor() {
     try {
       if (Capacitor.isNativePlatform()) {
         await ativarPushAndroidNativo();
+        await atualizarStatusPushAdmin();
 
         setAdminPushResultado({
           type: "success",
-          msg: "Permissão nativa ativada no Android. O token FCM será salvo no backend.",
+          msg: "Notificações nativas ativadas no Android. Agora o teste do Diagnóstico pode enviar push para este app.",
         });
 
         showToast("success", "Push nativo Android ativado.");
@@ -2000,6 +2018,16 @@ async function confirmarExcluirProfessor() {
     setAdminPushResultado(null);
 
     try {
+      if (Capacitor.isNativePlatform()) {
+        setAdminPushResultado({
+          type: "info",
+          msg: "No Android, para bloquear notificações, use as configurações do sistema do app FootEra. O botão de teste continuará funcionando se a permissão estiver liberada.",
+        });
+
+        showToast("success", "Use as configurações do Android para bloquear notificações.");
+        return;
+      }
+
       await desativarPushNotifications();
       await atualizarStatusPushAdmin();
 
@@ -2051,12 +2079,14 @@ async function confirmarExcluirProfessor() {
         return;
       }
 
-      const qtd = Number(json?.pushSubscriptions || 0);
+      const qtdWeb = Number(json?.pushSubscriptions || 0);
+      const qtdNative = Number(json?.nativePushTokens || 0);
+      const qtdTotal = Number(json?.totalDispositivos ?? qtdWeb + qtdNative);
 
       setDiagPushResultado({
         type: "success",
         msg:
-          qtd > 0
+          qtdTotal > 0
             ? "Push de teste enviado. Confira a central de notificações do navegador/celular e a página /notificacoes."
             : "Notificação interna criada, mas este admin não tem dispositivo push cadastrado. Vá em Admin > Configurações > Notificações do admin e clique em Ativar notificações.",
       });
@@ -3986,8 +4016,9 @@ async function confirmarExcluirProfessor() {
                   </h4>
 
                   <p className="text-sm text-gray-600">
-                    Ative as notificações neste navegador para conseguir testar push no
-                    Windows usando a aba Diagnóstico.
+                    {Capacitor.isNativePlatform()
+                      ? "Ative as notificações nativas neste app para conseguir testar push no Android usando a aba Diagnóstico."
+                      : "Ative as notificações neste navegador para conseguir testar push no Windows usando a aba Diagnóstico."}
                   </p>
                 </div>
 
@@ -4005,32 +4036,41 @@ async function confirmarExcluirProfessor() {
               <div className="mt-3 text-sm">
                 {adminPushPermissao === "unsupported" && (
                   <p className="text-red-600 font-medium">
-                    Este navegador não suporta notificações push.
+                    {Capacitor.isNativePlatform()
+                      ? "O push nativo do Android ainda não foi inicializado. Clique em Ativar notificações."
+                      : "Este navegador não suporta notificações push."}
                   </p>
                 )}
 
                 {adminPushPermissao === "denied" && (
                   <p className="text-red-600 font-medium">
-                    A permissão foi bloqueada no navegador. Clique no cadeado ao lado da URL,
-                    vá em permissões do site e libere notificações para localhost.
+                    {Capacitor.isNativePlatform()
+                      ? "A permissão foi bloqueada no Android. Abra as configurações do app no sistema e libere as notificações da FootEra."
+                      : "A permissão foi bloqueada no navegador. Clique no cadeado ao lado da URL, vá em permissões do site e libere notificações para localhost."}
                   </p>
                 )}
 
                 {adminPushPermissao === "default" && (
                   <p className="text-amber-700 font-medium">
-                    O navegador ainda não perguntou a permissão. Clique em Ativar notificações.
+                    {Capacitor.isNativePlatform()
+                      ? "O Android ainda não recebeu a permissão. Clique em Ativar notificações."
+                      : "O navegador ainda não perguntou a permissão. Clique em Ativar notificações."}
                   </p>
                 )}
 
                 {adminPushPermissao === "granted" && !adminPushAtivo && (
                   <p className="text-amber-700 font-medium">
-                    Permissão concedida, mas este navegador ainda não está cadastrado no backend.
+                    {Capacitor.isNativePlatform()
+                      ? "Permissão concedida, mas este app ainda não confirmou o token FCM no backend."
+                      : "Permissão concedida, mas este navegador ainda não está cadastrado no backend."}
                   </p>
                 )}
 
                 {adminPushPermissao === "granted" && adminPushAtivo && (
                   <p className="text-green-700 font-medium">
-                    Este navegador está cadastrado para receber push.
+                    {Capacitor.isNativePlatform()
+                      ? "Este app Android está liberado para receber push."
+                      : "Este navegador está cadastrado para receber push."}
                   </p>
                 )}
               </div>
@@ -4055,8 +4095,9 @@ async function confirmarExcluirProfessor() {
                   onClick={ativarNotificacoesAdmin}
                   disabled={
                     adminPushBusy ||
-                    adminPushPermissao === "unsupported" ||
-                    adminPushPermissao === "denied"
+                    (!Capacitor.isNativePlatform() &&
+                      (adminPushPermissao === "unsupported" ||
+                        adminPushPermissao === "denied"))
                   }
                   className="rounded-xl bg-green-700 px-4 py-2 text-white font-semibold disabled:opacity-60"
                 >

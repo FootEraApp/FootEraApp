@@ -1,6 +1,5 @@
 import { useMemo, useEffect, useState } from "react";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
-import { APP } from "@/config.js";
 
 type Props = {
   foto?: string | File | null;
@@ -10,7 +9,7 @@ type Props = {
   pasta?: string;
 };
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 function isEmptyFoto(value: unknown) {
   const v = String(value ?? "").trim();
@@ -50,6 +49,8 @@ export default function Avatar({
     };
   }, [foto, srcInicial]);
 
+  const isFallback = src === AVATAR_FALLBACK;
+
   return (
     <img
       src={src}
@@ -59,8 +60,8 @@ export default function Avatar({
       loading="lazy"
       referrerPolicy="no-referrer"
       className={[
-        "shrink-0 rounded-full object-cover object-center bg-emerald-900",
-        "overflow-hidden aspect-square",
+        "shrink-0 rounded-full object-center bg-emerald-900 overflow-hidden aspect-square",
+        isFallback ? "object-contain p-1" : "object-cover",
         className,
       ].join(" ")}
       onError={() => {
