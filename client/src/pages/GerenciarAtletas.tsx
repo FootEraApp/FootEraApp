@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import Storage from "../../../server/utils/storage.js";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import AgendaTreinos, { normalizeAgendadosPayload } from "@/components/agenda/AgendaTreinos";
@@ -128,12 +128,6 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
 
-function isPastDayISO(dayISO: string) {
-  const [y, m, d] = dayISO.split("-").map((n) => Number(n));
-  const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
-  return dt.getTime() < startOfToday().getTime();
-}
-
 function toISODateOnly(d: Date) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
@@ -178,23 +172,7 @@ function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
     submissaoTreinoId: s.tipo === "treino" ? s.id : null,
   };
 }
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-const getFoto = (f?: string | null) => {
-  if (!f || f === "" || f === "null") return AVATAR_FALLBACK;
 
-  const v = String(f).trim();
-
-  if (/^https?:\/\//i.test(v)) return v;
-  if (v.startsWith("/assets/") || v.startsWith("assets/")) {
-    return v.startsWith("/") ? v : `/${v}`;
-  }
-  if (v.startsWith("/uploads/") || v.startsWith("uploads/")) {
-    const path = v.startsWith("/") ? v.slice(1) : v;
-    return `${API.BASE_URL}/${path}`;
-  }
-
-  return `${API.BASE_URL}/${v.replace(/^\/+/, "")}`;
-};
 const nomeCompletoAtleta = (a: Pick<AtletaMin, "nome" | "sobrenome" | "nomeUsuario">) => {
   const nu = String((a as any).nomeUsuario || "").trim();
   if (nu) return nu;
@@ -254,23 +232,6 @@ async function fetchPontuacaoTotalPorUsuarioId(
     return null;
   }
 }
-
-function onImgErrorFallback(e: React.SyntheticEvent<HTMLImageElement>) {
-  const img = e.currentTarget;
-  if ((img as any).dataset?.fallbackApplied) return;
-  (img as any).dataset.fallbackApplied = "1";
-  img.src = AVATAR_FALLBACK;
-}
-
-const AprovacaoPill: React.FC<{ value: boolean | null }> = ({ value }) => {
-  const cls = value === true
-    ? "bg-emerald-100 text-emerald-700"
-    : value === false
-      ? "bg-red-100 text-red-700"
-      : "bg-zinc-100 text-zinc-600";
-  const label = value === true ? "aprovado" : value === false ? "reprovado" : "pendente";
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] ${cls}`}>{label}</span>;
-};
 
 const PontosPill: React.FC<{ pontos?: number | null; aprovado?: boolean | null }> = ({ pontos, aprovado }) => {
   if (typeof pontos !== "number") return null;
@@ -1311,11 +1272,10 @@ async function salvarAvaliacao() {
                 {professores.map((p) => (
                   <tr key={p.id} className="border-t border-zinc-100">
                     <td className="p-3">
-                      <img
-                        src={getFoto(p.foto)}
+                      <Avatar
+                        foto={p.foto}
                         alt={p.nome}
-                        onError={onImgErrorFallback}
-                        className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
+                        className="h-10 w-10 ring-2 ring-white shadow"
                       />
                     </td>
                     <td className="p-3">
@@ -1427,11 +1387,10 @@ async function salvarAvaliacao() {
                               onClick={() => setLocation(`/perfil/${a.usuarioId}`)}
                               title="Ver perfil do atleta"
                             >
-                              <img
-                                src={getFoto(a.foto)}
+                              <Avatar
+                                foto={a.foto}
                                 alt={nomeCompletoAtleta(a)}
-                                onError={onImgErrorFallback}
-                                className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow cursor-pointer hover:opacity-80"
+                                className="h-10 w-10 ring-2 ring-white shadow cursor-pointer hover:opacity-80"
                               />
                             </button>
                           </button>
@@ -1503,11 +1462,10 @@ async function salvarAvaliacao() {
                             </td>
 
                             <td className="p-3">
-                              <img
-                                src={getFoto(a.foto)}
+                              <Avatar
+                                foto={a.foto}
                                 alt={nomeCompletoAtleta(a)}
-                                onError={onImgErrorFallback}
-                                className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
+                                className="h-10 w-10 ring-2 ring-white shadow"
                               />
                             </td>
 
@@ -1560,10 +1518,10 @@ async function salvarAvaliacao() {
             {focado ? (
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={getFoto(focado.foto)}
-                    onError={onImgErrorFallback}
-                    className="h-12 w-12 rounded-full object-cover"
+                  <Avatar
+                    foto={focado.foto}
+                    alt={nomeCompletoAtleta(focado)}
+                    className="h-12 w-12"
                   />
 
                   <div>
