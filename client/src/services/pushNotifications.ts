@@ -38,17 +38,46 @@ async function getPublicKey() {
   return String(json.publicKey || "");
 }
 
-async function esperarServiceWorkerReady(timeoutMs = 8000) {
+async function esperarServiceWorkerReady(timeoutMs = 8000): Promise<ServiceWorkerRegistration> {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Este navegador não suporta service worker.");
   }
 
-  const registrationAtual = await navigator.serviceWorker.getRegistration();
+  let registrationAtual: ServiceWorkerRegistration | undefined =
+    await navigator.serviceWorker.getRegistration("/");
+
+  const scriptAtual =
+    registrationAtual?.active?.scriptURL ||
+    registrationAtual?.waiting?.scriptURL ||
+    registrationAtual?.installing?.scriptURL ||
+    "";
+
+  const precisaRegistrarPushHandler =
+    !registrationAtual || !scriptAtual.includes("/push-handler.js");
+
+  if (precisaRegistrarPushHandler) {
+    try {
+      registrationAtual = await navigator.serviceWorker.register("/push-handler.js", {
+        scope: "/",
+      });
+    } catch (e: any) {
+      throw new Error(
+        e?.message ||
+          "Não foi possível registrar o service worker de push. Verifique se existe client/public/push-handler.js."
+      );
+    }
+  }
 
   if (!registrationAtual) {
-    throw new Error(
-      "Service worker ainda não está ativo. Para testar no localhost, rode o build e use o preview, ou teste em produção/HTTPS."
-    );
+    throw new Error("Service worker de push não foi registrado corretamente.");
+  }
+
+  try {
+    await registrationAtual.update();
+  } catch {}
+
+  if (registrationAtual.active) {
+    return registrationAtual;
   }
 
   return await Promise.race([
@@ -57,7 +86,7 @@ async function esperarServiceWorkerReady(timeoutMs = 8000) {
       window.setTimeout(() => {
         reject(
           new Error(
-            "Service worker não ficou pronto a tempo. Recarregue a página ou teste usando build/preview."
+            "Service worker não ficou pronto a tempo. Recarregue a página e tente ativar novamente."
           )
         );
       }, timeoutMs);
@@ -207,7 +236,7 @@ export async function getPushDeviceStatus(): Promise<{
     };
   }
 
-  const registration = await navigator.serviceWorker.getRegistration();
+  const registration = await navigator.serviceWorker.getRegistration("/");
 
   if (!registration) {
     return {

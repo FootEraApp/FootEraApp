@@ -471,6 +471,56 @@ export default function ConfiguracoesPerfil() {
     }
   }
 
+  async function testarPushNesteDispositivo() {
+    try {
+      setPushLoading(true);
+      setPushMsg(null);
+      setPushErr(null);
+
+      const resp = await fetch(`${API.BASE_URL}/api/notificacoes/push/test`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.message || "Não foi possível enviar push de teste.");
+      }
+
+      const totalDispositivos = Number(
+        data?.totalDispositivos ??
+          data?.pushSubscriptions ??
+          data?.nativePushTokens ??
+          data?.total ??
+          0
+      );
+
+      if (totalDispositivos > 0) {
+        setPushMsg(
+          "Push de teste enviado. Verifique as notificações do Windows/Chrome ou do celular."
+        );
+        setPushErr(null);
+      } else {
+        setPushMsg(null);
+        setPushErr(
+          "A notificação interna foi criada, mas este dispositivo ainda não está cadastrado para push. Clique em Ativar primeiro."
+        );
+      }
+
+      await atualizarStatusPush();
+    } catch (e: any) {
+      setPushMsg(null);
+      setPushErr(e?.message || "Erro ao testar push.");
+      await atualizarStatusPush();
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-transparent pb-24">
       
@@ -1185,6 +1235,15 @@ export default function ConfiguracoesPerfil() {
                     className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                   >
                     Verificar status
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading}
+                    onClick={testarPushNesteDispositivo}
+                    className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-amber-800 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Enviar teste
                   </button>
                 </div>
               </div>
