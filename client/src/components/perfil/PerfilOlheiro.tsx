@@ -574,10 +574,10 @@ async function salvarNota(atletaId: string) {
             className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-100 border border-green-200 text-green-900 hover:bg-green-200 transition"
           >
             {clubeColab.logo ? (
-              <img
-                src={clubeColab.logo}
-                className="w-4 h-4 rounded object-cover border"
-                onError={(e: any) => (e.currentTarget.style.display = "none")}
+              <Avatar
+                foto={clubeColab.logo}
+                alt={clubeColab.nome}
+                className="w-4 h-4 rounded border"
               />
             ) : null}
             Colabora com <b className="ml-1">{clubeColab.nome}</b>
@@ -636,10 +636,10 @@ async function salvarNota(atletaId: string) {
                 <li className="flex items-center gap-2">
                   <b>Colaboração:</b>
                   {clubeColab.logo ? (
-                    <img
-                      src={clubeColab.logo}
-                      className="w-5 h-5 rounded object-cover border"
-                      onError={(e: any) => (e.currentTarget.style.display = "none")}
+                    <Avatar
+                      foto={clubeColab.logo}
+                      alt={clubeColab.nome}
+                      className="w-5 h-5 rounded border"
                     />
                   ) : null}
                   <Link

@@ -18,8 +18,8 @@ import {
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-import { formatarUrlFoto } from "../../utils/formatarFoto.js";
 import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
+import Avatar from "../shared/Avatar.js";
 
 interface Usuario {
   id: string;
@@ -84,9 +84,6 @@ function normalizeTipo(t: any): string {
 
   return first;
 }
-
-const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
-const ONLINE_TTL_MS = 45_000; 
 
 function timeAgoPtBR(dateLike?: string | Date | null): string {
   if (!dateLike) return "há algum tempo";
@@ -942,22 +939,10 @@ useEffect(() => {
     }
   };
 
-  const rawAvatar = String(foto ?? avatar ?? "").trim();
-  const temAvatarValido =
-    rawAvatar &&
-    rawAvatar !== "null" &&
-    rawAvatar !== "undefined" &&
-    rawAvatar !== "0";
-
-  const imageSrc = temAvatarValido
-    ? formatarUrlFoto(rawAvatar, "usuarios")
-    : FALLBACK_AVATAR;
-
-const alvoUsuarioIdFavorito = isOwnProfile
-  ? String(Storage.usuarioId ?? "").trim()
-  : String(perfilId || "").trim();
-
-
+  const rawAvatar = foto ?? avatar ?? null;
+  const alvoUsuarioIdFavorito = isOwnProfile
+    ? String(Storage.usuarioId ?? "").trim()
+    : String(perfilId || "").trim();
 
   const conquistasTotal = Number(conquistasCount || 0) || 0;
   const conquistasHref = `/perfil/conquistas?usuarioId=${encodeURIComponent(
@@ -1458,16 +1443,11 @@ const alvoUsuarioIdFavorito = isOwnProfile
       )}
 
       <div className="relative w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
-        <img
-          src={imageSrc}
+        <Avatar
+          foto={rawAvatar}
           alt={`${nome} profile`}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            const img = e.currentTarget;
-            if (img.dataset.fallbackApplied) return;
-            img.dataset.fallbackApplied = "1";
-            img.src = FALLBACK_AVATAR;
-          }}
+          className="w-full h-full"
+          size={96}
         />
       </div>
 
@@ -1742,11 +1722,6 @@ const alvoUsuarioIdFavorito = isOwnProfile
                 )}
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
-
-                  const fotoSrc = u.foto
-                    ? formatarUrlFoto(u.foto, "usuarios")
-                    : "/assets/usuarios/default-user.png";
-
                   return (
                     <button
                       key={u.id}
@@ -1758,10 +1733,10 @@ const alvoUsuarioIdFavorito = isOwnProfile
                           : "border-transparent"
                       }`}
                     >
-                      <img
-                        src={fotoSrc}
-                        alt={u.nome}
-                        className="w-14 h-14 rounded-full object-cover"
+                      <Avatar
+                        foto={u.foto}
+                        alt={u.nome || "Usuário"}
+                        className="w-14 h-14"
                       />
                       {selecionado && (
                         <span className="absolute -bottom-1 -right-1 bg-white rounded-full">

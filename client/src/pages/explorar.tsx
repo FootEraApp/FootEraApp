@@ -14,26 +14,17 @@ import {
   Shield,
   Heart,
   CalendarClock,
+  Star,
   Users,
   Ticket,
   CheckCircle2,
 } from "lucide-react";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
-import { publicImgUrl } from "../utils/publicUrl.js";
+import Avatar from "../components/shared/Avatar.js";
 
 const ENABLE_EVENTOS_TAB = false; 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
-function avatarSrc(foto?: string | null) {
-  return publicImgUrl(foto) || AVATAR_FALLBACK;
-}
-
-function onAvatarError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
-  const img = e.currentTarget;
-  if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
-}
 
 type UsuarioBasic = {
   id: string;
@@ -457,9 +448,36 @@ function Explorar() {
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
   const [erroEvento, setErroEvento] = useState<string | null>(null)
   const [pontosCache, setPontosCache] = useState<Record<string, number>>({});
+  const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
+  const [favoritosPerfilIds, setFavoritosPerfilIds] = useState<string[]>([]);
 
   function getUserIdFromAtleta(a: AtletaItem): string {
     return String(a?.usuario?.id ?? a?.usuarioId ?? a?.id ?? "").trim();
+  }
+
+  function getUserIdFromProfessor(p: ProfessorItem): string {
+    return String(p?.usuario?.id ?? "").trim();
+  }
+
+  function getUserIdFromOlheiro(o: OlheiroItem): string {
+    return String(o?.usuario?.id ?? "").trim();
+  }
+
+  function getUserIdFromClube(c: ClubeItem): string {
+    return String(c?.usuario?.id ?? c?.usuarioId ?? "").trim();
+  }
+
+  function getUserIdFromEscola(e: EscolaItem): string {
+    return String(e?.usuario?.id ?? e?.usuarioId ?? "").trim();
+  }
+
+  function getUserIdFromOutro(o: OutroItem): string {
+    return String(o?.usuario?.id ?? o?.usuarioId ?? "").trim();
+  }
+
+  function isPerfilFavorito(usuarioId?: string | null) {
+    const id = String(usuarioId || "").trim();
+    return !!id && favoritosPerfilIds.includes(id);
   }
 
   function calcTotalFromPontuacaoPayload(data: any): number {
@@ -493,6 +511,50 @@ function Explorar() {
       return null;
     }
   }
+
+  useEffect(() => {
+    let alive = true;
+
+    async function carregarFavoritosPerfil() {
+      const token = Storage?.token || "";
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/favoritos`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const data = await res.json().catch(() => []);
+
+        if (!res.ok) return;
+
+        const ids = Array.isArray(data)
+          ? data.map(String)
+          : Array.isArray(data?.ids)
+          ? data.ids.map(String)
+          : Array.isArray(data?.items)
+          ? data.items
+              .map((item: any) => item?.favoritoUsuarioId || item?.usuarioId || item?.id)
+              .filter(Boolean)
+              .map(String)
+          : [];
+
+        if (alive) setFavoritosPerfilIds(Array.from(new Set(ids)));
+      } catch (e) {
+        console.warn("[explorar] erro ao carregar favoritos", e);
+      }
+    }
+
+    carregarFavoritosPerfil();
+
+    const onFocus = () => carregarFavoritosPerfil();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
 
   useEffect(() => {
     setShowFilters(false);
@@ -593,6 +655,10 @@ function Explorar() {
     const q = normText(busca);
 
     const base = (dados.atletas || []).filter((a) => {
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromAtleta(a))) {
+        return false;
+      }
+
       const m = getAtletaMeta(a);
 
       if (f.categoria) {
@@ -630,7 +696,7 @@ function Explorar() {
     });
 
     return sortProThenName(base, (a) => (a as any)?.usuario?.nome ?? "");
-  }, [dados.atletas, filtrosKey, busca, pontosCache]);
+  }, [dados.atletas, filtrosKey, busca, pontosCache, mostrarFavoritos, favoritosPerfilIds]);
 
   const eventosFiltrados = useMemo(() => {
     const q = (busca || "").toLowerCase();
@@ -663,6 +729,10 @@ function Explorar() {
     const f = filtrosOrgs;
 
     const base = (dados.escolas || []).filter((e) => {
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromEscola(e))) {
+        return false;
+      }
+
       if (f.estado && !includesText(e.estado, f.estado)) return false;
       if (f.cidade && !includesText(e.cidade, f.cidade)) return false;
 
@@ -680,13 +750,18 @@ function Explorar() {
     });
 
     return sortProThenName(base, (e) => (e as any)?.nome ?? "");
-  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs)]);
+  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs), mostrarFavoritos, favoritosPerfilIds]);
 
   const clubesFiltrados = useMemo(() => {
     const q = normText(busca);
     const f = filtrosOrgs;
 
     const base = (dados.clubes || []).filter((c) => {
+
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromClube(c))) {
+        return false;
+      }
+
       if (f.estado && !includesText(c.estado, f.estado)) return false;
       if (f.cidade && !includesText(c.cidade, f.cidade)) return false;
 
@@ -699,13 +774,22 @@ function Explorar() {
     });
 
     return sortProThenName(base, (c) => (c as any)?.nome ?? "");
-  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs)]);
+  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs), favoritosPerfilIds, mostrarFavoritos]);
 
   const profissionaisFiltrados = useMemo(() => {
     const q = normText(busca);
     const f = filtrosProf;
 
     const base = (profissionais || []).filter((p: any) => {
+
+      const uid = p.role === "Olheiro"
+        ? getUserIdFromOlheiro(p)
+        : getUserIdFromProfessor(p);
+
+      if (mostrarFavoritos && !isPerfilFavorito(uid)) {
+        return false;
+      }
+
       const m = getProfMeta(p);
 
       if (f.papel && f.papel !== "Ambos") {
@@ -727,7 +811,7 @@ function Explorar() {
     });
 
     return sortProThenName(base, (p) => (p as any)?.usuario?.nome ?? "");
-  }, [profissionais, busca, JSON.stringify(filtrosProf)]);
+  }, [profissionais, busca, JSON.stringify(filtrosProf), mostrarFavoritos, favoritosPerfilIds]);
 
   const outrosFiltrados = useMemo(() => {
     const todos = [
@@ -740,6 +824,11 @@ function Explorar() {
     const q = normText(busca);
 
     const filtrados = todos.filter((item) => {
+
+      if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromOutro(item))) {
+        return false;
+      }
+
       const nome =
         item.nome ??
         item.usuario?.nome ??
@@ -780,16 +869,45 @@ function Explorar() {
     dados.federacoes,
     busca,
     JSON.stringify(filtrosOutros),
+    mostrarFavoritos,
+    favoritosPerfilIds
   ]);
 
-  useEffect(() => setShowCountAtletas(BATCH), [busca, filtrosKey, dados.atletas.length]);
-  useEffect(() => setShowCountEscolas(BATCH), [busca, escolasFiltradas.length]);
-  useEffect(() => setShowCountClubes(BATCH), [busca, clubesFiltrados.length]);
-  useEffect(() => setShowCountProfs(BATCH), [busca, profissionaisFiltrados.length]);
+  useEffect(() => setShowCountAtletas(BATCH), [
+    busca,
+    filtrosKey,
+    dados.atletas.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => setShowCountEscolas(BATCH), [
+    busca,
+    escolasFiltradas.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => setShowCountClubes(BATCH), [
+    busca,
+    clubesFiltrados.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => setShowCountProfs(BATCH), [
+    busca,
+    profissionaisFiltrados.length,
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
+  ]);
+
   useEffect(() => setShowCountOutros(BATCH), [
     busca,
     outrosFiltrados.length,
     JSON.stringify(filtrosOutros),
+    mostrarFavoritos,
+    favoritosPerfilIds.length,
   ]);
 
   useEffect(() => {
@@ -1087,6 +1205,59 @@ function Explorar() {
 
   const rawLogoOrg = selectedEvento?.clube?.logo || (selectedEvento as any)?.escolinha?.logo || null;
 
+  const favoritosNaAbaAtual = useMemo(() => {
+    if (aba === "atletas") {
+      return (dados.atletas || []).filter((a) =>
+        isPerfilFavorito(getUserIdFromAtleta(a))
+      ).length;
+    }
+
+    if (aba === "escolas") {
+      return (dados.escolas || []).filter((e) =>
+        isPerfilFavorito(getUserIdFromEscola(e))
+      ).length;
+    }
+
+    if (aba === "clubes") {
+      return (dados.clubes || []).filter((c) =>
+        isPerfilFavorito(getUserIdFromClube(c))
+      ).length;
+    }
+
+    if (aba === "profissionais") {
+      return (profissionais || []).filter((p: any) => {
+        const uid =
+          p.role === "Olheiro"
+            ? getUserIdFromOlheiro(p)
+            : getUserIdFromProfessor(p);
+
+        return isPerfilFavorito(uid);
+      }).length;
+    }
+
+    if (aba === "outros") {
+      const todos = [
+        ...(dados.learning || []),
+        ...(dados.marcas || []),
+        ...(dados.federacoes || []),
+      ];
+
+      return todos.filter((item) => isPerfilFavorito(getUserIdFromOutro(item))).length;
+    }
+
+    return 0;
+  }, [
+    aba,
+    dados.atletas,
+    dados.escolas,
+    dados.clubes,
+    dados.learning,
+    dados.marcas,
+    dados.federacoes,
+    profissionais,
+    favoritosPerfilIds,
+  ]);
+
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
       <div className="h-16 sm:h-20 bg-green-900 text-white flex items-center">
@@ -1108,6 +1279,36 @@ function Explorar() {
               className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white text-sm sm:text-base"
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setMostrarFavoritos((prev) => !prev)}
+            className={`relative shrink-0 px-3 py-2 rounded-xl border inline-flex items-center gap-2 text-sm font-semibold ${
+              mostrarFavoritos
+                ? "bg-amber-50 text-amber-700 border-amber-300"
+                : "bg-white text-green-800 border-green-200 hover:bg-emerald-50"
+            }`}
+            title={
+              mostrarFavoritos
+                ? "Mostrar todos os perfis"
+                : "Mostrar somente perfis favoritos"
+            }
+          >
+            <Star
+              size={16}
+              fill={mostrarFavoritos ? "currentColor" : "none"}
+            />
+
+            <span className="hidden sm:inline">
+              {mostrarFavoritos ? "Favoritos" : "Favoritos"}
+            </span>
+
+            {favoritosNaAbaAtual > 0 && (
+              <span className="inline-flex min-w-5 h-5 px-1 items-center justify-center rounded-full bg-amber-100 text-amber-800 text-[11px] border border-amber-200">
+                {favoritosNaAbaAtual}
+              </span>
+            )}
+          </button>
 
           {aba !== "eventos" && (
             <>
@@ -1659,11 +1860,10 @@ function Explorar() {
                       <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                           <div className="relative">
-                            <img
-                              src={avatarSrc(rawFoto)}
-                              onError={onAvatarError}
+                            <Avatar
+                              foto={rawFoto}
                               alt={`${nome} profile`}
-                              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                              className="w-20 h-20 sm:w-24 sm:h-24 border"
                             />
                             {shouldShowProBadgeOnAvatar(a) && (
                               <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
@@ -1728,11 +1928,10 @@ function Explorar() {
                         <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
                           <div className="min-w-[130px] sm:min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
                             <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
-                            <img
-                              src={avatarSrc(foto)}
-                              onError={onAvatarError}
-                              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border"
+                            <Avatar
+                              foto={foto}
                               alt={r.usuario.nome}
+                              className="w-14 h-14 sm:w-16 sm:h-16 border"
                             />
                             <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
                             <div className="text-xs mt-1">❤️ {r.total}</div>
@@ -1754,11 +1953,10 @@ function Explorar() {
                       <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
                           <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">{rotulo}</div>
-                          <img
-                            src={avatarSrc(foto)}
-                            onError={onAvatarError}
-                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border"
+                          <Avatar
+                            foto={foto}
                             alt={top.usuario.nome}
+                            className="w-9 h-9 sm:w-10 sm:h-10 border"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{top.usuario.nome}</div>
@@ -1785,11 +1983,10 @@ function Explorar() {
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border bg-white flex items-center justify-center overflow-hidden">
-                        <img
-                          src={avatarSrc(rawLogo)}
-                          onError={onAvatarError}
+                        <Avatar
+                          foto={rawLogo}
                           alt="Logo da escola"
-                          className="w-full h-full object-contain"
+                          className="w-full h-full"
                         />
                       </div>
 
@@ -1849,8 +2046,12 @@ function Explorar() {
               {!hasMoreEscolas && dados.escolas.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2"></div>
               )}
-              {dados.escolas.length === 0 && !carregandoDados && (
-                <div className="text-sm text-gray-600 mt-2">Nenhuma escola encontrada</div>
+              {escolasFiltradas.length === 0 && !carregandoDados && (
+                <div className="text-sm text-gray-600 mt-2">
+                  {mostrarFavoritos
+                    ? "Nenhuma escola favorita encontrada."
+                    : "Nenhuma escola encontrada"}
+                </div>
               )}
             </div>
           </>
@@ -1867,11 +2068,10 @@ function Explorar() {
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border bg-white flex items-center justify-center overflow-hidden">
-                        <img
-                          src={avatarSrc(rawLogo)}
-                          onError={onAvatarError}
+                        <Avatar
+                          foto={rawLogo}
                           alt="Logo do clube"
-                          className="w-full h-full object-contain"
+                          className="w-full h-full"
                         />
                       </div>
 
@@ -1927,8 +2127,12 @@ function Explorar() {
               {!hasMoreClubes && dados.clubes.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2"></div>
               )}
-              {dados.clubes.length === 0 && !carregandoDados && (
-                <div className="text-sm text-gray-600 mt-2">Nenhum clube encontrado</div>
+              {clubesFiltrados.length === 0 && !carregandoDados && (
+                <div className="text-sm text-gray-600 mt-2">
+                  {mostrarFavoritos
+                    ? "Nenhum clube favorito encontrado."
+                    : "Nenhum clube encontrado"}
+                </div>
               )}
             </div>
           </>
@@ -1937,7 +2141,7 @@ function Explorar() {
         {aba === "profissionais" && (
           <>
             <h2 className="text-base sm:text-lg font-bold my-4">Professores e Olheiros</h2>
-            {profissionais.length > 0 ? (
+            {profissionaisFiltrados.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {profissionaisFiltrados.slice(0, showCountProfs).map((p) => {
                   const rawFoto = p.foto ?? p.usuario?.foto;
@@ -1948,11 +2152,10 @@ function Explorar() {
                     <Link href={href} key={`${p.role}-${p.id}`}>
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <div className="relative">
-                          <img
-                            src={avatarSrc(rawFoto)}
-                            onError={onAvatarError}
+                          <Avatar
+                            foto={rawFoto}
                             alt="Foto do usuário"
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                            className="w-20 h-20 sm:w-24 sm:h-24 border"
                           />
                           {shouldShowProBadgeOnAvatar(p) && (
                             <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
@@ -1972,8 +2175,6 @@ function Explorar() {
                               <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
                             </Pill>
                           )}
-
-                          
                         </div>
 
                         {(() => {
@@ -2000,7 +2201,11 @@ function Explorar() {
                 })}
               </div>
             ) : (
-              <p className="text-center text-gray-600">Nenhum profissional encontrado</p>
+              <p className="text-center text-gray-600">
+                {mostrarFavoritos
+                  ? "Nenhum profissional favorito encontrado."
+                  : "Nenhum profissional encontrado."}
+              </p>
             )}
 
           </>
@@ -2045,11 +2250,10 @@ function Explorar() {
                     <Link href={`/perfil/${uid}`} key={`${item.tipoOutro}-${item.id}`}>
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <div className="relative">
-                          <img
-                            src={avatarSrc(rawFoto)}
-                            onError={onAvatarError}
+                          <Avatar
+                            foto={rawFoto}
                             alt="Foto do usuário"
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                            className="w-20 h-20 sm:w-24 sm:h-24 border"
                           />
 
                           {shouldShowProBadgeOnAvatar(item) && (
@@ -2087,7 +2291,9 @@ function Explorar() {
               </div>
             ) : (
               <div className="text-sm text-gray-600 mt-2">
-                Nenhum perfil encontrado em Outros.
+                {mostrarFavoritos
+                  ? "Nenhum perfil favorito encontrado em Outros."
+                  : "Nenhum perfil encontrado em Outros."}
               </div>
             )}
 
@@ -2247,11 +2453,10 @@ function Explorar() {
             {(selectedEvento.clube || (selectedEvento as any).escolinha) && (
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-full border bg-white flex items-center justify-center overflow-hidden">
-                  <img
-                    src={avatarSrc(rawLogoOrg)}
-                    onError={onAvatarError}
+                  <Avatar
+                    foto={rawLogoOrg}
                     alt="Logo do organizador"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full"
                   />
                 </div>
                 <div className="text-xs text-gray-700">
