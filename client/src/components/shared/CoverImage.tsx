@@ -10,6 +10,7 @@ type Props = {
 };
 
 const COVER_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
+const FALLBACK_BG_PADRAO = "#003c24";
 
 function isEmptySrc(value: unknown) {
   const v = String(value ?? "").trim();
@@ -45,6 +46,7 @@ export default function CoverImage({
   }, [src, pasta]);
 
   const [currentSrc, setCurrentSrc] = useState(srcInicial);
+  const [fallbackBg, setFallbackBg] = useState(FALLBACK_BG_PADRAO);
 
   useEffect(() => {
     setCurrentSrc(srcInicial);
@@ -60,7 +62,81 @@ export default function CoverImage({
     };
   }, [src, srcInicial]);
 
-  const isFallback = currentSrc === COVER_FALLBACK;
+  const isFallback =
+    currentSrc === COVER_FALLBACK ||
+    currentSrc.includes("/assets/usuarios/footera-logo-fundo-verde.png");
+
+  useEffect(() => {
+    if (!isFallback) {
+      setFallbackBg(FALLBACK_BG_PADRAO);
+      return;
+    }
+
+    let cancelado = false;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = currentSrc;
+
+    img.onload = () => {
+      if (cancelado) return;
+
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1;
+        canvas.height = 1;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const sampleW = Math.max(1, Math.floor(img.naturalWidth * 0.12));
+        const sampleH = Math.max(1, Math.floor(img.naturalHeight * 0.12));
+
+        ctx.drawImage(img, 0, 0, sampleW, sampleH, 0, 0, 1, 1);
+
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+
+        setFallbackBg(`rgb(${r}, ${g}, ${b})`);
+      } catch {
+        setFallbackBg(FALLBACK_BG_PADRAO);
+      }
+    };
+
+    img.onerror = () => {
+      if (!cancelado) setFallbackBg(FALLBACK_BG_PADRAO);
+    };
+
+    return () => {
+      cancelado = true;
+    };
+  }, [currentSrc, isFallback]);
+
+  if (isFallback) {
+    return (
+      <div
+        className={[
+          "relative block overflow-hidden",
+          className,
+        ].join(" ")}
+        style={{ backgroundColor: fallbackBg }}
+        role="img"
+        aria-label={alt}
+      >
+        <img
+          src={currentSrc}
+          alt={alt}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="relative z-10 block h-full w-full object-contain scale-[1.03]"
+          onError={() => {
+            if (currentSrc !== COVER_FALLBACK) {
+              setCurrentSrc(COVER_FALLBACK);
+            }
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <img
@@ -70,9 +146,7 @@ export default function CoverImage({
       referrerPolicy="no-referrer"
       className={[
         "block object-center",
-        isFallback
-          ? "object-contain bg-emerald-900 p-4"
-          : fit === "contain"
+        fit === "contain"
           ? "object-contain bg-slate-100"
           : "object-cover bg-slate-100",
         className,

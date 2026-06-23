@@ -217,7 +217,7 @@ export default function ConfiguracoesPerfil() {
     });
   }
 
-    async function atualizarStatusPush(options?: { desativadoManual?: boolean }) {
+  async function atualizarStatusPush(options?: { desativadoManual?: boolean }) {
     try {
       setPushDeviceStatus("checking");
 
@@ -271,6 +271,55 @@ export default function ConfiguracoesPerfil() {
       setPushDeviceStatus("default");
       setPushMsg(null);
       setPushErr(e?.message || "Não foi possível verificar o status das notificações.");
+    }
+  }
+
+  async function testarPushNesteDispositivo() {
+    try {
+      setPushLoading(true);
+      setPushMsg(null);
+      setPushErr(null);
+
+      const resp = await fetch(`${API.BASE_URL}/api/notificacoes/push/test`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.message || "Não foi possível enviar push de teste.");
+      }
+
+      const totalDispositivos = Number(
+        data?.totalDispositivos ??
+          data?.pushSubscriptions ??
+          data?.total ??
+          0
+      );
+
+      if (totalDispositivos > 0) {
+        setPushMsg(
+          "Push de teste enviado. Verifique as notificações do Windows/Chrome e a página de notificações."
+        );
+        setPushErr(null);
+      } else {
+        setPushMsg(null);
+        setPushErr(
+          "A notificação interna foi criada, mas este navegador ainda não está cadastrado para push. Clique em Ativar neste navegador primeiro."
+        );
+      }
+
+      await atualizarStatusPush();
+    } catch (e: any) {
+      setPushMsg(null);
+      setPushErr(e?.message || "Erro ao testar push.");
+      await atualizarStatusPush();
+    } finally {
+      setPushLoading(false);
     }
   }
 
@@ -1091,6 +1140,16 @@ export default function ConfiguracoesPerfil() {
                   >
                     Verificar status
                   </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading}
+                    onClick={testarPushNesteDispositivo}
+                    className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-amber-800 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Enviar teste
+                  </button>
+
                 </div>
                </div>
               </div>
