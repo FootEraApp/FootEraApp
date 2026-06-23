@@ -49,6 +49,9 @@ import {
   salvarVideosExecucaoTreino,
   uploadExecucaoVideoTreino,
   listarSessoesTreino,
+  listarFavoritosTreinos,
+  alternarFavoritoTreino,
+  removerFavoritoTreino,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -116,6 +119,9 @@ router.post(
   requireCapability("agendamento:lote"),
   agendarTreinoLote
 );
+router.get("/favoritos", listarFavoritosTreinos);
+router.post("/favoritos/toggle", alternarFavoritoTreino);
+router.delete("/favoritos/:id", removerFavoritoTreino);
 router.get("/alunos", authenticateToken, listarAlunosTreinoAgendadoTurma);
 router.get("/calendario", getCalendarioTreinos);
 router.post("/expirar-vencidos", expirarTreinosVencidos);
