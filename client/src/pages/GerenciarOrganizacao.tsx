@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API } from "../config.js";
-import Avatar from "../components/shared/Avatar.js";
 import {
   Building2,
   ShieldCheck,
@@ -61,6 +60,72 @@ function normalizePermissoes(raw: any | null | undefined): PermState {
 
 function permsToPayload(p: PermState) {
   return { atletasTurmas: !!p.atletasTurmas, professores: !!p.professores };
+}
+
+const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
+
+function fotoOuLogoFallback(foto?: string | null) {
+  const valor = String(foto ?? "").trim();
+
+  if (
+    !valor ||
+    valor.toLowerCase() === "null" ||
+    valor.toLowerCase() === "undefined"
+  ) {
+    return AVATAR_FALLBACK;
+  }
+
+  if (
+    valor.startsWith("http://") ||
+    valor.startsWith("https://") ||
+    valor.startsWith("data:") ||
+    valor.startsWith("blob:")
+  ) {
+    return valor;
+  }
+
+  if (valor.startsWith("/assets/")) return valor;
+  if (valor.startsWith("assets/")) return `/${valor}`;
+
+  if (valor.startsWith("/uploads/")) return `${API.BASE_URL}${valor}`;
+  if (valor.startsWith("uploads/")) return `${API.BASE_URL}/${valor}`;
+
+  if (!valor.includes("/") && /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(valor)) {
+    return `/assets/usuarios/${valor}`;
+  }
+
+  return valor;
+}
+
+type AvatarSeguroProps = {
+  foto?: string | null;
+  alt: string;
+  className?: string;
+};
+
+function AvatarSeguro({ foto, alt, className = "" }: AvatarSeguroProps) {
+  const [src, setSrc] = useState(() => fotoOuLogoFallback(foto));
+
+  useEffect(() => {
+    setSrc(fotoOuLogoFallback(foto));
+  }, [foto]);
+
+  return (
+    <span
+      className={`inline-flex shrink-0 overflow-hidden rounded-full bg-emerald-700 ${className}`}
+    >
+      <img
+        src={src}
+        alt={alt}
+        className="block h-full w-full rounded-full object-cover"
+        onError={() => {
+          if (src !== AVATAR_FALLBACK) {
+            setSrc(AVATAR_FALLBACK);
+          }
+        }}
+      />
+    </span>
+  );
 }
 
 function PermissoesChips({ perms }: { perms: PermState }) {
@@ -326,7 +391,7 @@ export default function GerenciarOrganizacao({
                 return (
                   <li key={o.id} className="rounded-2xl border border-zinc-200 bg-white p-4">
                     <div className="flex items-center gap-3">
-                      <Avatar foto={o.logo ?? null} alt={nome} className="h-12 w-12" />
+                      <AvatarSeguro foto={o.logo ?? null} alt={nome} className="h-12 w-12" />
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-zinc-900">{nome}</div>
                         <div className="text-xs text-zinc-500">
@@ -506,7 +571,7 @@ export default function GerenciarOrganizacao({
                     <div key={g.id} className="p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">
-                          <Avatar foto={foto} alt={nome} className="h-10 w-10" />
+                          <AvatarSeguro foto={foto} alt={nome} className="h-10 w-10" />
                           <div>
                             <div className="text-sm font-semibold text-zinc-900">{nome}</div>
                             <div className="text-xs text-zinc-500">

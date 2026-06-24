@@ -44,21 +44,72 @@ type TurmaItem = {
   alunosCount?: number | null;
 };
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 function fotoPerfilOuFallback(foto?: string | null) {
   const valor = String(foto ?? "").trim();
 
   if (
     !valor ||
-    valor === "null" ||
-    valor === "undefined"
+    valor.toLowerCase() === "null" ||
+    valor.toLowerCase() === "undefined"
   ) {
     return AVATAR_FALLBACK;
   }
 
+  if (
+    valor.startsWith("http://") ||
+    valor.startsWith("https://") ||
+    valor.startsWith("data:") ||
+    valor.startsWith("blob:")
+  ) {
+    return valor;
+  }
+
+  if (valor.startsWith("/assets/")) return valor;
+  if (valor.startsWith("assets/")) return `/${valor}`;
+
+  if (valor.startsWith("/uploads/")) return `${API.BASE_URL}${valor}`;
+  if (valor.startsWith("uploads/")) return `${API.BASE_URL}/${valor}`;
+
+  // Quando o banco salva só "prof-clube-footera.png"
+  if (!valor.includes("/") && /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(valor)) {
+    return `/assets/usuarios/${valor}`;
+  }
+
   return valor;
 }
+
+type AvatarSeguroProps = {
+  foto?: string | null;
+  alt: string;
+  className?: string;
+};
+
+const AvatarSeguro: React.FC<AvatarSeguroProps> = ({ foto, alt, className = "" }) => {
+  const [src, setSrc] = useState(() => fotoPerfilOuFallback(foto));
+
+  useEffect(() => {
+    setSrc(fotoPerfilOuFallback(foto));
+  }, [foto]);
+
+  return (
+    <span
+      className={`inline-flex shrink-0 overflow-hidden rounded-full bg-emerald-700 ${className}`}
+    >
+      <img
+        src={src}
+        alt={alt}
+        className="block h-full w-full rounded-full object-cover"
+        onError={() => {
+          if (src !== AVATAR_FALLBACK) {
+            setSrc(AVATAR_FALLBACK);
+          }
+        }}
+      />
+    </span>
+  );
+};
 
 function canVerAbaProfessores(org: any | null) {
   if (!org) return false;
@@ -720,8 +771,8 @@ const GerenciarProfessores: React.FC = () => {
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0">
                 <div className="shrink-0 translate-y-4">
-                  <Avatar
-                    foto={fotoPerfilOuFallback(orgSelecionada.logo)}
+                  <AvatarSeguro
+                    foto={orgSelecionada.logo}
                     alt={orgSelecionada.nome ?? "Organização"}
                     className="
                       h-16 w-16
@@ -1026,8 +1077,8 @@ const GerenciarProfessores: React.FC = () => {
                 {professores.map((p) => (
                   <div key={p.id} className="p-4">
                     <div className="flex items-start gap-3">
-                      <Avatar
-                        foto={fotoPerfilOuFallback(p.foto)}
+                      <AvatarSeguro
+                        foto={p.foto}
                         alt={p.nome}
                         className="h-12 w-12 shrink-0"
                       />
@@ -1093,8 +1144,8 @@ const GerenciarProfessores: React.FC = () => {
                     {professores.map((p) => (
                       <tr key={p.id} className="border-t border-zinc-100 hover:bg-zinc-50">
                         <td className="p-3">
-                          <Avatar
-                            foto={fotoPerfilOuFallback(p.foto)}
+                          <AvatarSeguro
+                            foto={p.foto}
                             alt={p.nome}
                             className="h-10 w-10"
                           />
