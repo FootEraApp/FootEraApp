@@ -13,14 +13,9 @@ import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import { ModalAdicionarMembrosGrupo } from "../components/mensagens/ModalAdicionarMembrosGrupo.js";
+import SharedAvatar from "../components/shared/Avatar.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
-function getAvatarSrc(foto?: string | null) {
-  if (!foto || !foto.trim()) return AVATAR_FALLBACK;
-  if (foto.startsWith("http://") || foto.startsWith("https://")) return foto;
-  return `${API.BASE_URL}${foto}`;
-}
 
 interface Usuario {
   id: string;
@@ -2011,14 +2006,10 @@ function stripConvocacaoTag(text: string) {
                           className="shrink-0"
                           title={`Ver perfil de ${membro.nome}`}
                         >
-                          <img
-                            src={getAvatarSrc(membro.foto)}
-                            alt={membro.nome}
-                            className="w-10 h-10 rounded-full object-cover border"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = AVATAR_FALLBACK;
-                            }}
+                          <SharedAvatar
+                            foto={membro.foto}
+                            alt={membro.nome || "Usuário"}
+                            className="w-10 h-10"
                           />
                         </button>
 

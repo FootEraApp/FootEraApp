@@ -91,8 +91,8 @@ export default function PaginaLogin() {
   const [sendingResend, setSendingResend] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [maintenanceChecked, setMaintenanceChecked] = useState(false);
-    const [deletedInfo, setDeletedInfo] = useState<{
+  const [maintenanceChecked, setMaintenanceChecked] = useState(isE2E);
+  const [deletedInfo, setDeletedInfo] = useState<{
     daysLeft: number;
     restoreAvailable: boolean;
     message: string;

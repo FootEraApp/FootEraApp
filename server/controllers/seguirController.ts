@@ -1,37 +1,27 @@
 import { Request, Response, RequestHandler } from "express";
 import {  NotificacaoTipo } from "@prisma/client";
-import { recomputeAndEmitBadge } from "./notificacoesController.js"; 
+import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js"; 
 import { prisma } from "../prisma.js";
 
-interface AuthenticatedRequest extends Request {
-  userId: string;
-}
-
 async function criarNotifEAtualizarBadge(params: {
-  usuarioId: string;            
-  actorId?: string | null;     
+  usuarioId: string;
+  actorId?: string | null;
   tipo: NotificacaoTipo;
   titulo: string;
   mensagem: string;
   link?: string | null;
 }) {
-  const { usuarioId, actorId, tipo, titulo, mensagem, link } = params;
-
-  await prisma.notificacao.create({
-    data: {
-      usuarioId,
-      actorId: actorId ?? null,
-      tipo,
-      titulo,
-      mensagem,
-      link: link ?? null,
-      lida: false,
-    },
-  });
-
   try {
-    await recomputeAndEmitBadge(usuarioId);
-  } catch {
+    await criarNotificacaoEEnviarPush({
+      usuarioId: params.usuarioId,
+      actorId: params.actorId ?? null,
+      tipo: params.tipo,
+      titulo: params.titulo,
+      mensagem: params.mensagem,
+      link: params.link ?? null,
+    });
+  } catch (e) {
+    console.warn("[seguir] falha ao criar notificacao/push:", e);
   }
 }
 

@@ -46,6 +46,7 @@ import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
 import { PrismaClient } from "@prisma/client";
 import { purgeDeletedAccounts } from "./jobs/purgeDeletedAccounts.js";
+import { startNotificationScheduler } from "./services/notificationScheduler.js";
 
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
@@ -151,9 +152,11 @@ const server = http.createServer(app);
 
 ensureUploadDirs();
 startExpiredTrainingsJob();
+startNotificationScheduler();
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 const PORT = Number(process.env.PORT) || 3001;
+
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const LOCAL_IP = process.env.LOCAL_IP || "192.168.18.8";
 const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;

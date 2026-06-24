@@ -19,7 +19,7 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         navigateFallbackDenylist: [/^\/api\//],
-
+        importScripts: ["/push-handler.js"],
         runtimeCaching: [
           {
             urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/"),
@@ -47,5 +47,10 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
+
+  build: {
+    chunkSizeWarningLimit: 750,
+  },
+
   server: { host: true },
 });

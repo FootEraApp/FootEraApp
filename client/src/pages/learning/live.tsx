@@ -16,6 +16,8 @@ import {
   Video,
 } from "lucide-react";
 import { API } from "@/config.js";
+import CoverImage from "../../components/shared/CoverImage";
+import Avatar from "../../components/shared/Avatar";
 
 type AulaAoVivoStatus = "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
 
@@ -111,21 +113,6 @@ function getToken() {
 function getAulaIdFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return params.get("aulaId") || params.get("id") || "";
-}
-
-function getInitials(nome?: string | null) {
-  const parts = String(nome || "U")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!parts.length) return "U";
-
-  return parts
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase();
 }
 
 function formatarDataHora(value?: string | null) {
@@ -838,13 +825,12 @@ export default function LearningLivePage() {
     if (isScheduled) {
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-white overflow-hidden">
-          {capaUrl ? (
-            <img
-              src={capaUrl}
-              alt={aula?.titulo || "Capa da aula"}
-              className="absolute inset-0 h-full w-full object-cover opacity-25"
-            />
-          ) : null}
+          <CoverImage
+            src={capaUrl}
+            alt={aula?.titulo || "Capa da aula"}
+            pasta="metodologias"
+            className="absolute inset-0 h-full w-full opacity-25"
+          />
 
           <div className="relative w-full max-w-[92%] sm:max-w-xl text-center px-3 sm:px-6 py-3">
             <CalendarClock className="w-8 h-8 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-4 text-amber-300" />
@@ -1038,18 +1024,11 @@ export default function LearningLivePage() {
             <div className="rounded-[22px] sm:rounded-[26px] bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
               <div className="flex flex-col md:flex-row md:items-start gap-4 mb-5">
                 <div className="h-20 w-20 rounded-2xl bg-[#0b4a2f] text-white flex items-center justify-center shrink-0 overflow-hidden">
-                  {criadorFoto ? (
-                    <img
-                      src={criadorFoto}
-                      alt={criadorNome}
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <Radio className="w-9 h-9" />
-                  )}
+                  <Avatar
+                    foto={criadorFoto}
+                    alt={criadorNome}
+                    className="h-full w-full rounded-2xl"
+                  />
                 </div>
 
                 <div className="min-w-0 flex-1">
@@ -1224,20 +1203,11 @@ export default function LearningLivePage() {
                 {messages.length ? (
                   messages.map((msg) => (
                     <div key={msg.id} className="flex items-start gap-3">
-                      {msg.usuario?.foto ? (
-                        <img
-                          src={msg.usuario.foto}
-                          alt={msg.usuario.nome || "Usuário"}
-                          className="h-9 w-9 rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-full bg-[#216c43] text-white flex items-center justify-center text-xs font-black">
-                          {getInitials(msg.usuario?.nome)}
-                        </div>
-                      )}
+                      <Avatar
+                        foto={msg.usuario?.foto}
+                        alt={msg.usuario?.nome || "Usuário"}
+                        className="h-9 w-9"
+                      />
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">

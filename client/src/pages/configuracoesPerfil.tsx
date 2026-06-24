@@ -8,6 +8,12 @@ import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
 import GoogleButton from "../components/auth/GoogleButton";
+import {
+  ativarPushNotifications,
+  desativarPushNotifications,
+  getPushDeviceStatus,
+  type PushDeviceStatus,
+} from "../services/pushNotifications.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 
@@ -52,6 +58,12 @@ export default function ConfiguracoesPerfil() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleSuccess, setGoogleSuccess] = useState<string | null>(null);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [pushErr, setPushErr] = useState<string | null>(null);
+  const [pushDeviceStatus, setPushDeviceStatus] = useState<PushDeviceStatus | "checking">("checking");
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported" | null>(null);
+  const [pushHasSubscription, setPushHasSubscription] = useState(false);
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
@@ -203,6 +215,112 @@ export default function ConfiguracoesPerfil() {
       },
       body: JSON.stringify(patch),
     });
+  }
+
+  async function atualizarStatusPush(options?: { desativadoManual?: boolean }) {
+    try {
+      setPushDeviceStatus("checking");
+
+      const status = await getPushDeviceStatus();
+
+      setPushDeviceStatus(status.status);
+      setPushPermission(status.permission);
+      setPushHasSubscription(status.hasSubscription);
+
+      if (status.status === "subscribed") {
+        setPushMsg("Notificações ativadas neste dispositivo ✅");
+        setPushErr(null);
+        return;
+      }
+
+      if (status.status === "denied") {
+        setPushMsg(null);
+        setPushErr(
+          "Notificações bloqueadas no navegador. Para ativar, libere as notificações nas configurações do site."
+        );
+        return;
+      }
+
+      if (status.status === "unsupported") {
+        setPushMsg(null);
+        setPushErr("Este navegador/dispositivo não suporta notificações push.");
+        return;
+      }
+
+      if (status.status === "granted_without_subscription") {
+        setPushErr(null);
+        setPushMsg(
+          options?.desativadoManual
+            ? "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
+            : "Notificações do sistema ainda não estão ativas neste dispositivo. Clique em Ativar neste navegador para receber avisos fora do site."
+        );
+        return;
+      }
+
+      if (status.status === "default") {
+        setPushMsg(
+          "Notificações ainda não foram ativadas neste dispositivo. Clique em Ativar neste navegador para escolher."
+        );
+        setPushErr(null);
+        return;
+      }
+
+      setPushMsg(null);
+      setPushErr(null);
+    } catch (e: any) {
+      setPushDeviceStatus("default");
+      setPushMsg(null);
+      setPushErr(e?.message || "Não foi possível verificar o status das notificações.");
+    }
+  }
+
+  async function testarPushNesteDispositivo() {
+    try {
+      setPushLoading(true);
+      setPushMsg(null);
+      setPushErr(null);
+
+      const resp = await fetch(`${API.BASE_URL}/api/notificacoes/push/test`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.message || "Não foi possível enviar push de teste.");
+      }
+
+      const totalDispositivos = Number(
+        data?.totalDispositivos ??
+          data?.pushSubscriptions ??
+          data?.total ??
+          0
+      );
+
+      if (totalDispositivos > 0) {
+        setPushMsg(
+          "Push de teste enviado. Verifique as notificações do Windows/Chrome e a página de notificações."
+        );
+        setPushErr(null);
+      } else {
+        setPushMsg(null);
+        setPushErr(
+          "A notificação interna foi criada, mas este navegador ainda não está cadastrado para push. Clique em Ativar neste navegador primeiro."
+        );
+      }
+
+      await atualizarStatusPush();
+    } catch (e: any) {
+      setPushMsg(null);
+      setPushErr(e?.message || "Erro ao testar push.");
+      await atualizarStatusPush();
+    } finally {
+      setPushLoading(false);
+    }
   }
 
   async function excluirConta(e: React.FormEvent) {
@@ -416,6 +534,7 @@ export default function ConfiguracoesPerfil() {
             onClick={async () => {
               setShowNotificacoesModal(true);
               await carregarNotificacoes();
+              await atualizarStatusPush();
             }}
             className="text-green-800 font-semibold"
           >
@@ -900,9 +1019,141 @@ export default function ConfiguracoesPerfil() {
                     salvarNotificacoes({ notifMarketing: v });
                   }}
                 />
+                </div>
+                <div className="rounded-lg border border-green-100 bg-white p-4 mt-4">
+                <div className="font-semibold text-green-900">
+                  Notificações no dispositivo
+                </div>
+
+                <p className="text-sm text-gray-600 mt-1">
+                  Ative para receber avisos mesmo com o site fechado.
+                </p>
+
+                {pushMsg && (
+                  <div className="mt-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                    {pushMsg}
+                  </div>
+                )}
+
+                {pushErr && (
+                  <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    {pushErr}
+                  </div>
+                )}
+
+                <div className="mt-3 text-xs text-gray-500">
+                  Permissão do navegador:{" "}
+                  <span className="font-semibold">
+                    {pushPermission || "verificando"}
+                  </span>
+                  {" · "}
+                  Status no dispositivo:{" "}
+                  <span className="font-semibold">
+                    {pushDeviceStatus === "checking"
+                      ? "verificando"
+                      : pushHasSubscription
+                      ? "ativo"
+                      : "inativo"}
+                  </span>
+                </div>
+
+                {pushDeviceStatus === "denied" && (
+                  <p className="mt-3 text-sm text-red-600 font-medium">
+                    ❌ Notificações bloqueadas neste navegador. Para ativar,
+                    clique no cadeado ao lado da URL do site e libere notificações.
+                    Depois recarregue a página.
+                  </p>
+                )}
+
+                {pushDeviceStatus === "granted_without_subscription" && (
+                  <p className="mt-3 text-sm text-red-600 font-medium">
+                    ⚠️ Notificações do sistema não estão ativas neste dispositivo.
+                  </p>
+                )}
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={
+                      pushLoading ||
+                      pushDeviceStatus === "denied" ||
+                      pushDeviceStatus === "unsupported"
+                    }
+                    onClick={async () => {
+                      try {
+                        setPushLoading(true);
+                        setPushMsg(null);
+                        setPushErr(null);
+
+                        await ativarPushNotifications();
+                        await atualizarStatusPush();
+
+                        setPushMsg("Notificações ativadas neste dispositivo ✅");
+                        setPushErr(null);
+                      } catch (e: any) {
+                        setPushMsg(null);
+                        setPushErr(e?.message || "Não foi possível ativar notificações.");
+                        await atualizarStatusPush();
+                      } finally {
+                        setPushLoading(false);
+                      }
+                    }}
+                    className="rounded-md bg-green-700 px-4 py-2 text-white text-sm font-semibold disabled:opacity-50"
+                  >
+                    {pushLoading ? "Processando..." : "Ativar neste navegador"}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading || pushDeviceStatus === "unsupported"}
+                    onClick={async () => {
+                      try {
+                        setPushLoading(true);
+                        setPushMsg(null);
+                        setPushErr(null);
+
+                        await desativarPushNotifications();
+                        await atualizarStatusPush({ desativadoManual: true });
+
+                        setPushMsg(
+                          "Notificações desativadas neste dispositivo. Você pode ativar novamente quando quiser."
+                        );
+                        setPushErr(null);
+                      } catch (e: any) {
+                        setPushMsg(null);
+                        setPushErr(e?.message || "Não foi possível desativar notificações.");
+                        await atualizarStatusPush();
+                      } finally {
+                        setPushLoading(false);
+                      }
+                    }}
+                    className="rounded-md border border-red-200 bg-white px-4 py-2 text-red-600 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Desativar neste dispositivo
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading}
+                    onClick={() => atualizarStatusPush()}
+                    className="rounded-md border border-gray-200 bg-white px-4 py-2 text-gray-700 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Verificar status
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushLoading}
+                    onClick={testarPushNesteDispositivo}
+                    className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-amber-800 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Enviar teste
+                  </button>
+
+                </div>
+               </div>
               </div>
-            </div>        
-          </div>
+             </div>
         </div>
       )}
 

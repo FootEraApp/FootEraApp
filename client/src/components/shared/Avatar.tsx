@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 type Props = {
@@ -6,34 +6,50 @@ type Props = {
   alt?: string;
   className?: string;
   size?: number;
+  pasta?: string;
 };
 
-const FALLBACK =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'>
-      <rect width='100%' height='100%' fill='#e5f3eb'/>
-      <circle cx='40' cy='30' r='16' fill='#97c7a6'/>
-      <rect x='14' y='50' width='52' height='22' rx='11' fill='#97c7a6'/>
-    </svg>`
-  );
+const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 
-export default function Avatar({ foto, alt = "", className = "w-10 h-10", size = 40 }: Props) {
-  const src = useMemo<string>(() => {
-    if (!foto) return FALLBACK;
+function isEmptyFoto(value: unknown) {
+  const v = String(value ?? "").trim();
+  return !v || v === "null" || v === "undefined";
+}
+
+export default function Avatar({
+  foto,
+  alt = "",
+  className = "w-10 h-10",
+  size = 40,
+  pasta = "usuarios",
+}: Props) {
+  const srcInicial = useMemo<string>(() => {
+    if (isEmptyFoto(foto)) return AVATAR_FALLBACK;
+
     if (typeof File !== "undefined" && foto instanceof File) {
       return URL.createObjectURL(foto);
     }
-    return formatarUrlFoto(String(foto), "usuarios") || FALLBACK;
-  }, [foto]);
+
+    return formatarUrlFoto(String(foto), pasta) || AVATAR_FALLBACK;
+  }, [foto, pasta]);
+
+  const [src, setSrc] = useState(srcInicial);
+
+  useEffect(() => {
+    setSrc(srcInicial);
+  }, [srcInicial]);
 
   useEffect(() => {
     return () => {
       if (typeof File !== "undefined" && foto instanceof File) {
-        try { URL.revokeObjectURL(src); } catch {}
+        try {
+          URL.revokeObjectURL(srcInicial);
+        } catch {}
       }
     };
-  }, [foto, src]);
+  }, [foto, srcInicial]);
+
+  const isFallback = src === AVATAR_FALLBACK;
 
   return (
     <img
@@ -43,11 +59,15 @@ export default function Avatar({ foto, alt = "", className = "w-10 h-10", size =
       height={size}
       loading="lazy"
       referrerPolicy="no-referrer"
-      className={`${className} rounded-full object-cover`}
-      onError={(e) => {
-        const img = e.currentTarget as HTMLImageElement;
-        img.onerror = null;
-        img.src = FALLBACK;
+      className={[
+        "shrink-0 rounded-full object-center bg-emerald-900 overflow-hidden aspect-square",
+        isFallback ? "object-contain p-1" : "object-cover",
+        className,
+      ].join(" ")}
+      onError={() => {
+        if (src !== AVATAR_FALLBACK) {
+          setSrc(AVATAR_FALLBACK);
+        }
       }}
     />
   );

@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { API } from "../../../config.js";
+import CoverImage from "../../../components/shared/CoverImage.js";
 
 function getReturnTo(): string {
   const qs = new URLSearchParams(window.location.search);
@@ -1867,10 +1868,11 @@ export default function CriarOuEditarTreino() {
                 <div className="mt-2 rounded-2xl border border-gray-200 bg-white p-4">
                   <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
                     {capaPreviewUrl ? (
-                      <img
+                      <CoverImage
                         src={capaPreviewUrl}
                         alt="Prévia da capa"
-                        className="h-48 w-full object-cover"
+                        pasta="treinos"
+                        className="h-48 w-full"
                       />
                     ) : (
                       <div className="grid h-48 place-items-center text-sm text-gray-500">

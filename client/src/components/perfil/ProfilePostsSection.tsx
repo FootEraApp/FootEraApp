@@ -7,6 +7,7 @@ import Storage from "../../../../server/utils/storage.js";
 import axios from "axios";
 import { X } from "lucide-react";
 import { getFeedPosts, deletarComentario, compartilharPost, likePost, comentarPost, repostPost, type PostagemComUsuario } from "../../services/feedService.js";
+import Avatar from "../shared/Avatar.js";
 
 type ConquistaDB = {
   id: string;
@@ -477,12 +478,9 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             ).trim();
 
             const canDelete = isMyProfile && (dono === me || reposterId === me);
-            const curtidas = post.curtidas || [];
-            const comentarios = post.comentarios || [];
             const parsed = parseAchievement(post.conteudo || "");
             const isAchievement = !!parsed;
             const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
-            const avatarSrc = publicImgUrl(post?.usuario?.foto) || FALLBACK_AVATAR;
             const imgSrc = midiaImg(post.imagemUrl);
             const videoSrc = midiaVideo(post.videoUrl);
             const ro = post.repostOf ?? null;
@@ -493,16 +491,10 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                 className="bg-stone-50 rounded-2xl shadow-md p-4 space-y-3"
               >
                <div className="flex items-center gap-2">
-                <img
-                  src={avatarSrc}
+                <Avatar
+                  foto={post?.usuario?.foto}
                   alt={post?.usuario?.nome || "Usuário"}
-                  className="w-10 h-10 rounded-full object-cover"
-                  onError={(e) => {
-                    const img = e.currentTarget;
-                    if ((img as any).dataset?.fallbackApplied) return;
-                    (img as any).dataset.fallbackApplied = "1";
-                    img.src = FALLBACK_AVATAR;
-                  }}
+                  className="w-10 h-10"
                 />
 
                 <div className="flex-1 min-w-0">
@@ -539,8 +531,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                         const root = getRootPost(post);     
                         const parentComment = parent ? cleanText(parent.conteudo) : "";
                         const rootText = cleanText(root.conteudo);
-                        const rootAvatar =
-                          publicImgUrl(root.usuario?.foto) || FALLBACK_AVATAR;
                         const rootImg = midiaImg(root.imagemUrl);
                         const rootVideo = midiaVideo(root.videoUrl);
 
@@ -563,11 +553,10 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
 
                             <div className="border rounded-xl p-3 bg-gray-50">
                               <div className="flex items-center gap-2 mb-1">
-                                <img
-                                  src={rootAvatar}
-                                  onError={(e) => ((e.currentTarget as HTMLImageElement).src = FALLBACK_AVATAR)}
+                                <Avatar
+                                  foto={root.usuario?.foto}
                                   alt={root.usuario?.nome || "avatar"}
-                                  className="w-7 h-7 rounded-full object-cover"
+                                  className="w-7 h-7"
                                 />
 
                                 <div className="min-w-0">
@@ -713,10 +702,10 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                     const isMine = String(c.usuarioId) === String(Storage.usuarioId);
                     return (
                       <div key={c.id} className="flex gap-3">
-                        <img
-                          src={publicImgUrl(c.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`}
-                          className="w-9 h-9 rounded-full object-cover"
+                        <Avatar
+                          foto={c.usuario?.foto}
                           alt={c.usuario?.nome || "avatar"}
+                          className="w-9 h-9"
                         />
 
                         <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">

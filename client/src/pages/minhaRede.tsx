@@ -1,31 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
-import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { ArrowLeft } from "lucide-react";
 import { Link } from 'wouter';
 import BottomNav from "@/components/layout/BottomNav.js";
+import Avatar from "../components/shared/Avatar.js";
 
 type Usuario = { id: string; nome: string; foto?: string | null; isPendente?: boolean };
 type Seguidor = Usuario & { isSeguindo?: boolean };
-
-const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
-
-function temFotoValida(foto?: string | null) {
-  const v = String(foto ?? "").trim();
-  return !!v && v !== "null" && v !== "undefined" && v !== "0";
-}
-
-function fotoSrcUsuario(foto?: string | null) {
-  return temFotoValida(foto) ? formatarUrlFoto(foto as any, "usuarios") : FALLBACK_AVATAR;
-}
-
-function aplicarFallback(e: React.SyntheticEvent<HTMLImageElement>) {
-  const img = e.currentTarget;
-  if (img.dataset.fallbackApplied) return;
-  img.dataset.fallbackApplied = "1";
-  img.src = FALLBACK_AVATAR;
-}
 
 export default function MinhaRede() {
   const [aba, setAba] = useState<"seguindo" | "seguidores">("seguindo");
@@ -149,12 +131,11 @@ export default function MinhaRede() {
             >
               <div className="flex items-center gap-3">
                 <Link href={`/perfil/${u.id}`} onClick={(e) => e.stopPropagation()}>
-                  <img
-                    src={fotoSrcUsuario(u.foto)}
-                    onError={aplicarFallback}
-                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                  <Avatar
+                    foto={u.foto}
                     alt={u.nome || "Usuário"}
-                    title="Ver perfil"
+                    className="w-10 h-10 cursor-pointer"
+                    size={40}
                   />
                 </Link>
 
@@ -188,12 +169,11 @@ export default function MinhaRede() {
               >
                 <div className="flex items-center gap-3">
                   <Link href={`/perfil/${u.id}`} onClick={(e) => e.stopPropagation()}>
-                    <img
-                      src={fotoSrcUsuario(u.foto)}
-                      onError={aplicarFallback}
-                      className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                    <Avatar
+                      foto={u.foto}
                       alt={u.nome || "Usuário"}
-                      title="Ver perfil"
+                      className="w-10 h-10 cursor-pointer"
+                      size={40}
                     />
                   </Link>
                   <span className="font-medium">{u.nome || "Usuário"}</span>

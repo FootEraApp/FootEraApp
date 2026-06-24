@@ -1,4 +1,16 @@
-import { getBadge, listarMinhasNotificacoes, recomputeAndEmitBadge, deletarNotificacao } from "../controllers/notificacoesController.js";
+import {
+  getBadge,
+  listarMinhasNotificacoes,
+  recomputeAndEmitBadge,
+  deletarNotificacao,
+  getPushPublicKey,
+  salvarPushSubscription,
+  removerPushSubscription,
+  testarPushAtual,
+  getPushStatusAtual,
+  salvarPushNativeToken,
+  removerPushNativeToken
+} from "../controllers/notificacoesController.js";
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -9,6 +21,13 @@ const router = Router();
 router.delete("/:id", authenticateToken, deletarNotificacao);
 router.get("/me", authenticateToken, listarMinhasNotificacoes);
 router.get("/badge", authenticateToken, getBadge);
+router.post("/push/native/subscribe", authenticateToken, salvarPushNativeToken);
+router.post("/push/native/unsubscribe", authenticateToken, removerPushNativeToken);
+router.get("/push/public-key", authenticateToken, getPushPublicKey);
+router.post("/push/subscribe", authenticateToken, salvarPushSubscription);
+router.post("/push/unsubscribe", authenticateToken, removerPushSubscription);
+router.post("/push/test", authenticateToken, testarPushAtual);
+router.get("/push/status", authenticateToken, getPushStatusAtual);
 router.patch("/:id/lida", authenticateToken, async (req: any, res) => {
   try {
     const id = String(req.params.id || "");

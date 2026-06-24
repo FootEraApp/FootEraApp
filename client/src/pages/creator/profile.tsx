@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import CreatorCard from "../../components/CreatorCard";
 import ProfilePostsSection from "@/components/perfil/ProfilePostsSection";
+import CoverImage from "../../components/shared/CoverImage";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
 const FRONTEND_BASE_URL =
@@ -277,6 +278,57 @@ function getConvidadosLabel(aula?: AulaAoVivoCreator | null) {
   return "";
 }
 
+function parseDataEvento(value?: string | null) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return null;
+
+  const direta = new Date(raw);
+  if (!Number.isNaN(direta.getTime())) {
+    return direta;
+  }
+
+  const brMatch = raw.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+
+  if (brMatch) {
+    const [, dia, mes, ano, hora = "0", minuto = "0", segundo = "0"] = brMatch;
+
+    return new Date(
+      Number(ano),
+      Number(mes) - 1,
+      Number(dia),
+      Number(hora),
+      Number(minuto),
+      Number(segundo),
+      0
+    );
+  }
+
+  return null;
+}
+
+function isEventoAindaNaoOcorreu(dataInicio?: string | null, status?: string | null) {
+  const s = String(status || "").toUpperCase();
+
+  if (s === "AO_VIVO") return true;
+
+  if (
+    s === "FINALIZADA" ||
+    s === "CANCELADA" ||
+    s === "ENCERRADO" ||
+    s === "CANCELADO"
+  ) {
+    return false;
+  }
+
+  const data = parseDataEvento(dataInicio);
+  if (!data) return false;
+
+  return data.getTime() > Date.now();
+}
+
 export default function CreatorProfile() {
   const [data, setData] = useState<PerfilResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -440,35 +492,39 @@ export default function CreatorProfile() {
   const eventosAoVivo = Array.isArray(data.eventosAoVivo) ? data.eventosAoVivo : [];
 
   const eventosDaAba = [
-    ...eventosAoVivo.map((aula) => ({
-      kind: "AULA_AO_VIVO" as const,
-      id: aula.id,
-      titulo: aula.titulo,
-      descricao: aula.descricao,
-      data: aula.dataInicio,
-      status: aula.status,
-      imagem:
-        aula.thumbUrl ||
-        aula.metodologiaAvulsa?.capaUrl ||
-        aula.metodologia?.capaUrl ||
-        AVATAR_FALLBACK,
-      metodologiaTitulo:
-        aula.metodologiaAvulsa?.titulo ||
-        aula.metodologia?.titulo ||
-        "Learning",
-      aula,
-    })),
-    ...eventos.map((ev) => ({
-      kind: "EVENTO" as const,
-      id: ev.id,
-      titulo: ev.titulo,
-      descricao: ev.descricao,
-      data: ev.dataEvento,
-      status: ev.status,
-      imagem: ev.capaUrl || ev.imagemUrl || AVATAR_FALLBACK,
-      metodologiaTitulo: ev.tipoLabel || ev.tipo || "Evento",
-      evento: ev,
-    })),
+    ...eventosAoVivo
+      .filter((aula) => isEventoAindaNaoOcorreu(aula.dataInicio, aula.status))
+      .map((aula) => ({
+        kind: "AULA_AO_VIVO" as const,
+        id: aula.id,
+        titulo: aula.titulo,
+        descricao: aula.descricao,
+        data: aula.dataInicio,
+        status: aula.status,
+        imagem:
+          aula.thumbUrl ||
+          aula.metodologiaAvulsa?.capaUrl ||
+          aula.metodologia?.capaUrl ||
+          AVATAR_FALLBACK,
+        metodologiaTitulo:
+          aula.metodologiaAvulsa?.titulo ||
+          aula.metodologia?.titulo ||
+          "Learning",
+        aula,
+      })),
+    ...eventos
+      .filter((ev) => isEventoAindaNaoOcorreu(ev.dataEvento, ev.status))
+      .map((ev) => ({
+        kind: "EVENTO" as const,
+        id: ev.id,
+        titulo: ev.titulo,
+        descricao: ev.descricao,
+        data: ev.dataEvento,
+        status: ev.status,
+        imagem: ev.capaUrl || ev.imagemUrl || AVATAR_FALLBACK,
+        metodologiaTitulo: ev.tipoLabel || ev.tipo || "Evento",
+        evento: ev,
+      })),
   ].sort((a, b) => {
     const da = new Date(a.data || 0).getTime();
     const db = new Date(b.data || 0).getTime();
@@ -1011,7 +1067,7 @@ export default function CreatorProfile() {
 
             {eventosDaAba.length === 0 ? (
               <p className="text-slate-500 text-sm">
-                Nenhum evento publicado ainda.
+                Nenhum evento futuro publicado ainda.
               </p>
             ) : (
               <div className="grid gap-3">
@@ -1027,13 +1083,11 @@ export default function CreatorProfile() {
                       className="rounded-2xl border bg-white overflow-hidden shadow-sm"
                     >
                       <div className="h-36 bg-emerald-50 overflow-hidden flex items-center justify-center">
-                        <img
-                          src={ev.imagem || AVATAR_FALLBACK}
+                        <CoverImage
+                          src={ev.imagem}
                           alt={ev.titulo}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = AVATAR_FALLBACK;
-                          }}
+                          pasta="metodologias"
+                          className="w-full h-full"
                         />
                       </div>
 

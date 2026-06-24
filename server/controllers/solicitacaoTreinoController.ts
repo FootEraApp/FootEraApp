@@ -1,8 +1,7 @@
 import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
-import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
 import { NotificacaoTipo } from "@prisma/client";
-import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -13,66 +12,6 @@ const absFoto = (req: Request, f?: string | null) =>
         ? f
         : `${getBase(req)}${f.startsWith("/") ? f : `/${f}`}`)
     : null;
-
-async function autoVincularAtleta(
-  atletaUsuarioId: string,
-  outroUsuarioId: string
-) {
-  const [uAtleta, uOutro] = await Promise.all([
-    prisma.usuario.findUnique({ where: { id: atletaUsuarioId }, select: { id: true, tipo: true } }),
-    prisma.usuario.findUnique({ where: { id: outroUsuarioId },  select: { id: true, tipo: true } }),
-  ]);
-  if (!uAtleta || !uOutro || uAtleta.tipo !== "Atleta") return;
-
-  const atleta = await prisma.atleta.findUnique({ where: { usuarioId: uAtleta.id }, select: { id: true } });
-  if (!atleta) return;
-
-  if (uOutro.tipo === "Clube") {
-    const clubeId = await resolveClubeId(uOutro.id);
-    if (!clubeId) return;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.atleta.update({ where: { id: atleta.id }, data: { clubeId } });
-
-      const existe = await tx.relacaoTreinamento.findFirst({ where: { atletaId: atleta.id, clubeId } });
-      if (!existe) {
-        await tx.relacaoTreinamento.deleteMany({ where: { atletaId: atleta.id, clubeId: { not: clubeId } } });
-        await tx.relacaoTreinamento.create({ data: { atletaId: atleta.id, clubeId } });
-      }
-
-      const jaTem = await tx.vinculoFormacao.findFirst({
-        where: { atletaId: atleta.id, origem: "Clube", origemId: clubeId },
-      });
-      if (!jaTem) {
-        await tx.vinculoFormacao.create({
-          data: { atletaId: atleta.id, origem: "Clube", origemId: clubeId },
-        });
-      }
-    });
-  } else if (uOutro.tipo === "Escolinha") {
-    const escolinhaId = await resolveEscolinhaId(uOutro.id);
-    if (!escolinhaId) return;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.atleta.update({ where: { id: atleta.id }, data: { escolinhaId } });
-
-      const existe = await tx.relacaoTreinamento.findFirst({ where: { atletaId: atleta.id, escolinhaId } });
-      if (!existe) {
-        await tx.relacaoTreinamento.deleteMany({ where: { atletaId: atleta.id, escolinhaId: { not: escolinhaId } } });
-        await tx.relacaoTreinamento.create({ data: { atletaId: atleta.id, escolinhaId } });
-      }
-
-      const jaTem = await tx.vinculoFormacao.findFirst({
-        where: { atletaId: atleta.id, origem: "Escolinha", origemId: escolinhaId },
-      });
-      if (!jaTem) {
-        await tx.vinculoFormacao.create({
-          data: { atletaId: atleta.id, origem: "Escolinha", origemId: escolinhaId },
-        });
-      }
-    });
-  }
-}
 
 export async function listarSolicitacoesMinhas(req: Request, res: Response) {
   const me: string | undefined = (req as any).user?.id || (req as any).userId;
@@ -353,19 +292,14 @@ export async function criarSolicitacao(req: Request, res: Response) {
       data: { remetenteId, destinatarioId, status: "pendente" },
     });
 
-    await prisma.notificacao.create({
-      data: {
-        usuarioId: destinatarioId,
-        actorId: remetenteId,
-        tipo: NotificacaoTipo.GENERICA,
-        titulo: "Solicitação de treino",
-        mensagem: "quer treinar junto com você",
-        link: "/notificacoes",
-        lida: false,
-      },
+    await criarNotificacaoEEnviarPush({
+      usuarioId: destinatarioId,
+      actorId: remetenteId,
+      tipo: NotificacaoTipo.GENERICA,
+      titulo: "Solicitação de treino",
+      mensagem: "quer treinar junto com você",
+      link: "/notificacoes",
     });
-
-    await recomputeAndEmitBadge(destinatarioId);
     return res.status(201).json({ ...row, ok: true });
   } catch (error) {
     console.error("Erro ao criar solicitação:", error);
@@ -723,19 +657,14 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
 
     await prisma.solicitacaoTreino.delete({ where: { id } });
 
-    await prisma.notificacao.create({
-      data: {
-        usuarioId: solicitacao.remetenteId,
-        actorId: solicitacao.destinatarioId,
-        tipo: NotificacaoTipo.GENERICA,
-        titulo: "Vínculo aceito",
-        mensagem: "Sua solicitação de treino foi aceita.",
-        link: `/perfil/${solicitacao.destinatarioId}`,
-        lida: false,
-      },
+    await criarNotificacaoEEnviarPush({
+      usuarioId: solicitacao.remetenteId,
+      actorId: solicitacao.destinatarioId,
+      tipo: NotificacaoTipo.GENERICA,
+      titulo: "Vínculo aceito",
+      mensagem: "Sua solicitação de treino foi aceita.",
+      link: `/perfil/${solicitacao.destinatarioId}`,
     });
-
-    await recomputeAndEmitBadge(solicitacao.remetenteId);
 
     return res.json({
       ok: true,

@@ -14,6 +14,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import CoverImage from "../../components/shared/CoverImage.js";
 
 type EventoListItem = {
   id: string;
@@ -525,13 +526,11 @@ export default function CreatorEventosPage() {
                   <li key={`live_${aula.id}`} className="bg-white rounded-2xl border p-4 shadow-sm">
                     <div className="flex gap-3">
                       <div className="w-20 h-20 rounded-2xl overflow-hidden bg-emerald-50 shrink-0">
-                        <img
+                        <CoverImage
                           src={capa}
                           alt={aula.titulo}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = AVATAR_FALLBACK;
-                          }}
+                          pasta="metodologias"
+                          className="w-full h-full"
                         />
                       </div>
                           

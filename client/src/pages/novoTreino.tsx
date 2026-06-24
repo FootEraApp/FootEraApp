@@ -11,7 +11,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import type { TreinoCreatePayload } from "../utils/treinos.types.js";
 import {
@@ -19,6 +19,8 @@ import {
 } from "../utils/treinos.helpers.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import axios from "axios";
+import Avatar from "../components/shared/Avatar.js";
+import CoverImage from "../components/shared/CoverImage.js";
 
 type ExItemUILocal = {
   idLocal: string;
@@ -249,7 +251,6 @@ const NOMES_MESES_PT = [
 ];
 
 const DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
   const m = String(mesZeroBased + 1).padStart(2, "0");
@@ -301,11 +302,6 @@ function parseDateOnlyToLocalMidnight(dateOnly: string): Date {
   if (!s) return new Date(NaN);
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
-}
-
-function resolveAvatarUrl(raw?: string) {
-  const u = resolveMediaUrl(raw);
-  return u || AVATAR_FALLBACK;
 }
 
 const ASSETS_CDN_BASE =
@@ -3985,10 +3981,11 @@ export default function NovoTreino() {
           listaAtiva.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
               {t.imagemUrl ? (
-                <img
-                  src={resolveMediaUrl(t.imagemUrl)}
+                <CoverImage
+                  src={t.imagemUrl}
                   alt={`Capa do treino ${t.nome}`}
-                  className="w-full h-40 object-cover rounded-xl border mb-3"
+                  pasta="treinos"
+                  className="w-full h-40 rounded-xl border mb-3"
                 />
               ) : null}
 
@@ -4424,10 +4421,11 @@ export default function NovoTreino() {
 
               { (capaPreview || capaUrl) ? (
                 <div className="mb-2">
-                  <img
-                    src={resolveMediaUrl(capaPreview || capaUrl)}
+                  <CoverImage
+                    src={capaPreview || capaUrl}
                     alt="Capa do treino"
-                    className="w-full max-h-48 object-cover rounded-xl border"
+                    pasta="treinos"
+                    className="w-full h-48 rounded-xl border"
                   />
                 </div>
               ) : (
@@ -5244,15 +5242,11 @@ export default function NovoTreino() {
                           : "border-gray-200"
                       }`}
                     >
-                      <img
-                        src={resolveAvatarUrl(atleta.foto)}
+                      <Avatar
+                        foto={atleta.foto}
                         alt={atleta.nome}
-                        className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
-                        loading="lazy"
-                        onError={(e) => {
-                          const img = e.currentTarget;
-                          if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
-                        }}
+                        className="w-20 h-20 mx-auto mb-2"
+                        size={80}
                       />
 
                       <p className="font-semibold text-sm sm:text-base">

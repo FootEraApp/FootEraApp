@@ -1,15 +1,12 @@
 import { Request, Response } from "express";
-import { TipoUsuario } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "../prisma.js";
-
 
 const SECRET = process.env.JWT_SECRET || "footera_secret"
 
 export const adminDashboard = async (_: Request, res: Response) => {
   try {
-
     const porTipo = await prisma.usuario.groupBy({
       by: ["tipo"],
       _count: { _all: true },
@@ -119,4 +116,77 @@ export async function loginAdmin(req: Request, res: Response) {
     console.error("Erro no login admin:", error);
     return res.status(500).json({ message: "Erro interno do servidor." });
   }
+}
+
+export async function adminDiagnostico(req: Request, res: Response) {
+  const startedAt = Date.now();
+
+  const checks: Array<{
+    nome: string;
+    status: "ok" | "erro";
+    detalhes?: string;
+    tempoMs?: number;
+  }> = [];
+
+  async function runCheck(nome: string, fn: () => Promise<void>) {
+    const inicio = Date.now();
+
+    try {
+      await fn();
+
+      checks.push({
+        nome,
+        status: "ok",
+        tempoMs: Date.now() - inicio,
+      });
+    } catch (e: any) {
+      checks.push({
+        nome,
+        status: "erro",
+        detalhes: e?.message || "Erro desconhecido.",
+        tempoMs: Date.now() - inicio,
+      });
+    }
+  }
+
+  await runCheck("Banco de dados Prisma", async () => {
+    await prisma.$queryRaw`SELECT 1`;
+  });
+
+  await runCheck("Tabela usuarios", async () => {
+    await prisma.usuario.count();
+  });
+
+  await runCheck("Tabela treinos programados", async () => {
+    await prisma.treinoProgramado.count();
+  });
+
+  await runCheck("Tabela professores", async () => {
+    await prisma.professor.count();
+  });
+
+  await runCheck("Tabela metodologias", async () => {
+    await prisma.metodologia.count();
+  });
+
+  const hasError = checks.some((c) => c.status === "erro");
+
+  return res.status(hasError ? 500 : 200).json({
+    ok: !hasError,
+    ambiente: process.env.NODE_ENV || "development",
+    node: process.version,
+    apiBaseUrl: process.env.API_BASE_URL || null,
+    frontendUrl: process.env.FRONTEND_URL || null,
+    uptimeSegundos: Math.round(process.uptime()),
+    tempoTotalMs: Date.now() - startedAt,
+    dataHora: new Date().toISOString(),
+    usuario: {
+      id: (req as any).authUser?.id ?? null,
+      tipo:
+        (req as any).authUser?.tipo ??
+        (req as any).authUser?.tipoUsuario ??
+        null,
+    },
+    checks,
+  });
 }

@@ -9,6 +9,10 @@ import axios from "axios";
 import Storage from "../utils/storage.js"
 import LearningCard from "../components/learning/LearningCard.js";
 import { Pencil, Trash2 } from "lucide-react";
+import {
+  ativarPushNotifications,
+  desativarPushNotifications,
+} from "../services/pushNotifications.js";
 
 type Tab =
   | "dashboard"
@@ -23,7 +27,8 @@ type Tab =
   | "analises"
   | "configuracoes"
   | "assinaturas"
-  | "feedback";
+  | "feedback"
+  | "diagnostico";
 
 interface Treinos {
   id: string;
@@ -331,8 +336,40 @@ export default function AdminDashboard() {
     "assinaturas",
     "feedback",
     "analises",
+    "diagnostico",
     "configuracoes",
   ];
+
+    type DiagnosticoStatus = "ok" | "erro" | "carregando";
+
+  type DiagnosticoItem = {
+    nome: string;
+    url: string;
+    status: DiagnosticoStatus;
+    httpStatus?: number;
+    tempoMs?: number;
+    detalhes?: string;
+  };
+
+  type PushPermissaoStatus = "granted" | "denied" | "default" | "unsupported";
+
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagUltimaExecucao, setDiagUltimaExecucao] = useState<string | null>(null);
+  const [diagItems, setDiagItems] = useState<DiagnosticoItem[]>([]);
+  const [diagPushLoading, setDiagPushLoading] = useState(false);
+  const [diagPushResultado, setDiagPushResultado] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
+
+  const [adminPushBusy, setAdminPushBusy] = useState(false);
+  const [adminPushAtivo, setAdminPushAtivo] = useState(false);
+  const [adminPushPermissao, setAdminPushPermissao] =
+    useState<PushPermissaoStatus>("default");
+  const [adminPushResultado, setAdminPushResultado] = useState<{
+    type: "success" | "error" | "info";
+    msg: string;
+  } | null>(null);
 
   const [dados, setDados] = useState<any>(EMPTY_DASH);
   const [dashLoading, setDashLoading] = useState(true);
@@ -534,6 +571,214 @@ export default function AdminDashboard() {
     setToast({ type, msg });
     window.clearTimeout((showToast as any)._t);
     (showToast as any)._t = window.setTimeout(() => setToast(null), 3500);
+  }
+
+    async function atualizarStatusPushAdmin() {
+    try {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        setAdminPushPermissao("unsupported");
+        setAdminPushAtivo(false);
+        return;
+      }
+
+      setAdminPushPermissao(Notification.permission as PushPermissaoStatus);
+
+      if (!("serviceWorker" in navigator)) {
+        setAdminPushAtivo(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = registration
+        ? await registration.pushManager.getSubscription()
+        : null;
+
+      setAdminPushAtivo(!!subscription);
+    } catch {
+      setAdminPushAtivo(false);
+    }
+  }
+
+  async function ativarNotificacoesAdmin() {
+    setAdminPushBusy(true);
+    setAdminPushResultado(null);
+
+    try {
+      await ativarPushNotifications();
+      await atualizarStatusPushAdmin();
+
+      setAdminPushResultado({
+        type: "success",
+        msg: "Notificações ativadas para este admin neste navegador. Agora o teste do Diagnóstico pode enviar push.",
+      });
+
+      showToast("success", "Notificações do admin ativadas.");
+    } catch (e: any) {
+      await atualizarStatusPushAdmin();
+
+      setAdminPushResultado({
+        type: "error",
+        msg:
+          e?.message ||
+          "Não foi possível ativar notificações para este admin.",
+      });
+    } finally {
+      setAdminPushBusy(false);
+    }
+  }
+
+  async function desativarNotificacoesAdmin() {
+    setAdminPushBusy(true);
+    setAdminPushResultado(null);
+
+    try {
+      await desativarPushNotifications();
+      await atualizarStatusPushAdmin();
+
+      setAdminPushResultado({
+        type: "success",
+        msg: "Notificações desativadas para este admin neste navegador.",
+      });
+
+      showToast("success", "Notificações do admin desativadas.");
+    } catch (e: any) {
+      setAdminPushResultado({
+        type: "error",
+        msg:
+          e?.message ||
+          "Não foi possível desativar notificações para este admin.",
+      });
+    } finally {
+      setAdminPushBusy(false);
+    }
+  }
+
+  async function testarPushDiagnostico() {
+    setDiagPushLoading(true);
+    setDiagPushResultado(null);
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/notificacoes/push/test`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+
+      const txt = await r.text().catch(() => "");
+      let json: any = null;
+
+      try {
+        json = txt ? JSON.parse(txt) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!r.ok) {
+        setDiagPushResultado({
+          type: "error",
+          msg:
+            json?.message ||
+            txt ||
+            `Erro ao testar push. HTTP ${r.status}`,
+        });
+        return;
+      }
+
+      const qtdWeb = Number(json?.pushSubscriptions || 0);
+      const qtdNative = Number(json?.nativePushTokens || 0);
+      const qtdTotal = Number(json?.totalDispositivos ?? qtdWeb + qtdNative);
+
+      setDiagPushResultado({
+        type: "success",
+        msg:
+          qtdTotal > 0
+            ? "Push de teste enviado. Confira a central de notificações do navegador e a página /notificacoes."
+            : "Notificação interna criada, mas este admin não tem dispositivo push cadastrado. Vá em Admin > Configurações > Notificações do admin e clique em Ativar notificações.",
+      });
+    } catch (e: any) {
+      setDiagPushResultado({
+        type: "error",
+        msg: e?.message || "Falha de rede ao testar push.",
+      });
+    } finally {
+      setDiagPushLoading(false);
+    }
+  }
+
+  async function checarEndpoint(nome: string, path: string): Promise<DiagnosticoItem> {
+    const inicio = performance.now();
+    const url = `${API.BASE_URL}${path}`;
+
+    try {
+      const res = await fetch(url, { headers: authHeaders() });
+      const tempoMs = Math.round(performance.now() - inicio);
+      const txt = await res.text().catch(() => "");
+
+      return {
+        nome,
+        url,
+        status: res.ok ? "ok" : "erro",
+        httpStatus: res.status,
+        tempoMs,
+        detalhes: res.ok
+          ? "Resposta OK"
+          : txt.slice(0, 280) || res.statusText || "Erro sem corpo de resposta.",
+      };
+    } catch (e: any) {
+      const tempoMs = Math.round(performance.now() - inicio);
+
+      return {
+        nome,
+        url,
+        status: "erro",
+        tempoMs,
+        detalhes: e?.message || "Falha de rede.",
+      };
+    }
+  }
+
+  async function rodarDiagnostico() {
+    setDiagLoading(true);
+
+    const endpoints = [
+      { nome: "Health da API", path: "/api/health" },
+      { nome: "Diagnóstico backend", path: "/api/admin/diagnostico" },
+      { nome: "Dashboard admin", path: "/api/admin" },
+      { nome: "Admin logado", path: "/api/admin/me" },
+      { nome: "Push public key", path: "/api/notificacoes/push/public-key" },
+      { nome: "Notificações do usuário", path: "/api/notificacoes/me" },
+      { nome: "Badge de notificações", path: "/api/notificacoes/badge" },
+      { nome: "Configurações", path: "/api/configuracoes" },
+      { nome: "Professores", path: "/api/professores?page=1&pageSize=1" },
+      { nome: "Exercícios", path: "/api/exercicios" },
+      { nome: "Treinos programados", path: "/api/treinos/programados" },
+      {
+        nome: "Metodologias pendentes",
+        path: "/api/admin/metodologias/pendentes?page=1&pageSize=1",
+      },
+      { nome: "Assinaturas overview", path: "/api/admin/assinantes/overview" },
+    ];
+
+    setDiagItems(
+      endpoints.map((e) => ({
+        nome: e.nome,
+        url: `${API.BASE_URL}${e.path}`,
+        status: "carregando" as DiagnosticoStatus,
+      }))
+    );
+
+    try {
+      const results: DiagnosticoItem[] = [];
+
+      for (const e of endpoints) {
+        const result = await checarEndpoint(e.nome, e.path);
+        results.push(result);
+        setDiagItems([...results]);
+      }
+
+      setDiagUltimaExecucao(new Date().toLocaleString("pt-BR"));
+    } finally {
+      setDiagLoading(false);
+    }
   }
 
 type AssinanteListItem = {
@@ -1022,6 +1267,11 @@ useEffect(() => {
   const h = setTimeout(() => setTrDebQ(trQ.trim()), 300);
   return () => clearTimeout(h);
 }, [trQ]);
+
+useEffect(() => {
+  if (aba !== "configuracoes" && aba !== "diagnostico") return;
+  void atualizarStatusPushAdmin();
+}, [aba]);
 
 useEffect(() => {
   if (aba !== "assinaturas") return;
@@ -3503,6 +3753,118 @@ async function confirmarExcluirProfessor() {
           </div>
         )}
 
+                {aba === "diagnostico" && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-green-100 bg-white p-5 shadow-sm">
+              <h3 className="text-xl font-bold text-green-900">
+                Diagnóstico FootEra
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Verifica rapidamente as principais rotas do backend, admin,
+                notificações e configurações.
+              </p>
+
+              {diagUltimaExecucao && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Última execução: {diagUltimaExecucao}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={rodarDiagnostico}
+                disabled={diagLoading}
+                className="mt-4 w-full rounded-xl bg-green-700 px-4 py-3 text-white font-semibold disabled:opacity-60"
+              >
+                {diagLoading ? "Rodando diagnóstico..." : "Rodar diagnóstico novamente"}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm">
+              <h4 className="font-bold text-yellow-900">
+                Teste de notificações push
+              </h4>
+              <p className="text-sm text-yellow-800 mt-1">
+                Envia uma notificação de teste para o admin logado. Use para
+                confirmar VAPID, rota de push, dispositivo cadastrado e service worker.
+              </p>
+
+              {diagPushResultado && (
+                <p
+                  className={`mt-3 text-sm font-semibold ${
+                    diagPushResultado.type === "success"
+                      ? "text-green-700"
+                      : "text-red-700"
+                  }`}
+                >
+                  {diagPushResultado.msg}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={testarPushDiagnostico}
+                disabled={diagPushLoading}
+                className="mt-4 w-full rounded-xl bg-yellow-700 px-4 py-3 text-white font-semibold disabled:opacity-60"
+              >
+                {diagPushLoading ? "Enviando..." : "Enviar push de teste"}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b font-semibold text-green-900">
+                Checks principais
+              </div>
+
+              {diagItems.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500">
+                  Clique em “Rodar diagnóstico novamente” para iniciar.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {diagItems.map((item) => (
+                    <div key={item.nome} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-gray-900">
+                            {item.status === "ok"
+                              ? "🟢"
+                              : item.status === "erro"
+                              ? "🔴"
+                              : "🟡"}{" "}
+                            {item.nome}
+                          </div>
+                          <div className="text-xs text-gray-500 break-all mt-1">
+                            {item.url}
+                          </div>
+                          {item.detalhes && (
+                            <div className="text-xs text-gray-600 mt-2">
+                              {item.detalhes}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="text-right text-xs">
+                          {item.httpStatus && (
+                            <div className="rounded-full bg-gray-100 px-2 py-1">
+                              HTTP {item.httpStatus}
+                            </div>
+                          )}
+                          {typeof item.tempoMs === "number" && (
+                            <div className="mt-1 text-gray-500">
+                              {item.tempoMs}ms
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {aba === "configuracoes" && configuracoes && (
           <div className="bg-white p-6 rounded shadow">
             <h3 className="text-xl font-bold mb-4">Configurações do Sistema</h3>
@@ -3573,6 +3935,111 @@ async function confirmarExcluirProfessor() {
                   });
                 }}
               />
+            </div>
+
+                        <div className="mb-6 rounded-xl border border-green-100 bg-green-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-semibold text-green-900">
+                    🔔 Notificações do admin
+                  </h4>
+                  <p className="text-sm text-green-900/80 mt-1">
+                    Ative as notificações neste navegador para conseguir testar
+                    push usando a aba Diagnóstico.
+                  </p>
+                </div>
+
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                    adminPushAtivo
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {adminPushAtivo ? "Ativas" : "Desativadas"}
+                </span>
+              </div>
+
+              <div className="mt-3 text-xs text-gray-700">
+                Permissão do navegador:{" "}
+                <span className="font-semibold">
+                  {adminPushPermissao || "verificando"}
+                </span>
+                {" · "}
+                Status no dispositivo:{" "}
+                <span className="font-semibold">
+                  {adminPushAtivo ? "ativo" : "inativo"}
+                </span>
+              </div>
+
+              {adminPushPermissao === "unsupported" && (
+                <p className="mt-3 text-sm text-red-600 font-medium">
+                  Este navegador não suporta notificações push.
+                </p>
+              )}
+
+              {adminPushPermissao === "denied" && (
+                <p className="mt-3 text-sm text-red-600 font-medium">
+                  A permissão foi bloqueada no navegador. Clique no cadeado ao
+                  lado da URL, vá em permissões do site e libere notificações.
+                </p>
+              )}
+
+              {adminPushPermissao === "default" && (
+                <p className="mt-3 text-sm text-yellow-700 font-medium">
+                  O navegador ainda não perguntou a permissão. Clique em Ativar notificações.
+                </p>
+              )}
+
+              {adminPushPermissao === "granted" && !adminPushAtivo && (
+                <p className="mt-3 text-sm text-yellow-700 font-medium">
+                  Permissão concedida, mas este navegador ainda não está cadastrado no backend.
+                </p>
+              )}
+
+              {adminPushPermissao === "granted" && adminPushAtivo && (
+                <p className="mt-3 text-sm text-green-700 font-medium">
+                  Este navegador está cadastrado para receber push.
+                </p>
+              )}
+
+              {adminPushResultado && (
+                <p
+                  className={`mt-3 text-sm font-semibold ${
+                    adminPushResultado.type === "success"
+                      ? "text-green-700"
+                      : adminPushResultado.type === "info"
+                      ? "text-blue-700"
+                      : "text-red-700"
+                  }`}
+                >
+                  {adminPushResultado.msg}
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={ativarNotificacoesAdmin}
+                  disabled={
+                    adminPushBusy ||
+                    adminPushPermissao === "unsupported" ||
+                    adminPushPermissao === "denied"
+                  }
+                  className="rounded-xl bg-green-700 px-4 py-2 text-white font-semibold disabled:opacity-50"
+                >
+                  {adminPushBusy ? "Processando..." : "Ativar notificações"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={desativarNotificacoesAdmin}
+                  disabled={adminPushBusy || adminPushPermissao === "unsupported"}
+                  className="rounded-xl border border-red-200 bg-white px-4 py-2 text-red-600 font-semibold disabled:opacity-50"
+                >
+                  Desativar notificações
+                </button>
+              </div>
             </div>
 
             <div className="mt-4">

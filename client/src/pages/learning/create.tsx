@@ -12,7 +12,6 @@ import {
   FileText,
   Trophy,
   Radio,
-  Calendar,
 } from "lucide-react";
 import {
   createMetodologiaCompleta,
@@ -38,6 +37,7 @@ import {
 import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningTypeChooser from "../../components/learning/LearningTypeChooser.js";
 import { API } from "@/config.js";
+import CoverImage from "../../components/shared/CoverImage.js";
 
 type AreaOption =
   | "TECNICO"
@@ -2299,10 +2299,11 @@ export default function LearningCreatePage() {
                     </div>
 
                     <div className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                      <img
+                      <CoverImage
                         src={capaPreviewUrl}
                         alt="Prévia da capa da metodologia"
-                        className="w-full h-[220px] object-cover"
+                        pasta="metodologias"
+                        className="w-full h-[220px]"
                       />
                     </div>
 

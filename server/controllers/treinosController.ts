@@ -8,7 +8,8 @@ import {
   TipoMidia,
   TreinoAgendadoStatus,
   Nivel,
-  Prisma
+  Prisma,
+  NotificacaoTipo,
 } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
@@ -32,6 +33,7 @@ import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 import { prisma } from "../prisma.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 
 type Request = ExpressRequest;
 type Response = ExpressResponse;
@@ -744,6 +746,19 @@ async function notificarNovoTreino(
     io.to(`u:${atleta.usuarioId}`).emit("novaMensagem", { ...saved, pending: false });
     io.to(deUsuarioId).emit("novaMensagem", { ...saved, pending: false });
     io.to(`u:${deUsuarioId}`).emit("novaMensagem", { ...saved, pending: false });
+  }
+
+  try {
+    await criarNotificacaoEEnviarPush({
+      usuarioId: atleta.usuarioId,
+      actorId: deUsuarioId,
+      tipo: NotificacaoTipo.TREINO,
+      titulo: "Novo treino agendado",
+      mensagem: `Um novo treino foi agendado para você: ${titulo}`,
+      link: `/treinos`,
+    });
+  } catch (e) {
+    console.warn("[notificarNovoTreino] falha ao criar push:", e);
   }
 }
 
@@ -5573,6 +5588,29 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
     });
 
     try {
+      const usuarioIdAtleta = sub.atleta?.usuarioId || null;
+      const treinoTitulo =
+        sub.treinoAgendado?.treinoProgramado?.nome ||
+        sub.treinoAgendado?.titulo ||
+        "treino";
+
+      if (usuarioIdAtleta) {
+        await criarNotificacaoEEnviarPush({
+          usuarioId: usuarioIdAtleta,
+          actorId: req.userId || null,
+          tipo: NotificacaoTipo.TREINO,
+          titulo: aprovado ? "Treino aprovado" : "Treino reprovado",
+          mensagem: aprovado
+            ? `Seu treino "${treinoTitulo}" foi aprovado.`
+            : `Seu treino "${treinoTitulo}" foi reprovado.`,
+          link: `/treinos`,
+        });
+      }
+    } catch (e) {
+      console.warn("[validarSubmissaoTreino] falha ao criar push:", e);
+    }
+
+    try {
       await recomputePontuacaoAtleta(sub.atletaId);
     } catch (e) {
       console.warn("recomputePontuacaoAtleta falhou (não é crítico para a aprovação):", e);
@@ -7086,5 +7124,152 @@ export async function salvarVideosExecucaoTreino(req: AuthenticatedRequest, res:
   } catch (e) {
     console.error("salvarVideosExecucaoTreino", e);
     return res.status(500).json({ message: "Erro ao salvar vídeos da execução." });
+  }
+}
+
+export async function listarFavoritosTreinos(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const favoritos = await prisma.treinoFavorito.findMany({
+      where: { usuarioId },
+      orderBy: { criadoEm: "desc" },
+      select: {
+        treinoProgramadoId: true,
+        criadoEm: true,
+      },
+    });
+
+    return res.json({
+      items: favoritos.map((f) => ({
+        id: f.treinoProgramadoId,
+        treinoProgramadoId: f.treinoProgramadoId,
+        criadoEm: f.criadoEm,
+      })),
+      ids: favoritos.map((f) => f.treinoProgramadoId),
+      keys: favoritos.map((f) => `TREINO:${f.treinoProgramadoId}`),
+    });
+  } catch (e: any) {
+    console.error("[listarFavoritosTreinos]", e);
+    return res.status(500).json({
+      message: "Erro ao listar favoritos de treinos.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function alternarFavoritoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const treinoProgramadoId = String(
+      req.body?.treinoProgramadoId || req.body?.id || ""
+    ).trim();
+
+    if (!treinoProgramadoId) {
+      return res.status(400).json({
+        message: "Informe o id do treino.",
+      });
+    }
+
+    const treinoExiste = await prisma.treinoProgramado.findUnique({
+      where: { id: treinoProgramadoId },
+      select: { id: true },
+    });
+
+    if (!treinoExiste) {
+      return res.status(404).json({
+        message: "Treino não encontrado.",
+      });
+    }
+
+    const existente = await prisma.treinoFavorito.findUnique({
+      where: {
+        usuarioId_treinoProgramadoId: {
+          usuarioId,
+          treinoProgramadoId,
+        },
+      },
+    });
+
+    if (existente) {
+      await prisma.treinoFavorito.delete({
+        where: { id: existente.id },
+      });
+
+      return res.json({
+        favorito: false,
+        id: treinoProgramadoId,
+        treinoProgramadoId,
+        key: `TREINO:${treinoProgramadoId}`,
+      });
+    }
+
+    await prisma.treinoFavorito.create({
+      data: {
+        usuarioId,
+        treinoProgramadoId,
+      },
+    });
+
+    return res.json({
+      favorito: true,
+      id: treinoProgramadoId,
+      treinoProgramadoId,
+      key: `TREINO:${treinoProgramadoId}`,
+    });
+  } catch (e: any) {
+    console.error("[alternarFavoritoTreino]", e);
+    return res.status(500).json({
+      message: "Erro ao favoritar treino.",
+      detail: e?.message,
+    });
+  }
+}
+
+export async function removerFavoritoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const treinoProgramadoId = String(req.params.id || "").trim();
+
+    if (!treinoProgramadoId) {
+      return res.status(400).json({
+        message: "Favorito inválido.",
+      });
+    }
+
+    await prisma.treinoFavorito.deleteMany({
+      where: {
+        usuarioId,
+        treinoProgramadoId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      favorito: false,
+      id: treinoProgramadoId,
+      treinoProgramadoId,
+      key: `TREINO:${treinoProgramadoId}`,
+    });
+  } catch (e: any) {
+    console.error("[removerFavoritoTreino]", e);
+    return res.status(500).json({
+      message: "Erro ao remover favorito de treino.",
+      detail: e?.message,
+    });
   }
 }
