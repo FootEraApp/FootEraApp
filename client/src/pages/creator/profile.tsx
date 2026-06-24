@@ -15,13 +15,9 @@ import {
 import CreatorCard from "../../components/CreatorCard";
 import ProfilePostsSection from "@/components/perfil/ProfilePostsSection";
 import CoverImage from "../../components/shared/CoverImage";
+import { API, APP } from "../../config.js";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
-const FRONTEND_BASE_URL =
-  import.meta.env.VITE_FRONTEND_BASE_URL ||
-  import.meta.env.VITE_APP_URL ||
-  window.location.origin;
-
+const FRONTEND_BASE_URL = APP.FRONTEND_BASE_URL;
 const AVATAR_FALLBACK = `${FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Conteudo = {
@@ -360,14 +356,14 @@ export default function CreatorProfile() {
 
     if (!token) return;
 
-    fetch(`${API}/api/mensagem/unread-count`, {
+    fetch(`${API.BASE_URL}/api/mensagem/unread-count`, {
         headers: { Authorization: `Bearer ${token}` },
     })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => setUnreadDM(typeof j === "number" ? j : j?.count ?? 0))
         .catch(() => setUnreadDM(0));
 
-    fetch(`${API}/api/notificacoes/badge`, {
+    fetch(`${API.BASE_URL}/api/notificacoes/badge`, {
      headers: { Authorization: `Bearer ${token}` },
     })
     .then((r) => (r.ok ? r.json() : null))
@@ -397,7 +393,7 @@ export default function CreatorProfile() {
       return;
     }
 
-    fetch(`${API}/api/creator/profile/${usuarioId}`)
+    fetch(`${API.BASE_URL}/api/creator/profile/${usuarioId}`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Creator não encontrado.");
         return res.json();
@@ -420,7 +416,7 @@ export default function CreatorProfile() {
         sessionStorage.getItem("token") ||
         "";
 
-    fetch(`${API}/api/creator/profile/${usuarioId}/view`, {
+    fetch(`${API.BASE_URL}/api/creator/profile/${usuarioId}/view`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }).catch(() => {});
@@ -444,7 +440,7 @@ export default function CreatorProfile() {
         return;
     }
 
-    fetch(`${API}/api/seguidores/status?seguidoUsuarioId=${encodeURIComponent(usuarioId)}`, {
+    fetch(`${API.BASE_URL}/api/seguidores/status?seguidoUsuarioId=${encodeURIComponent(usuarioId)}`, {
         headers: { Authorization: `Bearer ${token}` },
     })
         .then((r) => (r.ok ? r.json() : null))
@@ -461,7 +457,7 @@ export default function CreatorProfile() {
   useEffect(() => {
     if (!usuarioId) return;
 
-    fetch(`${API}/api/eventos?creatorUsuarioId=${usuarioId}`)
+    fetch(`${API.BASE_URL}/api/eventos?creatorUsuarioId=${usuarioId}`)
       .then((r) => (r.ok ? r.json() : []))
       .then((j) => setEventos(Array.isArray(j) ? j : []))
       .catch(() => setEventos([]));
@@ -724,7 +720,7 @@ export default function CreatorProfile() {
     }
 
     if (seguindo) {
-        const resp = await fetch(`${API}/api/seguidores/`, {
+        const resp = await fetch(`${API.BASE_URL}/api/seguidores/`, {
         method: "DELETE",
         headers: {
             "Content-Type": "application/json",
@@ -741,7 +737,7 @@ export default function CreatorProfile() {
         return;
     }
 
-    const resp = await fetch(`${API}/api/seguidores`, {
+    const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
         method: "POST",
         headers: {
         "Content-Type": "application/json",

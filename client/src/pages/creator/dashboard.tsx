@@ -9,8 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import CreatorCard from "../../components/CreatorCard";
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
+import { API } from "../../config.js";
 
 const token = () =>
   localStorage.getItem("token") ||
@@ -59,7 +58,7 @@ export default function CreatorDashboard() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API}/api/creator/dashboard`, {
+      const res = await fetch(`${API.BASE_URL}/api/creator/dashboard`, {
         headers: { Authorization: `Bearer ${token()}` },
       });
 
@@ -68,8 +67,17 @@ export default function CreatorDashboard() {
         return;
       }
 
-      if (!res.ok) throw new Error("Erro ao carregar dashboard.");
+      if (res.status === 401 || res.status === 403) {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/login";
+        return;
+      }
 
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `Erro ao carregar dashboard. HTTP ${res.status}`);
+      }
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -84,23 +92,44 @@ export default function CreatorDashboard() {
     setAtivando(true);
 
     try {
-      const res = await fetch(`${API}/api/creator/ativar`, {
+      const tk = token();
+
+      if (!tk) {
+        throw new Error("Você não está logado no app. Saia e entre novamente.");
+      }
+
+      const res = await fetch(`${API.BASE_URL}/api/creator/ativar`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token()}`,
+          Authorization: `Bearer ${tk}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            headline: "Creator FootEra",
+          headline: "Creator FootEra",
         }),
       });
 
-      if (!res.ok) throw new Error("Erro ao ativar Creator.");
+      const txt = await res.text().catch(() => "");
+      let json: any = null;
+
+      try {
+        json = txt ? JSON.parse(txt) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          json?.message ||
+            txt ||
+            `Erro ao ativar Creator. HTTP ${res.status}`
+        );
+      }
 
       await carregar();
-    } catch (err) {
-      console.error(err);
-      alert("Não foi possível ativar o Creator.");
+    } catch (err: any) {
+      console.error("[creator/dashboard] erro ao ativar creator:", err);
+      alert(err?.message || "Não foi possível ativar o Creator.");
     } finally {
       setAtivando(false);
     }

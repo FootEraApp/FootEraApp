@@ -3,9 +3,9 @@ import { useRoute, useLocation } from "wouter";
 import { ArrowLeft, Lock, CheckCircle2, Star } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
+import CoverImage from "../../components/shared/CoverImage";
 
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
-
+const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 type ItemTipo = "VIDEO" | "TREINO" | "AULA" | "MATERIAL" | "DESAFIO" | string;
 
 type MetodologiaEstruturaItem = {
@@ -123,7 +123,7 @@ function normalizeMediaUrl(raw?: string | null) {
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
   if (u.startsWith("uploads/")) return `${API.BASE_URL}/${u}`;
   if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
-  if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
+  if (u.startsWith("/assets/")) return u;
   if (u.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${u}`;
 
   return u;
@@ -787,14 +787,11 @@ export default function MetodologiaUnicaPage() {
       <div className="mt-4 rounded-2xl border bg-white p-4 md:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start gap-4">
           <div className="w-full md:w-80 shrink-0">
-            <img
+            <CoverImage
               src={capaHeader}
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = AVATAR_FALLBACK;
-              }}
-              className="w-full aspect-[16/9] rounded-2xl border object-cover bg-white"
               alt={data.titulo}
+              pasta="metodologias"
+              className="w-full aspect-[16/9] rounded-2xl border"
             />
           </div>
 
@@ -1098,14 +1095,11 @@ export default function MetodologiaUnicaPage() {
                     key={it.id}
                     className="rounded-xl border p-3 flex gap-3 items-start"
                   >
-                    <img
+                    <CoverImage
                       src={imgSrc}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = AVATAR_FALLBACK;
-                      }}
-                      className="h-14 w-20 sm:h-16 sm:w-28 rounded-lg border object-cover bg-white flex-shrink-0"
                       alt={it.titulo}
+                      pasta="metodologias"
+                      className="h-14 w-20 sm:h-16 sm:w-28 rounded-lg border flex-shrink-0"
                     />
 
                     <div className="flex-1 min-w-0">
