@@ -1,9 +1,18 @@
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { API } from "../config.js";
+import { LocalNotifications } from "@capacitor/local-notifications"
 
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
+
+function getUsuarioId() {
+  return (
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
+    ""
+  );
 }
 
 async function salvarTokenFCM(tokenValue: string) {
@@ -32,6 +41,7 @@ async function salvarTokenFCM(tokenValue: string) {
   }
 
   localStorage.setItem("footera:fcmToken", tokenValue);
+  localStorage.setItem("footera:fcmTokenUsuarioId", getUsuarioId());
 
   console.log("[push native] token FCM salvo no backend", {
     tokenStart: tokenValue.slice(0, 16),
@@ -77,6 +87,21 @@ export async function ativarPushAndroidNativo() {
     console.warn("[push native] não foi possível criar canal", e);
   }
 
+  try {
+    await LocalNotifications.requestPermissions();
+
+    await LocalNotifications.createChannel({
+      id: "footera_default",
+      name: "FootEra",
+      description: "Notificações da FootEra",
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+    });
+  } catch (e) {
+    console.warn("[push native] não foi possível preparar notificação local", e);
+  }
+
   return await new Promise<boolean>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       reject(
@@ -108,9 +133,32 @@ export async function ativarPushAndroidNativo() {
       reject(new Error(String((error as any)?.error || "Erro ao registrar push nativo.")));
     });
 
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      console.log("[push native] recebida com app aberto:", notification);
-    });
+    PushNotifications.addListener("pushNotificationReceived", async (notification) => {
+    console.log("[push native] recebida com app aberto:", notification);
+
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: Math.floor(Date.now() % 2147483647),
+            title:
+              notification.title ||
+              notification.data?.title ||
+              "FootEra",
+            body:
+              notification.body ||
+              notification.data?.body ||
+              notification.data?.mensagem ||
+              "Você tem uma nova notificação.",
+            channelId: "footera_default",
+            extra: notification.data || {},
+          },
+        ],
+      });
+    } catch (e) {
+      console.warn("[push native] erro ao mostrar notificação local:", e);
+    }
+  });
 
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
       console.log("[push native] clicada:", action);
@@ -147,4 +195,5 @@ export async function desativarPushAndroidNativo() {
   });
 
   localStorage.removeItem("footera:fcmToken");
+  localStorage.removeItem("footera:fcmTokenUsuarioId");
 }

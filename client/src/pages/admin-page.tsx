@@ -1932,8 +1932,26 @@ async function confirmarExcluirProfessor() {
         const perm = await PushNotifications.checkPermissions();
 
         if (perm.receive === "granted") {
+          const usuarioAtual =
+            localStorage.getItem("usuarioId") ||
+            sessionStorage.getItem("usuarioId") ||
+            "";
+
+          const tokenSalvo = localStorage.getItem("footera:fcmToken") || "";
+          const tokenUsuarioId = localStorage.getItem("footera:fcmTokenUsuarioId") || "";
+
           setAdminPushPermissao("granted");
-          setAdminPushAtivo(true);
+
+          if (tokenSalvo && tokenUsuarioId === usuarioAtual) {
+            setAdminPushAtivo(true);
+            return;
+          }
+
+          setAdminPushAtivo(false);
+          setAdminPushResultado({
+            type: "info",
+            msg: "Permissão do Android está liberada, mas este usuário ainda não confirmou o token FCM no backend. Clique em Ativar notificações.",
+          });
           return;
         }
 
