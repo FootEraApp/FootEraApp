@@ -11,7 +11,7 @@ import GoogleButton from "../components/auth/GoogleButton";
 import { ativarPushNotifications, desativarPushNotifications, getPushDeviceStatus, type PushDeviceStatus } from "../services/pushNotifications.js";
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
-import { ativarPushAndroidNativo } from "../services/nativePushNotifications.js";
+import { ativarPushAndroidNativo, desativarPushAndroidNativo, fcmTokenPertenceAoUsuarioAtual, inicializarPushAndroidNativo, mostrarNotificacaoLocalTeste } from "../services/nativePushNotifications.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 
@@ -80,6 +80,48 @@ export default function ConfiguracoesPerfil() {
       localStorage.getItem("token") ||
       sessionStorage.getItem("token") ||
       ""
+    );
+  }
+
+  function decodeJwtPayload(token: string) {
+    try {
+      const payload = token.split(".")[1];
+      if (!payload) return null;
+
+      const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+      const json = decodeURIComponent(
+        atob(normalized)
+          .split("")
+          .map((c) => `%${("00" + c.charCodeAt(0).toString(16)).slice(-2)}`)
+          .join("")
+      );
+
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+
+  function getUsuarioIdAtual() {
+    const direto =
+      localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      localStorage.getItem("userId") ||
+      sessionStorage.getItem("userId") ||
+      localStorage.getItem("idUsuario") ||
+      sessionStorage.getItem("idUsuario") ||
+      "";
+
+    if (direto) return direto;
+
+    const payload = decodeJwtPayload(getToken());
+
+    return String(
+      payload?.usuarioId ||
+        payload?.userId ||
+        payload?.id ||
+        payload?.sub ||
+        ""
     );
   }
 
@@ -389,10 +431,23 @@ export default function ConfiguracoesPerfil() {
         const perm = await PushNotifications.checkPermissions();
 
         if (perm.receive === "granted") {
-          setPushDeviceStatus("subscribed");
+          await inicializarPushAndroidNativo();
+
           setPushPermission("granted");
-          setPushHasSubscription(true);
-          setPushMsg("Notificações nativas ativadas neste app Android ✅");
+
+          if (fcmTokenPertenceAoUsuarioAtual()) {
+            setPushDeviceStatus("subscribed");
+            setPushHasSubscription(true);
+            setPushMsg("Notificações nativas ativadas neste app Android ✅");
+            setPushErr(null);
+            return;
+          }
+
+          setPushDeviceStatus("granted_without_subscription");
+          setPushHasSubscription(false);
+          setPushMsg(
+            "A permissão do Android está liberada, mas este app ainda não vinculou o token FCM à conta atual. Clique em Ativar no celular."
+          );
           setPushErr(null);
           return;
         }
@@ -477,6 +532,19 @@ export default function ConfiguracoesPerfil() {
       setPushMsg(null);
       setPushErr(null);
 
+      if (isNativePushApp()) {
+        const usuarioAtual = getUsuarioIdAtual();
+        const tokenSalvo = localStorage.getItem("footera:fcmToken") || "";
+        const tokenUsuarioId =
+          localStorage.getItem("footera:fcmTokenUsuarioId") || "";
+
+        if (!tokenSalvo || !usuarioAtual || tokenUsuarioId !== usuarioAtual) {
+          throw new Error(
+            "Este app ainda não está vinculado à conta atual para push. Clique em Ativar no celular antes de enviar o teste."
+          );
+        }
+      }
+
       const resp = await fetch(`${API.BASE_URL}/api/notificacoes/push/test`, {
         method: "POST",
         headers: {
@@ -491,32 +559,34 @@ export default function ConfiguracoesPerfil() {
         throw new Error(data?.message || "Não foi possível enviar push de teste.");
       }
 
+      const qtdWeb = Number(data?.pushSubscriptions || 0);
+      const qtdNative = Number(data?.nativePushTokens || 0);
       const totalDispositivos = Number(
-        data?.totalDispositivos ??
-          data?.pushSubscriptions ??
-          data?.nativePushTokens ??
-          data?.total ??
-          0
+        data?.totalDispositivos ?? qtdWeb + qtdNative
       );
 
       if (totalDispositivos > 0) {
+        if (isNativePushApp()) {
+          await mostrarNotificacaoLocalTeste();
+        }
+
         setPushMsg(
-          "Push de teste enviado. Verifique as notificações do Windows/Chrome ou do celular."
+          isNativePushApp()
+            ? `Push de teste enviado para ${totalDispositivos} dispositivo(s): ${qtdWeb} web e ${qtdNative} Android. Também disparei uma notificação local para confirmar a central do Android.`
+            : `Push de teste enviado para ${totalDispositivos} dispositivo(s): ${qtdWeb} web e ${qtdNative} Android.`
         );
         setPushErr(null);
       } else {
         setPushMsg(null);
         setPushErr(
-          "A notificação interna foi criada, mas este dispositivo ainda não está cadastrado para push. Clique em Ativar primeiro."
+          "A notificação interna foi criada, mas este usuário não tem dispositivo push cadastrado. Clique em Ativar primeiro."
         );
       }
-
-      await atualizarStatusPush();
     } catch (e: any) {
       setPushMsg(null);
       setPushErr(e?.message || "Erro ao testar push.");
-      await atualizarStatusPush();
     } finally {
+      await atualizarStatusPush();
       setPushLoading(false);
     }
   }
@@ -1164,9 +1234,8 @@ export default function ConfiguracoesPerfil() {
 
                       if (isNativePushApp()) {
                         await ativarPushAndroidNativo();
-                        setPushDeviceStatus("subscribed");
-                        setPushPermission("granted");
-                        setPushHasSubscription(true);
+                        await atualizarStatusPush();
+
                         setPushMsg("Notificações nativas ativadas neste app Android ✅");
                         setPushErr(null);
                         return;
@@ -1200,11 +1269,15 @@ export default function ConfiguracoesPerfil() {
                       setPushErr(null);
 
                       if (isNativePushApp()) {
+                        await desativarPushAndroidNativo();
+
+                        setPushDeviceStatus("granted_without_subscription");
+                        setPushPermission("granted");
+                        setPushHasSubscription(false);
                         setPushMsg(
-                          "No Android, para desativar notificações, use as configurações do sistema do app FootEra."
+                          "Notificações desativadas neste app. A permissão do Android continua liberada, mas este dispositivo foi removido do backend."
                         );
                         setPushErr(null);
-                        await atualizarStatusPush();
                         return;
                       }
 
@@ -1226,15 +1299,6 @@ export default function ConfiguracoesPerfil() {
                     className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                   >
                     Desativar neste dispositivo
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={pushLoading}
-                    onClick={() => atualizarStatusPush()}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                  >
-                    Verificar status
                   </button>
 
                   <button

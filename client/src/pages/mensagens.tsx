@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import socket from "../services/socket.js";
 import { ModalGrupos } from "../components/modal/ModalGrupos.js";
 import { ModalDesafiosGrupo } from "../components/modal/ModalDesafiosGrupos.js";
@@ -13,8 +13,7 @@ import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import { ModalAdicionarMembrosGrupo } from "../components/mensagens/ModalAdicionarMembrosGrupo.js";
-
-const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+import AvatarSeguro from "../components/shared/Avatar.js";
 
 interface Usuario {
   id: string;
@@ -331,34 +330,21 @@ export default function PaginaMensagens() {
     return conteudo.replace(/\s+/g, " ").trim().slice(0, 60);
   }
 
-  function Avatar({ src, name, className = "w-10 h-10" }:{
-    src?: string | null; name?: string; className?: string
+  function Avatar({
+    src,
+    name,
+    className = "w-10 h-10",
+  }: {
+    src?: string | null;
+    name?: string;
+    className?: string;
   }) {
-    const [broken, setBroken] = useState(false);
-    const ok = !!src && typeof src === "string" && !broken;
-
-    if (ok) {
-      const url = publicImgUrl(src) ?? undefined; 
-      if (url) {
-        return (
-          <img
-            src={url}
-            className={`${className} rounded-full object-cover border`}
-            onError={() => setBroken(true)}
-          />
-        );
-      }
-    }
-
-    const fallbackUrl = AVATAR_FALLBACK;
-
     return (
-      <img
-        src={fallbackUrl}
-        className={`${className} rounded-full object-cover border bg-white`}
-        alt={name ? `Avatar de ${name}` : "Avatar"}
-        draggable={false}
-        onError={() => setBroken(true)}
+      <AvatarSeguro
+        foto={src}
+        alt={name || "Avatar"}
+        className={className}
+        pasta="usuarios"
       />
     );
   }
