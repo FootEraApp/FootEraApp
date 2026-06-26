@@ -496,7 +496,7 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
     }
   }
 
-  await prisma.$transaction(
+  const criados = await prisma.$transaction(
     atletasIds.map((atletaId) =>
       prisma.treinoAgendado.create({
         data: {
@@ -520,6 +520,26 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
     update: {},
   });
   
+  const deUsuarioId = String(req.userId || user.id || "");
+
+  if (deUsuarioId) {
+    const criadosComAtleta = criados.filter(
+      (treino): treino is (typeof criados)[number] & { atletaId: string } =>
+        typeof treino.atletaId === "string" && treino.atletaId.trim().length > 0
+    );
+
+    await Promise.allSettled(
+      criadosComAtleta.map((treino) =>
+        notificarNovoTreino(
+          deUsuarioId,
+          treino.atletaId,
+          treino.id,
+          treino.titulo || tp.nome || "Treino"
+        )
+      )
+    );
+  }
+
   return res.status(201).json({ ok: true });
 }
 

@@ -6,6 +6,8 @@ import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import GoogleButton from "../components/auth/GoogleButton";
+import { Capacitor } from "@capacitor/core";
+import { inicializarPushAndroidNativo } from "../services/nativePushNotifications.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -110,6 +112,16 @@ export default function PaginaLogin() {
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportMsg, setSupportMsg] = useState("");
   const [supportSending, setSupportSending] = useState(false);
+
+  async function inicializarPushDepoisDoLogin() {
+    if (!Capacitor.isNativePlatform()) return;
+
+    try {
+      await inicializarPushAndroidNativo();
+    } catch (e) {
+      console.warn("[push native] não inicializou após login:", e);
+    }
+  }
 
   async function handleResend() {
     try {
@@ -241,6 +253,8 @@ export default function PaginaLogin() {
         const plano = String(usuario.plano ?? data.plano ?? "FREE");
         store.setItem("plano", plano);
 
+        await inicializarPushDepoisDoLogin();
+
         if (isAdmin) {
           navigate("/admin");
         } else {
@@ -366,6 +380,8 @@ export default function PaginaLogin() {
         setShowRecover(false);
         setRecoverSenha("");
         setDeletedInfo(null);
+
+        await inicializarPushDepoisDoLogin();
 
         navigate(isAdmin ? "/admin" : "/perfil");
       } catch (e: any) {
@@ -501,6 +517,8 @@ export default function PaginaLogin() {
 
       const plano = String(usuario.plano ?? data.plano ?? "FREE");
       store.setItem("plano", plano);
+
+      await inicializarPushDepoisDoLogin();
 
       navigate(isAdmin ? "/admin" : "/perfil");
     } catch (err: any) {

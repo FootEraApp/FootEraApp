@@ -1,7 +1,7 @@
 import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
 import { NotificacaoTipo } from "@prisma/client";
-import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -691,19 +691,14 @@ export async function recusarSolicitacao(req: Request, res: Response) {
 
     await prisma.solicitacaoTreino.delete({ where: { id } });
 
-    await prisma.notificacao.create({
-      data: {
-        usuarioId: solicitacao.remetenteId,
-        actorId: me,
-        tipo: NotificacaoTipo.GENERICA,
-        titulo: "Vínculo recusado",
-        mensagem: "Sua solicitação de treino foi recusada.",
-        link: `/perfil/${me}`,
-        lida: false,
-      },
+    await criarNotificacaoEEnviarPush({
+      usuarioId: solicitacao.remetenteId,
+      actorId: me,
+      tipo: NotificacaoTipo.GENERICA,
+      titulo: "Vínculo recusado",
+      mensagem: "Sua solicitação de treino foi recusada.",
+      link: `/perfil/${me}`,
     });
-
-    await recomputeAndEmitBadge(solicitacao.remetenteId);
 
     return res.json({ message: "Solicitação recusada com sucesso." });
   } catch (error) {
