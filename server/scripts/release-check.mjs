@@ -83,11 +83,18 @@ const serverPackagePath = path.join(serverRoot, "package.json");
 const clientPackagePath = path.join(clientRoot, "package.json");
 const serverIndexPath = path.join(serverRoot, "index.ts");
 const clientRoutesPath = path.join(clientRoot, "src", "routes.tsx");
+const rootPackagePath = path.join(projectRoot, "package.json");
+const playwrightConfigPath = path.join(projectRoot, "playwright.config.ts");
+const gitignorePath = path.join(projectRoot, ".gitignore");
+const testsE2eRoot = path.join(projectRoot, "tests", "e2e");
 
 checkFileExists("package.json do server", serverPackagePath);
 checkFileExists("package.json do client", clientPackagePath);
 checkFileExists("server/index.ts", serverIndexPath);
 checkFileExists("client/src/routes.tsx", clientRoutesPath);
+checkFileExists("package.json da raiz", rootPackagePath);
+checkFileExists("playwright.config.ts", playwrightConfigPath);
+checkFileExists("tests/e2e existe", testsE2eRoot);
 
 if (commandExists("node")) ok("Node disponível");
 else fail("Node disponível", "Comando node não encontrado.");
@@ -139,6 +146,36 @@ if (exists(clientPackagePath)) {
   }
 }
 
+if (exists(rootPackagePath)) {
+  const rootPackage = readJson(rootPackagePath);
+
+  const requiredRootScripts = [
+    "test:routes",
+    "test:admin",
+    "test:users",
+    "test:creators",
+    "test:predeploy",
+  ];
+
+  for (const script of requiredRootScripts) {
+    if (rootPackage.scripts?.[script]) {
+      ok(`root tem script ${script}`, rootPackage.scripts[script]);
+    } else {
+      fail(`root tem script ${script}`, "Script obrigatório para validar Playwright/predeploy.");
+    }
+  }
+
+  const hasPlaywright =
+    rootPackage.devDependencies?.["@playwright/test"] ||
+    rootPackage.dependencies?.["@playwright/test"];
+
+  if (hasPlaywright) {
+    ok("root tem @playwright/test", hasPlaywright);
+  } else {
+    fail("root tem @playwright/test", "Instale @playwright/test para E2E.");
+  }
+}
+
 if (exists(serverIndexPath)) {
   const index = read(serverIndexPath);
 
@@ -176,6 +213,49 @@ if (exists(serverIndexPath)) {
     } else {
       fail(`backend monta ${route}`, "Rota crítica não encontrada no index.ts.");
     }
+  }
+
+  const treinosRoutesPath = path.join(serverRoot, "routes", "treinos.ts");
+  const metodologiasRoutesPath = path.join(serverRoot, "routes", "metodologiasRoutes.ts");
+
+  if (exists(treinosRoutesPath)) {
+    const treinosRoutes = read(treinosRoutesPath);
+
+    const requiredTreinosRoutes = [
+      'router.get("/favoritos"',
+      'router.post("/favoritos/toggle"',
+      'router.delete("/favoritos/:id"',
+    ];
+
+    for (const route of requiredTreinosRoutes) {
+      if (treinosRoutes.includes(route)) {
+        ok(`treinos tem rota ${route}`);
+      } else {
+        fail(`treinos tem rota ${route}`, "Rota de favoritos de treinos não encontrada.");
+      }
+    }
+  } else {
+    fail("server/routes/treinos.ts existe", "Arquivo de rotas de treinos não encontrado.");
+  }
+
+  if (exists(metodologiasRoutesPath)) {
+    const metodologiasRoutes = read(metodologiasRoutesPath);
+
+    const requiredMetodologiasRoutes = [
+      'router.get("/favoritos"',
+      'router.post("/favoritos/toggle"',
+      'router.delete("/favoritos/:tipo/:id"',
+    ];
+
+    for (const route of requiredMetodologiasRoutes) {
+      if (metodologiasRoutes.includes(route)) {
+        ok(`metodologias tem rota ${route}`);
+      } else {
+        fail(`metodologias tem rota ${route}`, "Rota de favoritos do Learning não encontrada.");
+      }
+    }
+  } else {
+    fail("server/routes/metodologiasRoutes.ts existe", "Arquivo de rotas de metodologias não encontrado.");
   }
 
   const dangerousLogs = [
@@ -233,6 +313,44 @@ if (exists(clientRoutesPath)) {
   }
 }
 
+const requiredE2eFiles = [
+  "routes-public.spec.ts",
+  "auth.setup.ts",
+  "admin.smoke.spec.ts",
+  "user.setup.ts",
+  "user.smoke.spec.ts",
+  "creator.smoke.spec.ts",
+  "tsconfig.json",
+];
+
+if (exists(testsE2eRoot)) {
+  for (const file of requiredE2eFiles) {
+    checkFileExists(
+      `tests/e2e/${file}`,
+      path.join(testsE2eRoot, file)
+    );
+  }
+
+const authDir = path.join(testsE2eRoot, ".auth");
+if (exists(authDir)) {
+  const gitignore = exists(gitignorePath) ? read(gitignorePath) : "";
+
+  if (gitignore.includes("tests/e2e/.auth/")) {
+    ok(
+      "tests/e2e/.auth existe localmente e está ignorado",
+      "Tokens locais do Playwright não devem ir para o Git."
+    );
+  } else {
+    fail(
+      "tests/e2e/.auth existe mas não está no .gitignore",
+      "Adicione tests/e2e/.auth/ no .gitignore para não commitar tokens."
+    );
+  }
+} else {
+  ok("tests/e2e/.auth não existe no projeto limpo");
+}
+}
+
 const prismaSchemaPath = path.join(serverRoot, "prisma", "schema.prisma");
 checkFileExists("Prisma schema existe", prismaSchemaPath);
 
@@ -259,6 +377,29 @@ if (exists(clientPublicAssets)) {
   }
 } else {
   warn("client/public/assets não encontrado", "Tudo bem se seus assets estiverem em outro lugar.");
+}
+
+if (exists(gitignorePath)) {
+  const gitignore = read(gitignorePath);
+
+  const requiredIgnores = [
+    "tests/e2e/.auth/",
+    "playwright-report/",
+    "test-results/",
+    "footera-server-release.zip",
+    ".eb-release-staging/",
+    ".zip-check-temp/",
+  ];
+
+  for (const item of requiredIgnores) {
+    if (gitignore.includes(item)) {
+      ok(`.gitignore ignora ${item}`);
+    } else {
+      warn(`.gitignore deveria ignorar ${item}`);
+    }
+  }
+} else {
+  warn(".gitignore não encontrado", "Recomendado criar .gitignore na raiz.");
 }
 
 const productionEnvFiles = [

@@ -1386,14 +1386,14 @@ export default function LearningPage() {
                                   : "border-slate-300 bg-white text-slate-500"
                               }`}
                               title={
-                                isFavorito("METODOLOGIA_AVULSA", item.id)
+                                isFavorito("METODOLOGIA", item.id)
                                   ? "Remover dos favoritos"
                                   : "Adicionar aos favoritos"
                               }
                             >
                               <Star
                                 className="w-4 h-4"
-                                fill={isFavorito("METODOLOGIA_AVULSA", item.id) ? "currentColor" : "none"}
+                                fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
                               />
                             </button>
                           }
