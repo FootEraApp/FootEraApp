@@ -386,6 +386,42 @@ function getRepostChain(p: PostagemComUsuario): PostagemComUsuario[] {
   return chain;
 }
 
+function isPostUsuarioDestaque(p: PostagemComUsuario): boolean {
+  const usuario = (p as any)?.usuario;
+
+  return Boolean(
+    usuario?.destaque === true ||
+      usuario?.perfilDestaque === true ||
+      usuario?.isDestaque === true
+  );
+}
+
+function getPostDateMs(p: PostagemComUsuario): number {
+  const raw =
+    (p as any)?.createdAt ??
+    (p as any)?.criadoEm ??
+    (p as any)?.dataCriacao ??
+    (p as any)?.updatedAt ??
+    null;
+
+  const ms = raw ? new Date(raw).getTime() : 0;
+
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function sortPostsDestaquePrimeiro(
+  arr: PostagemComUsuario[]
+): PostagemComUsuario[] {
+  return [...arr].sort((a, b) => {
+    const ad = isPostUsuarioDestaque(a) ? 1 : 0;
+    const bd = isPostUsuarioDestaque(b) ? 1 : 0;
+
+    if (ad !== bd) return bd - ad;
+
+    return getPostDateMs(b) - getPostDateMs(a);
+  });
+}
+
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
@@ -482,12 +518,17 @@ function PaginaFeed(): JSX.Element {
         }
 
         const unicos: PostagemComUsuario[] = Array.from(
-          new Map<string, PostagemComUsuario>(dados.map((p) => [p.id, p] as const)).values()
+          new Map<string, PostagemComUsuario>(
+            dados.map((p) => [p.id, p] as const)
+          ).values()
         );
 
-        setPosts(unicos);
+        const ordenados = sortPostsDestaquePrimeiro(unicos);
+
+        setPosts(ordenados);
+
         const ids = new Set<string>();
-        for (const p of unicos) {
+        for (const p of ordenados) {
           const parsed = parseAchievement(p.conteudo || "");
           if (parsed?.conquistaId) ids.add(parsed.conquistaId);
         }
@@ -505,7 +546,7 @@ function PaginaFeed(): JSX.Element {
       setPosts((prev) => {
         if (novo.usuario?.id === Storage.usuarioId) return prev;
         if (prev.some((p) => p.id === novo.id)) return prev;
-        return [novo, ...prev];
+        return sortPostsDestaquePrimeiro([novo, ...prev]);
       });
     };
 
@@ -646,7 +687,11 @@ function PaginaFeed(): JSX.Element {
       if (resp.ok && resp.action === "repost" && resp.post) {
         const novoPost = resp.post;
 
-        setPosts((prev) => (prev.some((p) => p.id === novoPost.id) ? prev : [novoPost, ...prev]));
+        setPosts((prev) =>
+          prev.some((p) => p.id === novoPost.id)
+            ? prev
+            : sortPostsDestaquePrimeiro([novoPost, ...prev])
+        );
         return;
       }
 

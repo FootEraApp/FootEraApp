@@ -69,6 +69,8 @@ type StatusConta =
   | "banido"
   | "pendente";
 
+type DestaqueFiltro = "" | "sim" | "nao";
+
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
   atleta: "Atleta",
@@ -383,6 +385,7 @@ export default function AdminDashboard() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<UsuarioTipo>("");
+  const [destaqueFiltro, setDestaqueFiltro] = useState<DestaqueFiltro>("");
   const [pagina, setPagina] = useState(1);
   const pageSize = 20;
   const [totalUsuarios, setTotalUsuarios] = useState(0);
@@ -1424,7 +1427,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
   useEffect(() => {
     if (aba !== "usuarios") return;
     carregarUsuarios(1).catch(() => {});
-  }, [aba, tipoFiltro, debouncedQ]);
+  }, [aba, tipoFiltro, destaqueFiltro, debouncedQ]);
 
   useEffect(() => {
     (async () => {
@@ -1623,6 +1626,14 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
     if (debouncedQ) params.set("q", debouncedQ);
     if (tipoFiltro && tipoToServer[tipoFiltro]) {
       params.set("tipo", tipoToServer[tipoFiltro]);
+    }
+
+    if (destaqueFiltro === "sim") {
+      params.set("destaque", "true");
+    }
+
+    if (destaqueFiltro === "nao") {
+      params.set("destaque", "false");
     }
 
     const url = `${USERS_ENDPOINT}?${params.toString()}`;
@@ -2597,6 +2608,15 @@ async function confirmarExcluirProfessor() {
                 <option value="professor">Professores</option>
                 <option value="admin">Administrador</option>
                 <option value="olheiro">Olheiro</option>
+              </select>
+              <select
+                value={destaqueFiltro}
+                onChange={(e) => setDestaqueFiltro(e.target.value as DestaqueFiltro)}
+                className="border rounded px-3 py-2 w-full sm:w-auto"
+              >
+                <option value="">Todos os destaques</option>
+                <option value="sim">Somente destaque</option>
+                <option value="nao">Sem destaque</option>
               </select>
               <button className="w-full sm:w-auto px-3 py-2 rounded bg-gray-200" onClick={() => carregarUsuarios(1)}>
                 Atualizar

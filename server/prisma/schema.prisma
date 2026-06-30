@@ -28,6 +28,7 @@ model Usuario {
   dataCriacao                     DateTime                     @default(now())
   codigo                          String?
   verified                        Boolean                      @default(false)
+  destaque                        Boolean                      @default(false)
   configuracoesNotificacoes       Json?
   senhaAtualizadaEm               DateTime?
   tokenVersion                    Int                          @default(0)

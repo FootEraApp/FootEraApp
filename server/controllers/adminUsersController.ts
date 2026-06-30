@@ -47,6 +47,7 @@ export async function listAdminUsers(req: Request, res: Response) {
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize || 20) || 20));
     const q = String(req.query.q || "").trim();
     const tipo = normalizaTipo(String(req.query.tipo || ""));
+    const destaqueParam = String(req.query.destaque || "").trim().toLowerCase();
 
     const where: any = {};
     if (q) {
@@ -57,6 +58,14 @@ export async function listAdminUsers(req: Request, res: Response) {
       ];
     }
     if (tipo) where.tipo = tipo;
+
+    if (destaqueParam === "true") {
+      where.destaque = true;
+    }
+
+    if (destaqueParam === "false") {
+      where.destaque = false;
+    }
 
     const [rows, total] = await prisma.$transaction([
       prisma.usuario.findMany({
@@ -103,6 +112,7 @@ export async function listAdminUsers(req: Request, res: Response) {
         foto: resolveFoto(u),
         criadoEm,
         verificado: (u as any).verified ?? false,
+        destaque: (u as any).destaque ?? false,
         status: (u as any).status ?? "ATIVO",
         blockedAt: (u as any).blockedAt ?? null,
         blockedReason: (u as any).blockedReason ?? null,
@@ -164,6 +174,7 @@ export async function getAdminUserDetail(req: Request, res: Response) {
       (u as any).createdAt ??
       null,
     verificado: (u as any).verified ?? false,
+    destaque: (u as any).destaque ?? false,
     contagens: {
       posts: u._count.postagens,
       comentarios: u._count.comentarios,
@@ -294,17 +305,62 @@ async function totalVinculadosDoUsuario(u: { id: string; tipo: string }) {
 
 export async function patchAdminUser(req: Request, res: Response) {
   const { id } = req.params;
-  const { verificado } = req.body as { verificado?: boolean };
+  const { verificado, destaque } = req.body as {
+    verificado?: boolean;
+    destaque?: boolean;
+  };
 
   const data: any = {};
-  if (typeof verificado === "boolean") data.verified = verificado;
-  if (!Object.keys(data).length) {
-    return res
-      .status(400)
-      .json({ message: "Nenhum campo válido para atualizar." });
+
+  if (typeof verificado === "boolean") {
+    data.verified = verificado;
   }
-  const u = await prisma.usuario.update({ where: { id }, data });
-  res.json(u);
+
+  if (typeof destaque === "boolean") {
+    data.destaque = destaque;
+  }
+
+  if (!Object.keys(data).length) {
+    return res.status(400).json({
+      message: "Nenhum campo válido para atualizar.",
+    });
+  }
+
+  const u = await prisma.usuario.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      nome: true,
+      nomeDeUsuario: true,
+      email: true,
+      tipo: true,
+      foto: true,
+      dataCriacao: true,
+      verified: true,
+      destaque: true,
+      status: true,
+      blockedAt: true,
+      blockedReason: true,
+      deletedAt: true,
+    },
+  });
+
+  return res.json({
+    id: u.id,
+    nome: u.nome,
+    nomeDeUsuario: u.nomeDeUsuario,
+    email: u.email ?? null,
+    tipo: u.tipo,
+    foto: u.foto ?? null,
+    criadoEm: u.dataCriacao,
+    verificado: u.verified,
+    destaque: u.destaque,
+    status: u.status,
+    blockedAt: u.blockedAt,
+    blockedReason: u.blockedReason,
+    deletedAt: u.deletedAt,
+  });
 }
 
 export async function banUser(_req: Request, res: Response) {
