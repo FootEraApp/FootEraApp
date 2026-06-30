@@ -11,7 +11,15 @@ const AD_EVERY_N = 10;
 
 const postagemIncludeBase = {
   usuario: {
-    select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
+    select: {
+      id: true,
+      nome: true,
+      nomeDeUsuario: true,
+      foto: true,
+      tipo: true,
+      destaque: true,
+      verified: true,
+    },
   },
   curtidas: { select: { usuarioId: true } },
   comentarios: {
@@ -49,6 +57,30 @@ async function carregarCadeiasDosPosts(posts: any[]) {
   return Promise.all(posts.map((post) => carregarCadeiaRepost(post)));
 }
 
+function getPostDateMs(post: any) {
+  const raw =
+    post?.dataCriacao ??
+    post?.createdAt ??
+    post?.criadoEm ??
+    post?.updatedAt ??
+    null;
+
+  const ms = raw ? new Date(raw).getTime() : 0;
+
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function ordenarPostsDestaquePrimeiro(posts: any[]) {
+  return [...posts].sort((a, b) => {
+    const ad = a?.usuario?.destaque === true ? 1 : 0;
+    const bd = b?.usuario?.destaque === true ? 1 : 0;
+
+    if (ad !== bd) return bd - ad;
+
+    return getPostDateMs(b) - getPostDateMs(a);
+  });
+}
+
 export async function listarFeed(req: Request, res: Response) {
   try {
     const postagensBase = await prisma.postagem.findMany({
@@ -58,7 +90,9 @@ export async function listarFeed(req: Request, res: Response) {
       },
     });
 
-    const postagens = await carregarCadeiasDosPosts(postagensBase);
+    const postagens = ordenarPostsDestaquePrimeiro(
+      await carregarCadeiasDosPosts(postagensBase)
+    );
 
     res.json(postagens);
   } catch (e) {
@@ -196,7 +230,9 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
       },
     });
 
-    const postagens = await carregarCadeiasDosPosts(postagensBase);
+    const postagens = ordenarPostsDestaquePrimeiro(
+      await carregarCadeiasDosPosts(postagensBase)
+    );
 
     const ads = await getAdsConfigForUser(userId);
 
@@ -339,10 +375,29 @@ export const postar: RequestHandler = async (req, res) => {
     const postForEmit = await prisma.postagem.findUnique({
       where: { id: postagem.id },
       include: {
-        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            nomeDeUsuario: true,
+            foto: true,
+            tipo: true,
+            destaque: true,
+            verified: true,
+          },
+        },
         curtidas: true,
         comentarios: {
-          include: { usuario: { select: { id: true, nome: true, foto: true } } },
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                nomeDeUsuario: true,
+                foto: true,
+              },
+            },
+          },
         },
       },
     });

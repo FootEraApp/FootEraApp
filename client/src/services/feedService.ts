@@ -5,8 +5,10 @@ export interface Usuario {
   id: string;
   nome: string;
   nomeDeUsuario?: string;
-  foto?: string;
+  foto?: string | null;
   tipo: string;
+  destaque?: boolean | null;
+  verified?: boolean | null;
 }
 
 export interface Comentarios {
@@ -21,7 +23,15 @@ export type PostagemComUsuario = {
   id: string;
   conteudo: string;
   dataCriacao: string;
-  usuario: { id: string; nome: string; foto?: string | null; tipo?: string };
+  usuario: {
+    id: string;
+    nome: string;
+    nomeDeUsuario?: string | null;
+    foto?: string | null;
+    tipo?: string;
+    destaque?: boolean | null;
+    verified?: boolean | null;
+  };
   imagemUrl?: string | null;
   videoUrl?: string | null;
   tipoMidia?: "Imagem" | "Video" | "Documento" | null;

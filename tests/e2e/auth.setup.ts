@@ -21,7 +21,6 @@ setup("login admin (salva sessão)", async ({ page }) => {
     window.localStorage.clear();
     window.sessionStorage.clear();
 
-    // O login.tsx usa window.Cypress para pular alguns efeitos no E2E.
     // @ts-ignore
     window.Cypress = true;
 
@@ -47,14 +46,11 @@ setup("login admin (salva sessão)", async ({ page }) => {
   await userInput.fill(user);
   await passInput.fill(pass);
 
-  // Muito importante: força o login a salvar no localStorage.
   await rememberInput.check();
-
   await page.getByRole("button", { name: /^Entrar$/i }).click();
 
   await expect(page).toHaveURL(/\/admin/, { timeout: 60_000 });
 
-  // Garante que o storageState vai conter os dados que o RequireAdmin lê.
   await page.evaluate(() => {
     const token =
       localStorage.getItem("token") ||

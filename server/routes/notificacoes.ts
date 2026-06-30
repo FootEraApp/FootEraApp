@@ -9,7 +9,8 @@ import {
   testarPushAtual,
   getPushStatusAtual,
   salvarPushNativeToken,
-  removerPushNativeToken
+  removerPushNativeToken,
+  deletarNotificacoesEmLote,
 } from "../controllers/notificacoesController.js";
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
@@ -18,6 +19,7 @@ import { authenticateToken } from "../middlewares/auth.js";
 const prisma = new PrismaClient();
 const router = Router();
 
+router.delete("/lote", authenticateToken, deletarNotificacoesEmLote);
 router.delete("/:id", authenticateToken, deletarNotificacao);
 router.get("/me", authenticateToken, listarMinhasNotificacoes);
 router.get("/badge", authenticateToken, getBadge);

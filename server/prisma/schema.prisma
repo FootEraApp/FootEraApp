@@ -38,6 +38,7 @@ model Usuario {
   dataCriacao               DateTime            @default(now())
   codigo                    String?
   verified                  Boolean             @default(false)
+  destaque                  Boolean             @default(false)
   deletedAt                 DateTime?
   deleteScheduledAt         DateTime?
   lastSeenAt                DateTime?
