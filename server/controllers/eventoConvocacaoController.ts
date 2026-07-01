@@ -199,7 +199,7 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
           criarNotificacaoEEnviarPush({
             usuarioId: n.usuarioId,
             actorId: deId,
-            tipo: NotificacaoTipo.EVENTO,
+            tipo: NotificacaoTipo.CONVOCACAO,
             titulo: n.titulo,
             mensagem: n.mensagem,
             link: n.link,

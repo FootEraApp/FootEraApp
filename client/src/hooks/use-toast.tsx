@@ -20,8 +20,8 @@ export function useToast() {
 
     return (
       <div
-        className={`fixed top-4 right-4 p-3 rounded shadow-lg text-white z-50 ${
-          toast.type === "success" ? "bg-green-500" : "bg-red-500"
+        className={`fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl shadow-lg text-white z-50 text-sm font-medium max-w-[90vw] text-center ${
+          toast.type === "success" ? "bg-green-700" : "bg-red-600"
         }`}
       >
         {toast.message}

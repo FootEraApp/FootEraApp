@@ -5,6 +5,7 @@ import { API } from "../config.js";
 import { ArrowLeft, X } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
+import { useToast } from "../hooks/use-toast.js";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -69,22 +70,25 @@ function limparMensagem(mensagem: string) {
     .trim();
 }
 
-function isConvocacao(n: { titulo: string; mensagem: string }) {
+function isConvocacao(n: { tipo?: string | null; titulo: string; mensagem: string }) {
+  if (String(n.tipo || "").toUpperCase() === "CONVOCACAO") return true;
   const t = `${n.titulo} ${n.mensagem}`.toLowerCase();
-  return (
-    t.includes("convoc") ||
-    t.includes("você foi convoc") ||
-    t.includes("voce foi convoc")
-  );
+  return t.includes("convoc");
 }
 
 export default function PaginaNotificacoes() {
+  const { showToast, ToastComponent } = useToast();
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [, setLocation] = useLocation();
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [apagandoSelecionadas, setApagandoSelecionadas] = useState(false);
+  const [loadingNotificacoes, setLoadingNotificacoes] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingDeleteSolicitacao, setPendingDeleteSolicitacao] = useState<string | null>(null);
+  const [confirmandoApagarLote, setConfirmandoApagarLote] = useState(false);
+  const [pendingSeguirDeVolta, setPendingSeguirDeVolta] = useState<{ actorId: string; actorLabel: string } | null>(null);
 
   useEffect(() => {
     const token = Storage.token;
@@ -137,12 +141,12 @@ export default function PaginaNotificacoes() {
       if (!r.ok) {
         setNotificacoes(prev);
         console.warn("Falha ao apagar notificação:", r.status, await r.text());
-        alert("Não foi possível apagar a notificação agora.");
+        showToast("Não foi possível apagar a notificação agora.", "error");
       }
     } catch (e) {
       setNotificacoes(prev);
       console.error("Erro ao apagar notificação:", e);
-      alert("Erro ao apagar a notificação.");
+      showToast("Erro ao apagar a notificação.", "error");
     }
   };
 
@@ -192,15 +196,14 @@ export default function PaginaNotificacoes() {
       });
 
       if (!r.ok) {
-        const txt = await r.text();
-        alert(`Não foi possível seguir de volta (${r.status}): ${txt}`);
+        showToast("Não foi possível seguir de volta.", "error");
         return;
       }
 
-      alert("Agora você também está seguindo essa pessoa ✅");
+      showToast("Agora você também está seguindo essa pessoa!", "success");
     } catch (e) {
       console.error(e);
-      alert("Erro ao seguir de volta.");
+      showToast("Erro ao seguir de volta.", "error");
     }
   };
 
@@ -208,7 +211,10 @@ export default function PaginaNotificacoes() {
 
   useEffect(() => {
     const token = Storage.token;
-    if (!token) return;
+    if (!token) {
+      setLoadingNotificacoes(false);
+      return;
+    }
 
     (async () => {
       try {
@@ -229,6 +235,8 @@ export default function PaginaNotificacoes() {
         setNotificacoes(items);
       } catch (e) {
         console.error("Erro ao buscar notificações", e);
+      } finally {
+        setLoadingNotificacoes(false);
       }
     })();
   }, []);
@@ -236,7 +244,7 @@ export default function PaginaNotificacoes() {
   useEffect(() => {
     const naoLidas = (notificacoes || []).filter((n) => n.lida === false).length;
     const totalNotificacoes = naoLidas + (solicitacoes?.length || 0);
-    
+
     window.dispatchEvent(
       new CustomEvent("badge:update", { detail: totalNotificacoes })
     );
@@ -245,7 +253,7 @@ export default function PaginaNotificacoes() {
   const responderSolicitacao = async (id: string, aceitar: boolean) => {
     const token = Storage.token;
     if (!token) {
-      alert("Você precisa estar logado para responder a solicitação.");
+      showToast("Você precisa estar logado.", "error");
       return;
     }
 
@@ -272,7 +280,7 @@ export default function PaginaNotificacoes() {
       window.dispatchEvent(new Event("footera:vinculo-treino-alterado"));
     } catch (err) {
       console.error("Erro ao responder solicitação:", err);
-      alert("Não foi possível processar a solicitação agora.");
+      showToast("Não foi possível processar a solicitação agora.", "error");
     }
   };
 
@@ -305,6 +313,30 @@ export default function PaginaNotificacoes() {
   const sairModoSelecao = () => {
     setModoSelecao(false);
     limparSelecao();
+    setConfirmandoApagarLote(false);
+  };
+
+  const marcarTodasComoLidas = async () => {
+    const token = Storage.token;
+    if (!token) return;
+
+    const estadoAnterior = notificacoes;
+    setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/notificacoes/me/lidas`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!r.ok) {
+        setNotificacoes(estadoAnterior);
+        showToast("Não foi possível marcar as notificações como lidas.", "error");
+      }
+    } catch (e) {
+      setNotificacoes(estadoAnterior);
+      console.error("Erro ao marcar todas como lidas:", e);
+    }
   };
 
   const apagarNotificacoesSelecionadas = async () => {
@@ -312,15 +344,6 @@ export default function PaginaNotificacoes() {
     if (!token) return;
 
     const ids = Array.from(selecionadas);
-
-    if (ids.length === 0) {
-      alert("Selecione pelo menos uma notificação.");
-      return;
-    }
-
-    if (!confirm(`Apagar ${ids.length} notificação(ões) selecionada(s)?`)) {
-      return;
-    }
 
     const prevNotificacoes = notificacoes;
     const prevSelecionadas = selecionadas;
@@ -349,48 +372,146 @@ export default function PaginaNotificacoes() {
           await r.text()
         );
 
-        alert("Não foi possível apagar as notificações selecionadas agora.");
+        showToast("Não foi possível apagar as notificações selecionadas agora.", "error");
         return;
       }
 
       setModoSelecao(false);
+      setConfirmandoApagarLote(false);
     } catch (e) {
       setNotificacoes(prevNotificacoes);
       setSelecionadas(prevSelecionadas);
       console.error("Erro ao apagar notificações selecionadas:", e);
-      alert("Erro ao apagar as notificações selecionadas.");
+      showToast("Erro ao apagar as notificações selecionadas.", "error");
     } finally {
       setApagandoSelecionadas(false);
     }
   };
 
   const BotaoSelecaoNotificacao = ({ id }: { id: string }) => {
-      if (!modoSelecao) return null;
+    if (!modoSelecao) return null;
 
-      const marcada = selecionadas.has(id);
+    const marcada = selecionadas.has(id);
 
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          alternarSelecao(id);
+        }}
+        className={`absolute top-3 left-3 z-20 h-7 w-7 rounded-full border-2 flex items-center justify-center ${
+          marcada
+            ? "bg-green-800 border-green-800 text-white"
+            : "bg-white border-green-800 text-transparent"
+        }`}
+        aria-label={marcada ? "Remover da seleção" : "Selecionar notificação"}
+        title={marcada ? "Remover da seleção" : "Selecionar"}
+      >
+        ✓
+      </button>
+    );
+  };
+
+  const BotaoApagarNotificacao = ({ id }: { id: string }) => {
+    if (pendingDelete === id) {
       return (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            alternarSelecao(id);
-          }}
-          className={`absolute top-3 left-3 z-20 h-7 w-7 rounded-full border-2 flex items-center justify-center ${
-            marcada
-              ? "bg-green-800 border-green-800 text-white"
-              : "bg-white border-green-800 text-transparent"
-          }`}
-          aria-label={marcada ? "Remover da seleção" : "Selecionar notificação"}
-          title={marcada ? "Remover da seleção" : "Selecionar"}
-        >
-          ✓
-        </button>
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => { apagarNotificacao(id); setPendingDelete(null); }}
+            className="h-7 px-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
+          >
+            Apagar
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingDelete(null)}
+            className="h-7 px-2 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-300"
+          >
+            Não
+          </button>
+        </div>
       );
-    };
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => setPendingDelete(id)}
+        className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
+        aria-label="Apagar notificação"
+        title="Apagar"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    );
+  };
+
+  const BotaoApagarSolicitacao = ({ id }: { id: string }) => {
+    if (pendingDeleteSolicitacao === id) {
+      return (
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => { responderSolicitacao(id, false); setPendingDeleteSolicitacao(null); }}
+            className="h-7 px-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
+          >
+            Remover
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingDeleteSolicitacao(null)}
+            className="h-7 px-2 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-300"
+          >
+            Não
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setPendingDeleteSolicitacao(id); }}
+        className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
+        aria-label="Remover solicitação"
+        title="Remover"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    );
+  };
 
   return (
     <div className="max-w-xl mx-auto p-4 pb-24">
+      <ToastComponent />
+
+      {pendingSeguirDeVolta && (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-green-50 border border-green-200 px-4 py-3">
+          <p className="text-sm text-green-900">
+            Deseja seguir <strong>{pendingSeguirDeVolta.actorLabel}</strong> de volta?
+          </p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              className="rounded-lg bg-green-700 text-white text-xs px-3 py-1.5 hover:bg-green-800"
+              onClick={async () => {
+                await seguirDeVolta(pendingSeguirDeVolta.actorId);
+                setPendingSeguirDeVolta(null);
+              }}
+            >
+              Seguir
+            </button>
+            <button
+              className="rounded-lg bg-gray-200 text-gray-700 text-xs px-3 py-1.5 hover:bg-gray-300"
+              onClick={() => setPendingSeguirDeVolta(null)}
+            >
+              Não
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center justify-between gap-3">
         <Link
           href="/perfil"
@@ -427,6 +548,18 @@ export default function PaginaNotificacoes() {
         )}
       </header>
 
+      {!modoSelecao && notificacoes.some((n) => n.lida === false) && (
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={marcarTodasComoLidas}
+            className="text-xs text-green-800 underline underline-offset-2 hover:text-green-900"
+          >
+            Marcar todas como lidas
+          </button>
+        </div>
+      )}
+
       {modoSelecao && notificacoes.length > 0 && (
         <div className="mb-4 flex items-center justify-between gap-2">
           <button
@@ -441,14 +574,34 @@ export default function PaginaNotificacoes() {
             {totalSelecionadas} selecionada(s)
           </p>
 
-          <button
-            type="button"
-            disabled={totalSelecionadas === 0 || apagandoSelecionadas}
-            onClick={apagarNotificacoesSelecionadas}
-            className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-          >
-            {apagandoSelecionadas ? "Apagando..." : "Apagar"}
-          </button>
+          {confirmandoApagarLote ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={apagandoSelecionadas}
+                onClick={apagarNotificacoesSelecionadas}
+                className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {apagandoSelecionadas ? "Apagando..." : "Confirmar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmandoApagarLote(false)}
+                className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700"
+              >
+                Não
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={totalSelecionadas === 0 || apagandoSelecionadas}
+              onClick={() => setConfirmandoApagarLote(true)}
+              className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Apagar
+            </button>
+          )}
         </div>
       )}
 
@@ -458,6 +611,7 @@ export default function PaginaNotificacoes() {
             const data = formatarDataCurta((n as any).createdAt || (n as any).criadaEm || null);
             const msgLimpa = limparMensagem(n.mensagem || "");
             const ehConv = isConvocacao({
+              tipo: n.tipo,
               titulo: n.titulo || "",
               mensagem: n.mensagem || "",
             });
@@ -476,19 +630,7 @@ export default function PaginaNotificacoes() {
                   } border border-green-200`}
                 >
                   <BotaoSelecaoNotificacao id={n.id} />
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm("Apagar esta notificação?")) apagarNotificacao(n.id);
-                    }}
-                    className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
-                      bg-white hover:bg-gray-100 text-green-900 shadow"
-                    aria-label="Apagar notificação"
-                    title="Apagar"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <BotaoApagarNotificacao id={n.id} />
 
                   <div className="flex items-center gap-3 pr-10">
                     <Avatar
@@ -543,10 +685,7 @@ export default function PaginaNotificacoes() {
                             });
 
                             setNotificacoes((prev) => prev.filter((x) => x.id !== n.id));
-
-                            if (confirm("Deseja seguir essa pessoa de volta?")) {
-                              await seguirDeVolta(actorId);
-                            }
+                            setPendingSeguirDeVolta({ actorId, actorLabel });
                           }}
                         >
                           Aceitar
@@ -641,7 +780,7 @@ export default function PaginaNotificacoes() {
 
             const isIndicacaoOlheiro = String(n.tipo || "").toUpperCase() === "INDICACAO_OLHEIRO";
             const indicacaoId = getIndicacaoIdFromLink(n.link);
-                    
+
             if (isIndicacaoOlheiro && indicacaoId) {
               return (
                 <div
@@ -651,18 +790,7 @@ export default function PaginaNotificacoes() {
                   } border border-green-200`}
                 >
                   <BotaoSelecaoNotificacao id={n.id} />
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm("Apagar esta notificação?")) apagarNotificacao(n.id);
-                    }}
-                    className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
-                    aria-label="Apagar notificação"
-                    title="Apagar"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <BotaoApagarNotificacao id={n.id} />
 
                   <div className="pr-10">
                     <p className="font-semibold text-green-900 flex items-center gap-2">
@@ -697,7 +825,7 @@ export default function PaginaNotificacoes() {
                           });
 
                           if (!r.ok) {
-                            alert("Não foi possível aceitar a indicação.");
+                            showToast("Não foi possível aceitar a indicação.", "error");
                             return;
                           }
 
@@ -705,7 +833,7 @@ export default function PaginaNotificacoes() {
                           setNotificacoes((prev) =>
                             prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
                           );
-                          alert("Indicação aceita com sucesso.");
+                          showToast("Indicação aceita com sucesso.", "success");
                         }}
                       >
                         Aceitar
@@ -727,7 +855,7 @@ export default function PaginaNotificacoes() {
                           });
 
                           if (!r.ok) {
-                            alert("Não foi possível recusar a indicação.");
+                            showToast("Não foi possível recusar a indicação.", "error");
                             return;
                           }
 
@@ -735,7 +863,7 @@ export default function PaginaNotificacoes() {
                           setNotificacoes((prev) =>
                             prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
                           );
-                          alert("Indicação recusada.");
+                          showToast("Indicação recusada.", "success");
                         }}
                       >
                         Recusar
@@ -762,19 +890,7 @@ export default function PaginaNotificacoes() {
                 }`}
               >
                 <BotaoSelecaoNotificacao id={n.id} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm("Apagar esta notificação?"))
-                      apagarNotificacao(n.id);
-                  }}
-                  className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
-                  bg-white hover:bg-gray-100 text-green-900 shadow" 
-                  aria-label="Apagar notificação"
-                  title="Apagar"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <BotaoApagarNotificacao id={n.id} />
 
                 <div className="flex items-start gap-3">
                   <div className="flex-1 pr-10">
@@ -838,18 +954,13 @@ export default function PaginaNotificacoes() {
         </div>
       )}
 
-      {solicitacoes.length === 0 && notificacoes.length === 0 ? (
+      {loadingNotificacoes ? (
+        <p className="text-gray-400 text-sm">Carregando notificações...</p>
+      ) : solicitacoes.length === 0 && notificacoes.length === 0 ? (
         <p className="text-gray-500">Nenhuma notificação no momento.</p>
       ) : solicitacoes.length > 0 ? (
         <div className="space-y-4">
           {solicitacoes.map((solicitacao) => {
-            const fotoRaw = String(solicitacao.remetente?.foto ?? "").trim();
-            const temFotoValida =
-              fotoRaw &&
-              fotoRaw !== "null" &&
-              fotoRaw !== "undefined" &&
-              fotoRaw !== "0";
-
             const podeResponder =
               solicitacao.status === "pendente" ||
               solicitacao.status === "ativa";
@@ -860,21 +971,7 @@ export default function PaginaNotificacoes() {
                 className="relative bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
                 onClick={() => irParaPerfil(solicitacao.remetenteId)}
               >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm("Remover esta solicitação?")) {
-                      responderSolicitacao(solicitacao.id, false);
-                    }
-                  }}
-                  className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
-                  bg-white hover:bg-gray-100 text-green-900 shadow"
-                  aria-label="Remover solicitação"
-                  title="Remover"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <BotaoApagarSolicitacao id={solicitacao.id} />
 
                 <div className="flex items-center gap-4 pr-10">
                   <Avatar
@@ -926,7 +1023,7 @@ export default function PaginaNotificacoes() {
         </div>
       ) : null}
 
-      <BottomNav />
+      <BottomNav active="notificacoes" />
     </div>
   );
 }
