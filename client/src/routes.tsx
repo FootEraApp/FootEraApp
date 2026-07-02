@@ -133,7 +133,7 @@ export function AppRoutes() {
           </Route>
         )}
         <Route path="/admin/treinos/create">
-          <PaginaCreateTreinos />
+          <Private><PaginaCreateTreinos /></Private>
         </Route>
         <Route path="/admin/professores/create">
           <RequireAdmin><PaginaCreateProfessores /></RequireAdmin>
@@ -145,20 +145,20 @@ export function AppRoutes() {
           </RequireAdmin>
         </Route>
 
-        <Route path="/olheiros/desempenho"><PaginaDesempenhoAtleta /></Route>
-        <Route path="/olheiros/indicar"><PaginaIndicarClube /></Route>
-        <Route path="/olheiros"><PaginaOlheiros /></Route>
+        <Route path="/olheiros/desempenho"><Private><PaginaDesempenhoAtleta /></Private></Route>
+        <Route path="/olheiros/indicar"><Private><PaginaIndicarClube /></Private></Route>
+        <Route path="/olheiros"><Private><PaginaOlheiros /></Private></Route>
 
         <Route path="/perfil-olheiro/:id">
-          {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
+          {({ id }: { id: string }) => <Private><PaginaPerfilOlheiro idDaUrl={id} /></Private>}
         </Route>
 
         <Route path="/perfil/mudar-tipo">
           <Private><MudarTipoPerfilPage /></Private>
         </Route>
-        <Route path="/perfil/conquistas"><PaginaConquistas /></Route>
-        <Route path="/perfil/GerenciarAtletas"><PaginaGerenciarAtleta /></Route>
-        <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>
+        <Route path="/perfil/conquistas"><Private><PaginaConquistas /></Private></Route>
+        <Route path="/perfil/GerenciarAtletas"><Private><PaginaGerenciarAtleta /></Private></Route>
+        <Route path="/perfil/GerenciarProfessores"><Private><PaginaGerenciarProfessores /></Private></Route>
         {FLAGS.FORMADORES_ENABLED ? (
           <Route path="/formadores">
             <Private><PaginaFormadores /></Private>
@@ -187,20 +187,20 @@ export function AppRoutes() {
 
         <Route path="/eventos/clubes/:id/novo">
           {(params?: { id: string }) =>
-            params ? <PaginaNovoEventoClube clubeId={params.id} /> : null}
+            params ? <Private><PaginaNovoEventoClube clubeId={params.id} /></Private> : null}
         </Route>
         <Route path="/eventos/clubes/:id">
           {(params?: { id: string }) =>
-            params ? <PaginaEventosClube clubeId={params.id} /> : null}
+            params ? <Private><PaginaEventosClube clubeId={params.id} /></Private> : null}
         </Route>
 
         <Route path="/eventos/escolas/:id/novo">
           {(params?: { id: string }) =>
-            params ? <PaginaNovoEventoEscola escolaId={params.id} /> : null}
+            params ? <Private><PaginaNovoEventoEscola escolaId={params.id} /></Private> : null}
         </Route>
         <Route path="/eventos/escolas/:id">
           {(params?: { id: string }) =>
-            params ? <PaginaEventosEscola escolaId={params.id} /> : null}
+            params ? <Private><PaginaEventosEscola escolaId={params.id} /></Private> : null}
         </Route>
 
         <Route path="/eventos/:id">
@@ -235,7 +235,7 @@ export function AppRoutes() {
         <Route path="/treinos/livre/historico"><Private><PaginaTreinoLivresHistorico /></Private></Route> 
         <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
         <Route path="/treinos/elenco/jogos"><Private><PaginaJogosElenco/></Private></Route>
-        <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
+        <Route path="/treinos/novo"><Private><PaginaNovoTreino /></Private></Route>
         <Route path="/treinos/tutorial"><Private><TutorialPage /></Private></Route> 
         <Route path="/treinos/metodologia"><Private><TreinoMetodologiaPage /></Private></Route> 
         <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
@@ -318,13 +318,13 @@ export function AppRoutes() {
             </Route>
           </>
         )}
-        <Route path="/submissao"><PaginaSubmissao /></Route>
+        <Route path="/submissao"><Private><PaginaSubmissao /></Private></Route>
         <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
         <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>
-        <Route path="/trainings"><PaginaTraining /></Route>
-        <Route path="/configuracoes"><PaginaConfiguracoesPerfil /></Route>
-        <Route path="/notificacoes"><PaginaNotificacoes /></Route>
-        <Route path="/mensagens"><PaginaMensagens /></Route>
+        <Route path="/trainings"><Private><PaginaTraining /></Private></Route>
+        <Route path="/configuracoes"><Private><PaginaConfiguracoesPerfil /></Private></Route>
+        <Route path="/notificacoes"><Private><PaginaNotificacoes /></Private></Route>
+        <Route path="/mensagens"><Private><PaginaMensagens /></Private></Route>
         {/*<Route path="/"><HomeRedirect /></Route>*/}
         {<Route path="/"><LandingPage /></Route>} 
         <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>

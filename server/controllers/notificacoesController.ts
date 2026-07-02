@@ -376,7 +376,7 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
       }),
       prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
       prisma.notificacao.findMany({
-        where: { usuarioId: userId },
+        where: { usuarioId: userId, lida: false },
         select: {
           tipo: true,
           titulo: true,
@@ -436,7 +436,7 @@ export async function recomputeAndEmitBadge(userId: string) {
     }),
     prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
     prisma.notificacao.findMany({
-      where: { usuarioId: userId },
+      where: { usuarioId: userId, lida: false },
       select: {
         tipo: true,
         titulo: true,
@@ -529,6 +529,25 @@ export async function deletarNotificacoesEmLote(
   } catch (e) {
     console.error("[deletarNotificacoesEmLote]", e);
     return res.status(500).json({ error: "Erro ao deletar notificações." });
+  }
+}
+
+export async function marcarTodasComoLidas(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Não autenticado" });
+
+    await prisma.notificacao.updateMany({
+      where: { usuarioId: userId, lida: false },
+      data: { lida: true },
+    });
+
+    await recomputeAndEmitBadge(userId);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[marcarTodasComoLidas]", e);
+    return res.status(500).json({ error: "Erro ao marcar notificações como lidas." });
   }
 }
 
