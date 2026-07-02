@@ -545,9 +545,9 @@ export default function PaginaLogin() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen">
-      <div className="md:w-1/2 bg-[#14532d] text-white flex flex-col items-center p-5 md:p-10">
-        <div className="w-full max-w-[680px]">
+    <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-cream md:flex-row">
+      <div className="w-full md:w-1/2 md:min-h-screen bg-[#14532d] text-white flex flex-col items-center p-5 md:p-10">
+        <div className="w-full max-w-[680px] pb-8 md:pb-0">
           <div className="flex items-center justify-between gap-3 md:flex-col md:gap-2">
           <button
             type="button"
@@ -646,7 +646,7 @@ export default function PaginaLogin() {
         </div>
       </div>
 
-      <div className="relative md:w-1/2 bg-cream flex justify-center items-center p-6 md:p-10">
+      <div className="relative w-full md:w-1/2 bg-cream flex justify-center items-start md:items-center p-6 md:p-10 min-h-[calc(100vh-96px)] md:min-h-screen">
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div
             aria-hidden
