@@ -11,8 +11,10 @@ import {
   Prisma,
   NotificacaoTipo,
 } from "@prisma/client";
+import { z } from "zod";
 import { getIO } from "../socket.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
+import { sendError } from "../utils/httpError.js";
 import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
 import {
   onExercicioIncluidoNoTreino,
@@ -636,10 +638,7 @@ export async function listarSessoesTreino(req: Request, res: Response) {
 
     return res.json({ items });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar sessões de treino.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar sessões de treino.");
   }
 }
 
@@ -3673,6 +3672,18 @@ export async function restaurarTreinos(req: Request, res: Response) {
   return res.json({ ok: true, restaurados: restaurados.length });
 }
 
+// Só formaliza os 3 campos mais básicos (nome/nivel/exercicios), que já eram
+// checados manualmente mais abaixo. tipoTreino/categoria têm normalização
+// própria (aceitam "fisico"/"físico" etc.) e ficam como estão — não é
+// validação simples, é lógica de negócio que não deve ir pro schema.
+const criarTreinoProgramadoBaseSchema = z
+  .object({
+    nome: z.string().trim().min(1, "nome é obrigatório"),
+    nivel: z.nativeEnum(Nivel, { errorMap: () => ({ message: "Nivel inválido" }) }),
+    exercicios: z.array(z.any(), { invalid_type_error: "exercicios deve ser uma lista" }),
+  })
+  .passthrough();
+
 export async function criarTreinoProgramado(
   req: AuthenticatedRequest,
   res: Response
@@ -3731,6 +3742,16 @@ export async function criarTreinoProgramado(
   }
 
   try {
+    let bodyValidado: any;
+    try {
+      bodyValidado = criarTreinoProgramadoBaseSchema.parse(req.body ?? {});
+    } catch (e: any) {
+      if (e?.name === "ZodError") {
+        return res.status(400).json({ message: e.errors[0]?.message || "Dados inválidos.", details: e.errors });
+      }
+      throw e;
+    }
+
     const {
       nome,
       descricao,
@@ -3751,7 +3772,7 @@ export async function criarTreinoProgramado(
       parceiro,
       sessaoTreino,
       sessaoTreinoId,
-    } = req.body as any;
+    } = bodyValidado;
 
     const tokenUser =
       (req as any).user as { tipo?: string; tipoUsuarioId?: string } | undefined;
@@ -3774,9 +3795,6 @@ export async function criarTreinoProgramado(
         ""
     ).trim();
 
-    if (!(Object.values(Nivel) as string[]).includes(String(nivel))) {
-      return res.status(400).json({ message: "Nivel inválido" });
-    }
     const nivelEnum = nivel as Nivel;
     const usuarioIdToken =
       (req as any).userId ||
@@ -3802,17 +3820,8 @@ export async function criarTreinoProgramado(
 
     const parceiroFinal = tipoNorm === "professor" ? parceiroSolicitado : false;
 
-    if (
-      !nome ||
-      !nivel ||
-      !Array.isArray(exercicios) ||
-      !tipoUsuarioIdFinal ||
-      !usuarioIdToken
-    ) {
+    if (!tipoUsuarioIdFinal || !usuarioIdToken) {
       console.warn("[criarTreinoProgramado] Dados inválidos:", {
-        nome,
-        nivel,
-        exerciciosEhArray: Array.isArray(exercicios),
         tipoUsuarioIdFinal,
         usuarioIdToken,
       });
@@ -4691,11 +4700,20 @@ export async function criarTreinoProgramado(
       err
     );
 
-    return res
-      .status(500)
-      .json({ error: "Erro ao criar treino", detalhe: err?.message });
+    return sendError(res, err, "Erro ao criar treino");
   }
 }
+
+// Update parcial — todo campo é opcional. Só garante o tipo de quem já é
+// gravado direto no Prisma sem checagem (nivel, exercicios); o resto segue
+// como estava.
+const atualizarTreinoProgramadoBaseSchema = z
+  .object({
+    nome: z.string().trim().min(1, "nome não pode ser vazio").optional(),
+    nivel: z.nativeEnum(Nivel, { errorMap: () => ({ message: "Nivel inválido" }) }).optional(),
+    exercicios: z.array(z.any(), { invalid_type_error: "exercicios deve ser uma lista" }).optional(),
+  })
+  .passthrough();
 
 export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
   let body: any = req.body;
@@ -4712,6 +4730,86 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
   try {
     const { id } = req.params;
+    const usuarioId = req.userId;
+
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado." });
+
+    const treinoAtual = await prisma.treinoProgramado.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        professorId: true,
+        clubeId: true,
+        escolinhaId: true,
+        professores: { select: { professorId: true } },
+      },
+    });
+
+    if (!treinoAtual) return res.status(404).json({ message: "Treino programado não encontrado." });
+
+    const resolved = await resolveEntidade(usuarioId);
+    if (!resolved) {
+      return res.status(403).json({ message: "Sem permissão para editar este treino." });
+    }
+
+    let permitido = false;
+
+    if (resolved.tipo === "professor") {
+      permitido =
+        treinoAtual.professorId === resolved.id ||
+        treinoAtual.professores.some((p) => p.professorId === resolved.id);
+
+      if (!permitido && treinoAtual.escolinhaId) {
+        const escolinhaDoProfessor = await getEscolinhaIdDoProfessor(resolved.id);
+        if (escolinhaDoProfessor && treinoAtual.escolinhaId === escolinhaDoProfessor) {
+          permitido = true;
+        }
+      }
+
+      if (!permitido && treinoAtual.clubeId) {
+        const clubeDoProfessor = await getClubeIdDoProfessor(resolved.id);
+        if (clubeDoProfessor && treinoAtual.clubeId === clubeDoProfessor) {
+          permitido = true;
+        }
+      }
+    } else if (resolved.tipo === "clube") {
+      permitido = treinoAtual.clubeId === resolved.id;
+
+      if (!permitido) {
+        const profIds = await getProfessorIdsDoClube(resolved.id);
+        if (profIds.length) {
+          permitido =
+            (treinoAtual.professorId ? profIds.includes(treinoAtual.professorId) : false) ||
+            treinoAtual.professores.some((p) => profIds.includes(p.professorId));
+        }
+      }
+    } else if (resolved.tipo === "escolinha") {
+      permitido = treinoAtual.escolinhaId === resolved.id;
+
+      if (!permitido) {
+        const profIds = await getProfessorIdsDaEscolinha(resolved.id);
+        if (profIds.length) {
+          permitido =
+            (treinoAtual.professorId ? profIds.includes(treinoAtual.professorId) : false) ||
+            treinoAtual.professores.some((p) => profIds.includes(p.professorId));
+        }
+      }
+    }
+
+    if (!permitido) {
+      return res.status(403).json({ message: "Sem permissão para editar este treino." });
+    }
+
+    let bodyValidado: any;
+    try {
+      bodyValidado = atualizarTreinoProgramadoBaseSchema.parse(body ?? {});
+    } catch (e: any) {
+      if (e?.name === "ZodError") {
+        return res.status(400).json({ message: e.errors[0]?.message || "Dados inválidos.", details: e.errors });
+      }
+      throw e;
+    }
+
     let {
       nome,
       codigo,
@@ -4733,7 +4831,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       tipoUsuarioId,
       sessaoTreino,
       sessaoTreinoId,
-    } = body as any;
+    } = bodyValidado;
 
     if (nome || codigo) {
       const OR: any[] = [];
@@ -4821,6 +4919,36 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       if (s === "professor") donoUpdate.professorId = String(tipoUsuarioId);
       if (s === "clube") donoUpdate.clubeId = String(tipoUsuarioId);
       if (s === "escolinha" || s === "escola") donoUpdate.escolinhaId = String(tipoUsuarioId);
+    }
+
+    if (Object.keys(donoUpdate).length) {
+      const alvoProfessorId: string | null = donoUpdate.professorId ?? null;
+      const alvoClubeId: string | null = donoUpdate.clubeId ?? null;
+      const alvoEscolinhaId: string | null = donoUpdate.escolinhaId ?? null;
+
+      let alvoPermitido = false;
+
+      if (alvoProfessorId) {
+        if (resolved.tipo === "professor" && alvoProfessorId === resolved.id) {
+          alvoPermitido = true;
+        } else if (resolved.tipo === "clube") {
+          const profIds = await getProfessorIdsDoClube(resolved.id);
+          alvoPermitido = profIds.includes(alvoProfessorId);
+        } else if (resolved.tipo === "escolinha") {
+          const profIds = await getProfessorIdsDaEscolinha(resolved.id);
+          alvoPermitido = profIds.includes(alvoProfessorId);
+        }
+      } else if (alvoClubeId) {
+        alvoPermitido = resolved.tipo === "clube" && alvoClubeId === resolved.id;
+      } else if (alvoEscolinhaId) {
+        alvoPermitido = resolved.tipo === "escolinha" && alvoEscolinhaId === resolved.id;
+      } else {
+        alvoPermitido = true;
+      }
+
+      if (!alvoPermitido) {
+        return res.status(403).json({ message: "Você não pode atribuir este treino a este dono." });
+      }
     }
 
     const exs: any[] = Array.isArray(exercicios) ? exercicios : [];
@@ -5369,10 +5497,64 @@ export const deletarTreinoProgramado = async (req: any, res: any) => {
         professorId: true,
         clubeId: true,
         escolinhaId: true,
+        professores: { select: { professorId: true } },
       },
     });
 
     if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
+
+    const resolved = await resolveEntidade(usuarioId);
+    if (!resolved) {
+      return res.status(403).json({ message: "Sem permissão para excluir este treino." });
+    }
+
+    let permitido = false;
+
+    if (resolved.tipo === "professor") {
+      permitido =
+        treino.professorId === resolved.id ||
+        treino.professores.some((p) => p.professorId === resolved.id);
+
+      if (!permitido && treino.escolinhaId) {
+        const escolinhaDoProfessor = await getEscolinhaIdDoProfessor(resolved.id);
+        if (escolinhaDoProfessor && treino.escolinhaId === escolinhaDoProfessor) {
+          permitido = true;
+        }
+      }
+
+      if (!permitido && treino.clubeId) {
+        const clubeDoProfessor = await getClubeIdDoProfessor(resolved.id);
+        if (clubeDoProfessor && treino.clubeId === clubeDoProfessor) {
+          permitido = true;
+        }
+      }
+    } else if (resolved.tipo === "clube") {
+      permitido = treino.clubeId === resolved.id;
+
+      if (!permitido) {
+        const profIds = await getProfessorIdsDoClube(resolved.id);
+        if (profIds.length) {
+          permitido =
+            (treino.professorId ? profIds.includes(treino.professorId) : false) ||
+            treino.professores.some((p) => profIds.includes(p.professorId));
+        }
+      }
+    } else if (resolved.tipo === "escolinha") {
+      permitido = treino.escolinhaId === resolved.id;
+
+      if (!permitido) {
+        const profIds = await getProfessorIdsDaEscolinha(resolved.id);
+        if (profIds.length) {
+          permitido =
+            (treino.professorId ? profIds.includes(treino.professorId) : false) ||
+            treino.professores.some((p) => profIds.includes(p.professorId));
+        }
+      }
+    }
+
+    if (!permitido) {
+      return res.status(403).json({ message: "Sem permissão para excluir este treino." });
+    }
 
     await prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -5416,8 +5598,7 @@ export const deletarTreinoProgramado = async (req: any, res: any) => {
       message: "Treino excluído. Agendamentos futuros e submissões relacionadas foram removidos.",
     });
   } catch (e: any) {
-    console.error("deletarTreinoProgramado erro:", e);
-    return res.status(500).json({ message: e?.message || "Erro ao excluir treino." });
+    return sendError(res, e, "Erro ao excluir treino.");
   }
 };
 
@@ -6866,10 +7047,7 @@ export async function iniciarTreinoViaMetodologia(req: AuthenticatedRequest, res
       startedAt: treinoUsuario.startedAt,
     });
   } catch (e: any) {
-    console.error("iniciarTreinoViaMetodologia", e);
-    return res.status(500).json({
-      message: e?.message || "Erro ao iniciar treino via metodologia.",
-    });
+    return sendError(res, e, "Erro ao iniciar treino via metodologia.");
   }
 }
 
@@ -7154,11 +7332,7 @@ export async function listarFavoritosTreinos(req: AuthenticatedRequest, res: Res
       keys: favoritos.map((f) => `TREINO:${f.treinoProgramadoId}`),
     });
   } catch (e: any) {
-    console.error("[listarFavoritosTreinos]", e);
-    return res.status(500).json({
-      message: "Erro ao listar favoritos de treinos.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar favoritos de treinos.");
   }
 }
 
@@ -7227,11 +7401,7 @@ export async function alternarFavoritoTreino(req: AuthenticatedRequest, res: Res
       key: `TREINO:${treinoProgramadoId}`,
     });
   } catch (e: any) {
-    console.error("[alternarFavoritoTreino]", e);
-    return res.status(500).json({
-      message: "Erro ao favoritar treino.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao favoritar treino.");
   }
 }
 
@@ -7266,10 +7436,6 @@ export async function removerFavoritoTreino(req: AuthenticatedRequest, res: Resp
       key: `TREINO:${treinoProgramadoId}`,
     });
   } catch (e: any) {
-    console.error("[removerFavoritoTreino]", e);
-    return res.status(500).json({
-      message: "Erro ao remover favorito de treino.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao remover favorito de treino.");
   }
 }

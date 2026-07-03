@@ -1,4 +1,5 @@
 "use client";
+import { toast } from "@/lib/toast";
 
 import { useEffect, useState } from "react";
 import { API } from "../../../config.js";
@@ -64,7 +65,7 @@ export default function CriarOuEditarProfessor() {
     e.preventDefault();
 
     if (!nome.trim()) {
-      alert("Informe o nome do professor.");
+      toast.error("Informe o nome do professor.");
       return;
     }
 
@@ -95,15 +96,15 @@ export default function CriarOuEditarProfessor() {
 
       if (!res.ok) {
         const erro = await res.text();
-        alert("Erro ao salvar professor: " + erro);
+        toast.error("Erro ao salvar professor: " + erro);
         return;
       }
 
-      alert(`Professor ${id ? "editado" : "criado"} com sucesso!`);
+      toast.success(`Professor ${id ? "editado" : "criado"} com sucesso!`);
       window.location.href = "/admin";
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar professor");
+      toast.error("Erro ao salvar professor");
     }
   };
 

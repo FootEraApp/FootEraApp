@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import { API } from "@/config.js";
 
 interface ModalProps {
@@ -83,7 +84,7 @@ export function ModalDesafiosGrupo({
       onFechar();
     } catch (err) {
       console.error(err);
-      alert("Erro ao criar desafio em grupo.");
+      toast.error("Erro ao criar desafio em grupo.");
     } finally {
       setSalvando(false);
     }

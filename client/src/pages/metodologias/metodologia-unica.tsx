@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { toast } from "@/lib/toast";
 import { useRoute, useLocation } from "wouter";
 import { ArrowLeft, Lock, CheckCircle2, Star } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
@@ -302,7 +303,7 @@ export default function MetodologiaUnicaPage() {
       });
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || "Erro ao marcar como concluído");
+      toast.error(e?.message || "Erro ao marcar como concluído");
     }
   }
 
@@ -422,7 +423,7 @@ export default function MetodologiaUnicaPage() {
       const j = await r.json().catch(() => ({}));
 
       if (!r.ok) {
-        alert(j?.message || "Erro ao carregar metodologia");
+        toast.error(j?.message || "Erro ao carregar metodologia");
         navigate(adminPreview ? "/admin" : "/learning");
         return;
       }
@@ -511,7 +512,7 @@ export default function MetodologiaUnicaPage() {
       });
     } catch (e) {
       console.error(e);
-      alert("Erro ao carregar metodologia");
+      toast.error("Erro ao carregar metodologia");
     } finally {
       setLoading(false);
     }
@@ -659,7 +660,7 @@ export default function MetodologiaUnicaPage() {
         }
 
         if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
-        alert("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
+        toast.error("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
         navigate(adminPreview ? "/admin" : "/learning")
         return;
         }
@@ -688,20 +689,20 @@ export default function MetodologiaUnicaPage() {
         }
 
         if (j?.code === "LIMITE_METODOLOGIAS") {
-            alert(j?.message || "Você já atingiu o limite do seu plano.");
+            toast.error(j?.message || "Você já atingiu o limite do seu plano.");
             navigate(adminPreview ? "/admin" : "/learning")
             return;
         }
 
-        alert(j?.message || "Não foi possível assinar");
+        toast.error(j?.message || "Não foi possível assinar");
         return;
         }
 
-        alert("✅ Metodologia adicionada em 'Minhas Metodologias'!");
+        toast.success("✅ Metodologia adicionada em 'Minhas Metodologias'!");
         navigate(adminPreview ? "/admin" : "/learning")
     } catch (e) {
         console.error(e);
-        alert("Erro ao assinar");
+        toast.error("Erro ao assinar");
     } finally {
         setBusy(false);
     }
@@ -949,7 +950,7 @@ export default function MetodologiaUnicaPage() {
                     if (!data.viewer.temAcesso) return;
 
                     if (!metodologiaCompleta) {
-                      alert("Conclua todos os itens obrigatórios para finalizar a metodologia.");
+                      toast.error("Conclua todos os itens obrigatórios para finalizar a metodologia.");
                       return;
                     }
 
@@ -967,7 +968,7 @@ export default function MetodologiaUnicaPage() {
                       partes.push("Você também ganhou um certificado.");
                     }
 
-                    alert(partes.join(" "));
+                    toast.error(partes.join(" "));
 
                     const temRecompensa = data.geraBadge || data.geraCertificado;
 
@@ -1202,7 +1203,7 @@ export default function MetodologiaUnicaPage() {
                               onClick={() => {
                                 if (locked) return;
                                 if (!it.treinoProgramadoId) {
-                                  alert("Este item não possui treino vinculado.");
+                                  toast.error("Este item não possui treino vinculado.");
                                   return;
                                 }
 

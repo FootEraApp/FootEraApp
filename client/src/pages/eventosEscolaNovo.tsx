@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 import axios from "axios";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
@@ -103,12 +104,12 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
         headers,
       });
 
-      window.alert("Evento criado com sucesso!");
+      window.toast.success("Evento criado com sucesso!");
       setLocation(`/eventos/escolas/${escolaId}`);
     } catch (e: any) {
       const msg = e?.response?.data?.error || "Erro ao criar evento.";
       setErro(msg);
-      window.alert(msg);
+      window.toast.error(msg);
     } finally {
       setSalvando(false);
     }

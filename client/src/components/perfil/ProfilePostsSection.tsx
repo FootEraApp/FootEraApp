@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import { format } from "date-fns";
 import { publicImgUrl } from "../../utils/publicUrl.js";
 import { FaHeart, FaRegCommentDots, FaRetweet, FaShare } from "react-icons/fa";
@@ -189,7 +190,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         };
       });
     } catch (e: any) {
-      alert(e?.message || "Não foi possível apagar o comentário.");
+      toast.error(e?.message || "Não foi possível apagar o comentário.");
     }
   }
 
@@ -215,7 +216,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         })
       );
     } catch (e: any) {
-      alert(e?.message || "Não foi possível curtir.");
+      toast.error(e?.message || "Não foi possível curtir.");
     } finally {
       setCurtindoId(null);
     }
@@ -243,7 +244,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         return { ...prev, comentarios: [...(prev.comentarios || []), novoComentario as any] };
       });
     } catch (e: any) {
-      alert(e?.message || "Não foi possível comentar.");
+      toast.error(e?.message || "Não foi possível comentar.");
     }
   }
 
@@ -307,7 +308,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         return mapped;
       });
     } catch (e: any) {
-      alert(e?.message || "Não foi possível repostar.");
+      toast.error(e?.message || "Não foi possível repostar.");
     } finally {
       setRepostandoId(null);
     }
@@ -344,7 +345,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   async function apagarPost(postId: string) {
     const token = Storage.token;
     if (!token) {
-      alert("Você precisa estar logado para apagar.");
+      toast.error("Você precisa estar logado para apagar.");
       return;
     }
 
@@ -361,7 +362,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (err: any) {
       console.error(err);
-      alert(
+      toast.error(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
           "Não foi possível apagar agora."

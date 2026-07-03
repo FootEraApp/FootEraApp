@@ -9,6 +9,7 @@ import {
   TipoUsuario,
 } from "@prisma/client";
 import { sendLiveEventAccessEmail } from "../utils/mailer.js";
+import { sendError } from "../utils/httpError.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
 
@@ -635,11 +636,7 @@ export async function getAulaEventoPublica(req: Request, res: Response) {
       acesso: item.acesso,
     });
   } catch (e: any) {
-    console.error("Erro em getAulaEventoPublica:", e);
-    return res.status(500).json({
-      message: "Erro ao carregar evento ao vivo.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao carregar evento ao vivo.");
   }
 }
 
@@ -724,10 +721,7 @@ export async function inscreverAulaEvento(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    console.error("Erro em inscreverAulaEvento:", e);
-    return res.status(500).json({
-      message: e?.message || "Erro ao inscrever no evento.",
-    });
+    return sendError(res, e, "Erro ao inscrever no evento.");
   }
 }
 
@@ -825,10 +819,7 @@ export async function comprarAulaEvento(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    console.error("Erro em comprarAulaEvento:", e);
-    return res.status(500).json({
-      message: e?.message || "Erro ao liberar acesso.",
-    });
+    return sendError(res, e, "Erro ao liberar acesso.");
   }
 }
 
@@ -923,11 +914,7 @@ export async function getSalaCopaPublica(req: Request, res: Response) {
         },
         });
   } catch (e: any) {
-    console.error("Erro em getSalaCopaPublica:", e);
-    return res.status(500).json({
-      message: "Erro ao carregar evento Sala Copa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao carregar evento Sala Copa.");
   }
 }
 
@@ -1004,10 +991,7 @@ export async function inscreverSalaCopa(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    console.error("Erro em inscreverSalaCopa:", e);
-    return res.status(500).json({
-      message: e?.message || "Erro ao inscrever no evento.",
-    });
+    return sendError(res, e, "Erro ao inscrever no evento.");
   }
 }
 
@@ -1055,10 +1039,7 @@ export async function comprarSalaCopa(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    console.error("Erro em comprarSalaCopa:", e);
-    return res.status(500).json({
-      message: e?.message || "Erro ao liberar acesso.",
-    });
+    return sendError(res, e, "Erro ao liberar acesso.");
   }
 }
 

@@ -1,4 +1,5 @@
 // client/src/pages/configuracoesPerfil
+import { toast } from "@/lib/toast";
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
@@ -17,7 +18,7 @@ import {
 
 type FeedbackTipo = "sugestao" | "bug";
 
-const TUTORIAL_ENABLED = false;
+const TUTORIAL_ENABLED = FLAGS.TUTORIAL_ENABLED;
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();
@@ -343,7 +344,7 @@ export default function ConfiguracoesPerfil() {
       if (resp.ok) {
         localStorage.clear();
         sessionStorage.clear();
-        alert(data?.message || "Conta movida para lixeira por 30 dias.");
+        toast.error(data?.message || "Conta movida para lixeira por 30 dias.");
         setLocation("/login");
         return;
       }
@@ -578,7 +579,7 @@ export default function ConfiguracoesPerfil() {
           ) : (
             <button
               type="button"
-              onClick={() => alert(MESSAGES.PAGAMENTOS_EM_REFORMULACAO)}
+              onClick={() => toast.error(MESSAGES.PAGAMENTOS_EM_REFORMULACAO)}
               className="text-green-800 font-semibold"
             >
               Alterar

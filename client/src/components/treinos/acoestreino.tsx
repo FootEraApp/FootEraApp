@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 
@@ -42,7 +43,7 @@ export default function AcoesTreino({ treinoId, className }: Props) {
 
   async function start() {
     const token = Storage.token;
-    if (!token) return alert("Sessão expirada.");
+    if (!token) return toast.error("Sessão expirada.");
     try {
       setLoading(true);
       const r = await fetch(
@@ -62,7 +63,7 @@ export default function AcoesTreino({ treinoId, className }: Props) {
           err?.message ||
           err?.error ||
           "Não foi possível iniciar o treino.";
-        alert(msg);
+        toast.error(msg);
         return;
       }
 
@@ -70,7 +71,7 @@ export default function AcoesTreino({ treinoId, className }: Props) {
       setInfoMsg(null);
     } catch (e) {
       console.error(e);
-      alert("Não foi possível iniciar o treino.");
+      toast.error("Não foi possível iniciar o treino.");
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ export default function AcoesTreino({ treinoId, className }: Props) {
 
   async function complete() {
     const token = Storage.token;
-    if (!token) return alert("Sessão expirada.");
+    if (!token) return toast.error("Sessão expirada.");
     try {
       setLoading(true);
       const r = await fetch(
@@ -108,7 +109,7 @@ export default function AcoesTreino({ treinoId, className }: Props) {
           data?.message ||
           data?.error ||
           "Não foi possível concluir o treino.";
-        alert(msg);
+        toast.error(msg);
         return;
       }
 
@@ -134,10 +135,10 @@ export default function AcoesTreino({ treinoId, className }: Props) {
       setStatus("COMPLETED");
       setOpenFinish(false);
       setInfoMsg(msg);
-      alert(msg);
+      toast.error(msg);
     } catch (e) {
       console.error(e);
-      alert("Não foi possível concluir o treino.");
+      toast.error("Não foi possível concluir o treino.");
     } finally {
       setLoading(false);
     }

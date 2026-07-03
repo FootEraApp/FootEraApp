@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest, AuthUser } from "../middlewares/auth.js";
+import { sendError } from "../utils/httpError.js";
 
 function assertAdmin(req: AuthenticatedRequest) {
   const u: AuthUser | undefined = req.authUser;
@@ -56,11 +57,7 @@ export async function create(req: AuthenticatedRequest, res: Response) {
 
     return res.status(201).json(feedback);
   } catch (err: any) {
-    console.error("Erro ao criar feedback:", err);
-    const status = err?.status || 500;
-    return res
-      .status(status)
-      .json({ message: err?.message || "Erro ao enviar feedback." });
+    return sendError(res, err, "Erro ao enviar feedback.");
   }
 }
 
@@ -127,11 +124,7 @@ export async function listAll(req: AuthenticatedRequest, res: Response) {
 
     return res.json(feedbacks);
   } catch (err: any) {
-    console.error("Erro ao listar feedbacks (admin):", err);
-    const status = err?.status || 500;
-    return res
-      .status(status)
-      .json({ message: err?.message || "Erro ao carregar feedbacks." });
+    return sendError(res, err, "Erro ao carregar feedbacks.");
   }
 }
 
@@ -159,10 +152,7 @@ export async function marcarComoLido(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ message: "Feedback não encontrado." });
     }
 
-    const status = err?.status || 500;
-    return res
-      .status(status)
-      .json({ message: err?.message || "Erro ao atualizar feedback." });
+    return sendError(res, err, "Erro ao atualizar feedback.");
   }
 }
 

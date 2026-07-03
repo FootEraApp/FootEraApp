@@ -1,4 +1,5 @@
 // client/src/components/treinos/formExercicioTreinos
+import { toast } from "@/lib/toast";
 "use client";
 
 import { useEffect, useState } from "react";
@@ -248,7 +249,7 @@ export default function FormExercicioTreinos({
         setRemoverVideoExistente(false);
       })
       .catch((err) => {
-        alert(err?.message || "Erro ao carregar exercício");
+        toast.error(err?.message || "Erro ao carregar exercício");
       })
       .finally(() => setLoading(false));
   }, [exercicioId]);
@@ -346,7 +347,7 @@ export default function FormExercicioTreinos({
         setVideoNome("");
         setVideoPreviewUrl("");
         setVideoExistenteUrl("");
-        alert("Esse vídeo é muito longo. O máximo permitido é 60 segundos.");
+        toast.error("Esse vídeo é muito longo. O máximo permitido é 60 segundos.");
         return;
       }
 
@@ -362,7 +363,7 @@ export default function FormExercicioTreinos({
       const preview = URL.createObjectURL(file);
       setVideoPreviewUrl(preview);
     } catch (err: any) {
-      alert(err?.message || "Não foi possível validar o vídeo selecionado.");
+      toast.error(err?.message || "Não foi possível validar o vídeo selecionado.");
     }
   };
 
@@ -383,40 +384,40 @@ export default function FormExercicioTreinos({
 
     const token = getToken();
     if (!token) {
-      alert("Você precisa estar logado.");
+      toast.error("Você precisa estar logado.");
       window.location.href = "/login";
       return;
     }
 
     if (!nome.trim()) {
-      alert("Informe o nome do exercício.");
+      toast.error("Informe o nome do exercício.");
       return;
     }
 
     const codigoFinal = codigo.trim() || gerarCodigoAutomatico();
 
     if (!codigoFinal) {
-      alert("Não foi possível gerar o código do exercício.");
+      toast.error("Não foi possível gerar o código do exercício.");
       return;
     }
 
     if (!tipo) {
-      alert("Escolha o tipo do exercício.");
+      toast.error("Escolha o tipo do exercício.");
       return;
     }
 
     if (!nivel) {
-      alert("Escolha o nível do exercício.");
+      toast.error("Escolha o nível do exercício.");
       return;
     }
 
     if (faixasEtarias.length === 0) {
-      alert("Selecione pelo menos uma faixa etária.");
+      toast.error("Selecione pelo menos uma faixa etária.");
       return;
     }
 
     if (!modoExecucao) {
-      alert("Escolha como o exercício é executado.");
+      toast.error("Escolha como o exercício é executado.");
       return;
     }
 
@@ -424,11 +425,11 @@ export default function FormExercicioTreinos({
       try {
         const duracaoSegundos = await validarDuracaoVideo(video);
         if (duracaoSegundos > 60) {
-          alert("Esse vídeo é muito longo. O máximo permitido é 60 segundos.");
+          toast.error("Esse vídeo é muito longo. O máximo permitido é 60 segundos.");
           return;
         }
       } catch {
-        alert("Não foi possível validar a duração do vídeo.");
+        toast.error("Não foi possível validar a duração do vídeo.");
         return;
       }
     }
@@ -493,10 +494,10 @@ export default function FormExercicioTreinos({
         );
       }
 
-      alert(`Exercício ${exercicioId ? "atualizado" : "criado"} com sucesso!`);
+      toast.success(`Exercício ${exercicioId ? "atualizado" : "criado"} com sucesso!`);
       window.location.href = returnToFinal;
     } catch (err: any) {
-      alert(err?.message || "Erro ao enviar dados.");
+      toast.error(err?.message || "Erro ao enviar dados.");
     } finally {
       setSubmitting(false);
     }

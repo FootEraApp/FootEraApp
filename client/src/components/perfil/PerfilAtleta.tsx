@@ -368,26 +368,6 @@ export default function PerfilAtleta({
               <div className="mt-4 grid gap-4">
                 <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
                   <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
-                    <h3 className="font-semibold text-green-900">Certificados emitidos</h3>
-                    <Link href="/perfil/conquistas" className="text-sm text-green-800">
-                      Ver certificados
-                    </Link>
-                  </div>
-                  <div className="p-4">
-                    {certificados && certificados.length > 0 ? (
-                      <div className="text-green-900 font-medium">
-                        {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
-                      </div>
-                    ) : (
-                      <div className="text-center text-green-900/70 py-8">
-                        Nenhum certificado emitido ainda.
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
-                  <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
                     <h3 className="font-semibold text-green-900">Conquistas e Troféus</h3>
                     <Link href="/perfil/conquistas" className="text-sm text-green-800">
                       Ver conquistas
@@ -414,6 +394,26 @@ export default function PerfilAtleta({
                     ) : (
                       <div className="text-center text-green-900/70 py-8">
                         Nenhuma conquista registrada ainda.
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
+                  <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
+                    <h3 className="font-semibold text-green-900">Certificados emitidos</h3>
+                    <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                      Ver certificados
+                    </Link>
+                  </div>
+                  <div className="p-4">
+                    {certificados && certificados.length > 0 ? (
+                      <div className="text-green-900 font-medium">
+                        {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                      </div>
+                    ) : (
+                      <div className="text-center text-green-900/70 py-8">
+                        Nenhum certificado emitido ainda.
                       </div>
                     )}
                   </div>

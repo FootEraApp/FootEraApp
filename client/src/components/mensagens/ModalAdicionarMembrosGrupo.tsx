@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/lib/toast";
 import { API, APP } from "../../config.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
@@ -87,7 +88,7 @@ export function ModalAdicionarMembrosGrupo({
   async function confirmar() {
     const ids = Array.from(selecionados);
     if (ids.length === 0) {
-      alert("Selecione ao menos um usuário.");
+      toast.error("Selecione ao menos um usuário.");
       return;
     }
 

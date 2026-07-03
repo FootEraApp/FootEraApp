@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import {
   BadgeCheck,
   BookOpen,
@@ -100,7 +101,7 @@ export default function CreatorDashboard() {
       await carregar();
     } catch (err) {
       console.error(err);
-      alert("Não foi possível ativar o Creator.");
+      toast.error("Não foi possível ativar o Creator.");
     } finally {
       setAtivando(false);
     }

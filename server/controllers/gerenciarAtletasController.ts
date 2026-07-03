@@ -2,6 +2,7 @@
 import { Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 const CATEGORIA_ORDER: Categoria[] = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
 
@@ -293,8 +294,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ atletas: filtered });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.list]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao listar atletas" });
+      return sendError(res, e, "Erro ao listar atletas");
     }
   },
 
@@ -489,10 +489,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ professores: payload });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.listProfessores]", e);
-      return res.status(500).json({
-        message: e?.message || "Erro ao listar professores",
-      });
+      return sendError(res, e, "Erro ao listar professores");
     }
   },
 
@@ -571,8 +568,7 @@ export const gerenciarAtletasController = {
         })),
       });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.listTreinos]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao listar treinos" });
+      return sendError(res, e, "Erro ao listar treinos");
     }
   },
 
@@ -1258,8 +1254,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ items });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.listTreinosVisiveis]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao listar treinos visíveis" });
+      return sendError(res, e, "Erro ao listar treinos visíveis");
     }
   },
 
@@ -1320,8 +1315,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ ok: true, count: atletas.length, criouAgendados: true });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.convocarTreino]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao convocar treino" });
+      return sendError(res, e, "Erro ao convocar treino");
     }
   },
 
@@ -1405,8 +1399,7 @@ export const gerenciarAtletasController = {
         mediaPorTreino28d: Math.round(mediaPorTreino28d),
       });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.statsAtleta]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao obter estatísticas" });
+      return sendError(res, e, "Erro ao obter estatísticas");
     }
   },
 
@@ -1484,8 +1477,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ atletas: payload });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.ranking]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao obter ranking" });
+      return sendError(res, e, "Erro ao obter ranking");
     }
   },
 
@@ -1575,8 +1567,7 @@ export const gerenciarAtletasController = {
         },
       });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.detalhesAtleta]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao obter detalhes do atleta" });
+      return sendError(res, e, "Erro ao obter detalhes do atleta");
     }
   },
 
@@ -1667,8 +1658,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ total: rows.length, items: rows.slice(0, take) });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.submissoesAtleta]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao listar submissões" });
+      return sendError(res, e, "Erro ao listar submissões");
     }
   },
 
@@ -1719,8 +1709,7 @@ export const gerenciarAtletasController = {
           : null,
       });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.getAvaliacaoSubmissaoTreino]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao buscar avaliação" });
+      return sendError(res, e, "Erro ao buscar avaliação");
     }
   },
 
@@ -1837,8 +1826,7 @@ export const gerenciarAtletasController = {
         },
       });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.upsertAvaliacaoSubmissaoTreino]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao salvar avaliação" });
+      return sendError(res, e, "Erro ao salvar avaliação");
     }
   },
 
@@ -1869,8 +1857,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ ok: true, comentario: { id: c.id, texto: c.texto, ordem: c.ordem, createdAt: c.createdAt } });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.addComentarioAvaliacaoSubmissaoTreino]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao adicionar comentário" });
+      return sendError(res, e, "Erro ao adicionar comentário");
     }
   },
 
@@ -1904,8 +1891,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ ok: true, comentario: { id: c.id, texto: c.texto, ordem: c.ordem, updatedAt: c.updatedAt } });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.updateComentarioAvaliacaoSubmissaoTreino]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao editar comentário" });
+      return sendError(res, e, "Erro ao editar comentário");
     }
   },
 
@@ -1934,8 +1920,7 @@ export const gerenciarAtletasController = {
 
       return res.json({ ok: true });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.deleteComentarioAvaliacaoSubmissaoTreino]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao remover comentário" });
+      return sendError(res, e, "Erro ao remover comentário");
     }
   },
 
@@ -2002,8 +1987,7 @@ export const gerenciarAtletasController = {
         });
       return res.json({ items });
     } catch (e: any) {
-      console.error("[gerenciarAtletas.agendadosAtleta]", e);
-      return res.status(500).json({ message: e?.message || "Erro ao listar agendados do atleta" });
+      return sendError(res, e, "Erro ao listar agendados do atleta");
     }
   },
 };

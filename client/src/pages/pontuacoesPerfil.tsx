@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { toast } from "@/lib/toast";
 import axios from "axios";
 import { Link, useLocation, useRoute } from "wouter";
 import { ArrowLeft, BarChart2, Timer, KeyRound, Play, CheckCircle, AlertCircle, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
@@ -478,7 +479,7 @@ useEffect(() => {
         `Responsabilidade: ${resp} pts`;
 
       const node = cardShotRef.current;
-      if (!node) { alert("Não consegui capturar o card."); return; }
+      if (!node) { toast.error("Não consegui capturar o card."); return; }
 
       await preloadImgs(node);
       await new Promise(r => requestAnimationFrame(r as any));
@@ -495,14 +496,14 @@ useEffect(() => {
       if (res.status >= 200 && res.status < 300) {
         const postId = res.data?.id || res.data?.post?.id || res.data?.data?.id;
         if (postId) setLocation(`/post/${postId}`);
-        else alert("Post criado, mas sem ID para redirecionar.");
+        else toast.success("Post criado, mas sem ID para redirecionar.");
       } else {
         console.error("Falha ao criar post:", res.status, res.data);
-        alert(res.data?.message || "Não foi possível criar o post.");
+        toast.error(res.data?.message || "Não foi possível criar o post.");
       }
     } catch (e) {
       console.error(e);
-      alert("Falha ao publicar seu card.");
+      toast.error("Falha ao publicar seu card.");
     } finally {
       setPostando(false);
     }
@@ -659,13 +660,13 @@ useEffect(() => {
 
           <section className="bg-white mx-4 rounded-xl shadow mb-4">
             <button
-              onClick={() => alert("Abrir conexões")}
+              onClick={() => toast.error("Abrir conexões")}
               className="bg-white w-full p-4 text-left rounded-xl mb-2 text-green-900 font-semibold flex justify-between"
             >
               Conexões <span>›</span>
             </button>
             <button
-              onClick={() => alert("Abrir info adicionais")}
+              onClick={() => toast.error("Abrir info adicionais")}
               className="bg-white w-full p-4 text-left rounded-xl text-green-900 font-semibold flex justify-between"
             >
               Informações Adicionais <span>›</span>

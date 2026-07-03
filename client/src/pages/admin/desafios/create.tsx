@@ -1,4 +1,5 @@
 "use client";
+import { toast } from "@/lib/toast";
 
 import { useEffect, useState } from "react";
 import { API } from "../../../config.js";
@@ -58,7 +59,7 @@ export default function CreateOrEditDesafio() {
     e.preventDefault();
 
     if (categoria.length === 0) {
-      alert("Adicione ao menos uma categoria.");
+      toast.error("Adicione ao menos uma categoria.");
       return;
     }
 
@@ -88,14 +89,14 @@ export default function CreateOrEditDesafio() {
 
       if (!res.ok) {
         const erro = await res.text();
-        alert("Erro ao salvar desafio: " + erro);
+        toast.error("Erro ao salvar desafio: " + erro);
         return;
       }
 
-      alert(`Desafio ${id ? "editado" : "criado"} com sucesso!`);
+      toast.success(`Desafio ${id ? "editado" : "criado"} com sucesso!`);
       window.location.href = "/admin";
     } catch (err) {
-      alert("Erro ao salvar desafio: " + err);
+      toast.error("Erro ao salvar desafio: " + err);
       console.error(err);
     }
   };

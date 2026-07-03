@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { toast } from "@/lib/toast";
 import {
   FaHeart,
   FaRegHeart,
@@ -441,6 +442,8 @@ function PaginaFeed(): JSX.Element {
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
   const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
+  const [carregandoPosts, setCarregandoPosts] = useState(true);
+  const [erroFeed, setErroFeed] = useState(false);
 
   const selecionarFiltro = (target: "todos" | "seguindo" | "favoritos") => {
     setFiltro(target);
@@ -506,40 +509,47 @@ function PaginaFeed(): JSX.Element {
     })();
   }, [tipoUsuario]);
 
-  useEffect(() => {
-    async function carregar() {
-      try {
-        const usuarioLogadoId = Storage.usuarioId as string | null;
+  const carregarFeed = React.useCallback(async () => {
+    try {
+      setCarregandoPosts(true);
+      setErroFeed(false);
 
-        let dados: PostagemComUsuario[] = await getFeedPosts(filtro);
+      const usuarioLogadoId = Storage.usuarioId as string | null;
 
-        if (usuarioLogadoId) {
-          dados = dados.filter((p) => p.usuario?.id !== usuarioLogadoId);
-        }
+      let dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-        const unicos: PostagemComUsuario[] = Array.from(
-          new Map<string, PostagemComUsuario>(
-            dados.map((p) => [p.id, p] as const)
-          ).values()
-        );
-
-        const ordenados = sortPostsDestaquePrimeiro(unicos);
-
-        setPosts(ordenados);
-
-        const ids = new Set<string>();
-        for (const p of ordenados) {
-          const parsed = parseAchievement(p.conteudo || "");
-          if (parsed?.conquistaId) ids.add(parsed.conquistaId);
-        }
-        ids.forEach((id) => carregarConquista(id));
-      } catch (e) {
-        console.error("Falha ao carregar feed:", e);
-        setPosts([]);
+      if (usuarioLogadoId) {
+        dados = dados.filter((p) => p.usuario?.id !== usuarioLogadoId);
       }
+
+      const unicos: PostagemComUsuario[] = Array.from(
+        new Map<string, PostagemComUsuario>(
+          dados.map((p) => [p.id, p] as const)
+        ).values()
+      );
+
+      const ordenados = sortPostsDestaquePrimeiro(unicos);
+
+      setPosts(ordenados);
+
+      const ids = new Set<string>();
+      for (const p of ordenados) {
+        const parsed = parseAchievement(p.conteudo || "");
+        if (parsed?.conquistaId) ids.add(parsed.conquistaId);
+      }
+      ids.forEach((id) => carregarConquista(id));
+    } catch (e) {
+      console.error("Falha ao carregar feed:", e);
+      setPosts([]);
+      setErroFeed(true);
+    } finally {
+      setCarregandoPosts(false);
     }
-    carregar();
   }, [filtro]);
+
+  useEffect(() => {
+    carregarFeed();
+  }, [carregarFeed]);
 
   useEffect(() => {
     const onNovoPost = (novo: PostagemComUsuario) => {
@@ -593,13 +603,13 @@ function PaginaFeed(): JSX.Element {
         )
       );
     } catch (e: any) {
-      alert(e?.message || "Não foi possível apagar o comentário.");
+      toast.error(e?.message || "Não foi possível apagar o comentário.");
     }
   };
 
   const handleLike = async (postId: string) => {
     if (!userId) {
-      alert("Sessão expirada. Faça login novamente.");
+      toast.error("Sessão expirada. Faça login novamente.");
       return;
     }
     try {
@@ -644,7 +654,7 @@ function PaginaFeed(): JSX.Element {
       });
     } catch (e) {
       console.error("Erro ao comentar:", e);
-      alert("Não foi possível comentar.");
+      toast.error("Não foi possível comentar.");
     }
   };
 
@@ -660,7 +670,7 @@ function PaginaFeed(): JSX.Element {
       setUsuariosMutuos(lista);
     } catch (e) {
       console.error(e);
-      alert("Não foi possível carregar seus contatos.");
+      toast.error("Não foi possível carregar seus contatos.");
     } finally {
       setCarregandoMutuos(false);
     }
@@ -672,12 +682,12 @@ function PaginaFeed(): JSX.Element {
       await deletarPost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (e: any) {
-      alert(e?.message || "Não foi possível apagar a postagem.");
+      toast.error(e?.message || "Não foi possível apagar a postagem.");
     }
   };
 
   const handleRepost = async (postId: string) => {
-    if (!userId) return alert("Sessão expirada. Faça login novamente.");
+    if (!userId) return toast.error("Sessão expirada. Faça login novamente.");
 
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
 
@@ -705,7 +715,7 @@ function PaginaFeed(): JSX.Element {
       console.warn("Resposta inesperada no repost:", resp);
     } catch (e) {
       console.error(e);
-      alert("Não foi possível repostar.");
+      toast.error("Não foi possível repostar.");
     }
   };
 
@@ -746,11 +756,11 @@ function PaginaFeed(): JSX.Element {
         )
       );
 
-      alert("Post compartilhado por mensagem!");
+      toast.error("Post compartilhado por mensagem!");
       setModalAberto(false);
     } catch (e) {
       console.error(e);
-      alert("Falha ao enviar mensagens.");
+      toast.error("Falha ao enviar mensagens.");
     } finally {
       setEnviandoDM(false);
     }
@@ -797,7 +807,28 @@ function PaginaFeed(): JSX.Element {
           </button>
         </div>
 
-      {posts.length === 0 && (
+      {carregandoPosts && (
+        <div className="max-w-xl mx-auto space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-40 rounded-2xl bg-white shadow-md animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {!carregandoPosts && erroFeed && (
+        <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
+          <p>Não foi possível carregar o feed agora. Verifique sua conexão e tente de novo.</p>
+          <button
+            type="button"
+            onClick={() => carregarFeed()}
+            className="mt-3 px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 transition"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {!carregandoPosts && !erroFeed && posts.length === 0 && (
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
           <p>
             {{
@@ -819,7 +850,7 @@ function PaginaFeed(): JSX.Element {
         </div>
       )}
 
-      {posts.map((post) => {
+      {!carregandoPosts && !erroFeed && posts.map((post) => {
         const curtidas = post.curtidas || [];
         const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
         const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
@@ -1176,7 +1207,7 @@ function PaginaFeed(): JSX.Element {
           className="w-full bg-green-700 text-white py-2 rounded mb-3 hover:bg-green-800"
           onClick={() => {
             navigator.clipboard.writeText(linkCompartilhado);
-            alert("Link copiado!");
+            toast.success("Link copiado!");
           }}
         >
           Copiar Link

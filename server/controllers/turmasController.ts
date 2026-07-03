@@ -2,6 +2,7 @@
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 function uniqById<T extends { id: string }>(arr: T[]) {
   const map = new Map<string, T>();
@@ -516,8 +517,7 @@ export async function listarTurmas(req: Request, res: Response) {
 
     return res.json(items);
   } catch (e: any) {
-    console.error("[listarTurmas] erro:", e);
-    return res.status(500).json({ message: e.message || "Erro ao listar turmas" });
+    return sendError(res, e, "Erro ao listar turmas");
   }
 }
 
@@ -585,10 +585,7 @@ export async function listarTurmasComoProfessor(
 
     return res.json({ items });
   } catch (e: any) {
-    console.error("[listarTurmasComoProfessor] erro:", e);
-    return res
-      .status(500)
-      .json({ message: e.message || "Erro ao listar turmas do professor" });
+    return sendError(res, e, "Erro ao listar turmas do professor");
   }
 }
 
@@ -707,10 +704,7 @@ export async function criarTurma(req: Request, res: Response) {
       totalMembros: usuarioIdsFinal.length,
     });
   } catch (e: any) {
-    console.error("[criarTurma] erro:", e);
-    return res
-      .status(500)
-      .json({ message: e.message || "Erro ao criar turma" });
+    return sendError(res, e, "Erro ao criar turma");
   }
 }
 
@@ -733,7 +727,7 @@ export async function updateTurma(req: Request, res: Response) {
     const up = await prisma.turma.update({ where: { id }, data });
     res.json(up);
   } catch (e: any) {
-    res.status(500).json({ message: e.message || "Falha ao atualizar turma" });
+    sendError(res, e, "Falha ao atualizar turma");
   }
 }
 
@@ -756,7 +750,7 @@ export async function setProfessoresTurma(req: Request, res: Response) {
 
     return res.json({ ok: true, turmaId, total: professorIds.length });
   } catch (e: any) {
-    return res.status(500).json({ message: e.message || "Falha ao atribuir professores" });
+    return sendError(res, e, "Falha ao atribuir professores");
   }
 }
 
@@ -766,7 +760,7 @@ export async function deleteTurma(req: Request, res: Response) {
     await prisma.turma.delete({ where: { id } });
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ message: e.message || "Falha ao remover turma" });
+    sendError(res, e, "Falha ao remover turma");
   }
 }
 
@@ -788,7 +782,7 @@ export async function professoresDisponiveis(req: Request, res: Response) {
 
     res.json({ items: profs });
   } catch (e: any) {
-    res.status(500).json({ message: e.message || "Falha ao listar professores" });
+    sendError(res, e, "Falha ao listar professores");
   }
 }
 
@@ -954,7 +948,6 @@ export async function frequencia(req: Request, res: Response) {
       historicoMensal,
     });
   } catch (e: any) {
-    console.error("[turmas/frequencia] erro:", e);
-    return res.status(500).json({ message: e?.message || "Falha ao carregar frequência." });
+    return sendError(res, e, "Falha ao carregar frequência.");
   }
 }

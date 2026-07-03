@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/lib/toast";
 import { Search, Plus } from "lucide-react";
 import { API } from "../../config.js";
 import ExercicioCard, { type ExercicioItem } from "./exercicioCard.js";
@@ -86,7 +87,7 @@ export default function MeusExerciciosTab() {
 
       await carregar();
     } catch (e: any) {
-      alert(e?.message || "Erro ao duplicar exercício.");
+      toast.error(e?.message || "Erro ao duplicar exercício.");
     }
   }
 
@@ -123,7 +124,7 @@ export default function MeusExerciciosTab() {
         );
       });
     } catch (e: any) {
-      alert(e?.message || "Erro ao favoritar exercício.");
+      toast.error(e?.message || "Erro ao favoritar exercício.");
     }
   }
 
@@ -148,7 +149,7 @@ export default function MeusExerciciosTab() {
 
       setItems((prev) => prev.filter((item) => item.id !== id));
     } catch (e: any) {
-      alert(e?.message || "Erro ao excluir exercício.");
+      toast.error(e?.message || "Erro ao excluir exercício.");
     }
   }
 

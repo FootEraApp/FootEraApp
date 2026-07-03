@@ -87,6 +87,8 @@ export const FLAGS = {
   LEARNING_ENABLED: true,
   PAGAMENTOS_ENABLED: true,
   FORMADORES_ENABLED: false,
+  // Vídeos do tutorial ainda não foram gravados — reative quando estiverem prontos.
+  TUTORIAL_ENABLED: false,
 
   PAGAMENTOS_SHOW_LEARNING_PLANS: true,
   PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS: true,

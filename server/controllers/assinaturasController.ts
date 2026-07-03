@@ -2,6 +2,7 @@ import type { Response } from "express";
 import type { Periodicidade } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import { sendError } from "../utils/httpError.js";
 
 function assertAdmin(req: AuthenticatedRequest) {
   const u: any = req.user || {};
@@ -86,7 +87,7 @@ export async function getByUsuario(req: AuthenticatedRequest, res: Response) {
     res.json({ items: list.map(toDTO) });
   } catch (e: any) {
     console.error("erro getByUsuario:", e);
-    res.status(e.status || 500).send(e.message || "Erro ao buscar assinaturas");
+    sendError(res, e, "Erro ao buscar assinaturas");
   }
 }
 
@@ -168,7 +169,7 @@ export async function updatePlano(req: AuthenticatedRequest, res: Response) {
     res.json(toDTO(updated));
   } catch (e: any) {
     console.error("erro updatePlano:", e);
-    res.status(e.status || 500).send(e.message || "Erro ao atualizar assinatura");
+    sendError(res, e, "Erro ao atualizar assinatura");
   }
 }
 
@@ -196,7 +197,7 @@ export async function cancelar(req: AuthenticatedRequest, res: Response) {
     res.json({ ok: true });
   } catch (e: any) {
     console.error("erro cancelar:", e);
-    res.status(e.status || 500).send(e.message || "Erro ao cancelar assinatura(s)");
+    sendError(res, e, "Erro ao cancelar assinatura(s)");
   }
 }
 
@@ -243,6 +244,6 @@ export async function reativar(req: AuthenticatedRequest, res: Response) {
     res.json(toDTO(out));
   } catch (e: any) {
     console.error("erro reativar:", e);
-    res.status(e.status || 500).send(e.message || "Erro ao reativar assinatura");
+    sendError(res, e, "Erro ao reativar assinatura");
   }
 }

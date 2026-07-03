@@ -5,7 +5,7 @@ import { API } from "../config.js";
 import { ArrowLeft, X } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
-import { useToast } from "../hooks/use-toast.js";
+import { toast } from "@/lib/toast";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -77,7 +77,6 @@ function isConvocacao(n: { tipo?: string | null; titulo: string; mensagem: strin
 }
 
 export default function PaginaNotificacoes() {
-  const { showToast, ToastComponent } = useToast();
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [, setLocation] = useLocation();
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
@@ -141,12 +140,12 @@ export default function PaginaNotificacoes() {
       if (!r.ok) {
         setNotificacoes(prev);
         console.warn("Falha ao apagar notificação:", r.status, await r.text());
-        showToast("Não foi possível apagar a notificação agora.", "error");
+        toast.error("Não foi possível apagar a notificação agora.");
       }
     } catch (e) {
       setNotificacoes(prev);
       console.error("Erro ao apagar notificação:", e);
-      showToast("Erro ao apagar a notificação.", "error");
+      toast.error("Erro ao apagar a notificação.");
     }
   };
 
@@ -196,14 +195,14 @@ export default function PaginaNotificacoes() {
       });
 
       if (!r.ok) {
-        showToast("Não foi possível seguir de volta.", "error");
+        toast.error("Não foi possível seguir de volta.");
         return;
       }
 
-      showToast("Agora você também está seguindo essa pessoa!", "success");
+      toast.success("Agora você também está seguindo essa pessoa!");
     } catch (e) {
       console.error(e);
-      showToast("Erro ao seguir de volta.", "error");
+      toast.error("Erro ao seguir de volta.");
     }
   };
 
@@ -253,7 +252,7 @@ export default function PaginaNotificacoes() {
   const responderSolicitacao = async (id: string, aceitar: boolean) => {
     const token = Storage.token;
     if (!token) {
-      showToast("Você precisa estar logado.", "error");
+      toast.error("Você precisa estar logado.");
       return;
     }
 
@@ -280,7 +279,7 @@ export default function PaginaNotificacoes() {
       window.dispatchEvent(new Event("footera:vinculo-treino-alterado"));
     } catch (err) {
       console.error("Erro ao responder solicitação:", err);
-      showToast("Não foi possível processar a solicitação agora.", "error");
+      toast.error("Não foi possível processar a solicitação agora.");
     }
   };
 
@@ -331,7 +330,7 @@ export default function PaginaNotificacoes() {
 
       if (!r.ok) {
         setNotificacoes(estadoAnterior);
-        showToast("Não foi possível marcar as notificações como lidas.", "error");
+        toast.error("Não foi possível marcar as notificações como lidas.");
       }
     } catch (e) {
       setNotificacoes(estadoAnterior);
@@ -372,7 +371,7 @@ export default function PaginaNotificacoes() {
           await r.text()
         );
 
-        showToast("Não foi possível apagar as notificações selecionadas agora.", "error");
+        toast.error("Não foi possível apagar as notificações selecionadas agora.");
         return;
       }
 
@@ -382,7 +381,7 @@ export default function PaginaNotificacoes() {
       setNotificacoes(prevNotificacoes);
       setSelecionadas(prevSelecionadas);
       console.error("Erro ao apagar notificações selecionadas:", e);
-      showToast("Erro ao apagar as notificações selecionadas.", "error");
+      toast.error("Erro ao apagar as notificações selecionadas.");
     } finally {
       setApagandoSelecionadas(false);
     }
@@ -485,7 +484,6 @@ export default function PaginaNotificacoes() {
 
   return (
     <div className="max-w-xl mx-auto p-4 pb-24">
-      <ToastComponent />
 
       {pendingSeguirDeVolta && (
         <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-green-50 border border-green-200 px-4 py-3">
@@ -825,7 +823,7 @@ export default function PaginaNotificacoes() {
                           });
 
                           if (!r.ok) {
-                            showToast("Não foi possível aceitar a indicação.", "error");
+                            toast.error("Não foi possível aceitar a indicação.");
                             return;
                           }
 
@@ -833,7 +831,7 @@ export default function PaginaNotificacoes() {
                           setNotificacoes((prev) =>
                             prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
                           );
-                          showToast("Indicação aceita com sucesso.", "success");
+                          toast.success("Indicação aceita com sucesso.");
                         }}
                       >
                         Aceitar
@@ -855,7 +853,7 @@ export default function PaginaNotificacoes() {
                           });
 
                           if (!r.ok) {
-                            showToast("Não foi possível recusar a indicação.", "error");
+                            toast.error("Não foi possível recusar a indicação.");
                             return;
                           }
 
@@ -863,7 +861,7 @@ export default function PaginaNotificacoes() {
                           setNotificacoes((prev) =>
                             prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
                           );
-                          showToast("Indicação recusada.", "success");
+                          toast.success("Indicação recusada.");
                         }}
                       >
                         Recusar

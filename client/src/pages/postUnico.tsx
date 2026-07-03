@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import { useRoute, useLocation } from "wouter";
 import { getPostById, PostagemComUsuario, likePost, comentarPost } from "../services/feedService.js";
 import { format } from "date-fns";
@@ -77,15 +78,15 @@ function PostUnico(): JSX.Element {
       if (!response.ok) {
         const data = await response.json();
         console.error("Erro ao excluir:", data);
-        alert("Erro ao excluir a postagem.");
+        toast.error("Erro ao excluir a postagem.");
         return;
       }
 
-      alert("Postagem excluída com sucesso.");
+      toast.success("Postagem excluída com sucesso.");
       setLocation("/feed");
     } catch (err) {
       console.error("Erro ao excluir a postagem:", err);
-      alert("Erro ao excluir a postagem.");
+      toast.error("Erro ao excluir a postagem.");
     }
   }
 
@@ -94,10 +95,10 @@ function PostUnico(): JSX.Element {
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
     try {
       await repostPost(post.id, comentario);
-      alert("Repost publicado no seu perfil!");
+      toast.success("Repost publicado no seu perfil!");
     } catch (e) {
       console.error(e);
-      alert("Não foi possível repostar.");
+      toast.error("Não foi possível repostar.");
     }
   }
 
@@ -257,7 +258,7 @@ function PostUnico(): JSX.Element {
               className="w-full bg-green-700 text-white py-2 rounded mb-4 hover:bg-green-800"
               onClick={() => {
                 navigator.clipboard.writeText(linkCompartilhado);
-                alert("Link copiado!");
+                toast.success("Link copiado!");
               }}
             >
               Copiar Link

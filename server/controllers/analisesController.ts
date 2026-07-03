@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -87,7 +88,7 @@ export async function overview(req: Request, res: Response) {
       range: { from: from30.toISOString(), to: end.toISOString() },
     });
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro no overview");
+    sendError(res, e, "Erro no overview");
   }
 }
 
@@ -116,7 +117,7 @@ export async function activeUsersSeries(req: Request, res: Response) {
 
     return res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro na série de ativos");
+    sendError(res, e, "Erro na série de ativos");
   }
 }
 
@@ -139,7 +140,7 @@ export async function engagementSummary(req: Request, res: Response) {
 
     res.json({ posts, comments, likes, messages: msgs, subTreino, subDesafio, treinosAgendados, treinosRealizados });
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro no resumo de engajamento");
+    sendError(res, e, "Erro no resumo de engajamento");
   }
 }
 
@@ -169,7 +170,7 @@ export async function loginsSummary(req: Request, res: Response) {
       uniqueUsers: uniqueUsers.length,
     });
   } catch (e: any) {
-    return res.status(e.status || 500).send(e.message || "Erro no resumo de logins");
+    sendError(res, e, "Erro no resumo de logins");
   }
 }
 
@@ -204,7 +205,7 @@ export async function engagementSeries(req: Request, res: Response) {
 
     res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro na série de engajamento");
+    sendError(res, e, "Erro na série de engajamento");
   }
 }
 
@@ -224,7 +225,7 @@ export async function convEscolinha(req: Request, res: Response) {
     `;
     res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro na conversão via escolinha");
+    sendError(res, e, "Erro na conversão via escolinha");
   }
 }
 
@@ -244,7 +245,7 @@ export async function convClube(req: Request, res: Response) {
     `;
     res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro na conversão via clube");
+    sendError(res, e, "Erro na conversão via clube");
   }
 }
 
@@ -262,7 +263,7 @@ export async function invitesSummary(req: Request, res: Response) {
     `;
     res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro no resumo de convites");
+    sendError(res, e, "Erro no resumo de convites");
   }
 }
 
@@ -281,7 +282,7 @@ export async function activityByUf(req: Request, res: Response) {
     `;
     res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro no heatmap por UF");
+    sendError(res, e, "Erro no heatmap por UF");
   }
 }
 
@@ -301,7 +302,7 @@ export async function newUsersSeries(req: Request, res: Response) {
 
     res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro na série de usuários novos");
+    sendError(res, e, "Erro na série de usuários novos");
   }
 }
 
@@ -327,7 +328,7 @@ export async function activeByUserType(req: Request, res: Response) {
 
     return res.json(rows);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro por tipo de usuário");
+    sendError(res, e, "Erro por tipo de usuário");
   }
 }
 
@@ -347,7 +348,7 @@ export async function subscriptionsActive(req: Request, res: Response) {
 
     res.json({ month: on || new Date().toISOString().slice(0,7), ativos });
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro em contratos ativos");
+    sendError(res, e, "Erro em contratos ativos");
   }
 }
 
@@ -395,6 +396,6 @@ export async function subscriptionsChurn(req: Request, res: Response) {
 
     res.json(out);
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro no churn de assinaturas");
+    sendError(res, e, "Erro no churn de assinaturas");
   }
 }
