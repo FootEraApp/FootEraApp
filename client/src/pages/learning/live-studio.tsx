@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/learning/live-studio.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -512,7 +513,7 @@ export default function LearningLiveStudioPage() {
       setMessages(lista);
     } catch (e: any) {
       if (showError) {
-        alert(e?.message || "Falha ao carregar chat.");
+        toast.error(e?.message || "Falha ao carregar chat.");
       }
     }
   }
@@ -547,7 +548,7 @@ export default function LearningLiveStudioPage() {
       setChatInput("");
       await carregarMensagens(false);
     } catch (e: any) {
-      alert(e?.message || "Falha ao enviar mensagem.");
+      toast.error(e?.message || "Falha ao enviar mensagem.");
     } finally {
       setSendingMessage(false);
     }
@@ -2026,7 +2027,7 @@ if (!iniciarRes.ok) {
   async function copiar(texto?: string | null) {
     if (!texto) return;
     await navigator.clipboard.writeText(texto);
-    alert("Copiado!");
+    toast.success("Copiado!");
   }
 
   function abrirPaginaDaLive() {

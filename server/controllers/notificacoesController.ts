@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getIO } from "../socket.js";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 import webpush from "web-push";
 import { NotificacaoTipo } from "@prisma/client";
 import fs from "fs";
@@ -568,10 +569,7 @@ export async function getPushPublicKey(req: AuthenticatedRequest, res: Response)
 
     return res.json({ publicKey });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao carregar chave pública de push.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao carregar chave pública de push.");
   }
 }
 
@@ -617,11 +615,7 @@ export async function salvarPushSubscription(
 
     return res.json({ ok: true });
   } catch (e: any) {
-    console.error("[salvarPushSubscription]", e);
-    return res.status(500).json({
-      message: "Erro ao salvar dispositivo para push.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao salvar dispositivo para push.");
   }
 }
 
@@ -652,11 +646,7 @@ export async function removerPushSubscription(
 
     return res.json({ ok: true });
   } catch (e: any) {
-    console.error("[removerPushSubscription]", e);
-    return res.status(500).json({
-      message: "Erro ao remover dispositivo de push.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao remover dispositivo de push.");
   }
 }
 
@@ -708,7 +698,6 @@ export async function testarPushAtual(req: AuthenticatedRequest, res: Response) 
     return res.status(500).json({
       ok: false,
       message: "Erro ao testar push.",
-      detail: e?.message,
     });
   }
 }
@@ -754,7 +743,6 @@ export async function getPushStatusAtual(req: AuthenticatedRequest, res: Respons
     return res.status(500).json({
       ok: false,
       message: "Erro ao verificar status do dispositivo push.",
-      detail: e?.message,
     });
   }
 }
@@ -807,11 +795,7 @@ export async function salvarPushNativeToken(req: AuthenticatedRequest, res: Resp
       nativePushTokens: totalNativeTokens,
     });
   } catch (e: any) {
-    console.error("[salvarPushNativeToken]", e);
-    return res.status(500).json({
-      message: "Erro ao salvar token FCM.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao salvar token FCM.");
   }
 }
 
@@ -833,11 +817,7 @@ export async function removerPushNativeToken(req: AuthenticatedRequest, res: Res
 
     return res.json({ ok: true });
   } catch (e: any) {
-    console.error("[removerPushNativeToken]", e);
-    return res.status(500).json({
-      message: "Erro ao remover token FCM.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao remover token FCM.");
   }
 }
 

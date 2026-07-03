@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useLocation, useRoute } from "wouter";
@@ -240,13 +241,13 @@ export default function PontuacaoDePerfil() {
 
       <section className="bg-white mx-4 rounded-xl shadow mb-4">
         <button
-          onClick={() => alert("Abrir conexões")}
+          onClick={() => toast.error("Abrir conexões")}
           className="bg-white w-full p-4 text-left rounded-xl mb-2 text-green-900 font-semibold flex justify-between"
         >
           Conexões <span>›</span>
         </button>
         <button
-          onClick={() => alert("Abrir info adicionais")}
+          onClick={() => toast.error("Abrir info adicionais")}
           className="bg-white w-full p-4 text-left rounded-xl text-green-900 font-semibold flex justify-between"
         >
           Informações Adicionais <span>›</span>

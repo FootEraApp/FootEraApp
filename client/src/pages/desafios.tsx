@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
@@ -141,18 +142,18 @@ const RankingGlobalTab: React.FC = () => {
       const params:any={}; if(uf) params.estado=uf; if(categoria) params.categoria=categoria;
       const {data}=await axios.get<RankListResp>(`${API.BASE_URL}/api/ranking/global`,{headers:{Authorization:`Bearer ${token}`},params});
       setLista(Array.isArray(data.items)?data.items:[]); setTotal(Number(data.total??0));
-    }catch(e){ console.error(e); setLista([]); setTotal(0); alert("Não foi possível carregar o ranking global."); } finally{ setLoading(false); } };
+    }catch(e){ console.error(e); setLista([]); setTotal(0); toast.error("Não foi possível carregar o ranking global."); } finally{ setLoading(false); } };
   useEffect(()=>{carregar();},[]);
   const aplicarFiltros=async()=>{ await carregar(); setMinhaPosicao(null); };
   const limparFiltros=async()=>{ setUf(""); setCategoria(""); await carregar(); setMinhaPosicao(null); };
   const listaFiltradaTop = useMemo(()=>{ const q=qTop.trim().toLowerCase(); if(!q) return lista; return lista.filter(x=>x.nome.toLowerCase().includes(q));},[lista,qTop]);
   const buscarMinhaPosicao=async()=>{ try{
-      if(!buscaNome.trim()) return alert("Digite seu nome para procurar sua posição.");
+      if(!buscaNome.trim()) return toast.error("Digite seu nome para procurar sua posição.");
       setBuscandoPos(true);
       const params:any={}; if(buscaNome.trim()) params.q=buscaNome.trim(); if(uf) params.estado=uf; if(categoria) params.categoria=categoria;
       const {data}=await axios.get<PosicaoResp>(`${API.BASE_URL}/api/ranking/posicao`,{headers:{Authorization:`Bearer ${token}`},params});
       setMinhaPosicao(data||null); if(data?.inTop100) setQTop(data.nome);
-    }catch(e:any){ console.error(e?.response?.data||e); setMinhaPosicao(null); alert(e?.response?.data?.error||"Não foi possível encontrar a posição."); } finally{ setBuscandoPos(false);} };
+    }catch(e:any){ console.error(e?.response?.data||e); setMinhaPosicao(null); toast.error(e?.response?.data?.error||"Não foi possível encontrar a posição."); } finally{ setBuscandoPos(false);} };
 
   return (
     <div className="space-y-4">
@@ -280,7 +281,7 @@ function DesafiosInner() {
   const baseDeSub = (s: Submissao) => `${API.BASE_URL}${s.tipo === "TREINO" ? "/api/treinos/submissoes" : "/api/desafios/submissoes"}`;
   const toggleLike = async (sub: Submissao) => {
     try { const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/like`, {}, { headers: authHeaders() }); const { liked, count } = r.data; applyUpdate(sub, { viewerLiked: liked, curtidasCount: count }); }
-    catch { alert("Não foi possível curtir."); }
+    catch { toast.error("Não foi possível curtir."); }
   };
   const enviarComentario = async (sub: Submissao) => {
     const txt = (comentarioTexto[sub.id] || "").trim(); if (!txt) return;
@@ -289,11 +290,11 @@ function DesafiosInner() {
       const { comentario, count } = r.data;
       applyUpdate(sub, { comentariosCount: count, comentarios: [ ...(sub.comentarios || []), comentario ] });
       setComentarioTexto((p) => ({ ...p, [sub.id]: "" }));
-    } catch { alert("Não foi possível comentar."); }
+    } catch { toast.error("Não foi possível comentar."); }
   };
   const compartilhar = async (subId: string) => {
     const link = `${window.location.origin}/desafios?submissao=${subId}`;
-    try { await navigator.clipboard.writeText(link); alert("Link da submissão copiado!"); } catch { alert("Não foi possível copiar o link."); }
+    try { await navigator.clipboard.writeText(link); toast.success("Link da submissão copiado!"); } catch { toast.error("Não foi possível copiar o link."); }
   };
 
   const seteDiasAtras = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); return d; }, []);

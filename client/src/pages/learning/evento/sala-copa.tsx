@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/learning/evento/sala-copa.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -452,7 +453,7 @@ export default function SalaCopaEventoPage() {
 
   function entrarNaLive() {
     if (!aulaId) {
-      alert(
+      toast.error(
         "Ainda falta vincular esta página a uma AulaAoVivo real. Abra a página assim: /learning/evento/sala-copa?aulaId=ID_DA_AULA"
       );
       return;

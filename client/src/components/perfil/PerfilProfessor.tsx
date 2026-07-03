@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState, useCallback, ReactNode } from "react";
 import axios from "axios";
 import {
@@ -879,7 +880,7 @@ export default function PerfilProfessor({
       );
     } catch (e) {
       console.error(e);
-      alert("Erro ao salvar nota interna.");
+      toast.error("Erro ao salvar nota interna.");
     } finally {
       setSalvandoNota((p) => ({ ...p, [key]: false }));
     }
@@ -894,17 +895,17 @@ export default function PerfilProfessor({
 
     try {
       if (!org) {
-        alert(`Selecione uma ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
+        toast.error(`Selecione uma ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
         return;
       }
 
       if (org.id === vinculoAtualId) {
-        alert(`Você já está vinculado a esse ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
+        toast.info(`Você já está vinculado a esse ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
         return;
       }
 
       if (!org.usuarioId) {
-        alert(`${org.nome} não possui usuário vinculado para receber solicitação.`);
+        toast.error(`${org.nome} não possui usuário vinculado para receber solicitação.`);
         return;
       }
 
@@ -914,10 +915,10 @@ export default function PerfilProfessor({
         { headers }
       );
 
-      alert(`Solicitação enviada para ${org.nome}. Aguarde a confirmação.`);
+      toast.success(`Solicitação enviada para ${org.nome}. Aguarde a confirmação.`);
     } catch (e: any) {
       console.error("[PerfilProfessor.enviarSolicitacaoOrganizacao]", e?.response?.data || e);
-      alert(e?.response?.data?.message || "Erro ao enviar solicitação de vínculo.");
+      toast.error(e?.response?.data?.message || "Erro ao enviar solicitação de vínculo.");
     }
   }
 
@@ -1499,21 +1500,6 @@ export default function PerfilProfessor({
 
       {aba === "conquistas" && (
         <div className="mt-4 px-4 grid gap-4">
-          <SectionCard title="Certificados emitidos">
-            {certificados && certificados.length > 0 ? (
-              <div className="flex items-center justify-between">
-                <div className="text-green-900 font-medium">
-                  {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
-                </div>
-                <Link href="/perfil/conquistas" className="text-sm text-green-800">
-                  Ver certificados
-                </Link>
-              </div>
-            ) : (
-              <EmptyState text="Nenhum certificado emitido ainda." />
-            )}
-          </SectionCard>
-
           <SectionCard
             title="Conquistas e Troféus"
             right={
@@ -1542,6 +1528,21 @@ export default function PerfilProfessor({
               </div>
             ) : (
               <EmptyState text="Nenhuma conquista registrada ainda" />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Certificados emitidos">
+            {certificados && certificados.length > 0 ? (
+              <div className="flex items-center justify-between">
+                <div className="text-green-900 font-medium">
+                  {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                </div>
+                <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                  Ver certificados
+                </Link>
+              </div>
+            ) : (
+              <EmptyState text="Nenhum certificado emitido ainda." />
             )}
           </SectionCard>
         </div>

@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 //client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
@@ -752,7 +753,7 @@ async function tentarSalvarComoTreinoSalvo(
         await apiDeletarTreinoSalvo(apagar.id);
       } catch (err) {
         meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
-        alert("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
+        toast.error("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
         return { saved: false, reason: "falha-apagar" as const };
       }
 
@@ -1174,12 +1175,12 @@ export default function NovoTreino() {
 
   function irParaEtapa(destino: number) {
     if (destino >= 2 && !etapa1Valida) {
-      alert("Preencha título, duração, tipo do treino, nível e sessão do treino.");
+      toast.error("Preencha título, duração, tipo do treino, nível e sessão do treino.");
       return;
     }
 
     if (destino >= 3 && !etapa2Valida) {
-      alert("Selecione pelo menos um exercício para continuar.");
+      toast.error("Selecione pelo menos um exercício para continuar.");
       return;
     }
 
@@ -2608,7 +2609,7 @@ export default function NovoTreino() {
     }
 
     if (!atletasSelecionados || atletasSelecionados.length === 0) {
-      alert("Selecione pelo menos 1 atleta para a turma.");
+      toast.error("Selecione pelo menos 1 atleta para a turma.");
       return;
     }
 
@@ -2667,7 +2668,7 @@ export default function NovoTreino() {
         );
 
     if (!ownerIdFinal) {
-      alert("Não foi possível identificar o dono da turma. Faça login novamente.");
+      toast.error("Não foi possível identificar o dono da turma. Faça login novamente.");
       return;
     }
 
@@ -3545,7 +3546,7 @@ export default function NovoTreino() {
       );
 
       if (invalidos.length > 0) {
-        alert("Preencha pelo menos séries/repetições OU duração em todos os exercícios.");
+        toast.error("Preencha pelo menos séries/repetições OU duração em todos os exercícios.");
         return;
       }
 
@@ -3727,7 +3728,7 @@ export default function NovoTreino() {
       console.error("[NovoTreino] erro criar treino:", data || e);
 
       if (data?.code === "TREINO_NOME_DUPLICADO_DO_MESMO_DONO") {
-        alert(
+        toast.error(
           data?.message ||
             "Esse treino não pode ser criado porque você já possui um treino com esse nome. Se quiser criar, mude o nome do treino."
         );
@@ -4079,7 +4080,7 @@ export default function NovoTreino() {
                   const bloqueadas = datasAgendadasPorTreino.get(String(t.id));
 
                   if (bloqueadas?.has(dia)) {
-                    alert("Você já tem esse treino agendado nessa data. Escolha outro dia.");
+                    toast.error("Você já tem esse treino agendado nessa data. Escolha outro dia.");
                     return;
                   }
 
@@ -4457,7 +4458,7 @@ export default function NovoTreino() {
                         setCapaPreview("");
                       } catch (err: any) {
                         console.error(err);
-                        alert(err?.message || "Erro ao enviar imagem");
+                        toast.error(err?.message || "Erro ao enviar imagem");
                       } finally {
                         if (input) input.value = ""; 
                       }

@@ -7,6 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import GoogleButton from "../components/auth/GoogleButton";
 import MaintenanceScreen from "../components/MaintenanceScreen";
+import { applyAuthSession } from "../utils/authSession.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -965,54 +966,9 @@ export default function Cadastro() {
         return;
       }
 
-      const usuario = data.usuario ?? {};
-      const usuarioId: string = String(usuario.id ?? data.id ?? "");
-      const usuarioNome: string = String(
-        usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? ""
-      );
-      const token: string = String(data.token ?? "");
+      const { isAdmin } = applyAuthSession(data, { lembrar: false });
 
-      if (!token || !usuarioId) {
-        throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
-      }
-
-      sessionStorage.setItem("token", token);
-      sessionStorage.setItem("usuarioId", usuarioId);
-
-      if (usuarioNome) sessionStorage.setItem("nomeUsuario", usuarioNome);
-
-      const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-
-      const mapTipoStore: Record<string, string> = {
-        admin: "admin",
-        atleta: "atleta",
-        professor: "professor",
-        clube: "clube",
-        escolinha: "escolinha",
-        escola: "escola",
-        olheiro: "olheiro",
-        learning: "learning",
-        federacao: "federacao",
-        marca: "marca",
-      };
-
-      sessionStorage.setItem("tipoUsuario", mapTipoStore[rawTipo] ?? "atleta");
-      sessionStorage.setItem("usuarioTipoRaw", rawTipo);
-
-      if (data?.tipoUsuarioId) {
-        sessionStorage.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
-      }
-
-      sessionStorage.setItem(
-        "plano",
-        String(usuario.plano ?? data.plano ?? "FREE")
-      );
-
-      if (rawTipo === "admin") {
-        navigate("/admin");
-      } else {
-        navigate("/perfil");
-      }
+      navigate(isAdmin ? "/admin" : "/perfil");
     } catch (err: any) {
       console.error("Erro no cadastro/login com Google:", err.response?.data || err.message);
       setErro(

@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useLocation } from "wouter";
@@ -185,7 +186,7 @@ export default function CreatorNovoEventoPage() {
           status: data.status || "ABERTO",
         }));
       } catch (e: any) {
-        window.alert(
+        window.toast.error(
           e?.response?.data?.error ||
             e?.response?.data?.message ||
             "Erro ao carregar evento."
@@ -282,7 +283,7 @@ export default function CreatorNovoEventoPage() {
               : [],
         }));
       } catch (e: any) {
-        window.alert(
+        window.toast.error(
           e?.response?.data?.message ||
             e?.response?.data?.error ||
             "Erro ao carregar aula ao vivo."
@@ -550,7 +551,7 @@ export default function CreatorNovoEventoPage() {
 
     if (!form.titulo.trim()) {
       setErro("Título é obrigatório.");
-      window.alert("Título é obrigatório.");
+      window.toast.error("Título é obrigatório.");
       return;
     }
 
@@ -558,7 +559,7 @@ export default function CreatorNovoEventoPage() {
 
     if (erroDatas) {
       setErro(erroDatas);
-      window.alert(erroDatas);
+      window.toast.error(erroDatas);
       return;
     }
 
@@ -594,7 +595,7 @@ export default function CreatorNovoEventoPage() {
           headers,
         });
 
-        window.alert("Evento atualizado com sucesso!");
+        window.toast.success("Evento atualizado com sucesso!");
         setLocation("/creator/eventos");
         return;
       }
@@ -626,7 +627,7 @@ export default function CreatorNovoEventoPage() {
           { headers }
         );
 
-        window.alert("Aula ao vivo atualizada com sucesso!");
+        window.toast.success("Aula ao vivo atualizada com sucesso!");
         setLocation("/creator/eventos");
         return;
       }
@@ -658,7 +659,7 @@ export default function CreatorNovoEventoPage() {
           { headers }
         );
 
-        window.alert("Aula ao vivo criada como evento avulso!");
+        window.toast.success("Aula ao vivo criada como evento avulso!");
         setLocation("/creator/eventos");
         return;
       }
@@ -667,7 +668,7 @@ export default function CreatorNovoEventoPage() {
         headers,
       });
 
-      window.alert("Evento criado com sucesso!");
+      window.toast.success("Evento criado com sucesso!");
       setLocation("/creator/eventos");
     } catch (e: any) {
       const msg =
@@ -676,7 +677,7 @@ export default function CreatorNovoEventoPage() {
         "Erro ao salvar evento.";
 
       setErro(msg);
-      window.alert(msg);
+      window.toast.error(msg);
     } finally {
       setSalvando(false);
     }

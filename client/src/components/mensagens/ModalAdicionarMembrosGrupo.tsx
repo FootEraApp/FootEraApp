@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import { API, APP } from "../../config.js";
 
@@ -87,7 +88,7 @@ export function ModalAdicionarMembrosGrupo({
   async function confirmar() {
     const ids = Array.from(selecionados);
     if (ids.length === 0) {
-      alert("Selecione ao menos um usuário.");
+      toast.error("Selecione ao menos um usuário.");
       return;
     }
 

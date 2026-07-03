@@ -4,6 +4,7 @@ import { UserProvider } from "./context/UserContext.js";
 import { usePresencePing } from "@/hooks/usePresencePing";
 import { sincronizarPushSePermitido } from "./services/pushNotifications.js";
 import { inicializarPushAndroidNativo } from "./services/nativePushNotifications.js";
+import ToastContainer from "./components/ui/ToastContainer.js";
 
 function PresenceBoot() {
   usePresencePing();
@@ -66,6 +67,7 @@ export default function App() {
       <PresenceBoot />
       <PushBoot />
       <AppRoutes />
+      <ToastContainer />
     </UserProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -373,7 +374,7 @@ export default function PerfilOlheiro({
           : prev
       );
     } catch (e: any) {
-      alert(e?.response?.data?.error || "Falha ao apagar indicação.");
+      toast.error(e?.response?.data?.error || "Falha ao apagar indicação.");
     }
   }
 

@@ -1,5 +1,6 @@
 //server/controllers/cadastroController
 import { Request, Response } from "express";
+import { z } from "zod";
 import { TipoUsuario, Nivel, StatusCref, NotificacaoTipo} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -486,7 +487,31 @@ async function criarSolicitacaoVinculoCadastro(params: {
   await recomputeAndEmitBadge(destinatarioId);
 }
 
+// Só formaliza os campos que já eram checados manualmente (obrigatórios pra
+// todo tipo de usuário). Os ~40 campos específicos de cada tipo (clube,
+// escolinha, professor, olheiro etc.) passam intactos via .passthrough() —
+// validar cada um deles exigiria testar os 10 fluxos de cadastro reais.
+const cadastrarUsuarioBaseSchema = z
+  .object({
+    nome: z.string().trim().optional(),
+    email: z.string().trim().min(1, "email é obrigatório"),
+    senha: z.string().min(6, "senha deve ter pelo menos 6 caracteres"),
+    tipo: z.string().trim().min(1, "tipo é obrigatório"),
+    nomeDeUsuario: z.string().trim().min(1, "nomeDeUsuario é obrigatório"),
+  })
+  .passthrough();
+
 export const cadastrarUsuario = async (req: Request, res: Response) => {
+  let body: any;
+  try {
+    body = cadastrarUsuarioBaseSchema.parse(req.body ?? {});
+  } catch (e: any) {
+    if (e?.name === "ZodError") {
+      return res.status(400).json({ error: "Dados inválidos.", details: e.errors });
+    }
+    throw e;
+  }
+
   const {
     nome, email, senha, tipo,
     nomeDeUsuario, cidade, estado, pais, bairro, cpf,
@@ -499,13 +524,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     areaAtuacao, anosExperiencia, nomeOrganizacao,
     telefonePublico, emailPublico, descricao, colaboracaoClubeId, colaboracaoProfessorId,
     colaboracaoEscolinhaId, dataNascimento, responsavel, siteOuLinkedin, headline
-  } = req.body ?? {};
-
-  if (!email || !senha || !tipo || !nomeDeUsuario) {
-    return res.status(400).json({
-      error: "Campos obrigatórios: nomeDeUsuario, email, senha, tipo.",
-    });
-  }
+  } = body;
 
   function dataNascimentoPermitida(valor?: string | null) {
     if (!valor) return false;

@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/treino/treino-metodologia.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -265,7 +266,7 @@ export default function TreinoMetodologiaPage() {
 
   useEffect(() => {
     if (!treinoProgramadoId) {
-      alert("Treino da metodologia inválido.");
+      toast.error("Treino da metodologia inválido.");
 
       const backParams = new URLSearchParams();
       if (origem) backParams.set("origem", origem);
@@ -316,7 +317,7 @@ export default function TreinoMetodologiaPage() {
         } catch {}
       } catch (e: any) {
         console.error(e);
-        alert(e?.message || "Erro ao carregar treino da metodologia.");
+        toast.error(e?.message || "Erro ao carregar treino da metodologia.");
         navigate(`/learning/${metodologiaId || ""}`);
       } finally {
         setLoading(false);
@@ -412,7 +413,7 @@ export default function TreinoMetodologiaPage() {
       setElapsedSec(0);
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || "Não foi possível iniciar o treino.");
+      toast.error(e?.message || "Não foi possível iniciar o treino.");
     } finally {
       setSalvando(false);
     }
@@ -421,7 +422,7 @@ export default function TreinoMetodologiaPage() {
   async function finalizarTreino() {
     try {
       if (!checklistDone) {
-        alert("Marque todos os exercícios antes de finalizar.");
+        toast.error("Marque todos os exercícios antes de finalizar.");
         return;
       }
 
@@ -457,7 +458,7 @@ export default function TreinoMetodologiaPage() {
        setStatus("READY_TO_SUBMIT");
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || "Não foi possível finalizar o treino.");
+      toast.error(e?.message || "Não foi possível finalizar o treino.");
     } finally {
       setSalvando(false);
     }
@@ -465,7 +466,7 @@ export default function TreinoMetodologiaPage() {
 
   function irParaSubmissao() {
     if (!treinoAgendadoId) {
-      alert("Treino ainda não foi preparado corretamente.");
+      toast.error("Treino ainda não foi preparado corretamente.");
       return;
     }
 
@@ -516,7 +517,7 @@ export default function TreinoMetodologiaPage() {
   function abrirMidia(ex: ExercicioItem) {
     const url = resolveUploadUrl(ex.videoDemonstrativoUrl || ex.imgDemonstrativaUrl || "");
     if (!url) {
-      alert("Este exercício ainda não possui vídeo ou imagem cadastrados.");
+      toast.error("Este exercício ainda não possui vídeo ou imagem cadastrados.");
       return;
     }
     setVideoModal({ nome: ex.nome, url });

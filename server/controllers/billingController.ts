@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import { timingSafeEqual } from "crypto";
+import { z } from "zod";
 import {
   PrismaClient,
   Prisma,
@@ -14,6 +16,7 @@ import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { getIO } from "../socket.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import { sendError } from "../utils/httpError.js";
 
 function isLegacyPlano(planoId: string | null | undefined) {
   return String(planoId || "").toUpperCase() === "ATLETA_METODO_1";
@@ -171,6 +174,31 @@ type StartCheckoutBody = {
   pagador?: Pagador;
   cartao?: Cartao;
 };
+
+const pagadorSchema = z.object({
+  nome: z.string().trim().min(1).optional(),
+  email: z.string().trim().min(1).optional(),
+  cpf: z.string().trim().optional(),
+  telefone: z.string().trim().optional(),
+});
+
+const cartaoSchema = z.object({
+  numero: z.string().optional(),
+  nomeImpresso: z.string().optional(),
+  validade: z.string().optional(),
+  cvv: z.string().optional(),
+});
+
+const startCheckoutSchema = z.object({
+  planoId: z.string().trim().min(1, "planoId é obrigatório"),
+  periodicidade: z.enum(["Mensal", "Anual"], {
+    errorMap: () => ({ message: "Periodicidade inválida" }),
+  }),
+  metodo: z.enum(["PIX", "CREDITO", "DEBITO", "BOLETO"]).optional(),
+  cupom: z.string().trim().optional().nullable(),
+  pagador: pagadorSchema.optional(),
+  cartao: cartaoSchema.optional(),
+});
 
 type StartBundleBody = {
   items: Array<{ planoId: string; periodicidade: Periodicidade }>;
@@ -1419,12 +1447,7 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       message: "Mês grátis iniciado com sucesso.",
     });
   } catch (err: any) {
-    console.error("Erro startTrial:", err);
-
-    return res.status(err?.statusCode || 500).json({
-      message: err?.message || "Erro ao iniciar trial",
-      code: err?.code,
-    });
+    return sendError(res, err, "Erro ao iniciar trial");
   }
 }
 
@@ -1660,7 +1683,7 @@ export async function startCheckout(req: Request, res: Response) {
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
     const { planoId, periodicidade, metodo, cupom, pagador, cartao } =
-      req.body as StartCheckoutBody;
+      startCheckoutSchema.parse(req.body) as StartCheckoutBody;
 
     const { metodoPreferido } = await guardTrialRule(usuarioId);
 
@@ -1670,15 +1693,7 @@ export async function startCheckout(req: Request, res: Response) {
     const metodoFinal = (metodo || metodoPreferido) as MetodoPagamento;
     if (!metodoFinal) return res.status(400).json({ message: "Escolha um método de pagamento" });
 
-    if (!["Mensal", "Anual"].includes(periodicidade as any)) {
-      return res.status(400).json({ message: "Periodicidade inválida" });
-    }
-
     const planoNorm = normalizePlanoId(planoId);
-
-    if (!["Mensal", "Anual"].includes(periodicidade as any)) {
-      return res.status(400).json({ message: "Periodicidade inválida" });
-    }
 
     if (
       isMetodologiaAvulsa(planoNorm) ||
@@ -1878,11 +1893,7 @@ export async function startCheckout(req: Request, res: Response) {
           message: "Pagamento PIX criado. A assinatura será liberada após confirmação do pagamento.",
         });
       } catch (err: any) {
-        console.error("Erro PIX Mercado Pago:", err?.response?.data || err);
-        return res.status(500).json({
-          message: "Falha ao criar pagamento PIX com Mercado Pago",
-          detalhe: err?.response?.data || String(err),
-        });
+        return sendError(res, err, "Falha ao criar pagamento PIX com Mercado Pago");
       }
     }
 
@@ -1917,13 +1928,13 @@ export async function startCheckout(req: Request, res: Response) {
         message: "Redirecione o usuário para o checkout do Mercado Pago.",
       });
     } catch (err: any) {
-      console.error("Erro preference Mercado Pago:", err?.response?.data || err);
-      return res.status(500).json({
-        message: "Falha ao criar checkout Mercado Pago",
-        detalhe: err?.response?.data || String(err),
-      });
+      return sendError(res, err, "Falha ao criar checkout Mercado Pago");
     }
   } catch (err: any) {
+    if (err?.name === "ZodError") {
+      return res.status(400).json({ message: "Dados inválidos.", details: err.errors });
+    }
+
     if (err?.code === "TRIAL_ACTIVE") {
       return res.status(403).json({
         code: "TRIAL_ACTIVE",
@@ -1932,11 +1943,7 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
-    console.error("Erro em startCheckout:", err?.response?.data || err);
-    return res.status(500).json({
-      message: "Erro ao iniciar checkout",
-      detalhe: err?.response?.data || String(err),
-    });
+    return sendError(res, err, "Erro ao iniciar checkout");
   }
 }
 
@@ -2147,11 +2154,7 @@ export async function startCheckoutBundle(req: Request, res: Response) {
           message: "Pagamento PIX bundle criado. Assinaturas serão liberadas após aprovação.",
         });
       } catch (err: any) {
-        console.error("Erro PIX bundle Mercado Pago:", err?.response?.data || err);
-        return res.status(500).json({
-          message: "Falha ao criar PIX bundle com Mercado Pago",
-          detalhe: err?.response?.data || String(err),
-        });
+        return sendError(res, err, "Falha ao criar PIX bundle com Mercado Pago");
       }
     }
 
@@ -2186,11 +2189,7 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         message: "Redirecione o usuário para o checkout do Mercado Pago.",
       });
     } catch (err: any) {
-      console.error("Erro preference bundle Mercado Pago:", err?.response?.data || err);
-      return res.status(500).json({
-        message: "Falha ao criar checkout bundle Mercado Pago",
-        detalhe: err?.response?.data || String(err),
-      });
+      return sendError(res, err, "Falha ao criar checkout bundle Mercado Pago");
     }
   } catch (err: any) {
     if (err?.code === "TRIAL_ACTIVE") {
@@ -2200,8 +2199,7 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         ...(err.payload || {}),
       });
     }
-    console.error("Erro em startCheckoutBundle:", err);
-    return res.status(500).json({ message: "Erro ao iniciar checkout bundle", detalhe: String(err) });
+    return sendError(res, err, "Erro ao iniciar checkout bundle");
   }
 }
 
@@ -2258,8 +2256,24 @@ export async function switchPlan(req: Request, res: Response) {
   });
 }
 
+function isProviderWebhookAuthorized(req: Request): boolean {
+  const expected = process.env.BILLING_WEBHOOK_SECRET || "";
+  if (!expected) return false; // fail-closed: sem segredo configurado, endpoint fica bloqueado
+
+  const received = String(req.headers["x-webhook-secret"] || "");
+  const expectedBuf = Buffer.from(expected);
+  const receivedBuf = Buffer.from(received);
+  if (expectedBuf.length !== receivedBuf.length) return false;
+
+  return timingSafeEqual(expectedBuf, receivedBuf);
+}
+
 export async function providerWebhook(req: Request, res: Response) {
   try {
+    if (!isProviderWebhookAuthorized(req)) {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+
     const { provider, providerEventId, tipo, data } = req.body as any;
 
     const already = await prisma.eventoPagamento.findUnique({ where: { providerEventId } });
@@ -2278,6 +2292,12 @@ export async function providerWebhook(req: Request, res: Response) {
     }
 
     if (!pagamento) return res.status(404).json({ message: "Pagamento não encontrado" });
+
+    // Pagamentos reais do Mercado Pago só podem ser confirmados via mercadoPagoWebhook,
+    // que verifica o status de verdade na API do MP — nunca por este endpoint genérico.
+    if (pagamento.provider === "MERCADOPAGO") {
+      return res.status(403).json({ message: "Use o webhook oficial do Mercado Pago para este pagamento" });
+    }
 
     const now = new Date();
 
@@ -2413,11 +2433,7 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
 
     return res.status(200).json({ ok: true, ignored: true });
   } catch (err: any) {
-    console.error("Erro webhook Mercado Pago:", err?.response?.data || err);
-    return res.status(500).json({
-      message: "Erro ao processar webhook Mercado Pago",
-      detalhe: err?.response?.data || String(err),
-    });
+    return sendError(res, err, "Erro ao processar webhook Mercado Pago");
   }
 }
 
@@ -2755,10 +2771,6 @@ export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Respon
       })),
     });
   } catch (e: any) {
-    console.error("Erro em getAulasAoVivoPagas:", e);
-    return res.status(500).json({
-      message: "Erro ao listar eventos ao vivo pagos.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar eventos ao vivo pagos.");
   }
 }

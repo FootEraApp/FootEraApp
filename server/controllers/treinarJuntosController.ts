@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 type SideInfo = {
   atletaId: string | null;
@@ -188,10 +189,7 @@ export const treinarJuntosController = {
         status: "NUNCA",
       });
     } catch (e: any) {
-      console.error("[treinarJuntos.status]", e);
-      return res
-        .status(500)
-        .json({ message: e?.message || "Erro ao verificar vínculo de treino" });
+      return sendError(res, e, "Erro ao verificar vínculo de treino");
     }
   },
 };

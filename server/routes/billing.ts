@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
+import { requireAdmin } from "../middlewares/guards.js";
 import {
   getPlans,
   getMyBilling,
@@ -24,9 +25,10 @@ const router = Router();
 
 router.post("/mercadopago/webhook", mercadoPagoWebhook);
 router.post("/webhook/provider", providerWebhook);
-router.get("/check-expiring", checkExpiringSubscriptions);
 
 router.use(authenticateToken);
+
+router.get("/check-expiring", requireAdmin, checkExpiringSubscriptions);
 
 router.get("/plans", getPlans);
 router.get("/me", getMyBilling);

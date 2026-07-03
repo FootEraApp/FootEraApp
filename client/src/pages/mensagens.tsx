@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
@@ -665,7 +666,7 @@ export default function PaginaMensagens() {
 
     try {
       const base = (meuCardDados ?? await getMeuPerfilEBonus());
-      if (!base) { alert("Não consegui montar seu card agora."); return; }
+      if (!base) { toast.error("Não consegui montar seu card agora."); return; }
 
       const payload = {
         kind: "card-shield",
@@ -723,7 +724,7 @@ export default function PaginaMensagens() {
       await new Promise<void>(r => requestAnimationFrame(() => r()));
 
       const node = cardRef.current;
-      if (!node) { alert("Falha ao preparar o card para captura."); return; }
+      if (!node) { toast.error("Falha ao preparar o card para captura."); return; }
 
       const dataUrl = await htmlToImage.toPng(node, {
         cacheBust: false,
@@ -736,12 +737,12 @@ export default function PaginaMensagens() {
         reconcilePrivadaByClientId(saved);
       } else {
         console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
-        alert("Não consegui enviar o card agora.");
+        toast.error("Não consegui enviar o card agora.");
         setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
       }
     } catch (err) {
       console.error("Falha ao compartilhar card:", err);
-      alert("Não foi possível compartilhar seu card agora.");
+      toast.error("Não foi possível compartilhar seu card agora.");
     }
   };
 
@@ -1162,11 +1163,11 @@ export default function PaginaMensagens() {
         throw new Error(data?.error || "Erro ao sair do grupo");
       }
 
-      alert("Você saiu do grupo.");
+      toast.error("Você saiu do grupo.");
       setGrupoDetalhe(null);
       setMostrarInfoGrupo(false);
     } catch (err: any) {
-      alert(err.message || "Erro ao sair do grupo");
+      toast.error(err.message || "Erro ao sair do grupo");
     }
   }
 
@@ -1192,7 +1193,7 @@ export default function PaginaMensagens() {
 
       await carregarDetalheGrupo(grupoId);
     } catch (err: any) {
-      alert(err.message || "Erro ao alterar cargo do membro");
+      toast.error(err.message || "Erro ao alterar cargo do membro");
     }
   }
 
@@ -1212,7 +1213,7 @@ export default function PaginaMensagens() {
 
       await carregarDetalheGrupo(grupoId);
     } catch (err: any) {
-      alert(err.message || "Erro ao remover membro");
+      toast.error(err.message || "Erro ao remover membro");
     }
   }
 
@@ -1234,7 +1235,7 @@ export default function PaginaMensagens() {
 
       await carregarDetalheGrupo(grupoId);
     } catch (err: any) {
-      alert(err.message || "Erro ao adicionar membros");
+      toast.error(err.message || "Erro ao adicionar membros");
     }
   }
 
@@ -1456,7 +1457,7 @@ export default function PaginaMensagens() {
 
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() || !alvo) return;
-    if (!usuarioId) { alert("Sessão expirada. Faça login novamente."); return; }
+    if (!usuarioId) { toast.error("Sessão expirada. Faça login novamente."); return; }
 
     if (alvo.tipo === "usuario") {
       const clientMsgId = genClientId();
@@ -1499,7 +1500,7 @@ export default function PaginaMensagens() {
               m.clientMsgId === clientMsgId ? { ...m, pending: false } : m
             )
           );
-          alert("Não foi possível enviar a mensagem agora.");
+          toast.error("Não foi possível enviar a mensagem agora.");
         }
       } catch (e) {
         console.error("POST /api/mensagem erro:", e);
@@ -1508,7 +1509,7 @@ export default function PaginaMensagens() {
             m.clientMsgId === clientMsgId ? { ...m, pending: false } : m
           )
         );
-        alert("Não foi possível enviar a mensagem agora.");
+        toast.error("Não foi possível enviar a mensagem agora.");
       }
       setNovaMensagem("");
     } else {
@@ -1602,7 +1603,7 @@ function stripConvocacaoTag(text: string) {
       setMensagensGrupo(prev => prev.filter(m => m.id !== id));
     } catch (err) {
       console.error("Erro ao apagar mensagem:", err);
-      alert("Não foi possível apagar a mensagem.");
+      toast.error("Não foi possível apagar a mensagem.");
     }
   };
 

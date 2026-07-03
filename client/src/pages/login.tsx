@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/login
 import { useState, useEffect, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
@@ -8,6 +9,7 @@ import MaintenanceScreen from "../components/MaintenanceScreen";
 import GoogleButton from "../components/auth/GoogleButton";
 import { Capacitor } from "@capacitor/core";
 import { inicializarPushAndroidNativo } from "../services/nativePushNotifications.js";
+import { applyAuthSession } from "../utils/authSession.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -139,9 +141,9 @@ export default function PaginaLogin() {
         payload
       );
 
-      alert("Reenviamos o e-mail de verificação. Verifique sua caixa de entrada e spam.");
+      toast.success("Reenviamos o e-mail de verificação. Verifique sua caixa de entrada e spam.");
     } catch (e: any) {
-      alert(e?.response?.data?.message ?? "Não foi possível reenviar agora.");
+      toast.error(e?.response?.data?.message ?? "Não foi possível reenviar agora.");
     } finally {
       setSendingResend(false);
     }
@@ -186,72 +188,10 @@ export default function PaginaLogin() {
         }
 
         if (data?.notice === "ACCOUNT_REACTIVATED") {
-          alert(data?.noticeMessage ?? "Sua conta foi reativada por um administrador.");
+          toast.success(data?.noticeMessage ?? "Sua conta foi reativada por um administrador.");
         }
 
-        const usuario = data.usuario ?? {};
-        const usuarioId: string = String(usuario.id ?? data.id ?? "");
-        const usuarioNome: string = String(usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "");
-        const token: string = String(data.token ?? "");
-
-        if (!token || !usuarioId) {
-          throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
-        }
-
-        const store = lembrarDeMim ? localStorage : sessionStorage;
-
-        [
-          "token",
-          "usuarioId",
-          "nomeUsuario",
-          "tipoUsuario",
-          "usuarioTipoRaw",
-          "tipoUsuarioId",
-          "plano",
-        ].forEach((k) => {
-          localStorage.removeItem(k);
-          sessionStorage.removeItem(k);
-        });
-
-        store.setItem("token", token);
-        store.setItem("usuarioId", usuarioId);
-
-        if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
-
-        const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-        const isAdmin =
-          String(usuario.tipo ?? data.tipo ?? "").toLowerCase() === "admin";
-
-        const mapTipo: Record<string, string> = {
-          admin: "admin",
-          atleta: "atleta",
-          professor: "professor",
-          clube: "clube",
-          escolinha: "escolinha",
-          escola: "escola",
-          olheiro: "olheiro",
-          learning: "learning",
-          federacao: "federacao",
-          marca: "marca",
-        };
-
-        const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
-        store.setItem("tipoUsuario", tipoPadrao);
-        store.setItem("usuarioTipoRaw", rawTipo);
-
-        const tipoUsuarioId =
-          data.tipoUsuarioId ||
-          data?.olheiro?.id ||
-          data?.professor?.id ||
-          data?.clube?.id ||
-          data?.escolinha?.id ||
-          data?.atleta?.id ||
-          null;
-
-        if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
-
-        const plano = String(usuario.plano ?? data.plano ?? "FREE");
-        store.setItem("plano", plano);
+        const { isAdmin } = applyAuthSession(data, { lembrar: lembrarDeMim });
 
         await inicializarPushDepoisDoLogin();
 
@@ -323,60 +263,16 @@ export default function PaginaLogin() {
         const usuarioId = String(data.usuario?.id ?? data.id ?? "");
 
         if (!token || !usuarioId) {
-          alert("Conta restaurada! Agora faça login.");
+          toast.success("Conta restaurada! Agora faça login.");
           setShowRecover(false);
           setRecoverSenha("");
           setMostrarRecoverSenha(false);
           return;
         }
 
-        const store = lembrarDeMim ? localStorage : sessionStorage;
+        const { isAdmin } = applyAuthSession(data, { lembrar: lembrarDeMim });
 
-        ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "usuarioTipoRaw", "tipoUsuarioId", "plano"].forEach((k) => {
-          localStorage.removeItem(k);
-          sessionStorage.removeItem(k);
-        });
-
-        store.setItem("token", token);
-        store.setItem("usuarioId", usuarioId);
-
-        const usuarioNome = String(data.usuario?.nomeDeUsuario ?? data.nomeDeUsuario ?? "");
-        if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
-
-        const rawTipo = String(data.usuario?.tipo ?? data.tipo ?? "").toLowerCase();
-        const isAdmin = rawTipo === "admin";
-
-        const mapTipo: Record<string, string> = {
-          admin: "admin",
-          atleta: "atleta",
-          professor: "professor",
-          clube: "clube",
-          escolinha: "escolinha",
-          escola: "escola",
-          olheiro: "olheiro",
-          learning: "learning",
-          federacao: "federacao",
-          marca: "marca",
-        };
-
-        store.setItem("tipoUsuario", isAdmin ? "admin" : (mapTipo[rawTipo] ?? "atleta"));
-        store.setItem("usuarioTipoRaw", rawTipo);
-
-        const tipoUsuarioId =
-          data.tipoUsuarioId ||
-          data?.olheiro?.id ||
-          data?.professor?.id ||
-          data?.clube?.id ||
-          data?.escolinha?.id ||
-          data?.atleta?.id ||
-          null;
-
-        if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
-
-        const plano = String(data.usuario?.plano ?? data.plano ?? "FREE");
-        store.setItem("plano", plano);
-
-        alert("Conta restaurada com sucesso!");
+        toast.success("Conta restaurada com sucesso!");
         setShowRecover(false);
         setRecoverSenha("");
         setDeletedInfo(null);
@@ -385,7 +281,7 @@ export default function PaginaLogin() {
 
         navigate(isAdmin ? "/admin" : "/perfil");
       } catch (e: any) {
-        alert(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
+        toast.error(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
       } finally {
         setRecoverLoading(false);
       }
@@ -453,70 +349,7 @@ export default function PaginaLogin() {
         return;
       }
 
-      const usuario = data.usuario ?? {};
-      const usuarioId: string = String(usuario.id ?? data.id ?? "");
-      const usuarioNome: string = String(
-        usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? ""
-      );
-      const token: string = String(data.token ?? "");
-
-      if (!token || !usuarioId) {
-        throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
-      }
-
-      const store = lembrarDeMim ? localStorage : sessionStorage;
-
-      [
-        "token",
-        "usuarioId",
-        "nomeUsuario",
-        "tipoUsuario",
-        "usuarioTipoRaw",
-        "tipoUsuarioId",
-        "plano",
-      ].forEach((k) => {
-        localStorage.removeItem(k);
-        sessionStorage.removeItem(k);
-      });
-
-      store.setItem("token", token);
-      store.setItem("usuarioId", usuarioId);
-
-      if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
-
-      const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-      const isAdmin = rawTipo === "admin";
-
-      const mapTipo: Record<string, string> = {
-        admin: "admin",
-        atleta: "atleta",
-        professor: "professor",
-        clube: "clube",
-        escolinha: "escolinha",
-        escola: "escola",
-        olheiro: "olheiro",
-        learning: "learning",
-        federacao: "federacao",
-        marca: "marca",
-      };
-
-      const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
-      store.setItem("tipoUsuario", tipoPadrao);
-      store.setItem("usuarioTipoRaw", rawTipo);
-
-      const tipoUsuarioId =
-        data.tipoUsuarioId ||
-        data?.olheiro?.id ||
-        data?.professor?.id ||
-        data?.clube?.id ||
-        data?.escolinha?.id ||
-        data?.atleta?.id ||
-        null;
-
-      if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
-
-      const plano = String(usuario.plano ?? data.plano ?? "FREE");
-      store.setItem("plano", plano);
+      const { isAdmin } = applyAuthSession(data, { lembrar: lembrarDeMim });
 
       await inicializarPushDepoisDoLogin();
 
@@ -979,11 +812,11 @@ export default function PaginaLogin() {
                             nomeDeUsuario,
                             mensagem: supportMsg,
                           });
-                          alert("Mensagem enviada! Aguarde o retorno do suporte.");
+                          toast.success("Mensagem enviada! Aguarde o retorno do suporte.");
                           setSupportOpen(false);
                           setSupportMsg("");
                         } catch (e: any) {
-                          alert(e?.response?.data?.message ?? "Não foi possível enviar agora.");
+                          toast.error(e?.response?.data?.message ?? "Não foi possível enviar agora.");
                         } finally {
                           setSupportSending(false);
                         }

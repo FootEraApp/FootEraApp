@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   DragDropContext,
@@ -813,7 +814,7 @@ export default function PaginaElenco({
 
   const addElenco = () => {
     if (elencos.length >= 10) {
-      alert("Você já possui 10 elencos. Exclua um para criar outro.");
+      toast.success("Você já possui 10 elencos. Exclua um para criar outro.");
       return;
     }
     setElencos(prev => {
@@ -931,7 +932,7 @@ const handleDragEnd = (result: DropResult) => {
       const e = { ...arr[activeIndex] };
 
       if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
-        alert(`O elenco já tem ${e.maxJogadores} jogadores.`);
+        toast.error(`O elenco já tem ${e.maxJogadores} jogadores.`);
         return prev;
       }
 
@@ -993,7 +994,7 @@ const salvarElencoAtivo = async () => {
   if (!payloadBase) return;
 
   if (permitirReservas && reservasIds.length > MAX_RESERVAS) {
-    alert("Você pode selecionar no máximo 11 reservas.");
+    toast.error("Você pode selecionar no máximo 11 reservas.");
     return;
   }
 
@@ -1003,7 +1004,7 @@ const salvarElencoAtivo = async () => {
   );
 
   if (totalEscaladosSalvar !== 11) {
-    alert(
+    toast.success(
       `Seu time titular precisa ter exatamente 11 jogadores escalados.\n` +
       `Atualmente: ${totalEscaladosSalvar}/11.`
     );
@@ -1012,7 +1013,7 @@ const salvarElencoAtivo = async () => {
 
   if (modo === "convocacao") {
     if (!onSalvar) {
-      alert("Tela em modo convocação mas não foi passado onSalvar.");
+      toast.error("Tela em modo convocação mas não foi passado onSalvar.");
       return;
     }
     try {
@@ -1029,7 +1030,7 @@ const salvarElencoAtivo = async () => {
       await onSalvar({ ...payloadBase, turmaId });
     } catch (e) {
       console.error(e);
-      alert("Erro ao salvar convocação.");
+      toast.error("Erro ao salvar convocação.");
     }
     return;
   }
@@ -1040,11 +1041,11 @@ const salvarElencoAtivo = async () => {
   const tipoUsuario = tipoUsuarioRaw.toLowerCase();
 
   if (!token) {
-    alert("Você não está autenticado. Faça login novamente.");
+    toast.error("Você não está autenticado. Faça login novamente.");
     return;
   }
   if (!tipoUsuarioId || !tipoUsuario) {
-    alert("Não foi possível identificar seu tipo de usuário.");
+    toast.error("Não foi possível identificar seu tipo de usuário.");
     return;
   }
 
@@ -1077,7 +1078,7 @@ const salvarElencoAtivo = async () => {
       await axios.put(`${ELENCOS_BASE}/${ativo.id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      alert("Elenco atualizado com sucesso!");
+      toast.success("Elenco atualizado com sucesso!");
     } else {
       const res = await axios.post(ELENCOS_BASE, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1088,11 +1089,11 @@ const salvarElencoAtivo = async () => {
         arr[activeIndex] = { ...arr[activeIndex], id: newId };
         return arr;
       });
-      alert("Elenco criado com sucesso!");
+      toast.success("Elenco criado com sucesso!");
     }
   } catch (err) {
     console.error("Erro ao salvar elenco:", err);
-    alert("Erro ao salvar elenco.");
+    toast.error("Erro ao salvar elenco.");
   }
 };
 
@@ -1283,7 +1284,7 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
       const limitOutfield = Math.min(10, (ativo.maxJogadores ?? 11) - 1);
 
       if (totalOutfield >= limitOutfield) {
-        alert("A formação não pode ter mais de 11 jogadores no total.");
+        toast.error("A formação não pode ter mais de 11 jogadores no total.");
         return prev;
       }
 
@@ -1621,7 +1622,7 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                                   }`}
                               onClick={() => {
                               if (reservasIds.length >= MAX_RESERVAS) {
-                                alert("Você pode selecionar no máximo 11 reservas.");
+                                toast.error("Você pode selecionar no máximo 11 reservas.");
                                 return;
                               }
                               setReservasIds(prev =>
@@ -1738,7 +1739,7 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                                   }`}
                                 onClick={() => {
                                 if (reservasIds.length >= MAX_RESERVAS) {
-                                  alert("Você pode selecionar no máximo 11 reservas.");
+                                  toast.error("Você pode selecionar no máximo 11 reservas.");
                                   return;
                                 }
                                 setReservasIds(prev =>

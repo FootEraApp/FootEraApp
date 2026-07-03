@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/learning/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation} from "wouter";
@@ -613,7 +614,7 @@ export default function LearningPage() {
 
       setCriadas((prev) => prev.filter((item) => String(item.id) !== String(id)));
     } catch (e: any) {
-      alert(e?.message || "Falha ao apagar metodologia.");
+      toast.error(e?.message || "Falha ao apagar metodologia.");
     }
   }
 
@@ -714,7 +715,7 @@ export default function LearningPage() {
           : prev.filter((item) => item !== key)
       );
 
-      alert(e?.message || "Erro ao atualizar favorito.");
+      toast.error(e?.message || "Erro ao atualizar favorito.");
     }
   }
 

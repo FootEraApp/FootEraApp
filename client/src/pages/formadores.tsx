@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useLocation } from "wouter";
@@ -123,7 +124,7 @@ export default function FormadoresPage() {
       setDocs(docsRes.data);
     } catch (e: any) {
       console.error(e);
-      alert(e?.response?.data?.message ?? "Falha ao carregar dados de Formadores.");
+      toast.error(e?.response?.data?.message ?? "Falha ao carregar dados de Formadores.");
     } finally {
       setLoading(false);
     }
@@ -153,7 +154,7 @@ export default function FormadoresPage() {
       fetchAll();
     } catch (e: any) {
       console.error(e);
-      alert("Não foi possível registrar o vínculo.");
+      toast.error("Não foi possível registrar o vínculo.");
     }
   }
 
@@ -173,7 +174,7 @@ export default function FormadoresPage() {
       fetchAll();
     } catch (e: any) {
       console.error(e);
-      alert("Não foi possível registrar a transferência.");
+      toast.error("Não foi possível registrar a transferência.");
     }
   }
 
@@ -183,7 +184,7 @@ export default function FormadoresPage() {
     e.preventDefault();
     try {
       if (!uploadPayload.files || !uploadPayload.files.length) {
-        return alert("Selecione ao menos um arquivo.");
+        return toast.error("Selecione ao menos um arquivo.");
       }
       const fd = new FormData();
       fd.append("atletaId", uploadPayload.atletaId.trim());
@@ -200,7 +201,7 @@ export default function FormadoresPage() {
       setTab("documentos");
     } catch (e: any) {
       console.error(e);
-      alert("Falha no upload.");
+      toast.error("Falha no upload.");
     }
   }
 

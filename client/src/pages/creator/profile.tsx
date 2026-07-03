@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/creator/profile.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -708,14 +709,14 @@ export default function CreatorProfile() {
         "";
 
     if (!token) {
-        alert("Faça login para seguir.");
+        toast.error("Faça login para seguir.");
         return;
     }
 
     if (isOwnCreator) return;
 
     if (followPendente) {
-        alert("Solicitação já enviada. Aguarde a pessoa aceitar.");
+        toast.success("Solicitação já enviada. Aguarde a pessoa aceitar.");
         return;
     }
 
@@ -749,7 +750,7 @@ export default function CreatorProfile() {
     if (resp.ok) {
         setSeguindo(false);
         setFollowPendente(true);
-        alert("Solicitação enviada. Aguarde a pessoa aceitar.");
+        toast.success("Solicitação enviada. Aguarde a pessoa aceitar.");
     }
   }
 

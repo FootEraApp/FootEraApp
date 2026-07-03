@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 function normStr(v: any) {
   return String(v ?? "").trim();
@@ -231,7 +232,7 @@ export async function listMetodologiasPendentes(req: Request, res: Response) {
 
     return res.json({ items: pagedItems, total, page, pageSize });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao listar metodologias pendentes.", detail: e?.message });
+    return sendError(res, e, "Erro ao listar metodologias pendentes.");
   }
 }
 
@@ -282,10 +283,7 @@ export async function setMetodologiaAtivo(req: Request, res: Response) {
 
     return res.json({ item: updated });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao atualizar status (ativo) da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao atualizar status (ativo) da metodologia.");
   }
 }
 
@@ -625,10 +623,7 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
       },
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao buscar detalhe da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao buscar detalhe da metodologia.");
   }
 }
 
@@ -811,10 +806,7 @@ export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
 
     return res.json({ items, total, page, pageSize });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar minhas metodologias do admin.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar minhas metodologias do admin.");
   }
 }
 
@@ -878,9 +870,6 @@ export async function deleteMinhaMetodologiaAdmin(req: Request, res: Response) {
 
     return res.json({ ok: true });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao apagar metodologia do admin.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao apagar metodologia do admin.");
   }
 }

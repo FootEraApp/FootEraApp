@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Star as StarIcon, ArrowLeft, Volleyball } from "lucide-react";
@@ -158,22 +159,22 @@ export default function AvaliarTreino() {
     try {
       const token = getToken();
       if (!token) {
-        alert("Você precisa estar logado.");
+        toast.error("Você precisa estar logado.");
         return;
       }
 
       if (!treinoAgendadoId) {
-        alert("TreinoAgendadoId não encontrado na URL.");
+        toast.error("TreinoAgendadoId não encontrado na URL.");
         return;
       }
 
       if (nota <= 0) {
-        alert("Escolha uma nota com estrelas.");
+        toast.error("Escolha uma nota com estrelas.");
         return;
       }
 
       if (!sentimento) {
-        alert("Escolha como foi o treino.");
+        toast.error("Escolha como foi o treino.");
         return;
       }
       setEnviando(true);
@@ -205,11 +206,11 @@ export default function AvaliarTreino() {
         throw new Error(js?.error || js?.message || "Falha ao salvar avaliação");
       }
 
-      alert("Avaliação enviada! ✅");
+      toast.success("Avaliação enviada! ✅");
       navigate("/treinos");
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || "Erro ao enviar avaliação");
+      toast.error(e?.message || "Erro ao enviar avaliação");
     } finally {
       setEnviando(false);
     }

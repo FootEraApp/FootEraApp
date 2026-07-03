@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 
 type AdminReq = Request & { user?: any };
@@ -117,10 +118,7 @@ export async function listar(req: AdminReq, res: Response) {
 
     res.json({ total, items, page: p, pageSize: ps });
   } catch (e: any) {
-    console.error("erro listar assinantes:", e);
-    res
-      .status(e.status || 500)
-      .send(e.message || "Erro ao listar assinantes");
+    sendError(res, e, "Erro ao listar assinantes");
   }
 }
 
@@ -148,9 +146,6 @@ export async function overview(req: AdminReq, res: Response) {
 
     res.json({ total, ativos, cancelados, porPlano });
   } catch (e: any) {
-    console.error("erro overview assinaturas:", e);
-    res
-      .status(e.status || 500)
-      .send(e.message || "Erro ao calcular overview de assinaturas");
+    sendError(res, e, "Erro ao calcular overview de assinaturas");
   }
 }

@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/pagamentos/index.tsx
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
@@ -277,7 +278,7 @@ function PagamentoModal({
                           className="mt-2 px-3 py-2 border rounded-lg"
                           onClick={async () => {
                             await navigator.clipboard.writeText(pixCopiaECola);
-                            alert("Código PIX copiado!");
+                            toast.success("Código PIX copiado!");
                           }}
                         >
                           Copiar
@@ -1404,7 +1405,7 @@ export default function PagamentosPage() {
 
       if (!r.ok) {
         const e = await r.json();
-        alert(e.message || "Cupom inválido");
+        toast.error(e.message || "Cupom inválido");
         setCupomPreview(null);
         return;
       }
@@ -1418,33 +1419,33 @@ export default function PagamentosPage() {
         tipo: data.cupom.tipo,
       });
     } catch {
-      alert("Erro ao validar cupom. Para ele ser usado so pode ter o atleta_pro no carrinho.");
+      toast.error("Erro ao validar cupom. Para ele ser usado so pode ter o atleta_pro no carrinho.");
     }
   }
 
   async function startTrial() {
     if (trialAtivoAgora) {
-      alert("Seu mês grátis já está ativo ✅");
+      toast.success("Seu mês grátis já está ativo ✅");
       return;
     }
 
     if (trialJaUsado) {
-      alert("Você já usou o mês grátis nesta conta.");
+      toast.error("Você já usou o mês grátis nesta conta.");
       return;
     }
 
     if (isBloqueada) {
-      alert("Sua conta está bloqueada. Finalize um pagamento para liberar.");
+      toast.error("Sua conta está bloqueada. Finalize um pagamento para liberar.");
       return;
     }
 
     if (cart.length === 0) {
-      alert("Selecione um item para usar o mês grátis.");
+      toast.error("Selecione um item para usar o mês grátis.");
       return;
     }
 
     if (cart.length > 1) {
-      alert("O mês grátis só pode ser usado com 1 item no carrinho.");
+      toast.error("O mês grátis só pode ser usado com 1 item no carrinho.");
       return;
     }
 
@@ -1463,11 +1464,11 @@ export default function PagamentosPage() {
       const data = await r.json().catch(() => ({}));
 
       if (!r.ok) {
-        alert(data.message || "Erro ao iniciar mês grátis");
+        toast.error(data.message || "Erro ao iniciar mês grátis");
         return;
       }
 
-      alert("🎉 Mês grátis iniciado com sucesso!");
+      toast.success("🎉 Mês grátis iniciado com sucesso!");
       await loadMe();
 
       if (redirectAfterPayment) {
@@ -1475,7 +1476,7 @@ export default function PagamentosPage() {
       }
     } catch (e) {
       console.error(e);
-      alert("Erro ao iniciar mês grátis");
+      toast.error("Erro ao iniciar mês grátis");
     }
   }
 
@@ -1495,7 +1496,7 @@ export default function PagamentosPage() {
         const isAtivaNow = status === "ATIVA";
 
         if (pago?.status === "APROVADO" || isAtivaNow) {
-          alert("Pagamento aprovado! Assinatura ativada 🎉");
+          toast.success("Pagamento aprovado! Assinatura ativada 🎉");
           setPixCopiaECola(null);
           setPixQrUrl(null);
           setBoletoLinha(null);
@@ -1522,14 +1523,14 @@ export default function PagamentosPage() {
 
   async function startCheckout() {
     if (bloquearCheckoutPorTrial) {
-      alert(
+      toast.error(
         `Seu mês grátis está ativo. Você poderá escolher a forma de pagamento quando faltarem 7 dias para terminar.\n\nDias restantes: ${billingState?.diasRestantes}`
       );
       return;
     }
 
     const err = validarCamposAntesDoCheckout();
-    if (err) return alert(err);
+    if (err) return toast.error(err);
 
     setPixCopiaECola(null);
     setPixQrUrl(null);
@@ -1576,13 +1577,13 @@ export default function PagamentosPage() {
           return;
         }
 
-        alert(data.message || "Pagamento iniciado.");
+        toast.error(data.message || "Pagamento iniciado.");
         await loadMe();
         return;
       }
 
       if ((method === "PIX" || method === "BOLETO") && cart.length > 1) {
-        alert(
+        toast.error(
           "Para PIX/Boleto com múltiplos itens, você precisa do endpoint /checkout-bundle no backend (1 cobrança só)."
         );
         return;
@@ -1606,11 +1607,11 @@ export default function PagamentosPage() {
 
         if (!r.ok) {
           if (r.status === 403 && data.code === "TRIAL_ACTIVE") {
-            alert(data.message || "Trial ativo. Volte quando faltarem 7 dias.");
+            toast.error(data.message || "Trial ativo. Volte quando faltarem 7 dias.");
             await loadMe();
             return;
           }
-          alert(data.message || `Erro ao iniciar pagamento (${item.label})`);
+          toast.error(data.message || `Erro ao iniciar pagamento (${item.label})`);
           return;
         }
 
@@ -1636,11 +1637,11 @@ export default function PagamentosPage() {
         }
       }
 
-      alert("Pagamento(s) iniciado(s). Atualizando status...");
+      toast.error("Pagamento(s) iniciado(s). Atualizando status...");
       await loadMe();
     } catch (e) {
       console.error(e);
-      alert("Erro ao iniciar pagamento");
+      toast.error("Erro ao iniciar pagamento");
     }
   }
 
@@ -1654,11 +1655,11 @@ export default function PagamentosPage() {
       } as any);
 
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) return alert(data.message || "Erro ao cancelar");
-      alert("Assinatura cancelada.");
+      if (!r.ok) return toast.error(data.message || "Erro ao cancelar");
+      toast.success("Assinatura cancelada.");
       await loadMe();
     } catch {
-      alert("Erro ao cancelar");
+      toast.error("Erro ao cancelar");
     }
   }
 
@@ -1670,11 +1671,11 @@ export default function PagamentosPage() {
         body: JSON.stringify({ metodoFinal: method }),
       });
       const data = await r.json();
-      if (!r.ok) return alert(data.message || "Erro ao salvar método");
-      alert("Método de pagamento salvo! ✅");
+      if (!r.ok) return toast.error(data.message || "Erro ao salvar método");
+      toast.success("Método de pagamento salvo! ✅");
       await loadMe();
     } catch {
-      alert("Erro ao salvar método preferido");
+      toast.error("Erro ao salvar método preferido");
     }
   }
 
@@ -2477,7 +2478,7 @@ export default function PagamentosPage() {
                           className="mt-2 px-3 py-2 border rounded-lg"
                           onClick={async () => {
                             await navigator.clipboard.writeText(pixCopiaECola);
-                            alert("Código PIX copiado!");
+                            toast.success("Código PIX copiado!");
                           }}
                         >
                           Copiar

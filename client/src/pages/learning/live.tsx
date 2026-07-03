@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/learning/live.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -761,7 +762,7 @@ export default function LearningLivePage() {
       setMessages(lista);
     } catch (e: any) {
       if (showError) {
-        alert(e?.message || "Falha ao carregar chat.");
+        toast.error(e?.message || "Falha ao carregar chat.");
       }
     }
   }
@@ -796,7 +797,7 @@ export default function LearningLivePage() {
       setChatInput("");
       await carregarMensagens(false);
     } catch (e: any) {
-      alert(e?.message || "Falha ao enviar mensagem.");
+      toast.error(e?.message || "Falha ao enviar mensagem.");
     } finally {
       setSendingMessage(false);
     }

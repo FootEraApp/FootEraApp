@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -286,7 +287,7 @@ export default function MudarTipoPerfilPage() {
       localStorage.setItem("usuarioTipoRaw", tipoLower);
       sessionStorage.setItem("usuarioTipoRaw", tipoLower);
 
-      alert("Tipo de perfil atualizado com sucesso!");
+      toast.success("Tipo de perfil atualizado com sucesso!");
 
       if (tipoLower === "federacao" || tipoLower === "marca") {
         window.location.href = "/creator/dashboard";

@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -654,7 +655,7 @@ useEffect(() => {
   const iniciarChat = () => {
     const me = Storage.usuarioId;
     if (!me) {
-      alert("Faça login para enviar mensagens.");
+      toast.error("Faça login para enviar mensagens.");
       return;
     }
     localStorage.setItem(
@@ -745,7 +746,7 @@ useEffect(() => {
         }
       );
       if (r.status === 404) {
-        alert("Este perfil não tem cadastro de atleta.");
+        toast.error("Este perfil não tem cadastro de atleta.");
         return null;
       }
       if (!r.ok) return null;
@@ -906,12 +907,12 @@ useEffect(() => {
 
   const enviarCompartilhamentoPorDM = async () => {
     if (selecionados.size === 0) {
-      alert("Selecione ao menos uma pessoa.");
+      toast.error("Selecione ao menos uma pessoa.");
       return;
     }
     const token = Storage.token;
     if (!token) {
-      alert("Faça login para compartilhar.");
+      toast.error("Faça login para compartilhar.");
       return;
     }
     try {
@@ -932,7 +933,7 @@ useEffect(() => {
           })
         )
       );
-      alert("Perfil compartilhado por mensagem!");
+      toast.error("Perfil compartilhado por mensagem!");
       setModalAberto(false);
     } finally {
       setEnviandoDM(false);
@@ -1101,7 +1102,7 @@ useEffect(() => {
     if (!alvoUsuarioIdFavorito) return;
     const token = Storage.token;
     if (!token) {
-      alert("Faça login para favoritar.");
+      toast.error("Faça login para favoritar.");
       return;
     }
     await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioIdFavorito}`, {
@@ -1116,7 +1117,7 @@ useEffect(() => {
     const token = Storage.token;
     const seguidorUsuarioId = Storage.usuarioId;
     if (!token || !seguidorUsuarioId) {
-      alert("Faça login para seguir.");
+      toast.error("Faça login para seguir.");
       return false;
     }
 
@@ -1130,7 +1131,7 @@ useEffect(() => {
     });
 
     if (resp.ok) {
-      alert("Solicitação enviada. Aguarde a pessoa aceitar.");
+      toast.success("Solicitação enviada. Aguarde a pessoa aceitar.");
       setFollowPendente(true);
       setSeguindo(false);
       return true;
@@ -1145,7 +1146,7 @@ useEffect(() => {
 
   const toggleSeguir = async () => {
     if (followPendente) {
-      alert("Solicitação já enviada. Aguarde a pessoa aceitar.");
+      toast.success("Solicitação já enviada. Aguarde a pessoa aceitar.");
       return;
     }
 
@@ -1170,7 +1171,7 @@ useEffect(() => {
   const solicitarTreino = async (): Promise<boolean> => {
     const token = Storage.token;
     if (!token) {
-      alert("Faça login para solicitar treino.");
+      toast.error("Faça login para solicitar treino.");
       return false;
     }
 
@@ -1221,7 +1222,7 @@ useEffect(() => {
         localStorage.removeItem(storageKey);
         avisarVinculoAlterado();
       } else {
-        alert("Não foi possível desvincular agora.");
+        toast.error("Não foi possível desvincular agora.");
       }
 
       return;
@@ -1300,7 +1301,7 @@ useEffect(() => {
     try {
       const id = await resolverAtletaIdSePreciso();
       if (!id) {
-        alert("Não foi possível identificar o atleta.");
+        toast.error("Não foi possível identificar o atleta.");
         return;
       }
 
@@ -1336,11 +1337,11 @@ useEffect(() => {
 
       const r = await observarAtleta(id);
       if (r === "auth") {
-        alert("Faça login novamente.");
+        toast.error("Faça login novamente.");
         return;
       }
       if (r === "err") {
-        alert("Não foi possível observar agora.");
+        toast.error("Não foi possível observar agora.");
         return;
       }
       setObservando(true);

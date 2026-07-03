@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
@@ -18,10 +19,10 @@ export default function TreinoLivreNovo() {
     const token = (Storage as any).token ?? localStorage.getItem("token");
     const atletaId =
       (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
-    if (!token || !atletaId) return alert("Sessão expirada.");
+    if (!token || !atletaId) return toast.error("Sessão expirada.");
 
     if (!descricao.trim()) {
-      return alert("Descreva rapidamente o treino (ex.: Corrida 5km).");
+      return toast.error("Descreva rapidamente o treino (ex.: Corrida 5km).");
     }
 
     try {
@@ -48,14 +49,14 @@ export default function TreinoLivreNovo() {
       if (!r.ok) {
         const txt = await r.text();
         console.error("Falha ao salvar treino livre:", r.status, txt);
-        return alert("Não foi possível salvar o treino.");
+        return toast.error("Não foi possível salvar o treino.");
       }
 
-      alert("Treino livre registrado!");
+      toast.error("Treino livre registrado!");
       navigate("/treinos/livre/historico");
     } catch (e) {
       console.error(e);
-      alert("Erro inesperado.");
+      toast.error("Erro inesperado.");
     }
   }
 

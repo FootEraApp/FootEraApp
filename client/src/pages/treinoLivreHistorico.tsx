@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useState } from "react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
@@ -95,7 +96,7 @@ export default function TreinosLivresHistorico() {
 
     const token = (Storage as any).token ?? localStorage.getItem("token");
     if (!token) {
-      alert("Sessão expirada.");
+      toast.error("Sessão expirada.");
       return;
     }
 
@@ -110,14 +111,14 @@ export default function TreinosLivresHistorico() {
       if (!r.ok && r.status !== 204) {
         const txt = await r.text();
         console.error("Erro ao deletar treino livre:", r.status, txt);
-        alert("Não foi possível apagar o treino.");
+        toast.error("Não foi possível apagar o treino.");
         return;
       }
 
       setItens((prev) => prev.filter((t) => t.id !== id));
     } catch (e) {
       console.error(e);
-      alert("Erro inesperado ao apagar treino.");
+      toast.error("Erro inesperado ao apagar treino.");
     }
   }
 

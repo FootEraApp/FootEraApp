@@ -107,6 +107,7 @@ import treinosElencosRoutes from "./routes/treinosElencos.js";
 import adminAdminsRoutes from "./routes/adminAdmins.js";
 import analisesRoutes from "./routes/analises.js";
 import adminAssinantesRoutes from "./routes/adminAssinantes.js";
+import adminBillingRoutes from "./routes/adminBilling.js";
 import assinaturasRoutes from "./routes/assinaturas.js";
 import treinosSalvosRoutes from "./routes/treinosSalvos.js";
 import analyticsRoutes from "./routes/analytics.js"
@@ -299,6 +300,7 @@ app.use("/api/admin/metodologias", adminMetodologiasRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
 app.use("/api/admin", metricsRoutes);
+app.use("/api/admin", adminBillingRoutes);
 app.use("/api/analises", analisesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 app.use("/api/comentarios", comentariosRoutes);

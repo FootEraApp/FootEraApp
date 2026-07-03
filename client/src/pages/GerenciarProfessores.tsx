@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/GerenciarProfessores.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -1275,10 +1276,10 @@ const GerenciarProfessores: React.FC = () => {
                                 { headers }
                               );
                               await carregarTurmas();
-                              alert("Professores atualizados na turma!");
+                              toast.success("Professores atualizados na turma!");
                             } catch (err) {
                               console.error(err);
-                              alert("Não foi possível atualizar os professores.");
+                              toast.error("Não foi possível atualizar os professores.");
                             }
                           }}
                         >

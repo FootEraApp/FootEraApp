@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/treino/treinos-atletas.tsx
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
@@ -955,11 +956,11 @@ function abrirMidiaExercicioDireto(
           })
         )
       );
-      alert("Desafio enviado!");
+      toast.success("Desafio enviado!");
       setModalAberto(false);
     } catch (err) {
       console.error(err);
-      alert("Erro ao enviar DM.");
+      toast.error("Erro ao enviar DM.");
     } finally {
       setEnviandoDM(false);
     }
@@ -1283,7 +1284,7 @@ function abrirMidiaExercicioDireto(
     );
 
     if (!alvo) {
-      alert("Esse treino ainda não está nos seus treinos agendados. Agende primeiro e tente novamente.");
+      toast.error("Esse treino ainda não está nos seus treinos agendados. Agende primeiro e tente novamente.");
       return;
     }
 
@@ -1643,7 +1644,7 @@ function abrirMidiaExercicioDireto(
       setFullscreenId(null);
     } catch (err) {
       console.error("Erro ao finalizar treino:", err);
-      alert("Erro ao enviar treino.");
+      toast.error("Erro ao enviar treino.");
     }
   }
 
@@ -1669,24 +1670,24 @@ function abrirMidiaExercicioDireto(
     const isoSP = inputDateTimeSPToIso(nova.trim());
 
     if (!isoSP) {
-      alert("Formato inválido. Use AAAA-MM-DDTHH:mm. Exemplo: 2026-06-09T15:30");
+      toast.error("Formato inválido. Use AAAA-MM-DDTHH:mm. Exemplo: 2026-06-09T15:30");
       return;
     }
 
     const novaDate = new Date(isoSP);
 
     if (Number.isNaN(novaDate.getTime())) {
-      alert("Data ou horário inválido.");
+      toast.error("Data ou horário inválido.");
       return;
     }
 
     if (novaDate < agora) {
-      alert("Você não pode remarcar para uma data ou horário que já passou.");
+      toast.error("Você não pode remarcar para uma data ou horário que já passou.");
       return;
     }
 
     if (novaDate > maxDate) {
-      alert("Você só pode remarcar para no máximo 7 dias depois da data atual do treino.");
+      toast.error("Você só pode remarcar para no máximo 7 dias depois da data atual do treino.");
       return;
     }
 
@@ -1713,10 +1714,10 @@ function abrirMidiaExercicioDireto(
         arr.map((x) => (x.id === t.id ? { ...x, dataTreino: isoSP } : x))
       );
 
-      alert(`Treino remarcado para ${formatarDataHoraBR(novaDate)}.`);
+      toast.error(`Treino remarcado para ${formatarDataHoraBR(novaDate)}.`);
     } catch (err) {
       console.error(err);
-      alert("Não foi possível remarcar o treino.");
+      toast.error("Não foi possível remarcar o treino.");
     }
   }
 
@@ -1747,7 +1748,7 @@ function abrirMidiaExercicioDireto(
       });
     } catch (err) {
       console.error(err);
-      alert("Erro ao excluir treino.");
+      toast.error("Erro ao excluir treino.");
     }
   }
 
@@ -2580,7 +2581,7 @@ function abrirMidiaExercicioDireto(
 
             const handleCentralClick = () => {
               if (isCompletedTreino) {
-                alert(
+                toast.success(
                   "Este treino já foi concluído e aprovado. Você ainda pode revisar os exercícios quando quiser. 😉"
                 );
                 return;

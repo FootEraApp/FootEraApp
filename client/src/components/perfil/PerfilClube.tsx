@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -1214,7 +1215,7 @@ export default function PerfilClube({
                 <button
                   type="button"
                   className="inline-block rounded-lg bg-gray-300 text-gray-600 px-4 py-2 font-semibold cursor-not-allowed"
-                  onClick={() => alert("A página FootEra Formadores está em atualização no momento.")}
+                  onClick={() => toast.error("A página FootEra Formadores está em atualização no momento.")}
                 >
                   Módulo Formadores em manuntenção
                 </button>
@@ -1885,10 +1886,10 @@ export default function PerfilClube({
                                 { headers }
                               );
                               await loadTurmas();
-                              alert("Professores atualizados na turma!");
+                              toast.success("Professores atualizados na turma!");
                             } catch (err) {
                               console.error(err);
-                              alert("Não foi possível atualizar os professores.");
+                              toast.error("Não foi possível atualizar os professores.");
                             }
                           }}
                         >
@@ -1913,23 +1914,6 @@ export default function PerfilClube({
 
       {aba === "conquistas" && (
         <div className="mt-4 px-3 sm:px-4 grid gap-4">
-          <SectionCard
-            title="Certificados emitidos"
-            right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
-                Ver certificados
-              </Link>
-            }
-          >
-            {certificados && certificados.length > 0 ? (
-              <div className="text-green-900 font-medium">
-                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
-              </div>
-            ) : (
-              <EmptyState text="Nenhum certificado emitido ainda." />
-            )}
-          </SectionCard>
-
           <SectionCard
             title="Conquistas e Troféus"
             right={
@@ -1957,6 +1941,23 @@ export default function PerfilClube({
               </div>
             ) : (
               <EmptyState text="Nenhuma conquista registrada ainda." />
+            )}
+          </SectionCard>
+          
+          <SectionCard
+            title="Certificados emitidos"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver certificados
+              </Link>
+            }
+          >
+            {certificados && certificados.length > 0 ? (
+              <div className="text-green-900 font-medium">
+                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+              </div>
+            ) : (
+              <EmptyState text="Nenhum certificado emitido ainda." />
             )}
           </SectionCard>
         </div>

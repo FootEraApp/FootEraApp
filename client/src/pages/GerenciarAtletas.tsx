@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 // client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -974,13 +975,13 @@ async function abrirModalAvaliacao(submissaoTreinoId: string) {
 
 async function salvarAvaliacao() {
   if (!submissaoSelecionada) return;
-  if (!tipo) return alert("Tipo de perfil inválido.");
+  if (!tipo) return toast.error("Tipo de perfil inválido.");
 
   const autorId = getAutorId();
-  if (!autorId) return alert("Não foi possível identificar o ID do autor (org).");
+  if (!autorId) return toast.error("Não foi possível identificar o ID do autor (org).");
 
   const autorTipo = contextoTipo ? autorTipoFromTela(contextoTipo) : undefined;
-  if (!autorTipo) return alert("Tipo do autor inválido.");
+  if (!autorTipo) return toast.error("Tipo do autor inválido.");
 
   const comentariosMarcadosArr = Object.entries(comentariosMarcados)
     .filter(([, v]) => v)
@@ -1016,11 +1017,11 @@ async function salvarAvaliacao() {
       if (carreiraOpen && focado?.id) {
         await carregarAgendadosDoAtleta(focado.id, cursorMonth);
       }
-      alert("Avaliação salva!");
+      toast.success("Avaliação salva!");
       fecharModalAvaliacao();
     } catch (e: any) {
       console.error(e);
-      alert(e?.response?.data?.message || "Erro ao salvar avaliação");
+      toast.error(e?.response?.data?.message || "Erro ao salvar avaliação");
     } finally {
       setSalvandoAvaliacao(false);
     }

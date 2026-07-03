@@ -1,3 +1,4 @@
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import axios from "axios";
@@ -129,7 +130,7 @@ export default function JogosElencoPage() {
 
   const criarChaveamento = async () => {
     if (seed.length < 2) {
-      alert("Selecione pelo menos 2 elencos para criar o chaveamento.");
+      toast.error("Selecione pelo menos 2 elencos para criar o chaveamento.");
       return;
     }
     try {
@@ -168,7 +169,7 @@ export default function JogosElencoPage() {
       setSocket(s);
     } catch (err) {
       console.error(err);
-      alert("Erro ao criar chaveamento.");
+      toast.error("Erro ao criar chaveamento.");
     }
   };
 
@@ -215,7 +216,7 @@ export default function JogosElencoPage() {
       if (op === "finish") pararLoopTimer();
     } catch (e) {
       console.error(e);
-      alert("Falha ao enviar ação da partida.");
+      toast.error("Falha ao enviar ação da partida.");
     }
   }
 
