@@ -495,6 +495,43 @@ export async function deletarNotificacao(req: AuthenticatedRequest, res: Respons
   }
 }
 
+export async function deletarNotificacoesEmLote(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Não autenticado" });
+
+    const idsRaw = Array.isArray(req.body?.ids) ? req.body.ids : [];
+
+    const ids = idsRaw
+      .map((id: any) => String(id || "").trim())
+      .filter(Boolean);
+
+    if (ids.length === 0) {
+      return res.status(400).json({ error: "Nenhuma notificação selecionada." });
+    }
+
+    const del = await prisma.notificacao.deleteMany({
+      where: {
+        usuarioId: userId,
+        id: { in: ids },
+      },
+    });
+
+    await recomputeAndEmitBadge(userId);
+
+    return res.json({
+      ok: true,
+      deleted: del.count,
+    });
+  } catch (e) {
+    console.error("[deletarNotificacoesEmLote]", e);
+    return res.status(500).json({ error: "Erro ao deletar notificações." });
+  }
+}
+
 export async function getPushPublicKey(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -638,16 +675,9 @@ export async function testarPushAtual(req: AuthenticatedRequest, res: Response) 
       ok: true,
       message: "Notificação de teste criada/enviada.",
       notificacaoId: not.id,
-
-      // Web/PWA
       pushSubscriptions: totalSubscriptions,
-
-      // Android nativo/FCM
       nativePushTokens: totalNativeTokens,
-
-      // Total geral
       totalDispositivos,
-
       aviso:
         totalDispositivos > 0
           ? "Existe dispositivo cadastrado para push."
@@ -693,12 +723,8 @@ export async function getPushStatusAtual(req: AuthenticatedRequest, res: Respons
     return res.json({
       ok: true,
       endpointInformado: !!endpoint,
-
-      // compatibilidade com o código antigo
       deviceSaved: totalDispositivos > 0,
       total: totalWeb,
-
-      // novos campos
       pushSubscriptions: totalWeb,
       nativePushTokens: totalNative,
       totalDispositivos,

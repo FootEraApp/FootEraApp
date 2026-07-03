@@ -82,6 +82,9 @@ export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [, setLocation] = useLocation();
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [apagandoSelecionadas, setApagandoSelecionadas] = useState(false);
 
   useEffect(() => {
     const token = Storage.token;
@@ -114,7 +117,13 @@ export default function PaginaNotificacoes() {
     if (!token) return;
 
     const prev = notificacoes;
+
     setNotificacoes((p) => p.filter((n) => n.id !== notifId));
+    setSelecionadas((prevSel) => {
+      const next = new Set(prevSel);
+      next.delete(notifId);
+      return next;
+    });
 
     try {
       const r = await fetch(
@@ -195,32 +204,6 @@ export default function PaginaNotificacoes() {
     }
   };
 
-  const removerSeguidor = async (seguidorUsuarioId: string) => {
-    const token = Storage.token;
-    if (!token) return;
-
-    try {
-      const r = await fetch(
-        `${API.BASE_URL}/api/seguidores/seguidores/${encodeURIComponent(seguidorUsuarioId)}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (!r.ok) {
-        const txt = await r.text();
-        alert(`Não foi possível remover seguidor (${r.status}): ${txt}`);
-        return;
-      }
-
-      alert("Seguidor removido ✅");
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao remover seguidor.");
-    }
-  };
-
   const NOTIFS_BASE = `${API.BASE_URL}/api/notificacoes/me`;
 
   useEffect(() => {
@@ -294,25 +277,180 @@ export default function PaginaNotificacoes() {
   };
 
   const irParaPerfil = (id: string) => setLocation(`/perfil/${id}`);
+  const totalSelecionadas = selecionadas.size;
+  const todasSelecionadas = notificacoes.length > 0 && selecionadas.size === notificacoes.length;
+
+  const alternarSelecao = (notifId: string) => {
+    setSelecionadas((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(notifId)) {
+        next.delete(notifId);
+      } else {
+        next.add(notifId);
+      }
+
+      return next;
+    });
+  };
+
+  const selecionarTodas = () => {
+    setSelecionadas(new Set(notificacoes.map((n) => n.id)));
+  };
+
+  const limparSelecao = () => {
+    setSelecionadas(new Set());
+  };
+
+  const sairModoSelecao = () => {
+    setModoSelecao(false);
+    limparSelecao();
+  };
+
+  const apagarNotificacoesSelecionadas = async () => {
+    const token = Storage.token;
+    if (!token) return;
+
+    const ids = Array.from(selecionadas);
+
+    if (ids.length === 0) {
+      alert("Selecione pelo menos uma notificação.");
+      return;
+    }
+
+    if (!confirm(`Apagar ${ids.length} notificação(ões) selecionada(s)?`)) {
+      return;
+    }
+
+    const prevNotificacoes = notificacoes;
+    const prevSelecionadas = selecionadas;
+
+    setApagandoSelecionadas(true);
+    setNotificacoes((prev) => prev.filter((n) => !prevSelecionadas.has(n.id)));
+    setSelecionadas(new Set());
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/notificacoes/lote`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ids }),
+      });
+
+      if (!r.ok) {
+        setNotificacoes(prevNotificacoes);
+        setSelecionadas(prevSelecionadas);
+
+        console.warn(
+          "Falha ao apagar notificações selecionadas:",
+          r.status,
+          await r.text()
+        );
+
+        alert("Não foi possível apagar as notificações selecionadas agora.");
+        return;
+      }
+
+      setModoSelecao(false);
+    } catch (e) {
+      setNotificacoes(prevNotificacoes);
+      setSelecionadas(prevSelecionadas);
+      console.error("Erro ao apagar notificações selecionadas:", e);
+      alert("Erro ao apagar as notificações selecionadas.");
+    } finally {
+      setApagandoSelecionadas(false);
+    }
+  };
+
+  const BotaoSelecaoNotificacao = ({ id }: { id: string }) => {
+      if (!modoSelecao) return null;
+
+      const marcada = selecionadas.has(id);
+
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            alternarSelecao(id);
+          }}
+          className={`absolute top-3 left-3 z-20 h-7 w-7 rounded-full border-2 flex items-center justify-center ${
+            marcada
+              ? "bg-green-800 border-green-800 text-white"
+              : "bg-white border-green-800 text-transparent"
+          }`}
+          aria-label={marcada ? "Remover da seleção" : "Selecionar notificação"}
+          title={marcada ? "Remover da seleção" : "Selecionar"}
+        >
+          ✓
+        </button>
+      );
+    };
 
   return (
     <div className="max-w-xl mx-auto p-4 pb-24">
-      <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center relative">
+      <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center justify-between gap-3">
         <Link
           href="/perfil"
           aria-label="Voltar para perfil"
           className="inline-flex h-10 w-10 items-center justify-center
             rounded-full bg-white/10 text-white
             hover:bg-white/20 focus:outline-none
-            focus:ring-2 focus:ring-white/30 z-10"
+            focus:ring-2 focus:ring-white/30 shrink-0"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
 
-        <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold pointer-events-none">
+        <h1 className="text-xl font-bold flex-1 text-center">
           Notificações
         </h1>
+
+        {notificacoes.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (modoSelecao) {
+                sairModoSelecao();
+              } else {
+                setModoSelecao(true);
+              }
+            }}
+            className="h-9 px-3 rounded-full bg-white/10 text-white text-xs font-semibold
+              hover:bg-white/20 border border-white/20 shrink-0"
+          >
+            {modoSelecao ? "Cancelar" : "Selecionar notificações"}
+          </button>
+        ) : (
+          <div className="w-[84px] shrink-0" />
+        )}
       </header>
+
+      {modoSelecao && notificacoes.length > 0 && (
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={todasSelecionadas ? limparSelecao : selecionarTodas}
+            className="rounded-full border border-green-800 bg-white px-3 py-1.5 text-xs font-semibold text-green-900"
+          >
+            {todasSelecionadas ? "Limpar" : "Todas"}
+          </button>
+
+          <p className="text-xs font-semibold text-green-900">
+            {totalSelecionadas} selecionada(s)
+          </p>
+
+          <button
+            type="button"
+            disabled={totalSelecionadas === 0 || apagandoSelecionadas}
+            onClick={apagarNotificacoesSelecionadas}
+            className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {apagandoSelecionadas ? "Apagando..." : "Apagar"}
+          </button>
+        </div>
+      )}
 
       {notificacoes.length > 0 && (
         <div className="mb-6 space-y-3">
@@ -333,8 +471,12 @@ export default function PaginaNotificacoes() {
               return (
                 <div
                   key={n.id}
-                  className="relative bg-white shadow-md rounded-2xl p-4 border border-green-200"
+                  className={`relative bg-white shadow-md rounded-2xl p-4 ${
+                    modoSelecao ? "pl-12" : ""
+                  } border border-green-200`}
                 >
+                  <BotaoSelecaoNotificacao id={n.id} />
+
                   <button
                     type="button"
                     onClick={() => {
@@ -504,8 +646,12 @@ export default function PaginaNotificacoes() {
               return (
                 <div
                   key={n.id}
-                  className="relative bg-white shadow-md rounded-2xl p-4 border border-green-200"
+                  className={`relative bg-white shadow-md rounded-2xl p-4 ${
+                    modoSelecao ? "pl-12" : ""
+                  } border border-green-200`}
                 >
+                  <BotaoSelecaoNotificacao id={n.id} />
+
                   <button
                     type="button"
                     onClick={() => {
@@ -603,7 +749,9 @@ export default function PaginaNotificacoes() {
             return (
               <div
                 key={n.id}
-                className={`relative bg-white shadow-md rounded-2xl p-4 border ${
+                className={`relative bg-white shadow-md rounded-2xl p-4 ${
+                  modoSelecao ? "pl-12" : ""
+                } border ${
                   isBillingBlocked
                     ? "border-red-300 bg-red-50"
                     : isBillingWarning
@@ -613,6 +761,7 @@ export default function PaginaNotificacoes() {
                     : "border-transparent"
                 }`}
               >
+                <BotaoSelecaoNotificacao id={n.id} />
                 <button
                   type="button"
                   onClick={() => {

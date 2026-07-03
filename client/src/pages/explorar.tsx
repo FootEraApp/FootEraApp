@@ -32,6 +32,7 @@ type UsuarioBasic = {
   nomeDeUsuario?: string | null;
   email?: string | null;
   verified?: boolean | null;
+  destaque?: boolean | null;
   foto?: string | null;
   cidade?: string | null;
   estado?: string | null;
@@ -334,6 +335,15 @@ function isItemPro(x: any): boolean {
   return false;
 }
 
+function isItemDestaque(x: any): boolean {
+  return Boolean(
+    x?.destaque === true ||
+      x?.perfilDestaque === true ||
+      x?.usuario?.destaque === true ||
+      x?.usuario?.perfilDestaque === true
+  );
+}
+
 function shouldShowVerified(x: any): boolean {
   return Boolean(x?.perfilVerificado);
 }
@@ -344,10 +354,19 @@ function shouldShowProBadgeOnAvatar(x: any): boolean {
 
 function sortProThenName<T>(arr: T[], getName: (x: T) => string) {
   return [...arr].sort((a, b) => {
+    const ad = isItemDestaque(a) ? 1 : 0;
+    const bd = isItemDestaque(b) ? 1 : 0;
+
+    if (ad !== bd) return bd - ad;
+
     const ap = isItemPro(a) ? 1 : 0;
     const bp = isItemPro(b) ? 1 : 0;
+
     if (ap !== bp) return bp - ap;
-    return getName(a).localeCompare(getName(b), "pt-BR", { sensitivity: "base" });
+
+    return getName(a).localeCompare(getName(b), "pt-BR", {
+      sensitivity: "base",
+    });
   });
 }
 

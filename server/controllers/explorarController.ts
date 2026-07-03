@@ -78,6 +78,35 @@ function calcIsPro(
   return false;
 }
 
+function isDestaqueItem(item: any) {
+  return Boolean(
+    item?.destaque === true ||
+      item?.usuario?.destaque === true ||
+      item?.perfilDestaque === true
+  );
+}
+
+function ordenarDestaquesProNome<T>(
+  items: T[],
+  getName: (item: T) => string
+): T[] {
+  return [...items].sort((a: any, b: any) => {
+    const ad = isDestaqueItem(a) ? 1 : 0;
+    const bd = isDestaqueItem(b) ? 1 : 0;
+
+    if (ad !== bd) return bd - ad;
+
+    const ap = a?.isPro === true ? 1 : 0;
+    const bp = b?.isPro === true ? 1 : 0;
+
+    if (ap !== bp) return bp - ap;
+
+    return getName(a).localeCompare(getName(b), "pt-BR", {
+      sensitivity: "base",
+    });
+  });
+}
+
 export async function listarAtletasExplorar(req: Request, res: Response) {
   try {
     const authUserId = (req as any).userId as string | undefined;
@@ -110,6 +139,7 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -182,7 +212,9 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
       };
     });
 
-    res.json(payload);
+    res.json(
+      ordenarDestaquesProNome(payload, (a: any) => a?.usuario?.nome ?? "")
+    );
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "Erro ao carregar atletas do explorar" });
@@ -226,6 +258,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -308,6 +341,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -368,6 +402,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -442,6 +477,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -516,6 +552,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -585,6 +622,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -648,6 +686,7 @@ export async function explorar(req: Request, res: Response) {
             nomeDeUsuario: true,
             email: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -703,6 +742,7 @@ export async function explorar(req: Request, res: Response) {
             email: true,
             tipo: true,
             verified: true,
+            destaque: true,
             foto: true,
             cidade: true,
             estado: true,
@@ -802,15 +842,15 @@ export async function explorar(req: Request, res: Response) {
     }));
 
     return res.json({
-      atletas,
-      clubes,
-      escolas,
-      professores,
-      olheiros,
+      atletas: ordenarDestaquesProNome(atletas, (a: any) => a?.usuario?.nome ?? ""),
+      clubes: ordenarDestaquesProNome(clubes, (c: any) => c?.nome ?? c?.usuario?.nome ?? ""),
+      escolas: ordenarDestaquesProNome(escolas, (e: any) => e?.nome ?? e?.usuario?.nome ?? ""),
+      professores: ordenarDestaquesProNome(professores, (p: any) => p?.usuario?.nome ?? p?.nome ?? ""),
+      olheiros: ordenarDestaquesProNome(olheiros, (o: any) => o?.usuario?.nome ?? ""),
       eventos,
-      federacoes,
-      marcas,
-      learning,
+      federacoes: ordenarDestaquesProNome(federacoes, (f: any) => f?.nome ?? f?.usuario?.nome ?? ""),
+      marcas: ordenarDestaquesProNome(marcas, (m: any) => m?.nome ?? m?.usuario?.nome ?? ""),
+      learning: ordenarDestaquesProNome(learning, (l: any) => l?.nome ?? l?.usuario?.nome ?? ""),
     });
   } catch (error) {
     console.error("Erro em /api/explorar:", error);
@@ -846,6 +886,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               nomeDeUsuario: true,
               email: true,
               verified: true,
+              destaque: true,
               foto: true,
               cidade: true,
               estado: true,
@@ -889,6 +930,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               nomeDeUsuario: true,
               email: true,
               verified: true,
+              destaque: true,
               foto: true,
               cidade: true,
               estado: true,
@@ -919,6 +961,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               nomeDeUsuario: true,
               email: true,
               verified: true,
+              destaque: true,
               foto: true,
               cidade: true,
               estado: true,
@@ -956,6 +999,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               email: true,
               tipo: true,
               verified: true,
+              destaque: true,
               foto: true,
               cidade: true,
               estado: true,
@@ -993,6 +1037,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               email: true,
               tipo: true,
               verified: true,
+              destaque: true,
               foto: true,
               cidade: true,
               estado: true,
@@ -1033,6 +1078,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               nomeDeUsuario: true,
               email: true,
               verified: true,
+              destaque: true,
               foto: true,
               cidade: true,
               estado: true,
@@ -1054,7 +1100,16 @@ export const buscarExplorar = async (req: Request, res: Response) => {
       }),
     ]);
 
-    res.json({ atletas, clubes, escolas, professores, olheiros, federacoes, marcas, learning });
+    res.json({
+      atletas: ordenarDestaquesProNome(atletas, (a: any) => a?.usuario?.nome ?? ""),
+      clubes: ordenarDestaquesProNome(clubes, (c: any) => c?.nome ?? c?.usuario?.nome ?? ""),
+      escolas: ordenarDestaquesProNome(escolas, (e: any) => e?.nome ?? e?.usuario?.nome ?? ""),
+      professores: ordenarDestaquesProNome(professores, (p: any) => p?.usuario?.nome ?? p?.nome ?? ""),
+      olheiros: ordenarDestaquesProNome(olheiros, (o: any) => o?.usuario?.nome ?? ""),
+      federacoes: ordenarDestaquesProNome(federacoes, (f: any) => f?.nome ?? f?.usuario?.nome ?? ""),
+      marcas: ordenarDestaquesProNome(marcas, (m: any) => m?.nome ?? m?.usuario?.nome ?? ""),
+      learning: ordenarDestaquesProNome(learning, (l: any) => l?.nome ?? l?.usuario?.nome ?? ""),
+    });
   } catch (error) {
     console.error("Erro em /api/explorar/buscar:", error);
     res.status(500).json({ error: "Erro ao buscar dados" });

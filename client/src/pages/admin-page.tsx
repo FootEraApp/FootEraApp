@@ -62,6 +62,8 @@ type StatusConta =
   | "banido"
   | "pendente";
 
+type DestaqueFiltro = "" | "sim" | "nao";
+
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
   atleta: "Atleta",
@@ -393,6 +395,7 @@ export default function AdminDashboard() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<UsuarioTipo>("");
+  const [destaqueFiltro, setDestaqueFiltro] = useState<DestaqueFiltro>("");
   const [pagina, setPagina] = useState(1);
   const pageSize = 20;
   const [totalUsuarios, setTotalUsuarios] = useState(0);
@@ -1642,7 +1645,7 @@ useEffect(() => {
   useEffect(() => {
     if (aba !== "usuarios") return;
     carregarUsuarios(1).catch(() => {});
-  }, [aba, tipoFiltro, debouncedQ]);
+  }, [aba, tipoFiltro, destaqueFiltro, debouncedQ]);
 
   useEffect(() => {
     (async () => {
@@ -1861,6 +1864,14 @@ useEffect(() => {
     if (debouncedQ) params.set("q", debouncedQ);
     if (tipoFiltro && tipoToServer[tipoFiltro]) {
       params.set("tipo", tipoToServer[tipoFiltro]);
+    }
+
+    if (destaqueFiltro === "sim") {
+      params.set("destaque", "true");
+    }
+
+    if (destaqueFiltro === "nao") {
+      params.set("destaque", "false");
     }
 
     const url = `${USERS_ENDPOINT}?${params.toString()}`;
@@ -2355,17 +2366,17 @@ async function confirmarExcluirProfessor() {
         {aba === "usuarios" && (
           <div>
             <h3 className="text-xl font-bold mb-3">Usuários</h3>
-            <div className="flex flex-wrap gap-2 items-center mb-4">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center mb-4">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Buscar por nome ou email…"
-                className="border rounded px-3 py-2 w-64"
+                className="border rounded px-3 py-2 w-full sm:w-64"
               />
               <select
                 value={tipoFiltro}
                 onChange={(e) => setTipoFiltro(e.target.value as UsuarioTipo)}
-                className="border rounded px-3 py-2"
+                className="border rounded px-3 py-2 w-full sm:w-auto"
               >
                 <option value="">Todos os tipos</option>
                 <option value="atleta">Atletas</option>
@@ -2378,10 +2389,21 @@ async function confirmarExcluirProfessor() {
                 <option value="admin">Administrador</option>
                 <option value="olheiro">Olheiro</option>
               </select>
-              <button className="px-3 py-2 rounded bg-gray-200" onClick={() => carregarUsuarios(1)}>
+
+              <select
+                value={destaqueFiltro}
+                onChange={(e) => setDestaqueFiltro(e.target.value as DestaqueFiltro)}
+                className="border rounded px-3 py-2 w-full sm:w-auto"
+              >
+                <option value="">Todos os destaques</option>
+                <option value="sim">Somente destaque</option>
+                <option value="nao">Sem destaque</option>
+              </select>
+
+              <button className="w-full sm:w-auto px-3 py-2 rounded bg-gray-200" onClick={() => carregarUsuarios(1)}>
                 Atualizar
               </button>
-              <div className="ml-auto text-sm text-gray-600">{carregandoUsuarios ? "Carregando…" : `${totalUsuarios} resultados`}</div>
+              <div className="w-full sm:w-auto sm:ml-auto text-sm text-gray-600">{carregandoUsuarios ? "Carregando…" : `${totalUsuarios} resultados`}</div>
             </div>
 
             {erroUsuarios && <div className="mb-3 text-sm text-red-600">{erroUsuarios}</div>}
@@ -2402,7 +2424,161 @@ async function confirmarExcluirProfessor() {
               </div>
             )}
 
-            <div className="bg-white rounded shadow overflow-x-auto">
+
+            <div className="md:hidden space-y-3">
+              {usuariosOrdenados.map((u) => {
+                const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
+                const foto = avatarSrc(u.foto);
+                const act = getAccountAction(u);
+
+                return (
+                  <div
+                    key={u.id}
+                    className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => irParaPerfilUsuario(u.id)}
+                        className="shrink-0 w-11 h-11 rounded-full border bg-white overflow-hidden inline-flex items-center justify-center"
+                        title="Abrir perfil do usuário"
+                      >
+                        <img
+                          src={foto}
+                          onError={onAvatarError}
+                          alt={nome}
+                          className="w-full h-full rounded-full object-contain p-[2px]"
+                        />
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => irParaPerfilUsuario(u.id)}
+                          className="block max-w-full truncate text-left font-bold text-green-900"
+                          title={nome}
+                        >
+                          {nome}
+                        </button>
+
+                        <div className="mt-0.5 truncate text-xs text-gray-600">
+                          {u.email ?? "Sem e-mail"}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold capitalize text-green-800">
+                            {u.tipo ?? "sem tipo"}
+                          </span>
+
+                          <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-700">
+                            Criado: {formatDate(u.criadoEm)}
+                          </span>
+
+                          {u.assinatura?.renovaEm && (
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] text-blue-700">
+                              Renova: {fmtDate(u.assinatura.renovaEm)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <label className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={!!u.verificado}
+                          disabled={!isAdminBase || acaoBusyId === u.id}
+                          onChange={(e) => toggleCampo(u.id, "verificado", e.target.checked)}
+                        />
+                        Verificado
+                      </label>
+
+                      <label className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={!!u.destaque}
+                          disabled={!isAdminBase || acaoBusyId === u.id}
+                          onChange={(e) => toggleCampo(u.id, "destaque", e.target.checked)}
+                        />
+                        Destaque
+                      </label>
+                    </div>
+
+                    {u.ultimaAtividade && (
+                      <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                        <div className="font-semibold text-gray-700">Última atividade</div>
+                        <div className="truncate">{u.ultimaAtividadeNome ?? "—"}</div>
+                        <div>{formatDate(u.ultimaAtividade)}</div>
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => abrirDetalhes(u.id)}
+                        className="rounded-xl bg-green-700 px-3 py-2 text-xs font-semibold text-white"
+                      >
+                        Detalhes
+                      </button>
+
+                      {act === "DELETED_EXPIRED" ? (
+                        <span className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-500">
+                          Conta apagada
+                        </span>
+                      ) : act === "RESTORE" ? (
+                        <button
+                          onClick={() => bloquearOuReativarConta(u.id, "restaurar")}
+                          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
+                          disabled={acaoBusyId === u.id}
+                        >
+                          {acaoBusyId === u.id ? "Processando..." : "Restaurar"}
+                        </button>
+                      ) : act === "UNBLOCK" ? (
+                        <button
+                          onClick={() => bloquearOuReativarConta(u.id, "desbloquear")}
+                          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
+                          disabled={acaoBusyId === u.id}
+                        >
+                          {acaoBusyId === u.id ? "Processando..." : "Desbloquear"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
+                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                          disabled={acaoBusyId === u.id}
+                        >
+                          {acaoBusyId === u.id ? "Processando..." : "Bloquear"}
+                        </button>
+                      )}
+
+                      <button
+                        className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-800"
+                        onClick={() => excluirContaPermanente(u)}
+                      >
+                        Excluir
+                      </button>
+
+                      {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
+                        <button
+                          onClick={() => deletarAdmin(u.id)}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600"
+                        >
+                          Remover admin
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!carregandoUsuarios && usuarios.length === 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+                  Nenhum usuário encontrado.
+                </div>
+              )}
+            </div>
+
+            <div className="hidden md:block bg-white rounded shadow overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -3394,20 +3570,20 @@ async function confirmarExcluirProfessor() {
           <div>
             <h3 className="text-xl font-bold mb-3">Gerenciar Assinaturas</h3>
 
-            <div className="grid md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
               <Card title="Total de Assinaturas" icon="🧾" value={Number(assOverview?.total || 0)} />
               <Card title="Ativas" icon="✅" value={Number(assOverview?.ativos || 0)} />
               <Card title="Canceladas" icon="🛑" value={Number(assOverview?.cancelados || 0)} />
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center mb-4">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center mb-4">
               <input
                 value={assQ}
                 onChange={(e) => setAssQ(e.target.value)}
                 placeholder="Buscar por nome, @usuario ou e-mail…"
-                className="border rounded px-3 py-2 w-64"
+                className="border rounded px-3 py-2 w-full sm:w-64"
               />
-              <select value={assPlano} onChange={(e) => setAssPlano(e.target.value)} className="border rounded px-3 py-2">
+              <select value={assPlano} onChange={(e) => setAssPlano(e.target.value)} className="border rounded px-3 py-2 w-full sm:w-auto">
                 <option value="">Todos os planos</option>
                 <option value="FREE">FREE</option>
                 <option value="PRO">PRO</option>
@@ -3416,7 +3592,7 @@ async function confirmarExcluirProfessor() {
               <select
                 value={assTipo}
                 onChange={(e) => setAssTipo(e.target.value)}
-                className="border rounded px-3 py-2"
+                className="border rounded px-3 py-2 w-full sm:w-auto"
               >
                 <option value="">Todos os tipos</option>
                 <option value="Atleta">Atleta</option>
@@ -3428,22 +3604,157 @@ async function confirmarExcluirProfessor() {
                 <option value="Professor">Professor</option>
                 <option value="Olheiro">Olheiro</option>
               </select>
-              <select value={assAtivo} onChange={(e) => setAssAtivo(e.target.value)} className="border rounded px-3 py-2">
+              <select value={assAtivo} onChange={(e) => setAssAtivo(e.target.value)} className="border rounded px-3 py-2 w-full sm:w-auto">
                 <option value="">Status (todos)</option>
                 <option value="true">Ativas</option>
                 <option value="false">Inativas</option>
               </select>
-              <button className="px-3 py-2 rounded bg-gray-200" onClick={() => carregarAssinantes(1)}>
+              <button className="w-full sm:w-auto px-3 py-2 rounded bg-gray-200" onClick={() => carregarAssinantes(1)}>
                 Atualizar
               </button>
-              <div className="ml-auto text-sm text-gray-600">
+              <div className="w-full sm:w-auto sm:ml-auto text-sm text-gray-600">
                 {assLoading ? "Carregando…" : `${assTotal} resultados`}
               </div>
             </div>
 
             {assErro && <div className="mb-3 text-sm text-red-600">{assErro}</div>}
 
-            <div className="bg-white rounded shadow overflow-x-auto">
+
+            <div className="md:hidden space-y-3">
+              {assinantesOrdenados.map((a) => {
+                const u = a.usuario;
+                const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
+                const foto = avatarSrc(u.foto);
+
+                return (
+                  <div
+                    key={a.id}
+                    className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => irParaPerfilUsuario(u.id)}
+                        className="shrink-0 w-11 h-11 rounded-full border bg-white overflow-hidden inline-flex items-center justify-center"
+                        title="Abrir perfil do usuário"
+                      >
+                        <img
+                          src={foto}
+                          onError={onAvatarError}
+                          alt={nome}
+                          className="w-full h-full rounded-full object-contain p-[2px]"
+                        />
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => irParaPerfilUsuario(u.id)}
+                          className="block max-w-full truncate text-left font-bold text-green-900"
+                          title={nome}
+                        >
+                          {nome}
+                        </button>
+
+                        <div className="mt-0.5 truncate text-xs text-gray-600">
+                          {u.email ?? "Sem e-mail"}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-800">
+                            {a.plano}
+                          </span>
+
+                          <span
+                            className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                              a.ativo
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {a.ativo ? "Ativa" : "Inativa"}
+                          </span>
+
+                          {u.tipo && (
+                            <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-700">
+                              {u.tipo}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">
+                      <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <span className="font-semibold text-gray-700">Início: </span>
+                        {fmtDate(a.startsAt)}
+                      </div>
+
+                      <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <span className="font-semibold text-gray-700">Cancelada em: </span>
+                        {fmtDate(a.canceledAt)}
+                      </div>
+
+                      {a.renovaEm && (
+                        <div className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700">
+                          <span className="font-semibold">Renova em: </span>
+                          {fmtDate(a.renovaEm)}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl bg-green-700 px-3 py-2 text-xs font-semibold text-white"
+                        onClick={() => abrirDetalhes(u.id)}
+                      >
+                        Ver conta
+                      </button>
+
+                      <button
+                        className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"
+                        onClick={async () => {
+                          const atual = a.plano ?? "FREE";
+                          const novo = prompt(
+                            "Novo plano (FREE | PRO | LEARNING):",
+                            String(atual)
+                          )?.toUpperCase().trim();
+
+                          if (!novo) return;
+
+                          await alterarPlanoAssinatura(u.id, novo);
+                          await carregarAssinantes(assPage);
+                          await carregarAssOverview();
+                        }}
+                      >
+                        Trocar plano
+                      </button>
+
+                      {a.ativo && (
+                        <button
+                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                          onClick={async () => {
+                            await cancelarAssinatura(u.id);
+                            await carregarAssinantes(assPage);
+                            await carregarAssOverview();
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!assLoading && assinantes.length === 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+                  Nenhuma assinatura encontrada.
+                </div>
+              )}
+            </div>
+
+            <div className="hidden md:block bg-white rounded shadow overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>

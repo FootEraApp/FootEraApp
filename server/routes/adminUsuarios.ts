@@ -3,6 +3,7 @@ import {
   listAdminUsers,
   getAdminUserDetail,
   hardDeleteUsuario,
+  patchAdminUser,
 } from "../controllers/adminUsersController.js";
 import {
   bloquearUsuario,
@@ -17,6 +18,7 @@ router.use(authenticateToken, requireAdmin);
 
 router.post("/:id/bloquear", bloquearUsuario);
 router.post("/:id/reativar", reativarUsuario);
+router.patch("/:id", patchAdminUser);
 router.get("/:id", getAdminUserDetail);
 router.delete("/:id", hardDeleteUsuario);
 router.get("/", listAdminUsers);
