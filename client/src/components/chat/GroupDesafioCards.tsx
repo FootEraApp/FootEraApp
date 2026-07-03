@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import { useLocation } from "wouter";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -110,7 +111,7 @@ export function CardDesafioGrupo({ msg }: { msg: MsgGrupo }) {
       return;
     }
 
-    alert("Não foi possível abrir a página de submissão: faltam IDs.");
+    toast.error("Não foi possível abrir a página de submissão: faltam IDs.");
   };
 
   return (

@@ -1,4 +1,5 @@
 import React from "react";
+import { toast } from "@/lib/toast";
 import { Crown, BadgeCheck, X } from "lucide-react";
 import { Link } from "wouter";
 import { http } from "../../services/http.js";
@@ -160,7 +161,7 @@ export default function SubscriptionBanner({
             ) : (
               <button
                 type="button"
-                onClick={() => alert(MESSAGES.PAGAMENTOS_EM_REFORMULACAO)}
+                onClick={() => toast.error(MESSAGES.PAGAMENTOS_EM_REFORMULACAO)}
                 className={`relative group px-3 py-2 rounded-lg border cursor-pointer text-sm font-semibold overflow-hidden ${
                   assinaturaAtiva
                     ? "bg-green-600 text-white border-green-600"

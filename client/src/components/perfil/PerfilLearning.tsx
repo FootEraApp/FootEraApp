@@ -512,27 +512,6 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
             <section className="border rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between border-b px-5 py-4">
                 <h2 className="text-lg font-semibold text-green-900">
-                  Certificados emitidos
-                </h2>
-
-                <Link
-                  href="/perfil/conquistas"
-                  className="text-sm text-green-900 hover:underline"
-                >
-                  Ver certificados
-                </Link>
-              </div>
-
-              <div className="p-5 text-green-900 font-semibold">
-                {certificados.length === 1
-                  ? "1 certificado emitido"
-                  : `${certificados.length} certificados emitidos`}
-              </div>
-            </section>
-
-            <section className="border rounded-2xl overflow-hidden">
-              <div className="flex items-center justify-between border-b px-5 py-4">
-                <h2 className="text-lg font-semibold text-green-900">
                   Conquistas e Troféus
                 </h2>
 
@@ -578,6 +557,27 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
                   })}
                 </div>
               )}
+            </section>
+
+            <section className="border rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between border-b px-5 py-4">
+                <h2 className="text-lg font-semibold text-green-900">
+                  Certificados emitidos
+                </h2>
+
+                <Link
+                  href="/perfil/conquistas"
+                  className="text-sm text-green-900 hover:underline"
+                >
+                  Ver certificados
+                </Link>
+              </div>
+
+              <div className="p-5 text-green-900 font-semibold">
+                {certificados.length === 1
+                  ? "1 certificado emitido"
+                  : `${certificados.length} certificados emitidos`}
+              </div>
             </section>
           </div>
         )}

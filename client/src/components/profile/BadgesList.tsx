@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/lib/toast";
 import axios from "axios";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
@@ -258,10 +259,10 @@ export function BadgesList({
       );
       setOpenShare(false);
       setMensagem("");
-      alert("Conquista compartilhada no feed! 🎉");
+      toast.error("Conquista compartilhada no feed! 🎉");
     } catch (e) {
       console.error(e);
-      alert("Não foi possível compartilhar. Tente novamente.");
+      toast.error("Não foi possível compartilhar. Tente novamente.");
     }
   }
 

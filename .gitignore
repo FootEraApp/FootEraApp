@@ -118,6 +118,10 @@ client/.env.*
 server/.env
 server/.env.*
 
+# dumps de banco — não versionar (migrations/*.sql continuam versionadas)
+server/footera_backup.sql
+server/*backup*.sql
+
 # vídeos
 *.mp4
 

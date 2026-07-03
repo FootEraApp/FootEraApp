@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import axios from "axios";
 import {
   ChevronRight,
@@ -1132,7 +1133,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   <button
                     type="button"
                     className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-gray-300 text-gray-600 cursor-not-allowed"
-                    onClick={() => alert("A página FootEra Formadores está em atualização no momento.")}
+                    onClick={() => toast.error("A página FootEra Formadores está em atualização no momento.")}
                   >
                     <Shield className="w-4 h-4" />
                     Módulo Formadores em manuntenção
@@ -1651,23 +1652,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       {aba === "conquistas" && (
         <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
-            title="Certificados emitidos"
-            right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
-                Ver certificados
-              </Link>
-            }
-          >
-            {certificados && certificados.length > 0 ? (
-              <div className="text-green-900 font-medium">
-                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
-              </div>
-            ) : (
-              <EmptyState text="Nenhum certificado emitido ainda." />
-            )}
-          </SectionCard>
-
-          <SectionCard
             title="Conquistas e Troféus"
             right={
               <Link href="/perfil/conquistas" className="text-sm text-green-800">
@@ -1694,6 +1678,23 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               </div>
             ) : (
               <EmptyState text="Nenhuma conquista registrada ainda." />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Certificados emitidos"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver certificados
+              </Link>
+            }
+          >
+            {certificados && certificados.length > 0 ? (
+              <div className="text-green-900 font-medium">
+                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+              </div>
+            ) : (
+              <EmptyState text="Nenhum certificado emitido ainda." />
             )}
           </SectionCard>
         </div>
@@ -1853,10 +1854,10 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                                 { headers }
                               );
                               await loadTurmas();
-                              alert("Professores atualizados na turma!");
+                              toast.success("Professores atualizados na turma!");
                             } catch (err) {
                               console.error(err);
-                              alert("Não foi possível atualizar os professores.");
+                              toast.error("Não foi possível atualizar os professores.");
                             }
                           }}
                         >

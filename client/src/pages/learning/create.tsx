@@ -1,4 +1,5 @@
 // client/src/pages/learning/create.tsx
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -973,7 +974,7 @@ export default function LearningCreatePage() {
 
         setEstruturas(estruturasMapped.length ? estruturasMapped : [emptyEstrutura(item.estruturaTipo)]);
       } catch (e: any) {
-        alert(e?.message || "Falha ao carregar metodologia para edição.");
+        toast.error(e?.message || "Falha ao carregar metodologia para edição.");
         navigate("/learning");
       } finally {
         if (ativo) setLoadingExisting(false);
@@ -1280,7 +1281,7 @@ export default function LearningCreatePage() {
         treinosVinculados,
       });
     } catch (e: any) {
-      alert(e?.message || "Falha ao carregar treinos.");
+      toast.error(e?.message || "Falha ao carregar treinos.");
     } finally {
       setTreinosLoading(false);
     }
@@ -1304,7 +1305,7 @@ export default function LearningCreatePage() {
     } catch (e: any) {
       setCapaUrl("");
       setCapaPreviewUrl(null);
-      alert(e?.message || "Falha ao enviar capa.");
+      toast.error(e?.message || "Falha ao enviar capa.");
     } finally {
       setUploadingCover(false);
     }
@@ -1375,7 +1376,7 @@ export default function LearningCreatePage() {
             }),
       });
 
-      alert(e?.message || "Falha ao enviar arquivo.");
+      toast.error(e?.message || "Falha ao enviar arquivo.");
     } finally {
       URL.revokeObjectURL(localPreview);
     }
@@ -1383,39 +1384,39 @@ export default function LearningCreatePage() {
 
   function validar() {
     if (!tipoMetodologia || !estruturaTipo) {
-      alert("Escolha o tipo da metodologia.");
+      toast.error("Escolha o tipo da metodologia.");
       return false;
     }
 
     if (!titulo.trim()) {
-      alert("Informe o nome da metodologia.");
+      toast.error("Informe o nome da metodologia.");
       return false;
     }
 
     if (!estruturas.length) {
-      alert("Adicione pelo menos uma trilha ou módulo.");
+      toast.error("Adicione pelo menos uma trilha ou módulo.");
       return false;
     }
 
     for (const [indexEstrutura, estrutura] of estruturas.entries()) {
       if (!estrutura.titulo?.trim()) {
-        alert(`Preencha o título da ${estruturaTipo === "TRILHA" ? "trilha" : "módulo"} ${indexEstrutura + 1}.`);
+        toast.error(`Preencha o título da ${estruturaTipo === "TRILHA" ? "trilha" : "módulo"} ${indexEstrutura + 1}.`);
         return false;
       }
 
       if (estruturaTipo === "TRILHA") {
         if (!estrutura.duracaoSemanas || estrutura.duracaoSemanas <= 0) {
-          alert(`Defina a duração da trilha "${estrutura.titulo || indexEstrutura + 1}".`);
+          toast.error(`Defina a duração da trilha "${estrutura.titulo || indexEstrutura + 1}".`);
           return false;
         }
         if (!estrutura.treinosPorSemana || estrutura.treinosPorSemana <= 0) {
-          alert(`Defina os treinos por semana da trilha "${estrutura.titulo || indexEstrutura + 1}".`);
+          toast.error(`Defina os treinos por semana da trilha "${estrutura.titulo || indexEstrutura + 1}".`);
           return false;
         }
         const modo = estrutura.modoExecucao;
 
         if (!modo) {
-          alert(`Escolha o modo de execução da trilha "${estrutura.titulo || indexEstrutura + 1}".`);
+          toast.error(`Escolha o modo de execução da trilha "${estrutura.titulo || indexEstrutura + 1}".`);
           return false;
         }
 
@@ -1434,7 +1435,7 @@ export default function LearningCreatePage() {
 
         if (modo === "PRAZO_SUGERIDO") {
           if (!estrutura.prazoFinal) {
-            alert(`A trilha "${estrutura.titulo}" precisa de prazo final no modo "Com prazo sugerido".`);
+            toast.error(`A trilha "${estrutura.titulo}" precisa de prazo final no modo "Com prazo sugerido".`);
             return false;
           }
 
@@ -1442,30 +1443,30 @@ export default function LearningCreatePage() {
           prazoFinal.setHours(0, 0, 0, 0);
 
           if (prazoFinal < minFinal) {
-            alert(`O prazo final da trilha "${estrutura.titulo}" deve ser no mínimo 2 semanas a partir de hoje.`);
+            toast.error(`O prazo final da trilha "${estrutura.titulo}" deve ser no mínimo 2 semanas a partir de hoje.`);
             return false;
           }
 
           if (prazoFinal > maxFinal) {
-            alert(`O prazo final da trilha "${estrutura.titulo}" não pode passar de 8 semanas a partir de hoje.`);
+            toast.error(`O prazo final da trilha "${estrutura.titulo}" não pode passar de 8 semanas a partir de hoje.`);
             return false;
           }
 
           const diff = prazoFinal.getTime() - hoje.getTime();
           if (Math.abs(diff - prazoEsperadoMs) > toleranciaMs) {
-            alert(`O prazo final da trilha "${estrutura.titulo}" deve ficar próximo da duração do ciclo (${semanas} semanas).`);
+            toast.error(`O prazo final da trilha "${estrutura.titulo}" deve ficar próximo da duração do ciclo (${semanas} semanas).`);
             return false;
           }
         }
 
         if (modo === "DESAFIO_FECHADO") {
           if (!estrutura.prazoInicio) {
-            alert(`A trilha "${estrutura.titulo}" precisa de prazo de início.`);
+            toast.error(`A trilha "${estrutura.titulo}" precisa de prazo de início.`);
             return false;
           }
 
           if (!estrutura.prazoFinal) {
-            alert(`A trilha "${estrutura.titulo}" precisa de prazo final.`);
+            toast.error(`A trilha "${estrutura.titulo}" precisa de prazo final.`);
             return false;
           }
 
@@ -1475,62 +1476,62 @@ export default function LearningCreatePage() {
           prazoFinal.setHours(0, 0, 0, 0);
 
           if (prazoInicio < minInicio) {
-            alert(`O prazo de início da trilha "${estrutura.titulo}" não pode estar no passado.`);
+            toast.error(`O prazo de início da trilha "${estrutura.titulo}" não pode estar no passado.`);
             return false;
           }
 
           if (prazoInicio > maxInicio) {
-            alert(`O prazo de início da trilha "${estrutura.titulo}" não pode passar de 6 semanas a partir de hoje.`);
+            toast.error(`O prazo de início da trilha "${estrutura.titulo}" não pode passar de 6 semanas a partir de hoje.`);
             return false;
           }
 
           if (prazoFinal < minFinal) {
-            alert(`O prazo final da trilha "${estrutura.titulo}" deve ser no mínimo 2 semanas a partir de hoje.`);
+            toast.error(`O prazo final da trilha "${estrutura.titulo}" deve ser no mínimo 2 semanas a partir de hoje.`);
             return false;
           }
 
           if (prazoFinal > maxFinal) {
-            alert(`O prazo final da trilha "${estrutura.titulo}" não pode passar de 8 semanas a partir de hoje.`);
+            toast.error(`O prazo final da trilha "${estrutura.titulo}" não pode passar de 8 semanas a partir de hoje.`);
             return false;
           }
 
           if (prazoFinal <= prazoInicio) {
-            alert(`Na trilha "${estrutura.titulo}", o prazo final precisa ser maior que o prazo de início.`);
+            toast.error(`Na trilha "${estrutura.titulo}", o prazo final precisa ser maior que o prazo de início.`);
             return false;
           }
 
           const diff = prazoFinal.getTime() - prazoInicio.getTime();
           if (Math.abs(diff - prazoEsperadoMs) > toleranciaMs) {
-            alert(`O intervalo entre início e fim da trilha "${estrutura.titulo}" deve ficar próximo da duração do ciclo (${semanas} semanas).`);
+            toast.error(`O intervalo entre início e fim da trilha "${estrutura.titulo}" deve ficar próximo da duração do ciclo (${semanas} semanas).`);
             return false;
           }
         }
       }
 
       if (!estrutura.itens.length) {
-        alert(`Adicione ao menos um item em "${estrutura.titulo || indexEstrutura + 1}".`);
+        toast.error(`Adicione ao menos um item em "${estrutura.titulo || indexEstrutura + 1}".`);
         return false;
       }
 
       for (const [indexItem, item] of estrutura.itens.entries()) {
         if (item.tipo !== "TREINO" && !item.titulo?.trim()) {
-          alert(`Preencha o título do item ${indexItem + 1} da estrutura "${estrutura.titulo}".`);
+          toast.error(`Preencha o título do item ${indexItem + 1} da estrutura "${estrutura.titulo}".`);
           return false;
         }
 
         if (item.tipo === "TREINO" && !item.treinoProgramadoId?.trim()) {
-          alert(`O item ${indexItem + 1} da estrutura "${estrutura.titulo}" precisa ter um treino selecionado.`);
+          toast.error(`O item ${indexItem + 1} da estrutura "${estrutura.titulo}" precisa ter um treino selecionado.`);
           return false;
         }
 
         if ((item.tipo === "VIDEO" || item.tipo === "AULA") && !item.videoUrl?.trim()) {
-          alert(`O item "${item.titulo}" precisa ter vídeo.`);
+          toast.error(`O item "${item.titulo}" precisa ter vídeo.`);
           return false;
         }
 
         if (item.tipo === "AULA_AO_VIVO") {
           if (!item.aulaAoVivo?.dataInicio) {
-            alert(`A aula ao vivo "${item.titulo}" precisa ter data e horário de início.`);
+            toast.error(`A aula ao vivo "${item.titulo}" precisa ter data e horário de início.`);
             return false;
           }
 
@@ -1546,49 +1547,49 @@ export default function LearningCreatePage() {
             : null;
 
           if (Number.isNaN(inicio.getTime())) {
-            alert(`A data de início da aula ao vivo "${item.titulo}" é inválida.`);
+            toast.error(`A data de início da aula ao vivo "${item.titulo}" é inválida.`);
             return false;
           }
 
           if (fim && fim <= inicio) {
-            alert(`A data final da aula ao vivo "${item.titulo}" precisa ser maior que a data de início.`);
+            toast.error(`A data final da aula ao vivo "${item.titulo}" precisa ser maior que a data de início.`);
             return false;
           }
         
 
         if (inscricaoInicio && Number.isNaN(inscricaoInicio.getTime())) {
-          alert(`O início das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
+          toast.error(`O início das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
           return false;
         }
 
         if (inscricaoFim && Number.isNaN(inscricaoFim.getTime())) {
-          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
+          toast.error(`O fim das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
           return false;
         }
 
         if (inscricaoInicio && !inscricaoFim) {
-          alert(`Informe também o fim das inscrições da aula ao vivo "${item.titulo}".`);
+          toast.error(`Informe também o fim das inscrições da aula ao vivo "${item.titulo}".`);
           return false;
         }
 
         if (!inscricaoInicio && inscricaoFim) {
-          alert(`Informe também o início das inscrições da aula ao vivo "${item.titulo}".`);
+          toast.error(`Informe também o início das inscrições da aula ao vivo "${item.titulo}".`);
           return false;
         }
 
         if (inscricaoInicio && inscricaoFim && inscricaoFim <= inscricaoInicio) {
-          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser depois do início.`);
+          toast.error(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser depois do início.`);
           return false;
         }
 
         if (inscricaoFim && inscricaoFim >= inicio) {
-          alert(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser antes do início da aula.`);
+          toast.error(`O fim das inscrições da aula ao vivo "${item.titulo}" precisa ser antes do início da aula.`);
           return false;
         }
       }
 
         if (item.tipo === "MATERIAL" && !item.arquivoUrl?.trim() && !item.materialUrl?.trim()) {
-          alert(`O item "${item.titulo}" precisa ter arquivo ou link do material.`);
+          toast.error(`O item "${item.titulo}" precisa ter arquivo ou link do material.`);
           return false;
         }
       }
@@ -1767,7 +1768,7 @@ export default function LearningCreatePage() {
         }
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
-        alert("✅ Sua metodologia foi criada com sucesso!");
+        toast.success("✅ Sua metodologia foi criada com sucesso!");
         navigate("/learning");
         return;
       }
@@ -1783,7 +1784,7 @@ export default function LearningCreatePage() {
         });
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
-        alert("✅ Sua metodologia foi editada com sucesso!");
+        toast.success("✅ Sua metodologia foi editada com sucesso!");
         navigate("/learning");
         return;
       }
@@ -1795,7 +1796,7 @@ export default function LearningCreatePage() {
         });
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
-        alert("✅ Sua metodologia foi editada com sucesso!");
+        toast.success("✅ Sua metodologia foi editada com sucesso!");
         navigate("/learning");
         return;
       }
@@ -1823,7 +1824,7 @@ export default function LearningCreatePage() {
         }
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
-        alert("✅ Sua metodologia foi editada com sucesso!");
+        toast.success("✅ Sua metodologia foi editada com sucesso!");
         navigate("/learning");
         return;
       }
@@ -1852,7 +1853,7 @@ export default function LearningCreatePage() {
         }
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
-        alert("✅ Sua metodologia foi editada com sucesso!");
+        toast.success("✅ Sua metodologia foi editada com sucesso!");
         navigate("/learning");
         return;
       }
@@ -2014,7 +2015,7 @@ export default function LearningCreatePage() {
         });
       }
 
-      alert(editMetodologiaId ? "Metodologia atualizada com sucesso!" : "Metodologia criada com sucesso!");
+      toast.success(editMetodologiaId ? "Metodologia atualizada com sucesso!" : "Metodologia criada com sucesso!");
       localStorage.removeItem(LEARNING_DRAFT_KEY);
       navigate(`/learning/${metodologiaId}`);
     } catch (e: any) {
@@ -2030,11 +2031,11 @@ export default function LearningCreatePage() {
         null;
 
       if (code === "METODOLOGIA_NOME_DUPLICADO_DO_MESMO_CRIADOR") {
-        alert(msg);
+        toast.error(msg);
         return;
       }
 
-      alert(msg);
+      toast.error(msg);
       return;
     } finally {
       setSaving(false);

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 function normalizaTipo(raw: string) {
   const t = String(raw || "")
@@ -124,10 +125,7 @@ export async function listAdminUsers(req: Request, res: Response) {
 
     res.json({ items, total, page, pageSize });
   } catch (e: any) {
-    console.error("Erro em listAdminUsers:", e);
-    res
-      .status(e.status || 500)
-      .json({ message: e.message || "Erro ao listar usuários (admin)." });
+    sendError(res, e, "Erro ao listar usuários (admin).");
   }
 }
 
@@ -429,10 +427,6 @@ export async function hardDeleteUsuario(req: Request, res: Response) {
 
     return res.json({ ok: true });
   } catch (e: any) {
-    console.error("[Admin] hardDeleteUsuario erro:", e);
-    return res.status(500).json({
-      message: "Falha ao excluir permanentemente. Veja o log do servidor para a tabela que bloqueou (FK).",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Falha ao excluir permanentemente. Veja o log do servidor para a tabela que bloqueou (FK).");
   }
 }

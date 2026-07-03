@@ -1,9 +1,11 @@
-import React from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { Volleyball, User, CirclePlus, Search, House, Eye } from "lucide-react";
+import { Volleyball, User, CirclePlus, Search, House, Eye, Bell } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
+import { API } from "../../config.js";
+import socket from "../../services/socket.js";
 
-type ActiveKey = "feed" | "explorar" | "post" | "treinos" | "perfil" | "olheiros";
+type ActiveKey = "feed" | "explorar" | "post" | "treinos" | "perfil" | "olheiros" | "notificacoes";
 
 export default function BottomNav({
   active,
@@ -21,6 +23,43 @@ export default function BottomNav({
     "";
 
   const isOlheiro = String(tipoUsuario).toLowerCase() === "olheiro";
+
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  useEffect(() => {
+    const token = Storage.token;
+    if (!token) return;
+
+    fetch(`${API.BASE_URL}/api/notificacoes/badge`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setBadgeCount(Number(data.total ?? data.totalNotificacoes ?? 0));
+      })
+      .catch(() => {});
+
+    const parseBadge = (d: any): number => {
+      if (typeof d === "number") return d;
+      return Number(d?.total ?? d?.totalNotificacoes ?? 0);
+    };
+
+    const onDomBadge = (e: Event) => {
+      setBadgeCount(parseBadge((e as CustomEvent).detail));
+    };
+
+    const onSocketBadge = (data: any) => {
+      setBadgeCount(parseBadge(data));
+    };
+
+    window.addEventListener("badge:update", onDomBadge as EventListener);
+    socket.on("badge:update", onSocketBadge);
+
+    return () => {
+      window.removeEventListener("badge:update", onDomBadge as EventListener);
+      socket.off("badge:update", onSocketBadge);
+    };
+  }, []);
 
   const baseItem =
     "inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors";
@@ -60,6 +99,19 @@ export default function BottomNav({
         <span className="w-8 h-8" />
       )}
 
+      <Link
+        href="/notificacoes"
+        className={`${baseItem} relative ${active === "notificacoes" ? activeItem : "hover:opacity-90"}`}
+        aria-label="Notificações"
+      >
+        <Bell className={iconClass} />
+        {badgeCount > 0 && (
+          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
+            {badgeCount > 9 ? "9+" : badgeCount}
+          </span>
+        )}
+      </Link>
+      
       {isOlheiro ? (
         <Link
           href="/olheiros"
@@ -85,6 +137,7 @@ export default function BottomNav({
       >
         <User className={iconClass} />
       </Link>
+
     </nav>
   );
 }

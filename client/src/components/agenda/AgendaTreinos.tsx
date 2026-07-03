@@ -1,4 +1,5 @@
 // client/src/components/agenda/AgendaTreinos
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
@@ -1016,15 +1017,15 @@ export default function AgendaTreinos({
 
   async function agendarParaDiasSelecionados() {
     if (selectedDays.some(isPastDayISO)) {
-      alert("Não é permitido agendar treinos em datas passadas.");
+      toast.error("Não é permitido agendar treinos em datas passadas.");
       return;
     }
     if (!treinoProgramadoId) {
-      alert("Selecione um treino programado para agendar.");
+      toast.error("Selecione um treino programado para agendar.");
       return;
     }
     if (!selectedDays.length) {
-      alert("Selecione ao menos 1 dia no calendário.");
+      toast.error("Selecione ao menos 1 dia no calendário.");
       return;
     }
     if (salvandoAgenda) return;
@@ -1032,7 +1033,7 @@ export default function AgendaTreinos({
     setSalvandoAgenda(true);
       try {
         if (!isValidHHMM(selectedTimeInput)) {
-          alert("Digite o horário no formato HH:mm. Exemplo: 15:24.");
+          toast.error("Digite o horário no formato HH:mm. Exemplo: 15:24.");
           return;
         }
 
@@ -1042,7 +1043,7 @@ export default function AgendaTreinos({
           const minNow = hhmmNow();
 
           if (horarioFinal < minNow) {
-            alert(`Para hoje, escolha um horário a partir de ${minNow}.`);
+            toast.error(`Para hoje, escolha um horário a partir de ${minNow}.`);
             horarioFinal = minNow;
             setSelectedTime(minNow);
             setSelectedTimeInput(minNow);
@@ -1062,7 +1063,7 @@ export default function AgendaTreinos({
       const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
       setAgendados(list);
       setSelectedDays([]);
-      alert("Treino(s) agendado(s) com sucesso!");
+      toast.success("Treino(s) agendado(s) com sucesso!");
       setAba("agenda");
     } catch (e: any) {
       const msg =
@@ -1071,7 +1072,7 @@ export default function AgendaTreinos({
           ? "Já existe treino agendado em um dos dias selecionados."
           : null) ||
         "Erro ao agendar treinos.";
-      alert(msg);
+      toast.error(msg);
     } finally {
       setSalvandoAgenda(false);
     }
@@ -1518,7 +1519,7 @@ export default function AgendaTreinos({
                       const fixed = hasTodaySelected && v < minNow ? minNow : v;
 
                       if (fixed !== v) {
-                        alert(`Para hoje, escolha um horário a partir de ${minNow}.`);
+                        toast.error(`Para hoje, escolha um horário a partir de ${minNow}.`);
                       }
 
                       setSelectedTime(fixed);

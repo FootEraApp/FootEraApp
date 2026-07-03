@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/lib/toast";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 
@@ -184,7 +185,7 @@ async function load(p = 1) {
       };
       await Promise.all(Array.from({ length: workers }, run));
       await load(page);
-      alert("Submissões selecionadas aprovadas!");
+      toast.error("Submissões selecionadas aprovadas!");
     } finally {
       setBusy(false);
     }
@@ -223,7 +224,7 @@ async function load(p = 1) {
         p += 1;
       }
       await load(1);
-      alert("Todas as submissões pendentes foram aprovadas (quando possível).");
+      toast.error("Todas as submissões pendentes foram aprovadas (quando possível).");
     } finally {
       setBusy(false);
     }

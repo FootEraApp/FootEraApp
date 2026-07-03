@@ -1,4 +1,5 @@
 // client/src/pages/metodologias/avaliar.tsx
+import { toast } from "@/lib/toast";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Star as StarIcon, ArrowLeft, Volleyball } from "lucide-react";
@@ -117,22 +118,22 @@ export default function AvaliarMetodologia() {
     try {
       const token = getToken();
       if (!token) {
-        alert("Você precisa estar logado.");
+        toast.error("Você precisa estar logado.");
         return;
       }
 
       if (!metodologiaId) {
-        alert("metodologiaId não encontrado na URL.");
+        toast.error("metodologiaId não encontrado na URL.");
         return;
       }
 
       if (nota <= 0) {
-        alert("Escolha uma nota com estrelas.");
+        toast.error("Escolha uma nota com estrelas.");
         return;
       }
 
       if (!sentimento) {
-        alert("Escolha como foi a metodologia.");
+        toast.error("Escolha como foi a metodologia.");
         return;
       }
 
@@ -160,12 +161,12 @@ export default function AvaliarMetodologia() {
         throw new Error(js?.error || js?.message || "Falha ao salvar avaliação");
       }
 
-      alert("Avaliação enviada! ✅");
+      toast.success("Avaliação enviada! ✅");
       localStorage.setItem(`metodologia:avaliada:${metodologiaId}`, "1");
       navigate(destinoPosAvaliacao());
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || "Erro ao enviar avaliação");
+      toast.error(e?.message || "Erro ao enviar avaliação");
     } finally {
       setEnviando(false);
     }

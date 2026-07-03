@@ -1,6 +1,7 @@
 // server/controllers/metodologiasController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 import { startOfMonth, addMonths } from "date-fns";
 import {
   MetodologiaAssinaturaStatus,
@@ -899,7 +900,7 @@ export async function listMetodologias(req: Request, res: Response) {
 
     return res.json({ items });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao listar metodologias.", detail: e?.message });
+    return sendError(res, e, "Erro ao listar metodologias.");
   }
 }
 
@@ -992,7 +993,7 @@ export async function getMetodologiaById(req: Request, res: Response) {
     });
     return res.json({ item });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao buscar metodologia.", detail: e?.message });
+    return sendError(res, e, "Erro ao buscar metodologia.");
   }
 }
 
@@ -1155,7 +1156,7 @@ export async function createMetodologia(req: Request, res: Response) {
 
     return res.status(201).json({ item: created });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao criar metodologia.", detail: e?.message });
+    return sendError(res, e, "Erro ao criar metodologia.");
   }
 }
 
@@ -1491,7 +1492,7 @@ export async function updateMetodologia(req: Request, res: Response) {
 
     return res.json({ item: updated });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao editar metodologia.", detail: e?.message });
+    return sendError(res, e, "Erro ao editar metodologia.");
   }
 }
 
@@ -1720,10 +1721,7 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
       },
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar assinadas.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar assinadas.");
   }
 }
 
@@ -1809,10 +1807,7 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
       permissaoCriacao,
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar minhas metodologias.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar minhas metodologias.");
   }
 }
 
@@ -1903,10 +1898,7 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
 
     return res.json({ items });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar visíveis.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar visíveis.");
   }
 }
 
@@ -2119,10 +2111,7 @@ export async function listEventosAoVivoVisiveis(req: Request, res: Response) {
 
     return res.json({ items });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar eventos ao vivo visíveis.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar eventos ao vivo visíveis.");
   }
 }
 
@@ -2310,7 +2299,7 @@ export async function createMetodologiaItens(req: Request, res: Response) {
 
     return res.status(201).json({ itens: created });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao adicionar itens.", detail: e?.message });
+    return sendError(res, e, "Erro ao adicionar itens.");
   }
 }
 
@@ -2686,10 +2675,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao buscar detalhe da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao buscar detalhe da metodologia.");
   }
 }
 
@@ -2823,10 +2809,7 @@ export async function assinarMetodologia(req: Request, res: Response) {
 
     return res.json({ ok: true, assinatura });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao assinar metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao assinar metodologia.");
   }
 }
 
@@ -2856,7 +2839,7 @@ export async function deleteMetodologiaItens(req: Request, res: Response) {
 
     return res.json({ ok: true, deleted: del.count });
   } catch (e: any) {
-    return res.status(500).json({ message: "Erro ao limpar itens.", detail: e?.message });
+    return sendError(res, e, "Erro ao limpar itens.");
   }
 }
 
@@ -3104,11 +3087,7 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
       totalReviews: result.total,
     });
   } catch (e: any) {
-    console.error("[criarAvaliacaoMetodologia]", e);
-    return res.status(500).json({
-      message: "Erro ao salvar avaliação da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao salvar avaliação da metodologia.");
   }
 }
 
@@ -3314,10 +3293,7 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao concluir item.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao concluir item.");
   }
 }
 
@@ -3536,10 +3512,7 @@ export async function createMetodologiaEstruturas(req: Request, res: Response) {
 
     return res.status(201).json({ estruturas: criadas });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao criar estruturas da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao criar estruturas da metodologia.");
   }
 }
 
@@ -3746,10 +3719,7 @@ export async function updateMetodologiaEstrutura(req: Request, res: Response) {
 
     return res.json({ estrutura: updated });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao atualizar estrutura da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao atualizar estrutura da metodologia.");
   }
 }
 
@@ -3798,10 +3768,7 @@ export async function deleteMetodologiaEstrutura(req: Request, res: Response) {
 
     return res.json({ ok: true, deletedId: estruturaId });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao excluir estrutura da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao excluir estrutura da metodologia.");
   }
 }
 
@@ -4018,10 +3985,7 @@ export async function createMetodologiaEstruturaItens(req: Request, res: Respons
 
     return res.status(201).json({ itens: created });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao criar itens da estrutura.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao criar itens da estrutura.");
   }
 }
 
@@ -4078,10 +4042,7 @@ export async function deleteMetodologiaEstruturaItens(req: Request, res: Respons
       mode: "all",
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao excluir itens da estrutura.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao excluir itens da estrutura.");
   }
 }
 
@@ -4555,10 +4516,7 @@ export async function concluirEstruturaItemMetodologia(req: Request, res: Respon
       },
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao concluir item da estrutura da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao concluir item da estrutura da metodologia.");
   }
 }
 
@@ -4839,9 +4797,7 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
 
     return res.status(201).json({ item: criada });
   } catch (e: any) {
-    return res.status(400).json({
-      message: e?.message || "Erro ao criar metodologia completa.",
-    });
+    return sendError(res, e, "Erro ao criar metodologia completa.");
   }
 }
 
@@ -5076,10 +5032,7 @@ export async function createMetodologiaAvulsaCompleta(req: Request, res: Respons
 
     return res.status(201).json({ item });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao criar metodologia avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao criar metodologia avulsa.");
   }
 }
 
@@ -5188,10 +5141,7 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
 
     return res.status(201).json({ item: created });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao criar metodologia avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao criar metodologia avulsa.");
   }
 }
 
@@ -5492,10 +5442,7 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
       },
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao buscar metodologia avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao buscar metodologia avulsa.");
   }
 }
 
@@ -5818,10 +5765,7 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
 
     return res.json({ item: atualizado });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao atualizar metodologia avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao atualizar metodologia avulsa.");
   }
 }
 
@@ -5872,10 +5816,7 @@ export async function deleteMetodologiaAvulsa(req: Request, res: Response) {
 
     return res.json({ ok: true, message: "Metodologia avulsa removida com sucesso." });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao deletar metodologia avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao deletar metodologia avulsa.");
   }
 }
 
@@ -6063,10 +6004,7 @@ export async function migrarMetodologiaParaAvulsa(req: Request, res: Response) {
 
     return res.json({ item });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao migrar metodologia para avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao migrar metodologia para avulsa.");
   }
 }
 
@@ -6246,10 +6184,7 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
 
     return res.json({ item });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao migrar metodologia avulsa para Learning.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao migrar metodologia avulsa para Learning.");
   }
 }
 
@@ -6372,10 +6307,7 @@ export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
       pageSize,
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar todas as metodologias do admin.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar todas as metodologias do admin.");
   }
 }
 
@@ -6867,11 +6799,7 @@ export async function criarSubmissaoMetodologiaItem(req: Request, res: Response)
       estruturaId,
     });
   } catch (e: any) {
-    console.error("[criarSubmissaoMetodologiaItem]", e);
-    return res.status(500).json({
-      message: "Erro ao criar submissão da metodologia.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao criar submissão da metodologia.");
   }
 }
 
@@ -6940,10 +6868,7 @@ export async function deleteMetodologiaAvulsaEstruturaItens(req: Request, res: R
       mode: "all",
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao excluir itens da estrutura avulsa.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao excluir itens da estrutura avulsa.");
   }
 }
 
@@ -7013,10 +6938,7 @@ export async function listarFavoritosLearning(req: Request, res: Response) {
       keys: items.map((item) => item.key),
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao listar favoritos do Learning.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao listar favoritos do Learning.");
   }
 }
 
@@ -7083,10 +7005,7 @@ export async function alternarFavoritoLearning(req: Request, res: Response) {
       key: `${tipo}:${alvoId}`,
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao alternar favorito.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao alternar favorito.");
   }
 }
 
@@ -7123,9 +7042,6 @@ export async function removerFavoritoLearning(req: Request, res: Response) {
       key: `${tipo}:${alvoId}`,
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: "Erro ao remover favorito.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao remover favorito.");
   }
 }

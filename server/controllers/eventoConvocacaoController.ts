@@ -1,7 +1,8 @@
 import { Response } from "express";
+import { NotificacaoTipo } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
-
+import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 
 function ensureArray<T>(v: any): T[] {
   return Array.isArray(v) ? v : [];
@@ -191,7 +192,18 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
       }
     });
 
-    await prisma.notificacao.createMany({ data: notifs, skipDuplicates: true });
+    await Promise.all(
+      notifs.map((n) =>
+        criarNotificacaoEEnviarPush({
+          usuarioId: n.usuarioId,
+          actorId: deId,
+          tipo: NotificacaoTipo.CONVOCACAO,
+          titulo: n.titulo,
+          mensagem: n.mensagem,
+          link: n.link,
+        })
+      )
+    );
 
     await prisma.mensagem.deleteMany({
       where: {

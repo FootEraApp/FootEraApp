@@ -86,12 +86,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       "| secretLoaded =",
       !!SECRET
     );
-    console.error("[AUTH JWT ERROR]", {
-      name: err.name,
-      message: err.message,
-      secretPrefix: SECRET.slice(0, 5),
-      tokenPrefix: token.slice(0, 20),
-    });
     return res.status(401).json({ message: "Invalid/expired token" });
   }
 
@@ -276,6 +270,3 @@ const parceiro = Boolean(dbUser?.parceiro);
   return next();
 };
 
-export const auth = authenticateToken;
-export const requireAuth = authenticateToken;
-export const authMiddleware = authenticateToken;

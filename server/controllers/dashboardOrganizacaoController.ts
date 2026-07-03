@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import { prisma } from "../prisma.js";
+import { sendError } from "../utils/httpError.js";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
@@ -229,10 +230,6 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
       porTurma,
     });
   } catch (e: any) {
-    console.error("[dashboard organizacao] erro:", e);
-    return res.status(500).json({
-      message: "Erro ao gerar dashboard.",
-      detail: e?.message,
-    });
+    return sendError(res, e, "Erro ao gerar dashboard.");
   }
 }

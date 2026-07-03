@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "@/lib/toast";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -111,7 +112,7 @@ export default function PaginaConvocarEvento() {
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        alert(
+        toast.success(
           `Convocação enviada!\n\n` +
             `${ev.titulo} (${labelEventoTipo(ev.tipo)})\n` +
             `${when}${where ? `\n${where}` : ""}`

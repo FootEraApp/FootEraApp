@@ -1,4 +1,5 @@
 //client/src/pages/admin/treinos/create
+import { toast } from "@/lib/toast";
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -818,7 +819,7 @@ export default function CriarOuEditarTreino() {
         await loadTreino();
       } catch (e: any) {
         console.error(e);
-        alert(e?.message || "Falha ao carregar dados");
+        toast.error(e?.message || "Falha ao carregar dados");
       }
     })();
   }, []);
@@ -1264,7 +1265,7 @@ export default function CriarOuEditarTreino() {
   const onProximo = () => {
     if (step === 1) {
       if (!podeIrProximo) {
-        alert("Preencha o título, o nível e selecione quem será o criador.");
+        toast.success("Preencha o título, o nível e selecione quem será o criador.");
         return;
       }
 
@@ -1278,13 +1279,13 @@ export default function CriarOuEditarTreino() {
 
   const handleSubmit = async () => {
     if (!titulo.trim()) {
-      alert("Título do treino é obrigatório.");
+      toast.error("Título do treino é obrigatório.");
       setStep(1);
       return;
     }
 
     if (!criadorId.trim()) {
-      alert("Selecione quem será o criador do treino.");
+      toast.success("Selecione quem será o criador do treino.");
       setStep(1);
       return;
     }
@@ -1294,7 +1295,7 @@ export default function CriarOuEditarTreino() {
     );
 
     if (!temAlgum) {
-      alert("Adicione ao menos 1 exercício (do banco ou personalizado).");
+      toast.error("Adicione ao menos 1 exercício (do banco ou personalizado).");
       setStep(2);
       return;
     }
@@ -1397,7 +1398,7 @@ export default function CriarOuEditarTreino() {
     const exerciciosFinal = exerciciosPayload.filter(Boolean);
 
     if (exerciciosFinal.length === 0) {
-      alert("Adicione ao menos 1 exercício (do banco ou personalizado) para salvar o treino.");
+      toast.success("Adicione ao menos 1 exercício (do banco ou personalizado) para salvar o treino.");
       setStep(2);
       return;
     }
@@ -1433,12 +1434,12 @@ export default function CriarOuEditarTreino() {
     };
 
     if (tipoCriador !== "Admin" && !criadorId.trim()) {
-      alert("Selecione o criador do treino.");
+      toast.success("Selecione o criador do treino.");
       return;
     }
 
     if (tipoCriador === "Admin" && !adminUserId) {
-      alert("Não foi possível identificar o admin logado.");
+      toast.error("Não foi possível identificar o admin logado.");
       return;
     }
 
@@ -1463,11 +1464,11 @@ export default function CriarOuEditarTreino() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Erro ao salvar treino.");
 
-      alert(`Treino ${id ? "atualizado" : "criado"} com sucesso!`);
+      toast.success(`Treino ${id ? "atualizado" : "criado"} com sucesso!`);
       window.location.href = returnTo;
     } catch (e: any) {
       console.error(e);
-      alert(e?.message || "Erro ao salvar treino.");
+      toast.error(e?.message || "Erro ao salvar treino.");
     }
   };
 
@@ -1500,7 +1501,7 @@ export default function CriarOuEditarTreino() {
                   type="button"
                   onClick={() => {
                     if (!podeIrProximo) {
-                      alert("Preencha o título, o nível e selecione quem será o criador.");
+                      toast.success("Preencha o título, o nível e selecione quem será o criador.");
                       return;
                     }
                     setStep(2);

@@ -1,4 +1,5 @@
 // client/src/pages/editarPerfil
+import { toast } from "@/lib/toast";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -1159,7 +1160,7 @@ return (
 
           if (usernameFinal) {
             if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
-              alert("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
+              toast.error("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
               return;
             }
           }
@@ -1268,7 +1269,7 @@ return (
               }
             }
 
-            alert("Perfil atualizado com sucesso!");
+            toast.success("Perfil atualizado com sucesso!");
             Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
             const returnTo = new URLSearchParams(window.location.search).get("returnTo");
             window.location.href = returnTo || "/perfil";
@@ -1276,7 +1277,7 @@ return (
           } catch (err: any) {
             console.error("[EditarPerfil] Erro ao salvar:", err);
             const msg = err?.response?.data?.error || err?.message || "Erro ao salvar os dados.";
-            alert(msg);
+            toast.error(msg);
           }
         }}
       >

@@ -1,4 +1,5 @@
 import { API } from "../config.js";
+import { toast } from "@/lib/toast";
 import { readToken } from "../utils/auth.js";
 
 export interface Usuario {
@@ -173,10 +174,10 @@ export async function compartilharPost(postId: string) {
       method: "POST",
       headers: auth(),
     });
-    alert("Link copiado para a área de transferência!");
+    toast.success("Link copiado para a área de transferência!");
   } catch (error) {
     console.error("Erro ao copiar link:", error);
-    alert("Não foi possível copiar o link.");
+    toast.error("Não foi possível copiar o link.");
   }
 }
 

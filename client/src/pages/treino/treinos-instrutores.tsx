@@ -1,4 +1,5 @@
 // client/src/pages/treino/treinos-instrutores
+import { toast } from "@/lib/toast";
 import { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -1008,7 +1009,7 @@ export default function TreinosInstrutores({
       };
     });
 
-    alert(`Você escolheu manter o vídeo atual de ${nomeExercicio}. A decisão será aplicada ao finalizar o treino.`);
+    toast.error(`Você escolheu manter o vídeo atual de ${nomeExercicio}. A decisão será aplicada ao finalizar o treino.`);
     fecharCameraModal();
   }
 
@@ -1037,7 +1038,7 @@ export default function TreinosInstrutores({
       };
     });
 
-    alert(`Você escolheu atualizar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
+    toast.error(`Você escolheu atualizar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
     fecharCameraModal();
   }
 
@@ -1113,20 +1114,20 @@ export default function TreinosInstrutores({
       }));
 
       if (saveMode === "SESSION_ONLY") {
-        alert("Vídeo selecionado para salvar só para este treino. Ele será salvo ao finalizar o treino.");
+        toast.success("Vídeo selecionado para salvar só para este treino. Ele será salvo ao finalizar o treino.");
         fecharCameraModal();
         return;
       }
 
       if (!existingUrl) {
-        alert(`Vídeo selecionado para virar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
+        toast.error(`Vídeo selecionado para virar o vídeo oficial de ${nomeExercicio}. A atualização será aplicada ao finalizar o treino.`);
         fecharCameraModal();
         return;
       }
 
     } catch (error: any) {
       console.error(error);
-      alert(error?.message || "Erro ao enviar vídeo.");
+      toast.error(error?.message || "Erro ao enviar vídeo.");
     }
   }
 
@@ -1136,7 +1137,7 @@ export default function TreinosInstrutores({
   ) {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        alert("Seu navegador não suporta acesso à câmera.");
+        toast.error("Seu navegador não suporta acesso à câmera.");
         return;
       }
 
@@ -1181,7 +1182,7 @@ export default function TreinosInstrutores({
       }, 80);
     } catch (error) {
       console.error(error);
-      alert("Não foi possível acessar a câmera.");
+      toast.error("Não foi possível acessar a câmera.");
     }
   }
 
@@ -1240,7 +1241,7 @@ export default function TreinosInstrutores({
       }, 80);
     } catch (error) {
       console.error(error);
-      alert("Não foi possível trocar a câmera.");
+      toast.error("Não foi possível trocar a câmera.");
     }
   }
 
@@ -1278,7 +1279,7 @@ export default function TreinosInstrutores({
         : new MediaRecorder(cameraModal.mediaStream);
     } catch (e) {
       console.error(e);
-      alert("Não foi possível iniciar a gravação.");
+      toast.error("Não foi possível iniciar a gravação.");
       return;
     }
 
@@ -1296,7 +1297,7 @@ export default function TreinosInstrutores({
       });
 
       if (!blob.size) {
-        alert("O vídeo gravado ficou vazio. Tente gravar novamente.");
+        toast.error("O vídeo gravado ficou vazio. Tente gravar novamente.");
         return;
       }
 
@@ -1401,7 +1402,7 @@ export default function TreinosInstrutores({
 
     const js = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert(js?.erro || js?.message || "Erro ao finalizar treino.");
+      toast.error(js?.erro || js?.message || "Erro ao finalizar treino.");
       return;
     }
 
@@ -1424,7 +1425,7 @@ export default function TreinosInstrutores({
     const turmaIdOk = String(turmaId || "").trim();
     if (!turmaIdOk) {
       console.warn("[treinos] turmaId ausente para buscar alunos", { sessaoId, turmaId });
-      alert("Não consegui identificar a turma dessa sessão. Recarregue a página.");
+      toast.error("Não consegui identificar a turma dessa sessão. Recarregue a página.");
       return;
     }
 
@@ -1515,7 +1516,7 @@ export default function TreinosInstrutores({
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         console.error("[treinos] erro ao iniciar sessão:", res.status, txt);
-        alert("Não foi possível iniciar esse treino.");
+        toast.error("Não foi possível iniciar esse treino.");
         return;
       }
 
@@ -1530,7 +1531,7 @@ export default function TreinosInstrutores({
       await carregarSessoesDeHoje();
     } catch (e) {
       console.error("[treinos] erro ao confirmar presenças:", e);
-      alert("Erro inesperado ao iniciar o treino.");
+      toast.error("Erro inesperado ao iniciar o treino.");
     }
   }
 
@@ -1631,7 +1632,7 @@ export default function TreinosInstrutores({
     if (!token) return;
 
     if (!dataISO) {
-      alert("Escolha uma data para remarcar o treino.");
+      toast.error("Escolha uma data para remarcar o treino.");
       return;
     }
 
@@ -1640,7 +1641,7 @@ export default function TreinosInstrutores({
 
     const diaSelecionado = new Date(`${dataISO}T00:00:00`);
     if (diaSelecionado < hoje) {
-      alert("Você não pode remarcar um treino para uma data que já passou.");
+      toast.error("Você não pode remarcar um treino para uma data que já passou.");
       return;
     }
 
@@ -1672,17 +1673,17 @@ export default function TreinosInstrutores({
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         console.error("[treinos] erro ao remarcar sessão:", res.status, txt);
-        alert("Não foi possível remarcar esse treino.");
+        toast.error("Não foi possível remarcar esse treino.");
         return;
       }
 
-      alert("Treino remarcado com sucesso!");
+      toast.success("Treino remarcado com sucesso!");
 
       setSessaoEmRemarcacaoId(null);
       await carregarSessoesDeHoje();
     } catch (e) {
       console.error("[treinos] erro inesperado ao remarcar sessão:", e);
-      alert("Erro inesperado ao remarcar o treino.");
+      toast.error("Erro inesperado ao remarcar o treino.");
     }
   }
 
@@ -2478,17 +2479,17 @@ export default function TreinosInstrutores({
       if (!res.ok) {
         const txt = await res.text();
         console.error("Falha ao validar:", res.status, txt);
-        return alert("Não foi possível validar a submissão.");
+        return toast.error("Não foi possível validar a submissão.");
       }
       setSubmissoesPendentes((prev) => prev.filter((s) => s.id !== id));
-      alert(
+      toast.error(
         aprovado
           ? "Submissão aprovada e pontos creditados!"
           : "Submissão reprovada.",
       );
     } catch (e) {
       console.error(e);
-      alert("Erro inesperado ao validar.");
+      toast.error("Erro inesperado ao validar.");
     }
   }
   const aprovar = (id: string, pontos?: number) =>
@@ -2566,12 +2567,12 @@ export default function TreinosInstrutores({
     const js = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      alert(js?.message || "Não foi possível excluir o treino.");
+      toast.error(js?.message || "Não foi possível excluir o treino.");
       return;
     }
 
     setTreinos((prev) => prev.filter((t) => t.id !== treinoId));
-    alert("Treino excluído com sucesso!");
+    toast.success("Treino excluído com sucesso!");
   }
 
   function isTreinoMeuDeVerdade(t: TreinoProgramado, user: UsuarioLogado | null) {
@@ -2630,7 +2631,7 @@ export default function TreinosInstrutores({
           : prev.filter((item) => item !== id)
       );
 
-      alert(e?.message || "Erro ao atualizar favorito.");
+      toast.error(e?.message || "Erro ao atualizar favorito.");
     }
   }
 

@@ -41,6 +41,75 @@ function baseUrlFromReq(req: Request) {
   return String(base).replace(/\/+$/, "");
 }
 
+// Antes: qualquer usuário logado podia anexar mídia a atletaId/clubeId/etc de
+// outra pessoa só informando o id no body. Agora exige que o alvo pertença a
+// quem está enviando (ou que seja admin, caso do fluxo de gestão de conteúdo
+// em formadores.tsx). Se nenhum campo de alvo for enviado, não há nada pra
+// checar (upload de perfil simples).
+async function verificarPosseAlvoUpload(params: {
+  isAdminUser: boolean;
+  requesterId: string;
+  atletaId?: any;
+  clubeId?: any;
+  escolinhaId?: any;
+  exercicioPersonalizadoId?: any;
+  submissaoDesafioId?: any;
+  submissaoTreinoId?: any;
+}): Promise<boolean> {
+  if (params.isAdminUser) return true;
+  if (!params.requesterId) return false;
+
+  if (params.atletaId) {
+    const atleta = await prisma.atleta.findUnique({
+      where: { id: String(params.atletaId) },
+      select: { usuarioId: true },
+    });
+    if (!atleta || atleta.usuarioId !== params.requesterId) return false;
+  }
+
+  if (params.clubeId) {
+    const clube = await prisma.clube.findUnique({
+      where: { id: String(params.clubeId) },
+      select: { usuarioId: true },
+    });
+    if (!clube || clube.usuarioId !== params.requesterId) return false;
+  }
+
+  if (params.escolinhaId) {
+    const escolinha = await prisma.escolinha.findUnique({
+      where: { id: String(params.escolinhaId) },
+      select: { usuarioId: true },
+    });
+    if (!escolinha || escolinha.usuarioId !== params.requesterId) return false;
+  }
+
+  if (params.exercicioPersonalizadoId) {
+    const exercicio = await prisma.exercicioPersonalizado.findUnique({
+      where: { id: String(params.exercicioPersonalizadoId) },
+      select: { criadorUsuarioId: true },
+    });
+    if (!exercicio || exercicio.criadorUsuarioId !== params.requesterId) return false;
+  }
+
+  if (params.submissaoDesafioId) {
+    const submissao = await prisma.submissaoDesafio.findUnique({
+      where: { id: String(params.submissaoDesafioId) },
+      select: { usuarioId: true },
+    });
+    if (!submissao || submissao.usuarioId !== params.requesterId) return false;
+  }
+
+  if (params.submissaoTreinoId) {
+    const submissao = await prisma.submissaoTreino.findUnique({
+      where: { id: String(params.submissaoTreinoId) },
+      select: { usuarioId: true },
+    });
+    if (!submissao || submissao.usuarioId !== params.requesterId) return false;
+  }
+
+  return true;
+}
+
 export const uploadMidia = [
   upload.fields([
     { name: "foto", maxCount: 1 },
@@ -84,8 +153,29 @@ export const uploadMidia = [
         clubeId,
         submissaoDesafioId,
         submissaoTreinoId,
-        exercicioPersonalizadoId, 
+        exercicioPersonalizadoId,
       } = (req.body || {}) as any;
+
+      const requesterId = String((req as any).userId || (req as any).user?.id || "");
+      const isAdminUser = Boolean((req as any).user?.isAdmin);
+
+      const permitido = await verificarPosseAlvoUpload({
+        isAdminUser,
+        requesterId,
+        atletaId,
+        clubeId,
+        escolinhaId,
+        exercicioPersonalizadoId,
+        submissaoDesafioId,
+        submissaoTreinoId,
+      });
+
+      if (!permitido) {
+        fs.unlink(localPath, () => {});
+        return res
+          .status(403)
+          .json(uploadError("FORBIDDEN", "Sem permissão para enviar mídia para este destino."));
+      }
 
       let tipoMidia: TipoMidia;
       if (tipo === "Imagem" || tipo === "Video" || tipo === "Documento") {

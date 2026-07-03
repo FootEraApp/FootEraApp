@@ -3,6 +3,7 @@ import type { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import { sendError } from "../utils/httpError.js";
 
 type VinculoGestor = Prisma.OrganizacaoGestorGetPayload<{
   select: {
@@ -246,7 +247,7 @@ export async function listarMinhasOrganizacoesGerenciaveis(
     console.error("[listarMinhasOrganizacoesGerenciaveis]", e);
     return res.status(500).json({
       items: [],
-      message: e?.message || "Erro ao listar organizações gerenciáveis.",
+      message: "Erro ao listar organizações gerenciáveis.",
     });
   }
 }
@@ -699,9 +700,7 @@ export async function listarGestores(req: AuthenticatedRequest, res: Response) {
       }),
     });
   } catch (e: any) {
-    return res.status(500).json({
-      message: e?.message || "Falha ao carregar responsáveis.",
-    });
+    return sendError(res, e, "Falha ao carregar responsáveis.");
   }
 }
 

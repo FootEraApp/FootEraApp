@@ -1,4 +1,5 @@
 // client/src/components/turmas/TurmasManager
+import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -418,7 +419,7 @@ export default function TurmasManager({
         });
         setFreqData(r.data);
       } catch (e: any) {
-        alert(e?.response?.data?.message || e?.message || "Falha ao carregar frequência.");
+        toast.error(e?.response?.data?.message || e?.message || "Falha ao carregar frequência.");
         setFreqData(null);
       } finally {
         setFreqLoading(false);
@@ -569,7 +570,7 @@ export default function TurmasManager({
 
   const salvarInfoTurma = async () => {
     if (!selecionada) return;
-    if (!editNomeTurma.trim()) return alert("Informe o nome da turma.");
+    if (!editNomeTurma.trim()) return toast.error("Informe o nome da turma.");
 
     try {
       setSalvando(true);
@@ -584,7 +585,7 @@ export default function TurmasManager({
         { headers }
       );
 
-      alert("Dados da turma atualizados!");
+      toast.success("Dados da turma atualizados!");
 
       if (owner) {
         const lista = await carregarTurmas(owner, filtroProf);
@@ -598,7 +599,7 @@ export default function TurmasManager({
 
       setEditandoInfoTurma(false);
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Falha ao atualizar turma.");
+      toast.error(e?.response?.data?.message || e?.message || "Falha ao atualizar turma.");
     } finally {
       setSalvando(false);
     }
@@ -669,13 +670,13 @@ export default function TurmasManager({
       setDirtyProf(false);
       setDirtyAlunos(false);
 
-      alert(
+      toast.success(
         dirtyAlunos
           ? `Turma atualizada! (${totalAlunosAtualizado} aluno(s))`
           : "Turma atualizada!"
       );
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Falha ao salvar turma");
+      toast.error(e?.response?.data?.message || e?.message || "Falha ao salvar turma");
     } finally {
       setSalvando(false);
     }
@@ -689,7 +690,7 @@ export default function TurmasManager({
 
   const confirmarSairDaTurma = async () => {
     if (!selecionada) return;
-    if (!meuProfessorId) return alert("Não foi possível identificar seu professorId.");
+    if (!meuProfessorId) return toast.error("Não foi possível identificar seu professorId.");
 
     try {
       setLeavingTurma(true);
@@ -702,7 +703,7 @@ export default function TurmasManager({
         { headers }
       );
 
-      alert("Você foi removido da turma. Ela não aparecerá mais para você.");
+      toast.success("Você foi removido da turma. Ela não aparecerá mais para você.");
 
       const lista = await carregarTurmas(undefined, filtroProf);
       const primeira = lista?.[0]?.id;
@@ -714,7 +715,7 @@ export default function TurmasManager({
         await abrirTurma(primeira);
       }
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Falha ao sair da turma.");
+      toast.error(e?.response?.data?.message || e?.message || "Falha ao sair da turma.");
     } finally {
       setLeavingTurma(false);
     }
@@ -736,17 +737,17 @@ export default function TurmasManager({
       await axios.delete(`${API.BASE_URL}/api/turmas/${turmaId}`, { headers });
 
       setConfirmDeleteOpen(false);
-      alert("Turma excluída!");
+      toast.success("Turma excluída!");
       fecharModal();
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Falha ao excluir turma.");
+      toast.error(e?.response?.data?.message || e?.message || "Falha ao excluir turma.");
     } finally {
       setDeletandoTurma(false);
     }
   };
 
   const criarTurma = async () => {
-    if (!novoNome.trim()) return alert("Dê um nome para a turma");
+    if (!novoNome.trim()) return toast.error("Dê um nome para a turma");
 
     const professoresDaNovaTurma = owner
       ? novoProfessores
@@ -755,7 +756,7 @@ export default function TurmasManager({
         : [];
 
     if (!owner && professoresDaNovaTurma.length === 0) {
-      return alert("Não foi possível identificar o professor logado.");
+      return toast.error("Não foi possível identificar o professor logado.");
     }
 
     setSalvando(true);
@@ -794,9 +795,9 @@ export default function TurmasManager({
       const turmaNova = lista.find((t) => t.id === novaId);
       if (novaId) await abrirTurma(novaId, turmaNova);
 
-      alert("Turma criada!");
+      toast.success("Turma criada!");
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Falha ao criar turma");
+      toast.error(e?.response?.data?.message || e?.message || "Falha ao criar turma");
     } finally {
       setSalvando(false);
     }
@@ -1531,7 +1532,7 @@ export default function TurmasManager({
                                 );
 
                                 setAbaDireita("agenda");
-                                alert("Sessão agendada e treinos criados para os atletas da turma!");
+                                toast.success("Sessão agendada e treinos criados para os atletas da turma!");
                               }}
                             />
                           </div>

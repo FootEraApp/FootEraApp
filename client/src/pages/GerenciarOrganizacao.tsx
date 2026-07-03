@@ -1,4 +1,5 @@
 // client/src/pages/GerenciarOrganizacao.tsx
+import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API } from "../config.js";
@@ -278,7 +279,7 @@ export default function GerenciarOrganizacao({
 
   const criarGestor = async () => {
     if (!owner || !tipoApi) return;
-    if (!novoProfessorId) return alert("Selecione um professor.");
+    if (!novoProfessorId) return toast.error("Selecione um professor.");
 
     try {
       setSaving(true);
@@ -300,9 +301,9 @@ export default function GerenciarOrganizacao({
       setNovoPerms({ atletasTurmas: true, professores: false });
 
       await carregarGestores();
-      alert("Responsável adicionado!");
+      toast.success("Responsável adicionado!");
     } catch (e: any) {
-      alert(e?.response?.data?.error || e?.response?.data?.message || e?.message || "Erro ao adicionar responsável.");
+      toast.error(e?.response?.data?.error || e?.response?.data?.message || e?.message || "Erro ao adicionar responsável.");
     } finally {
       setSaving(false);
     }
@@ -324,7 +325,7 @@ export default function GerenciarOrganizacao({
 
       await carregarGestores();
     } catch (e: any) {
-      alert(e?.response?.data?.error || e?.response?.data?.message || e?.message || "Erro ao salvar responsável.");
+      toast.error(e?.response?.data?.error || e?.response?.data?.message || e?.message || "Erro ao salvar responsável.");
     } finally {
       setSaving(false);
     }
@@ -337,7 +338,7 @@ export default function GerenciarOrganizacao({
       setSaving(true);
       await axios.delete(`${API.BASE_URL}/api/gerenciar-organizacoes/gestores/${g.id}`, { headers });
       await carregarGestores();
-      alert("Responsável removido!");
+      toast.success("Responsável removido!");
     } catch (e: any) {
       try {
         await salvarGestor(g, { ativo: false });
@@ -434,7 +435,7 @@ export default function GerenciarOrganizacao({
                       <button
                         onClick={() => {
                           navigator.clipboard?.writeText(o.ownerId).catch(() => {});
-                          alert("ID da organização copiado (ownerId).");
+                          toast.success("ID da organização copiado (ownerId).");
                         }}
                         className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50"
                         title="Copiar ID"

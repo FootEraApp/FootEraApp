@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "@/lib/toast";
 import { API, APP } from "../../config.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
@@ -67,11 +68,11 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
 
   async function criarGrupo() {
     if (!nomeGrupo.trim()) {
-      alert("Informe um nome para o grupo");
+      toast.error("Informe um nome para o grupo");
       return;
     }
     if (membrosSelecionados.size === 0) {
-      alert("Selecione ao menos um membro");
+      toast.error("Selecione ao menos um membro");
       return;
     }
 
@@ -97,11 +98,11 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
         throw new Error(text || "Erro ao criar grupo");
       }
 
-      alert("Grupo criado com sucesso!");
+      toast.success("Grupo criado com sucesso!");
       onFechar();
     } catch (err) {
       console.error(err);
-      alert("Erro ao criar grupo");
+      toast.error("Erro ao criar grupo");
     }
   }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "@/lib/toast";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
@@ -750,12 +751,12 @@ export default function PaginaSubmissao() {
     if (enviando) return;
 
     if (isSessaoTreino && awardAtletas.length === 0) {
-      alert("Nenhum atleta presente foi encontrado para esta sessão.");
+      toast.error("Nenhum atleta presente foi encontrado para esta sessão.");
       return;
     }
 
     if (!isSessaoTreino && isDesafio && !atletaId && !metodologiaId) {
-      alert("Selecione o atleta.");
+      toast.error("Selecione o atleta.");
       return;
     }
 
@@ -771,7 +772,7 @@ export default function PaginaSubmissao() {
 
       if (isDesafio) {
         if (!desafioId) {
-          alert("Desafio inválido.");
+          toast.error("Desafio inválido.");
           return;
         }
 
@@ -810,7 +811,7 @@ export default function PaginaSubmissao() {
           url = `${API.BASE_URL}/api/submissoes/treino/sessao`;
         } else {
           if (!treinoAgendadoId) {
-            alert("Treino agendado inválido.");
+            toast.error("Treino agendado inválido.");
             return;
           }
 
@@ -833,7 +834,7 @@ export default function PaginaSubmissao() {
           url = `${API.BASE_URL}/api/submissoes/treino`;
         }
       } else {
-        alert("Nada para enviar.");
+        toast.error("Nada para enviar.");
         return;
       }
 
@@ -996,7 +997,7 @@ export default function PaginaSubmissao() {
       );
     } catch (err: any) {
       console.error("Erro no envio:", err);
-      alert(err?.message || "Erro de conexão ao enviar submissão.");
+      toast.error(err?.message || "Erro de conexão ao enviar submissão.");
     } finally {
       setEnviando(false);
     }

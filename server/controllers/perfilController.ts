@@ -7,6 +7,7 @@ import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/an
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+import { sendError } from "../utils/httpError.js";
 
 type AtividadeUI = {
   id: string;
@@ -3119,10 +3120,6 @@ export const upgradeLearningProfile = async (req: any, res: Response) => {
       tipo: novoTipo,
     });
   } catch (e: any) {
-    console.error("upgradeLearningProfile error:", e);
-
-    return res.status(e?.statusCode || 500).json({
-      message: e?.message || "Erro ao mudar tipo de perfil.",
-    });
+    return sendError(res, e, "Erro ao mudar tipo de perfil.");
   }
 };

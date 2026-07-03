@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { StatusCref } from "@prisma/client"; 
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
+import { sendError } from "../utils/httpError.js";
 
 function normalizeStatusCref(v: any): StatusCref {
   const raw = String(v ?? "").trim();
@@ -810,10 +811,7 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
       message: "Vínculo salvo com sucesso.",
     });
   } catch (err: any) {
-    console.error("Erro ao salvar vínculo do professor:", err);
-    return res.status(500).json({
-      message: err?.message || "Erro ao salvar vínculo.",
-    });
+    return sendError(res, err, "Erro ao salvar vínculo.");
   }
 };
 

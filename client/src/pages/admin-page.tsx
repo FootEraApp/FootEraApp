@@ -1,4 +1,5 @@
 // client/src/pages/admin-page
+import { toast as notify } from "@/lib/toast";
 import React, { useEffect, useState, useMemo } from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -1179,14 +1180,14 @@ async function excluirContaPermanente(usuario: any) {
 
   const typed = window.prompt('Digite EXCLUIR para confirmar:');
   if (typed !== "EXCLUIR") {
-    alert("Exclusão cancelada.");
+    notify.success("Exclusão cancelada.");
     return;
   }
 
   try {
     const token = Storage.token; 
     if (!token) {
-      alert("Sessão expirada. Faça login novamente.");
+      notify.error("Sessão expirada. Faça login novamente.");
       return;
     }
 
@@ -1194,7 +1195,7 @@ async function excluirContaPermanente(usuario: any) {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    alert("Conta excluída permanentemente.");
+    notify.success("Conta excluída permanentemente.");
 
     setUsuarios((prev: any[]) => prev.filter((u) => u.id !== usuario.id));
 
@@ -1204,7 +1205,7 @@ async function excluirContaPermanente(usuario: any) {
     }
   } catch (err: any) {
     console.error("[Admin] erro hard-delete:", err?.response?.status, err?.response?.data, err?.message);
-    alert(
+    notify.error(
       err?.response?.data?.message ||
         err?.response?.data?.error ||
         err?.message ||
@@ -1239,7 +1240,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
             : p
         )
       );
-      alert(txt || `Erro ao atualizar parceiro (HTTP ${r.status}).`);
+      notify.error(txt || `Erro ao atualizar parceiro (HTTP ${r.status}).`);
       return;
     }
   } catch (e: any) {
@@ -1250,7 +1251,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
           : p
       )
     );
-    alert(e?.message || "Falha de rede ao atualizar parceiro.");
+    notify.error(e?.message || "Falha de rede ao atualizar parceiro.");
   } finally {
     setProfParceiroBusyId(null);
   }
@@ -1575,7 +1576,7 @@ useEffect(() => {
 
       if (!r.ok) {
         const txt = await r.text();
-        alert(`Erro ao marcar como lido: ${txt || r.status}`);
+        notify.error(`Erro ao marcar como lido: ${txt || r.status}`);
         return;
       }
 
@@ -1586,7 +1587,7 @@ useEffect(() => {
       );
     } catch (e) {
       console.error(e);
-      alert("Falha ao marcar feedback como lido.");
+      notify.error("Falha ao marcar feedback como lido.");
     }
   }
 
@@ -1812,7 +1813,7 @@ useEffect(() => {
   }
 
   async function criarAdminViaPrompt() {
-    if (!canManageAdmins) return alert("Ação restrita ao super admin.");
+    if (!canManageAdmins) return notify.error("Ação restrita ao super admin.");
 
     const email = prompt("Email do novo admin:");
     if (!email) return;
@@ -1828,16 +1829,16 @@ useEffect(() => {
 
     if (!resp.ok) {
       const t = await resp.text();
-      alert(`Erro ao criar admin: ${t}`);
+      notify.error(`Erro ao criar admin: ${t}`);
       return;
     }
-    alert("Administrador criado com sucesso! Ele já pode acessar /admin/login com o email/senha definidos.");
+    notify.success("Administrador criado com sucesso! Ele já pode acessar /admin/login com o email/senha definidos.");
     await carregarUsuarios(1);
   }
 
   async function deletarAdmin(id: string) {
-    if (!canManageAdmins) return alert("Ação restrita ao super admin.");
-    if (meId && id === meId) return alert("Você não pode deletar sua própria conta.");
+    if (!canManageAdmins) return notify.error("Ação restrita ao super admin.");
+    if (meId && id === meId) return notify.error("Você não pode deletar sua própria conta.");
     if (!confirm("Tem certeza que deseja deletar este administrador?")) return;
 
     const resp = await fetch(`${API.BASE_URL}/api/admin/admins/${id}`, {
@@ -1847,10 +1848,10 @@ useEffect(() => {
 
     if (!resp.ok) {
       const t = await resp.text();
-      alert(`Falha ao deletar: ${t}`);
+      notify.error(`Falha ao deletar: ${t}`);
       return;
     }
-    alert("Administrador removido.");
+    notify.success("Administrador removido.");
     setUsuarios((prev) => prev.filter((u) => u.id !== id));
   }
 
@@ -1949,7 +1950,7 @@ async function confirmarExcluirProfessor() {
     }
 
     fecharModalExcluirProfessor();
-    alert("Professor e conta vinculada foram excluídos!");
+    notify.success("Professor e conta vinculada foram excluídos!");
     const nextPage = professores.length <= 1 && profPage > 1 ? profPage - 1 : profPage;
     await carregarProfessores(nextPage);
 
@@ -2063,10 +2064,10 @@ async function confirmarExcluirProfessor() {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ plano: novoPlano }),
     });
-    if (!resp.ok) return alert(await resp.text());
+    if (!resp.ok) return notify.error(await resp.text());
     const upd = await resp.json();
     setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
-    alert("Plano atualizado.");
+    notify.success("Plano atualizado.");
   }
 
   async function cancelarAssinatura(usuarioId: string) {
@@ -2075,10 +2076,10 @@ async function confirmarExcluirProfessor() {
       method: "POST",
       headers: authHeaders(),
     });
-    if (!resp.ok) return alert(await resp.text());
+    if (!resp.ok) return notify.error(await resp.text());
     const upd = await resp.json();
     setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
-    alert("Assinatura cancelada.");
+    notify.success("Assinatura cancelada.");
   }
 
   async function reativarAssinatura(usuarioId: string) {
@@ -2086,10 +2087,10 @@ async function confirmarExcluirProfessor() {
       method: "POST",
       headers: authHeaders(),
     });
-    if (!resp.ok) return alert(await resp.text());
+    if (!resp.ok) return notify.error(await resp.text());
     const upd = await resp.json();
     setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
-    alert("Assinatura reativada.");
+    notify.success("Assinatura reativada.");
   }
 
   function daysBetween(a: Date, b: Date) {
@@ -2817,7 +2818,7 @@ async function confirmarExcluirProfessor() {
 
                       <button
                         onClick={() => {
-                          if (!videoUrl) return alert("Este exercício não possui vídeo cadastrado.");
+                          if (!videoUrl) return notify.error("Este exercício não possui vídeo cadastrado.");
                           openVideo(videoUrl);
                         }}
                         className={videoUrl ? "text-green-600" : "text-gray-400 cursor-not-allowed"}
@@ -2836,10 +2837,10 @@ async function confirmarExcluirProfessor() {
                             headers: authHeaders(),
                           });
                           if (response.ok) {
-                            alert("Exercício excluído!");
+                            notify.success("Exercício excluído!");
                             await carregarExercicios();
                           } else {
-                            alert("Erro ao excluir.");
+                            notify.error("Erro ao excluir.");
                           }
                         }}
                         className="text-red-600"
@@ -2920,11 +2921,11 @@ async function confirmarExcluirProfessor() {
                               });
                             }
                             if (resp.ok) {
-                              alert("Treino excluído com sucesso!");
+                              notify.success("Treino excluído com sucesso!");
                               setTreinos((prev) => prev.filter((x) => x.id !== t.id));
                               void carregarExercicios();
                             } else {
-                              alert("Erro ao excluir treino.");
+                              notify.error("Erro ao excluir treino.");
                             }
                           }}
                         >
@@ -3440,10 +3441,10 @@ async function confirmarExcluirProfessor() {
                           if (!confirmar) return;
                           const response = await fetch(`${API.BASE_URL}/api/desafios/${d.id}`, { method: "DELETE" });
                           if (response.ok) {
-                            alert("Desafio excluído com sucesso!");
+                            notify.success("Desafio excluído com sucesso!");
                             window.location.reload();
                           } else {
-                            alert("Erro ao excluir desafio.");
+                            notify.error("Erro ao excluir desafio.");
                           }
                         }}
                         className="text-red-600"
@@ -4210,7 +4211,7 @@ async function confirmarExcluirProfessor() {
                       if (!res.ok) {
                         const txt = await res.text().catch(() => "");
                         setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
-                        alert(txt || "Erro ao salvar configuração.");
+                        notify.error(txt || "Erro ao salvar configuração.");
                         return;
                       }
 
@@ -4218,7 +4219,7 @@ async function confirmarExcluirProfessor() {
                       if (txt) setConfiguracoes(JSON.parse(txt));
                     } catch (err: any) {
                       setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
-                      alert(err?.message || "Falha de rede ao salvar configuração.");
+                      notify.error(err?.message || "Falha de rede ao salvar configuração.");
                     }
                   }}
                 />
@@ -4356,10 +4357,10 @@ async function confirmarExcluirProfessor() {
             <div className="mt-4">
               <h4 className="font-semibold text-green-800 mb-2">🔧 Ações Administrativas</h4>
               <div className="flex gap-4">
-                <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Cache atualizado!")}>
+                <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => notify.success("Cache atualizado!")}>
                   Atualizar Cache
                 </button>
-                <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Verificação de integridade feita!")}>
+                <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => notify.error("Verificação de integridade feita!")}>
                   Verificar Integridade
                 </button>
               </div>

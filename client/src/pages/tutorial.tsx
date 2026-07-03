@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
+import MaintenanceScreen from "@/components/MaintenanceScreen.js";
+import { FLAGS } from "@/config.js";
 
 const cadastroFooteraVideo = "";
 const configuracoesAssinaturasVideo = "";
@@ -222,6 +224,16 @@ const CATEGORIAS: TutorialItem["categoria"][] = [
 
 export default function TutorialPage() {
   const [, navigate] = useLocation();
+
+  if (!FLAGS.TUTORIAL_ENABLED) {
+    return (
+      <MaintenanceScreen
+        title="Tutorial a caminho!"
+        subtitle="Estamos gravando os vídeos com o passo a passo de cada parte do app. Em breve essa página estará disponível."
+        hint="Volte em breve para conferir os tutoriais."
+      />
+    );
+  }
 
   const [categoria, setCategoria] = useState<TutorialItem["categoria"]>("Criar Treino");
   const [busca, setBusca] = useState("");
