@@ -56,6 +56,83 @@ export default function Atualizacoes() {
   return (
     <div className="space-y-4 text-sm text-gray-800">
 
+      <UpdateCard type="atualizacao" title="✨ Atualizações do Perfil — 03/07/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            Agora é possível <strong>mudar o tipo do seu perfil</strong>: quem criou conta
+            como <strong>Learning</strong> (só cursos) pode virar Atleta, Profissional,
+            Olheiro, Clube, Escolinha, Federação ou Marca sem perder cursos, lives e
+            progresso já conquistados — em Configurações {'>'} Mudar tipo de perfil.
+          </li>
+          <li>
+            Chegaram <strong>três novos tipos de perfil</strong> na FootEra:{" "}
+            <strong>Learning</strong> (focado em cursos e certificados),{" "}
+            <strong>Marca</strong> (parceiras/patrocinadoras) e{" "}
+            <strong>Federação</strong> (canal institucional com eventos e conteúdos
+            oficiais).
+          </li>
+          <li>
+            <strong>Seguir alguém</strong> agora funciona por solicitação: você pede para
+            seguir e a pessoa precisa aceitar — dá para aceitar ou recusar pedidos direto
+            na tela de <strong>notificações</strong>.
+          </li>
+          <li>
+            O perfil de <strong>Atleta</strong> ganhou uma aba nova de{" "}
+            <strong>Conquistas</strong>, mostrando emblemas e certificados conquistados.
+          </li>
+          <li>
+            Perfis de <strong>Clube</strong> e <strong>Escolinha</strong> também ganharam
+            a aba <strong>Conquistas</strong>, com emblemas e certificados da organização.
+          </li>
+          <li>
+            O perfil de <strong>Clube</strong> ganhou uma aba de{" "}
+            <strong>Dashboard</strong> própria.
+          </li>
+          <li>
+            Contas verificadas agora mostram um selo <strong>“Verificado”</strong> no
+            topo do perfil.
+          </li>
+          <li>
+            <strong>Editar perfil</strong> ficou bem mais completo: agora dá para
+            preencher <strong>Bio, CPF, CEP, país, estado, cidade e endereço</strong>.
+          </li>
+          <li>
+            Perfis de organização (Clube, Escolinha, Marca, Federação) passaram a ter
+            campos próprios para editar <strong>CNPJ, telefones, e-mail público, site
+            oficial, sede e descrição</strong>.
+          </li>
+          <li>
+            <strong>Professores</strong> agora podem enviar solicitação de vínculo direto
+            pelo próprio perfil para se conectar com um clube ou escolinha.
+          </li>
+          <li>
+            A <strong>foto de perfil</strong> ganhou um jeito novo e mais confiável de
+            carregar, com um ícone padrão quando a pessoa ainda não tem foto.
+          </li>
+          <li>
+            Ao acessar o perfil de clubes, escolinhas, profissionais, olheiros, marcas e
+            federações que também têm página de <strong>Creator</strong>, aparece um
+            botão para ver a página Creator dessa pessoa/organização.
+          </li>
+          <li>
+            Agora dá para <strong>desvincular um treino em conjunto</strong> direto pelo
+            perfil da pessoa, com uma confirmação antes de desfazer.
+          </li>
+          <li>
+            Avisos e mensagens de erro (por exemplo, ao tentar seguir sem estar logado)
+            agora aparecem como <strong>notificações discretas</strong> na tela em vez de
+            pop-ups de alerta.
+          </li>
+          <li>
+            Notificações podem ser enviadas para o seu computador/celular se vc habilitar essa opção.
+          </li>
+          <li>
+            A seção <strong>“Minhas postagens”</strong> no perfil recebeu um visual
+            levemente atualizado.
+          </li>
+        </ul>
+      </UpdateCard>
+
       <UpdateCard type="atualizacao" title="✨ Atualizações — 20/02/2026">
         <ul className="list-disc list-inside space-y-1">
           <li>
@@ -184,7 +261,7 @@ export default function Atualizacoes() {
         </ul>
       </UpdateCard>
 
-      <UpdateCard type="correcoes" title="🐞 Correções de bugs — ??/01/2026">
+      <UpdateCard type="correcoes" title="🐞 Correções de bugs — 15/01/2026">
         <ul className="list-disc list-inside space-y-1">
           <li>Ajustes na exibição e filtragem de treinos para atletas, professores, clubes e escolinhas.</li>
           <li>Correção na contagem e visualização de treinos realizados, utilizados e vinculados.</li>
