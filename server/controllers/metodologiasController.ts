@@ -6199,34 +6199,159 @@ export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
     const page = Math.max(1, Number(req.query.page || 1));
     const pageSize = Math.max(1, Math.min(50, Number(req.query.pageSize || 10)));
     const q = String(req.query.q || "").trim();
+    const criador = String(req.query.criador || "").trim();
+    const criadorUsuarioId = String(
+      req.query.criadorUsuarioId || ""
+    ).trim();
 
-    const whereLearning = q
-      ? {
-          OR: [
-            { titulo: { contains: q, mode: "insensitive" as const } },
-            { descricao: { contains: q, mode: "insensitive" as const } },
-            { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" as const } } } },
-            { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" as const } } } },
-          ],
-        }
-      : {};
+    const criadorTipoRaw = String(
+      req.query.criadorTipo || ""
+    )
+      .trim()
+      .toLowerCase();
 
-    const whereAvulsa = q
-      ? {
-          OR: [
-            { titulo: { contains: q, mode: "insensitive" as const } },
-            { descricao: { contains: q, mode: "insensitive" as const } },
-            { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" as const } } } },
-            { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" as const } } } },
-          ],
-        }
-      : {};
+    const tipoCriadorMap: Record<string, string> = {
+      professor: "Professor",
+      clube: "Clube",
+      escolinha: "Escolinha",
+      escola: "Escolinha",
+      olheiro: "Olheiro",
+      marca: "Marca",
+      federacao: "Federacao",
+      "federação": "Federacao",
+      learning: "Learning",
+      atleta: "Atleta",
+      admin: "Admin",
+      administrador: "Admin",
+      profissional: "Profissional",
+    };
+
+    const criadorTipo =
+      tipoCriadorMap[criadorTipoRaw] || "";
+
+    const ordenarPor = String(
+      req.query.ordenarPor || "criadoEm"
+    )
+      .trim()
+      .toLowerCase();
+
+    const ordem: "asc" | "desc" =
+      String(req.query.ordem || "desc")
+        .trim()
+        .toLowerCase() === "asc"
+        ? "asc"
+        : "desc";
+
+    function montarWhereMetodologia() {
+      const where: any = {};
+
+      if (q) {
+        where.OR = [
+          {
+            titulo: {
+              contains: q,
+              mode: "insensitive",
+            },
+          },
+          {
+            descricao: {
+              contains: q,
+              mode: "insensitive",
+            },
+          },
+          {
+            criadorUsuario: {
+              is: {
+                nome: {
+                  contains: q,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+          {
+            criadorUsuario: {
+              is: {
+                nomeDeUsuario: {
+                  contains: q,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+          {
+            criadorUsuario: {
+              is: {
+                email: {
+                  contains: q,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+        ];
+      }
+
+      const filtroCriador: any = {};
+
+      if (criadorUsuarioId) {
+        filtroCriador.id = criadorUsuarioId;
+      }
+
+      if (criadorTipo) {
+        filtroCriador.tipo = criadorTipo;
+      }
+
+      if (criador) {
+        filtroCriador.OR = [
+          {
+            nome: {
+              contains: criador,
+              mode: "insensitive",
+            },
+          },
+          {
+            nomeDeUsuario: {
+              contains: criador,
+              mode: "insensitive",
+            },
+          },
+          {
+            email: {
+              contains: criador,
+              mode: "insensitive",
+            },
+          },
+        ];
+      }
+
+      if (Object.keys(filtroCriador).length) {
+        where.criadorUsuario = {
+          is: filtroCriador,
+        };
+      }
+
+      return where;
+    }
+
+    const whereLearning = montarWhereMetodologia();
+    const whereAvulsa = montarWhereMetodologia();
 
     const [learning, avulsas] = await Promise.all([
       prisma.metodologia.findMany({
         where: whereLearning as any,
         include: {
-          criadorUsuario: { select: { id: true, nome: true, email: true, foto: true, parceiro: true } },
+          criadorUsuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              email: true,
+              foto: true,
+              tipo: true,
+              parceiro: true,
+            },
+          },
           _count: { select: { assinantes: true, estruturas: true } },
         },
         orderBy: { criadoEm: "desc" },
@@ -6234,7 +6359,17 @@ export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
       prisma.metodologiaAvulsa.findMany({
         where: whereAvulsa as any,
         include: {
-          criadorUsuario: { select: { id: true, nome: true, email: true, foto: true, parceiro: true } },
+          criadorUsuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              email: true,
+              foto: true,
+              tipo: true,
+              parceiro: true,
+            },
+          },
           _count: { select: { assinantes: true, estruturas: true } },
           estruturas: {
             include: {
@@ -6290,10 +6425,47 @@ export async function listTodasMetodologiasAdmin(req: Request, res: Response) {
         };
       })
     ]
-      .sort((a, b) => {
-        const da = new Date(a.criadoEm || 0).getTime();
-        const db = new Date(b.criadoEm || 0).getTime();
-        return db - da;
+      items.sort((a: any, b: any) => {
+        if (ordenarPor === "titulo") {
+          const tituloA = String(a.titulo || "");
+          const tituloB = String(b.titulo || "");
+
+          const resultado = tituloA.localeCompare(
+            tituloB,
+            "pt-BR",
+            {
+              sensitivity: "base",
+              numeric: true,
+            }
+          );
+
+          return ordem === "asc"
+            ? resultado
+            : -resultado;
+        }
+
+        const dataA = a.criadoEm
+          ? new Date(a.criadoEm).getTime()
+          : 0;
+
+        const dataB = b.criadoEm
+          ? new Date(b.criadoEm).getTime()
+          : 0;
+
+        if (dataA === dataB) {
+          return String(a.titulo || "").localeCompare(
+            String(b.titulo || ""),
+            "pt-BR",
+            {
+              sensitivity: "base",
+              numeric: true,
+            }
+          );
+        }
+
+        return ordem === "asc"
+          ? dataA - dataB
+          : dataB - dataA;
       });
 
     const total = items.length;

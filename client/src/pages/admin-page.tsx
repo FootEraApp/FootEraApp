@@ -37,7 +37,9 @@ interface Treinos {
   codigo: string;
   nivel: string;
   descricao: string;
+  createdAt?: string | null;
   agendadosCount?: number;
+  agendadoCount?: number;
   realizadoCount?: number;
   realizados?: number;
   submissoes?: number;
@@ -64,6 +66,47 @@ type StatusConta =
   | "pendente";
 
 type DestaqueFiltro = "" | "sim" | "nao";
+type OrdenacaoUsuarios =
+  | "nome_asc"
+  | "nome_desc"
+  | "criado_desc"
+  | "criado_asc";
+type OrdenacaoConteudoAdmin =
+  | "uso_desc"
+  | "nome_asc"
+  | "nome_desc"
+  | "criado_desc"
+  | "criado_asc";
+
+type OrdenacaoProfessoresAdmin =
+  | "nome_asc"
+  | "nome_desc"
+  | "criado_desc"
+  | "criado_asc";
+
+type OrdenacaoMetodologiasAdmin =
+  | "criado_desc"
+  | "criado_asc"
+  | "titulo_asc"
+  | "titulo_desc";
+
+type TipoCriadorMetodologia =
+  | ""
+  | "Professor"
+  | "Clube"
+  | "Escolinha"
+  | "Olheiro"
+  | "Marca"
+  | "Federacao"
+  | "Learning"
+  | "Atleta"
+  | "Admin";
+
+type OrdenacaoAssinaturasAdmin =
+  | "nome_asc"
+  | "nome_desc"
+  | "inicio_desc"
+  | "inicio_asc";
 
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
@@ -325,6 +368,68 @@ function getAdminMetodologiaHref(item: any) {
     : `/learning/${item.id}?from=admin`;
 }
 
+function compararNomeAdmin(a: any, b: any) {
+  const nomeA = String(
+    a?.nome ??
+    a?.titulo ??
+    a?.usuario?.nome ??
+    ""
+  ).trim();
+
+  const nomeB = String(
+    b?.nome ??
+    b?.titulo ??
+    b?.usuario?.nome ??
+    ""
+  ).trim();
+
+  return nomeA.localeCompare(nomeB, "pt-BR", {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
+function compararDataCriacaoAdmin(
+  a: any,
+  b: any,
+  ordem: "asc" | "desc"
+) {
+  const rawA =
+    a?.createdAt ??
+    a?.criadoEm ??
+    a?.dataCriacao ??
+    a?.usuario?.dataCriacao ??
+    null;
+
+  const rawB =
+    b?.createdAt ??
+    b?.criadoEm ??
+    b?.dataCriacao ??
+    b?.usuario?.dataCriacao ??
+    null;
+
+  const timeA = rawA ? new Date(rawA).getTime() : NaN;
+  const timeB = rawB ? new Date(rawB).getTime() : NaN;
+
+  const validoA = Number.isFinite(timeA);
+  const validoB = Number.isFinite(timeB);
+
+  if (!validoA && !validoB) {
+    return compararNomeAdmin(a, b);
+  }
+
+  if (!validoA) return 1;
+  if (!validoB) return -1;
+
+  if (timeA === timeB) {
+    return compararNomeAdmin(a, b);
+  }
+
+  return ordem === "asc"
+    ? timeA - timeB
+    : timeB - timeA;
+}
+
 export default function AdminDashboard() {
   const [aba, setAba] = useState<Tab>("dashboard");
 
@@ -387,6 +492,7 @@ export default function AdminDashboard() {
   const [profParceiroFiltro, setProfParceiroFiltro] = useState<
     "todos" | "parceiros" | "naoParceiros"
   >("todos");
+  const [ordenacaoProfessores, setOrdenacaoProfessores] = useState<OrdenacaoProfessoresAdmin>("nome_asc");
   const profPageSize = 20;
   const [profTotal, setProfTotal] = useState(0);
   const [desafios, setDesafios] = useState<any[]>([]);
@@ -397,6 +503,7 @@ export default function AdminDashboard() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<UsuarioTipo>("");
   const [destaqueFiltro, setDestaqueFiltro] = useState<DestaqueFiltro>("");
+  const [ordenacaoUsuarios, setOrdenacaoUsuarios] =  useState<OrdenacaoUsuarios>("nome_asc");
   const [pagina, setPagina] = useState(1);
   const pageSize = 20;
   const [totalUsuarios, setTotalUsuarios] = useState(0);
@@ -406,6 +513,8 @@ export default function AdminDashboard() {
   const [trQ, setTrQ] = useState("");
   const [trDebQ, setTrDebQ] = useState("");
   const [trCat, setTrCat] = useState<string>("");
+  const [ordenacaoExercicios, setOrdenacaoExercicios] = useState<OrdenacaoConteudoAdmin>("uso_desc");
+  const [ordenacaoTreinos, setOrdenacaoTreinos] = useState<OrdenacaoConteudoAdmin>("uso_desc");
   const [detalheAberto, setDetalheAberto] = useState(false);
   const [userSelecionado, setUserSelecionado] = useState<UsuarioDetalhe | null>(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -438,6 +547,10 @@ export default function AdminDashboard() {
   const [metTodasErro, setMetTodasErro] = useState("");
   const [metTodasTotal, setMetTodasTotal] = useState(0);
   const [metTodasPage, setMetTodasPage] = useState(1);
+  const [metTodasCriador, setMetTodasCriador] = useState("");
+  const [metTodasCriadorDeb, setMetTodasCriadorDeb] = useState("");
+  const [metTodasCriadorTipo, setMetTodasCriadorTipo] = useState<TipoCriadorMetodologia>("");
+  const [metTodasOrdenacao, setMetTodasOrdenacao] = useState<OrdenacaoMetodologiasAdmin>("criado_desc");
 
   type MetodologiaItemPreview = {
     id: string;
@@ -555,7 +668,6 @@ export default function AdminDashboard() {
     }>;
   };
 
-
   const [metPendentes, setMetPendentes] = useState<MetodologiaPendente[]>([]);
   const [metLoading, setMetLoading] = useState(false);
   const [metErro, setMetErro] = useState<string>("");
@@ -564,12 +676,10 @@ export default function AdminDashboard() {
   const [metPage, setMetPage] = useState(1);
   const [metTotal, setMetTotal] = useState(0);
   const metPageSize = 20;
-
   const [metDetailOpen, setMetDetailOpen] = useState(false);
   const [metDetailLoading, setMetDetailLoading] = useState(false);
   const [metDetail, setMetDetail] = useState<MetodologiaDetail | null>(null);
   const [metDetailErr, setMetDetailErr] = useState<string>("");
-
 
   function showToast(type: "success" | "error", msg: string) {
     setToast({ type, msg });
@@ -825,6 +935,8 @@ const [assPlano, setAssPlano] = useState<string>("");
 const [assAtivo, setAssAtivo] = useState<string>("");
 const [assTipo, setAssTipo] = useState<string>("");
 const [assPage, setAssPage] = useState(1);
+const [assOrdenacao, setAssOrdenacao] = useState<OrdenacaoAssinaturasAdmin>("nome_asc");
+const [assDeleteBusyId, setAssDeleteBusyId] = useState<string | null>(null);
 const assPageSize = 20;
 const [assLoading, setAssLoading] = useState(false);
 const [assErro, setAssErro] = useState<string>("");
@@ -1279,9 +1391,17 @@ useEffect(() => {
 
 useEffect(() => {
   if (aba !== "assinaturas") return;
+
   void carregarAssinantes(1);
   void carregarAssOverview();
-}, [aba, assPlano, assAtivo, assDebQ, assTipo]);
+}, [
+  aba,
+  assPlano,
+  assAtivo,
+  assDebQ,
+  assTipo,
+  assOrdenacao,
+]);
 
 useEffect(() => {
   if (aba !== "feedback") return;
@@ -1305,9 +1425,16 @@ useEffect(() => {
 
   useEffect(() => {
     if (aba !== "professores") return;
+
     void carregarProfessores(1);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, profDebQ]);
+  }, [
+    aba,
+    profDebQ,
+    profParceiroFiltro,
+    ordenacaoProfessores,
+  ]);
 
   async function carregarProfessores(page: number) {
     setProfLoading(true);
@@ -1315,9 +1442,39 @@ useEffect(() => {
 
     try {
       const params = new URLSearchParams();
+
       params.set("page", String(page));
       params.set("pageSize", String(profPageSize));
+
       if (profDebQ) params.set("q", profDebQ);
+
+      if (profParceiroFiltro === "parceiros") {
+        params.set("parceiro", "true");
+      }
+
+      if (profParceiroFiltro === "naoParceiros") {
+        params.set("parceiro", "false");
+      }
+
+      if (ordenacaoProfessores === "nome_asc") {
+        params.set("ordenarPor", "nome");
+        params.set("ordem", "asc");
+      }
+
+      if (ordenacaoProfessores === "nome_desc") {
+        params.set("ordenarPor", "nome");
+        params.set("ordem", "desc");
+      }
+
+      if (ordenacaoProfessores === "criado_desc") {
+        params.set("ordenarPor", "criadoEm");
+        params.set("ordem", "desc");
+      }
+
+      if (ordenacaoProfessores === "criado_asc") {
+        params.set("ordenarPor", "criadoEm");
+        params.set("ordem", "asc");
+      }
 
       const r = await fetch(`${API.BASE_URL}/api/professores?${params.toString()}`, {
         headers: authHeaders(),
@@ -1359,15 +1516,56 @@ useEffect(() => {
     return () => clearTimeout(h);
   }, [metQ]);
 
+  useEffect(() => {
+    const h = setTimeout(
+      () => setMetTodasCriadorDeb(metTodasCriador.trim()),
+      350
+    );
+
+    return () => clearTimeout(h);
+  }, [metTodasCriador]);
+
   async function carregarTodasMetodologiasAdmin(page = 1) {
     setMetTodasLoading(true);
     setMetTodasErro("");
 
     try {
       const params = new URLSearchParams();
+
       params.set("page", String(page));
       params.set("pageSize", String(metPageSize));
-      if (metDebQ) params.set("q", metDebQ);
+
+      if (metDebQ) {
+        params.set("q", metDebQ);
+      }
+
+      if (metTodasCriadorDeb) {
+        params.set("criador", metTodasCriadorDeb);
+      }
+
+      if (metTodasCriadorTipo) {
+        params.set("criadorTipo", metTodasCriadorTipo);
+      }
+
+      if (metTodasOrdenacao === "criado_desc") {
+        params.set("ordenarPor", "criadoEm");
+        params.set("ordem", "desc");
+      }
+
+      if (metTodasOrdenacao === "criado_asc") {
+        params.set("ordenarPor", "criadoEm");
+        params.set("ordem", "asc");
+      }
+
+      if (metTodasOrdenacao === "titulo_asc") {
+        params.set("ordenarPor", "titulo");
+        params.set("ordem", "asc");
+      }
+
+      if (metTodasOrdenacao === "titulo_desc") {
+        params.set("ordenarPor", "titulo");
+        params.set("ordem", "desc");
+      }
 
       const r = await fetch(
         `${API.BASE_URL}/api/admin/metodologias/todas?${params.toString()}`,
@@ -1468,8 +1666,16 @@ useEffect(() => {
     } else {
       void carregarTodasMetodologiasAdmin(1);
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, metTab, metDebQ]);
+  }, [
+    aba,
+    metTab,
+    metDebQ,
+    metTodasCriadorDeb,
+    metTodasCriadorTipo,
+    metTodasOrdenacao,
+  ]);
 
   async function carregarAssinantes(page: number) {
     setAssLoading(true);
@@ -1482,6 +1688,26 @@ useEffect(() => {
       if (assPlano) params.set("plano", assPlano);
       if (assTipo) params.set("tipo", assTipo);
       if (assAtivo) params.set("ativo", assAtivo);
+
+      if (assOrdenacao === "nome_asc") {
+        params.set("ordenarPor", "nome");
+        params.set("ordem", "asc");
+      }
+
+      if (assOrdenacao === "nome_desc") {
+        params.set("ordenarPor", "nome");
+        params.set("ordem", "desc");
+      }
+
+      if (assOrdenacao === "inicio_desc") {
+        params.set("ordenarPor", "startsAt");
+        params.set("ordem", "desc");
+      }
+
+      if (assOrdenacao === "inicio_asc") {
+        params.set("ordenarPor", "startsAt");
+        params.set("ordem", "asc");
+      }
 
       const r = await fetch(`${API.BASE_URL}/api/admin/assinantes?${params}`, { headers: authHeaders() });
       if (!r.ok) {
@@ -1634,8 +1860,6 @@ useEffect(() => {
     void carregarExercicios();
   }, [aba]);
 
-
-
   useEffect(() => {
     fetch(`${API.BASE_URL}/api/configuracoes`, { headers: authHeaders() })
       .then((r) => r.json())
@@ -1646,7 +1870,13 @@ useEffect(() => {
   useEffect(() => {
     if (aba !== "usuarios") return;
     carregarUsuarios(1).catch(() => {});
-  }, [aba, tipoFiltro, destaqueFiltro, debouncedQ]);
+  }, [
+    aba,
+    tipoFiltro,
+    destaqueFiltro,
+    debouncedQ,
+    ordenacaoUsuarios,
+  ]);
 
   useEffect(() => {
     (async () => {
@@ -1738,6 +1968,7 @@ useEffect(() => {
             codigo: String(tr.codigo ?? ""),
             nivel: String(tr.nivel ?? ""),
             descricao: tr.descricao ?? "",
+            createdAt: tr.createdAt ?? null,
             realizadoCount,
             agendadoCount,
           };
@@ -1856,67 +2087,87 @@ useEffect(() => {
   }
 
   async function carregarUsuarios(targetPage: number) {
-  setCarregandoUsuarios(true);
-  setErroUsuarios("");
-  try {
-    const params = new URLSearchParams();
-    params.set("page", String(targetPage));
-    params.set("pageSize", String(pageSize));
-    if (debouncedQ) params.set("q", debouncedQ);
-    if (tipoFiltro && tipoToServer[tipoFiltro]) {
-      params.set("tipo", tipoToServer[tipoFiltro]);
-    }
+    setCarregandoUsuarios(true);
+    setErroUsuarios("");
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(targetPage));
+      params.set("pageSize", String(pageSize));
+      if (debouncedQ) params.set("q", debouncedQ);
+      if (tipoFiltro && tipoToServer[tipoFiltro]) {
+        params.set("tipo", tipoToServer[tipoFiltro]);
+      }
 
-    if (destaqueFiltro === "sim") {
-      params.set("destaque", "true");
-    }
+      if (destaqueFiltro === "sim") {
+        params.set("destaque", "true");
+      }
 
-    if (destaqueFiltro === "nao") {
-      params.set("destaque", "false");
-    }
+      if (destaqueFiltro === "nao") {
+        params.set("destaque", "false");
+      }
 
-    const url = `${USERS_ENDPOINT}?${params.toString()}`;
-    const res = await fetch(url, { headers: authHeaders() });
+      if (ordenacaoUsuarios === "nome_asc") {
+        params.set("ordenarPor", "nome");
+        params.set("ordem", "asc");
+      }
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
+      if (ordenacaoUsuarios === "nome_desc") {
+        params.set("ordenarPor", "nome");
+        params.set("ordem", "desc");
+      }
+
+      if (ordenacaoUsuarios === "criado_desc") {
+        params.set("ordenarPor", "criadoEm");
+        params.set("ordem", "desc");
+      }
+
+      if (ordenacaoUsuarios === "criado_asc") {
+        params.set("ordenarPor", "criadoEm");
+        params.set("ordem", "asc");
+      }
+
+      const url = `${USERS_ENDPOINT}?${params.toString()}`;
+      const res = await fetch(url, { headers: authHeaders() });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        setUsuarios([]);
+        setTotalUsuarios(0);
+        setErroUsuarios(
+          `Falha ao buscar usuários (status ${res.status}). ${body || "Verifique se o token de admin é válido."}`
+        );
+        return;
+      }
+
+      const json: any = await res.json();
+      const arr =
+        Array.isArray(json)
+          ? json
+          : json.items ??
+            json.data ??
+            json.usuarios ??
+            json.users ??
+            json.rows ??
+            json.result ??
+            [];
+
+      const items = Array.isArray(arr) ? arr : [];
+      const total =
+        json.total ??
+        json.count ??
+        (Array.isArray(json) ? json.length : items.length);
+
+      setUsuarios(items);
+      setTotalUsuarios(total);
+      setPagina(targetPage);
+    } catch (e) {
+      setErroUsuarios("Erro inesperado ao carregar usuários.");
       setUsuarios([]);
       setTotalUsuarios(0);
-      setErroUsuarios(
-        `Falha ao buscar usuários (status ${res.status}). ${body || "Verifique se o token de admin é válido."}`
-      );
-      return;
+    } finally {
+      setCarregandoUsuarios(false);
     }
-
-    const json: any = await res.json();
-    const arr =
-      Array.isArray(json)
-        ? json
-        : json.items ??
-          json.data ??
-          json.usuarios ??
-          json.users ??
-          json.rows ??
-          json.result ??
-          [];
-
-    const items = Array.isArray(arr) ? arr : [];
-    const total =
-      json.total ??
-      json.count ??
-      (Array.isArray(json) ? json.length : items.length);
-
-    setUsuarios(items);
-    setTotalUsuarios(total);
-    setPagina(targetPage);
-  } catch (e) {
-    setErroUsuarios("Erro inesperado ao carregar usuários.");
-    setUsuarios([]);
-    setTotalUsuarios(0);
-  } finally {
-    setCarregandoUsuarios(false);
   }
-}
 
 function abrirModalExcluirProfessor(p: any) {
   setProfDeleteErr("");
@@ -2082,15 +2333,80 @@ async function confirmarExcluirProfessor() {
     notify.success("Assinatura cancelada.");
   }
 
-  async function reativarAssinatura(usuarioId: string) {
-    const resp = await fetch(`${API.BASE_URL}/api/assinaturas/${usuarioId}/reativar`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-    if (!resp.ok) return notify.error(await resp.text());
-    const upd = await resp.json();
-    setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
-    notify.success("Assinatura reativada.");
+  async function excluirAssinatura(
+    assinatura: AssinanteListItem
+  ) {
+    if (assinatura.ativo) {
+      notify.error(
+        "Cancele a assinatura antes de excluí-la."
+      );
+      return;
+    }
+
+    const nome =
+      assinatura.usuario?.nome ??
+      assinatura.usuario?.nomeDeUsuario ??
+      assinatura.usuario?.email ??
+      "este usuário";
+
+    const confirmou = window.confirm(
+      `Excluir permanentemente a assinatura "${assinatura.plano}" de ${nome}?\n\n` +
+      `Ela será removida do histórico exibido no admin.`
+    );
+
+    if (!confirmou) return;
+
+    setAssDeleteBusyId(assinatura.id);
+
+    try {
+      const resp = await fetch(
+        `${API.BASE_URL}/api/admin/assinantes/${assinatura.id}`,
+        {
+          method: "DELETE",
+          headers: authHeaders(),
+        }
+      );
+
+      const txt = await resp.text().catch(() => "");
+
+      if (!resp.ok) {
+        let msg = txt;
+
+        try {
+          const json = txt ? JSON.parse(txt) : null;
+          msg = json?.message || txt;
+        } catch {}
+
+        notify.error(
+          msg || "Não foi possível excluir a assinatura."
+        );
+
+        return;
+      }
+
+      notify.success(
+        "Assinatura excluída com sucesso."
+      );
+
+      // Se apagou o único item da página,
+      // volta uma página para não deixar a tela vazia.
+      const proximaPagina =
+        assinantes.length <= 1 && assPage > 1
+          ? assPage - 1
+          : assPage;
+
+      await Promise.all([
+        carregarAssinantes(proximaPagina),
+        carregarAssOverview(),
+      ]);
+    } catch (e: any) {
+      notify.error(
+        e?.message ||
+        "Falha de rede ao excluir assinatura."
+      );
+    } finally {
+      setAssDeleteBusyId(null);
+    }
   }
 
   function daysBetween(a: Date, b: Date) {
@@ -2188,35 +2504,72 @@ async function confirmarExcluirProfessor() {
     });
   }, [exercicios, exDebQ, exCat]);
 
-  const treinosOrdenados = [...treinosFiltrados].sort((a: any, b: any) => {
-    const ra = Number(a.realizadoCount ?? a.realizados ?? 0);
-    const rb = Number(b.realizadoCount ?? b.realizados ?? 0);
+  const treinosOrdenados = useMemo(() => {
+    return [...treinosFiltrados].sort((a: any, b: any) => {
+      if (ordenacaoTreinos === "nome_asc") {
+        return compararNomeAdmin(a, b);
+      }
 
-    if (rb !== ra) return rb - ra;
+      if (ordenacaoTreinos === "nome_desc") {
+        return compararNomeAdmin(b, a);
+      }
 
-    const na = String(a.nome ?? "").toLowerCase();
-    const nb = String(b.nome ?? "").toLowerCase();
-    if (na !== nb) return na.localeCompare(nb);
+      if (ordenacaoTreinos === "criado_desc") {
+        return compararDataCriacaoAdmin(a, b, "desc");
+      }
 
-    const ca = String(a.codigo ?? "").toLowerCase();
-    const cb = String(b.codigo ?? "").toLowerCase();
-    return ca.localeCompare(cb);
-  });
+      if (ordenacaoTreinos === "criado_asc") {
+        return compararDataCriacaoAdmin(a, b, "asc");
+      }
 
-  const exerciciosOrdenados = [...exerciciosFiltrados].sort((a: any, b: any) => {
-    const ca = Number(a.usadoEmTreinos ?? 0);
-    const cb = Number(b.usadoEmTreinos ?? 0);
+      const realizadosA = Number(
+        a.realizadoCount ??
+        a.realizados ??
+        0
+      );
 
-    if (cb !== ca) return cb - ca;
+      const realizadosB = Number(
+        b.realizadoCount ??
+        b.realizados ??
+        0
+      );
 
-    const na = String(a.nome ?? "").toLowerCase();
-    const nb = String(b.nome ?? "").toLowerCase();
-    if (na !== nb) return na.localeCompare(nb);
+      if (realizadosB !== realizadosA) {
+        return realizadosB - realizadosA;
+      }
 
-    const ka = String(a.codigo ?? "").toLowerCase();
-    const kb = String(b.codigo ?? "").toLowerCase();
-    return ka.localeCompare(kb);
-  });
+      return compararNomeAdmin(a, b);
+    });
+  }, [treinosFiltrados, ordenacaoTreinos]);
+
+  const exerciciosOrdenados = useMemo(() => {
+    return [...exerciciosFiltrados].sort((a: any, b: any) => {
+      if (ordenacaoExercicios === "nome_asc") {
+        return compararNomeAdmin(a, b);
+      }
+
+      if (ordenacaoExercicios === "nome_desc") {
+        return compararNomeAdmin(b, a);
+      }
+
+      if (ordenacaoExercicios === "criado_desc") {
+        return compararDataCriacaoAdmin(a, b, "desc");
+      }
+
+      if (ordenacaoExercicios === "criado_asc") {
+        return compararDataCriacaoAdmin(a, b, "asc");
+      }
+
+      const usoA = Number(a.usadoEmTreinos ?? 0);
+      const usoB = Number(b.usadoEmTreinos ?? 0);
+
+      if (usoB !== usoA) {
+        return usoB - usoA;
+      }
+
+      return compararNomeAdmin(a, b);
+    });
+  }, [exerciciosFiltrados, ordenacaoExercicios]);
 
   const isProfessorParceiro = (p: any) => {
     return !!(
@@ -2228,15 +2581,10 @@ async function confirmarExcluirProfessor() {
   };
 
   const professoresFiltrados = useMemo(() => {
-    return (Array.isArray(professores) ? professores : []).filter((p: any) => {
-      const parceiro = isProfessorParceiro(p);
-
-      if (profParceiroFiltro === "parceiros") return parceiro;
-      if (profParceiroFiltro === "naoParceiros") return !parceiro;
-
-      return true;
-    });
-  }, [professores, profParceiroFiltro]);
+    return Array.isArray(professores)
+      ? professores
+      : [];
+  }, [professores]);
 
   const usuariosOrdenados = usuarios;
   const assinantesOrdenados = assinantes;
@@ -2399,6 +2747,20 @@ async function confirmarExcluirProfessor() {
                 <option value="">Todos os destaques</option>
                 <option value="sim">Somente destaque</option>
                 <option value="nao">Sem destaque</option>
+              </select>
+
+              <select
+                value={ordenacaoUsuarios}
+                onChange={(e) => {
+                  setOrdenacaoUsuarios(e.target.value as OrdenacaoUsuarios);
+                  setPagina(1);
+                }}
+                className="border rounded px-3 py-2 w-full sm:w-auto md:hidden"
+              >
+                <option value="nome_asc">Nome: A → Z</option>
+                <option value="nome_desc">Nome: Z → A</option>
+                <option value="criado_desc">Mais recentes</option>
+                <option value="criado_asc">Mais antigos</option>
               </select>
 
               <button className="w-full sm:w-auto px-3 py-2 rounded bg-gray-200" onClick={() => carregarUsuarios(1)}>
@@ -2583,12 +2945,43 @@ async function confirmarExcluirProfessor() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left">Usuário</th>
+                    <th className="px-3 py-2 text-left">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOrdenacaoUsuarios((atual) =>
+                            atual === "nome_asc" ? "nome_desc" : "nome_asc"
+                          )
+                        }
+                        className="inline-flex items-center gap-1 font-semibold hover:text-green-700"
+                        title="Ordenar por nome"
+                      >
+                        Usuário
+                        <span>
+                          {ordenacaoUsuarios === "nome_desc" ? "↓" : "↑"}
+                        </span>
+                      </button>
+                    </th>
                     <th className="px-3 py-2 text-left">Email</th>
                     <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Criado em</th>
-                    <th className="px-3 py-2 text-left">Última atv.</th>
-                    <th className="px-3 py-2 text-left">Renova em</th>
+                    <th className="px-3 py-2 text-left">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOrdenacaoUsuarios((atual) =>
+                            atual === "criado_desc" ? "criado_asc" : "criado_desc"
+                          )
+                        }
+                        className="inline-flex items-center gap-1 font-semibold hover:text-green-700"
+                        title="Ordenar por data de criação"
+                      >
+                        Criado em
+                        <span>
+                          {ordenacaoUsuarios === "criado_asc" ? "↑" : "↓"}
+                        </span>
+                      </button>
+                    </th>
+
                     <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
@@ -2652,21 +3045,6 @@ async function confirmarExcluirProfessor() {
                         <td className="px-3 py-2">{u.email ?? "-"}</td>
                         <td className="px-3 py-2 capitalize">{u.tipo ?? "-"}</td>
                        <td className="px-3 py-2">{formatDate(u.criadoEm)}</td>
-                          <td className="px-3 py-2">
-                            {u.ultimaAtividade ? (
-                              <>
-                                <span className="block truncate max-w-[220px]" title={u.ultimaAtividadeNome ?? ""}>
-                                  {u.ultimaAtividadeNome ?? "—"}
-                                </span>
-                                <span className="text-xs text-gray-500">{formatDate(u.ultimaAtividade)}</span>
-                              </>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {fmtDate(u.assinatura?.renovaEm ?? null)}
-                          </td>
                           <td className="px-3 py-2 text-right">
                           <div className="flex items-center gap-3 justify-end">
                             <button onClick={() => abrirDetalhes(u.id)} className="text-green-700 hover:underline">
@@ -2784,10 +3162,26 @@ async function confirmarExcluirProfessor() {
                 value={exQ}
                 onChange={(e) => setExQ(e.target.value)}
                 placeholder="Pesquisar por nome, código, nível (Base/Avançado), descrição…"
-                className="border rounded px-3 py-2 w-[min(520px,100%)]"
+                className="border rounded px-3 py-2 w-full sm:w-[min(520px,100%)]"
               />
 
-              <div className="ml-auto text-sm text-gray-600">
+              <select
+                value={ordenacaoExercicios}
+                onChange={(e) =>
+                  setOrdenacaoExercicios(
+                    e.target.value as OrdenacaoConteudoAdmin
+                  )
+                }
+                className="border rounded px-3 py-2 bg-white w-full sm:w-auto"
+              >
+                <option value="uso_desc">Mais usados</option>
+                <option value="nome_asc">Nome: A → Z</option>
+                <option value="nome_desc">Nome: Z → A</option>
+                <option value="criado_desc">Mais novos</option>
+                <option value="criado_asc">Mais antigos</option>
+              </select>
+
+              <div className="w-full sm:w-auto sm:ml-auto text-sm text-gray-600">
                 {exerciciosOrdenados.length} resultado(s)
               </div>
             </div>
@@ -2873,10 +3267,26 @@ async function confirmarExcluirProfessor() {
                 value={trQ}
                 onChange={(e) => setTrQ(e.target.value)}
                 placeholder="Pesquisar por nome, código, nível (Base/Avançado), descrição…"
-                className="border rounded px-3 py-2 w-[min(520px,100%)]"
+                className="border rounded px-3 py-2 w-full sm:w-[min(520px,100%)]"
               />
 
-              <div className="ml-auto text-sm text-gray-600">
+              <select
+                value={ordenacaoTreinos}
+                onChange={(e) =>
+                  setOrdenacaoTreinos(
+                    e.target.value as OrdenacaoConteudoAdmin
+                  )
+                }
+                className="border rounded px-3 py-2 bg-white w-full sm:w-auto"
+              >
+                <option value="uso_desc">Mais realizados</option>
+                <option value="nome_asc">Nome: A → Z</option>
+                <option value="nome_desc">Nome: Z → A</option>
+                <option value="criado_desc">Mais novos</option>
+                <option value="criado_asc">Mais antigos</option>
+              </select>
+
+              <div className="w-full sm:w-auto sm:ml-auto text-sm text-gray-600">
                 {treinosOrdenados.length} resultado(s)
               </div>
             </div>
@@ -2973,6 +3383,21 @@ async function confirmarExcluirProfessor() {
                 <option value="todos">Todos</option>
                 <option value="parceiros">Parceiros FootEra</option>
                 <option value="naoParceiros">Não parceiros</option>
+              </select>
+
+              <select
+                value={ordenacaoProfessores}
+                onChange={(e) =>
+                  setOrdenacaoProfessores(
+                    e.target.value as OrdenacaoProfessoresAdmin
+                  )
+                }
+                className="border rounded px-3 py-2 w-full sm:w-auto bg-white"
+              >
+                <option value="nome_asc">Nome: A → Z</option>
+                <option value="nome_desc">Nome: Z → A</option>
+                <option value="criado_desc">Mais novos</option>
+                <option value="criado_asc">Mais antigos</option>
               </select>
 
               <button
@@ -3195,9 +3620,60 @@ async function confirmarExcluirProfessor() {
               <input
                 value={metQ}
                 onChange={(e) => setMetQ(e.target.value)}
-                placeholder="Buscar por título, descrição ou criador…"
-                className="border rounded px-3 py-2 w-[min(520px,100%)]"
+                placeholder={
+                  metTab === "todas"
+                    ? "Buscar por título ou descrição…"
+                    : "Buscar por título, descrição ou criador…"
+                }
+                className="border rounded px-3 py-2 w-full sm:w-[min(420px,100%)]"
               />
+
+              {metTab === "todas" && (
+                <>
+                  <input
+                    value={metTodasCriador}
+                    onChange={(e) => setMetTodasCriador(e.target.value)}
+                    placeholder="Criador: nome, usuário ou e-mail…"
+                    className="border rounded px-3 py-2 w-full sm:w-[260px]"
+                  />
+
+                  <select
+                    value={metTodasCriadorTipo}
+                    onChange={(e) =>
+                      setMetTodasCriadorTipo(
+                        e.target.value as TipoCriadorMetodologia
+                      )
+                    }
+                    className="border rounded px-3 py-2 bg-white w-full sm:w-auto"
+                  >
+                    <option value="">Todos os criadores</option>
+                    <option value="Professor">Professores</option>
+                    <option value="Clube">Clubes</option>
+                    <option value="Escolinha">Escolinhas</option>
+                    <option value="Olheiro">Olheiros</option>
+                    <option value="Marca">Marcas</option>
+                    <option value="Federacao">Federações</option>
+                    <option value="Learning">Learning</option>
+                    <option value="Atleta">Atletas</option>
+                    <option value="Admin">Administradores</option>
+                  </select>
+
+                  <select
+                    value={metTodasOrdenacao}
+                    onChange={(e) =>
+                      setMetTodasOrdenacao(
+                        e.target.value as OrdenacaoMetodologiasAdmin
+                      )
+                    }
+                    className="border rounded px-3 py-2 bg-white w-full sm:w-auto"
+                  >
+                    <option value="criado_desc">Mais recentes</option>
+                    <option value="criado_asc">Mais antigos</option>
+                    <option value="titulo_asc">Título: A → Z</option>
+                    <option value="titulo_desc">Título: Z → A</option>
+                  </select>
+                </>
+              )}
 
               <button
                 className="px-3 py-2 rounded bg-gray-200"
@@ -3610,6 +4086,33 @@ async function confirmarExcluirProfessor() {
                 <option value="true">Ativas</option>
                 <option value="false">Inativas</option>
               </select>
+
+              <select
+                value={assOrdenacao}
+                onChange={(e) =>
+                  setAssOrdenacao(
+                    e.target.value as OrdenacaoAssinaturasAdmin
+                  )
+                }
+                className="border rounded px-3 py-2 w-full sm:w-auto bg-white"
+              >
+                <option value="nome_asc">
+                  Nome: A → Z
+                </option>
+
+                <option value="nome_desc">
+                  Nome: Z → A
+                </option>
+
+                <option value="inicio_desc">
+                  Mais recentes
+                </option>
+
+                <option value="inicio_asc">
+                  Mais antigas
+                </option>
+              </select>
+
               <button className="w-full sm:w-auto px-3 py-2 rounded bg-gray-200" onClick={() => carregarAssinantes(1)}>
                 Atualizar
               </button>
@@ -3743,6 +4246,24 @@ async function confirmarExcluirProfessor() {
                           Cancelar
                         </button>
                       )}
+
+                      {!a.ativo && (
+                        <button
+                          type="button"
+                          onClick={() => excluirAssinatura(a)}
+                          disabled={assDeleteBusyId === a.id}
+                          className="
+                            inline-flex items-center justify-center
+                            rounded-xl border border-red-200
+                            bg-red-50 px-3 py-2
+                            text-xs font-semibold text-red-700
+                            disabled:opacity-50
+                          "
+                          title="Excluir assinatura"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -3844,6 +4365,18 @@ async function confirmarExcluirProfessor() {
                                 }}
                               >
                                 Cancelar
+                              </button>
+                            )}
+
+                            {!a.ativo && (
+                              <button
+                                type="button"
+                                onClick={() => excluirAssinatura(a)}
+                                disabled={assDeleteBusyId === a.id}
+                                className="inline-flex items-center justify-center text-red-600 hover:text-red-800 disabled:opacity-50"
+                                title="Excluir assinatura"
+                              >
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </div>
