@@ -55,6 +55,134 @@ function UpdateCard({
 export default function Atualizacoes() {
   return (
     <div className="space-y-4 text-sm text-gray-800">
+      <UpdateCard type="atualizacao" title="✨ Novidades da FootEra — 24/07/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            A central de <strong>Notificações</strong> ficou mais organizada:
+            agora é possível selecionar várias notificações de uma vez,
+            selecionar todas e apagar as selecionadas.
+          </li>
+
+          <li>
+            Notificações agora possuem controle de <strong>lidas e não lidas</strong>,
+            facilitando identificar o que ainda precisa ser visto.
+          </li>
+
+          <li>
+            A FootEra ganhou melhorias nas <strong>notificações push</strong>,
+            incluindo suporte no navegador e no aplicativo Android quando
+            as notificações estão permitidas no dispositivo.
+          </li>
+
+          <li>
+            Perfis podem receber <strong>Destaque FootEra</strong>, ajudando
+            conteúdos e perfis selecionados a ganharem mais visibilidade
+            dentro da plataforma.
+          </li>
+
+          <li>
+            Os <strong>treinos</strong> agora suportam melhor a participação
+            de mais de um professor, e clubes e escolinhas receberam melhorias
+            no vínculo e gerenciamento de múltiplos professores.
+          </li>
+
+          <li>
+            As <strong>Metodologias</strong> receberam suporte aprimorado para
+            aulas ao vivo, convidados, inscrições, chat e replay das transmissões.
+          </li>
+
+          <li>
+            Foram feitas melhorias no painel administrativo para facilitar
+            buscas, filtros, organização de usuários, professores,
+            exercícios, treinos, metodologias e assinaturas.
+          </li>
+
+          <li>
+            O sistema ganhou um <strong>modo de manutenção</strong> que pode
+            ser ativado pela administração durante atualizações da plataforma.
+          </li>
+        </ul>
+      </UpdateCard>
+
+      <UpdateCard type="atualizacao" title="✨ Atualizações do Perfil — 03/07/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            Agora é possível <strong>mudar o tipo do seu perfil</strong>: quem criou conta
+            como <strong>Learning</strong> (só cursos) pode virar Atleta, Professores,
+            Olheiro, Clube, Escolinha, Federação ou Marca sem perder cursos, lives e
+            progresso já conquistados — em Configurações {'>'} Mudar tipo de perfil.
+          </li>
+          <li>
+            Chegaram <strong>três novos tipos de perfil</strong> na FootEra:{" "}
+            <strong>Learning</strong> (focado em cursos e certificados),{" "}
+            <strong>Marca</strong> (parceiras/patrocinadoras) e{" "}
+            <strong>Federação</strong> (canal institucional com eventos e conteúdos
+            oficiais).
+          </li>
+          <li>
+            <strong>Seguir alguém</strong> agora funciona por solicitação: você pede para
+            seguir e a pessoa precisa aceitar — dá para aceitar ou recusar pedidos direto
+            na tela de <strong>notificações</strong>.
+          </li>
+          <li>
+            O perfil de <strong>Atleta</strong> ganhou uma aba nova de{" "}
+            <strong>Conquistas</strong>, mostrando emblemas e certificados conquistados.
+          </li>
+          <li>
+            Perfis de <strong>Clube</strong> e <strong>Escolinha</strong> também ganharam
+            a aba <strong>Conquistas</strong>, com emblemas e certificados da organização.
+          </li>
+          <li>
+            O perfil de <strong>Clube</strong> ganhou uma aba de{" "}
+            <strong>Dashboard</strong> própria.
+          </li>
+          <li>
+            Contas verificadas agora mostram um selo <strong>“Verificado”</strong> no
+            topo do perfil.
+          </li>
+          <li>
+            <strong>Editar perfil</strong> ficou bem mais completo: agora dá para
+            preencher <strong>Bio, CPF, CEP, país, estado, cidade e endereço</strong>.
+          </li>
+          <li>
+            Perfis de organização (Clube, Escolinha, Marca, Federação) passaram a ter
+            campos próprios para editar <strong>CNPJ, telefones, e-mail público, site
+            oficial, sede e descrição</strong>.
+          </li>
+          <li>
+            <strong>Professores</strong> agora podem enviar solicitação de vínculo direto
+            pelo próprio perfil para se conectar com um clube ou escolinha.
+          </li>
+          <li>
+            A <strong>foto de perfil</strong> ganhou um jeito novo e mais confiável de
+            carregar, com um ícone padrão quando a pessoa ainda não tem foto.
+          </li>
+          <li>
+            Ao acessar o perfil de clubes, escolinhas, professores, olheiros, marcas e
+            federações que também têm página de <strong>Creator</strong>, aparece um
+            botão para ver a página Creator dessa pessoa/organização.
+          </li>
+          <li>
+            Agora dá para <strong>desvincular um treino em conjunto</strong> direto pelo
+            perfil da pessoa, com uma confirmação antes de desfazer.
+          </li>
+          <li>
+            Avisos e mensagens de erro (por exemplo, ao tentar seguir sem estar logado)
+            agora aparecem como <strong>notificações discretas</strong> na tela em vez de
+            pop-ups de alerta.
+          </li>
+          <li>
+            As <strong>notificações push</strong> podem ser ativadas para receber
+            avisos no navegador e em dispositivos compatíveis. No aplicativo
+            Android, as notificações também podem ser recebidas quando a permissão
+            estiver habilitada no aparelho.
+          </li>
+          <li>
+            A seção <strong>“Minhas postagens”</strong> no perfil recebeu um visual
+            levemente atualizado.
+          </li>
+        </ul>
+      </UpdateCard>
 
       <UpdateCard type="atualizacao" title="✨ Atualizações — 20/02/2026">
         <ul className="list-disc list-inside space-y-1">
@@ -184,7 +312,16 @@ export default function Atualizacoes() {
         </ul>
       </UpdateCard>
 
-      <UpdateCard type="correcoes" title="🐞 Correções de bugs — ??/01/2026">
+      <UpdateCard type="correcoes" title="🐞 Correções de bugs — 19/01/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>Correção no carregamento de treinos agendados;</li>
+          <li>Ajustes em notificações duplicadas;</li>
+          <li>Correção de erros em eventos com datas inválidas;</li>
+          <li>Melhoria na estabilidade geral da plataforma.</li>
+        </ul>
+      </UpdateCard>
+
+      <UpdateCard type="correcoes" title="🐞 Correções de bugs — 15/01/2026">
         <ul className="list-disc list-inside space-y-1">
           <li>Ajustes na exibição e filtragem de treinos para atletas, professores, clubes e escolinhas.</li>
           <li>Correção na contagem e visualização de treinos realizados, utilizados e vinculados.</li>
@@ -200,83 +337,6 @@ export default function Atualizacoes() {
           <li>Melhorias nas configurações de conta, assinatura e acesso a pagamentos.</li>
           <li>Ajustes no controle de trial gratuito e ativação consciente do plano.</li>
           <li>Correções visuais e funcionais em telas administrativas e de gerenciamento.</li>
-        </ul>
-      </UpdateCard>
-      
-      <UpdateCard type="atualizacao" title="✨ Atualizações 2026">
-        <p className="font-medium">
-          Estamos preparando muitas novidades para este ano de{" "}
-          <strong>2026</strong> 💚  
-          Abaixo estão algumas das principais melhorias e funcionalidades
-          que estamos implementando na plataforma:
-        </p>
-
-        <ul className="list-disc list-inside space-y-1 mt-2">
-          <li>Professor avaliar o treino realizado pelo atleta;</li>
-
-          <li>
-            Adicionar <strong>titular e reserva</strong> no dia de competição,
-            com notificação automática aos atletas selecionados;
-          </li>
-
-          <li>Treinos com mais de um professor;</li>
-
-          <li>
-            Vínculo de múltiplos professores por turma, clube ou escolinha;
-          </li>
-
-          <li>Tela de agendamento de treinos aprimorada para professores;</li>
-
-          <li>Ajustes nas postagens para todos os tipos de usuários;</li>
-
-          <li>Cadastro de professor sem obrigatoriedade do CREF;</li>
-
-          <li>
-            Escolher se exercícios personalizados terão vídeo ou não;
-          </li>
-
-          <li>Melhorias na página de Olheiros;</li>
-
-          <li>
-            Página de manutenção para períodos de atualização do sistema;
-          </li>
-
-          <li>
-            Atleta avaliar o treino realizado, indicando dificuldade
-            ou impossibilidade de conclusão;
-          </li>
-
-          <li>
-            Validação correta das datas de eventos e notificações;
-          </li>
-
-          <li>
-            Visualização cruzada de treinos entre professores,
-            clubes e escolinhas;
-          </li>
-
-          <li>
-            Contagem de uso dos treinos por professor,
-            escolinha ou clube;
-          </li>
-
-          <li>
-            Exibição completa de treinos disponíveis no
-            agendamento do atleta;
-          </li>
-        </ul>
-
-        <p className="mt-3 font-medium text-green-800">
-          🚀 Estamos preparando muitas atualizações para esse ano de 2026 💚
-        </p>
-      </UpdateCard>
-
-      <UpdateCard type="correcoes" title="🐞 Correções de bugs — 19/01/2026">
-        <ul className="list-disc list-inside space-y-1">
-          <li>Correção no carregamento de treinos agendados;</li>
-          <li>Ajustes em notificações duplicadas;</li>
-          <li>Correção de erros em eventos com datas inválidas;</li>
-          <li>Melhoria na estabilidade geral da plataforma.</li>
         </ul>
       </UpdateCard>
 
@@ -305,6 +365,64 @@ export default function Atualizacoes() {
         <p className="mt-2">
           🔧 Seguimos evoluindo constantemente com melhorias
           e correções contínuas.
+        </p>
+      </UpdateCard>
+
+      <UpdateCard type="atualizacao" title="✨ Proximas novidades da FootEra">
+        <p className="font-medium">
+          Estamos preparando muitas novidades para este ano de{" "}
+          <strong>2026</strong> 💚  
+          Abaixo estão algumas das principais melhorias e funcionalidades
+          que estamos implementando na plataforma:
+        </p>
+
+        <ul className="list-disc list-inside space-y-1 mt-2">
+          <li>Professor avaliar o treino realizado pelo atleta;</li>
+
+          <li>
+            Adicionar <strong>titular e reserva</strong> no dia de competição,
+            com notificação automática aos atletas selecionados;
+          </li>
+
+          <li>Tela de agendamento de treinos aprimorada para professores;</li>
+
+          <li>Ajustes nas postagens para todos os tipos de usuários;</li>
+
+          <li>Cadastro de professor sem obrigatoriedade do CREF;</li>
+
+          <li>
+            Escolher se exercícios personalizados terão vídeo ou não;
+          </li>
+
+          <li>Melhorias na página de Olheiros;</li>
+
+          <li>
+            Atleta avaliar o treino realizado, indicando dificuldade
+            ou impossibilidade de conclusão;
+          </li>
+
+          <li>
+            Validação correta das datas de eventos e notificações;
+          </li>
+
+          <li>
+            Visualização cruzada de treinos entre professores,
+            clubes e escolinhas;
+          </li>
+
+          <li>
+            Contagem de uso dos treinos por professor,
+            escolinha ou clube;
+          </li>
+
+          <li>
+            Exibição completa de treinos disponíveis no
+            agendamento do atleta;
+          </li>
+        </ul>
+
+        <p className="mt-3 font-medium text-green-800">
+          🚀 Estamos preparando muitas atualizações para esse ano de 2026 💚
         </p>
       </UpdateCard>
     </div>

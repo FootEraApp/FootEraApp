@@ -45,10 +45,25 @@ function resolveFoto(u: any): string | null {
 export async function listAdminUsers(req: Request, res: Response) {
   try {
     const page = Math.max(1, Number(req.query.page || 1) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize || 20) || 20));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, Number(req.query.pageSize || 20) || 20)
+    );
+
     const q = String(req.query.q || "").trim();
     const tipo = normalizaTipo(String(req.query.tipo || ""));
-    const destaqueParam = String(req.query.destaque || "").trim().toLowerCase();
+    const destaqueParam = String(req.query.destaque || "")
+      .trim()
+      .toLowerCase();
+
+    const ordenarPor = String(req.query.ordenarPor || "nome")
+      .trim()
+      .toLowerCase();
+
+    const ordem: "asc" | "desc" =
+      String(req.query.ordem || "asc").toLowerCase() === "desc"
+        ? "desc"
+        : "asc";
 
     const where: any = {};
     if (q) {
@@ -68,17 +83,28 @@ export async function listAdminUsers(req: Request, res: Response) {
       where.destaque = false;
     }
 
+    let orderBy: any[];
+
+    if (ordenarPor === "criadoem") {
+      orderBy = [
+        { dataCriacao: ordem },
+        { id: "asc" },
+      ];
+    } else {
+      orderBy = [
+        { nome: ordem },
+        { nomeDeUsuario: ordem },
+        { email: ordem },
+        { id: "asc" },
+      ];
+    }
+
     const [rows, total] = await prisma.$transaction([
       prisma.usuario.findMany({
         where,
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: [
-          { nome: "asc" },
-          { nomeDeUsuario: "asc" },
-          { email: "asc" },
-          { id: "asc" },
-        ],
+        orderBy,
         include: {
           atleta: { select: { foto: true } },
           professor: { select: { fotoUrl: true } },

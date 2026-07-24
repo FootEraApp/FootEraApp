@@ -159,17 +159,32 @@ export const buscarProfessorPorId = async (req: Request, res: Response) => {
 
 export const listarProfessores = async (req: Request, res: Response) => {
   try {
-    const organizacaoIdRaw = typeof req.query.organizacaoId === "string" ? req.query.organizacaoId : "";
-    const ownerTipoRaw = typeof req.query.ownerTipo === "string" ? req.query.ownerTipo : "";
-    const ownerIdRaw = typeof req.query.ownerId === "string" ? req.query.ownerId : "";
+    const organizacaoIdRaw =
+      typeof req.query.organizacaoId === "string"
+        ? req.query.organizacaoId
+        : "";
+
+    const ownerTipoRaw =
+      typeof req.query.ownerTipo === "string"
+        ? req.query.ownerTipo
+        : "";
+
+    const ownerIdRaw =
+      typeof req.query.ownerId === "string"
+        ? req.query.ownerId
+        : "";
+
     const organizacaoId = organizacaoIdRaw.trim();
     const ownerTipo = ownerTipoRaw.trim();
     const ownerId = ownerIdRaw.trim();
 
     if (ownerId && ownerTipo) {
       const tipoNorm = ownerTipo.toLowerCase();
+
       if (tipoNorm !== "clube" && tipoNorm !== "escolinha") {
-        return res.status(400).json({ message: "ownerTipo deve ser Clube ou Escolinha" });
+        return res.status(400).json({
+          message: "ownerTipo deve ser Clube ou Escolinha",
+        });
       }
 
       const rels = await prisma.relacaoTreinamento.findMany({
@@ -178,32 +193,57 @@ export const listarProfessores = async (req: Request, res: Response) => {
           encerradoEm: null,
           atletaId: null,
           professorId: { not: null },
-          ...(tipoNorm === "clube" ? { clubeId: ownerId } : { escolinhaId: ownerId }),
+          ...(tipoNorm === "clube"
+            ? { clubeId: ownerId }
+            : { escolinhaId: ownerId }),
         },
-        select: { professorId: true },
-        orderBy: { criadoEm: "desc" },
+        select: {
+          professorId: true,
+        },
+        orderBy: {
+          criadoEm: "desc",
+        },
       });
 
       const professorIds = Array.from(
-        new Set(rels.map((r) => r.professorId).filter(Boolean) as string[]),
+        new Set(
+          rels
+            .map((r) => r.professorId)
+            .filter(Boolean) as string[]
+        )
       );
 
-      if (!professorIds.length) return res.json([]);
+      if (!professorIds.length) {
+        return res.json([]);
+      }
 
       const professores = await prisma.professor.findMany({
-        where: { id: { in: professorIds } },
-        include: { usuario: true },
+        where: {
+          id: { in: professorIds },
+        },
+        include: {
+          usuario: true,
+        },
       });
 
-      const byId = new Map(professores.map((p) => [p.id, p]));
-      const ordered = professorIds.map((id) => byId.get(id)).filter(Boolean);
+      const byId = new Map(
+        professores.map((p) => [p.id, p])
+      );
+
+      const ordered = professorIds
+        .map((id) => byId.get(id))
+        .filter(Boolean);
 
       return res.json(ordered);
     }
 
     if (organizacaoId) {
-      const { tipo, id } = await resolveOrganizacao(organizacaoId);
-      if (!id || !tipo) return res.json([]);
+      const { tipo, id } =
+        await resolveOrganizacao(organizacaoId);
+
+      if (!id || !tipo) {
+        return res.json([]);
+      }
 
       const rels = await prisma.relacaoTreinamento.findMany({
         where: {
@@ -211,37 +251,233 @@ export const listarProfessores = async (req: Request, res: Response) => {
           encerradoEm: null,
           atletaId: null,
           professorId: { not: null },
-          ...(tipo === "Clube" ? { clubeId: id } : { escolinhaId: id }),
+          ...(tipo === "Clube"
+            ? { clubeId: id }
+            : { escolinhaId: id }),
         },
-        select: { professorId: true },
-        orderBy: { criadoEm: "desc" },
+        select: {
+          professorId: true,
+        },
+        orderBy: {
+          criadoEm: "desc",
+        },
       });
 
       const professorIds = Array.from(
-        new Set(rels.map((r) => r.professorId).filter(Boolean) as string[]),
+        new Set(
+          rels
+            .map((r) => r.professorId)
+            .filter(Boolean) as string[]
+        )
       );
 
-      if (!professorIds.length) return res.json([]);
+      if (!professorIds.length) {
+        return res.json([]);
+      }
 
       const professores = await prisma.professor.findMany({
-        where: { id: { in: professorIds } },
-        include: { usuario: true },
+        where: {
+          id: { in: professorIds },
+        },
+        include: {
+          usuario: true,
+        },
       });
 
-      const byId = new Map(professores.map((p) => [p.id, p]));
-      const ordered = professorIds.map((pid) => byId.get(pid)).filter(Boolean);
+      const byId = new Map(
+        professores.map((p) => [p.id, p])
+      );
+
+      const ordered = professorIds
+        .map((pid) => byId.get(pid))
+        .filter(Boolean);
 
       return res.json(ordered);
     }
 
-    const professores = await prisma.professor.findMany({
-      include: { usuario: true },
-    });
+    const page = Math.max(
+      1,
+      Number(req.query.page || 1) || 1
+    );
 
-    return res.json(professores);
+    const pageSize = Math.min(
+      100,
+      Math.max(
+        1,
+        Number(req.query.pageSize || 20) || 20
+      )
+    );
+
+    const q = String(req.query.q || "").trim();
+
+    const ordenarPor = String(
+      req.query.ordenarPor || "nome"
+    )
+      .trim()
+      .toLowerCase();
+
+    const ordem: "asc" | "desc" =
+      String(req.query.ordem || "asc")
+        .trim()
+        .toLowerCase() === "desc"
+        ? "desc"
+        : "asc";
+
+    const parceiroParam = String(
+      req.query.parceiro || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const where: any = {};
+
+    if (q) {
+      where.OR = [
+        {
+          nome: {
+            contains: q,
+            mode: "insensitive",
+          },
+        },
+        {
+          codigo: {
+            contains: q,
+            mode: "insensitive",
+          },
+        },
+        {
+          cref: {
+            contains: q,
+            mode: "insensitive",
+          },
+        },
+        {
+          usuario: {
+            is: {
+              nome: {
+                contains: q,
+                mode: "insensitive",
+              },
+            },
+          },
+        },
+        {
+          usuario: {
+            is: {
+              email: {
+                contains: q,
+                mode: "insensitive",
+              },
+            },
+          },
+        },
+      ];
+    }
+
+    if (parceiroParam === "true") {
+      where.usuario = {
+        is: {
+          parceiro: true,
+        },
+      };
+    }
+
+    if (parceiroParam === "false") {
+      where.OR = [
+        {
+          usuario: {
+            is: {
+              parceiro: false,
+            },
+          },
+        },
+        {
+          usuario: {
+            is: null,
+          },
+        },
+      ];
+    }
+
+    let orderBy: any[];
+
+    if (ordenarPor === "criadoem") {
+      orderBy = [
+        {
+          usuario: {
+            dataCriacao: ordem,
+          },
+        },
+        {
+          nome: "asc",
+        },
+        {
+          id: "asc",
+        },
+      ];
+    } else {
+      orderBy = [
+        {
+          nome: ordem,
+        },
+        {
+          id: "asc",
+        },
+      ];
+    }
+    
+    const usarPaginacao =
+      req.query.page !== undefined ||
+      req.query.pageSize !== undefined ||
+      req.query.q !== undefined ||
+      req.query.ordenarPor !== undefined ||
+      req.query.ordem !== undefined ||
+      req.query.parceiro !== undefined;
+
+    if (!usarPaginacao) {
+      const professores = await prisma.professor.findMany({
+        where,
+        include: {
+          usuario: true,
+        },
+        orderBy,
+      });
+
+      return res.json(professores);
+    }
+
+    const [professores, total] =
+      await prisma.$transaction([
+        prisma.professor.findMany({
+          where,
+          include: {
+            usuario: true,
+          },
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+
+        prisma.professor.count({
+          where,
+        }),
+      ]);
+
+    return res.json({
+      items: professores,
+      total,
+      page,
+      pageSize,
+    });
   } catch (error) {
-    console.error("Erro ao listar professores:", error);
-    return res.status(500).json({ message: "Erro ao listar professores." });
+    console.error(
+      "Erro ao listar professores:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Erro ao listar professores.",
+    });
   }
 };
 

@@ -43,12 +43,39 @@ export async function listar(req: AdminReq, res: Response) {
       plano = "",
       tipo = "",
       ativo = "",
+      ordenarPor = "nome",
+      ordem = "asc",
       page = "1",
       pageSize = "20",
     } = req.query as Record<string, string>;
 
     const p = Math.max(1, Number(page) || 1);
     const ps = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    const ordemFinal: "asc" | "desc" =
+      String(ordem).toLowerCase() === "desc"
+        ? "desc"
+        : "asc";
+
+    const ordenarPorFinal =
+      String(ordenarPor || "nome")
+        .trim()
+        .toLowerCase();
+
+    let orderBy: any[];
+
+    if (ordenarPorFinal === "startsat") {
+      orderBy = [
+        { startsAt: ordemFinal },
+        { id: "asc" },
+      ];
+    } else {
+      orderBy = [
+        { usuario: { nome: ordemFinal } },
+        { usuario: { nomeDeUsuario: ordemFinal } },
+        { usuario: { email: ordemFinal } },
+        { id: "asc" },
+      ];
+    }
 
     const where: any = {};
 
@@ -105,12 +132,7 @@ export async function listar(req: AdminReq, res: Response) {
             },
           },
         },
-        orderBy: [
-          { usuario: { nome: "asc" } },       
-          { usuario: { nomeDeUsuario: "asc" } },  
-          { usuario: { email: "asc" } },          
-          { id: "asc" },                          
-        ],
+        orderBy,
         skip: (p - 1) * ps,
         take: ps,
       }),
@@ -147,5 +169,65 @@ export async function overview(req: AdminReq, res: Response) {
     res.json({ total, ativos, cancelados, porPlano });
   } catch (e: any) {
     sendError(res, e, "Erro ao calcular overview de assinaturas");
+  }
+}
+
+export async function excluir(req: AdminReq, res: Response) {
+  try {
+    assertAdmin(req);
+
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        message: "ID da assinatura é obrigatório.",
+      });
+    }
+
+    const assinatura = await prisma.assinatura.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        plano: true,
+        ativo: true,
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!assinatura) {
+      return res.status(404).json({
+        message: "Assinatura não encontrada.",
+      });
+    }
+
+    if (assinatura.ativo) {
+      return res.status(400).json({
+        message:
+          "Não é possível excluir uma assinatura ativa. Cancele a assinatura primeiro.",
+      });
+    }
+
+    await prisma.assinatura.delete({
+      where: { id },
+    });
+
+    return res.json({
+      ok: true,
+      id: assinatura.id,
+    });
+  } catch (e: any) {
+    console.error("erro excluir assinatura:", e);
+
+    sendError(
+      res,
+      e,
+      "Erro ao excluir assinatura"
+    );
   }
 }
