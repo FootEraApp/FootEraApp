@@ -2962,6 +2962,20 @@ async function confirmarExcluirProfessor() {
                 <option value="nao">Sem destaque</option>
               </select>
 
+              <select
+                value={ordenacaoUsuarios}
+                onChange={(e) => {
+                  setOrdenacaoUsuarios(e.target.value as OrdenacaoUsuarios);
+                  setPagina(1);
+                }}
+                className="border rounded px-3 py-2 w-full sm:w-auto md:hidden bg-white"
+              >
+                <option value="nome_asc">Nome: A → Z</option>
+                <option value="nome_desc">Nome: Z → A</option>
+                <option value="criado_desc">Mais recentes</option>
+                <option value="criado_asc">Mais antigos</option>
+              </select>
+
               <button className="w-full sm:w-auto px-3 py-2 rounded bg-gray-200" onClick={() => carregarUsuarios(1)}>
                 Atualizar
               </button>
@@ -3028,12 +3042,6 @@ async function confirmarExcluirProfessor() {
                           <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-700">
                             Criado: {formatDate(u.criadoEm)}
                           </span>
-
-                          {u.assinatura?.renovaEm && (
-                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] text-blue-700">
-                              Renova: {fmtDate(u.assinatura.renovaEm)}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -3059,14 +3067,6 @@ async function confirmarExcluirProfessor() {
                         Destaque
                       </label>
                     </div>
-
-                    {u.ultimaAtividade && (
-                      <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                        <div className="font-semibold text-gray-700">Última atividade</div>
-                        <div className="truncate">{u.ultimaAtividadeNome ?? "—"}</div>
-                        <div>{formatDate(u.ultimaAtividade)}</div>
-                      </div>
-                    )}
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
