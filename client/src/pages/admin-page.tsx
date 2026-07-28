@@ -391,6 +391,11 @@ export default function AdminDashboard() {
   const [profTotal, setProfTotal] = useState(0);
   const [desafios, setDesafios] = useState<any[]>([]);
   const [configuracoes, setConfiguracoes] = useState<any>(null);
+
+  const [maintenanceCustomAt, setMaintenanceCustomAt] = useState("");
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [maintenanceTick, setMaintenanceTick] = useState(Date.now());
+
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [q, setQ] = useState("");
@@ -1634,8 +1639,6 @@ useEffect(() => {
     void carregarExercicios();
   }, [aba]);
 
-
-
   useEffect(() => {
     fetch(`${API.BASE_URL}/api/configuracoes`, { headers: authHeaders() })
       .then((r) => r.json())
@@ -2240,6 +2243,150 @@ async function confirmarExcluirProfessor() {
 
   const usuariosOrdenados = usuarios;
   const assinantesOrdenados = assinantes;
+
+useEffect(() => {
+  if (!configuracoes?.maintenanceScheduledAt) return;
+
+  const interval = window.setInterval(() => {
+    setMaintenanceTick(Date.now());
+  }, 1000);
+
+  return () => window.clearInterval(interval);
+}, [configuracoes?.maintenanceScheduledAt]);
+
+const maintenanceScheduledMs = configuracoes?.maintenanceScheduledAt
+  ? Date.parse(configuracoes.maintenanceScheduledAt)
+  : null;
+
+const maintenanceRemainingMs =
+  maintenanceScheduledMs !== null &&
+  Number.isFinite(maintenanceScheduledMs)
+    ? Math.max(0, maintenanceScheduledMs - maintenanceTick)
+    : null;
+
+function formatarTempoManutencao(ms: number) {
+  const totalSegundos = Math.max(0, Math.ceil(ms / 1000));
+
+  const dias = Math.floor(totalSegundos / 86_400);
+  const horas = Math.floor((totalSegundos % 86_400) / 3600);
+  const minutos = Math.floor((totalSegundos % 3600) / 60);
+  const segundos = totalSegundos % 60;
+
+  if (dias > 0) {
+    return `${dias}d ${horas}h ${minutos}min ${segundos}s`;
+  }
+
+  if (horas > 0) {
+    return `${horas}h ${minutos}min ${segundos}s`;
+  }
+
+  return `${minutos}min ${segundos}s`;
+}
+
+function minimoDateTimeLocal() {
+  const agora = new Date();
+
+  const dataLocal = new Date(
+    agora.getTime() - agora.getTimezoneOffset() * 60_000
+  );
+
+  return dataLocal.toISOString().slice(0, 16);
+}
+
+async function salvarManutencao(
+  body: Record<string, unknown>,
+  mensagemSucesso: string
+) {
+  setMaintenanceBusy(true);
+
+  try {
+    const response = await fetch(
+      `${API.BASE_URL}/api/configuracoes`,
+      {
+        method: "PATCH",
+        headers: authHeaders({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(body),
+      }
+    );
+
+    const texto = await response.text();
+
+    let resultado: any = {};
+
+    if (texto) {
+      try {
+        resultado = JSON.parse(texto);
+      } catch {
+        resultado = {};
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        resultado?.message ||
+          texto ||
+          "Erro ao salvar manutenção."
+      );
+    }
+
+    setConfiguracoes((atual: any) => ({
+      ...(atual || {}),
+      ...resultado,
+    }));
+
+    setMaintenanceTick(Date.now());
+    notify.success(mensagemSucesso);
+
+    return true;
+  } catch (error: any) {
+    notify.error(
+      error?.message || "Falha ao salvar manutenção."
+    );
+
+    return false;
+  } finally {
+    setMaintenanceBusy(false);
+  }
+}
+
+async function agendarManutencaoEm(minutos: number) {
+  await salvarManutencao(
+    {
+      maintenanceDelayMinutes: minutos,
+    },
+    `Manutenção agendada para daqui a ${minutos} minutos.`
+  );
+}
+
+async function agendarManutencaoPersonalizada() {
+  if (!maintenanceCustomAt) {
+    notify.error("Escolha a data e o horário da manutenção.");
+    return;
+  }
+
+  const dataEscolhida = new Date(maintenanceCustomAt);
+
+  if (
+    Number.isNaN(dataEscolhida.getTime()) ||
+    dataEscolhida.getTime() <= Date.now()
+  ) {
+    notify.error("Escolha uma data futura válida.");
+    return;
+  }
+
+  const salvou = await salvarManutencao(
+    {
+      maintenanceScheduledAt: dataEscolhida.toISOString(),
+    },
+    "Manutenção agendada com sucesso."
+  );
+
+  if (salvou) {
+    setMaintenanceCustomAt("");
+  }
+}
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -4065,7 +4212,7 @@ async function confirmarExcluirProfessor() {
           </div>
         )}
 
-                {aba === "diagnostico" && (
+        {aba === "diagnostico" && (
           <div className="space-y-4">
             <div className="rounded-xl border border-green-100 bg-white p-5 shadow-sm">
               <h3 className="text-xl font-bold text-green-900">
@@ -4185,7 +4332,7 @@ async function confirmarExcluirProfessor() {
               <h4 className="font-semibold text-green-800 mb-2">🔍 Funcionalidades</h4>
               {[
                 { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
-                { key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
+                //{ key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
                 { key: "allowAthleteChallenges", label: "allow_athete_challenges", desc: "Permite que atletas participem de desafios" },
                 { key: "allowProfileEditing", label: "allow_profile_editing", desc: "Permite edição de perfis pelos usuários" },
               ].map((item) => (
@@ -4227,6 +4374,188 @@ async function confirmarExcluirProfessor() {
                 </div>
               ))}
             </div>
+
+<div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <h4 className="font-semibold text-amber-950">
+        🔧 Modo de manutenção
+      </h4>
+
+      <p className="mt-1 text-sm text-amber-900/80">
+        Ative imediatamente ou programe quando o FootEra ficará
+        indisponível para os usuários.
+      </p>
+    </div>
+
+    <span
+      className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+        configuracoes.maintenanceMode
+          ? "bg-red-100 text-red-700"
+          : configuracoes.maintenanceScheduledAt
+            ? "bg-yellow-100 text-yellow-800"
+            : "bg-green-100 text-green-700"
+      }`}
+    >
+      {configuracoes.maintenanceMode
+        ? "Em manutenção"
+        : configuracoes.maintenanceScheduledAt
+          ? "Agendada"
+          : "Funcionando"}
+    </span>
+  </div>
+
+  <div className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-white p-3">
+    <div>
+      <p className="font-semibold text-gray-900">
+        Ativar manutenção agora
+      </p>
+
+      <p className="text-xs text-gray-600">
+        Desloga os usuários e bloqueia novos acessos imediatamente.
+      </p>
+    </div>
+
+    <ToggleSwitch
+      checked={!!configuracoes.maintenanceMode}
+      disabled={maintenanceBusy}
+      onChange={(next) => {
+        void salvarManutencao(
+          {
+            maintenanceMode: next,
+          },
+          next
+            ? "Modo de manutenção ativado."
+            : "Modo de manutenção desativado."
+        );
+      }}
+    />
+  </div>
+
+  {configuracoes.maintenanceScheduledAt &&
+    maintenanceRemainingMs !== null && (
+      <div className="mt-4 rounded-lg border border-yellow-300 bg-yellow-100 p-3 text-yellow-900">
+        <p className="font-semibold">
+          Manutenção programada
+        </p>
+
+        <p className="mt-1 text-sm">
+          Início em{" "}
+          <strong>
+            {new Date(
+              configuracoes.maintenanceScheduledAt
+            ).toLocaleString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+              dateStyle: "short",
+              timeStyle: "short",
+            })}
+          </strong>
+        </p>
+
+        <p className="mt-1 text-sm">
+          Tempo restante:{" "}
+          <strong>
+            {formatarTempoManutencao(
+              maintenanceRemainingMs
+            )}
+          </strong>
+        </p>
+
+        <button
+          type="button"
+          disabled={maintenanceBusy}
+          onClick={() => {
+            void salvarManutencao(
+              {
+                maintenanceScheduledAt: null,
+              },
+              "Agendamento de manutenção cancelado."
+            );
+          }}
+          className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50"
+        >
+          Cancelar agendamento
+        </button>
+      </div>
+    )}
+
+  <div className="mt-4">
+    <p className="mb-2 text-sm font-semibold text-gray-800">
+      Agendamento rápido
+    </p>
+
+    <div className="flex flex-wrap gap-2">
+      {[30, 60, 120].map((minutos) => (
+        <button
+          key={minutos}
+          type="button"
+          disabled={
+            maintenanceBusy ||
+            configuracoes.maintenanceMode
+          }
+          onClick={() => {
+            void agendarManutencaoEm(minutos);
+          }}
+          className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {minutos === 30
+            ? "30 minutos"
+            : minutos === 60
+              ? "1 hora"
+              : "2 horas"}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <div className="mt-4">
+    <label
+      htmlFor="maintenance-custom-at"
+      className="mb-2 block text-sm font-semibold text-gray-800"
+    >
+      Data e horário personalizados
+    </label>
+
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <input
+        id="maintenance-custom-at"
+        type="datetime-local"
+        min={minimoDateTimeLocal()}
+        value={maintenanceCustomAt}
+        disabled={
+          maintenanceBusy ||
+          configuracoes.maintenanceMode
+        }
+        onChange={(event) => {
+          setMaintenanceCustomAt(event.target.value);
+        }}
+        className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 sm:w-auto"
+      />
+
+      <button
+        type="button"
+        disabled={
+          maintenanceBusy ||
+          configuracoes.maintenanceMode ||
+          !maintenanceCustomAt
+        }
+        onClick={() => {
+          void agendarManutencaoPersonalizada();
+        }}
+        className="rounded-lg bg-green-700 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {maintenanceBusy ? "Salvando..." : "Agendar"}
+      </button>
+    </div>
+
+    {configuracoes.maintenanceMode && (
+      <p className="mt-2 text-xs font-medium text-red-600">
+        Desative a manutenção atual antes de criar um novo
+        agendamento.
+      </p>
+    )}
+  </div>
+</div>
 
             <div className="mb-6">
               <h4 className="font-semibold text-green-800 mb-2">⚙️ Outras Configurações</h4>

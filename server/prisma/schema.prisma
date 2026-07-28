@@ -1825,6 +1825,7 @@ model ConfiguracaoSistema {
   id                     String  @id @default(uuid())
   registrationEnabled    Boolean @default(true)
   maintenanceMode        Boolean @default(false)
+  maintenanceScheduledAt DateTime?
   allowAthleteChallenges Boolean @default(true)
   allowProfileEditing    Boolean @default(true)
   maxDailyPosts          Int     @default(5)

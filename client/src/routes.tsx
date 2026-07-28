@@ -1,3 +1,4 @@
+// client/src/routes
 import { Route, Switch } from "wouter";
 import { Private, PublicOnly } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";

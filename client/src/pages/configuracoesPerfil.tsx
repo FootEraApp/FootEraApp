@@ -330,7 +330,7 @@ export default function ConfiguracoesPerfil() {
 
     try {
       setDeleting(true);
-      const resp = await fetch(`${API.REST}/configuracoes/configuracoes/minha-conta`, {
+      const resp = await fetch(`${API.REST}/configuracoes/minha-conta`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
