@@ -98,41 +98,79 @@ function formatarFaixas(faixas?: string[] | null) {
 }
 
 function formatarResumoExecucao(item: ExercicioItem) {
-  const descanso = item.descanso?.trim();
+  const descanso = item.descanso?.trim() || "";
+  const repeticoes = item.repeticoes?.trim() || "";
+  const duracao = item.duracao?.trim() || "";
+  const series =
+    typeof item.series === "number" && item.series > 0
+      ? item.series
+      : null;
+
+  const comDescanso = (base: string) => {
+    return descanso
+      ? `${base} • descanso: ${descanso}`
+      : base;
+  };
+
+  const textoSeries = series
+    ? `${series} série${series > 1 ? "s" : ""}`
+    : "";
 
   if (item.modoExecucao === "Tempo") {
-    const base = item.duracao?.trim() || "Sem duração";
-    return descanso ? `${base} • descanso: ${descanso}` : base;
+    const base = duracao || "Sem duração";
+    return comDescanso(base);
   }
 
   if (item.modoExecucao === "SeriesRepeticoes") {
-    const partes: string[] = [];
+    if (repeticoes) {
+      const base = textoSeries
+        ? `${textoSeries} x ${repeticoes} repetições`
+        : `${repeticoes} repetições`;
 
-    if (item.series) partes.push(`${item.series} série${item.series > 1 ? "s" : ""}`);
-    if (item.repeticoes?.trim()) partes.push(`${item.repeticoes.trim()} repetições`);
+      return comDescanso(base);
+    }
 
-    const base = partes.length ? partes.join(" x ") : "Sem execução definida";
-    return descanso ? `${base} • descanso: ${descanso}` : base;
+    if (duracao) {
+      const base = textoSeries
+        ? `${textoSeries} x ${duracao}`
+        : duracao;
+
+      return comDescanso(base);
+    }
+
+    if (textoSeries) {
+      return comDescanso(textoSeries);
+    }
+
+    return "Sem execução definida";
   }
 
   if (item.modoExecucao === "LivreOrientativo") {
-    const base = item.duracao?.trim() || "Livre / orientativo";
-    return descanso ? `${base} • descanso: ${descanso}` : base;
+    const base = duracao || "Livre / orientativo";
+    return comDescanso(base);
   }
 
-  if (item.duracao?.trim()) {
-    return descanso ? `${item.duracao.trim()} • descanso: ${descanso}` : item.duracao.trim();
+  if (repeticoes) {
+    const base = textoSeries
+      ? `${textoSeries} x ${repeticoes} repetições`
+      : `${repeticoes} repetições`;
+
+    return comDescanso(base);
   }
 
-  if (item.series || item.repeticoes?.trim()) {
-    const partes: string[] = [];
-    if (item.series) partes.push(`${item.series} série${item.series > 1 ? "s" : ""}`);
-    if (item.repeticoes?.trim()) partes.push(`${item.repeticoes.trim()} repetições`);
-    const base = partes.join(" x ");
-    return descanso ? `${base} • descanso: ${descanso}` : base;
+  if (duracao) {
+    const base = textoSeries
+      ? `${textoSeries} x ${duracao}`
+      : duracao;
+
+    return comDescanso(base);
   }
 
-  return "Sem duração";
+  if (textoSeries) {
+    return comDescanso(textoSeries);
+  }
+
+  return "Sem execução definida";
 }
 
 function temMaisInformacoes(item: ExercicioItem) {

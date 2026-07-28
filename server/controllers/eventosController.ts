@@ -704,6 +704,36 @@ export async function criarEventoCreator(req: any, res: Response) {
     }
 
     const dataEventoValida: Date = dataEventoDia;
+    const tituloNormalizado = String(titulo || "").trim();
+
+    const eventoDuplicado = await prisma.evento.findFirst({
+      where: {
+        creatorUsuarioId: usuarioId,
+        dataEvento: dataEventoValida,
+
+        titulo: {
+          equals: tituloNormalizado,
+          mode: "insensitive",
+        },
+
+        status: {
+          not: "CANCELADO",
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+    if (eventoDuplicado) {
+      return res.status(409).json({
+        error:
+          "Você já possui um evento com esse mesmo nome e horário.",
+        code: "EVENTO_DUPLICADO",
+        eventoId: eventoDuplicado.id,
+      });
+    }
 
     let requisitosArr: string[] = [];
 
@@ -720,7 +750,7 @@ export async function criarEventoCreator(req: any, res: Response) {
       creatorUsuarioId: usuarioId,
       creatorTipo: tipoUsuario,
 
-      titulo: String(titulo || "").trim(),
+      titulo: tituloNormalizado,
       tipo: (tipo as any) || "EVENTO",
       status: (status as any) || "ABERTO",
       dataEvento: dataEventoValida,
@@ -869,6 +899,39 @@ export async function atualizarEventoCreator(req: any, res: Response) {
     }
 
     const dataEventoValida: Date = dataEventoDia;
+    const tituloNormalizado = String(titulo || "").trim();
+
+    const eventoDuplicado = await prisma.evento.findFirst({
+      where: {
+        creatorUsuarioId: usuarioId,
+        dataEvento: dataEventoValida,
+
+        titulo: {
+          equals: tituloNormalizado,
+          mode: "insensitive",
+        },
+
+        status: {
+          not: "CANCELADO",
+        },
+
+        id: {
+          not: String(id),
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+    if (eventoDuplicado) {
+      return res.status(409).json({
+        error:
+          "Você já possui outro evento com esse mesmo nome e horário.",
+        code: "EVENTO_DUPLICADO",
+      });
+    }
 
     let requisitosArr: string[] = [];
 

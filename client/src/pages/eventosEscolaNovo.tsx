@@ -104,12 +104,12 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
         headers,
       });
 
-      window.toast.success("Evento criado com sucesso!");
+      toast.success("Evento criado com sucesso!");
       setLocation(`/eventos/escolas/${escolaId}`);
     } catch (e: any) {
       const msg = e?.response?.data?.error || "Erro ao criar evento.";
       setErro(msg);
-      window.toast.error(msg);
+      toast.error(msg);
     } finally {
       setSalvando(false);
     }

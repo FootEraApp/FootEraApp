@@ -1,11 +1,10 @@
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import { useLocation } from "wouter";
 import Storage from "../../utils/storage.js";
 import { API } from "../../config.js";
 import { EVENTO_TIPOS, EventoTipo } from "@/utils/eventos.js";
-import { dataTagErrorSymbol } from "@tanstack/react-query";
 
 type EventoForm = {
   titulo: string;
@@ -38,10 +37,6 @@ type EventoForm = {
 
 const TIMEZONE_BR = "America/Sao_Paulo";
 const SAO_PAULO_OFFSET = "-03:00";
-
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
 
 function getSaoPauloParts(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -137,6 +132,7 @@ export default function CreatorNovoEventoPage() {
   });
 
   const [salvando, setSalvando] = useState(false);
+  const submitEmAndamentoRef = useRef(false);
   const [erro, setErro] = useState("");
   const [buscaConvidado, setBuscaConvidado] = useState("");
   const [resultadosConvidado, setResultadosConvidado] = useState<any[]>([]);
@@ -186,7 +182,7 @@ export default function CreatorNovoEventoPage() {
           status: data.status || "ABERTO",
         }));
       } catch (e: any) {
-        window.toast.error(
+        toast.error(
           e?.response?.data?.error ||
             e?.response?.data?.message ||
             "Erro ao carregar evento."
@@ -283,7 +279,7 @@ export default function CreatorNovoEventoPage() {
               : [],
         }));
       } catch (e: any) {
-        window.toast.error(
+        toast.error(
           e?.response?.data?.message ||
             e?.response?.data?.error ||
             "Erro ao carregar aula ao vivo."
@@ -547,11 +543,15 @@ export default function CreatorNovoEventoPage() {
   }
 
   async function submit() {
+    if (salvando) {
+      return;
+    }
+
     setErro("");
 
     if (!form.titulo.trim()) {
       setErro("Título é obrigatório.");
-      window.toast.error("Título é obrigatório.");
+      toast.error("Título é obrigatório.");
       return;
     }
 
@@ -559,9 +559,15 @@ export default function CreatorNovoEventoPage() {
 
     if (erroDatas) {
       setErro(erroDatas);
-      window.toast.error(erroDatas);
+      toast.error(erroDatas);
       return;
     }
+
+    if (submitEmAndamentoRef.current) {
+      return;
+    }
+
+    submitEmAndamentoRef.current = true;
 
     try {
       setSalvando(true);
@@ -595,7 +601,7 @@ export default function CreatorNovoEventoPage() {
           headers,
         });
 
-        window.toast.success("Evento atualizado com sucesso!");
+        toast.success("Evento atualizado com sucesso!");
         setLocation("/creator/eventos");
         return;
       }
@@ -627,7 +633,7 @@ export default function CreatorNovoEventoPage() {
           { headers }
         );
 
-        window.toast.success("Aula ao vivo atualizada com sucesso!");
+        toast.success("Aula ao vivo atualizada com sucesso!");
         setLocation("/creator/eventos");
         return;
       }
@@ -659,7 +665,7 @@ export default function CreatorNovoEventoPage() {
           { headers }
         );
 
-        window.toast.success("Aula ao vivo criada como evento avulso!");
+        toast.success("Aula ao vivo criada como evento avulso!");
         setLocation("/creator/eventos");
         return;
       }
@@ -668,17 +674,25 @@ export default function CreatorNovoEventoPage() {
         headers,
       });
 
-      window.toast.success("Evento criado com sucesso!");
+      toast.success("Evento criado com sucesso!");
       setLocation("/creator/eventos");
     } catch (e: any) {
+      console.error(
+        "[CreatorNovoEventoPage.submit]",
+        e?.response?.status,
+        e?.response?.data || e
+      );
+
       const msg =
         e?.response?.data?.error ||
         e?.response?.data?.message ||
+        e?.message ||
         "Erro ao salvar evento.";
 
       setErro(msg);
-      window.toast.error(msg);
+      toast.error(msg);
     } finally {
+      submitEmAndamentoRef.current = false;
       setSalvando(false);
     }
   }
@@ -1020,7 +1034,11 @@ export default function CreatorNovoEventoPage() {
           {erro && <p className="text-sm text-red-600">{erro}</p>}
 
           <div className="flex gap-2 justify-end">
-            <button onClick={() => history.back()} className="px-4 py-2 rounded border">
+            <button
+              type="button"
+              onClick={() => history.back()}
+              className="px-4 py-2 rounded border"
+            >
               Cancelar
             </button>
 

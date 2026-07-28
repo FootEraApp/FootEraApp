@@ -1,5 +1,6 @@
 import { toast } from "@/lib/toast";
 import { useMemo, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Star as StarIcon, ArrowLeft, Volleyball } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
@@ -51,6 +52,7 @@ function Stars({
 }
 
 export default function AvaliarTreino() {
+  const qc = useQueryClient();
   const [, navigate] = useLocation();
 
   const treinoAgendadoId = useMemo(() => {
@@ -155,6 +157,36 @@ export default function AvaliarTreino() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treinoAgendadoId, tituloParam]);
 
+  async function atualizarPerfilAposTreino() {
+    await Promise.all([
+      qc.invalidateQueries({
+        queryKey: ["treinosAgendados"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["perfilResumoTreinos"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["pontuacaoPerfil"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["perfilAtividades"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["conquistas-earned"],
+      }),
+    ]);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("treino:concluido"));
+      window.dispatchEvent(new Event("treino:avaliado"));
+      window.dispatchEvent(new Event("perfil:refresh"));
+    }
+  }
+
   async function enviar() {
     try {
       const token = getToken();
@@ -206,6 +238,8 @@ export default function AvaliarTreino() {
         throw new Error(js?.error || js?.message || "Falha ao salvar avaliação");
       }
 
+      await atualizarPerfilAposTreino();
+      
       toast.success("Avaliação enviada! ✅");
       navigate("/treinos");
     } catch (e: any) {

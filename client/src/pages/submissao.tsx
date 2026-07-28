@@ -1,5 +1,6 @@
 import { toast } from "@/lib/toast";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
@@ -27,6 +28,7 @@ const Storage = {
 };
 
 export default function PaginaSubmissao() {
+  const qc = useQueryClient();
   const ATTEMPT_LIMIT = 2;
   const STORAGE_KEY_PREFIX = "footera:desafioAttempts";
   const IDB_NAME = "footera-media";
@@ -747,6 +749,35 @@ export default function PaginaSubmissao() {
     }
   }
 
+  async function atualizarCachesDoPerfil() {
+    await Promise.all([
+      qc.invalidateQueries({
+        queryKey: ["treinosAgendados"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["perfilResumoTreinos"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["pontuacaoPerfil"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["perfilAtividades"],
+      }),
+
+      qc.invalidateQueries({
+        queryKey: ["conquistas-earned"],
+      }),
+    ]);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("treino:submetido"));
+      window.dispatchEvent(new Event("perfil:refresh"));
+    }
+  }
+
   const handleEnviar = async () => {
     if (enviando) return;
 
@@ -928,6 +959,8 @@ export default function PaginaSubmissao() {
         metodologiaCompleta = await concluirItemDaMetodologia();
       }
 
+      await atualizarCachesDoPerfil();
+
       if (metodologiaCompleta && metodologiaId) {
         const qsAvaliar = new URLSearchParams();
         const search = new URLSearchParams(window.location.search);
@@ -944,11 +977,6 @@ export default function PaginaSubmissao() {
 
         navigate(`/learning/avaliar?${qsAvaliar.toString()}`);
         return;
-      }
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("treino:submetido"));
-        window.dispatchEvent(new Event("perfil:refresh"));
       }
 
       const search = new URLSearchParams(window.location.search);

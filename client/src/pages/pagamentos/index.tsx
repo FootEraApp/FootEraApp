@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/pagamentos/index.tsx
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   ArrowLeft,
@@ -1196,16 +1195,35 @@ export default function PagamentosPage() {
     if (plano.startsWith("AULA_AO_VIVO:")) {
       const aulaId = plano.replace("AULA_AO_VIVO:", "").trim();
 
-      if (aulaId) {
-        setPickAulasAoVivo({ [aulaId]: true });
-        setBuscaAulaAoVivo("");
-        setOpenPagamentoModal(true);
+      const aulaDisponivel = aulasAoVivoPagas.find(
+        (aula) => String(aula.id) === String(aulaId)
+      );
+
+      if (!aulaDisponivel) {
+        setPickAulasAoVivo({});
+        setOpenPagamentoModal(false);
+
+        toast.error(
+          "Este evento ao vivo não está mais disponível para compra."
+        );
+
+        return;
       }
+
+      setPickAulasAoVivo({
+        [aulaId]: true,
+      });
+
+      setBuscaAulaAoVivo("");
+      setOpenPagamentoModal(true);
 
       setTimeout(() => {
         document
           .getElementById(`aula-ao-vivo-${aulaId}`)
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
       }, 250);
 
       return;
@@ -1366,7 +1384,47 @@ export default function PagamentosPage() {
     filtroNivelMetod,
     filtroConteudoMetod,
     filtroPublicoMetod, 
-  ]);
+    ]);
+
+    const aulasAoVivoFiltradas = useMemo(() => {
+    const q = buscaAulaAoVivo.trim().toLowerCase();
+    const agora = Date.now();
+
+    return aulasAoVivoPagas
+      .filter((aula) => {
+        const status = String(aula.status || "").toUpperCase();
+
+        if (status === "CANCELADA" || status === "FINALIZADA") {
+          return false;
+        }
+
+        const inicioTs = new Date(aula.dataInicio).getTime();
+
+        if (!Number.isFinite(inicioTs)) {
+          return false;
+        }
+
+        if (inicioTs < agora && status !== "AO_VIVO") {
+          return false;
+        }
+
+        if (q) {
+          const encontrou =
+            String(aula.titulo || "").toLowerCase().includes(q) ||
+            String(aula.descricao || "").toLowerCase().includes(q);
+
+          if (!encontrou) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        return (
+          new Date(a.dataInicio).getTime() -
+          new Date(b.dataInicio).getTime()
+        );
+      });
+  }, [aulasAoVivoPagas, buscaAulaAoVivo]);
 
   const checkoutError = useMemo(() => {
     if (bloquearCheckoutPorTrial) return "Trial ativo (aguarde faltar 7 dias).";
@@ -1491,12 +1549,12 @@ export default function PagamentosPage() {
         const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
         const data = await me.json();
 
-        const pago = (data.pagamentos || []).find((p: Pagamento) => p.id === pagamentoId);
-        const status = data.billingState?.status ?? data.assinatura?.status;
-        const isAtivaNow = status === "ATIVA";
+        const pago = (data.pagamentos || []).find(
+          (p: Pagamento) => p.id === pagamentoId
+        );
 
-        if (pago?.status === "APROVADO" || isAtivaNow) {
-          toast.success("Pagamento aprovado! Assinatura ativada 🎉");
+        if (pago?.status === "APROVADO") {
+          toast.success("Pagamento aprovado com sucesso! 🎉");
           setPixCopiaECola(null);
           setPixQrUrl(null);
           setBoletoLinha(null);
@@ -2210,16 +2268,7 @@ export default function PagamentosPage() {
         />
 
         <div className="grid gap-3">
-          {aulasAoVivoPagas
-            .filter((aula) => {
-              const q = buscaAulaAoVivo.trim().toLowerCase();
-              if (!q) return true;
-
-              return (
-                aula.titulo.toLowerCase().includes(q) ||
-                String(aula.descricao || "").toLowerCase().includes(q)
-              );
-            })
+          {aulasAoVivoFiltradas            
             .map((aula) => {
               const checked = !!pickAulasAoVivo[aula.id];
               const dataLabel = formatDateTimeBR(aula.dataInicio);
@@ -2291,7 +2340,7 @@ export default function PagamentosPage() {
               );
             })}
 
-          {aulasAoVivoPagas.length === 0 ? (
+          {aulasAoVivoFiltradas.length === 0 ? (
             <div className="rounded-xl border border-dashed p-4 text-sm text-gray-500">
               Nenhum evento ao vivo pago disponível no momento.
             </div>
