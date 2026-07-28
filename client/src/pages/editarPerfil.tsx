@@ -462,8 +462,14 @@ const EditarPerfil = () => {
       type: string = "text"
     ) => {
       const raw = dadosTipo[name];
+
+      const isLista =
+        name === "categorias" ||
+        name === "qualificacoes" ||
+        name === "certificacoes";
+
       const value =
-        name === "categorias"
+        isLista
           ? Array.isArray(raw)
             ? raw.join(", ")
             : raw ?? ""
@@ -1212,7 +1218,7 @@ return (
             tipo.telefonePublico = nullIfEmpty(tipo.telefonePublico);
             tipo.siteOuLinkedin = nullIfEmpty(tipo.siteOuLinkedin);
 
-            if (tipoUsuarioOriginal === "professor") {
+            if (tipoRender === "professor") {
               if (typeof tipo.qualificacoes === "string") {
                 tipo.qualificacoes = tipo.qualificacoes
                   .split(",")

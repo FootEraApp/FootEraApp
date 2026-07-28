@@ -421,6 +421,33 @@ export default function FormExercicioTreinos({
       return;
     }
 
+    if (modoExecucao === "SeriesRepeticoes") {
+      const temSeries = !!series.trim();
+      const temRepeticoes = !!repeticoes.trim();
+      const temDuracao = !!duracao.trim();
+
+      if (!temSeries) {
+        toast.error(
+          "Informe a quantidade de séries."
+        );
+        return;
+      }
+
+      if (!temRepeticoes && !temDuracao) {
+        toast.error(
+          "Informe Repetições ou Duração / observação."
+        );
+        return;
+      }
+
+      if (temRepeticoes && temDuracao) {
+        toast.error(
+          "Use apenas uma opção: Repetições ou Duração / observação."
+        );
+        return;
+      }
+    }
+
     if (video) {
       try {
         const duracaoSegundos = await validarDuracaoVideo(video);
@@ -454,8 +481,15 @@ export default function FormExercicioTreinos({
         formData.append("descanso", descanso.trim());
       } else if (modoExecucao === "SeriesRepeticoes") {
         formData.append("series", series.trim());
-        formData.append("repeticoes", repeticoes.trim());
-        formData.append("duracao", duracao.trim());
+
+        if (repeticoes.trim()) {
+          formData.append("repeticoes", repeticoes.trim());
+          formData.append("duracao", "");
+        } else {
+          formData.append("repeticoes", "");
+          formData.append("duracao", duracao.trim());
+        }
+
         formData.append("descanso", descanso.trim());
       } else if (modoExecucao === "LivreOrientativo") {
         formData.append("duracao", duracao.trim());
@@ -672,7 +706,7 @@ export default function FormExercicioTreinos({
 
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-                  Descanso
+                  Descanso (opcional)
                 </label>
                 <input
                   value={descanso}
@@ -685,7 +719,8 @@ export default function FormExercicioTreinos({
           )}
 
           {modoExecucao === "SeriesRepeticoes" && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <div className="mt-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
                   Séries
@@ -701,10 +736,21 @@ export default function FormExercicioTreinos({
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
                   Repetições
+                  <span className="ml-1 text-xs font-normal text-gray-500">
+                    (opção 1)
+                  </span>
                 </label>
                 <input
                   value={repeticoes}
-                  onChange={(e) => setRepeticoes(e.target.value)}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+
+                    setRepeticoes(valor);
+
+                    if (valor.trim()) {
+                      setDuracao("");
+                    }
+                  }}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
                   placeholder="Ex: 10, 12, 15"
                 />
@@ -712,11 +758,22 @@ export default function FormExercicioTreinos({
 
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-                  Duração / observação
+                  Duração
+                  <span className="ml-1 text-xs font-normal text-gray-500">
+                    (opção 2)
+                  </span>
                 </label>
                 <input
                   value={duracao}
-                  onChange={(e) => setDuracao(e.target.value)}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+
+                    setDuracao(valor);
+
+                    if (valor.trim()) {
+                      setRepeticoes("");
+                    }
+                  }}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[16px] outline-none focus:border-[#0D6A43]"
                   placeholder="Ex: 2min, até errar, por lado..."
                 />
@@ -724,7 +781,7 @@ export default function FormExercicioTreinos({
 
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-                  Descanso
+                  Descanso (opcional)
                 </label>
                 <input
                   value={descanso}
@@ -734,6 +791,7 @@ export default function FormExercicioTreinos({
                 />
               </div>
             </div>
+          </div>
           )}
 
           {modoExecucao === "LivreOrientativo" && (
@@ -752,7 +810,7 @@ export default function FormExercicioTreinos({
 
               <div>
                 <label className="mb-2 block text-[15px] font-medium text-[#243B35]">
-                  Descanso
+                  Descanso (opcional)
                 </label>
                 <input
                   value={descanso}

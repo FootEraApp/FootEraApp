@@ -7,6 +7,7 @@ import {
   PlusCircle,
   ChevronRight,
   Trophy,
+  Pencil,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -651,12 +652,27 @@ export default function PerfilProfessor({
     }
 
     if (aba === "visao") {
-      if (treinosCriados == null) fetchTreinosCriados();
-      if (vinculados == null) fetchVinculados();
+      if (treinosCriados == null) {
+        fetchTreinosCriados();
+      }
+
+      if (vinculados == null) {
+        fetchVinculados();
+      }
+
+      if (observados == null) {
+        fetchObservados();
+      }
     }
+
     if (aba === "atletas") {
-      if (subAba === "vinculados" && vinculados == null) fetchVinculados();
-      if (subAba === "observados" && observados == null) fetchObservados();
+      if (vinculados == null) {
+        fetchVinculados();
+      }
+
+      if (observados == null) {
+        fetchObservados();
+      }
     }
 
     return () => {
@@ -675,6 +691,7 @@ export default function PerfilProfessor({
     fetchTreinosCriados,
     headers,
     isOwn,
+    observados,
   ]);
 
   useEffect(() => {
@@ -736,44 +753,69 @@ export default function PerfilProfessor({
   useEffect(() => {
     if (!rawToken || !professorId) return;
 
-    const parseOrg = (x: any, tipoFallback?: "Escolinha" | "Clube"): Organizacao => ({
-      id: String(x.id),
-      usuarioId:
-        x.usuarioId ??
-        x.usuario?.id ??
-        x.userId ??
-        x.usuario_id ??
-        x.usuario?.usuarioId ??
-        null,
-      nome: String(
-        x.nome ??
+    const parseOrg = (
+      x: any,
+      tipoFallback?: "Escolinha" | "Clube"
+    ): Organizacao => {
+      const tipo = String(
+        x.tipo ??
+        x.kind ??
+        tipoFallback ??
+        "Escolinha"
+      );
+
+      const fotoOrganizacao =
+        x.clube?.logo ??
+        x.escolinha?.logo ??
+        x.escola?.logo ??
+        x.organizacao?.logo ??
+        x.logo ??
+        x.clube?.foto ??
+        x.escolinha?.foto ??
+        x.fotoUrl ??
+        x.imagemUrl ??
+        x.avatarUrl ??
+        x.foto ??
+        x.usuarioFoto ??
+        x.usuario?.foto ??
+        null;
+
+      return {
+        id: String(
+          x.id ??
+          x.clube?.id ??
+          x.escolinha?.id ??
+          x.escola?.id
+        ),
+
+        usuarioId:
+          x.usuarioId ??
+          x.usuario?.id ??
+          x.clube?.usuarioId ??
+          x.escolinha?.usuarioId ??
+          x.userId ??
+          x.usuario_id ??
+          x.usuario?.usuarioId ??
+          null,
+
+        nome: String(
+          x.nome ??
+          x.clube?.nome ??
+          x.escolinha?.nome ??
+          x.escola?.nome ??
           x.nomeEscolinha ??
           x.nomeClube ??
           x.nomeFantasia ??
           x.razaoSocial ??
           x.titulo ??
           "Organização"
-      ),
-      tipo: (x.tipo ?? x.kind ?? tipoFallback ?? "Escolinha") as "Escolinha" | "Clube",
-      foto:
-        x.logo ??
-        x.foto ??
-        x.fotoUrl ??
-        x.imagemUrl ??
-        x.avatarUrl ??
-        x.usuarioFoto ??
-        x.usuario?.foto ??
-        null,
-      logo:
-        x.logo ??
-        x.foto ??
-        x.fotoUrl ??
-        x.imagemUrl ??
-        x.avatarUrl ??
-        x.usuarioFoto ??
-        x.usuario?.foto ??
-        null,
-    });
+        ),
+
+        tipo: tipo as "Escolinha" | "Clube",
+        foto: fotoOrganizacao,
+        logo: fotoOrganizacao,
+      };
+    };
 
     (async () => {
       try {
@@ -971,29 +1013,52 @@ export default function PerfilProfessor({
       {aba === "visao" && (
         <div className="mt-5 px-3 sm:px-4 grid gap-5 sm:gap-6">
 
-          <SectionCard title="Informações do Professor">
+          <SectionCard
+            title="Informações do Professor"
+            right={
+              canEdit ? (
+                <Link
+                  href="/perfil/editar?returnTo=/perfil"
+                  className="
+                    inline-flex items-center justify-center gap-2
+                    rounded-lg border border-green-200
+                    px-3 py-2 text-sm font-medium text-green-800
+                    hover:bg-green-50 transition
+                  "
+                  title="Editar informações do professor"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Editar
+                </Link>
+              ) : null
+            }
+          >
             <ul className="text-sm text-green-900/90 space-y-2">
               <li>
                 <b>Nome:</b> {data.professor.nome}
               </li>
-              {privacidade?.mostrarEmail && emailDoPerfil ? (
+
+              {emailDoPerfil && (isOwn || privacidade?.mostrarEmail) && (
                 <li>
                   <b>Email:</b> {emailDoPerfil}
                 </li>
-              ) : null}
+              )}
 
               {data.professor.codigo && (
                 <li>
                   <b>Código:</b> {data.professor.codigo}
                 </li>
               )}
+
               {data.professor.cref && (
                 <li>
                   <b>CREF:</b> {data.professor.cref}
                 </li>
               )}
+
               <li>
-                <b>Área de formação:</b> {data.professor.areaFormacao}
+                <b>Área de formação:</b>{" "}
+                {data.professor.areaFormacao || "Não informada"}
               </li>
 
               {data.professor.statusCref && (
@@ -1001,6 +1066,20 @@ export default function PerfilProfessor({
                   <b>Status do CREF:</b> {data.professor.statusCref}
                 </li>
               )}
+
+              <li>
+                <b>Qualificações:</b>{" "}
+                {data.professor.qualificacoes?.length
+                  ? data.professor.qualificacoes.join(", ")
+                  : "Não informadas"}
+              </li>
+
+              <li>
+                <b>Certificações:</b>{" "}
+                {data.professor.certificacoes?.length
+                  ? data.professor.certificacoes.join(", ")
+                  : "Não informadas"}
+              </li>
             </ul>
           </SectionCard>
           <SectionCard
@@ -1094,13 +1173,23 @@ export default function PerfilProfessor({
                     </label>
 
                     {clubesDisponiveis.map((o) => (
-                      <label key={o.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                      <label
+                        key={o.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
                         <input
                           type="radio"
                           name="clubeVinculoProfessor"
                           checked={clubeSelecionado === o.id}
                           onChange={() => setClubeSelecionado(o.id)}
                         />
+
+                        <Avatar
+                          foto={getOrgFoto(o)}
+                          alt={o.nome}
+                          className="w-7 h-7"
+                        />
+
                         <span className="text-sm">{o.nome}</span>
                       </label>
                     ))}
@@ -1146,66 +1235,6 @@ export default function PerfilProfessor({
               </div>
             )}
           </SectionCard>
-
-          {!!data.professor.qualificacoes?.length && (
-            <SectionCard title="Qualificações">
-              <div className="flex flex-wrap gap-2">
-                {data.professor.qualificacoes.map((q, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-1 rounded-full bg-green-100 text-green-900 text-xs"
-                  >
-                    {q}
-                  </span>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-
-          {!!data.professor.certificacoes?.length && (
-            <SectionCard title="Certificações">
-              <div className="flex flex-wrap gap-2">
-                {data.professor.certificacoes.map((c, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-
-          {canEdit && (
-            <SectionCard
-              title="Treinos"
-              right={
-                <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                  <Link
-                    href="/treinos"
-                    className="inline-flex items-center justify-center rounded-lg border border-green-200 px-3 py-2 text-sm text-green-900 hover:bg-green-50 whitespace-nowrap"
-                  >
-                    Ver todos
-                  </Link>
-                  <Link
-                    href="/treinos/novo"
-                    className="inline-flex items-center justify-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700 whitespace-nowrap"
-                  >
-                    <PlusCircle className="w-4 h-4" /> Criar novo treino
-                  </Link>
-                  <button
-                    onClick={() => setTurmasOpen(true)}
-                    className="inline-flex items-center justify-center rounded-lg border border-green-200 px-3 py-2 text-sm text-green-900 hover:bg-green-50 whitespace-nowrap"
-                  >
-                    Administrar turmas
-                  </button>
-                </div>
-              }
-            >
-              <p className="text-sm text-green-900/90">Crie e gerencie treinos para seus atletas.</p>
-            </SectionCard>
-          )}
 
           <SectionCard
             title="Turmas em que você participa"
@@ -1324,9 +1353,20 @@ export default function PerfilProfessor({
         <div className="mt-4 px-4">
           <div className="bg-white/90 rounded-xl p-1 grid grid-cols-2 gap-1 border border-green-100">
             {[
-              { id: "vinculados", label: `Vinculados (${qtdVinculados})` },
-              { id: "observados", label: `Observados (${qtdObservados})` },
-              
+              {
+                id: "vinculados",
+                label:
+                  vinculados === null
+                    ? "Vinculados (...)"
+                    : `Vinculados (${qtdVinculados})`,
+              },
+              {
+                id: "observados",
+                label:
+                  observados === null
+                    ? "Observados (...)"
+                    : `Observados (${qtdObservados})`,
+              },
             ].map((t) => (
               <button
                 key={t.id}

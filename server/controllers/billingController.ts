@@ -495,6 +495,86 @@ function extractAulaAoVivoId(planoId: string) {
     .trim();
 }
 
+async function assertAulaAoVivoDisponivelParaCompra(planoId: string) {
+  const planoNorm = normalizePlanoId(planoId);
+
+  if (!isAulaAoVivo(planoNorm)) return null;
+
+  const aulaAoVivoId = extractAulaAoVivoId(planoNorm);
+  const agora = new Date();
+
+  const aula = await prisma.aulaAoVivo.findUnique({
+    where: {
+      id: aulaAoVivoId,
+    },
+    select: {
+      id: true,
+      titulo: true,
+      dataInicio: true,
+      dataFim: true,
+      status: true,
+      acessoPago: true,
+      precoAcesso: true,
+    },
+  });
+
+  if (!aula) {
+    const err: any = new Error("Evento ao vivo não encontrado.");
+    err.statusCode = 404;
+    err.code = "AULA_AO_VIVO_NOT_FOUND";
+    throw err;
+  }
+
+  const valor = Number(aula.precoAcesso || 0);
+
+  if (!aula.acessoPago || valor <= 0) {
+    const err: any = new Error(
+      "Este evento ao vivo não está disponível para compra."
+    );
+    err.statusCode = 400;
+    err.code = "AULA_AO_VIVO_INDISPONIVEL";
+    throw err;
+  }
+
+  if (
+    aula.status === "FINALIZADA" ||
+    aula.status === "CANCELADA"
+  ) {
+    const err: any = new Error(
+      "Este evento ao vivo já foi finalizado ou cancelado e não pode mais ser comprado."
+    );
+    err.statusCode = 400;
+    err.code = "AULA_AO_VIVO_ENCERRADA";
+    throw err;
+  }
+
+  if (
+    aula.status === "AGENDADA" &&
+    new Date(aula.dataInicio).getTime() < agora.getTime()
+  ) {
+    const err: any = new Error(
+      "Este evento ao vivo já passou e não pode mais ser comprado."
+    );
+    err.statusCode = 400;
+    err.code = "AULA_AO_VIVO_EXPIRADA";
+    throw err;
+  }
+
+  if (
+    aula.status !== "AGENDADA" &&
+    aula.status !== "AO_VIVO"
+  ) {
+    const err: any = new Error(
+      "Este evento ao vivo não está disponível para compra."
+    );
+    err.statusCode = 400;
+    err.code = "AULA_AO_VIVO_INDISPONIVEL";
+    throw err;
+  }
+
+  return aula;
+}
+
 function extractMetodologiaId(planoId: string) {
   return String(planoId || "")
     .replace(/^METODOLOGIA_AVULSA:/i, "")
@@ -1200,6 +1280,10 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const isAula = isAulaAoVivo(planoNorm);
     const isPlanoPrincipal = !isAvulsa && !isLearningMetodologia && !isAula;
 
+    if (isAula) {
+      await assertAulaAoVivoDisponivelParaCompra(planoNorm);
+    }
+
     if (isPlanoPrincipal && !findPlan(planoNorm)) {
       return res.status(400).json({ message: "Plano inválido" });
     }
@@ -1695,6 +1779,11 @@ export async function startCheckout(req: Request, res: Response) {
 
     const planoNorm = normalizePlanoId(planoId);
 
+    const aulaAoVivoParaCheckout =
+      isAulaAoVivo(planoNorm)
+        ? await assertAulaAoVivoDisponivelParaCompra(planoNorm)
+        : null;
+
     if (
       isMetodologiaAvulsa(planoNorm) ||
       isMetodologiaLearning(planoNorm) ||
@@ -1758,43 +1847,29 @@ export async function startCheckout(req: Request, res: Response) {
     });
 
     if (total === 0) {
-      const pid = normalizePlanoId(planoId);
+      await approvePaymentAndProvision(
+        pagamento.id,
+        [
+          {
+            planoId: planoNorm,
+            periodicidade,
+          },
+        ]
+      );
 
-      if (isMetodologiaAvulsa(pid)) {
-        const metodologiaAvulsaId = extractMetodologiaId(pid);
-
-        await prisma.metodologiaAssinante.upsert({
-          where: {
-            metodologiaAvulsaId_usuarioId: {
-              metodologiaAvulsaId,
-              usuarioId: pagamento.usuarioId,
-            },
-          },
-          update: {
-            status: "ATIVA",
-            cancelouEm: null,
-            origem: "AVULSA",
-            metodologiaId: null,
-            metodologiaAvulsaId,
-          },
-          create: {
-            usuarioId: pagamento.usuarioId,
-            metodologiaId: null,
-            metodologiaAvulsaId,
-            origem: "AVULSA",
-            status: "ATIVA",
-          },
-        });
-      } else {
-        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
+      if (cupomRow) {
+        await resgatarCupom(
+          cupomRow.id,
+          usuarioId,
+          pagamento.id
+        );
       }
-
-      if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
 
       return res.json({
         status: "APROVADO",
         pagamento,
-        message: "Compra aprovada sem cobrança (cupom/presente).",
+        message:
+          "Compra aprovada sem cobrança (cupom/presente).",
       });
     }
 
@@ -1839,13 +1914,25 @@ export async function startCheckout(req: Request, res: Response) {
     }
 
     let planTitle = "Plano";
-    if (isMetodologiaAvulsa(normalizePlanoId(planoId))) {
-      const mid = extractMetodologiaId(normalizePlanoId(planoId));
+
+    if (isMetodologiaAvulsa(planoNorm)) {
+      const mid = extractMetodologiaId(planoNorm);
       const pr = await computeMetodologiaAvulsaPricing(mid);
+
       planTitle = `Metodologia Avulsa: ${pr.titulo}`;
+    } else if (isAulaAoVivo(planoNorm)) {
+      planTitle = `Evento ao vivo: ${
+        aulaAoVivoParaCheckout?.titulo ?? "Evento ao vivo"
+      }`;
     } else {
-      const plan = findPlan(planoId);
-      if (!plan) return res.status(400).json({ message: "Plano inválido" });
+      const plan = findPlan(planoNorm);
+
+      if (!plan) {
+        return res.status(400).json({
+          message: "Plano inválido",
+        });
+      }
+
       planTitle = plan.title;
     }
 
@@ -1979,6 +2066,10 @@ export async function startCheckoutBundle(req: Request, res: Response) {
 
     for (const it of normalizedItems) {
       assertPlanoPermitido(tipo, it.planoId);
+
+      if (isAulaAoVivo(it.planoId)) {
+        await assertAulaAoVivoDisponivelParaCompra(it.planoId);
+      }
 
       if (
         !isMetodologiaAvulsa(it.planoId) &&
@@ -2258,7 +2349,7 @@ export async function switchPlan(req: Request, res: Response) {
 
 function isProviderWebhookAuthorized(req: Request): boolean {
   const expected = process.env.BILLING_WEBHOOK_SECRET || "";
-  if (!expected) return false; // fail-closed: sem segredo configurado, endpoint fica bloqueado
+  if (!expected) return false;
 
   const received = String(req.headers["x-webhook-secret"] || "");
   const expectedBuf = Buffer.from(expected);
@@ -2293,8 +2384,6 @@ export async function providerWebhook(req: Request, res: Response) {
 
     if (!pagamento) return res.status(404).json({ message: "Pagamento não encontrado" });
 
-    // Pagamentos reais do Mercado Pago só podem ser confirmados via mercadoPagoWebhook,
-    // que verifica o status de verdade na API do MP — nunca por este endpoint genérico.
     if (pagamento.provider === "MERCADOPAGO") {
       return res.status(403).json({ message: "Use o webhook oficial do Mercado Pago para este pagamento" });
     }
@@ -2302,25 +2391,19 @@ export async function providerWebhook(req: Request, res: Response) {
     const now = new Date();
 
     if (tipo === "payment_approved") {
-      await prisma.pagamento.update({
-        where: { id: pagamento.id },
-        data: { status: PagamentoStatus.APROVADO, pagoEm: pagamento.pagoEm ?? now },
-      });
-
       if (pagamento.plano !== "BUNDLE") {
-      const pid = normalizePlanoId(pagamento.plano);
+        await approvePaymentAndProvision(
+          pagamento.id,
+          [
+            {
+              planoId: pagamento.plano,
+              periodicidade: pagamento.periodicidade,
+            },
+          ]
+        );
 
-      if (isMetodologiaAvulsa(pid)) {
-        const mid = extractMetodologiaId(pid);
-        await prisma.metodologiaAssinante.upsert({
-          where: { metodologiaId_usuarioId: { metodologiaId: mid, usuarioId: pagamento.usuarioId } },
-          update: { status: "ATIVA", cancelouEm: null },
-          create: { metodologiaId: mid, usuarioId: pagamento.usuarioId, status: "ATIVA" },
-        });
-      } else {
-        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
+        return res.json({ ok: true });
       }
-    }
 
       return res.json({ ok: true });
     }
@@ -2395,22 +2478,15 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         return res.status(200).json({ ok: true });
       }
 
-      await prisma.pagamento.update({
-        where: { id: pagamento.id },
-        data: { status: PagamentoStatus.APROVADO, pagoEm: pagamento.pagoEm ?? now },
-      });
-      const pid = normalizePlanoId(pagamento.plano);
-
-      if (isMetodologiaAvulsa(pid)) {
-        const metodologiaId = extractMetodologiaId(pid);
-        await prisma.metodologiaAssinante.upsert({
-          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId: pagamento.usuarioId } },
-          update: { status: "ATIVA", cancelouEm: null },
-          create: { metodologiaId, usuarioId: pagamento.usuarioId, status: "ATIVA" },
-        });
-      } else {
-        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
-      }
+      await approvePaymentAndProvision(
+        pagamento.id,
+        [
+          {
+            planoId: pagamento.plano,
+            periodicidade: pagamento.periodicidade,
+          },
+        ]
+      );
 
       return res.status(200).json({ ok: true });
     }
@@ -2690,23 +2766,41 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
   }
 }
 
-export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Response) {
+export async function getAulasAoVivoPagas(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
+    const agora = new Date();
+
     const items = await prisma.aulaAoVivo.findMany({
       where: {
         metodologiaId: null,
         metodologiaAvulsaId: null,
+
         acessoPago: true,
+
         precoAcesso: {
           gt: 0,
         },
-        status: {
-          in: ["AGENDADA", "AO_VIVO", "FINALIZADA"],
-        },
+
+        OR: [
+          {
+            status: "AGENDADA",
+            dataInicio: {
+              gte: agora,
+            },
+          },
+          {
+            status: "AO_VIVO",
+          },
+        ],
       },
+
       orderBy: {
         dataInicio: "asc",
       },
+
       select: {
         id: true,
         titulo: true,
@@ -2771,6 +2865,10 @@ export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Respon
       })),
     });
   } catch (e: any) {
-    return sendError(res, e, "Erro ao listar eventos ao vivo pagos.");
+    return sendError(
+      res,
+      e,
+      "Erro ao listar eventos ao vivo pagos."
+    );
   }
 }

@@ -366,7 +366,7 @@ export default function CreatorEventosPage() {
 
       await carregarTudo();
     } catch (e: any) {
-      window.toast.error(
+      toast.error(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
           "Erro ao apagar evento."
@@ -384,7 +384,7 @@ export default function CreatorEventosPage() {
     const origem = getOrigemAula(aula);
 
     if (aula.status === "AO_VIVO") {
-      window.toast.error("Finalize a transmissão antes de apagar este evento.");
+      toast.error("Finalize a transmissão antes de apagar este evento.");
       return;
     }
 
@@ -409,7 +409,7 @@ export default function CreatorEventosPage() {
       }
 
       if (!origem.metodologiaId || !origem.estruturaId || !origem.itemId) {
-        window.toast.error(
+        toast.error(
           "Não foi possível encontrar a estrutura/item desta aula para apagar somente ela."
         );
         return;
@@ -435,7 +435,7 @@ export default function CreatorEventosPage() {
 
       await carregarTudo();
     } catch (e: any) {
-      window.toast.error(
+      toast.error(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
           "Erro ao apagar aula ao vivo."

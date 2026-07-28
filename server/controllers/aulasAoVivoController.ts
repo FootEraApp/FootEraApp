@@ -579,11 +579,49 @@ export async function atualizarAulaAoVivoAvulsa(req: AuthRequest, res: Response)
       });
     }
 
+    const tituloFinal =
+      String(titulo || "").trim() ||
+      aula.titulo;
+
+    const aulaDuplicada = await prisma.aulaAoVivo.findFirst({
+      where: {
+        criadorUsuarioId: userId,
+        titulo: {
+          equals: tituloFinal,
+          mode: "insensitive",
+        },
+        dataInicio: inicio,
+        metodologiaId: null,
+        metodologiaAvulsaId: null,
+        itemId: null,
+        itemAvulsaId: null,
+        status: {
+          not: "CANCELADA",
+        },
+        id: {
+          not: id,
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+    if (aulaDuplicada) {
+      return res.status(409).json({
+        code: "AULA_AO_VIVO_DUPLICADA",
+        message:
+          "Você já possui outra aula ao vivo com esse mesmo nome e horário.",
+        aulaId: aulaDuplicada.id,
+      });
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       const aulaAtualizada = await tx.aulaAoVivo.update({
         where: { id },
         data: {
-          titulo: String(titulo || "").trim() || aula.titulo,
+          titulo: tituloFinal,
           descricao:
             descricao === undefined
               ? aula.descricao
@@ -1432,6 +1470,38 @@ export async function criarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
     if (fim && fim <= inicio) {
       return res.status(400).json({
         message: "Data final precisa ser maior que a data de início.",
+      });
+    }
+
+    const aulaDuplicada = await prisma.aulaAoVivo.findFirst({
+      where: {
+        criadorUsuarioId: userId,
+        titulo: {
+          equals: tituloTrim,
+          mode: "insensitive",
+        },
+        dataInicio: inicio,
+        metodologiaId: null,
+        metodologiaAvulsaId: null,
+        itemId: null,
+        itemAvulsaId: null,
+        status: {
+          not: "CANCELADA",
+        },
+      },
+      select: {
+        id: true,
+        titulo: true,
+        dataInicio: true,
+      },
+    });
+
+    if (aulaDuplicada) {
+      return res.status(409).json({
+        code: "AULA_AO_VIVO_DUPLICADA",
+        message:
+          "Você já possui uma aula ao vivo com esse mesmo nome e horário.",
+        aulaId: aulaDuplicada.id,
       });
     }
 
