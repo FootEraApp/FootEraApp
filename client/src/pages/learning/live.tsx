@@ -31,19 +31,22 @@ type AulaAoVivoDetalhe = {
   dataFim?: string | null;
   iniciouEm?: string | null;
   finalizouEm?: string | null;
-  
   urlStream?: string | null;
   videoGravadoUrl?: string | null;
   thumbUrl?: string | null;
-
   chatAtivo: boolean;
   gravacaoAtiva: boolean;
   replayDisponivel: boolean;
-
+  ivsRecordingStatus?:
+    | "CONFIGURADA"
+    | "PROCESSANDO"
+    | "DISPONIVEL"
+    | "NAO_CONFIGURADA"
+    | string
+    | null;
   totalMensagens?: number;
   totalParticipantes?: number;
   totalOnline?: number;
-
   metodologia?: {
     id: string;
     titulo: string;
@@ -53,7 +56,6 @@ type AulaAoVivoDetalhe = {
       foto?: string | null;
     } | null;
   } | null;
-
   metodologiaAvulsa?: {
     id: string;
     titulo: string;
@@ -63,29 +65,24 @@ type AulaAoVivoDetalhe = {
       foto?: string | null;
     } | null;
   } | null;
-
   estrutura?: {
     id: string;
     titulo?: string | null;
   } | null;
-
   estruturaAvulsa?: {
     id: string;
     titulo?: string | null;
   } | null;
-
   item?: {
     id: string;
     titulo?: string | null;
     tipo?: string | null;
   } | null;
-
   itemAvulsa?: {
     id: string;
     titulo?: string | null;
     tipo?: string | null;
   } | null;
-
   metodologiaId?: string | null;
   metodologiaAvulsaId?: string | null;
   estruturaId?: string | null;
@@ -244,6 +241,17 @@ export default function LearningLivePage() {
 
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [playerLoading, setPlayerLoading] = useState(false);
+  const [
+    replaySincronizando,
+    setReplaySincronizando,
+  ] = useState(false);
+
+  const [
+    replayMensagem,
+    setReplayMensagem,
+  ] = useState<string | null>(
+    null
+  );
 
   const isLive = aula?.status === "AO_VIVO";
   const isScheduled = aula?.status === "AGENDADA";
@@ -271,13 +279,37 @@ export default function LearningLivePage() {
     aula?.metodologiaAvulsa?.criadorUsuario?.foto ||
     null;
 
-  const streamAtual = useMemo(() => {
-    if (isLive) return aula?.urlStream || "";
-    if (isFinished && aula?.replayDisponivel) {
-      return aula?.videoGravadoUrl || aula?.urlStream || "";
-    }
-    return "";
-  }, [aula, isLive, isFinished]);
+  const streamAtual =
+    useMemo(() => {
+      if (isLive) {
+        return aula?.urlStream || "";
+      }
+
+      /*
+      * Depois da finalização, nunca reutiliza
+      * a URL da transmissão ao vivo.
+      *
+      * O playbackUrl do canal IVS não é a URL
+      * da gravação.
+      */
+      if (
+        isFinished &&
+        aula?.replayDisponivel
+      ) {
+        return (
+          aula?.videoGravadoUrl ||
+          ""
+        );
+      }
+
+      return "";
+    }, [
+      aula?.urlStream,
+      aula?.videoGravadoUrl,
+      aula?.replayDisponivel,
+      isLive,
+      isFinished,
+    ]);
 
   const liveBadge = useMemo(() => {
     if (!aula) return null;
@@ -331,6 +363,55 @@ export default function LearningLivePage() {
     return () => { window.clearInterval(interval); limparTimerConclusaoAoVivo(); };
   }, [aulaId]);
 
+  useEffect(() => {
+    if (!aulaId) return;
+
+    if (
+      aula?.status !==
+      "FINALIZADA"
+    ) {
+      return;
+    }
+
+    if (aula.replayDisponivel) {
+      return;
+    }
+
+    if (!aula.gravacaoAtiva) {
+      return;
+    }
+
+    if (
+      aula.ivsRecordingStatus ===
+      "NAO_CONFIGURADA"
+    ) {
+      return;
+    }
+
+    /*
+    * Verifica imediatamente e depois
+    * a cada 30 segundos.
+    */
+    void sincronizarReplay(false);
+
+    const intervalo =
+      window.setInterval(() => {
+        void sincronizarReplay(false);
+      }, 30_000);
+
+    return () => {
+      window.clearInterval(
+        intervalo
+      );
+    };
+  }, [
+    aulaId,
+    aula?.status,
+    aula?.replayDisponivel,
+    aula?.gravacaoAtiva,
+    aula?.ivsRecordingStatus,
+  ]);
+  
   useEffect(() => {
     if (!aulaId) return;
 
@@ -679,6 +760,121 @@ export default function LearningLivePage() {
     }
   }
 
+  async function sincronizarReplay(
+    mostrarErro = false
+  ) {
+    if (
+      !aulaId ||
+      replaySincronizando
+    ) {
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      setReplaySincronizando(true);
+
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/replay/sincronizar`,
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const json =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      /*
+      * 202 significa que a AWS ainda está
+      * processando os arquivos.
+      */
+      if (resposta.status === 202) {
+        setReplayMensagem(
+          json?.message ||
+            "A gravação ainda está sendo processada."
+        );
+
+        setAula((anterior) =>
+          anterior
+            ? {
+                ...anterior,
+                ivsRecordingStatus:
+                  "PROCESSANDO",
+              }
+            : anterior
+        );
+
+        return;
+      }
+
+      if (!resposta.ok) {
+        const mensagem =
+          json?.message ||
+          "Não foi possível sincronizar o replay.";
+
+        setReplayMensagem(
+          mensagem
+        );
+
+        if (mostrarErro) {
+          toast.error(mensagem);
+        }
+
+        return;
+      }
+
+      const item =
+        json?.item ?? null;
+
+      setReplayMensagem(
+        "Replay disponível."
+      );
+
+      /*
+      * O retorno do update contém os campos
+      * novos. Faz merge para preservar as
+      * relações já carregadas da aula.
+      */
+      if (item) {
+        setAula((anterior) =>
+          anterior
+            ? {
+                ...anterior,
+                ...item,
+              }
+            : item
+        );
+      } else {
+        await carregarAula(false);
+      }
+    } catch (error: any) {
+      const mensagem =
+        error?.message ||
+        "Erro ao verificar o replay.";
+
+      setReplayMensagem(
+        mensagem
+      );
+
+      if (mostrarErro) {
+        toast.error(mensagem);
+      }
+    } finally {
+      setReplaySincronizando(false);
+    }
+  }
+  
   async function carregarAula(showLoading = true) {
     try {
       if (showLoading) setLoadingAula(true);
@@ -871,15 +1067,52 @@ export default function LearningLivePage() {
       );
     }
 
-    if (isFinished && !streamAtual) {
+    if (
+      isFinished &&
+      !streamAtual
+    ) {
+      const gravacaoNaoConfigurada =
+        aula?.ivsRecordingStatus ===
+        "NAO_CONFIGURADA";
+
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-white">
-          <div className="text-center px-6">
-            <CheckCircle2 className="w-14 h-14 mx-auto mb-4 text-emerald-300" />
-            <div className="text-2xl font-black">Live finalizada</div>
-            <p className="text-white/70 mt-2">
-              O replay ainda não está disponível.
+          <div className="max-w-lg px-6 text-center">
+            {replaySincronizando ? (
+              <Loader2 className="mx-auto mb-4 h-14 w-14 animate-spin text-emerald-300" />
+            ) : (
+              <CheckCircle2 className="mx-auto mb-4 h-14 w-14 text-emerald-300" />
+            )}
+
+            <div className="text-2xl font-black">
+              Live finalizada
+            </div>
+
+            <p className="mt-2 text-white/70">
+              {gravacaoNaoConfigurada
+                ? "Esta live não foi gravada pela AWS IVS, portanto não existe replay automático."
+                : replayMensagem ||
+                  "A gravação está sendo processada. Esta página verificará automaticamente quando o replay estiver pronto."}
             </p>
+
+            {!gravacaoNaoConfigurada && (
+              <button
+                type="button"
+                disabled={
+                  replaySincronizando
+                }
+                onClick={() =>
+                  void sincronizarReplay(
+                    true
+                  )
+                }
+                className="mt-5 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white hover:bg-white/20 disabled:opacity-60"
+              >
+                {replaySincronizando
+                  ? "Verificando..."
+                  : "Verificar replay agora"}
+              </button>
+            )}
           </div>
         </div>
       );
@@ -1141,7 +1374,11 @@ export default function LearningLivePage() {
                         : isFinished && aula?.replayDisponivel
                           ? "O replay já está disponível para assistir novamente."
                           : isFinished
-                            ? "O replay ainda será disponibilizado pelo responsável."
+                            ? aula?.ivsRecordingStatus ===
+                              "NAO_CONFIGURADA"
+                              ? "Esta transmissão não possui gravação configurada."
+                              : replayMensagem ||
+                                "A gravação está sendo processada automaticamente."
                             : "Acompanhe as informações dessa aula ao vivo."}
                   </div>
                 </div>

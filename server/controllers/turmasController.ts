@@ -24,8 +24,253 @@ function parseCategoriasTurma(input: any): string[] {
   return [];
 }
 
-export async function getAlunosTurma(req: Request, res: Response) {
+async function buscarContextoUsuarioLogado(
+  req: AuthenticatedRequest
+) {
+  const userId = String(
+    req.userId ||
+    (req as any).userCtx?.id ||
+    ""
+  ).trim();
+
+  if (!userId) {
+    return null;
+  }
+
+  const [clube, escolinha, professor] =
+    await Promise.all([
+      prisma.clube.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.escolinha.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.professor.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+    ]);
+
+  return {
+    userId,
+    clubeId: clube?.id ?? null,
+    escolinhaId: escolinha?.id ?? null,
+    professorId: professor?.id ?? null,
+  };
+}
+
+async function podeAcessarTurma(
+  req: AuthenticatedRequest,
+  turmaId: string
+) {
+  const contexto =
+    await buscarContextoUsuarioLogado(req);
+
+  if (!contexto) {
+    return {
+      autorizado: false,
+      turma: null,
+    };
+  }
+
+  const turma =
+    await prisma.turma.findUnique({
+      where: {
+        id: turmaId,
+      },
+
+      select: {
+        id: true,
+        ativo: true,
+        clubeId: true,
+        escolinhaId: true,
+
+        professores: {
+          select: {
+            professorId: true,
+          },
+        },
+      },
+    });
+
+  if (!turma || turma.ativo === false) {
+    return {
+      autorizado: false,
+      turma: null,
+    };
+  }
+
+  const autorizado =
+    turma.clubeId === contexto.clubeId ||
+    turma.escolinhaId ===
+      contexto.escolinhaId ||
+    turma.professores.some(
+      (item) =>
+        item.professorId ===
+        contexto.professorId
+    );
+
+  return {
+    autorizado,
+    turma,
+    contexto,
+  };
+}
+
+async function buscarUsuarioIdsPermitidosNaTurma(
+  turmaId: string
+): Promise<Set<string>> {
+  const turma =
+    await prisma.turma.findUnique({
+      where: {
+        id: turmaId,
+      },
+
+      select: {
+        clubeId: true,
+        escolinhaId: true,
+
+        professores: {
+          select: {
+            professorId: true,
+          },
+        },
+      },
+    });
+
+  if (!turma) {
+    return new Set();
+  }
+
+  const professorIds =
+    turma.professores
+      .map(
+        (item) =>
+          item.professorId
+      )
+      .filter(Boolean);
+
+  const vinculosDiretos: any[] = [];
+
+  if (turma.clubeId) {
+    vinculosDiretos.push({
+      clubeId:
+        turma.clubeId,
+    });
+  }
+
+  if (turma.escolinhaId) {
+    vinculosDiretos.push({
+      escolinhaId:
+        turma.escolinhaId,
+    });
+  }
+
+  const relacoesPermitidas: any[] = [];
+
+  if (turma.clubeId) {
+    relacoesPermitidas.push({
+      clubeId:
+        turma.clubeId,
+    });
+  }
+
+  if (turma.escolinhaId) {
+    relacoesPermitidas.push({
+      escolinhaId:
+        turma.escolinhaId,
+    });
+  }
+
+  if (professorIds.length > 0) {
+    relacoesPermitidas.push({
+      professorId: {
+        in: professorIds,
+      },
+    });
+  }
+
+  if (relacoesPermitidas.length > 0) {
+    vinculosDiretos.push({
+      relacoesTreinamento: {
+        some: {
+          atletaId: {
+            not: null,
+          },
+
+          ativo: true,
+          encerradoEm: null,
+
+          OR:
+            relacoesPermitidas,
+        },
+      },
+    });
+  }
+
+  if (vinculosDiretos.length === 0) {
+    return new Set();
+  }
+
+  const atletas =
+    await prisma.atleta.findMany({
+      where: {
+        OR: vinculosDiretos,
+      },
+
+      select: {
+        usuarioId: true,
+      },
+    });
+
+  return new Set(
+    atletas
+      .map(
+        (atleta) =>
+          atleta.usuarioId
+      )
+      .filter(
+        (id): id is string =>
+          typeof id === "string" &&
+          id.length > 0
+      )
+  );
+}
+
+export async function getAlunosTurma(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
+
+  const acesso =
+    await podeAcessarTurma(req, id);
+
+  if (!acesso.turma) {
+    return res.status(404).json({
+      error: "Turma não encontrada.",
+    });
+  }
+
+  if (!acesso.autorizado) {
+    return res.status(403).json({
+      error:
+        "Você não possui acesso a esta turma.",
+    });
+  }
 
   try {
     const usuarioLogadoId = String((req as any).userId || (req as any).userCtx?.id || "").trim();
@@ -47,58 +292,14 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     const usuarioIdsFromVinculo = membros.map((m) => m.usuarioId).filter(Boolean);
 
-    let usuarioIdsFromTurmaLegacy: string[] = [];
-    try {
-      const cols = await prisma.$queryRaw<{ column_name: string }[]>`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE (table_name = 'Turma' OR table_name = 'turma')
-          AND column_name IN ('usuarioIds', 'atletaIds')
-      `;
-
-      const hasUsuarioIds = cols.some((c) => c.column_name === "usuarioIds");
-      const hasAtletaIds = cols.some((c) => c.column_name === "atletaIds");
-
-      if (hasUsuarioIds || hasAtletaIds) {
-        const rows = await prisma.$queryRaw<any[]>`
-          SELECT
-            ${hasUsuarioIds ? prisma.$queryRaw`"usuarioIds"` : prisma.$queryRaw`NULL`} as "usuarioIds",
-            ${hasAtletaIds ? prisma.$queryRaw`"atletaIds"` : prisma.$queryRaw`NULL`} as "atletaIds"
-          FROM "Turma"
-          WHERE id = ${id}
-          LIMIT 1
-        `;
-
-        const row = rows?.[0];
-
-        const legacyUsuarioIds: string[] = Array.isArray(row?.usuarioIds)
-          ? row.usuarioIds.map(String).filter(Boolean)
-          : [];
-
-        const legacyAtletaIds: string[] = Array.isArray(row?.atletaIds)
-          ? row.atletaIds.map(String).filter(Boolean)
-          : [];
-
-        if (legacyAtletaIds.length) {
-          const atletasLegacy = await prisma.atleta.findMany({
-            where: { id: { in: legacyAtletaIds } },
-            select: { usuarioId: true },
-          });
-
-          usuarioIdsFromTurmaLegacy.push(
-            ...atletasLegacy.map((a) => a.usuarioId).filter((x): x is string => Boolean(x))
-          );
-        }
-
-        usuarioIdsFromTurmaLegacy.push(...legacyUsuarioIds);
-      }
-    } catch (legacyErr) {
-      console.warn("[turmas] legacy check ignorado:", legacyErr);
-    }
-
     const usuarioIdsTurma = Array.from(
-      new Set([...usuarioIdsFromVinculo, ...usuarioIdsFromTurmaLegacy].map(String))
-    ).filter(Boolean);
+      new Set(
+        usuarioIdsFromVinculo
+          .map(String)
+          .map((id) => id.trim())
+          .filter(Boolean)
+      )
+    );
 
     let disponiveis: Array<{
       atletaId: string | null;
@@ -126,7 +327,8 @@ export async function getAlunosTurma(req: Request, res: Response) {
       const rels = await prisma.relacaoTreinamento.findMany({
         where: {
           professorId: professorIdLogado,
-          ativo: { not: false },
+          ativo: true,
+          encerradoEm: null,
         },
         select: {
           atleta: {
@@ -236,7 +438,8 @@ export async function getAlunosTurma(req: Request, res: Response) {
             escolinhaId: true,
             relacoesTreinamento: {
               where: {
-                ativo: { not: false },
+                ativo: true,
+                encerradoEm: null,
                 OR: [
                   ...(ownerClubeId ? [{ clubeId: ownerClubeId }] : []),
                   ...(ownerEscolinhaId ? [{ escolinhaId: ownerEscolinhaId }] : []),
@@ -348,17 +551,75 @@ export async function getAlunosTurma(req: Request, res: Response) {
     });
 
     const naoVinculadosUsuarioIds =
-      ownerClubeId || ownerEscolinhaId
-        ? alunos.filter((a) => a.inTurma && !a.vinculado).map((a) => a.usuarioId)
-        : [];
+      alunos
+        .filter(
+          (aluno) =>
+            aluno.inTurma &&
+            !aluno.vinculado
+        )
+        .map(
+          (aluno) =>
+            aluno.usuarioId
+        );
+
+    if (
+      naoVinculadosUsuarioIds.length > 0
+    ) {
+      await prisma.turmaUsuario.deleteMany({
+        where: {
+          turmaId: id,
+
+          usuarioId: {
+            in:
+              naoVinculadosUsuarioIds,
+          },
+        },
+      });
+    }
+
+    const removidosSet = new Set(
+      naoVinculadosUsuarioIds
+    );
+
+    const usuarioIdsTurmaValidos =
+      usuarioIdsTurma.filter(
+        (usuarioId) =>
+          !removidosSet.has(usuarioId)
+      );
+
+    const alunosVinculados =
+      alunos.filter(
+        (aluno) =>
+          aluno.vinculado === true
+      );
 
     return res.json({
-      alunos,
-      usuarioIds: usuarioIdsTurma,
-      atletaIds: alunos.filter((a) => a.inTurma).map((a) => a.atletaId).filter(Boolean),
+      alunos: alunosVinculados,
+      usuarioIds:
+        usuarioIdsTurmaValidos,
+      atletaIds:
+        alunosVinculados
+          .filter(
+            (aluno) =>
+              aluno.inTurma === true
+          )
+          .map(
+            (aluno) =>
+              aluno.atletaId
+          )
+          .filter(Boolean),
       naoVinculadosUsuarioIds,
-      disponiveis,
-      usuarioIdsTodos,
+      disponiveis:
+        disponiveis.filter(
+          (atleta) =>
+            atleta.vinculado === true
+        ),
+
+      usuarioIdsTodos:
+        alunosVinculados.map(
+          (aluno) =>
+            aluno.usuarioId
+        ),
     });
   } catch (e) {
     console.error("[turmas] erro ao buscar alunos da turma", id, e);
@@ -388,63 +649,190 @@ export async function obterAlunosTurma(req: Request, res: Response) {
   return res.json({ usuarioIds, atletaIds });
 }
 
-export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Response) {
+export async function listarMinhasTurmas(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
-    if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+    const tipoUsuarioId = String(
+      req.query.tipoUsuarioId || ""
+    ).trim();
 
-    const turmas = await prisma.turma.findMany({
-      where: {
-        OR: [
-          { clubeId: tipoUsuarioId },
-          { escolinhaId: tipoUsuarioId },
-          { professores: { some: { professorId: tipoUsuarioId } } },
-        ],
-      },
-      select: {
-        id: true,
-        nome: true,
-        categoria: true,
-        descricao: true,
-        professores: {
-          select: {
-            professor: {
-              select: {
-                id: true,
-                nome: true,
-                usuario: { select: { nome: true } },
+    if (!tipoUsuarioId) {
+      return res.status(400).json({
+        error: "tipoUsuarioId obrigatório",
+      });
+    }
+
+    const turmas =
+      await prisma.turma.findMany({
+        where: {
+          ativo: true,
+
+          OR: [
+            {
+              clubeId: tipoUsuarioId,
+            },
+            {
+              escolinhaId: tipoUsuarioId,
+            },
+            {
+              professores: {
+                some: {
+                  professorId:
+                    tipoUsuarioId,
+                },
+              },
+            },
+          ],
+        },
+
+        select: {
+          id: true,
+          nome: true,
+          categoria: true,
+          descricao: true,
+          ativo: true,
+          clubeId: true,
+          escolinhaId: true,
+
+          clube: {
+            select: {
+              id: true,
+              nome: true,
+            },
+          },
+
+          escolinha: {
+            select: {
+              id: true,
+              nome: true,
+            },
+          },
+
+          professores: {
+            select: {
+              professor: {
+                select: {
+                  id: true,
+                  nome: true,
+
+                  usuario: {
+                    select: {
+                      nome: true,
+                    },
+                  },
+                },
               },
             },
           },
+
+          _count: {
+            select: {
+              membros: true,
+            },
+          },
         },
-        _count: { select: { membros: true } },
-      },
-      orderBy: { nome: "asc" },
+
+        orderBy: [
+          {
+            nome: "asc",
+          },
+          {
+            createdAt: "asc",
+          },
+        ],
+      });
+
+    const items = turmas.map((turma) => {
+      const profsRaw = (
+        turma.professores ?? []
+      )
+        .map(
+          (turmaProfessor) =>
+            turmaProfessor.professor
+        )
+        .filter(Boolean) as Array<{
+        id: string;
+        nome: string;
+        usuario: {
+          nome: string;
+        } | null;
+      }>;
+
+      const professores =
+        uniqById(profsRaw);
+
+      const professorNomes =
+        professores
+          .map(
+            (professor) =>
+              professor.usuario?.nome?.trim() ||
+              professor.nome?.trim()
+          )
+          .filter(
+            (nome): nome is string =>
+              Boolean(nome)
+          );
+
+      let origemTipo:
+        | "Clube"
+        | "Escolinha"
+        | "Professor" = "Professor";
+
+      let origemNome =
+        professorNomes.join(", ") ||
+        "Professor";
+
+      if (turma.clube) {
+        origemTipo = "Clube";
+        origemNome = turma.clube.nome;
+      } else if (turma.escolinha) {
+        origemTipo = "Escolinha";
+        origemNome =
+          turma.escolinha.nome;
+      }
+
+      return {
+        id: turma.id,
+        nome: turma.nome,
+        categoria:
+          turma.categoria ?? null,
+        descricao:
+          turma.descricao ?? null,
+        ativo: turma.ativo,
+
+        professorIds:
+          professores.map(
+            (professor) =>
+              professor.id
+          ),
+
+        professorNomes,
+        professorNome:
+          professorNomes.join(", ") ||
+          null,
+
+        alunosCount:
+          turma._count.membros,
+
+        origemTipo,
+        origemNome,
+      };
     });
 
-    const items = turmas.map((t) => {
-    const profsRaw = (t.professores ?? [])
-      .map((tp) => tp?.professor ?? null)
-      .filter((p): p is { id: string; nome: string; usuario: { nome: string } } => Boolean(p?.id));
-
-    const profs = uniqById(profsRaw);
-
-    return {
-      id: t.id,
-      nome: t.nome,
-      categoria: t.categoria ?? null,
-      professorIds: profs.map((p) => p.id),
-      professorNomes: profs.map((p) => p.nome),
-      professorNome: profs.map((p) => p.nome).join(", ") || null,
-      alunosCount: t._count.membros,
-      descricao: t.descricao ?? null,
-    };
+    return res.json({
+      items,
     });
+  } catch (error) {
+    console.error(
+      "[listarMinhasTurmas] erro:",
+      error
+    );
 
-    return res.json({ items });
-  } catch (e) {
-    console.error("[listarMinhasTurmas] erro:", e);
-    return res.status(500).json({ error: "Erro ao listar turmas" });
+    return res.status(500).json({
+      error: "Erro ao listar turmas",
+    });
   }
 }
 
@@ -462,7 +850,9 @@ export async function listarTurmas(req: Request, res: Response) {
       });
     }
 
-    const where: any = {};
+    const where: any = {
+      ativo: true,
+    };
     const ownerTipoNorm = ownerTipoRaw.toLowerCase();
 
     if (ownerTipoRaw && ownerIdRaw) {
@@ -501,6 +891,18 @@ export async function listarTurmas(req: Request, res: Response) {
 
       const profs = uniqById(profsRaw);
 
+      const ownerTipo =
+        t.clubeId
+          ? "Clube"
+          : t.escolinhaId
+          ? "Escolinha"
+          : null;
+
+      const ownerId =
+        t.clubeId ??
+        t.escolinhaId ??
+        null;
+
       return {
         id: t.id,
         nome: t.nome,
@@ -510,8 +912,12 @@ export async function listarTurmas(req: Request, res: Response) {
         professorNomes: profs.map((p) => p.nome),
         professorNome: profs.map((p) => p.nome).join(", ") || null,
         alunosCount: t._count.membros,
-        ownerTipo: ownerTipoRaw || null,
-        ownerId: ownerIdRaw || null,
+        ownerTipo,
+        ownerId,
+        criadoPorProfessorId:
+         !ownerId && professorId
+          ? professorId
+          : null,
       };
     });
 
@@ -708,9 +1114,26 @@ export async function criarTurma(req: Request, res: Response) {
   }
 }
 
-export async function updateTurma(req: Request, res: Response) {
+export async function updateTurma(req: AuthenticatedRequest, res: Response) {
   try {
     const { id } = req.params;
+
+    const acesso =
+      await podeAcessarTurma(req, id);
+
+    if (!acesso.turma) {
+      return res.status(404).json({
+        message: "Turma não encontrada.",
+      });
+    }
+
+    if (!acesso.autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não pode editar esta turma.",
+      });
+    }
+
     const { nome, categoria, descricao, ativo } = req.body as Partial<{
       nome: string;
       categoria: string | string[];
@@ -731,9 +1154,29 @@ export async function updateTurma(req: Request, res: Response) {
   }
 }
 
-export async function setProfessoresTurma(req: Request, res: Response) {
+export async function setProfessoresTurma(req: AuthenticatedRequest, res: Response) {
   try {
     const turmaId = String(req.params.id);
+
+    const acesso =
+      await podeAcessarTurma(
+        req,
+        turmaId
+      );
+
+    if (!acesso.turma) {
+      return res.status(404).json({
+        message: "Turma não encontrada.",
+      });
+    }
+
+    if (!acesso.autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não pode atribuir professores nesta turma.",
+      });
+    }
+
     const professorIds: string[] = Array.isArray(req.body?.professorIds)
       ? req.body.professorIds.map(String).filter(Boolean)
       : [];
@@ -754,13 +1197,60 @@ export async function setProfessoresTurma(req: Request, res: Response) {
   }
 }
 
-export async function deleteTurma(req: Request, res: Response) {
+export async function deleteTurma(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
     const { id } = req.params;
-    await prisma.turma.delete({ where: { id } });
-    res.json({ ok: true });
-  } catch (e: any) {
-    sendError(res, e, "Falha ao remover turma");
+
+    const acesso =
+      await podeAcessarTurma(req, id);
+
+    if (!acesso.turma) {
+      return res.status(404).json({
+        message: "Turma não encontrada.",
+      });
+    }
+
+    if (!acesso.autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não pode remover esta turma.",
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.turma.update({
+        where: {
+          id,
+        },
+        data: {
+          ativo: false,
+        },
+      }),
+
+      prisma.elenco.updateMany({
+        where: {
+          turmaId: id,
+          ativo: true,
+        },
+        data: {
+          ativo: false,
+        },
+      }),
+    ]);
+
+    return res.json({
+      ok: true,
+      id,
+    });
+  } catch (error: any) {
+    return sendError(
+      res,
+      error,
+      "Falha ao remover turma"
+    );
   }
 }
 
@@ -786,10 +1276,71 @@ export async function professoresDisponiveis(req: Request, res: Response) {
   }
 }
 
-export async function substituirAlunosTurma(req: Request, res: Response) {
+export async function substituirAlunosTurma(req: AuthenticatedRequest, res: Response) {
   const { id } = req.params;
-  const usuarioIds: string[] = Array.isArray(req.body?.usuarioIds) ? req.body.usuarioIds : [];
 
+  const acesso =
+    await podeAcessarTurma(req, id);
+
+  if (!acesso.turma) {
+    return res.status(404).json({
+      message: "Turma não encontrada.",
+    });
+  }
+
+  if (!acesso.autorizado) {
+    return res.status(403).json({
+      message:
+        "Você não pode alterar os alunos desta turma.",
+    });
+  }
+
+  const usuarioIdsBrutos: unknown =
+    req.body?.usuarioIds;
+
+  const usuarioIdsRecebidos: string[] =
+    Array.isArray(usuarioIdsBrutos)
+      ? Array.from(
+          new Set<string>(
+            usuarioIdsBrutos
+              .map((valor: unknown) =>
+                String(valor).trim()
+              )
+              .filter(
+                (usuarioId: string) =>
+                  usuarioId.length > 0
+              )
+          )
+        )
+      : [];
+
+  const usuarioIdsPermitidos =
+    await buscarUsuarioIdsPermitidosNaTurma(
+      id
+    );
+
+  const usuarioIdsInvalidos =
+    usuarioIdsRecebidos.filter(
+      (usuarioId) =>
+        !usuarioIdsPermitidos.has(
+          usuarioId
+        )
+    );
+
+  if (
+    usuarioIdsInvalidos.length > 0
+  ) {
+    return res.status(400).json({
+      message:
+        "Existem atletas que não possuem mais vínculo com o responsável da turma.",
+
+      usuarioIdsInvalidos,
+    });
+  }
+
+  const usuarioIds =
+    usuarioIdsRecebidos;
+    
   const turma = await prisma.turma.findUnique({ where: { id } });
   if (!turma) return res.status(404).json({ message: "Turma não encontrada" });
 

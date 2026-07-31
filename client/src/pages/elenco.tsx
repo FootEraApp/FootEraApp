@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback} from "react";
 import {
   DragDropContext,
   Droppable,
@@ -175,7 +175,6 @@ type EscalaItem = {
   idade?: number | null;
   posicao?: string | null;
 };
-type EscalaEnriquecida = Record<PosicaoCampo, EscalaItem | null>;
 
 type ElencoServidor = {
   id: string;
@@ -185,12 +184,34 @@ type ElencoServidor = {
   atletasElenco?: { atletaId: string; posicao: PosicaoCampo }[];
 };
 
+type FormacaoElenco = {
+  atacantes: number;
+  meio: number;
+  defesa: number;
+};
+
+const FORMACAO_PADRAO: FormacaoElenco = {
+  atacantes: 3,
+  meio: 3,
+  defesa: 4,
+};
+
 type ElencoUI = {
   id: string | null;
   nome: string;
   maxJogadores: number;
   posicoes: Record<PosicaoCampo, Atleta | null>;
   livres: Atleta[];
+  reservasIds: string[];
+  formacao: FormacaoElenco;
+};
+
+type TurmaOpcao = {
+  id: string;
+  nome: string;
+  categoria?: string | string[] | null;
+  origemTipo?: "Clube" | "Escolinha" | "Professor" | null;
+  origemNome?: string | null;
 };
 
 const isLikelyValidFoto = (v?: string | null) => {
@@ -477,9 +498,8 @@ export default function PaginaElenco({
 }: PaginaElencoProps) {
   const isMobile = useIsMobile();
 
-  const [turmas, setTurmas] = useState<Array<{ id: string; nome: string }>>([]);
+  const [turmas, setTurmas] = useState<TurmaOpcao[]>([]);
   const [turmaId, setTurmaId] = useState<string>("");
-
   const [pontos, setPontos] = useState<Record<string, PontuacaoDTO>>({});
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -489,46 +509,209 @@ export default function PaginaElenco({
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [filtro, setFiltro] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [reservasIds, setReservasIds] = useState<string[]>([]);
 
+  const MAX_TITULARES = 11;
   const MAX_RESERVAS = 11;
+  const MAX_SELECIONADOS = MAX_TITULARES + MAX_RESERVAS;
+
   const ativo = elencos[activeIndex];
-  const posicoesAtivas = ativo?.posicoes ?? emptyPosicoes();
-  const atletasLivresAtivo = (ativo?.livres ?? []).filter(a => {
+
+  const reservasIds =
+    ativo?.reservasIds ?? [];
+
+  const formacao =
+    ativo?.formacao ?? FORMACAO_PADRAO;
+
+  const setReservasIds = (
+    acao: React.SetStateAction<string[]>
+  ) => {
+    setElencos((anteriores) => {
+      if (!anteriores[activeIndex]) {
+        return anteriores;
+      }
+
+      const resultado = [...anteriores];
+      const elencoAtual = resultado[activeIndex];
+
+      const novoValor =
+        typeof acao === "function"
+          ? acao(elencoAtual.reservasIds)
+          : acao;
+
+      resultado[activeIndex] = {
+        ...elencoAtual,
+        reservasIds: novoValor,
+      };
+
+      return resultado;
+    });
+  };
+
+  const setFormacao = (
+    acao: React.SetStateAction<FormacaoElenco>
+  ) => {
+    setElencos((anteriores) => {
+      if (!anteriores[activeIndex]) {
+        return anteriores;
+      }
+
+      const resultado = [...anteriores];
+      const elencoAtual = resultado[activeIndex];
+
+      const novoValor =
+        typeof acao === "function"
+          ? acao(elencoAtual.formacao)
+          : acao;
+
+      resultado[activeIndex] = {
+        ...elencoAtual,
+        formacao: novoValor,
+      };
+
+      return resultado;
+    });
+  };
+
+  const posicoesAtivas =
+    ativo?.posicoes ?? emptyPosicoes();
+
+  const posicoesDaFormacao = useMemo<PosicaoCampo[]>(
+    () => [
+      "GOL",
+      ...getDefPositions(formacao.defesa),
+      ...getMidPositions(formacao.meio),
+      ...getAttPositions(formacao.atacantes),
+    ],
+    [
+      formacao.defesa,
+      formacao.meio,
+      formacao.atacantes,
+    ]
+  );
+
+  /*
+  * Considera somente posições que estão visíveis
+  * na formação atual e não conta o mesmo atleta duas vezes.
+  */
+  const elencoAtual = useMemo(() => {
+    const vistos = new Set<string>();
+    const titulares: Atleta[] = [];
+
+    for (const posicao of posicoesDaFormacao) {
+      const atleta = posicoesAtivas[posicao];
+
+      if (!atleta?.atletaId) continue;
+      if (vistos.has(atleta.atletaId)) continue;
+
+      vistos.add(atleta.atletaId);
+      titulares.push(atleta);
+    }
+
+    return titulares;
+  }, [posicoesAtivas, posicoesDaFormacao]);
+
+  const atletasLivresAtivo = (
+    ativo?.livres ?? []
+  ).filter((atleta) => {
     if (!filtro) return true;
-    const f = filtro.toLowerCase();
+
+    const termo = filtro.toLowerCase();
+
     return (
-      a.nome?.toLowerCase().includes(f) ||
-      a.posicao?.toLowerCase().includes(f)
+      atleta.nome?.toLowerCase().includes(termo) ||
+      atleta.posicao?.toLowerCase().includes(termo)
     );
   });
 
-  const elencoAtual = useMemo(
-    () => POSICOES.map((p) => posicoesAtivas[p.id]).filter(Boolean) as Atleta[],
-    [posicoesAtivas]
-  );
-
   const reservas = useMemo(() => {
     if (!permitirReservas) return [];
-    const map = new Map(todosAtletas.map(a => [a.atletaId, a]));
-    return reservasIds.map(id => map.get(id)).filter(Boolean) as Atleta[];
-  }, [reservasIds, todosAtletas, permitirReservas]);
+
+    const atletasDaTurma = new Map(
+      todosAtletas.map((atleta) => [
+        atleta.atletaId,
+        atleta,
+      ])
+    );
+
+    const titularesIds = new Set(
+      elencoAtual.map((atleta) => atleta.atletaId)
+    );
+
+    const vistos = new Set<string>();
+    const lista: Atleta[] = [];
+
+    for (const reservaId of reservasIds) {
+      if (vistos.has(reservaId)) continue;
+      if (titularesIds.has(reservaId)) continue;
+
+      const atleta = atletasDaTurma.get(reservaId);
+
+      if (!atleta) continue;
+
+      vistos.add(reservaId);
+      lista.push(atleta);
+    }
+
+    return lista.slice(0, MAX_RESERVAS);
+  }, [
+    reservasIds,
+    todosAtletas,
+    permitirReservas,
+    elencoAtual,
+  ]);
 
   const reservasDisponiveis = useMemo(() => {
     if (!permitirReservas) return [];
-    const escaladosIds = new Set(elencoAtual.map(a => a.atletaId));
-    const reservasSet = new Set(reservasIds);
 
-    return atletasLivresAtivo.filter(a => !escaladosIds.has(a.atletaId) && !reservasSet.has(a.atletaId));
-  }, [permitirReservas, atletasLivresAtivo, elencoAtual, reservasIds]);
+    const titularesIds = new Set(
+      elencoAtual.map((atleta) => atleta.atletaId)
+    );
 
-  const totalEscalados = elencoAtual.length;
+    const reservasSet = new Set(
+      reservas.map((atleta) => atleta.atletaId)
+    );
 
-  const [formacao, setFormacao] = useState<{ atacantes: number; meio: number; defesa: number }>({
-    atacantes: 3,
-    meio: 3,
-    defesa: 4,
-  });
+    return atletasLivresAtivo.filter(
+      (atleta) =>
+        !titularesIds.has(atleta.atletaId) &&
+        !reservasSet.has(atleta.atletaId)
+    );
+  }, [
+    permitirReservas,
+    atletasLivresAtivo,
+    elencoAtual,
+    reservas,
+  ]);
+
+  const totalTitulares = elencoAtual.length;
+  const totalReservas = reservas.length;
+  const totalSelecionados = totalTitulares + totalReservas;
+
+  const nomesTurmasDuplicados = useMemo(() => {
+    const quantidades = new Map<
+      string,
+      number
+    >();
+
+    for (const turma of turmas) {
+      const nomeNormalizado =
+        turma.nome.trim().toLowerCase();
+
+      quantidades.set(
+        nomeNormalizado,
+        (quantidades.get(nomeNormalizado) ??
+          0) + 1
+      );
+    }
+
+    return new Set(
+      Array.from(quantidades.entries())
+        .filter(([, quantidade]) =>
+          quantidade > 1
+        )
+        .map(([nome]) => nome)
+    );
+  }, [turmas]);
 
   const fetchPontuacoes = async (ids: string[]) => {
     const token = Storage.token;
@@ -552,6 +735,31 @@ export default function PaginaElenco({
   ): ElencoUI {
     const posicoesPreenchidas: Record<PosicaoCampo, Atleta | null> = emptyPosicoes();
     const usados = new Set<string>();
+
+    const escalaBruta =
+      (raw as any).escala ?? {};
+
+    const reservasDoElenco =
+      Array.isArray(
+        escalaBruta.__reservasIds
+      )
+        ? escalaBruta.__reservasIds
+            .map(String)
+            .filter((id: string) =>
+              baseAtletas.some(
+                (atleta) =>
+                  atleta.atletaId === id
+              )
+            )
+            .slice(0, MAX_RESERVAS)
+        : [];
+
+    const formacaoDoElenco =
+      typeof (raw as any).formacao === "string"
+        ? parseFormacaoStr(
+            (raw as any).formacao
+          )
+        : FORMACAO_PADRAO;
 
     const tryFillFromEscala = (esc: Record<PosicaoCampo, any>) => {
       POSICOES.forEach(({ id }) => {
@@ -620,6 +828,8 @@ export default function PaginaElenco({
       maxJogadores: (raw as any).maxJogadores ?? 11,
       posicoes: posicoesPreenchidas,
       livres,
+      reservasIds: reservasDoElenco,
+      formacao: formacaoDoElenco,
     };
   }
 
@@ -657,143 +867,550 @@ export default function PaginaElenco({
     }
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = Storage.token;
-        const tipoUsuarioId = Storage.tipoUsuarioId;
-        if (!token || !tipoUsuarioId) return;
-
-        const r = await axios.get(TURMAS_BASE, {
-          params: { tipoUsuarioId },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const lista = Array.isArray(r.data?.items) ? r.data.items : [];
-        setTurmas(lista);
-
-        if (!turmaId && lista.length) setTurmaId(lista[0].id);
-
-        if (!lista.length) setLoading(false);
-      } catch (e) {
-        console.error("Erro ao listar turmas:", e);
-        setLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
-
-  useEffect(() => {
-  let cancelled = false;
-
-  (async () => {
+  const carregarTurmas = useCallback(async () => {
+  try {
     const token = Storage.token;
+    const tipoUsuarioId =
+      Storage.tipoUsuarioId;
 
-    if (!token || !turmaId) {
+    if (!token || !tipoUsuarioId) {
+      setTurmas([]);
+      setTurmaId("");
+      setTodosAtletas([]);
+      setElencos([]);
       setLoading(false);
       return;
     }
 
-    try {
-      setLoading(true);
+    const resposta = await axios.get(
+      TURMAS_BASE,
+      {
+        params: {
+          tipoUsuarioId,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-      const res = await axios.get(
-        `${API.BASE_URL}/api/turmas/${turmaId}/alunos`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    const recebidas = Array.isArray(
+      resposta.data?.items
+    )
+      ? resposta.data.items
+      : Array.isArray(resposta.data)
+      ? resposta.data
+      : [];
 
-      if (cancelled) return;
+    /*
+     * Remove duplicações somente quando o ID
+     * realmente for o mesmo.
+     *
+     * Duas turmas com o mesmo nome e IDs
+     * diferentes continuam sendo duas turmas.
+     */
+    const mapaTurmas =
+      new Map<string, TurmaOpcao>();
 
-      const baseAtletas = normalizeAtletas(res.data);
-      const rElencos = await axios.get(ELENCOS_BASE, {
-        params: { tipoUsuarioId: Storage.tipoUsuarioId, turmaId },
-        headers: { Authorization: `Bearer ${token}` },
+    for (const turma of recebidas) {
+      if (!turma?.id) continue;
+      if (turma?.ativo === false) continue;
+
+      const id = String(turma.id);
+
+      if (mapaTurmas.has(id)) continue;
+
+      mapaTurmas.set(id, {
+        id,
+        nome: String(
+          turma.nome ??
+            turma.titulo ??
+            "Turma"
+        ),
+
+        categoria:
+          turma.categoria ?? null,
+
+        origemTipo:
+          turma.origemTipo ?? null,
+
+        origemNome:
+          turma.origemNome ?? null,
       });
+    }
 
-      const salvos = Array.isArray(rElencos.data) ? rElencos.data : [];
-      const salvosDaTurma = salvos.filter((e: any) => String(e.turmaId) === String(turmaId));
+    const unicasPorId = Array.from(
+      mapaTurmas.values()
+    );
 
-      if (salvosDaTurma.length) {
-        const montados = salvosDaTurma.map((e: any) =>
-          buildElencoUI(e, baseAtletas)
+    setTurmas(unicasPorId);
+
+    /*
+     * Mantém a turma selecionada caso ela
+     * ainda esteja vinculada ao usuário.
+     *
+     * Caso tenha sido apagada ou desvinculada,
+     * seleciona a primeira turma disponível.
+     */
+    setTurmaId((atual) => {
+      const aindaExiste =
+        unicasPorId.some(
+          (turma) => turma.id === atual
         );
 
-        const primeiro = salvosDaTurma[0];
-        const escalaSalva = primeiro?.escala || {};
+      if (aindaExiste) {
+        return atual;
+      }
 
-        setTodosAtletas(baseAtletas);
-        setElencos(montados);
-        setActiveIndex(0);
-        setReservasIds(Array.isArray(escalaSalva.__reservasIds) ? escalaSalva.__reservasIds.map(String) : []);
+      return unicasPorId[0]?.id ?? "";
+    });
 
-        if (primeiro?.formacao) {
-          setFormacao(parseFormacaoStr(primeiro.formacao));
-        }
+    if (unicasPorId.length === 0) {
+      setTodosAtletas([]);
+      setElencos([]);
+      setActiveIndex(0);
+      setLoading(false);
+    }
+  } catch (erro) {
+    console.error(
+      "Erro ao listar turmas:",
+      erro
+    );
 
+    /*
+    * Mantém os dados atuais na tela.
+    * Uma falha temporária não deve apagar
+    * o elenco que está sendo editado.
+    */
+    setLoading(false);
+  }
+  }, []);
+
+  const carregarAtletasDaTurmaAtual =
+    useCallback(async () => {
+      const token = Storage.token;
+
+      if (!token || !turmaId) {
         return;
       }
 
-      if (modo === "convocacao" && eventoId) {
-        try {
-          const raw = localStorage.getItem(convKey(eventoId, turmaId));
-          if (raw) {
-            const draft = JSON.parse(raw) as ConvocacaoDraft;
+      try {
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/turmas/${turmaId}/alunos`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
 
-            setTodosAtletas(baseAtletas);
-            setFormacao(parseFormacaoStr(draft.formacao));
-            setReservasIds(Array.isArray(draft.reservasIds) ? draft.reservasIds : []);
+        const alunosValidos =
+          Array.isArray(
+            resposta.data?.alunos
+          )
+            ? resposta.data.alunos.filter(
+                (aluno: any) =>
+                  aluno?.inTurma === true &&
+                  aluno?.vinculado === true &&
+                  Boolean(
+                    aluno?.atletaId
+                  )
+              )
+            : resposta.data;
 
-            const elencoRestaurado = buildElencoUI(
-              {
-                id: null,
-                nome: draft.nome || "Elenco 1",
-                maxJogadores: 11,
-                escala: draft.escala,
-              } as any,
-              baseAtletas
+        const novosAtletas =
+          normalizeAtletas(
+            alunosValidos
+          );
+
+        /*
+        * Só altera o estado quando houve
+        * mudança real nos atletas.
+        */
+        setTodosAtletas(
+          (atletasAnteriores) => {
+            const criarAssinatura = (
+              lista: Atleta[]
+            ) =>
+              lista
+                .map(
+                  (atleta) =>
+                    [
+                      atleta.atletaId,
+                      atleta.nome,
+                      atleta.posicao ?? "",
+                      atleta.foto ?? "",
+                    ].join(":")
+                )
+                .sort()
+                .join("|");
+
+            const anterior =
+              criarAssinatura(
+                atletasAnteriores
+              );
+
+            const nova =
+              criarAssinatura(
+                novosAtletas
+              );
+
+            if (anterior === nova) {
+              return atletasAnteriores;
+            }
+
+            return novosAtletas;
+          }
+        );
+      } catch (error) {
+        console.error(
+          "Erro ao atualizar atletas da turma:",
+          error
+        );
+      }
+    }, [turmaId]);
+
+  useEffect(() => {
+    void carregarTurmas();
+  }, [carregarTurmas]);
+
+  useEffect(() => {
+    function atualizarTurmasEAtletas() {
+      /*
+      * Atualiza a lista de turmas.
+      *
+      * Se a turma atual tiver sido apagada,
+      * carregarTurmas selecionará outra.
+      */
+      void carregarTurmas();
+
+      /*
+      * Atualiza os atletas sem substituir
+      * os elencos que estão sendo editados.
+      */
+      void carregarAtletasDaTurmaAtual();
+    }
+
+    function atualizarSomenteAtletas() {
+      void carregarAtletasDaTurmaAtual();
+    }
+
+    window.addEventListener(
+      "footera:turma-alterada",
+      atualizarTurmasEAtletas
+    );
+
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarSomenteAtletas
+    );
+
+    return () => {
+      window.removeEventListener(
+        "footera:turma-alterada",
+        atualizarTurmasEAtletas
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarSomenteAtletas
+      );
+    };
+  }, [
+    carregarTurmas,
+    carregarAtletasDaTurmaAtual,
+  ]);
+
+  useEffect(() => {
+    if (loading || !turmaId) {
+      return;
+    }
+
+    const atletasValidos = new Map(
+      todosAtletas.map((atleta) => [
+        atleta.atletaId,
+        atleta,
+      ])
+    );
+
+    setElencos((anteriores) =>
+      anteriores.map((elenco) => {
+        const posicoesPermitidas =
+          new Set<PosicaoCampo>([
+            "GOL",
+
+            ...getDefPositions(
+              elenco.formacao.defesa
+            ),
+
+            ...getMidPositions(
+              elenco.formacao.meio
+            ),
+
+            ...getAttPositions(
+              elenco.formacao.atacantes
+            ),
+          ]);
+
+        const novasPosicoes =
+          emptyPosicoes();
+
+        const titularesUsados =
+          new Set<string>();
+
+        for (const { id: posicao } of POSICOES) {
+          const atletaSalvo =
+            elenco.posicoes[posicao];
+
+          if (!atletaSalvo?.atletaId) {
+            continue;
+          }
+
+          const atletaAtual =
+            atletasValidos.get(
+              atletaSalvo.atletaId
             );
 
-            setElencos([elencoRestaurado]);
-            setActiveIndex(0);
-            return;
+          if (!atletaAtual) {
+            continue;
           }
-        } catch (e) {
-          console.error("Falha ao restaurar convocacao do localStorage:", e);
+
+          if (
+            !posicoesPermitidas.has(posicao)
+          ) {
+            continue;
+          }
+
+          if (
+            titularesUsados.has(
+              atletaAtual.atletaId
+            )
+          ) {
+            continue;
+          }
+
+          novasPosicoes[posicao] =
+            atletaAtual;
+
+          titularesUsados.add(
+            atletaAtual.atletaId
+          );
         }
+
+        const reservasIdsValidas =
+          Array.from(
+            new Set(
+              elenco.reservasIds
+            )
+          )
+            .filter(
+              (atletaId) =>
+                atletasValidos.has(atletaId) &&
+                !titularesUsados.has(
+                  atletaId
+                )
+            )
+            .slice(0, MAX_RESERVAS);
+
+        const livres =
+          todosAtletas.filter(
+            (atleta) =>
+              !titularesUsados.has(
+                atleta.atletaId
+              )
+          );
+
+        return {
+          ...elenco,
+          posicoes:
+            novasPosicoes,
+          reservasIds:
+            reservasIdsValidas,
+          livres,
+        };
+      })
+    );
+  }, [
+    loading,
+    turmaId,
+    todosAtletas,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const token = Storage.token;
+
+      if (!token || !turmaId) {
+        setLoading(false);
+        return;
       }
 
-      setTodosAtletas(baseAtletas);
-      setElencos([
-      {
-        id: null,
-        nome: "Elenco 1",
-        maxJogadores: 11,
-        posicoes: emptyPosicoes(),
-        livres: baseAtletas.slice(),
-      },
-    ]);
+      try {
+        setLoading(true);
 
-    setActiveIndex(0);
-    setReservasIds([]);
-    setFormacao({ atacantes: 3, meio: 3, defesa: 4 });
-      setReservasIds((prev) => filterReservasForTurma(baseAtletas, prev));
-    } catch (e) {
-      console.error("Erro ao carregar membros da turma:", e);
-      if (cancelled) return;
+        const res = await axios.get(
+          `${API.BASE_URL}/api/turmas/${turmaId}/alunos`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
-      setTodosAtletas([]);
-      setElencos((prev) => prev.map(el => ({ ...el, livres: [] })));
-      setReservasIds([]);
-    } finally {
-      if (!cancelled) setLoading(false);
-    }
-  })();
+        if (cancelled) return;
 
-  return () => {
-    cancelled = true;
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [turmaId]);
+        const alunosValidos =
+          Array.isArray(res.data?.alunos)
+            ? res.data.alunos.filter(
+                (aluno: any) =>
+                  aluno?.inTurma === true &&
+                  aluno?.vinculado === true &&
+                  Boolean(aluno?.atletaId)
+              )
+            : res.data;
+
+        const baseAtletas = normalizeAtletas(alunosValidos);
+        const rElencos = await axios.get(ELENCOS_BASE, {
+          params: { tipoUsuarioId: Storage.tipoUsuarioId, turmaId },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const salvos = Array.isArray(rElencos.data) ? rElencos.data : [];
+        const salvosDaTurma = salvos.filter((e: any) => String(e.turmaId) === String(turmaId));
+
+        if (salvosDaTurma.length) {
+          const elencoAtivoIdAntes =
+            elencos[activeIndex]?.id ??
+            null;
+
+          const indiceAtivoAntes =
+            activeIndex;
+
+          const montados =
+            salvosDaTurma.map(
+              (elencoSalvo: any) =>
+                buildElencoUI(
+                  elencoSalvo,
+                  baseAtletas
+                )
+            );
+
+          setTodosAtletas(
+            baseAtletas
+          );
+
+          setElencos(
+            montados
+          );
+
+          const indicePeloId =
+            elencoAtivoIdAntes
+              ? montados.findIndex(
+                  (elenco) =>
+                    elenco.id ===
+                    elencoAtivoIdAntes
+                )
+              : -1;
+
+          if (indicePeloId >= 0) {
+            setActiveIndex(
+              indicePeloId
+            );
+          } else {
+            setActiveIndex(
+              Math.min(
+                indiceAtivoAntes,
+                montados.length - 1
+              )
+            );
+          }
+
+          return;
+        }
+
+        if (modo === "convocacao" && eventoId) {
+          try {
+            const raw = localStorage.getItem(convKey(eventoId, turmaId));
+            if (raw) {
+              const draft =
+                JSON.parse(raw) as ConvocacaoDraft;
+
+              const reservasValidas =
+                filterReservasForTurma(
+                  baseAtletas,
+                  Array.isArray(draft.reservasIds)
+                    ? draft.reservasIds
+                    : []
+                ).slice(0, MAX_RESERVAS);
+
+              const elencoRestaurado =
+                buildElencoUI(
+                  {
+                    id: null,
+                    nome:
+                      draft.nome ||
+                      "Elenco 1",
+                    maxJogadores: 11,
+
+                    escala: {
+                      ...draft.escala,
+                      __reservasIds:
+                        reservasValidas,
+                    },
+
+                    formacao:
+                      draft.formacao,
+                  } as any,
+
+                  baseAtletas
+                );
+
+              setTodosAtletas(baseAtletas);
+              setElencos([
+                elencoRestaurado,
+              ]);
+              setActiveIndex(0);
+
+              return;
+            }
+          } catch (e) {
+            console.error("Falha ao restaurar convocacao do localStorage:", e);
+          }
+        }
+
+        setTodosAtletas(baseAtletas);
+        setElencos([
+        {
+          id: null,
+          nome: "Elenco 1",
+          maxJogadores: 11,
+          posicoes: emptyPosicoes(),
+          livres: baseAtletas.slice(),
+          reservasIds: [],
+          formacao: {
+            ...FORMACAO_PADRAO,
+          },
+        },
+      ]);
+
+      setActiveIndex(0);
+      } catch (e) {
+        console.error("Erro ao carregar membros da turma:", e);
+        if (cancelled) return;
+
+        console.error(
+          "Não foi possível atualizar a turma."
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turmaId]);
 
   const fieldBox = useSize<HTMLDivElement>();
 
@@ -824,6 +1441,10 @@ export default function PaginaElenco({
         maxJogadores: 11,
         posicoes: emptyPosicoes(),
         livres: todosAtletas.slice(),
+        reservasIds:[],
+        formacao: {
+          ...FORMACAO_PADRAO,
+        },
       };
       const arr = [...prev, novo];
       setActiveIndex(arr.length - 1);
@@ -832,29 +1453,107 @@ export default function PaginaElenco({
   };
 
   const removeElenco = (index: number) => {
-    setElencos(prev => {
-      if (prev.length <= 1) return prev;
-      const arr = prev.slice();
-      arr.splice(index, 1);
-      if (activeIndex >= arr.length) setActiveIndex(arr.length - 1);
-      return arr;
+    setElencos((anteriores) => {
+      if (anteriores.length <= 1) {
+        return anteriores;
+      }
+
+      const novos = anteriores.filter(
+        (_, indice) => indice !== index
+      );
+
+      setActiveIndex((indiceAtual) => {
+        /*
+        * Excluiu um item anterior ao ativo:
+        * o mesmo elenco ativo passa uma posição para trás.
+        */
+        if (index < indiceAtual) {
+          return indiceAtual - 1;
+        }
+
+        /*
+        * Excluiu o próprio elenco ativo:
+        * tenta manter a mesma posição ou usa a última.
+        */
+        if (index === indiceAtual) {
+          return Math.min(
+            indiceAtual,
+            novos.length - 1
+          );
+        }
+
+        return Math.min(
+          indiceAtual,
+          novos.length - 1
+        );
+      });
+
+      return novos;
     });
   };
 
-const LIST_IDS = ["atletasDesk", "atletasMob"] as const;
+  const LIST_IDS = ["atletasDesk", "atletasMob"] as const;
 
-const isLista = (id: string) =>
-  LIST_IDS.includes(id as (typeof LIST_IDS)[number]);
-const isPosicao = (id: string) => id.startsWith("pos:");
+  const isLista = (id: string) =>
+    LIST_IDS.includes(id as (typeof LIST_IDS)[number]);
+  const isPosicao = (id: string) => id.startsWith("pos:");
 
-const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = (result: DropResult) => {
 
-  const { source, destination, reason } = result;
+    const { source, destination, reason } = result;
 
-  if (!destination) {
+    if (!destination) {
 
-    if (isPosicao(source.droppableId) && ativo) {
-      const posId = source.droppableId.replace("pos:", "") as PosicaoCampo;
+      if (isPosicao(source.droppableId) && ativo) {
+        const posId = source.droppableId.replace("pos:", "") as PosicaoCampo;
+
+        setElencos((prev) => {
+          const arr = [...prev];
+          const e = { ...arr[activeIndex] };
+          const atleta = e.posicoes[posId];
+          if (!atleta) return prev;
+
+          e.livres = [...e.livres, atleta];
+          e.posicoes = { ...e.posicoes, [posId]: null };
+          arr[activeIndex] = e;
+          return arr;
+        });
+      }
+
+      return;
+    }
+
+    if (!ativo) {
+      return;
+    }
+
+    const fromId = source.droppableId;
+    const toId = destination.droppableId;
+
+    const fromLista = isLista(fromId);
+    const toLista = isLista(toId);
+    const fromPos = isPosicao(fromId);
+    const toPos = isPosicao(toId);
+
+    if (fromPos && toPos) {
+      const from = fromId.replace("pos:", "") as PosicaoCampo;
+      const to = toId.replace("pos:", "") as PosicaoCampo;
+      if (from === to) return;
+
+      setElencos((prev) => {
+        const arr = [...prev];
+        const e = { ...arr[activeIndex] };
+        const a = e.posicoes[from];
+        const b = e.posicoes[to];
+        e.posicoes = { ...e.posicoes, [to]: a ?? null, [from]: b ?? null };
+        arr[activeIndex] = e;
+        return arr;
+      });
+      return;
+    }
+
+    if (fromPos && !toPos) {
+      const posId = fromId.replace("pos:", "") as PosicaoCampo;
 
       setElencos((prev) => {
         const arr = [...prev];
@@ -862,316 +1561,522 @@ const handleDragEnd = (result: DropResult) => {
         const atleta = e.posicoes[posId];
         if (!atleta) return prev;
 
-        e.livres = [...e.livres, atleta];
+        const livres = Array.from(e.livres);
+        const insertIndex = Math.min(destination.index, livres.length);
+        livres.splice(insertIndex, 0, atleta);
+
         e.posicoes = { ...e.posicoes, [posId]: null };
+        e.livres = livres;
         arr[activeIndex] = e;
         return arr;
       });
-    }
 
-    return;
-  }
-
-  if (!ativo) {
-    return;
-  }
-
-  const fromId = source.droppableId;
-  const toId = destination.droppableId;
-
-  const fromLista = isLista(fromId);
-  const toLista = isLista(toId);
-  const fromPos = isPosicao(fromId);
-  const toPos = isPosicao(toId);
-
-  if (fromPos && toPos) {
-    const from = fromId.replace("pos:", "") as PosicaoCampo;
-    const to = toId.replace("pos:", "") as PosicaoCampo;
-    if (from === to) return;
-
-    setElencos((prev) => {
-      const arr = [...prev];
-      const e = { ...arr[activeIndex] };
-      const a = e.posicoes[from];
-      const b = e.posicoes[to];
-      e.posicoes = { ...e.posicoes, [to]: a ?? null, [from]: b ?? null };
-      arr[activeIndex] = e;
-      return arr;
-    });
-    return;
-  }
-
-  if (fromPos && !toPos) {
-    const posId = fromId.replace("pos:", "") as PosicaoCampo;
-
-    setElencos((prev) => {
-      const arr = [...prev];
-      const e = { ...arr[activeIndex] };
-      const atleta = e.posicoes[posId];
-      if (!atleta) return prev;
-
-      const livres = Array.from(e.livres);
-      const insertIndex = Math.min(destination.index, livres.length);
-      livres.splice(insertIndex, 0, atleta);
-
-      e.posicoes = { ...e.posicoes, [posId]: null };
-      e.livres = livres;
-      arr[activeIndex] = e;
-      return arr;
-    });
-
-    return;
-  }
-
-  if (fromLista && toPos) {
-    const posId = toId.replace("pos:", "") as PosicaoCampo;
-    const ocupados = elencoAtual.length;
-
-    setElencos((prev) => {
-      const arr = [...prev];
-      const e = { ...arr[activeIndex] };
-
-      if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
-        toast.error(`O elenco já tem ${e.maxJogadores} jogadores.`);
-        return prev;
-      }
-
-      const livres = Array.from(e.livres);
-      const [atleta] = livres.splice(source.index, 1);
-      setReservasIds(prev => prev.filter(id => id !== atleta.atletaId));
-
-      const anterior = e.posicoes[posId];
-      e.posicoes = { ...e.posicoes, [posId]: atleta };
-      if (anterior) livres.unshift(anterior);
-
-      e.livres = livres;
-      arr[activeIndex] = e;
-
-      if (atleta && !pontos[atleta.atletaId]) {
-        fetchPontuacoes([atleta.atletaId]);
-      }
-
-      return arr;
-    });
-    return;
-  }
-
-  if (fromLista && toLista) {
-    setElencos((prev) => {
-      const arr = [...prev];
-      const e = { ...arr[activeIndex] };
-      const nova = Array.from(e.livres);
-      const [movido] = nova.splice(source.index, 1);
-      nova.splice(destination.index, 0, movido);
-      e.livres = nova;
-      arr[activeIndex] = e;
-      return arr;
-    });
-  }
-};
-
-const montarPayloadEscala = () => {
-  const e = ativo;
-  if (!e) return null;
-
-  const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
-    acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
-    return acc;
-  }, {} as Record<PosicaoCampo, string | null>);
-
-  const formacaoStr = `${formacao.defesa}-${formacao.meio}-${formacao.atacantes}`;
-
-  return {
-    nome: e.nome,
-    escala,
-    formacao: formacaoStr,
-    reservasIds: permitirReservas ? reservasIds.slice() : [],
-  };
-};
-
-const salvarElencoAtivo = async () => {
-  const payloadBase = montarPayloadEscala();
-  if (!payloadBase) return;
-
-  if (permitirReservas && reservasIds.length > MAX_RESERVAS) {
-    toast.error("Você pode selecionar no máximo 11 reservas.");
-    return;
-  }
-
-  const totalEscaladosSalvar = POSICOES.reduce(
-    (acc, p) => (ativo?.posicoes[p.id] ? acc + 1 : acc),
-    0
-  );
-
-  if (totalEscaladosSalvar !== 11) {
-    toast.success(
-      `Seu time titular precisa ter exatamente 11 jogadores escalados.\n` +
-      `Atualmente: ${totalEscaladosSalvar}/11.`
-    );
-    return;
-  }
-
-  if (modo === "convocacao") {
-    if (!onSalvar) {
-      toast.error("Tela em modo convocação mas não foi passado onSalvar.");
       return;
     }
-    try {
-      if (eventoId && turmaId) {
-        const draft: ConvocacaoDraft = {
-          nome: payloadBase.nome,
-          formacao: payloadBase.formacao,
-          escala: payloadBase.escala,
-          reservasIds: payloadBase.reservasIds,
-        };
-        localStorage.setItem(convKey(eventoId, turmaId), JSON.stringify(draft));
-      }
 
-      await onSalvar({ ...payloadBase, turmaId });
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro ao salvar convocação.");
-    }
-    return;
-  }
+    if (fromLista && toPos) {
+      const posId = toId.replace("pos:", "") as PosicaoCampo;
+      const ocupados = elencoAtual.length;
 
-  const token = Storage.token;
-  const tipoUsuarioId = Storage.tipoUsuarioId;
-  const tipoUsuarioRaw = Storage.tipoSalvo || "";
-  const tipoUsuario = tipoUsuarioRaw.toLowerCase();
-
-  if (!token) {
-    toast.error("Você não está autenticado. Faça login novamente.");
-    return;
-  }
-  if (!tipoUsuarioId || !tipoUsuario) {
-    toast.error("Não foi possível identificar seu tipo de usuário.");
-    return;
-  }
-
-  const donoRef =
-    tipoUsuario === "professor"
-      ? { professorId: tipoUsuarioId }
-      : tipoUsuario === "clube"
-      ? { clubeId: tipoUsuarioId }
-      : tipoUsuario === "escolinha"
-      ? { escolinhaId: tipoUsuarioId }
-      : {};
-
-  const payload = {
-    nome: payloadBase.nome,
-    ...donoRef,
-    atletasIds: (POSICOES.map((p) => ativo!.posicoes[p.id]).filter(Boolean) as Atleta[]).map(
-      (a) => a.atletaId
-    ),
-    maxJogadores: ativo!.maxJogadores,
-    escala: payloadBase.escala,
-    tipoUsuario,
-    tipoUsuarioId,
-    turmaId: turmaId || undefined,
-    formacao: payloadBase.formacao,
-    reservasIds: payloadBase.reservasIds,
-  };
-
-  try {
-    if (ativo?.id) {
-      await axios.put(`${ELENCOS_BASE}/${ativo.id}`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast.success("Elenco atualizado com sucesso!");
-    } else {
-      const res = await axios.post(ELENCOS_BASE, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const newId = res.data?.id ?? null;
       setElencos((prev) => {
         const arr = [...prev];
-        arr[activeIndex] = { ...arr[activeIndex], id: newId };
+        const e = { ...arr[activeIndex] };
+
+        if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
+          toast.error(`O elenco já tem ${e.maxJogadores} jogadores.`);
+          return prev;
+        }
+
+        const atletaArrastado =
+          atletasLivresAtivo[source.index];
+
+        if (!atletaArrastado) {
+          return prev;
+        }
+
+        const livres = Array.from(
+          e.livres
+        );
+
+        const indiceReal =
+          livres.findIndex(
+            (atleta) =>
+              atleta.atletaId ===
+              atletaArrastado.atletaId
+          );
+
+        if (indiceReal < 0) {
+          return prev;
+        }
+
+        const [atleta] =
+          livres.splice(
+            indiceReal,
+            1
+          );
+
+        if (!atleta) {
+          return prev;
+        }
+
+        /*
+        * Se era reserva e foi para o campo,
+        * remove diretamente das reservas
+        * deste mesmo elenco.
+        */
+        e.reservasIds =
+          e.reservasIds.filter(
+            (id) =>
+              id !== atleta.atletaId
+          );
+
+        const anterior = e.posicoes[posId];
+        e.posicoes = { ...e.posicoes, [posId]: atleta };
+        if (anterior) livres.unshift(anterior);
+
+        e.livres = livres;
+        arr[activeIndex] = e;
+
+        if (atleta && !pontos[atleta.atletaId]) {
+          fetchPontuacoes([atleta.atletaId]);
+        }
+
         return arr;
       });
-      toast.success("Elenco criado com sucesso!");
+      return;
     }
-  } catch (err) {
-    console.error("Erro ao salvar elenco:", err);
-    toast.error("Erro ao salvar elenco.");
-  }
-};
 
-const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
-  const a = posicoesAtivas[pos];
-  const pts = a ? pontos[a.atletaId] : undefined;
-  const ovr  = pts?.mediaGeral ?? 0;
-  const perf = pts?.performance ?? 0;
-  const disc = pts?.disciplina ?? 0;
-  const resp = pts?.responsabilidade ?? 0;
+    if (fromLista && toLista) {
+      if (filtro.trim()) {
+        return;
+      }
 
-  const WRAP_W = SHIELD_W + 12;
-  const WRAP_H = SHIELD_H + SLOT_EXTRA_H;
+      setElencos((prev) => {
+        const arr = [...prev];
+        const e = {
+          ...arr[activeIndex],
+        };
 
-  return (
-    <div
-      className="relative flex items-start justify-center"
-      style={{
-        width: WRAP_W,
-        height: WRAP_H,
-        flex: "0 0 auto",
-      }}
-    >
-      <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold opacity-80 pointer-events-none">
-        {label}
-      </span>
+        const nova =
+          Array.from(e.livres);
 
-      <Droppable droppableId={`pos:${pos}`} type="ATLETA">
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`mt-5 rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center
-              transition-colors duration-200
-              ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
-            style={{
-              width: SHIELD_W,
-              height: SHIELD_H,
-            }}
-          >
-            {a ? (
-              <Draggable draggableId={String(a.atletaId)} index={0}>
-                {(provided2, snapshot2) => (
-                  <div
-                    ref={provided2.innerRef}
-                    {...provided2.draggableProps}
-                    {...provided2.dragHandleProps}
-                    className={`transition-shadow duration-200 ${
-                      snapshot2.isDragging ? "shadow-2xl z-50" : ""
-                    } will-change-transform`}
-                  >
-                    <CardAtletaShield
-                      atleta={a}
-                      slotPos={pos}
-                      ovr={ovr}
-                      perf={perf}
-                      disc={disc}
-                      resp={resp}
-                      size={{ w: SHIELD_W, h: SHIELD_H }}
-                      goldenMinOVR={GOLDEN_MIN_OVR}
-                    />
-                  </div>
-                )}
-              </Draggable>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-[10px] sm:text-xs text-green-700/70">
-                Solte aqui
-              </div>
-            )}
+        const [movido] =
+          nova.splice(
+            source.index,
+            1
+          );
 
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-    </div>
-  );
-};
+        if (!movido) {
+          return prev;
+        }
 
+        nova.splice(
+          destination.index,
+          0,
+          movido
+        );
+
+        e.livres = nova;
+        arr[activeIndex] = e;
+
+        return arr;
+      });
+    }
+  };
+
+  const montarPayloadEscala = () => {
+    const elencoAtivo = ativo;
+
+    if (!elencoAtivo) {
+      return null;
+    }
+
+    /*
+    * Começa com todas as posições vazias.
+    */
+    const escala =
+      POSICOES.reduce(
+        (resultado, posicao) => {
+          resultado[posicao.id] =
+            null;
+
+          return resultado;
+        },
+        {} as Record<
+          PosicaoCampo,
+          string | null
+        >
+      );
+
+    /*
+    * Preenche somente as posições
+    * exibidas pela formação atual.
+    */
+    for (
+      const posicao
+      of posicoesDaFormacao
+    ) {
+      escala[posicao] =
+        elencoAtivo
+          .posicoes[posicao]
+          ?.atletaId ??
+        null;
+    }
+
+    const formacaoStr =
+      `${formacao.defesa}-` +
+      `${formacao.meio}-` +
+      `${formacao.atacantes}`;
+
+    return {
+      nome:
+        elencoAtivo.nome,
+
+      escala,
+
+      formacao:
+        formacaoStr,
+
+      reservasIds:
+        permitirReservas
+          ? reservasIds.slice()
+          : [],
+    };
+  };
+
+  const salvarElencoAtivo = async () => {
+    const payloadOriginal =
+      montarPayloadEscala();
+
+    if (!payloadOriginal) return;
+
+    const titularesIds = Array.from(
+      new Set(
+        Object.values(
+          payloadOriginal.escala
+        ).filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            id.trim().length > 0
+        )
+      )
+    );
+
+    const titularesSet = new Set(
+      titularesIds
+    );
+
+    const reservasIdsValidas:
+      string[] =
+      permitirReservas
+        ? Array.from(
+            new Set<string>(
+              payloadOriginal.reservasIds
+            )
+          )
+            .filter(
+              (id) =>
+                !titularesSet.has(id)
+            )
+            .slice(0, MAX_RESERVAS)
+        : [];
+
+    const totalTitularesSalvar =
+      titularesIds.length;
+
+    const totalReservasSalvar =
+      reservasIdsValidas.length;
+
+    const totalSelecionadosSalvar =
+      totalTitularesSalvar +
+      totalReservasSalvar;
+
+    if (
+      totalTitularesSalvar >
+      MAX_TITULARES
+    ) {
+      toast.error(
+        "Você pode colocar no máximo 11 titulares."
+      );
+
+      return;
+    }
+
+    if (
+      totalReservasSalvar >
+      MAX_RESERVAS
+    ) {
+      toast.error(
+        "Você pode colocar no máximo 11 reservas."
+      );
+
+      return;
+    }
+
+    /*
+    * Permite salvar um elenco incompleto.
+    *
+    * Exemplos válidos:
+    * - 2 titulares;
+    * - 1 titular e 1 reserva;
+    * - 8 titulares e 2 reservas;
+    * - 11 titulares e 11 reservas.
+    */
+    if (totalSelecionadosSalvar < 2) {
+      toast.error(
+        "Adicione pelo menos 2 jogadores ao elenco antes de salvar."
+      );
+
+      return;
+    }
+
+    const payloadBase = {
+      ...payloadOriginal,
+      reservasIds: reservasIdsValidas,
+    };
+
+    if (modo === "convocacao") {
+      if (!onSalvar) {
+        toast.error("Tela em modo convocação mas não foi passado onSalvar.");
+        return;
+      }
+      try {
+        if (eventoId && turmaId) {
+          const draft: ConvocacaoDraft = {
+            nome: payloadBase.nome,
+            formacao: payloadBase.formacao,
+            escala: payloadBase.escala,
+            reservasIds: payloadBase.reservasIds,
+          };
+          localStorage.setItem(convKey(eventoId, turmaId), JSON.stringify(draft));
+        }
+
+        await onSalvar({ ...payloadBase, turmaId });
+      } catch (error: any) {
+        console.error(
+          "Erro ao salvar elenco:",
+          error
+        );
+
+        toast.error(
+          error?.response?.data?.error ||
+            error?.response?.data?.message ||
+            error?.message ||
+            "Erro ao salvar elenco."
+        );
+      }
+      return;
+    }
+
+    const token = Storage.token;
+    const tipoUsuarioId = Storage.tipoUsuarioId;
+    const tipoUsuarioRaw = Storage.tipoSalvo || "";
+    const tipoUsuario = tipoUsuarioRaw.toLowerCase();
+
+    if (!token) {
+      toast.error("Você não está autenticado. Faça login novamente.");
+      return;
+    }
+    if (!tipoUsuarioId || !tipoUsuario) {
+      toast.error("Não foi possível identificar seu tipo de usuário.");
+      return;
+    }
+
+    const donoRef =
+      tipoUsuario === "professor"
+        ? { professorId: tipoUsuarioId }
+        : tipoUsuario === "clube"
+        ? { clubeId: tipoUsuarioId }
+        : tipoUsuario === "escolinha"
+        ? { escolinhaId: tipoUsuarioId }
+        : {};
+
+    const payload = {
+      nome: payloadBase.nome,
+      ...donoRef,
+      atletasIds: (POSICOES.map((p) => ativo!.posicoes[p.id]).filter(Boolean) as Atleta[]).map(
+        (a) => a.atletaId
+      ),
+      maxJogadores: ativo!.maxJogadores,
+      escala: payloadBase.escala,
+      tipoUsuario,
+      tipoUsuarioId,
+      turmaId: turmaId || undefined,
+      formacao: payloadBase.formacao,
+      reservasIds: payloadBase.reservasIds,
+    };
+
+    try {
+      if (ativo?.id) {
+        await axios.put(`${ELENCOS_BASE}/${ativo.id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success("Elenco atualizado com sucesso!");
+      } else {
+        const res = await axios.post(ELENCOS_BASE, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const newId = res.data?.id ?? null;
+        setElencos((prev) => {
+          const arr = [...prev];
+          arr[activeIndex] = { ...arr[activeIndex], id: newId };
+          return arr;
+        });
+        toast.success("Elenco criado com sucesso!");
+      }
+    } catch (error: any) {
+      console.error(
+        "Erro ao salvar elenco:",
+        error
+      );
+
+      toast.error(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          "Erro ao salvar elenco."
+      );
+    }
+  };
+
+  const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
+    const a = posicoesAtivas[pos];
+    const pts = a ? pontos[a.atletaId] : undefined;
+    const ovr  = pts?.mediaGeral ?? 0;
+    const perf = pts?.performance ?? 0;
+    const disc = pts?.disciplina ?? 0;
+    const resp = pts?.responsabilidade ?? 0;
+
+    const WRAP_W = SHIELD_W + 12;
+    const WRAP_H = SHIELD_H + SLOT_EXTRA_H;
+
+    return (
+      <div
+        className="relative flex items-start justify-center"
+        style={{
+          width: WRAP_W,
+          height: WRAP_H,
+          flex: "0 0 auto",
+        }}
+      >
+        <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold opacity-80 pointer-events-none">
+          {label}
+        </span>
+
+        <Droppable droppableId={`pos:${pos}`} type="ATLETA">
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={`mt-5 rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center
+                transition-colors duration-200
+                ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
+              style={{
+                width: SHIELD_W,
+                height: SHIELD_H,
+              }}
+            >
+              {a ? (
+                <Draggable draggableId={String(a.atletaId)} index={0}>
+                  {(provided2, snapshot2) => (
+                    <div
+                      ref={provided2.innerRef}
+                      {...provided2.draggableProps}
+                      {...provided2.dragHandleProps}
+                      className={`transition-shadow duration-200 ${
+                        snapshot2.isDragging ? "shadow-2xl z-50" : ""
+                      } will-change-transform`}
+                    >
+                      <CardAtletaShield
+                        atleta={a}
+                        slotPos={pos}
+                        ovr={ovr}
+                        perf={perf}
+                        disc={disc}
+                        resp={resp}
+                        size={{ w: SHIELD_W, h: SHIELD_H }}
+                        goldenMinOVR={GOLDEN_MIN_OVR}
+                      />
+                    </div>
+                  )}
+                </Draggable>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[10px] sm:text-xs text-green-700/70">
+                  Solte aqui
+                </div>
+              )}
+
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </div>
+    );
+  };
+
+  const contarJogadoresDoElenco = (
+    elenco: ElencoUI
+  ) => {
+    /*
+    * Conta apenas posições que pertencem
+    * à formação desse elenco.
+    */
+    const posicoesVisiveis: PosicaoCampo[] = [
+      "GOL",
+
+      ...getDefPositions(
+        elenco.formacao.defesa
+      ),
+
+      ...getMidPositions(
+        elenco.formacao.meio
+      ),
+
+      ...getAttPositions(
+        elenco.formacao.atacantes
+      ),
+    ];
+
+    const titularesIds = new Set<string>();
+
+    for (const posicao of posicoesVisiveis) {
+      const atleta =
+        elenco.posicoes[posicao];
+
+      if (atleta?.atletaId) {
+        titularesIds.add(
+          atleta.atletaId
+        );
+      }
+    }
+
+    /*
+    * Remove reservas repetidas e impede
+    * que um titular seja contado novamente.
+    */
+    const reservasIdsValidas = Array.from(
+      new Set(elenco.reservasIds)
+    )
+      .filter(
+        (atletaId) =>
+          Boolean(atletaId) &&
+          !titularesIds.has(atletaId)
+      )
+      .slice(0, MAX_RESERVAS);
+
+    const titulares =
+      titularesIds.size;
+
+    const reservas =
+      reservasIdsValidas.length;
+
+    return {
+      titulares,
+      reservas,
+      total:
+        titulares + reservas,
+    };
+  };
 
   const ElencoPickerModal: React.FC<{
     open: boolean;
@@ -1210,9 +2115,12 @@ const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) =>
           </div>
 
           <div className="overflow-y-auto pr-1 space-y-2 max-h-[60dvh]">
-            {elencos.map((e, idx) => (
+            {elencos.map((e, idx) => {
+              const contagem = contarJogadoresDoElenco(e);
+
+              return (
               <div
-                key={idx}
+                key={e.id ?? `novo-${idx}`}
                 className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 ${
                   idx === activeIndex ? "border-green-600/70 bg-green-50" : "border-gray-200"
                 }`}
@@ -1226,7 +2134,13 @@ const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) =>
                     {e.nome || `Elenco ${idx + 1}`}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {Object.values(e.posicoes).filter(Boolean).length}/11 jogadores escalados
+                    {contagem.total}/{MAX_SELECIONADOS} jogadores selecionados
+                  </div>
+
+                  <div className="text-[11px] text-gray-400">
+                    Titulares: {contagem.titulares}/{MAX_TITULARES}
+                    {" • "}
+                    Reservas: {contagem.reservas}/{MAX_RESERVAS}
                   </div>
                 </button>
 
@@ -1244,7 +2158,8 @@ const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) =>
                   Excluir
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-4 flex items-center justify-between">
@@ -1273,6 +2188,41 @@ const maxSlotsPorLinha: Record<LinhaFormacao, number> = {
   atacantes: ATT_BASE.length,
   meio: MID_BASE.length,
   defesa: DEF_BASE.length,
+};
+
+const excluirElencoSalvo = async (
+  index: number
+) => {
+  const alvo = elencos[index];
+
+  if (!alvo) return;
+
+  try {
+    if (alvo.id) {
+      const token = Storage.token;
+
+      await axios.delete(
+        `${ELENCOS_BASE}/${alvo.id}`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+    }
+
+    removeElenco(index);
+
+    toast.success(
+      "Elenco excluído com sucesso!"
+    );
+  } catch (error: any) {
+    toast.error(
+      error?.response?.data?.error ||
+        "Não foi possível excluir o elenco."
+    );
+  }
 };
 
 const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
@@ -1368,11 +2318,38 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                 className="border rounded-full px-3 py-1 text-xs sm:text-sm bg-white"
                 title="Turma"
               >
-                {turmas.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.nome}
-                  </option>
-                ))}
+                {turmas.map((turma) => {
+                  const nomeDuplicado =
+                    nomesTurmasDuplicados.has(
+                      turma.nome
+                        .trim()
+                        .toLowerCase()
+                    );
+
+                  const partes = [
+                    turma.nome,
+
+                    turma.origemNome
+                      ? `${
+                          turma.origemTipo ??
+                          "Responsável"
+                        }: ${turma.origemNome}`
+                      : null,
+
+                    nomeDuplicado
+                      ? `ID ${turma.id.slice(0, 6)}`
+                      : null,
+                  ].filter(Boolean);
+
+                  return (
+                    <option
+                      key={turma.id}
+                      value={turma.id}
+                    >
+                      {partes.join(" • ")}
+                    </option>
+                  );
+                })}
               </select>
             )}
 
@@ -1408,8 +2385,13 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
               placeholder="Nome do elenco"
             />
             <span className="text-sm font-semibold text-green-900">
-              {totalEscalados}/11 jogadores escalados • Formação:{" "}
-              {formacao.defesa}-{formacao.meio}-{formacao.atacantes}
+              {totalSelecionados}/{MAX_SELECIONADOS} jogadores selecionados
+              {" • "}
+              Titulares: {totalTitulares}/{MAX_TITULARES}
+              {" • "}
+              Reservas: {totalReservas}/{MAX_RESERVAS}
+              {" • "}
+              Formação: {formacao.defesa}-{formacao.meio}-{formacao.atacantes}
             </span>
 
             <button
@@ -1528,7 +2510,7 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
             {permitirReservas && (
               <div className="mb-3 p-3 rounded-lg border border-yellow-300 bg-yellow-50">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm text-yellow-900">Reservas ({reservasIds.length})</h3>
+                  <h3 className="font-bold text-sm text-yellow-900">Reservas ({reservas.length})</h3>
                   <button
                     className="text-xs px-2 py-1 rounded border border-yellow-300 hover:bg-yellow-100"
                     onClick={() => setReservasIds([])}
@@ -1782,14 +2764,16 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
         }}
         onDelete={(idx) => {
           const alvo = elencos[idx];
+
           if (!alvo) return;
           if (elencos.length <= 1) return;
-          if (confirm(`Excluir "${alvo.nome}"? Essa ação não poderá ser desfeita.`)) {
-            if (idx === activeIndex) {
-              const novoAtivo = Math.max(0, Math.min(activeIndex - 1, elencos.length - 2));
-              setActiveIndex(novoAtivo);
-            }
-            removeElenco(idx);
+
+          if (
+            confirm(
+              `Excluir "${alvo.nome}"? Essa ação não poderá ser desfeita.`
+            )
+          ) {
+            void excluirElencoSalvo(idx);
           }
         }}
       />

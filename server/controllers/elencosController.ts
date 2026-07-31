@@ -4,35 +4,147 @@ import type { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
-async function montarRespostaElencos(donoId: string, turmaId?: string) {
-  const whereBase: any = {
-    OR: [{ clubeId: donoId }, { escolinhaId: donoId }, { professorId: donoId }],
+async function buscarDonoLogado(
+  req: AuthenticatedRequest
+) {
+  const userId = req.userId;
+
+  if (!userId) {
+    return null;
+  }
+
+  const [clube, escolinha, professor] =
+    await Promise.all([
+      prisma.clube.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.escolinha.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.professor.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+    ]);
+
+  return {
+    userId,
+    clubeId: clube?.id ?? null,
+    escolinhaId:
+      escolinha?.id ?? null,
+    professorId:
+      professor?.id ?? null,
   };
-  if (turmaId) whereBase.turmaId = turmaId;
+}
 
-  const elencos = await prisma.elenco.findMany({
-    where: whereBase,
-    select: { id: true, nome: true },
-    orderBy: { nome: "asc" },
-  });
+async function podeGerenciarTurma(
+  req: AuthenticatedRequest,
+  turmaId: string
+) {
+  const dono =
+    await buscarDonoLogado(req);
 
-  const ids = elencos.map((e) => e.id);
-  const atletasPorElenco = ids.length
-    ? await prisma.atletaElenco.findMany({
-        where: { elencoId: { in: ids } },
-        select: { elencoId: true, atletaId: true },
-      })
-    : [];
+  if (!dono) {
+    return false;
+  }
 
-  const bucket = new Map<string, string[]>();
-  ids.forEach((id) => bucket.set(id, []));
-  for (const r of atletasPorElenco) bucket.get(r.elencoId)?.push(r.atletaId);
+  const turma =
+    await prisma.turma.findFirst({
+      where: {
+        id: turmaId,
+        ativo: true,
+      },
 
-  return elencos.map((e) => ({
-    id: e.id,
-    nome: e.nome ?? "Elenco",
-    atletasIds: bucket.get(e.id) ?? [],
-  }));
+      select: {
+        clubeId: true,
+        escolinhaId: true,
+
+        professores: {
+          select: {
+            professorId: true,
+          },
+        },
+      },
+    });
+
+  if (!turma) {
+    return false;
+  }
+
+  return (
+    turma.clubeId === dono.clubeId ||
+    turma.escolinhaId ===
+      dono.escolinhaId ||
+    turma.professores.some(
+      (item) =>
+        item.professorId ===
+        dono.professorId
+    )
+  );
+}
+
+async function montarRespostaElencos(
+  donoId: string,
+  turmaId?: string
+) {
+  const where: Prisma.ElencoWhereInput = {
+    ativo: true,
+
+    OR: [
+      {
+        clubeId: donoId,
+      },
+      {
+        escolinhaId: donoId,
+      },
+      {
+        professorId: donoId,
+      },
+    ],
+
+    ...(turmaId
+      ? {
+          turmaId,
+        }
+      : {}),
+  };
+
+  const elencos =
+    await prisma.elenco.findMany({
+      where,
+
+      select: {
+        id: true,
+        nome: true,
+        atletasIds: true,
+        escala: true,
+        formacao: true,
+        turmaId: true,
+        maxJogadores: true,
+      },
+
+      orderBy: {
+        dataCriacao: "desc",
+      },
+    });
+
+  return elencos;
 }
 
 export async function listarElencosMinha(req: AuthenticatedRequest, res: Response) {
@@ -113,15 +225,82 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
       return res.status(403).json({ error: "Sem permissão nesta turma" });
     }
 
-    const elenco = await prisma.elenco.findFirst({
-      where: { turmaId },
-      select: { id: true, nome: true, maxJogadores: true, escala: true },
-    });
+    const elencoId = String(
+      req.query.elencoId || ""
+    ).trim();
+
+    const elenco =
+      await prisma.elenco.findFirst({
+        where: {
+          turmaId,
+          ativo: true,
+
+          ...(elencoId
+            ? {
+                id: elencoId,
+              }
+            : {}),
+        },
+
+        orderBy: {
+          dataCriacao: "desc",
+        },
+
+        select: {
+          id: true,
+          nome: true,
+          maxJogadores: true,
+          escala: true,
+          formacao: true,
+        },
+      });
 
     if (!elenco) return res.json(null);
 
-    const escala = (elenco.escala as Record<string, string | null>) || {};
-    const atletasIds = Object.values(escala).filter(Boolean) as string[];
+    const escalaBruta =
+      (
+        elenco.escala as
+          | Record<string, unknown>
+          | null
+      ) ?? {};
+
+    const entradasTitulares =
+      Object.entries(escalaBruta)
+        .filter(
+          (
+            entrada
+          ): entrada is [
+            string,
+            string
+          ] => {
+            const [chave, valor] =
+              entrada;
+
+            return (
+              chave !==
+                "__reservasIds" &&
+              typeof valor ===
+                "string" &&
+              valor.trim().length > 0
+            );
+          }
+        );
+
+    const escalaTitulares =
+      Object.fromEntries(
+        entradasTitulares
+      ) as Record<
+        string,
+        string
+      >;
+
+    const atletasIds = Array.from(
+      new Set(
+        Object.values(
+          escalaTitulares
+        )
+      )
+    );
 
     const atletas = atletasIds.length
       ? await prisma.atleta.findMany({
@@ -132,7 +311,7 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
 
     const byId = new Map(atletas.map((a) => [a.id, a]));
     const escalaEnriquecida: any = {};
-    Object.entries(escala).forEach(([pos, atletaId]) => {
+    Object.entries(escalaTitulares).forEach(([pos, atletaId]) => {
       const a = atletaId ? byId.get(atletaId) : null;
       escalaEnriquecida[pos] = a
         ? {
@@ -148,9 +327,22 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
 
     return res.json({
       id: elenco.id,
-      nome: elenco.nome ?? turma.nome ?? "Elenco",
-      maxJogadores: elenco.maxJogadores ?? 11,
-      escala: escalaEnriquecida,
+      nome:
+        elenco.nome ??
+        turma.nome ??
+        "Elenco",
+      maxJogadores:
+        elenco.maxJogadores ?? 11,
+      escala:
+        escalaEnriquecida,
+      reservasIds:
+        normalizarIds(
+          escalaBruta.__reservasIds
+        ),
+      formacao:
+        typeof elenco.formacao === "string"
+          ? elenco.formacao
+          : null,
     });
   } catch (e) {
     console.error("[escalaPorTurma] erro:", e);
@@ -196,8 +388,10 @@ async function getEscalaCore(elencoId: string, res: Response) {
       (elenco.escala as Record<string, string | null> | null) ?? null;
 
     const formacao =
-      (elenco.formacao as { defesa: number; meio: number; atacantes: number } | null) ?? null;
-
+      typeof elenco.formacao === "string"
+        ? elenco.formacao
+        : null;
+        
     return res.json({
       id: elenco.id,
       nome: elenco.nome,
@@ -294,90 +488,351 @@ export async function listarElencos(req: Request, res: Response) {
   }
 }
 
-export async function criarElenco(req: Request, res: Response) {
-  try {
-    const {
-      nome,
-      professorId,
-      clubeId,
-      escolinhaId,
-      escala,
-      turmaId,
-      formacao, 
-      tipoUsuario,
-      tipoUsuarioId,
-      reservasIds,
-    } = req.body;
+function normalizarIds(
+  valores: unknown
+): string[] {
+  if (!Array.isArray(valores)) {
+    return [];
+  }
 
-    const tipo = (tipoUsuario ?? "").toString().toLowerCase();
-    const donoId =
-      typeof tipoUsuarioId === "string" && tipoUsuarioId.trim()
-        ? tipoUsuarioId.trim()
-        : null;
+  return Array.from(
+    new Set(
+      valores
+        .map(String)
+        .map((id) => id.trim())
+        .filter(Boolean)
+    )
+  );
+}
 
-    const owner: {
-      professorId?: string | null;
-      clubeId?: string | null;
-      escolinhaId?: string | null;
-    } = {};
+function limparEscala(
+  escala: unknown,
+  atletasPermitidos: Set<string>
+): Record<string, string | null> {
+  const resultado: Record<
+    string,
+    string | null
+  > = {};
 
-    if (donoId) {
-      if (tipo === "professor") owner.professorId = donoId;
-      else if (tipo === "clube") owner.clubeId = donoId;
-      else if (tipo === "escolinha") owner.escolinhaId = donoId;
+  if (
+    !escala ||
+    typeof escala !== "object"
+  ) {
+    return resultado;
+  }
+
+  const posicoesValidas = new Set(
+    Object.values(PosicaoCampo)
+  );
+
+  /*
+   * Impede o mesmo atleta de ocupar
+   * duas posições ao mesmo tempo.
+   */
+  const atletasUsados =
+    new Set<string>();
+
+  for (
+    const [posicao, valor]
+    of Object.entries(
+      escala as Record<string, unknown>
+    )
+  ) {
+    if (
+      posicao === "__reservasIds" ||
+      !posicoesValidas.has(
+        posicao as PosicaoCampo
+      )
+    ) {
+      continue;
     }
 
-    const escalaUsada = escala && typeof escala === "object" ? escala : null;
-    const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
-    const reservasIdsLimpos = Array.isArray(reservasIds)
-      ? reservasIds.map(String).filter(Boolean)
-      : [];
+    let atletaId:
+      | string
+      | null = null;
 
-    const atletasIdsFinal = Array.from(
-      new Set([...atletasFromEscala, ...reservasIdsLimpos])
+    if (typeof valor === "string") {
+      atletaId =
+        valor.trim() || null;
+    } else if (
+      valor &&
+      typeof valor === "object"
+    ) {
+      const objeto = valor as {
+        atletaId?: unknown;
+        id?: unknown;
+      };
+
+      const id =
+        objeto.atletaId ??
+        objeto.id ??
+        null;
+
+      atletaId =
+        id != null
+          ? String(id).trim()
+          : null;
+    }
+
+    const atletaValido =
+      atletaId &&
+      atletasPermitidos.has(atletaId) &&
+      !atletasUsados.has(atletaId);
+
+    if (atletaValido && atletaId) {
+      resultado[posicao] =
+        atletaId;
+
+      atletasUsados.add(
+        atletaId
+      );
+    } else {
+      resultado[posicao] =
+        null;
+    }
+  }
+
+  return resultado;
+}
+
+async function prepararJogadoresElenco(
+  turmaId: string,
+  escala: unknown,
+  reservasIds: unknown
+) {
+  const atletasPermitidos =
+    await buscarAtletaIdsDaTurma(
+      turmaId
     );
 
-    if (atletasFromEscala.length !== 11) {
-      return res.status(400).json({
-        error: "Elenco precisa ter exatamente 11 jogadores escalados.",
-        detalhe: { recebidos: atletasFromEscala.length },
-      });
-    }
+  if (atletasPermitidos === null) {
+    return {
+      ok: false as const,
+      error:
+        "Turma não encontrada ou inativa.",
+    };
+  }
 
-    const elenco = await prisma.elenco.create({
-      data: {
-        nome,
-        professorId: professorId ?? owner.professorId ?? null,
-        clubeId: clubeId ?? owner.clubeId ?? null,
-        escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
-        atletasIds: atletasIdsFinal,
-        escala: {
-          ...(escalaUsada ?? {}),
-          __reservasIds: reservasIdsLimpos,
+  const escalaLimpa =
+    limparEscala(
+      escala,
+      atletasPermitidos
+    );
+
+  const titularesValidos =
+    extrairAtletasDaEscala(
+      escalaLimpa
+    );
+
+  const titularesSet = new Set(
+    titularesValidos
+  );
+
+  const reservasValidas =
+    normalizarIds(reservasIds)
+      .filter(
+        (id) =>
+          atletasPermitidos.has(id) &&
+          !titularesSet.has(id)
+      );
+
+  if (titularesValidos.length > 11) {
+    return {
+      ok: false as const,
+
+      error:
+        "O elenco pode possuir no máximo 11 titulares.",
+    };
+  }
+
+  if (reservasValidas.length > 11) {
+    return {
+      ok: false as const,
+
+      error:
+        "O elenco pode possuir no máximo 11 reservas.",
+    };
+  }
+
+  const totalSelecionados =
+    titularesValidos.length +
+    reservasValidas.length;
+
+  if (totalSelecionados < 2) {
+    return {
+      ok: false as const,
+
+      error:
+        "Adicione pelo menos 2 jogadores válidos ao elenco.",
+
+      detalhe: {
+        titulares:
+          titularesValidos.length,
+
+        reservas:
+          reservasValidas.length,
+      },
+    };
+  }
+
+  const atletasIdsFinal = [
+    ...titularesValidos,
+    ...reservasValidas,
+  ];
+
+  return {
+    ok: true as const,
+    escalaLimpa,
+    titularesValidos,
+    reservasValidas,
+    atletasIdsFinal,
+  };
+}
+
+async function buscarAtletaIdsDaTurma(
+  turmaId: string
+): Promise<Set<string> | null> {
+  const turma =
+    await prisma.turma.findUnique({
+      where: {
+        id: turmaId,
+      },
+
+      select: {
+        id: true,
+        ativo: true,
+        clubeId: true,
+        escolinhaId: true,
+
+        membros: {
+          select: {
+            usuarioId: true,
+          },
         },
-        formacao: formacao ?? null,
-        maxJogadores: 11, 
-        turmaId: turmaId ?? null,
+
+        professores: {
+          select: {
+            professorId: true,
+          },
+        },
       },
     });
 
-    return res.status(201).json(elenco);
-  } catch (err) {
-    console.error("Erro ao criar elenco:", err);
-    return res.status(500).json({ error: "Erro ao criar elenco" });
+  if (!turma || turma.ativo === false) {
+    return null;
   }
+
+  const usuarioIds =
+    turma.membros
+      .map(
+        (membro) =>
+          membro.usuarioId
+      )
+      .filter(Boolean);
+
+  if (!usuarioIds.length) {
+    return new Set();
+  }
+
+  const professorIds =
+    turma.professores
+      .map(
+        (item) =>
+          item.professorId
+      )
+      .filter(Boolean);
+
+  const vinculosDiretos:
+    Prisma.AtletaWhereInput[] = [];
+
+  if (turma.clubeId) {
+    vinculosDiretos.push({
+      clubeId: turma.clubeId,
+    });
+  }
+
+  if (turma.escolinhaId) {
+    vinculosDiretos.push({
+      escolinhaId:
+        turma.escolinhaId,
+    });
+  }
+
+  const relacoesPermitidas:
+    Prisma.RelacaoTreinamentoWhereInput[] =
+    [];
+
+  if (turma.clubeId) {
+    relacoesPermitidas.push({
+      clubeId: turma.clubeId,
+    });
+  }
+
+  if (turma.escolinhaId) {
+    relacoesPermitidas.push({
+      escolinhaId:
+        turma.escolinhaId,
+    });
+  }
+
+  if (professorIds.length) {
+    relacoesPermitidas.push({
+      professorId: {
+        in: professorIds,
+      },
+    });
+  }
+
+  if (relacoesPermitidas.length) {
+    vinculosDiretos.push({
+      relacoesTreinamento: {
+        some: {
+          ativo: true,
+          encerradoEm: null,
+          OR: relacoesPermitidas,
+        },
+      },
+    });
+  }
+
+  if (!vinculosDiretos.length) {
+    return new Set();
+  }
+
+  const atletas =
+    await prisma.atleta.findMany({
+      where: {
+        usuarioId: {
+          in: usuarioIds,
+        },
+
+        OR: vinculosDiretos,
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  return new Set(
+    atletas.map(
+      (atleta) =>
+        atleta.id
+    )
+  );
 }
 
-export async function atualizarElenco(req: Request, res: Response) {
+export async function criarElenco(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const { id } = req.params;
     const {
       nome,
       professorId,
       clubeId,
       escolinhaId,
       escala,
-      maxJogadores,
       turmaId,
       formacao,
       tipoUsuario,
@@ -385,9 +840,13 @@ export async function atualizarElenco(req: Request, res: Response) {
       reservasIds,
     } = req.body;
 
-    const tipo = (tipoUsuario ?? "").toString().toLowerCase();
+    const tipo = String(
+      tipoUsuario ?? ""
+    ).toLowerCase();
+
     const donoId =
-      typeof tipoUsuarioId === "string" && tipoUsuarioId.trim()
+      typeof tipoUsuarioId === "string" &&
+      tipoUsuarioId.trim()
         ? tipoUsuarioId.trim()
         : null;
 
@@ -398,50 +857,289 @@ export async function atualizarElenco(req: Request, res: Response) {
     } = {};
 
     if (donoId) {
-      if (tipo === "professor") owner.professorId = donoId;
-      else if (tipo === "clube") owner.clubeId = donoId;
-      else if (tipo === "escolinha") owner.escolinhaId = donoId;
+      if (tipo === "professor") {
+        owner.professorId = donoId;
+      } else if (tipo === "clube") {
+        owner.clubeId = donoId;
+      } else if (tipo === "escolinha") {
+        owner.escolinhaId = donoId;
+      }
     }
 
-    const escalaUsada = escala && typeof escala === "object" ? escala : null;
-    const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
-    const reservasIdsLimpos = Array.isArray(reservasIds)
-      ? reservasIds.map(String).filter(Boolean)
-      : [];
-
-    const atletasIdsFinal = Array.from(
-      new Set([...atletasFromEscala, ...reservasIdsLimpos])
-    );
-
-    if (atletasFromEscala.length !== 11) {
+    if (!turmaId) {
       return res.status(400).json({
-        error: "Elenco precisa ter exatamente 11 jogadores escalados.",
-        detalhe: { recebidos: atletasFromEscala.length },
+        error:
+          "É obrigatório selecionar uma turma.",
       });
     }
 
-    const elenco = await prisma.elenco.update({
-      where: { id },
-      data: {
-        nome,
-        professorId: professorId ?? owner.professorId ?? null,
-        clubeId: clubeId ?? owner.clubeId ?? null,
-        escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
-        atletasIds: atletasIdsFinal,
-        escala: {
-          ...(escalaUsada ?? {}),
-          __reservasIds: reservasIdsLimpos,
+    const autorizado =
+      await podeGerenciarTurma(
+        req,
+        String(turmaId)
+      );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        error:
+          "Você não pode criar elenco nesta turma.",
+      });
+    }
+
+    const preparacao =
+      await prepararJogadoresElenco(
+        String(turmaId),
+        escala,
+        reservasIds
+      );
+
+    if (!preparacao.ok) {
+      return res.status(400).json({
+        error: preparacao.error,
+
+        detalhe:
+          "detalhe" in preparacao
+            ? preparacao.detalhe
+            : undefined,
+      });
+    }
+
+    /*
+     * Estes valores já foram:
+     * - filtrados pela turma;
+     * - deduplicados;
+     * - limitados a 11 titulares;
+     * - limitados a 11 reservas;
+     * - validados com mínimo de 2 jogadores.
+     */
+    const {
+      escalaLimpa,
+      reservasValidas,
+      atletasIdsFinal,
+    } = preparacao;
+
+    const elenco =
+      await prisma.elenco.create({
+        data: {
+          nome,
+
+          professorId:
+            professorId ??
+            owner.professorId ??
+            null,
+
+          clubeId:
+            clubeId ??
+            owner.clubeId ??
+            null,
+
+          escolinhaId:
+            escolinhaId ??
+            owner.escolinhaId ??
+            null,
+
+          atletasIds:
+            atletasIdsFinal,
+
+          escala: {
+            ...escalaLimpa,
+            __reservasIds:
+              reservasValidas,
+          },
+
+          formacao:
+            formacao ?? null,
+
+          /*
+           * Continua 11 porque este campo
+           * representa o máximo de titulares.
+           * As reservas são armazenadas separadamente.
+           */
+          maxJogadores: 11,
+
+          turmaId:
+            String(turmaId),
         },
-        formacao: formacao ?? null,
-        maxJogadores: 11, 
-        turmaId: turmaId ?? null,
-      },
+      });
+
+    return res
+      .status(201)
+      .json(elenco);
+  } catch (error) {
+    console.error(
+      "Erro ao criar elenco:",
+      error
+    );
+
+    return res.status(500).json({
+      error: "Erro ao criar elenco",
     });
+  }
+}
+
+export async function atualizarElenco(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const { id } = req.params;
+
+    const {
+      nome,
+      professorId,
+      clubeId,
+      escolinhaId,
+      escala,
+      turmaId,
+      formacao,
+      tipoUsuario,
+      tipoUsuarioId,
+      reservasIds,
+    } = req.body;
+
+    const tipo = String(
+      tipoUsuario ?? ""
+    ).toLowerCase();
+
+    const donoId =
+      typeof tipoUsuarioId === "string" &&
+      tipoUsuarioId.trim()
+        ? tipoUsuarioId.trim()
+        : null;
+
+    const owner: {
+      professorId?: string | null;
+      clubeId?: string | null;
+      escolinhaId?: string | null;
+    } = {};
+
+    if (donoId) {
+      if (tipo === "professor") {
+        owner.professorId = donoId;
+      } else if (tipo === "clube") {
+        owner.clubeId = donoId;
+      } else if (tipo === "escolinha") {
+        owner.escolinhaId = donoId;
+      }
+    }
+
+    if (!turmaId) {
+      return res.status(400).json({
+        error:
+          "É obrigatório selecionar uma turma.",
+      });
+    }
+
+    const autorizado =
+      await podeGerenciarTurma(
+        req,
+        String(turmaId)
+      );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        error:
+          "Você não pode alterar o elenco desta turma.",
+      });
+    }
+
+    const preparacao =
+      await prepararJogadoresElenco(
+        String(turmaId),
+        escala,
+        reservasIds
+      );
+
+    if (!preparacao.ok) {
+      return res.status(400).json({
+        error: preparacao.error,
+
+        detalhe:
+          "detalhe" in preparacao
+            ? preparacao.detalhe
+            : undefined,
+      });
+    }
+
+    const {
+      escalaLimpa,
+      reservasValidas,
+      atletasIdsFinal,
+    } = preparacao;
+
+    const elencoExistente =
+      await prisma.elenco.findFirst({
+        where: {
+          id,
+          turmaId: String(turmaId),
+          ativo: true,
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (!elencoExistente) {
+      return res.status(404).json({
+        error:
+          "Elenco não encontrado nesta turma.",
+      });
+    }
+
+    const elenco =
+      await prisma.elenco.update({
+        where: {
+          id,
+        },
+
+        data: {
+          nome,
+
+          professorId:
+            professorId ??
+            owner.professorId ??
+            null,
+
+          clubeId:
+            clubeId ??
+            owner.clubeId ??
+            null,
+
+          escolinhaId:
+            escolinhaId ??
+            owner.escolinhaId ??
+            null,
+
+          atletasIds:
+            atletasIdsFinal,
+
+          escala: {
+            ...escalaLimpa,
+            __reservasIds:
+              reservasValidas,
+          },
+
+          formacao:
+            formacao ?? null,
+
+          maxJogadores: 11,
+
+          turmaId:
+            String(turmaId),
+        },
+      });
 
     return res.json(elenco);
-  } catch (err) {
-    console.error("Erro ao atualizar elenco:", err);
-    return res.status(500).json({ error: "Erro ao atualizar elenco" });
+  } catch (error) {
+    console.error(
+      "Erro ao atualizar elenco:",
+      error
+    );
+
+    return res.status(500).json({
+      error: "Erro ao atualizar elenco",
+    });
   }
 }
 
@@ -471,7 +1169,14 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
     const incluirPontuacao = String(req.query.incluirPontuacao ?? "") === "1";
 
     const rows = await prisma.relacaoTreinamento.findMany({
-      where: { professorId: pid, atletaId: { not: null } },
+      where: {
+        professorId: pid,
+        atletaId: {
+          not: null,
+        },
+        ativo: true,
+        encerradoEm: null,
+      },
       select: {
         atleta: {
           select: {
@@ -522,7 +1227,15 @@ export async function listarAtletasVinculados(req: Request, res: Response) {
 
     const whereBase: Prisma.AtletaWhereInput = {
       OR: [
-        { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
+        {
+          relacoesTreinamento: {
+            some: {
+              professorId: tipoUsuarioId,
+              ativo: true,
+              encerradoEm: null,
+            },
+          },
+        },
         { clubeId: tipoUsuarioId },
         { escolinhaId: tipoUsuarioId },
       ],
@@ -555,5 +1268,129 @@ export async function listarAtletasVinculados(req: Request, res: Response) {
   } catch (e) {
     console.error("[listarAtletasVinculados]", e);
     return res.status(500).json({ error: "Erro ao listar atletas vinculados" });
+  }
+}
+
+export async function excluirElenco(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const userId = req.userId;
+    const elencoId = String(
+      req.params.id || ""
+    ).trim();
+
+    if (!userId) {
+      return res.status(401).json({
+        error: "Não autenticado.",
+      });
+    }
+
+    if (!elencoId) {
+      return res.status(400).json({
+        error: "ID do elenco obrigatório.",
+      });
+    }
+
+    const [
+      clube,
+      escolinha,
+      professor,
+    ] = await Promise.all([
+      prisma.clube.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.escolinha.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.professor.findFirst({
+        where: {
+          usuarioId: userId,
+        },
+        select: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const donoId =
+      clube?.id ||
+      escolinha?.id ||
+      professor?.id;
+
+    if (!donoId) {
+      return res.status(403).json({
+        error:
+          "Não foi possível identificar o responsável.",
+      });
+    }
+
+    const elenco =
+      await prisma.elenco.findFirst({
+        where: {
+          id: elencoId,
+          ativo: true,
+
+          OR: [
+            {
+              clubeId: donoId,
+            },
+            {
+              escolinhaId: donoId,
+            },
+            {
+              professorId: donoId,
+            },
+          ],
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (!elenco) {
+      return res.status(404).json({
+        error:
+          "Elenco não encontrado ou sem permissão.",
+      });
+    }
+
+    await prisma.elenco.update({
+      where: {
+        id: elenco.id,
+      },
+      data: {
+        ativo: false,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      id: elenco.id,
+    });
+  } catch (error) {
+    console.error(
+      "[excluirElenco] erro:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível excluir o elenco.",
+    });
   }
 }

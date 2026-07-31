@@ -19,7 +19,7 @@ type AtividadeUI = {
 };
 
 const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
-
+const PONTOS_POR_INDICACAO_APROVADA = 10;
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3001";
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
 
@@ -2489,20 +2489,19 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       observadosCount,
       indicacoesTotais,
       indicacoesAprovadas,
-      atletasAssinados,
     ] = await Promise.all([
       prisma.atletaObservado.count({
-        where: { olheiroId: olheiro.id },
+        where: {
+          olheiroId: olheiro.id,
+        },
       }),
-      prisma.indicacao.count({
-        where: { olheiroId: olheiro.id },
-      }),
+
       prisma.indicacao.count({
         where: {
           olheiroId: olheiro.id,
-          status: "APROVADA",
         },
       }),
+
       prisma.indicacao.count({
         where: {
           olheiroId: olheiro.id,
@@ -2513,6 +2512,39 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
 
     const taxaAprovacao =
       indicacoesTotais > 0 ? indicacoesAprovadas / indicacoesTotais : 0;
+
+    const reputacaoCalculada =
+      indicacoesAprovadas *
+      PONTOS_POR_INDICACAO_APROVADA;
+
+    /*
+    * Corrige registros antigos do banco.
+    *
+    * Exemplo:
+    * 2 indicações aprovadas × 10 = 20 pontos.
+    */
+    if (
+      Number(
+        olheiro.reputacaoScore ?? 0
+      ) !== reputacaoCalculada ||
+      Number(
+        olheiro.totalIndicacoes ?? 0
+      ) !== indicacoesTotais
+    ) {
+      await prisma.olheiro.update({
+        where: {
+          id: olheiro.id,
+        },
+
+        data: {
+          reputacaoScore:
+            reputacaoCalculada,
+
+          totalIndicacoes:
+            indicacoesTotais,
+        },
+      });
+    }
 
     const usuarioMin = olheiro.usuario ?? null;
 
@@ -2529,8 +2561,8 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         anosExperiencia: olheiro.anosExperiencia ?? 0,
         emailPublico: olheiro.emailPublico ?? null,
         telefonePublico: olheiro.telefonePublico ?? null,
-        reputacaoScore: olheiro.reputacaoScore ?? 0,
-        totalIndicacoes: olheiro.totalIndicacoes ?? indicacoesTotais,
+        reputacaoScore: reputacaoCalculada,
+        totalIndicacoes: indicacoesTotais,
         colaboracaoClube: olheiro.colaboracaoClube
           ? {
               id: olheiro.colaboracaoClube.id,
@@ -2549,12 +2581,12 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         indicacoesEnviadas: indicacoesTotais,
         indicacoes: indicacoesTotais,
 
-        reputacaoScore: olheiro.reputacaoScore ?? 0,
-        reputacao: olheiro.reputacaoScore ?? 0,
+        reputacaoScore: reputacaoCalculada,
+        reputacao: reputacaoCalculada,
 
         indicacoesAprovadas,
         taxaAprovacao,
-        atletasAssinados,
+        atletasAssinados: null,
       },
     });
   } catch (e) {
@@ -2939,187 +2971,566 @@ export const getPerfilLearning = async (req: Request, res: Response) => {
   }
 };
 
-export const upgradeLearningProfile = async (req: any, res: Response) => {
-  try {
-    const usuarioId = req.userId || req.user?.id;
+function normalizarNomeDeUsuarioUpgrade(
+  valor: unknown
+) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    )
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(
+      /[^a-z0-9._]/g,
+      ""
+    )
+    .replace(/_{2,}/g, "_")
+    .replace(/\.{2,}/g, ".")
+    .replace(
+      /^[._]+|[._]+$/g,
+      ""
+    )
+    .slice(0, 30);
+}
 
-    if (!usuarioId) {
-      return res.status(401).json({ message: "Não autenticado." });
-    }
+export const upgradeLearningProfile =
+  async (
+    req: AuthenticatedRequest,
+    res: Response
+  ) => {
+    try {
+      const usuarioId =
+        req.userId ||
+        req.user?.id;
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        nomeDeUsuario: true,
-        tipo: true,
-      },
-    });
+      if (!usuarioId) {
+        return res.status(401).json({
+          message:
+            "Não autenticado.",
+        });
+      }
 
-    if (!usuario) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
-    }
+      const usuario =
+        await prisma.usuario.findUnique({
+          where: {
+            id: usuarioId,
+          },
 
-    if (usuario.tipo !== "Learning") {
-      return res.status(400).json({
-        message: "Apenas contas Learning podem mudar o tipo por este fluxo.",
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            nomeDeUsuario: true,
+            tipo: true,
+          },
+        });
+
+      if (!usuario) {
+        return res.status(404).json({
+          message:
+            "Usuário não encontrado.",
+        });
+      }
+
+      if (
+        usuario.tipo !== "Learning"
+      ) {
+        return res.status(400).json({
+          message:
+            "Apenas contas Learning podem mudar o tipo por este fluxo.",
+        });
+      }
+
+      const novoTipo = String(
+        req.body?.tipo || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const mapaTipos = {
+        ATLETA: "Atleta",
+        PROFESSOR: "Professor",
+        OLHEIRO: "Olheiro",
+        CLUBE: "Clube",
+        ESCOLINHA: "Escolinha",
+        FEDERACAO: "Federacao",
+        MARCA: "Marca",
+      } as const;
+
+      type NovoTipo =
+        keyof typeof mapaTipos;
+
+      if (
+        !Object.prototype.hasOwnProperty.call(
+          mapaTipos,
+          novoTipo
+        )
+      ) {
+        return res.status(400).json({
+          message:
+            "Tipo de perfil inválido.",
+        });
+      }
+
+      const tipoValidado =
+        novoTipo as NovoTipo;
+
+      const tipoUsuarioFinal =
+        mapaTipos[tipoValidado];
+
+      const tiposOrganizacao =
+        new Set<NovoTipo>([
+          "CLUBE",
+          "ESCOLINHA",
+          "FEDERACAO",
+          "MARCA",
+        ]);
+
+      const isOrganizacao =
+        tiposOrganizacao.has(
+          tipoValidado
+        );
+
+      const nomeOrganizacao =
+        String(
+          req.body
+            ?.nomeOrganizacao || ""
+        ).trim();
+
+      if (
+        isOrganizacao &&
+        !nomeOrganizacao
+      ) {
+        return res.status(400).json({
+          message:
+            "Informe o nome da organização.",
+        });
+      }
+
+      /*
+       * Para pessoa, o novo nome vem do
+       * campo Nome.
+       *
+       * Para organização, vem de
+       * Nome da organização.
+       */
+      const nomeNovoInformado =
+        isOrganizacao
+          ? nomeOrganizacao
+          : String(
+              req.body?.nome || ""
+            ).trim();
+
+      const escolhaNomePerfil =
+        req.body
+          ?.escolhaNomePerfil ===
+        "NOVO"
+          ? "NOVO"
+          : "ANTIGO";
+
+      /*
+       * Nome salvo em Usuario.nome.
+       */
+      const nomeFinal =
+        escolhaNomePerfil ===
+        "NOVO"
+          ? nomeNovoInformado
+          : String(
+              usuario.nome || ""
+            ).trim();
+
+      if (!nomeFinal) {
+        return res.status(400).json({
+          message:
+            "Não foi possível definir o nome do novo perfil.",
+        });
+      }
+
+      const usernameRecebido =
+        normalizarNomeDeUsuarioUpgrade(
+          req.body
+            ?.nomeDeUsuario
+        );
+
+      const usernameAtual =
+        normalizarNomeDeUsuarioUpgrade(
+          usuario.nomeDeUsuario ||
+            usuario.nome
+        );
+
+      const nomeDeUsuarioFinal =
+        usernameRecebido ||
+        usernameAtual ||
+        normalizarNomeDeUsuarioUpgrade(
+          nomeFinal
+        );
+
+      if (
+        !/^[a-z0-9._]{3,30}$/.test(
+          nomeDeUsuarioFinal
+        )
+      ) {
+        return res.status(400).json({
+          message:
+            "Nome de usuário inválido. Use entre 3 e 30 caracteres com letras, números, ponto ou underline.",
+        });
+      }
+
+      const usernameEmUso =
+        await prisma.usuario.findFirst({
+          where: {
+            nomeDeUsuario:
+              nomeDeUsuarioFinal,
+
+            NOT: {
+              id: usuarioId,
+            },
+          },
+
+          select: {
+            id: true,
+          },
+        });
+
+      if (usernameEmUso) {
+        return res.status(409).json({
+          message:
+            "Esse nome de usuário já está sendo utilizado.",
+        });
+      }
+
+      /*
+       * Agora o resultado da transação é
+       * armazenado nesta variável.
+       */
+      const tipoUsuarioId =
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.usuario.update({
+              where: {
+                id: usuarioId,
+              },
+
+              data: {
+                tipo:
+                  tipoUsuarioFinal as any,
+
+                nome:
+                  nomeFinal,
+
+                nomeDeUsuario:
+                  nomeDeUsuarioFinal,
+              },
+            });
+
+            switch (
+              tipoValidado
+            ) {
+              case "ATLETA": {
+                const nascimento =
+                  parseDataNascimentoObrigatoria(
+                    req.body
+                      .dataNascimento
+                  );
+
+                const categorias =
+                  normalizarCategorias(
+                    req.body
+                      .categoria
+                  );
+
+                const atleta =
+                  await tx.atleta.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeFinal,
+
+                      dataNascimento:
+                        nascimento
+                          .dataNascimento,
+
+                      idade:
+                        nascimento
+                          .idade,
+
+                      categoria:
+                        categorias,
+
+                      posicao:
+                        req.body
+                          .posicao ||
+                        null,
+                    } as any,
+                  });
+
+                return atleta.id;
+              }
+
+              case "PROFESSOR": {
+                const nascimento =
+                  parseDataNascimentoObrigatoria(
+                    req.body
+                      .dataNascimento
+                  );
+
+                const professor =
+                  await tx.professor.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeFinal,
+
+                      email:
+                        usuario.email,
+
+                      dataNascimento:
+                        nascimento
+                          .dataNascimento,
+
+                      areaFormacao:
+                        req.body
+                          .areaFormacao ||
+                        null,
+
+                      cref:
+                        req.body.cref ||
+                        null,
+
+                      statusCref:
+                        req.body
+                          .statusCref ||
+                        null,
+                    } as any,
+                  });
+
+                return professor.id;
+              }
+
+              case "OLHEIRO": {
+                const nascimento =
+                  parseDataNascimentoObrigatoria(
+                    req.body
+                      .dataNascimento
+                  );
+
+                const olheiro =
+                  await tx.olheiro.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeFinal,
+
+                      email:
+                        usuario.email,
+
+                      dataNascimento:
+                        nascimento
+                          .dataNascimento,
+
+                      areaAtuacao:
+                        req.body
+                          .areaAtuacao ||
+                        null,
+
+                      anosExperiencia:
+                        req.body
+                          .anosExperiencia
+                          ? Number(
+                              req.body
+                                .anosExperiencia
+                            )
+                          : null,
+
+                      headline:
+                        req.body
+                          .headline ||
+                        null,
+
+                      descricao:
+                        req.body
+                          .descricao ||
+                        null,
+                    } as any,
+                  });
+
+                return olheiro.id;
+              }
+
+              case "CLUBE": {
+                const clube =
+                  await tx.clube.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeOrganizacao,
+
+                      email:
+                        usuario.email,
+
+                      cnpj:
+                        req.body.cnpj ||
+                        null,
+
+                      cidade:
+                        req.body
+                          .cidade ||
+                        null,
+
+                      estado:
+                        req.body
+                          .estado ||
+                        null,
+                    } as any,
+                  });
+
+                return clube.id;
+              }
+
+              case "ESCOLINHA": {
+                const escolinha =
+                  await tx.escolinha.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeOrganizacao,
+
+                      email:
+                        usuario.email,
+
+                      cnpj:
+                        req.body.cnpj ||
+                        null,
+
+                      cidade:
+                        req.body
+                          .cidade ||
+                        null,
+
+                      estado:
+                        req.body
+                          .estado ||
+                        null,
+                    } as any,
+                  });
+
+                return escolinha.id;
+              }
+
+              case "FEDERACAO": {
+                const federacao =
+                  await tx.federacao.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeOrganizacao,
+
+                      email:
+                        usuario.email,
+
+                      cnpj:
+                        req.body.cnpj ||
+                        null,
+
+                      cidade:
+                        req.body
+                          .cidade ||
+                        null,
+
+                      estado:
+                        req.body
+                          .estado ||
+                        null,
+                    } as any,
+                  });
+
+                return federacao.id;
+              }
+
+              case "MARCA": {
+                const marca =
+                  await tx.marca.create({
+                    data: {
+                      usuarioId,
+
+                      nome:
+                        nomeOrganizacao,
+
+                      email:
+                        usuario.email,
+
+                      cnpj:
+                        req.body.cnpj ||
+                        null,
+
+                      cidade:
+                        req.body
+                          .cidade ||
+                        null,
+
+                      estado:
+                        req.body
+                          .estado ||
+                        null,
+                    } as any,
+                  });
+
+                return marca.id;
+              }
+
+              default: {
+                throw new Error(
+                  "Tipo de perfil inválido."
+                );
+              }
+            }
+          }
+        );
+
+      return res.json({
+        ok: true,
+
+        message:
+          "Tipo de perfil atualizado com sucesso.",
+
+        tipo:
+          tipoValidado,
+
+        /*
+         * ID do Atleta, Professor,
+         * Olheiro, Clube, Escolinha,
+         * Federação ou Marca criado.
+         */
+        tipoUsuarioId,
+
+        usuario: {
+          id:
+            usuarioId,
+
+          nome:
+            nomeFinal,
+
+          nomeDeUsuario:
+            nomeDeUsuarioFinal,
+
+          tipo:
+            tipoUsuarioFinal,
+        },
       });
+    } catch (error: any) {
+      return sendError(
+        res,
+        error,
+        "Erro ao mudar tipo de perfil."
+      );
     }
-
-    const novoTipo = String(req.body?.tipo || "").toUpperCase();
-
-    if (!["ATLETA", "PROFESSOR", "OLHEIRO", "CLUBE", "ESCOLINHA", "FEDERACAO", "MARCA"].includes(novoTipo)) {
-      return res.status(400).json({ message: "Tipo de perfil inválido." });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      if (novoTipo === "ATLETA") {
-        const nascimento = parseDataNascimentoObrigatoria(req.body.dataNascimento);
-
-        const categoriasNormalizadas = normalizarCategorias(req.body.categoria);
-
-        await tx.atleta.create({
-          data: {
-            usuarioId,
-            nome: req.body.nome || usuario.nome,
-            dataNascimento: nascimento.dataNascimento,
-            idade: nascimento.idade,
-            categoria: categoriasNormalizadas,
-            posicao: req.body.posicao || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Atleta" as any },
-        });
-      }
-
-      if (novoTipo === "PROFESSOR") {
-        const nascimento = parseDataNascimentoObrigatoria(req.body.dataNascimento);
-
-        await tx.professor.create({
-          data: {
-            usuarioId,
-            nome: req.body.nome || usuario.nome,
-            email: usuario.email,
-            dataNascimento: nascimento.dataNascimento,
-            areaFormacao: req.body.areaFormacao || null,
-            cref: req.body.cref || null,
-            statusCref: req.body.statusCref || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Professor" as any },
-        });
-      }
-
-      if (novoTipo === "OLHEIRO") {
-        const nascimento = parseDataNascimentoObrigatoria(req.body.dataNascimento);
-
-        await tx.olheiro.create({
-          data: {
-            usuarioId,
-            nome: req.body.nome || usuario.nome,
-            email: usuario.email,
-            dataNascimento: nascimento.dataNascimento,
-            areaAtuacao: req.body.areaAtuacao || null,
-            anosExperiencia: req.body.anosExperiencia
-              ? Number(req.body.anosExperiencia)
-              : null,
-            descricao: req.body.descricao || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Olheiro" as any },
-        });
-      }
-
-      if (novoTipo === "CLUBE") {
-        await tx.clube.create({
-          data: {
-            usuarioId,
-            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
-            email: usuario.email,
-            cnpj: req.body.cnpj || null,
-            cidade: req.body.cidade || null,
-            estado: req.body.estado || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Clube" as any },
-        });
-      }
-
-      if (novoTipo === "ESCOLINHA") {
-        await tx.escolinha.create({
-          data: {
-            usuarioId,
-            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
-            email: usuario.email,
-            cnpj: req.body.cnpj || null,
-            cidade: req.body.cidade || null,
-            estado: req.body.estado || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Escolinha" as any },
-        });
-      }
-
-      if (novoTipo === "FEDERACAO") {
-        await tx.federacao.create({
-          data: {
-            usuarioId,
-            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
-            email: usuario.email,
-            cnpj: req.body.cnpj || null,
-            cidade: req.body.cidade || null,
-            estado: req.body.estado || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Federacao" as any },
-        });
-      }
-
-      if (novoTipo === "MARCA") {
-        await tx.marca.create({
-          data: {
-            usuarioId,
-            nome: req.body.nomeOrganizacao || req.body.nome || usuario.nome,
-            email: usuario.email,
-            cnpj: req.body.cnpj || null,
-            cidade: req.body.cidade || null,
-            estado: req.body.estado || null,
-          } as any,
-        });
-
-        await tx.usuario.update({
-          where: { id: usuarioId },
-          data: { tipo: "Marca" as any },
-        });
-      }
-    });
-
-    return res.json({
-      ok: true,
-      message: "Tipo de perfil atualizado com sucesso.",
-      tipo: novoTipo,
-    });
-  } catch (e: any) {
-    return sendError(res, e, "Erro ao mudar tipo de perfil.");
-  }
-};
+  };

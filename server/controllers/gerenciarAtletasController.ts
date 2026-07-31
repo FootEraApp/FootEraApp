@@ -80,6 +80,101 @@ async function resolveEntidadeId(vinculo: "clube" | "escolinha" | "professor", i
   return null;
 }
 
+async function buscarProfessorIdsDaOrganizacao(
+  tipo: "clube" | "escolinha",
+  entidadeId: string
+): Promise<string[]> {
+  const ownerWhere =
+    tipo === "clube"
+      ? {
+          clubeId: entidadeId,
+        }
+      : {
+          escolinhaId: entidadeId,
+        };
+
+  const [
+    professoresDiretos,
+    professoresPivot,
+    relacoesAtivas,
+  ] = await Promise.all([
+    prisma.professor.findMany({
+      where: ownerWhere,
+      select: {
+        id: true,
+      },
+    }),
+
+    tipo === "clube"
+      ? prisma.professorClube.findMany({
+          where: {
+            clubeId: entidadeId,
+          },
+          select: {
+            professorId: true,
+          },
+        })
+      : prisma.professorEscolinha.findMany({
+          where: {
+            escolinhaId: entidadeId,
+          },
+          select: {
+            professorId: true,
+          },
+        }),
+
+    prisma.relacaoTreinamento.findMany({
+      where: {
+        ...ownerWhere,
+
+        professorId: {
+          not: null,
+        },
+
+        /*
+         * atletaId null identifica a relação:
+         * professor ↔ organização.
+         */
+        atletaId: null,
+
+        ativo: true,
+        encerradoEm: null,
+      },
+
+      select: {
+        professorId: true,
+      },
+    }),
+  ]);
+
+  const ids = [
+    ...professoresDiretos.map(
+      (professor) =>
+        professor.id
+    ),
+
+    ...professoresPivot.map(
+      (vinculo) =>
+        vinculo.professorId
+    ),
+
+    ...relacoesAtivas.map(
+      (relacao) =>
+        relacao.professorId
+    ),
+  ];
+
+  return Array.from(
+    new Set<string>(
+      ids.filter(
+        (id): id is string =>
+          typeof id === "string" &&
+          id.trim().length > 0
+      )
+    )
+  );
+}
+
 export const gerenciarAtletasController = {
   list: async (req: Request, res: Response) => {
     try {
@@ -103,83 +198,125 @@ export const gerenciarAtletasController = {
       let whereByVinculo: any = {};
       let entidadeId: string | null = null;
 
-  if (vinculo === "clube") {
-    let entidade = await prisma.clube.findUnique({
-      where: { usuarioId: entidadeUsuarioId },
-      select: { id: true },
-    });
-    if (!entidade) {
-      entidade = await prisma.clube.findUnique({
-        where: { id: entidadeUsuarioId },
-        select: { id: true },
-      });
-    }
-    if (!entidade) {
-      return res.status(404).json({ message: "Entidade não encontrada" });
-    }
+      if (
+        vinculo === "clube" ||
+        vinculo === "escolinha"
+      ) {
+        const resolved =
+          await resolveEntidadeId(
+            vinculo,
+            entidadeUsuarioId
+          );
 
-    entidadeId = entidade.id;
+        if (!resolved) {
+          return res.status(404).json({
+            message:
+              vinculo === "clube"
+                ? "Clube não encontrado"
+                : "Escolinha não encontrada",
+          });
+        }
 
-    whereByVinculo = {
-      OR: [
-        { clubeId: entidadeId },
-        { relacoesTreinamento: { some: { clubeId: entidadeId, ativo: true } } },
-      ],
-    };
-  }
-  else if (vinculo === "escolinha") {
-    let entidade = await prisma.escolinha.findUnique({
-      where: { usuarioId: entidadeUsuarioId },
-      select: { id: true },
-    });
+        entidadeId =
+          resolved.entidadeId;
 
-    if (!entidade) {
-      entidade = await prisma.escolinha.findUnique({
-        where: { id: entidadeUsuarioId },
-        select: { id: true },
-      });
-    }
+        const professorIds =
+          await buscarProfessorIdsDaOrganizacao(
+            vinculo,
+            entidadeId
+          );
 
-    if (!entidade) {
-      return res.status(404).json({ message: "Entidade não encontrada" });
-    }
+        const vinculosPermitidos: any[] = [
+          vinculo === "clube"
+            ? {
+                clubeId: entidadeId,
+              }
+            : {
+                escolinhaId: entidadeId,
+              },
+        ];
 
-    entidadeId = entidade.id;
+        /*
+        * Um atleta vinculado diretamente a um
+        * professor pertencente à organização também
+        * é considerado disponível para suas turmas.
+        */
+        if (professorIds.length > 0) {
+          vinculosPermitidos.push({
+            professorId: {
+              in: professorIds,
+            },
+          });
+        }
 
-    const rels = await prisma.relacaoTreinamento.findMany({
-      where: {
-        escolinhaId: entidade.id,
-        ativo: { not: false},
-      },
-      select: { atletaId: true },
-    });
-
-    const idsRelacao = rels
-      .map((r) => r.atletaId)
-      .filter((x): x is string => !!x);
-
-      whereByVinculo = {
+        whereByVinculo = {
           OR: [
-            { escolinhaId: entidade.id },
-            ...(idsRelacao.length ? [{ id: { in: idsRelacao } }] : []),
+            /*
+            * Vínculo direto salvo na tabela Atleta.
+            */
+            vinculo === "clube"
+              ? {
+                  clubeId: entidadeId,
+                }
+              : {
+                  escolinhaId: entidadeId,
+                },
+
+            /*
+            * Relação de treinamento ativa:
+            * - diretamente com a organização;
+            * - ou com um professor da organização.
+            */
+            {
+              relacoesTreinamento: {
+                some: {
+                  atletaId: {
+                    not: null,
+                  },
+
+                  ativo: true,
+                  encerradoEm: null,
+
+                  OR: vinculosPermitidos,
+                },
+              },
+            },
           ],
         };
-     } else {
-        const resolved = await resolveEntidadeId("professor", entidadeUsuarioId);
-        if (!resolved) return res.status(404).json({ message: "Professor não encontrado" });
+      } else {
+        const resolved =
+          await resolveEntidadeId(
+            "professor",
+            entidadeUsuarioId
+          );
 
-        entidadeId = resolved.entidadeId;
+        if (!resolved) {
+          return res.status(404).json({
+            message:
+              "Professor não encontrado",
+          });
+        }
+
+        entidadeId =
+          resolved.entidadeId;
 
         whereByVinculo = {
           relacoesTreinamento: {
             some: {
-              professorId: entidadeId,
-              ativo: { not: false }, 
+              professorId:
+                entidadeId,
+
+              atletaId: {
+                not: null,
+              },
+
+              ativo: true,
+              encerradoEm: null,
             },
           },
         };
       }
-      
+          
       const where: any = { AND: [whereByVinculo] };
 
       if (categoria) where.AND.push({ categoria: { has: categoria } });
@@ -233,13 +370,13 @@ export const gerenciarAtletasController = {
 
       let elencoIds: string[] = [];
       if (vinculo === "clube" && entidadeId) {
-        const elencos = await prisma.elenco.findMany({ where: { clubeId: entidadeId }, select: { id: true } });
+        const elencos = await prisma.elenco.findMany({ where: { clubeId: entidadeId, ativo: true }, select: { id: true } });
         elencoIds = elencos.map((e) => e.id);
       } else if (vinculo === "escolinha" && entidadeId) {
-        const elencos = await prisma.elenco.findMany({ where: { escolinhaId: entidadeId }, select: { id: true } });
+        const elencos = await prisma.elenco.findMany({ where: { escolinhaId: entidadeId, ativo: true}, select: { id: true } });
         elencoIds = elencos.map((e) => e.id);
       } else if (vinculo === "professor" && entidadeId) {
-        const elencos = await prisma.elenco.findMany({ where: { professorId: entidadeId }, select: { id: true } });
+        const elencos = await prisma.elenco.findMany({ where: { professorId: entidadeId, ativo: true }, select: { id: true } });
         elencoIds = elencos.map((e) => e.id);
       }
 
@@ -259,17 +396,42 @@ export const gerenciarAtletasController = {
 
       const enriched = atletas.map((a) => {
         const posicaoElenco = posicaoPorAtletaId.get(a.id) ?? null;
+        const nomeUsuario = a.usuario?.nome?.trim() || "";
+        const nomeCadastroAtleta = a.nome?.trim() || "";
 
         return {
           id: a.id,
           usuarioId: a.usuarioId,
-          nome: a.nome || a.usuario?.nome || "—",
+
+          /*
+          * O nome do perfil do usuário tem prioridade.
+          * Exemplo: "Atleta Pro" em vez do nome genérico
+          * "Atleta" salvo na tabela Atleta.
+          */
+          nome:
+            nomeUsuario ||
+            nomeCadastroAtleta ||
+            "Atleta",
+
           idade: a.idade,
           foto: a.foto,
-          posicao: posicaoElenco || a.posicao || null,
-          categoria: pickMainCategoria(a.categoria) || null,
-          pontuacao: a.pontuacao?.pontuacaoTotal ?? 0,
-          ativoRecentemente: a.usuarioId ? ativosSet.has(a.usuarioId) : false,
+          posicao:
+            posicaoElenco ||
+            a.posicao ||
+            null,
+
+          categoria:
+            pickMainCategoria(a.categoria) ||
+            null,
+
+          pontuacao:
+            a.pontuacao?.pontuacaoTotal ??
+            0,
+
+          ativoRecentemente:
+            a.usuarioId
+              ? ativosSet.has(a.usuarioId)
+              : false,
         };
       });
 
@@ -328,90 +490,79 @@ export const gerenciarAtletasController = {
           ? { clubeId: entidadeId }
           : { escolinhaId: entidadeId };
 
-      const ownerDirect =
+      /*
+      * Busca os vínculos existentes nas tabelas oficiais
+      * ProfessorClube e ProfessorEscolinha.
+      *
+      * Isso mantém funcionando os vínculos que já existiam
+      * antes da criação das relações de treinamento.
+      */
+      const vinculosDiretos =
         vinculo === "clube"
-          ? ({ clubeId: entidadeId } as Prisma.ProfessorWhereInput)
-          : ({ escolinhaId: entidadeId } as Prisma.ProfessorWhereInput);
-
-      const professorIdsSet = new Set<string>();
-      const profsDiretos = await prisma.professor.findMany({
-        where: ownerDirect,
-        select: { id: true },
-      });
-
-      for (const p of profsDiretos) {
-        if (p.id) professorIdsSet.add(p.id);
-      }
-
-      const relacoes = await prisma.relacaoTreinamento.findMany({
-        where: {
-          ...ownerWhere,
-          ativo: { not: false },
-          professorId: { not: null },
-        },
-        select: { professorId: true },
-      });
-
-      for (const r of relacoes) {
-        if (r.professorId) professorIdsSet.add(r.professorId);
-      }
-
-      const turmasDoOwner = await prisma.turma.findMany({
-        where: ownerWhere,
-        select: {
-          id: true,
-          professores: {
-            select: {
-              professor: {
-                select: {
-                  id: true,
-                },
+          ? await prisma.professorClube.findMany({
+              where: {
+                clubeId: entidadeId,
               },
+              select: {
+                professorId: true,
+              },
+            })
+          : await prisma.professorEscolinha.findMany({
+              where: {
+                escolinhaId: entidadeId,
+              },
+              select: {
+                professorId: true,
+              },
+            });
+
+      /*
+      * Também considera as novas relações de treinamento
+      * professor ↔ organização que estejam realmente ativas.
+      */
+      const relacoesAtivas =
+        await prisma.relacaoTreinamento.findMany({
+          where: {
+            ...ownerWhere,
+            professorId: {
+              not: null,
             },
+            atletaId: null,
+            ativo: true,
+            encerradoEm: null,
           },
-        },
-      });
-
-      for (const turma of turmasDoOwner) {
-        for (const tp of turma.professores) {
-          if (tp.professor?.id) professorIdsSet.add(tp.professor.id);
-        }
-      }
-
-      const gestores = await prisma.organizacaoGestor.findMany({
-        where: {
-          ownerId: entidadeId,
-          tipo: vinculo === "clube" ? "CLUBE" : "ESCOLINHA",
-          ativo: true,
-        },
-        select: { professorId: true },
-      });
-
-      for (const g of gestores) {
-        if (g.professorId) professorIdsSet.add(g.professorId);
-      }
-
-      if (vinculo === "clube") {
-        const pivotClubes = await prisma.professorClube.findMany({
-          where: { clubeId: entidadeId },
-          select: { professorId: true },
+          select: {
+            professorId: true,
+          },
+          orderBy: {
+            criadoEm: "desc",
+          },
         });
 
-        for (const pc of pivotClubes) {
-          if (pc.professorId) professorIdsSet.add(pc.professorId);
-        }
-      } else {
-        const pivotEscolinhas = await prisma.professorEscolinha.findMany({
-          where: { escolinhaId: entidadeId },
-          select: { professorId: true },
-        });
+      /*
+      * Junta as duas fontes e elimina duplicados.
+      *
+      * Assim:
+      * - vínculos antigos de ProfessorClube aparecem;
+      * - vínculos novos de RelacaoTreinamento aparecem;
+      * - o mesmo professor não aparece duas vezes.
+      */
+      const profIds = Array.from(
+        new Set(
+          [
+            ...vinculosDiretos.map(
+              (vinculoDireto) => vinculoDireto.professorId
+            ),
 
-        for (const pe of pivotEscolinhas) {
-          if (pe.professorId) professorIdsSet.add(pe.professorId);
-        }
-      }
-
-      const profIds = Array.from(professorIdsSet);
+            ...relacoesAtivas.map(
+              (relacao) => relacao.professorId
+            ),
+          ].filter(
+            (id): id is string =>
+              typeof id === "string" && id.length > 0
+          )
+        )
+      );
 
       if (!profIds.length) {
         return res.json({ professores: [] });
@@ -1467,7 +1618,10 @@ export const gerenciarAtletasController = {
         .map((a) => ({
           id: a.id,
           usuarioId: a.usuarioId,
-          nome: a.nome || a.usuario?.nome || "—",
+          nome:
+          a.usuario?.nome?.trim() ||
+          a.nome?.trim() ||
+          "Atleta",
           foto: a.foto,
           posicao: a.posicao || null,
           categoria: pickMainCategoria(a.categoria) || null,

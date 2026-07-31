@@ -96,6 +96,42 @@ const s3 = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",
 });
 
+async function listarTodosObjetosS3(
+  bucket: string,
+  prefix: string
+) {
+  const objetos: Array<{
+    Key?: string;
+    LastModified?: Date;
+  }> = [];
+
+  let continuationToken:
+    | string
+    | undefined;
+
+  do {
+    const pagina = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken:
+          continuationToken,
+      })
+    );
+
+    objetos.push(
+      ...(pagina.Contents ?? [])
+    );
+
+    continuationToken =
+      pagina.IsTruncated
+        ? pagina.NextContinuationToken
+        : undefined;
+  } while (continuationToken);
+
+  return objetos;
+}
+
 async function getAulaComOwner(aulaId: string) {
   return prisma.aulaAoVivo.findUnique({
     where: { id: aulaId },
@@ -900,9 +936,22 @@ export async function finalizarAulaAoVivo(req: AuthRequest, res: Response) {
       data: {
         status: "FINALIZADA",
         finalizouEm: agora,
-        dataFim: aula.dataFim || agora,
+
+        /*
+        * Use o horário real da finalização.
+        * Evita manter um término previsto
+        * anterior ao início real.
+        */
+        dataFim: agora,
+
         chatAtivo: false,
         replayDisponivel: false,
+
+        ivsRecordingStatus:
+          aula.gravacaoAtiva &&
+          aula.ivsRecordingConfigurationArn
+            ? "PROCESSANDO"
+            : "NAO_CONFIGURADA",
       },
       include: {
         metodologia: {
@@ -1572,8 +1621,34 @@ function extrairChannelIdDoArn(channelArn?: string | null) {
   return partes[partes.length - 1] || null;
 }
 
-function montarUrlS3Publica(bucket: string, key: string) {
-  const region = process.env.AWS_REGION || "us-east-1";
+function montarUrlS3Publica(
+  bucket: string,
+  key: string
+) {
+  /*
+   * Em produção, prefira uma URL pública
+   * do CloudFront apontando para o bucket.
+   *
+   * Exemplo:
+   * IVS_RECORDING_PUBLIC_BASE_URL=
+   * https://videos.footera.app.br
+   */
+  const basePublica = String(
+    process.env
+      .IVS_RECORDING_PUBLIC_BASE_URL ||
+      ""
+  )
+    .trim()
+    .replace(/\/+$/, "");
+
+  if (basePublica) {
+    return `${basePublica}/${key}`;
+  }
+
+  const region =
+    process.env.AWS_REGION ||
+    "us-east-1";
+
   return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 }
 
@@ -1587,9 +1662,19 @@ function extrairRecordingIdDoMasterKey(masterKey: string) {
   return partes[mediaIndex - 1] || null;
 }
 
-export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
+export async function sincronizarReplayAulaAoVivo(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
+
+    const userId =
+      getAuthUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        message:
+          "Usuário não autenticado.",
+      });
+    }
 
     const aula = await prisma.aulaAoVivo.findUnique({
       where: { id },
@@ -1604,6 +1689,31 @@ export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
     if (!aula.ivsChannelArn) {
       return res.status(400).json({
         message: "Aula ainda não possui canal IVS.",
+      });
+    }
+
+    if (
+      !aula.gravacaoAtiva ||
+      !aula.ivsRecordingConfigurationArn
+    ) {
+      await prisma.aulaAoVivo.update({
+        where: {
+          id: aula.id,
+        },
+        data: {
+          replayDisponivel: false,
+          ivsRecordingStatus:
+            "NAO_CONFIGURADA",
+        },
+      });
+
+      return res.status(409).json({
+        processing: false,
+        replayDisponivel: false,
+        code:
+          "GRAVACAO_NAO_CONFIGURADA",
+        message:
+          "Esta live não foi criada com uma configuração de gravação da AWS IVS. Não existe replay automático para sincronizar.",
       });
     }
 
@@ -1635,17 +1745,18 @@ export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
     }
 
     const accountId = process.env.AWS_ACCOUNT_ID || "886789338729";
-
     const prefix = `ivs/v1/${accountId}/${channelId}/`;
 
-    const result = await s3.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
-      })
-    );
-
-    const objetos = result.Contents || [];
+    /*
+    * Busca todas as páginas.
+    * Uma gravação longa pode gerar milhares
+    * de segmentos HLS.
+    */
+    const objetos =
+      await listarTodosObjetosS3(
+        bucket,
+        prefix
+      );
 
     const masters = objetos
       .filter((obj) => obj.Key?.endsWith("/media/hls/master.m3u8"))
@@ -1658,43 +1769,87 @@ export async function sincronizarReplayAulaAoVivo(req: Request, res: Response) {
     const master = masters[0];
 
     if (!master?.Key) {
+      await prisma.aulaAoVivo.update({
+        where: {
+          id: aula.id,
+        },
+        data: {
+          replayDisponivel: false,
+          ivsRecordingStatus:
+            "PROCESSANDO",
+        },
+      });
+
       return res.status(202).json({
         processing: true,
         replayDisponivel: false,
+        recordingStatus:
+          "PROCESSANDO",
+
         message:
-          "Replay ainda não encontrado no S3. Aguarde alguns minutos e tente novamente.",
+          "A gravação está sendo processada pela AWS. Esta página verificará novamente automaticamente.",
+
         prefix,
       });
     }
 
     const masterKey = master.Key;
-    const recordingId = extrairRecordingIdDoMasterKey(masterKey);
 
-    const playlist1080 = objetos.find((obj) =>
-      obj.Key?.endsWith("/media/hls/1080p/playlist.m3u8")
-    );
+    const recordingId =
+      extrairRecordingIdDoMasterKey(
+        masterKey
+      );
 
-    const playlist1080p30 = objetos.find((obj) =>
-      obj.Key?.endsWith("/media/hls/1080p30/playlist.m3u8")
-    );
+    /*
+    * Prefixo exato da gravação encontrada.
+    *
+    * Impede pegar playlist ou thumbnail
+    * de uma transmissão anterior.
+    */
+    const prefixoDaGravacao =
+      masterKey.replace(
+        /\/media\/hls\/master\.m3u8$/,
+        ""
+      );
 
-    const replayKeyPreferido =
-      playlist1080?.Key ||
-      playlist1080p30?.Key ||
-      masterKey;
+    const objetosDaGravacao =
+      objetos.filter((objeto) =>
+        objeto.Key?.startsWith(
+          `${prefixoDaGravacao}/`
+        )
+      );
+
+    /*
+    * O master.m3u8 é preferível porque permite
+    * qualidade adaptativa conforme a internet
+    * do usuário.
+    */
+    const replayKeyPreferido = masterKey;
 
     const videoGravadoUrl = montarUrlS3Publica(bucket, replayKeyPreferido);
 
-    const thumbnail = objetos
-      .filter((obj) =>
-        obj.Key?.includes("/media/thumbnails/") &&
-        /\.(jpg|jpeg|png)$/i.test(obj.Key)
-      )
-      .sort((a, b) => {
-        const timeA = a.LastModified?.getTime?.() || 0;
-        const timeB = b.LastModified?.getTime?.() || 0;
-        return timeB - timeA;
-      })[0];
+    const thumbnail =
+      objetosDaGravacao
+        .filter(
+          (objeto) =>
+            objeto.Key?.includes(
+              "/media/thumbnails/"
+            ) &&
+            /\.(jpg|jpeg|png)$/i.test(
+              objeto.Key
+            )
+        )
+        .sort((a, b) => {
+          const timeA =
+            a.LastModified?.getTime?.() ||
+            0;
+
+          const timeB =
+            b.LastModified?.getTime?.() ||
+            0;
+
+          return timeB - timeA;
+        })[0];
 
     const thumbUrl = thumbnail?.Key
       ? montarUrlS3Publica(bucket, thumbnail.Key)

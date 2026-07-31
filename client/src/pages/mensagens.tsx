@@ -37,6 +37,8 @@ interface Grupo {
   id: string;
   nome: string;
   descricao?: string | null;
+  ownerId: string;
+  totalMembros?: number;
   ultimaMensagem?: string | null;
   ultimaMensagemTipo?: string | null;
   ultimaMensagemEm?: string | null;
@@ -121,6 +123,7 @@ export default function PaginaMensagens() {
   const [mostrarInfoGrupo, setMostrarInfoGrupo] = useState(false);
   const [carregandoGrupoDetalhe, setCarregandoGrupoDetalhe] = useState(false);
   const [modalAdicionarMembrosAberto, setModalAdicionarMembrosAberto] = useState(false);
+  const [excluindoGrupoId, setExcluindoGrupoId] = useState<string | null>(null);
 
   type PresencaUI = {
     isOnline: boolean | null;
@@ -265,7 +268,10 @@ export default function PaginaMensagens() {
   const [lastMsgByGroup, setLastMsgByGroup] = useState<Record<string, string>>({});
 
   const abrirModal = () => setModalAberto(true);
-  const fecharModal = () => setModalAberto(false);
+
+  function fecharModal() {
+    setModalAberto(false);
+  }
 
   const [modalDesafiosAberto, setModalDesafiosAberto] = useState(false);
   const fecharModalDesafios = () => setModalDesafiosAberto(false);
@@ -551,9 +557,39 @@ export default function PaginaMensagens() {
                 }`}
                 onClick={() => selecionarAlvo({ tipo: "grupo", grupo: g })}
               >
-                <div className="font-medium text-sm">{g.nome}</div>
-                <div className="text-xs text-gray-500 line-clamp-1">
-                  {lastMsgByGroup[g.id] || g.ultimaMensagem || g.descricao || "Sem mensagens ainda."}
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm truncate">
+                      {g.nome}
+                    </div>
+
+                    <div className="text-xs text-gray-500 line-clamp-1">
+                      {lastMsgByGroup[g.id] ||
+                        g.ultimaMensagem ||
+                        g.descricao ||
+                        "Sem mensagens ainda."}
+                    </div>
+                  </div>
+
+                  {g.ownerId === usuarioId && (
+                    <button
+                      type="button"
+                      disabled={excluindoGrupoId === g.id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void excluirGrupo(g);
+                      }}
+                      className="
+                        shrink-0 p-1.5 rounded-md
+                        text-red-600 hover:bg-red-50
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                      "
+                      title="Apagar grupo"
+                      aria-label={`Apagar grupo ${g.nome}`}
+                    >
+                      <Trash size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -898,11 +934,62 @@ export default function PaginaMensagens() {
       setMensagensGrupo(prev => prev.filter(m => m.id !== id));
     });
 
+    socket.on("grupoCriado", (novoGrupo: Grupo) => {
+      if (!novoGrupo?.id) return;
+
+      /*
+      * Adiciona o grupo imediatamente à lista.
+      * A verificação evita duplicação caso o evento seja recebido
+      * mais de uma vez.
+      */
+      setGrupos((prev) => {
+        const grupoJaExiste = prev.some(
+          (grupo) => grupo.id === novoGrupo.id
+        );
+
+        if (grupoJaExiste) {
+          return prev.map((grupo) =>
+            grupo.id === novoGrupo.id
+              ? { ...grupo, ...novoGrupo }
+              : grupo
+          );
+        }
+
+        return [novoGrupo, ...prev];
+      });
+
+      /*
+      * Como o grupo acabou de ser criado, ainda não possui
+      * mensagens para exibir na prévia.
+      */
+      setLastMsgByGroup((prev) => ({
+        ...prev,
+        [novoGrupo.id]: "",
+      }));
+
+      /*
+      * Coloca o grupo recém-criado no início da lista.
+      */
+      setLastMsgAtByGroup((prev) => ({
+        ...prev,
+        [novoGrupo.id]: Date.now(),
+      }));
+    });
+
+    socket.on(
+      "grupoRemovido",
+      ({ grupoId }: { grupoId: string }) => {
+        removerGrupoDaInterface(grupoId);
+      }
+    );
+
     return () => {
       socket.off("connect");
       socket.off("novaMensagem");
       socket.off("novaMensagemGrupo");
       socket.off("mensagemDeletada");
+      socket.off("grupoCriado");
+      socket.off("grupoRemovido");
     };
   }, [usuarioId]);
 
@@ -1149,25 +1236,140 @@ export default function PaginaMensagens() {
     });
   }, [usuariosMutuos, token]);
 
-  async function sairDoGrupo(grupoId: string) {
+  function removerGrupoDaInterface(grupoId: string) {
+    const alvoAtual = alvoRef.current;
+
+    const grupoEstavaAberto =
+      alvoAtual?.tipo === "grupo" &&
+      alvoAtual.grupo.id === grupoId;
+
+    // Remove imediatamente da lista lateral
+    setGrupos((prev) => prev.filter((grupo) => grupo.id !== grupoId));
+
+    // Limpa os dados usados para ordenar/exibir a última mensagem
+    setLastMsgByGroup((prev) => {
+      const next = { ...prev };
+      delete next[grupoId];
+      return next;
+    });
+
+    setLastMsgAtByGroup((prev) => {
+      const next = { ...prev };
+      delete next[grupoId];
+      return next;
+    });
+
+    // Remove o cache local das mensagens desse grupo
+    localStorage.removeItem(`conversa_grupo_${grupoId}`);
+
+    // Impede que o grupo removido seja reaberto automaticamente
     try {
-      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}/sair`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const raw = localStorage.getItem("mensagens_last_target");
+
+      if (raw) {
+        const ultimoAlvo = JSON.parse(raw);
+
+        if (
+          ultimoAlvo?.tipo === "grupo" &&
+          ultimoAlvo?.id === grupoId
+        ) {
+          localStorage.removeItem("mensagens_last_target");
+        }
+      }
+    } catch {
+      localStorage.removeItem("mensagens_last_target");
+    }
+
+    setGrupoDetalhe((prev) =>
+      prev?.id === grupoId ? null : prev
+    );
+
+    if (grupoEstavaAberto) {
+      socket.emit("leaveGroup", grupoId);
+
+      if (lastGroupRef.current === grupoId) {
+        lastGroupRef.current = null;
+      }
+
+      setAlvo(null);
+      setMensagensGrupo([]);
+      setNovaMensagem("");
+      setGrupoDetalhe(null);
+      setMostrarInfoGrupo(false);
+      setModalAdicionarMembrosAberto(false);
+
+      // No celular, abre novamente a lista de conversas
+      setShowSidebar(true);
+    }
+  }
+
+  async function sairDoGrupo(grupoId: string) {
+    const confirmou = window.confirm(
+      "Deseja realmente sair deste grupo?"
+    );
+
+    if (!confirmou) return;
+
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/grupos/${grupoId}/sair`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Erro ao sair do grupo");
       }
 
-      toast.error("Você saiu do grupo.");
-      setGrupoDetalhe(null);
-      setMostrarInfoGrupo(false);
+      removerGrupoDaInterface(grupoId);
+
+      toast.success("Você saiu do grupo.");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao sair do grupo");
+      toast.error(err?.message || "Erro ao sair do grupo");
+    }
+  }
+
+  async function excluirGrupo(grupo: Grupo) {
+    const confirmou = window.confirm(
+      `Deseja realmente apagar o grupo "${grupo.nome}"?\n\n` +
+        "Todas as mensagens, membros e dados desse grupo serão apagados. " +
+        "Essa ação não poderá ser desfeita."
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setExcluindoGrupoId(grupo.id);
+
+      const res = await fetch(
+        `${API.BASE_URL}/api/grupos/${grupo.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao apagar o grupo");
+      }
+
+      removerGrupoDaInterface(grupo.id);
+
+      toast.success("Grupo apagado com sucesso.");
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao apagar o grupo");
+    } finally {
+      setExcluindoGrupoId(null);
     }
   }
 
@@ -1514,6 +1716,11 @@ export default function PaginaMensagens() {
       setNovaMensagem("");
     } else {
       const clientMsgId = genClientId();
+
+      const meuMembroNoGrupo = grupoDetalhe?.membros.find(
+        (membro) => membro.id === usuarioId
+      );
+
       const otm: MensagemGrupo = {
         id: clientMsgId,
         clientMsgId,
@@ -1523,6 +1730,11 @@ export default function PaginaMensagens() {
         grupoId: alvo.grupo.id,
         usuarioId: usuarioId!,
         tipo: "NORMAL",
+        usuario: {
+          id: usuarioId!,
+          nome: meuMembroNoGrupo?.nome ?? "Você",
+          foto: meuMembroNoGrupo?.foto ?? null,
+        },
       };
       setMensagensGrupo(prev => [...prev, otm]);
 
@@ -1609,60 +1821,164 @@ function stripConvocacaoTag(text: string) {
 
   const renderizarMensagemGrupoWhats = (msg: MensagemGrupo) => {
     const isMine = msg.usuarioId === usuarioId;
-    const wrap = isMine ? "self-end items-end" : "self-start items-start";
-    const bubble = isMine ? "bg-green-900 text-white rounded-2xl rounded-tr-none" : "bg-[#E8ECF7] text-[#0F172A] rounded-2xl rounded-tl-none";
-    const ts = isMine ? "text-[11px] text-gray-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
+
+    /*
+    * As mensagens carregadas do backend já possuem msg.usuario.
+    * Para mensagens otimistas ou antigas do cache, usamos também
+    * os dados da lista de membros do grupo.
+    */
+    const membroDoGrupo = grupoDetalhe?.membros.find(
+      (membro) => membro.id === msg.usuarioId
+    );
+
+    const nomeRemetente =
+      msg.usuario?.nome?.trim() ||
+      membroDoGrupo?.nome?.trim() ||
+      (isMine ? "Você" : "Usuário FootEra");
+
+    const fotoRemetente =
+      msg.usuario?.foto ??
+      membroDoGrupo?.foto ??
+      null;
+
+    const bubble = isMine
+      ? "bg-green-900 text-white rounded-2xl rounded-tr-none"
+      : "bg-[#E8ECF7] text-[#0F172A] rounded-2xl rounded-tl-none";
+
+    const horarioClass = isMine
+      ? "text-[11px] text-gray-500 text-right mt-1"
+      : "text-[11px] text-gray-500 mt-1";
 
     const Shell = (children: React.ReactNode): JSX.Element => (
-      <div className={`max-w-[75%] flex flex-col ${wrap}`}>
-        <div className={`${bubble} px-3 py-2 shadow-sm relative`}>
-          {children}
-          {isMine && (
-            <button
-              onClick={() => deletarMensagem(msg.id)}
-              className="absolute -top-2 -right-2 bg-white/80 text-gray-700 hover:text-red-600 p-1 rounded-full shadow"
-              title="Apagar"
+      <div
+        className={`w-full flex ${
+          isMine ? "justify-end" : "justify-start"
+        }`}
+      >
+        <div
+          className={`flex items-start gap-2 max-w-[85%] ${
+            isMine ? "flex-row-reverse" : "flex-row"
+          }`}
+        >
+          {/* Foto de quem enviou */}
+          <button
+            type="button"
+            onClick={() => navigate(`/perfil/${msg.usuarioId}`)}
+            className="shrink-0 mt-5 rounded-full"
+            title={`Ver perfil de ${nomeRemetente}`}
+            aria-label={`Ver perfil de ${nomeRemetente}`}
+          >
+            <Avatar
+              src={fotoRemetente}
+              name={nomeRemetente}
+              className="w-9 h-9"
+            />
+          </button>
+
+          <div
+            className={`min-w-0 flex flex-col ${
+              isMine ? "items-end" : "items-start"
+            }`}
+          >
+            {/* Nome de quem enviou */}
+            <div
+              className={`mb-1 px-1 text-[12px] font-semibold truncate max-w-full ${
+                isMine ? "text-green-900 text-right" : "text-gray-700"
+              }`}
             >
-              <Trash size={14} />
-            </button>
-          )}
-        </div>
-        <div className={ts}>
-          {new Date(msg.criadaEm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {nomeRemetente}
+            </div>
+
+            {/* Balão da mensagem */}
+            <div
+              className={`${bubble} max-w-full px-3 py-2 shadow-sm relative`}
+            >
+              {children}
+
+              {isMine && (
+                <button
+                  type="button"
+                  onClick={() => deletarMensagem(msg.id)}
+                  className="
+                    absolute -top-2 -right-2
+                    bg-white/90 text-gray-700
+                    hover:text-red-600
+                    p-1 rounded-full shadow
+                  "
+                  title="Apagar mensagem"
+                  aria-label="Apagar mensagem"
+                >
+                  <Trash size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Horário */}
+            <div className={horarioClass}>
+              {new Date(msg.criadaEm).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </div>
+          </div>
         </div>
       </div>
     );
 
-    if (!FLAGS.DESAFIOS_ENABLED && (
-      msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS"
-    )) {
-      return Shell(<p className="text-sm opacity-80">Conteúdo de desafio está temporariamente indisponível.</p>);
+    if (
+      !FLAGS.DESAFIOS_ENABLED &&
+      (
+        msg.tipo === "GRUPO_DESAFIO" ||
+        msg.tipo === "GRUPO_DESAFIO_BONUS"
+      )
+    ) {
+      return Shell(
+        <p className="text-sm opacity-80">
+          Conteúdo de desafio está temporariamente indisponível.
+        </p>
+      );
     }
 
-    if (msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS" || msg.tipo === "DESAFIO" || msg.tipo === "POST" || msg.tipo === "USUARIO") {
+    if (
+      msg.tipo === "GRUPO_DESAFIO" ||
+      msg.tipo === "GRUPO_DESAFIO_BONUS" ||
+      msg.tipo === "DESAFIO" ||
+      msg.tipo === "POST" ||
+      msg.tipo === "USUARIO"
+    ) {
       return Shell(
         <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
           <MensagemItemGrupo msg={msg} meId={usuarioId} />
         </div>
       );
     }
-    if (typeof msg.conteudo === "string" && msg.conteudo.includes("[CONVOCACAO_EVENTO:")) {
+
+    if (
+      typeof msg.conteudo === "string" &&
+      msg.conteudo.includes("[CONVOCACAO_EVENTO:")
+    ) {
       const parsed = parseConvocacaoEvento(msg.conteudo);
 
       if (parsed?.link) {
         return Shell(
           <div
             onClick={() => navigate(parsed.link!)}
-            className="cursor-pointer bg-white/90 border border-green-700 rounded-xl p-3 flex flex-col gap-2 hover:bg-green-50"
+            className="
+              cursor-pointer bg-white/90 border border-green-700
+              rounded-xl p-3 flex flex-col gap-2
+              hover:bg-green-50
+            "
           >
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-green-800 flex items-center justify-center text-white font-bold">
                 📣
               </div>
+
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm text-green-900 truncate">
                   {parsed.titulo}
                 </p>
+
                 {parsed.papel && (
                   <p className="text-xs text-green-900/80 truncate">
                     {parsed.papel}
@@ -1677,12 +1993,20 @@ function stripConvocacaoTag(text: string) {
               </p>
             )}
 
-            <button className="mt-1 text-xs px-3 py-1 bg-green-800 text-white rounded-lg self-start">
+            <button
+              type="button"
+              className="mt-1 text-xs px-3 py-1 bg-green-800 text-white rounded-lg self-start"
+            >
               Ver evento
             </button>
 
             <p className="text-[12px] text-gray-600 whitespace-pre-wrap break-words">
-              {stripConvocacaoTag(parsed.raw).replace(/🔗\s*Link:\s*\/eventos\/[^\s]+/i, "").trim()}
+              {stripConvocacaoTag(parsed.raw)
+                .replace(
+                  /🔗\s*Link:\s*\/eventos\/[^\s]+/i,
+                  ""
+                )
+                .trim()}
             </p>
           </div>
         );
@@ -1695,7 +2019,11 @@ function stripConvocacaoTag(text: string) {
       );
     }
 
-    return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
+    return Shell(
+      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+        {msg.conteudo}
+      </p>
+    );
   };
 
   const renderizarMensagemPrivadaWhats = (msg: Mensagem) => {
@@ -2126,7 +2454,40 @@ function stripConvocacaoTag(text: string) {
 
       <BottomNav />
 
-      <ModalGrupos aberto={modalAberto} onFechar={fecharModal} usuarioId={usuarioId ?? ""} token={token} />
+      <ModalGrupos
+        aberto={modalAberto}
+        onFechar={fecharModal}
+        usuarioId={usuarioId ?? ""}
+        token={token}
+        onGrupoCriado={(novoGrupo) => {
+          /*
+          * Remove uma possível cópia recebida pelo socket
+          * e insere o grupo no início.
+          */
+          setGrupos((prev) => [
+            novoGrupo,
+            ...prev.filter(
+              (grupo) => grupo.id !== novoGrupo.id
+            ),
+          ]);
+
+          setLastMsgByGroup((prev) => ({
+            ...prev,
+            [novoGrupo.id]: "",
+          }));
+
+          setLastMsgAtByGroup((prev) => ({
+            ...prev,
+            [novoGrupo.id]: Date.now(),
+          }));
+
+          /*
+          * Limpa uma busca ativa para evitar que o novo grupo
+          * fique escondido por causa do filtro.
+          */
+          setSearchTerm("");
+        }}
+      />
       {FLAGS.DESAFIOS_ENABLED && alvo?.tipo === "grupo" && (
         <ModalDesafiosGrupo
           aberto={modalDesafiosAberto}

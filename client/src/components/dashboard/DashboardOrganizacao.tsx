@@ -54,6 +54,7 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
   const [data, setData] = useState<DashboardResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!token || !ownerId) return;
@@ -76,7 +77,51 @@ export default function DashboardOrganizacao({ ownerTipo, ownerId }: Props) {
     })();
 
     return () => { cancel = true; };
-  }, [token, ownerTipo, ownerId, ano]);
+  }, [token, ownerTipo, ownerId, ano, refreshKey]);
+
+  useEffect(() => {
+    function atualizarDashboard() {
+      setRefreshKey((valor) => valor + 1);
+    }
+
+    function atualizarQuandoVisivel() {
+      if (document.visibilityState === "visible") {
+        atualizarDashboard();
+      }
+    }
+
+    window.addEventListener(
+      "focus",
+      atualizarDashboard
+    );
+
+    window.addEventListener(
+      "footera:treino-concluido",
+      atualizarDashboard
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      atualizarQuandoVisivel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "focus",
+        atualizarDashboard
+      );
+
+      window.removeEventListener(
+        "footera:treino-concluido",
+        atualizarDashboard
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        atualizarQuandoVisivel
+      );
+    };
+  }, []);
 
   const anosOptions = useMemo(() => {
     const arr: number[] = [];

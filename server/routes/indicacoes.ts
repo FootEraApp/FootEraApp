@@ -5,6 +5,51 @@ import { recomputeAndEmitBadge } from "../controllers/notificacoesController.js"
 const prisma = new PrismaClient();
 const router = Router();
 
+const PONTOS_POR_INDICACAO_APROVADA = 10;
+
+async function recalcularMetricasOlheiro(
+  olheiroId: string
+) {
+  const [
+    totalIndicacoes,
+    indicacoesAprovadas,
+  ] = await Promise.all([
+    prisma.indicacao.count({
+      where: {
+        olheiroId,
+      },
+    }),
+
+    prisma.indicacao.count({
+      where: {
+        olheiroId,
+        status: IndicacaoStatus.APROVADA,
+      },
+    }),
+  ]);
+
+  const reputacaoScore =
+    indicacoesAprovadas *
+    PONTOS_POR_INDICACAO_APROVADA;
+
+  await prisma.olheiro.update({
+    where: {
+      id: olheiroId,
+    },
+
+    data: {
+      totalIndicacoes,
+      reputacaoScore,
+    },
+  });
+
+  return {
+    totalIndicacoes,
+    indicacoesAprovadas,
+    reputacaoScore,
+  };
+}
+
 function getOlheiroIdFromReq(req: any): string | null {
   return (
     req?.authUser?.tipoUsuarioId ||
@@ -121,10 +166,9 @@ router.post("/", async (req, res) => {
         select: { id: true, status: true, criadoEm: true },
       });
 
-      await prisma.olheiro.update({
-        where: { id: olheiroId },
-        data: { totalIndicacoes: { increment: 1 } },
-      });
+      await recalcularMetricasOlheiro(
+        olheiroId
+      );
 
       if (clube.usuarioId) {
         const nomeOlheiro =
@@ -133,8 +177,10 @@ router.post("/", async (req, res) => {
           "Um olheiro";
 
         const nomeAtleta =
-          atleta?.nome ||
           atleta?.usuario?.nome ||
+          atleta?.nome ||
+          atleta?.usuario
+            ?.nomeDeUsuario ||
           "um atleta";
 
         await criarNotificacaoIndicacao({
@@ -175,10 +221,9 @@ router.post("/", async (req, res) => {
       select: { id: true, status: true, criadoEm: true },
     });
 
-    await prisma.olheiro.update({
-      where: { id: olheiroId },
-      data: { totalIndicacoes: { increment: 1 } },
-    });
+    await recalcularMetricasOlheiro(
+      olheiroId
+    );
 
     if (escolinha.usuarioId) {
       const nomeOlheiro =
@@ -187,8 +232,10 @@ router.post("/", async (req, res) => {
         "Um olheiro";
 
       const nomeAtleta =
-        atleta?.nome ||
         atleta?.usuario?.nome ||
+        atleta?.nome ||
+        atleta?.usuario
+          ?.nomeDeUsuario ||
         "um atleta";
 
       await criarNotificacaoIndicacao({
@@ -222,7 +269,23 @@ router.get("/olheiros/:id/indicacoes", async (req, res) => {
         id: true,
         status: true,
         criadoEm: true,
-        atleta: { select: { id: true, nome: true, foto: true } },
+        atleta: {
+          select: {
+            id: true,
+            usuarioId: true,
+            nome: true,
+            foto: true,
+
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                nomeDeUsuario: true,
+                foto: true,
+              },
+            },
+          },
+        },
         clube: { select: { id: true, nome: true, logo: true, usuarioId: true } },
         escolinha: { select: { id: true, nome: true, logo: true, usuarioId: true } },
       },
@@ -234,8 +297,46 @@ router.get("/olheiros/:id/indicacoes", async (req, res) => {
       status: i.status as "PENDENTE" | "APROVADA" | "REJEITADA",
       atleta: {
         id: i.atleta.id,
-        nome: i.atleta.nome || "Atleta",
-        foto: i.atleta.foto,
+
+        usuarioId:
+          i.atleta.usuarioId ??
+          i.atleta.usuario?.id ??
+          null,
+
+        /*
+        * Prioriza o nome de perfil.
+        * Exemplo: "Atleta Pro", em vez do
+        * campo genérico "Atleta".
+        */
+        nome:
+          i.atleta.usuario?.nome ||
+          i.atleta.nome ||
+          i.atleta.usuario
+            ?.nomeDeUsuario ||
+          "Atleta",
+
+        foto:
+          i.atleta.usuario?.foto ??
+          i.atleta.foto ??
+          null,
+
+        usuario:
+          i.atleta.usuario
+            ? {
+                id:
+                  i.atleta.usuario.id,
+
+                nome:
+                  i.atleta.usuario.nome,
+
+                nomeDeUsuario:
+                  i.atleta.usuario
+                    .nomeDeUsuario,
+
+                foto:
+                  i.atleta.usuario.foto,
+              }
+            : null,
       },
       clube: i.clube
         ? {
@@ -325,16 +426,13 @@ router.patch("/:id/status", async (req, res) => {
       await recomputeAndEmitBadge(indicacao.escolinha.usuarioId);
     }
 
-    if (status === "APROVADA") {
-      await prisma.olheiro.update({
-        where: { id: updated.olheiroId },
-        data: { reputacaoScore: { increment: 10 } },
-      });
-    }
+    await recalcularMetricasOlheiro(
+      updated.olheiroId
+    );
 
     const nomeAtleta =
-      indicacao.atleta?.nome ||
       indicacao.atleta?.usuario?.nome ||
+      indicacao.atleta?.nome ||
       "o atleta";
 
     const nomeDestino =
@@ -453,12 +551,9 @@ router.delete("/:id", async (req, res) => {
       where: { id: String(id) },
     });
 
-    await prisma.olheiro.update({
-      where: { id: olheiroId },
-      data: {
-        totalIndicacoes: { decrement: 1 },
-      },
-    }).catch(() => null);
+    await recalcularMetricasOlheiro(
+      olheiroId
+    );
 
     await prisma.notificacao.deleteMany({
       where: {

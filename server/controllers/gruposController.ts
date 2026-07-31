@@ -1,7 +1,27 @@
 import { Response } from "express";
 import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
-import { TipoMembro } from "@prisma/client";
+import { TipoMembro, NotificacaoTipo } from "@prisma/client";
+import { getIO } from "../socket.js";
+import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+
+async function buscarNomeUsuario(usuarioId: string) {
+  const usuario = await prisma.usuario.findUnique({
+    where: {
+      id: usuarioId,
+    },
+    select: {
+      nome: true,
+      nomeDeUsuario: true,
+    },
+  });
+
+  return (
+    usuario?.nome?.trim() ||
+    usuario?.nomeDeUsuario?.trim() ||
+    "Um usuário"
+  );
+}
 
 async function getIdsPermitidosParaAdicionarNoGrupo(grupoId: string, userId: string) {
   const membrosAdmins = await prisma.membroGrupo.findMany({
@@ -93,7 +113,10 @@ export async function listarUsuariosAdicionaveisNoGrupo(req: AuthenticatedReques
   }
 }
 
-export async function criarGrupo(req: AuthenticatedRequest, res: Response) {
+export async function criarGrupo(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   const { nome, descricao, membros } = req.body as {
     nome: string;
     descricao?: string;
@@ -101,27 +124,37 @@ export async function criarGrupo(req: AuthenticatedRequest, res: Response) {
   };
 
   const ownerId = req.userId;
-  if (!ownerId) return res.status(401).json({ error: "Não autenticado" });
-  if (!nome || !Array.isArray(membros)) {
-    return res.status(400).json({ error: "Nome e lista de membros são obrigatórios" });
+
+  if (!ownerId) {
+    return res.status(401).json({
+      error: "Não autenticado",
+    });
+  }
+
+  if (!nome?.trim() || !Array.isArray(membros)) {
+    return res.status(400).json({
+      error: "Nome e lista de membros são obrigatórios",
+    });
   }
 
   try {
-    const membrosUnicos = Array.from(new Set(membros)).filter((id) => id !== ownerId);
+    const membrosUnicos = Array.from(new Set(membros)).filter(
+      (id) => id && id !== ownerId
+    );
 
     const grupo = await prisma.grupo.create({
       data: {
-        nome,
-        descricao: descricao ?? null,
+        nome: nome.trim(),
+        descricao: descricao?.trim() || null,
         ownerId,
         membros: {
           create: [
             {
-              usuarioId: ownerId,         
-              tipo: TipoMembro.ADMIN,    
+              usuarioId: ownerId,
+              tipo: TipoMembro.ADMIN,
             },
             ...membrosUnicos.map((uid) => ({
-              usuarioId: uid,          
+              usuarioId: uid,
               tipo: TipoMembro.MEMBRO,
             })),
           ],
@@ -129,14 +162,81 @@ export async function criarGrupo(req: AuthenticatedRequest, res: Response) {
       },
       include: {
         owner: true,
-        membros: { include: { usuario: true } },
+        membros: {
+          include: {
+            usuario: true,
+          },
+        },
       },
     });
+
+    const grupoParaLista = {
+      id: grupo.id,
+      nome: grupo.nome,
+      descricao: grupo.descricao,
+      ownerId: grupo.ownerId,
+      totalMembros: grupo.membros.length,
+      ultimaMensagem: null,
+      ultimaMensagemTipo: null,
+      ultimaMensagemEm: null,
+    };
+
+    const participantesIds = Array.from(
+      new Set(grupo.membros.map((membro) => membro.usuarioId))
+    );
+
+    const nomeCriador =
+      grupo.owner?.nome?.trim() ||
+      grupo.owner?.nomeDeUsuario?.trim() ||
+      "Um usuário";
+
+    /*
+    * Notifica somente os usuários adicionados.
+    * O criador não precisa receber notificação sobre o próprio grupo.
+    */
+    const resultadosNotificacoes = await Promise.allSettled(
+      membrosUnicos.map((membroId) =>
+        criarNotificacaoEEnviarPush({
+          usuarioId: membroId,
+          actorId: ownerId,
+          tipo: NotificacaoTipo.MENSAGEM,
+          titulo: "Você foi adicionado a um grupo",
+          mensagem: `${nomeCriador} adicionou você ao grupo ${grupo.nome}.`,
+          link: `/mensagens?grupoId=${grupo.id}`,
+        })
+      )
+    );
+
+    resultadosNotificacoes.forEach((resultado, index) => {
+      if (resultado.status === "rejected") {
+        console.warn(
+          "[criarGrupo] falha ao notificar membro:",
+          {
+            membroId: membrosUnicos[index],
+            erro: resultado.reason,
+          }
+        );
+      }
+    });
+
+    const io = getIO();
+
+    if (io) {
+      participantesIds.forEach((participanteId) => {
+        io.to(`u:${participanteId}`).emit(
+          "grupoCriado",
+          grupoParaLista
+        );
+      });
+    }
 
     return res.status(201).json(grupo);
   } catch (error) {
     console.error("Erro ao criar grupo:", error);
-    return res.status(500).json({ error: "Erro ao criar grupo" });
+
+    return res.status(500).json({
+      error: "Erro ao criar grupo",
+    });
   }
 }
 
@@ -292,6 +392,84 @@ export async function adicionarMembrosGrupo(req: AuthenticatedRequest, res: Resp
         })),
         skipDuplicates: true,
       });
+
+      const [grupo, nomeAdministrador] = await Promise.all([
+        prisma.grupo.findUnique({
+          where: {
+            id: grupoId,
+          },
+          include: {
+            _count: {
+              select: {
+                membros: true,
+              },
+            },
+            mensagens: {
+              take: 1,
+              orderBy: {
+                criadaEm: "desc",
+              },
+              select: {
+                conteudo: true,
+                tipo: true,
+                criadaEm: true,
+              },
+            },
+          },
+        }),
+
+        buscarNomeUsuario(userId),
+      ]);
+
+      if (grupo) {
+        const resultadosNotificacoes = await Promise.allSettled(
+          novos.map((novoMembroId) =>
+            criarNotificacaoEEnviarPush({
+              usuarioId: novoMembroId,
+              actorId: userId,
+              tipo: NotificacaoTipo.MENSAGEM,
+              titulo: "Você foi adicionado a um grupo",
+              mensagem:
+                `${nomeAdministrador} adicionou você ao grupo ${grupo.nome}.`,
+              link: `/mensagens?grupoId=${grupoId}`,
+            })
+          )
+        );
+
+        resultadosNotificacoes.forEach((resultado, index) => {
+          if (resultado.status === "rejected") {
+            console.warn(
+              "[adicionarMembrosGrupo] falha ao notificar membro:",
+              {
+                membroId: novos[index],
+                erro: resultado.reason,
+              }
+            );
+          }
+        });
+
+        const grupoParaLista = {
+          id: grupo.id,
+          nome: grupo.nome,
+          descricao: grupo.descricao,
+          ownerId: grupo.ownerId,
+          totalMembros: grupo._count.membros,
+          ultimaMensagem: grupo.mensagens[0]?.conteudo ?? null,
+          ultimaMensagemTipo: grupo.mensagens[0]?.tipo ?? null,
+          ultimaMensagemEm: grupo.mensagens[0]?.criadaEm ?? null,
+        };
+
+        const io = getIO();
+
+        if (io) {
+          novos.forEach((novoMembroId) => {
+            io.to(`u:${novoMembroId}`).emit(
+              "grupoCriado",
+              grupoParaLista
+            );
+          });
+        }
+      }
     }
 
     return res.status(200).json({ ok: true });
@@ -321,8 +499,13 @@ export async function alterarTipoMembroGrupo(req: AuthenticatedRequest, res: Res
     }
 
     const grupo = await prisma.grupo.findUnique({
-      where: { id: grupoId },
-      select: { ownerId: true },
+      where: {
+        id: grupoId,
+      },
+      select: {
+        ownerId: true,
+        nome: true,
+      },
     });
 
     if (!grupo) {
@@ -346,6 +529,8 @@ export async function alterarTipoMembroGrupo(req: AuthenticatedRequest, res: Res
       return res.status(404).json({ error: "Membro não encontrado no grupo." });
     }
 
+    const tipoAnterior = membro.tipo;
+
     await prisma.membroGrupo.update({
       where: {
         grupoId_usuarioId: {
@@ -354,11 +539,53 @@ export async function alterarTipoMembroGrupo(req: AuthenticatedRequest, res: Res
         },
       },
       data: {
-        tipo: tipo === "ADMIN" ? TipoMembro.ADMIN : TipoMembro.MEMBRO,
+        tipo:
+          tipo === "ADMIN"
+            ? TipoMembro.ADMIN
+            : TipoMembro.MEMBRO,
       },
     });
 
-    return res.status(200).json({ ok: true });
+    /*
+    * Só notifica quando realmente houve uma promoção.
+    * Se a pessoa já era admin, não cria outra notificação.
+    */
+    const foiPromovidoAAdministrador =
+      tipo === "ADMIN" &&
+      tipoAnterior !== TipoMembro.ADMIN;
+
+    if (foiPromovidoAAdministrador) {
+      try {
+        const nomeResponsavel = await buscarNomeUsuario(userId);
+
+        await criarNotificacaoEEnviarPush({
+          usuarioId: membroId,
+          actorId: userId,
+          tipo: NotificacaoTipo.MENSAGEM,
+          titulo: "Você agora é administrador",
+          mensagem:
+            `${nomeResponsavel} tornou você administrador do grupo ${grupo.nome}.`,
+          link: `/mensagens?grupoId=${grupoId}`,
+        });
+      } catch (error) {
+        /*
+        * A promoção já aconteceu. Uma eventual falha de push
+        * não deve desfazer ou impedir a alteração do cargo.
+        */
+        console.warn(
+          "[alterarTipoMembroGrupo] falha ao enviar notificação:",
+          error
+        );
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      tipo:
+        tipo === "ADMIN"
+          ? TipoMembro.ADMIN
+          : TipoMembro.MEMBRO,
+    });
   } catch (error) {
     console.error("Erro ao alterar tipo do membro:", error);
     return res.status(500).json({ error: "Erro ao alterar tipo do membro." });
@@ -401,6 +628,15 @@ export async function removerMembroGrupo(req: AuthenticatedRequest, res: Respons
         },
       },
     });
+
+    const io = getIO();
+
+    if (io) {
+      io.to(`u:${userId}`).emit("grupoRemovido", {
+        grupoId,
+        motivo: "SAIU",
+      });
+    }
 
     return res.status(200).json({ ok: true });
   } catch (error) {
@@ -487,5 +723,136 @@ export async function sairDoGrupo(req: AuthenticatedRequest, res: Response) {
   } catch (error) {
     console.error("Erro ao sair do grupo:", error);
     return res.status(500).json({ error: "Erro ao sair do grupo" });
+  }
+}
+
+export async function deletarGrupo(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  const userId = req.userId;
+  const { grupoId } = req.params as { grupoId: string };
+
+  if (!userId) {
+    return res.status(401).json({
+      error: "Não autenticado",
+    });
+  }
+
+  try {
+    const grupo = await prisma.grupo.findUnique({
+      where: {
+        id: grupoId,
+      },
+      select: {
+        id: true,
+        nome: true,
+        ownerId: true,
+        membros: {
+          select: {
+            usuarioId: true,
+          },
+        },
+      },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({
+        error: "Grupo não encontrado.",
+      });
+    }
+
+    // Apenas o dono pode apagar o grupo inteiro
+    if (grupo.ownerId !== userId) {
+      return res.status(403).json({
+        error: "Apenas o dono pode apagar este grupo.",
+      });
+    }
+
+    const participantesIds = Array.from(
+      new Set([
+        grupo.ownerId,
+        ...grupo.membros.map((membro) => membro.usuarioId),
+      ])
+    );
+
+    await prisma.$transaction(async (tx) => {
+      /*
+       * Primeiro buscamos os desafios porque existem submissões
+       * vinculadas a eles.
+       */
+      const desafios = await tx.desafioEmGrupo.findMany({
+        where: {
+          grupoId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const desafiosIds = desafios.map((desafio) => desafio.id);
+
+      /*
+       * As mensagens devem ser apagadas antes dos desafios,
+       * pois algumas mensagens podem apontar para desafioEmGrupoId.
+       */
+      await tx.mensagemGrupo.deleteMany({
+        where: {
+          grupoId,
+        },
+      });
+
+      if (desafiosIds.length > 0) {
+        await tx.submissaoDesafioEmGrupo.deleteMany({
+          where: {
+            desafioEmGrupoId: {
+              in: desafiosIds,
+            },
+          },
+        });
+
+        await tx.desafioEmGrupo.deleteMany({
+          where: {
+            id: {
+              in: desafiosIds,
+            },
+          },
+        });
+      }
+
+      await tx.membroGrupo.deleteMany({
+        where: {
+          grupoId,
+        },
+      });
+
+      await tx.grupo.delete({
+        where: {
+          id: grupoId,
+        },
+      });
+    });
+
+    const io = getIO();
+
+    if (io) {
+      participantesIds.forEach((participanteId) => {
+        io.to(`u:${participanteId}`).emit("grupoRemovido", {
+          grupoId,
+          motivo: "EXCLUIDO",
+        });
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      grupoId,
+    });
+  } catch (error) {
+    console.error("Erro ao apagar grupo:", error);
+
+    return res.status(500).json({
+      error: "Erro ao apagar grupo.",
+    });
   }
 }

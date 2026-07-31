@@ -223,6 +223,11 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(
     null
   );
+  const [contagensAtletas, setContagensAtletas] = useState({
+    vinculados: 0,
+    observados: 0,
+    solicitacoes: 0,
+  });
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
@@ -248,6 +253,92 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
   const entidadeUsuarioId = (isOwn ? Storage.usuarioId : data?.escolinha?.usuarioId) ?? null;
   
+  function extrairListaResposta(
+    payload: any,
+    chaves: string[] = []
+  ): any[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    for (const chave of chaves) {
+      if (Array.isArray(payload?.[chave])) {
+        return payload[chave];
+      }
+    }
+
+    return [];
+  }
+
+  async function carregarContagensAtletas() {
+    if (!token || !escolinhaId || !canEdit) return;
+
+    const [vinculadosResult, observadosResult, solicitacoesResult] =
+      await Promise.allSettled([
+        axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params: {
+            vinculo: "escolinha",
+            id: escolinhaId,
+          },
+        }),
+
+        axios.get(`${API.BASE_URL}/api/observados`, {
+          headers,
+          params: {
+            tipoUsuarioId: escolinhaId,
+            tipo: "Escolinha",
+          },
+        }),
+
+        axios.get(
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
+          { headers }
+        ),
+      ]);
+
+    const vinculadosLista =
+      vinculadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            vinculadosResult.value.data,
+            ["atletas", "items", "data"]
+          )
+        : null;
+
+    const observadosLista =
+      observadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            observadosResult.value.data,
+            ["observados", "items", "data"]
+          )
+        : null;
+
+    const solicitacoesLista =
+      solicitacoesResult.status === "fulfilled"
+        ? extrairListaResposta(
+            solicitacoesResult.value.data,
+            ["solicitacoes", "items", "data"]
+          )
+        : null;
+
+    setContagensAtletas((prev) => ({
+      vinculados:
+        vinculadosLista !== null
+          ? vinculadosLista.length
+          : prev.vinculados,
+
+      observados:
+        observadosLista !== null
+          ? observadosLista.length
+          : prev.observados,
+
+      solicitacoes:
+        solicitacoesLista !== null
+          ? solicitacoesLista.length
+          : prev.solicitacoes,
+    }));
+  }
+
   async function buscarPontuacaoRealDoUsuario(usuarioId: string): Promise<number | null> {
     if (!token || !usuarioId) return null;
 
@@ -266,6 +357,77 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       return null;
     }
   }
+
+  useEffect(() => {
+    if (
+      aba !== "atletas" ||
+      !token ||
+      !escolinhaId ||
+      !canEdit
+    ) {
+      return;
+    }
+
+    void carregarContagensAtletas();
+
+    const intervalId = window.setInterval(() => {
+      void carregarContagensAtletas();
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [aba, token, escolinhaId, canEdit]);
+
+  useEffect(() => {
+    if (!token || !escolinhaId || !canEdit) return;
+
+    function atualizarDadosDosAtletas() {
+      setVinculados(null);
+      setObservados(null);
+      setSolicitacoes(null);
+
+      void carregarContagensAtletas();
+    }
+
+    function aoAlterarVisibilidade() {
+      if (document.visibilityState === "visible") {
+        atualizarDadosDosAtletas();
+      }
+    }
+
+    window.addEventListener(
+      "focus",
+      atualizarDadosDosAtletas
+    );
+
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarDadosDosAtletas
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      aoAlterarVisibilidade
+    );
+
+    return () => {
+      window.removeEventListener(
+        "focus",
+        atualizarDadosDosAtletas
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarDadosDosAtletas
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        aoAlterarVisibilidade
+      );
+    };
+  }, [token, escolinhaId, canEdit]);
 
   useEffect(() => {
     setVinculados(null);
@@ -968,8 +1130,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       </div>
     );
 
-  const vinculadosCount = Array.isArray(vinculados) ? vinculados.length : 0;
-  const observadosCount = Array.isArray(observados) ? observados.length : 0;
   const nome = data.escolinha.nome || data.usuario?.nome || "Escola";
   const headerFoto: string | undefined =
     (typeof data.escolinha.logo === "string" && data.escolinha.logo) ||
@@ -1381,9 +1541,21 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         <div className="mt-4 px-3 sm:px-4">
           <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
             {[
-              { id: "vinculados", label: "Vinculados" },
-              { id: "observados", label: "Observados" },
-              { id: "solicitacoes", label: "Solicitações" },
+              {
+                id: "vinculados",
+                label: "Vinculados",
+                count: contagensAtletas.vinculados,
+              },
+              {
+                id: "observados",
+                label: "Observados",
+                count: contagensAtletas.observados,
+              },
+              {
+                id: "solicitacoes",
+                label: "Solicitações",
+                count: contagensAtletas.solicitacoes,
+              },
             ].map((t) => (
               <button
                 key={t.id}
@@ -1392,7 +1564,19 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   subAba === t.id ? "bg-green-600 text-white" : "text-green-900"
                 }`}
               >
-                {t.label}
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <span>{t.label}</span>
+
+                  <span
+                    className={`inline-flex min-w-5 h-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
+                      subAba === t.id
+                        ? "bg-white/20 text-white"
+                        : "bg-green-100 text-green-900"
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
@@ -1400,7 +1584,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           <div className="mt-4 grid gap-4">
             {subAba === "vinculados" && (
               <SectionCard
-                title={`Atletas Vinculados (${vinculadosCount})`}
+                title="Atletas Vinculados"
                 right={
                   <Link
                     href="/perfil/GerenciarAtletas"
@@ -1467,7 +1651,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
             {subAba === "observados" && (
               <SectionCard
-                title={`Atletas Observados (${observadosCount})`}
+                title="Atletas Observados"
                 right={
                   <Link
                     href="/explorar"

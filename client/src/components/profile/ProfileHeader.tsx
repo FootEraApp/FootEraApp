@@ -109,7 +109,11 @@ function timeAgoPtBR(dateLike?: string | Date | null): string {
   if (day < 30) return `há ${day}d`;
 
   const mo = Math.floor(day / 30);
-  if (mo < 12) return `há ${mo} mês${mo > 1 ? "es" : ""}`;
+  if (mo < 12) {
+    return mo === 1
+      ? "há 1 mês"
+      : `há ${mo} meses`;
+  }
 
   const yr = Math.floor(mo / 12);
   return `há ${yr} ano${yr > 1 ? "s" : ""}`;

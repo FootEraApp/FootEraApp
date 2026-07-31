@@ -259,6 +259,11 @@ export default function PerfilClube({
   const [atletasHeaderCount, setAtletasHeaderCount] = useState<number | null>(
     null
   );
+  const [contagensAtletas, setContagensAtletas] = useState({
+    vinculados: 0,
+    observados: 0,
+    solicitacoes: 0,
+  });
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -285,6 +290,124 @@ export default function PerfilClube({
   const entidadeUsuarioId = isOwn
     ? Storage.usuarioId
     : data?.clube?.usuarioId ?? null;
+
+  function extrairListaResposta(
+    payload: any,
+    chaves: string[] = []
+  ): any[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    for (const chave of chaves) {
+      if (Array.isArray(payload?.[chave])) {
+        return payload[chave];
+      }
+    }
+
+    return [];
+  }
+
+  async function carregarContagensAtletas() {
+    if (!token || !clubeId || !canEdit) return;
+
+    const [vinculadosResult, observadosResult, solicitacoesResult] =
+      await Promise.allSettled([
+        axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params: {
+            vinculo: "clube",
+            id: clubeId,
+          },
+        }),
+
+        axios.get(`${API.BASE_URL}/api/observados`, {
+          headers,
+          params: {
+            tipoUsuarioId: clubeId,
+            tipo: "Clube",
+          },
+        }),
+
+        axios.get(
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
+          { headers }
+        ),
+      ]);
+
+    const vinculadosLista =
+      vinculadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            vinculadosResult.value.data,
+            ["atletas", "items", "data"]
+          )
+        : null;
+
+    const observadosLista =
+      observadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            observadosResult.value.data,
+            ["observados", "items", "data"]
+          )
+        : null;
+
+    const solicitacoesLista =
+      solicitacoesResult.status === "fulfilled"
+        ? extrairListaResposta(
+            solicitacoesResult.value.data,
+            ["solicitacoes", "items", "data"]
+          )
+        : null;
+
+    setContagensAtletas((prev) => ({
+      vinculados:
+        vinculadosLista !== null
+          ? vinculadosLista.length
+          : prev.vinculados,
+
+      observados:
+        observadosLista !== null
+          ? observadosLista.length
+          : prev.observados,
+
+      solicitacoes:
+        solicitacoesLista !== null
+          ? solicitacoesLista.length
+          : prev.solicitacoes,
+    }));
+
+    /*
+    * Mantém também o KPI de atletas do cabeçalho atualizado.
+    */
+    if (vinculadosLista !== null) {
+      setAtletasHeaderCount(vinculadosLista.length);
+    }
+  }
+
+  useEffect(() => {
+    if (
+      aba !== "atletas" ||
+      !token ||
+      !clubeId ||
+      !canEdit
+    ) {
+      return;
+    }
+
+    void carregarContagensAtletas();
+
+    /*
+    * Atualiza enquanto a aba Atletas estiver aberta,
+    * mesmo sem clicar nas subabas.
+    */
+    const intervalId = window.setInterval(() => {
+      void carregarContagensAtletas();
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [aba, token, clubeId, canEdit]);
 
   useEffect(() => {
     setAba("perfil");
@@ -947,21 +1070,66 @@ export default function PerfilClube({
   }, [aba, token, clubeId, hasCreator, creatorUsuarioId, entidadeUsuarioId]);
 
   useEffect(() => {
-    function atualizarVinculos() {
+    if (!token || !clubeId || !canEdit) return;
+
+    function atualizarDadosDosAtletas() {
+      /*
+      * Limpa as listas para que sejam buscadas novamente
+      * quando a respectiva subaba estiver aberta.
+      */
       setVinculados(null);
+      setObservados(null);
+      setSolicitacoes(null);
+
       setVinculadosPreview([]);
       setAtletasHeaderCount(null);
-      setRefreshVinculosKey((k) => k + 1);
+
+      setRefreshVinculosKey((valor) => valor + 1);
+
+      /*
+      * Atualiza os números superiores imediatamente.
+      */
+      void carregarContagensAtletas();
     }
 
-    window.addEventListener("focus", atualizarVinculos);
-    window.addEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+    function aoAlterarVisibilidade() {
+      if (document.visibilityState === "visible") {
+        atualizarDadosDosAtletas();
+      }
+    }
+
+    window.addEventListener(
+      "focus",
+      atualizarDadosDosAtletas
+    );
+
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarDadosDosAtletas
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      aoAlterarVisibilidade
+    );
 
     return () => {
-      window.removeEventListener("focus", atualizarVinculos);
-      window.removeEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+      window.removeEventListener(
+        "focus",
+        atualizarDadosDosAtletas
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarDadosDosAtletas
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        aoAlterarVisibilidade
+      );
     };
-  }, []);
+  }, [token, clubeId, canEdit]);
 
   async function salvarObservado(atletaId: string) {
     if (!token || !clubeId) return;
@@ -1501,9 +1669,21 @@ export default function PerfilClube({
         <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <div className="grid grid-cols-3 gap-2">
             {[
-              { key: "vinculados", label: "Vinculados" },
-              { key: "observados", label: "Observados" },
-              { key: "solicitacoes", label: "Solicitações" },
+              {
+                key: "vinculados",
+                label: "Vinculados",
+                count: contagensAtletas.vinculados,
+              },
+              {
+                key: "observados",
+                label: "Observados",
+                count: contagensAtletas.observados,
+              },
+              {
+                key: "solicitacoes",
+                label: "Solicitações",
+                count: contagensAtletas.solicitacoes,
+              },
             ].map((t) => (
               <button
                 key={t.key}
@@ -1514,18 +1694,26 @@ export default function PerfilClube({
                     : "bg-white/70 text-green-900 hover:bg-white"
                 }`}
               >
-                {t.label}
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <span>{t.label}</span>
+
+                  <span
+                    className={`inline-flex min-w-5 h-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
+                      subAba === t.key
+                        ? "bg-green-700 text-white"
+                        : "bg-green-100 text-green-900"
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
 
           {subAba === "vinculados" && (
             <SectionCard
-              title={`Atletas Vinculados${
-                typeof atletasHeaderCount === "number"
-                  ? ` (${atletasHeaderCount})`
-                  : ""
-              }`}
+              title="Atletas Vinculados"
               right={
                 <Link
                   href="/perfil/GerenciarAtletas"
@@ -1583,8 +1771,7 @@ export default function PerfilClube({
 
           {subAba === "observados" && (
             <SectionCard
-              title={`Atletas Observados (${observados?.length ?? 0})`}
-              
+              title="Atletas Observados"
             >
               {observados && observados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">

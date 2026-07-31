@@ -141,7 +141,7 @@ type Turma = {
   professorNomes?: string[]; 
   professorNome?: string | null; 
   alunosCount?: number | null;
-  categoria?: string | null;
+  categoria?: string | string[] | null;
 };
 
 type TreinoCriado = {
@@ -245,6 +245,7 @@ export default function PerfilProfessor({
   type SubAba = "vinculados" | "observados" | "solicitacoes";
   const [subAba, setSubAba] = useState<SubAba>("vinculados");
 
+  const [mostrarTodosVinculados, setMostrarTodosVinculados] = useState(false);
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
@@ -256,6 +257,13 @@ export default function PerfilProfessor({
 
   const qtdVinculados = vinculados?.length ?? 0;
   const qtdObservados = observados?.length ?? 0;
+  const qtdSolicitacoes = solicitacoes?.length ?? 0;
+
+  const vinculadosParaExibir = vinculados ?? [];
+
+  const vinculadosVisiveis = mostrarTodosVinculados
+    ? vinculadosParaExibir
+    : vinculadosParaExibir.slice(0, 5);
 
   const [orgsDisponiveis, setOrgsDisponiveis] = useState<Organizacao[]>([]);
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
@@ -337,7 +345,12 @@ export default function PerfilProfessor({
     setTreinosCriados(null);
     setAtividades(null);
     setTurmas(null);
+    setMostrarTodosVinculados(false);
   }, [targetId]);
+
+  useEffect(() => {
+    setMostrarTodosVinculados(false);
+  }, [subAba]);
 
   const canEdit = useMemo(() => {
     const tipoLocal = (
@@ -426,69 +439,170 @@ export default function PerfilProfessor({
   }, [rawToken, data?.professor?.id]);
 
   const reloadTurmas = useCallback(async () => {
-    if (!rawToken || !professorId) return;
+    if (!rawToken || !professorId) {
+      return;
+    }
 
     setTurmasLoading(true);
 
-    const parse = (arr: any[]): Turma[] =>
-      (arr ?? []).map((t: any) => {
-        const professorIds = Array.isArray(t.professorIds)
-          ? t.professorIds.map(String)
-          : [];
-
-        const professorNomes = Array.isArray(t.professorNomes)
-          ? t.professorNomes
-          : Array.isArray(t.professores)
-          ? t.professores.map((p: any) => p?.nome ?? p?.usuario?.nome).filter(Boolean)
-          : [];
-
-        return {
-          id: String(t.id),
-          nome: String(t.nome ?? t.titulo ?? "Turma"),
-          ownerTipo: t.ownerTipo ?? t.tipoOwner ?? null,
-          ownerId: t.ownerId ?? t.clubeId ?? t.escolinhaId ?? null,
-          professorIds,
-          professorNomes,
-          professorNome:
-            t.professorNome ??
-            (professorNomes.length ? professorNomes.join(", ") : null) ??
-            null,
-          alunosCount: t.alunosCount ?? t._count?.alunos ?? t.qtdAlunos ?? null,
-          categoria: t.categoria ?? null,
-        };
-      });
-
     try {
-      const params: any = {};
-
-      if (owner?.tipo && owner?.id) {
-        params.ownerTipo = owner.tipo;
-        params.ownerId = owner.id;
-      } else {
-        params.professorId = professorId;
-      }
-
-      const r = await axios.get(`${API.BASE_URL}/api/turmas`, {
-        headers,
-        params,
-      });
-
-      const arr = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
-      const parsed = parse(arr);
-
-      const minhas = parsed.filter((t) =>
-        (t.professorIds ?? []).includes(String(professorId))
+      /*
+      * O perfil precisa mostrar todas as turmas
+      * ligadas ao professor em TurmaProfessor.
+      *
+      * Não deve limitar pelo clube/escolinha
+      * atualmente vinculado ao perfil.
+      */
+      const resposta = await axios.get(
+        `${API.BASE_URL}/api/turmas`,
+        {
+          headers,
+          params: {
+            professorId,
+          },
+        }
       );
 
-      setTurmas(owner?.tipo && owner?.id ? minhas : parsed);
-    } catch (e: any) {
-      console.error("[PerfilProfessor.reloadTurmas]", e?.response?.data || e);
+      const listaBruta = Array.isArray(
+        resposta.data
+      )
+        ? resposta.data
+        : Array.isArray(
+            resposta.data?.items
+          )
+        ? resposta.data.items
+        : Array.isArray(
+            resposta.data?.data
+          )
+        ? resposta.data.data
+        : [];
+
+      const mapa = new Map<
+        string,
+        Turma
+      >();
+
+      for (const item of listaBruta) {
+        const id = String(
+          item?.id ?? ""
+        ).trim();
+
+        if (!id) continue;
+
+        const professorIds =
+          Array.isArray(
+            item?.professorIds
+          )
+            ? item.professorIds.map(
+                String
+              )
+            : [];
+
+        /*
+        * Segurança extra: mantém somente
+        * turmas realmente ligadas ao professor.
+        */
+        if (
+          !professorIds.includes(
+            String(professorId)
+          )
+        ) {
+          continue;
+        }
+
+        const professorNomes =
+          Array.isArray(
+            item?.professorNomes
+          )
+            ? item.professorNomes
+                .map(String)
+                .filter(Boolean)
+            : Array.isArray(
+                item?.professores
+              )
+            ? item.professores
+                .map(
+                  (professor: any) =>
+                    professor?.nome ??
+                    professor?.usuario?.nome
+                )
+                .filter(Boolean)
+            : [];
+
+        const categoria =
+          Array.isArray(
+            item?.categoria
+          )
+            ? item.categoria
+                .map(String)
+                .filter(Boolean)
+                .join(", ")
+            : item?.categoria != null
+            ? String(item.categoria)
+            : null;
+
+        mapa.set(id, {
+          id,
+
+          nome: String(
+            item?.nome ??
+              item?.titulo ??
+              "Turma"
+          ),
+
+          ownerTipo:
+            item?.ownerTipo ??
+            item?.tipoOwner ??
+            null,
+
+          ownerId:
+            item?.ownerId ??
+            item?.clubeId ??
+            item?.escolinhaId ??
+            null,
+
+          professorIds,
+          professorNomes,
+
+          professorNome:
+            item?.professorNome ??
+            (professorNomes.length > 0
+              ? professorNomes.join(", ")
+              : null),
+
+          alunosCount:
+            item?.alunosCount ??
+            item?._count?.membros ??
+            item?._count?.alunos ??
+            item?.qtdAlunos ??
+            null,
+
+          categoria,
+        });
+      }
+
+      setTurmas(
+        Array.from(
+          mapa.values()
+        )
+      );
+    } catch (error: any) {
+      console.error(
+        "[PerfilProfessor.reloadTurmas]",
+        error?.response?.data ??
+          error
+      );
+
       setTurmas([]);
     } finally {
       setTurmasLoading(false);
     }
-  }, [rawToken, professorId, headers, owner?.tipo, owner?.id]);
-  
+  }, [
+    rawToken,
+    professorId,
+    headers,
+  ]);
+
   useEffect(() => {
     let cancel = false;
 
@@ -518,21 +632,71 @@ export default function PerfilProfessor({
   }, [professorId, turmas, reloadTurmas]);
 
   useEffect(() => {
-    if (aba !== "atletas" || subAba !== "solicitacoes" || !rawToken) return;
+    function atualizarTurmas() {
+      void reloadTurmas();
+    }
+
+    window.addEventListener(
+      "footera:turma-alterada",
+      atualizarTurmas
+    );
+
+    return () => {
+      window.removeEventListener(
+        "footera:turma-alterada",
+        atualizarTurmas
+      );
+    };
+  }, [reloadTurmas]);
+
+  useEffect(() => {
+    if (
+      aba !== "atletas" ||
+      !rawToken ||
+      !canEdit ||
+      solicitacoes !== null
+    ) {
+      return;
+    }
+
+    let cancelado = false;
+
     (async () => {
       try {
         const { data } = await axios.get<SolicitacaoItem[]>(
-          `${API.BASE_URL}/api/solicitacoes-treino`,
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
           { headers }
         );
-        setSolicitacoes(
-          (Array.isArray(data) ? data : []).filter((s) => (s.status ?? "PENDENTE") === "PENDENTE")
+
+        if (cancelado) return;
+
+        const pendentes = (Array.isArray(data) ? data : []).filter(
+          (solicitacao) =>
+            String(
+              solicitacao.status ?? "PENDENTE"
+            )
+              .toUpperCase()
+              .includes("PEND")
         );
+
+        setSolicitacoes(pendentes);
       } catch {
-        setSolicitacoes([]);
+        if (!cancelado) {
+          setSolicitacoes([]);
+        }
       }
     })();
-  }, [aba, subAba, rawToken, headers]);
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    aba,
+    rawToken,
+    headers,
+    canEdit,
+    solicitacoes,
+  ]);
 
   const fetchVinculados = useCallback(async () => {
     if (!rawToken) return;
@@ -1350,153 +1514,338 @@ export default function PerfilProfessor({
       )}
 
       {aba === "atletas" && (
-        <div className="mt-4 px-4">
-          <div className="bg-white/90 rounded-xl p-1 grid grid-cols-2 gap-1 border border-green-100">
+        <div className="mt-4 px-3 sm:px-4">
+          {/* Subabas e contadores */}
+          <div
+            className={`
+              bg-white/90 rounded-xl p-1 grid gap-1
+              border border-green-100
+              ${canEdit ? "grid-cols-3" : "grid-cols-2"}
+            `}
+          >
             {[
               {
                 id: "vinculados",
-                label:
-                  vinculados === null
-                    ? "Vinculados (...)"
-                    : `Vinculados (${qtdVinculados})`,
+                label: "Vinculados",
+                count: qtdVinculados,
               },
               {
                 id: "observados",
-                label:
-                  observados === null
-                    ? "Observados (...)"
-                    : `Observados (${qtdObservados})`,
+                label: "Observados",
+                count: qtdObservados,
               },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSubAba(t.id as any)}
-                className={`py-2 rounded-lg text-sm font-medium ${
-                  subAba === t.id ? "bg-green-600 text-white" : "text-green-900"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+              ...(canEdit
+                ? [
+                    {
+                      id: "solicitacoes",
+                      label: "Solicitações",
+                      count: qtdSolicitacoes,
+                    },
+                  ]
+                : []),
+            ].map((item) => {
+              const ativo = subAba === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() =>
+                    setSubAba(item.id as SubAba)
+                  }
+                  className={`
+                    min-w-0 py-2 px-2 rounded-lg
+                    text-sm font-medium
+                    transition-colors
+                    ${
+                      ativo
+                        ? "bg-green-600 text-white"
+                        : "text-green-900 hover:bg-green-50"
+                    }
+                  `}
+                >
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    <span className="truncate">
+                      {item.label}
+                    </span>
+
+                    <span
+                      className={`
+                        inline-flex min-w-5 h-5
+                        items-center justify-center
+                        rounded-full px-1.5
+                        text-[11px] font-bold
+                        ${
+                          ativo
+                            ? "bg-white/20 text-white"
+                            : "bg-green-100 text-green-900"
+                        }
+                      `}
+                    >
+                      {item.count}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="mt-4 grid gap-4">
+            {/* Vinculados */}
             {subAba === "vinculados" && (
               <SectionCard
-                title={`Atletas Vinculados (${qtdVinculados})`}
+                title="Atletas Vinculados"
                 right={
                   canEdit ? (
-                    <Link href="/perfil/GerenciarAtletas" className="text-md text-green-800">
+                    <Link
+                      href="/perfil/GerenciarAtletas"
+                      className="text-sm text-green-800"
+                    >
                       Gerenciar Atletas
                     </Link>
                   ) : null
                 }
               >
-                {vinculados && vinculados.length > 0 ? (
-                  <ul className="grid grid-cols-1 gap-3">
-                    {vinculados.map((a) => (
-                      <li
-                        key={a.usuarioId ?? a.atletaId ?? a.id}
-                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3"
-                      >
-                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                          <div className="text-xs text-green-900/70">
-                            {[
-                              a.posicao,
-                              a.idade ? `${a.idade} anos` : "",
-                              a.categoria ? `Cat. ${a.categoria}` : "",
-                              a.pontuacao != null ? `${a.pontuacao} pts` : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </div>
-                        </div>
-                        <Link
-                          href={`/perfil/${a.usuarioId ?? a.atletaId ?? a.id}`}
-                          className="text-sm text-green-800 inline-flex items-center gap-1"
+                {vinculadosParaExibir.length > 0 ? (
+                  <>
+                    <ul className="grid grid-cols-1 gap-3">
+                      {vinculadosVisiveis.map((atleta) => {
+                        const perfilId =
+                          atleta.usuarioId ??
+                          atleta.atletaId ??
+                          atleta.id;
+
+                        return (
+                          <li
+                            key={perfilId}
+                            className="
+                              flex flex-col gap-3
+                              rounded-xl border border-green-100
+                              p-3
+                              sm:flex-row sm:items-center
+                            "
+                          >
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <Avatar
+                                foto={atleta.foto ?? null}
+                                alt={atleta.nome}
+                                className="w-10 h-10 shrink-0"
+                              />
+
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-green-900">
+                                  {atleta.nome}
+                                </div>
+
+                                <div className="text-xs text-green-900/70">
+                                  {[
+                                    atleta.posicao,
+                                    atleta.idade != null
+                                      ? `${atleta.idade} anos`
+                                      : null,
+
+                                    /*
+                                    * Mostra somente o valor:
+                                    * "Sub15", e não "Cat. Sub15".
+                                    */
+                                    atleta.categoria,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" • ")}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 sm:justify-end">
+                              {typeof atleta.pontuacao ===
+                                "number" && (
+                                <span
+                                  className="
+                                    rounded border border-green-200
+                                    bg-green-100 px-2 py-0.5
+                                    text-[11px] text-green-800
+                                    whitespace-nowrap
+                                  "
+                                >
+                                  {atleta.pontuacao} pts
+                                </span>
+                              )}
+
+                              <Link
+                                href={`/perfil/${perfilId}`}
+                                className="
+                                  inline-flex items-center gap-1
+                                  whitespace-nowrap
+                                  text-sm text-green-800
+                                "
+                              >
+                                Ver perfil
+                                <ChevronRight className="w-4 h-4" />
+                              </Link>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {vinculadosParaExibir.length > 5 && (
+                      <div className="mt-4 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMostrarTodosVinculados(
+                              (valor) => !valor
+                            )
+                          }
+                          className="
+                            rounded-lg border border-green-200
+                            px-4 py-2
+                            text-sm font-medium text-green-900
+                            hover:bg-green-50
+                          "
                         >
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                          {mostrarTodosVinculados
+                            ? "Mostrar menos"
+                            : `Ver todos (${vinculadosParaExibir.length})`}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="grid gap-3">
                     <EmptyState text="Nenhum atleta vinculado ainda" />
-                    {canEdit ? (
+
+                    {canEdit && (
                       <Link
                         href="/explorar"
-                        className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block"
+                        className="
+                          inline-block rounded-md
+                          border border-green-200
+                          px-4 py-2 text-green-900
+                        "
                       >
                         Ver atletas
                       </Link>
-                    ) : null}
+                    )}
                   </div>
                 )}
               </SectionCard>
             )}
 
+            {/* Observados */}
             {subAba === "observados" && (
               <SectionCard
-                title={`Atletas Observados (${qtdObservados})`}
+                title="Atletas Observados"
                 right={
                   canEdit ? (
                     <Link
                       href="/explorar"
-                      className="inline-flex items-center gap-2 text-md px-3 py-1.5 rounded-md text-green-800"
+                      className="text-sm text-green-800"
                     >
-                     Descobrir novos atletas
+                      Descobrir novos atletas
                     </Link>
                   ) : null
                 }
               >
                 {observados && observados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
-                    {observados.map((a) => {
-                      const key = String(a.usuarioId ?? a.atletaId ?? a.id);
+                    {observados.map((atleta) => {
+                      const key = String(
+                        atleta.usuarioId ??
+                          atleta.atletaId ??
+                          atleta.id
+                      );
 
                       return (
                         <li
                           key={key}
-                          className="rounded-xl border border-green-100 p-3"
+                          className="
+                            rounded-xl border
+                            border-green-100 p-3
+                          "
                         >
-                          <div className="flex items-center gap-3">
-                            <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                          <div
+                            className="
+                              flex flex-col gap-3
+                              sm:flex-row sm:items-center
+                            "
+                          >
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <Avatar
+                                foto={atleta.foto ?? null}
+                                alt={atleta.nome}
+                                className="w-10 h-10 shrink-0"
+                              />
 
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                              <div className="text-xs text-green-900/70">
-                                {[
-                                  a.posicao,
-                                  a.idade ? `${a.idade} anos` : "",
-                                  a.categoria ? `Cat. ${a.categoria}` : "",
-                                  a.pontuacao != null ? `${a.pontuacao} pts` : "",
-                                ]
-                                  .filter(Boolean)
-                                  .join(" • ")}
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-green-900">
+                                  {atleta.nome}
+                                </div>
+
+                                <div className="text-xs text-green-900/70">
+                                  {[
+                                    atleta.posicao,
+                                    atleta.idade != null
+                                      ? `${atleta.idade} anos`
+                                      : null,
+                                    atleta.categoria,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" • ")}
+                                </div>
                               </div>
                             </div>
 
-                            <Link
-                              href={`/perfil/${key}`}
-                              className="text-sm text-green-800 inline-flex items-center gap-1"
-                            >
-                              Ver perfil <ChevronRight className="w-4 h-4" />
-                            </Link>
+                            <div className="flex items-center justify-between gap-3 sm:justify-end">
+                              {typeof atleta.pontuacao ===
+                                "number" && (
+                                <span
+                                  className="
+                                    rounded border border-green-200
+                                    bg-green-100 px-2 py-0.5
+                                    text-[11px] text-green-800
+                                    whitespace-nowrap
+                                  "
+                                >
+                                  {atleta.pontuacao} pts
+                                </span>
+                              )}
+
+                              <Link
+                                href={`/perfil/${key}`}
+                                className="
+                                  inline-flex items-center gap-1
+                                  whitespace-nowrap
+                                  text-sm text-green-800
+                                "
+                              >
+                                Ver perfil
+                                <ChevronRight className="w-4 h-4" />
+                              </Link>
+                            </div>
                           </div>
 
-                          {canEdit ? (
+                          {canEdit && (
                             <div className="mt-3 w-full">
-                              <div className="text-xs text-green-900/70 mb-1">Nota interna</div>
+                              <div className="mb-1 text-xs text-green-900/70">
+                                Nota interna
+                              </div>
 
                               <textarea
-                                className="w-full rounded-xl border border-green-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
+                                className="
+                                  w-full rounded-xl
+                                  border border-green-100
+                                  bg-white px-3 py-2
+                                  text-sm outline-none
+                                  focus:ring-2 focus:ring-green-200
+                                "
                                 placeholder="Digite uma nota interna..."
                                 value={notaPorAtleta[key] ?? ""}
-                                onChange={(e) => {
-                                  setNotaPorAtleta((p) => ({ ...p, [key]: e.target.value }));
+                                onChange={(event) => {
+                                  setNotaPorAtleta((anterior) => ({
+                                    ...anterior,
+                                    [key]: event.target.value,
+                                  }));
                                 }}
                                 rows={2}
                               />
@@ -1505,25 +1854,49 @@ export default function PerfilProfessor({
                                 <input
                                   type="checkbox"
                                   className="mt-0.5"
-                                  checked={!!notificarPorAtleta[key]}
-                                  onChange={(e) => {
-                                    setNotificarPorAtleta((p) => ({ ...p, [key]: e.target.checked }));
+                                  checked={
+                                    !!notificarPorAtleta[key]
+                                  }
+                                  onChange={(event) => {
+                                    setNotificarPorAtleta(
+                                      (anterior) => ({
+                                        ...anterior,
+                                        [key]:
+                                          event.target.checked,
+                                      })
+                                    );
                                   }}
                                 />
+
                                 <span>
-                                  Notificar mudanças (pontuação, posição, idade, novos treinos/desafios)
+                                  Notificar mudanças
+                                  (pontuação, posição, idade,
+                                  novos treinos/desafios)
                                 </span>
                               </label>
 
                               <button
-                                onClick={() => salvarNotaInterna(key)}
-                                disabled={!!salvandoNota[key]}
-                                className="mt-3 inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                type="button"
+                                onClick={() =>
+                                  salvarNotaInterna(key)
+                                }
+                                disabled={
+                                  !!salvandoNota[key]
+                                }
+                                className="
+                                  mt-3 inline-flex items-center
+                                  justify-center rounded-xl
+                                  bg-green-600 px-5 py-2
+                                  text-sm font-semibold text-white
+                                  disabled:opacity-60
+                                "
                               >
-                                {salvandoNota[key] ? "Salvando..." : "Salvar"}
+                                {salvandoNota[key]
+                                  ? "Salvando..."
+                                  : "Salvar"}
                               </button>
                             </div>
-                          ) : null}
+                          )}
                         </li>
                       );
                     })}
@@ -1534,6 +1907,86 @@ export default function PerfilProfessor({
               </SectionCard>
             )}
 
+            {/* Solicitações */}
+            {subAba === "solicitacoes" && canEdit && (
+              <SectionCard
+                title="Solicitações de Atletas"
+                right={
+                  <Link
+                    href="/notificacoes"
+                    className="text-sm text-green-800"
+                  >
+                    Abrir notificações
+                  </Link>
+                }
+              >
+                {solicitacoes &&
+                solicitacoes.length > 0 ? (
+                  <ul className="space-y-3">
+                    {solicitacoes.map((solicitacao) => {
+                      const nomeRemetente =
+                        solicitacao.remetente
+                          ?.nomeDeUsuario ||
+                        "Usuário";
+
+                      const perfilRemetenteId =
+                        solicitacao.remetente
+                          ?.usuarioId ||
+                        solicitacao.remetenteId;
+
+                      return (
+                        <li
+                          key={solicitacao.id}
+                          className="
+                            flex flex-col gap-3
+                            rounded-xl border
+                            border-green-100 p-3
+                            sm:flex-row
+                            sm:items-center
+                            sm:justify-between
+                          "
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Avatar
+                              foto={
+                                solicitacao.remetente
+                                  ?.foto ?? null
+                              }
+                              alt={nomeRemetente}
+                              className="w-10 h-10 shrink-0"
+                            />
+
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-green-900">
+                                {nomeRemetente}
+                              </div>
+
+                              <div className="text-xs text-green-900/70">
+                                quer treinar junto com você
+                              </div>
+                            </div>
+                          </div>
+
+                          <Link
+                            href={`/perfil/${perfilRemetenteId}`}
+                            className="
+                              inline-flex items-center gap-1
+                              whitespace-nowrap
+                              text-sm text-green-800
+                            "
+                          >
+                            Ver perfil
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <EmptyState text="Nenhuma solicitação no momento." />
+                )}
+              </SectionCard>
+            )}
           </div>
         </div>
       )}
@@ -1599,8 +2052,8 @@ export default function PerfilProfessor({
       <TurmasManager
         open={turmasOpen && canEdit}
         onClose={handleCloseTurmas}
-        owner={owner}
         professorId={professorId} 
+        mostrarTodasDoProfessor
       />
       <div className="h-6" />
     </div>

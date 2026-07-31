@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import { prisma } from "../prisma.js";
+import { Prisma } from "@prisma/client";
 import { sendError } from "../utils/httpError.js";
 
 function startOfMonth(d: Date) {
@@ -86,10 +87,55 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
     const whereTreinoProgramado: any =
       ownerTipo === "Clube" ? { clubeId: ownerId } : { escolinhaId: ownerId };
 
-    const whereAgendado: any =
+    const whereTreinoAgendadoOrganizacao:
+      Prisma.TreinoAgendadoWhereInput =
       ownerTipo === "Clube"
-        ? { treinoProgramado: { clubeId: ownerId } }
-        : { treinoProgramado: { escolinhaId: ownerId } };
+        ? {
+            OR: [
+              {
+                treinoProgramado: {
+                  is: {
+                    clubeId: ownerId,
+                  },
+                },
+              },
+              {
+                turma: {
+                  is: {
+                    clubeId: ownerId,
+                  },
+                },
+              },
+            ],
+          }
+        : {
+            OR: [
+              {
+                treinoProgramado: {
+                  is: {
+                    escolinhaId: ownerId,
+                  },
+                },
+              },
+              {
+                turma: {
+                  is: {
+                    escolinhaId: ownerId,
+                  },
+                },
+              },
+            ],
+          };
+
+    /*
+    * Filtro utilizado nas consultas de SubmissaoTreino.
+    */
+    const whereSubmissaoOrganizacao:
+      Prisma.SubmissaoTreinoWhereInput = {
+      treinoAgendado: {
+        is: whereTreinoAgendadoOrganizacao,
+      },
+    };
 
     const treinosLancadosTotal = await prisma.treinoProgramado.count({
       where: whereTreinoProgramado,
@@ -102,33 +148,53 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
       } as any,
     });
 
-    const agendamentosMes = await prisma.treinoAgendado.count({
-      where: {
-        ...whereAgendado,
-        dataTreino: { gte: mesAtualStart, lt: mesAtualEnd },
-      } as any,
-    });
-
-    const concluidosMes = await prisma.submissaoTreino.count({
+    const agendamentosMes =
+      await prisma.treinoAgendado.count({
         where: {
-            aprovado: true,
-            [SUBMISSAO_TREINO_DATE_FIELD]: { gte: mesAtualStart, lt: mesAtualEnd },
-            treinoAgendado: whereAgendado,
-        } as any,
-    });
+          ...whereTreinoAgendadoOrganizacao,
+
+          dataTreino: {
+            gte: mesAtualStart,
+            lt: mesAtualEnd,
+          },
+        },
+      });
+
+    const concluidosMes =
+      await prisma.submissaoTreino.count({
+        where: {
+          aprovado: true,
+
+          [SUBMISSAO_TREINO_DATE_FIELD]: {
+            gte: mesAtualStart,
+            lt: mesAtualEnd,
+          },
+
+          ...whereSubmissaoOrganizacao,
+        },
+      });
 
     const d30 = new Date();
     d30.setDate(d30.getDate() - 30);
 
-    const ativos30d = await prisma.submissaoTreino.findMany({
+    const ativos30d =
+      await prisma.submissaoTreino.findMany({
         where: {
-            aprovado: true,
-            [SUBMISSAO_TREINO_DATE_FIELD]: { gte: d30 },
-            treinoAgendado: whereAgendado,
-        } as any,
-        select: { atletaId: true },
+          aprovado: true,
+
+          [SUBMISSAO_TREINO_DATE_FIELD]: {
+            gte: d30,
+          },
+
+          ...whereSubmissaoOrganizacao,
+        },
+
+        select: {
+          atletaId: true,
+        },
+
         distinct: ["atletaId"],
-    });
+      });
 
     const alunosAtivos30d = ativos30d.length;
     const taxaConclusaoMes = agendamentosMes > 0 ? (concluidosMes / agendamentosMes) * 100 : 0;
@@ -151,14 +217,26 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
           } as any,
         }),
         prisma.treinoAgendado.count({
-          where: { ...whereAgendado, dataTreino: { gte: ini, lt: fim } } as any,
+          where: {
+            ...whereTreinoAgendadoOrganizacao,
+
+            dataTreino: {
+              gte: ini,
+              lt: fim,
+            },
+          },
         }),
         prisma.submissaoTreino.count({
           where: {
             aprovado: true,
-            [SUBMISSAO_TREINO_DATE_FIELD]: { gte: ini, lt: fim },
-            treinoAgendado: whereAgendado,
-          } as any,
+
+            [SUBMISSAO_TREINO_DATE_FIELD]: {
+              gte: ini,
+              lt: fim,
+            },
+
+            ...whereSubmissaoOrganizacao,
+          },
         }),
       ]);
 
@@ -170,14 +248,23 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
       });
     }
 
-    const submissoesMes = await prisma.submissaoTreino.findMany({
-    where: {
-        aprovado: true,
-        [SUBMISSAO_TREINO_DATE_FIELD]: { gte: mesAtualStart, lt: mesAtualEnd },
-        treinoAgendado: whereAgendado,
-    } as any,
-    select: { atletaId: true },
-    });
+    const submissoesMes =
+      await prisma.submissaoTreino.findMany({
+        where: {
+          aprovado: true,
+
+          [SUBMISSAO_TREINO_DATE_FIELD]: {
+            gte: mesAtualStart,
+            lt: mesAtualEnd,
+          },
+
+          ...whereSubmissaoOrganizacao,
+        },
+
+        select: {
+          atletaId: true,
+        },
+      });
 
     const countByAtleta = new Map<string, number>();
     for (const s of submissoesMes) {

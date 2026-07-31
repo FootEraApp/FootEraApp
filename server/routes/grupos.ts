@@ -15,6 +15,7 @@ import {
   sairDoGrupo,
   listarUsuariosAdicionaveisNoGrupo,
   alterarTipoMembroGrupo,
+  deletarGrupo,
 } from "../controllers/gruposController.js";
 
 const router = express.Router();
@@ -32,6 +33,7 @@ router.post("/desafios/submissoes-grupo", authenticateToken, submeterDesafioGrup
 router.get("/:grupoId/mensagens", authenticateToken, listarMensagensGrupo);
 router.post("/:grupoId/mensagens", authenticateToken, enviarMensagemGrupo);
 router.get("/:grupoId", authenticateToken, detalharGrupo);
+router.delete("/:grupoId", authenticateToken, deletarGrupo);
 router.post("/", authenticateToken, criarGrupo);
 
 export default router;

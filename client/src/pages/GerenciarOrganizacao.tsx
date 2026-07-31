@@ -266,27 +266,128 @@ export default function GerenciarOrganizacao({
     }
   };
 
-  const removerGestor = async (g: GestorItem) => {
-    if (!confirm("Remover/desativar este responsável?")) return;
+  const removerGestor = async (
+    gestor: GestorItem
+  ) => {
+    const confirmou = window.confirm(
+      "Remover/desativar este responsável?"
+    );
+
+    if (!confirmou) return;
 
     try {
       setSaving(true);
-      await axios.delete(`${API.BASE_URL}/api/gerenciar-organizacoes/gestores/${g.id}`, { headers });
-      await carregarGestores();
+
+      await axios.delete(
+        `${API.BASE_URL}/api/gerenciar-organizacoes/gestores/${gestor.id}`,
+        {
+          headers,
+        }
+      );
+
+      /*
+      * Remove imediatamente sem precisar esperar
+      * uma nova consulta.
+      */
+      setGestores((atual) =>
+        atual.filter(
+          (item) => item.id !== gestor.id
+        )
+      );
+
       toast.success("Responsável removido!");
-    } catch (e: any) {
-      try {
-        await salvarGestor(g, { ativo: false });
-      } catch {}
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          "Não foi possível remover o responsável."
+      );
     } finally {
       setSaving(false);
     }
   };
 
   useEffect(() => {
-    if (tipo !== "Professor" && owner) carregarGestores();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, owner?.id, tipoApi]);
+    if (
+      tipo === "Professor" ||
+      !owner ||
+      !tipoApi
+    ) {
+      return;
+    }
+
+    function atualizarResponsaveis() {
+      void carregarGestores();
+    }
+
+    function atualizarAoVoltar() {
+      if (
+        document.visibilityState === "visible"
+      ) {
+        atualizarResponsaveis();
+      }
+    }
+
+    /*
+    * Carregamento inicial.
+    */
+    atualizarResponsaveis();
+
+    /*
+    * Atualiza ao voltar para a janela.
+    */
+    window.addEventListener(
+      "focus",
+      atualizarResponsaveis
+    );
+
+    /*
+    * Atualiza quando a aplicação informa
+    * que algum vínculo foi alterado.
+    */
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarResponsaveis
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      atualizarAoVoltar
+    );
+
+    /*
+    * Garante atualização caso a alteração tenha sido
+    * feita por outro usuário ou dispositivo.
+    */
+    const intervalId = window.setInterval(
+      atualizarResponsaveis,
+      20_000
+    );
+
+    return () => {
+      window.removeEventListener(
+        "focus",
+        atualizarResponsaveis
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarResponsaveis
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        atualizarAoVoltar
+      );
+
+      window.clearInterval(intervalId);
+    };
+  }, [
+    tipo,
+    owner?.id,
+    tipoApi,
+  ]);
 
   if (tipo === "Professor") {
     return (
