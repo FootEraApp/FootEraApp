@@ -2,18 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import axios from "axios";
 import {
-  Activity, PlusCircle, ChevronRight, Save, Loader2, X, ArrowLeft
+  Activity, PlusCircle, ChevronRight, Save, Loader2, X
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null; nomeDeUsuario?: string };
 type Note = { texto: string; saving: boolean; dirty: boolean };
 type PayloadOlheiro = {
@@ -43,7 +43,7 @@ type PayloadOlheiro = {
     reputacao?: number;          
     indicacoesAprovadas?: number;
     taxaAprovacao?: number;
-    atletasAssinados?: number;
+    atletasAssinados?: number | null;
   };
 };
 
@@ -74,7 +74,18 @@ type IndicacaoItem = {
   id: string;
   criadoEm?: string;
   status?: "PENDENTE" | "APROVADA" | "REJEITADA";
-  atleta: { id: string; nome: string; foto?: string | null };
+  atleta: {
+    id: string;
+    usuarioId?: string | null;
+    nome?: string | null;
+    foto?: string | null;
+    usuario?: {
+      id?: string | null;
+      nome?: string | null;
+      nomeDeUsuario?: string | null;
+      foto?: string | null;
+    } | null;
+  };
   clube?: IndicacaoDestino | null;
   escolinha?: IndicacaoDestino | null;
 };
@@ -135,24 +146,11 @@ export default function PerfilOlheiro({
   idDaUrl,
   hasCreator = false,
   creatorUsuarioId = null,
-  mostrarBotaoVoltar = true,
 }: {
   idDaUrl?: string;
   hasCreator?: boolean;
   creatorUsuarioId?: string | null;
-  mostrarBotaoVoltar?: boolean;
 }) {
-  const [, navigate] = useLocation();
-
-  function handleBack() {
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-
-    navigate("/perfil");
-  }
-
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
@@ -166,7 +164,7 @@ export default function PerfilOlheiro({
     mostrarEmail: boolean;
   } | null>(null);
 
-  type Aba = "visao" | "atletas" | "indicacoes" | "postagens";
+  type Aba = "visao" | "atletas" | "eventos" | "indicacoes" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
   type SubAbaAtletas = "observados";
   const [subAbaAtletas, setSubAbaAtletas] = useState<SubAbaAtletas>("observados");
@@ -344,37 +342,49 @@ export default function PerfilOlheiro({
     [headers]
   );
 
-  async function apagarIndicacao(indicacaoId: string) {
-    if (!confirm("Deseja apagar esta indicação?")) return;
+  async function apagarIndicacao(
+    indicacaoId: string
+  ) {
+    if (
+      !confirm(
+        "Deseja apagar esta indicação?"
+      )
+    ) {
+      return;
+    }
 
     try {
       await axios.delete(
-        `${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}`,
+        `${API.BASE_URL}/api/indicacoes/${encodeURIComponent(
+          indicacaoId
+        )}`,
         { headers }
       );
 
-      setIndicacoes((prev) =>
-        Array.isArray(prev) ? prev.filter((i) => i.id !== indicacaoId) : prev
+      setIndicacoes((anteriores) =>
+        Array.isArray(anteriores)
+          ? anteriores.filter(
+              (indicacao) =>
+                indicacao.id !==
+                indicacaoId
+            )
+          : anteriores
       );
 
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              metrics: {
-                ...prev.metrics,
-                indicacoesEnviadas: Math.max(0, Number(prev.metrics?.indicacoesEnviadas ?? 0) - 1),
-                indicacoes: Math.max(0, Number(prev.metrics?.indicacoes ?? 0) - 1),
-              },
-              olheiro: {
-                ...prev.olheiro,
-                totalIndicacoes: Math.max(0, Number(prev.olheiro?.totalIndicacoes ?? 0) - 1),
-              },
-            }
-          : prev
+      const perfilAtualizado =
+        await axios.get<PayloadOlheiro>(
+          `${API.BASE_URL}/api/perfil/olheiro/${targetId}`,
+          { headers }
+        );
+
+      setData(
+        perfilAtualizado.data
       );
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || "Falha ao apagar indicação.");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.error ||
+          "Falha ao apagar indicação."
+      );
     }
   }
 
@@ -536,20 +546,6 @@ async function salvarNota(atletaId: string) {
   
   return (
     <div className="w-full max-w-2xl mx-auto pb-28">
-      {mostrarBotaoVoltar && (
-        <div className="mb-4 px-3 sm:px-4">
-          <button
-            type="button"
-            onClick={handleBack}
-            aria-label="Voltar"
-            title="Voltar"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-green-800 bg-white text-green-900 shadow-sm hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-700/30"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-
       <ProfileHeader
         nome={nome}
         time={time}
@@ -593,6 +589,17 @@ async function salvarNota(atletaId: string) {
             { id: "visao", label: "Visão Geral" },
             { id: "atletas", label: "Atletas" },
             { id: "indicacoes", label: "Indicações" },
+            ...(mostrarCreator
+              ? [
+                  {
+                    id:
+                      "eventos",
+
+                    label:
+                      "Eventos",
+                  },
+                ]
+              : []),
             { id: "postagens", label: "Postagens" },
           ].map(t => (
             <button
@@ -691,9 +698,6 @@ async function salvarNota(atletaId: string) {
                   className="h-2 bg-green-600"
                   style={{ width: `${Math.max(0, Math.min(100, Math.round((taxaAprovacao ?? 0) * 100)))}%` }}
                 />
-              </div>
-              <div className="mt-2 text-xs text-green-900/70">
-                Atletas que assinaram após suas indicações: <b>{typeof atletasAssinados === "number" ? atletasAssinados : "—"}</b>
               </div>
             </div>
           </SectionCard>
@@ -930,6 +934,22 @@ async function salvarNota(atletaId: string) {
                   const destino = i.clube ?? i.escolinha ?? null;
                   const destinoPerfilId = destino?.usuarioId ?? destino?.id ?? "";
 
+                  const nomeAtleta =
+                    i.atleta?.usuario?.nome ||
+                    i.atleta?.nome ||
+                    i.atleta?.usuario?.nomeDeUsuario ||
+                    "Atleta";
+
+                  const fotoAtleta =
+                    i.atleta?.usuario?.foto ??
+                    i.atleta?.foto ??
+                    null;
+
+                  const atletaPerfilId =
+                    i.atleta?.usuario?.id ||
+                    i.atleta?.usuarioId ||
+                    i.atleta?.id ||
+                    "";
                   return (
                     <li key={i.id} className="relative flex items-center gap-3 rounded-xl border border-green-100 p-3">
                       <button
@@ -945,15 +965,32 @@ async function salvarNota(atletaId: string) {
                       >
                         <X className="w-3 h-3" />
                       </button>
-                     <Avatar foto={withAvatarFallback(i.atleta.foto)} alt={i.atleta.nome} className="w-10 h-10" />
-                      <div className="flex-1 pr-8">
-                        <div className="text-sm font-medium text-green-900">{i.atleta.nome}</div>
-                        <div className="text-xs text-green-900/70">
-                          {i.criadoEm ? new Date(i.criadoEm).toLocaleString() : "—"}
-                          {i.status ? ` • ${i.status}` : ""}
-                        </div>
-                      </div>
+                     <Link
+                        href={`/perfil/${atletaPerfilId}`}
+                        className="flex min-w-0 flex-1 items-center gap-3 pr-8"
+                      >
+                        <Avatar
+                          foto={withAvatarFallback(fotoAtleta)}
+                          alt={nomeAtleta}
+                          className="w-10 h-10 shrink-0"
+                        />
 
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-green-900">
+                            {nomeAtleta}
+                          </div>
+
+                          <div className="text-xs text-green-900/70">
+                            {i.criadoEm
+                              ? new Date(i.criadoEm).toLocaleString("pt-BR")
+                              : "—"}
+
+                            {i.status
+                              ? ` • ${i.status}`
+                              : ""}
+                          </div>
+                        </div>
+                      </Link>
                       {destino ? (
                         <Link
                           href={`/perfil/${destinoPerfilId}`}
@@ -983,6 +1020,16 @@ async function salvarNota(atletaId: string) {
             )}
           </SectionCard>
         </div>
+      )}
+
+      {aba === "eventos" && (
+        <section className="mt-5 px-3 sm:px-4">
+          <ProfileReplaysSection
+            creatorUsuarioId={
+              creatorLinkUsuarioId
+            }
+          />
+        </section>
       )}
 
       {aba === "postagens" && (

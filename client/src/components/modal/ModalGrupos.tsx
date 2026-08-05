@@ -10,10 +10,33 @@ interface Usuario {
   foto?: string;
 }
 
+interface GrupoParaLista {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  ownerId: string;
+  totalMembros?: number;
+  ultimaMensagem?: string | null;
+  ultimaMensagemTipo?: string | null;
+  ultimaMensagemEm?: string | null;
+}
+
+interface GrupoRespostaApi {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  ownerId: string;
+  membros?: Array<{
+    usuarioId?: string;
+    usuario?: Usuario;
+  }>;
+}
+
 interface Props {
   aberto: boolean;
   onFechar: () => void;
-  usuarioId: string; 
+  onGrupoCriado?: (grupo: GrupoParaLista) => void;
+  usuarioId: string;
   token: string;
 }
 
@@ -23,11 +46,13 @@ function getAvatarSrc(foto?: string) {
   return `${API.BASE_URL}${foto}`;
 }
 
-export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
+export function ModalGrupos({ aberto, onFechar, onGrupoCriado, usuarioId, token }: Props) {
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [nomeGrupo, setNomeGrupo] = useState("");
   const [descricaoGrupo, setDescricaoGrupo] = useState("");
   const [membrosSelecionados, setMembrosSelecionados] = useState<Set<string>>(new Set([usuarioId]));
+  const [criando, setCriando] = useState(false);
+  const [buscaMembro, setBuscaMembro] = useState("");
 
   const selecionadosCount = membrosSelecionados.size;
  
@@ -49,6 +74,7 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
 
     setNomeGrupo("");
     setDescricaoGrupo("");
+    setBuscaMembro("");
     setMembrosSelecionados(new Set([usuarioId]));  
 
     fetchSeguidoresMutuos();
@@ -66,19 +92,46 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
     });
   }
 
+  function normalizarTexto(texto: string) {
+    return texto
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  const termoBuscaNormalizado = normalizarTexto(buscaMembro);
+
+  const usuariosFiltrados = usuariosMutuos.filter((usuario) =>
+    normalizarTexto(usuario.nome).includes(termoBuscaNormalizado)
+  );
+
   async function criarGrupo() {
-    if (!nomeGrupo.trim()) {
+    const nomeLimpo = nomeGrupo.trim();
+    const descricaoLimpa = descricaoGrupo.trim();
+
+    if (!nomeLimpo) {
       toast.error("Informe um nome para o grupo");
       return;
     }
-    if (membrosSelecionados.size === 0) {
-      toast.error("Selecione ao menos um membro");
+
+    if (!usuarioId) {
+      toast.error("Sessão inválida. Entre novamente.");
       return;
     }
 
-    const membros = Array.from(new Set<string>([...membrosSelecionados, usuarioId]));
+    if (criando) return;
+
+    const membros = Array.from(
+      new Set<string>([
+        usuarioId,
+        ...membrosSelecionados,
+      ])
+    );
 
     try {
+      setCriando(true);
+
       const res = await fetch(`${API.BASE_URL}/api/grupos`, {
         method: "POST",
         headers: {
@@ -86,23 +139,56 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          nome: nomeGrupo,
-          descricao: descricaoGrupo || undefined,
-          ownerId: usuarioId,         
-          membros,                    
+          nome: nomeLimpo,
+          descricao: descricaoLimpa || undefined,
+          membros,
         }),
       });
 
+      const data: GrupoRespostaApi | { error?: string } | null =
+        await res.json().catch(() => null);
+
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || "Erro ao criar grupo");
+        throw new Error(
+          data && "error" in data && data.error
+            ? data.error
+            : "Erro ao criar grupo"
+        );
       }
+
+      if (!data || !("id" in data) || !data.id) {
+        throw new Error(
+          "O grupo foi criado, mas a resposta do servidor é inválida."
+        );
+      }
+
+      const novoGrupo: GrupoParaLista = {
+        id: data.id,
+        nome: data.nome,
+        descricao: data.descricao ?? null,
+        ownerId: data.ownerId,
+        totalMembros: Array.isArray(data.membros)
+          ? data.membros.length
+          : membros.length,
+        ultimaMensagem: null,
+        ultimaMensagemTipo: null,
+        ultimaMensagemEm: null,
+      };
+
+      onGrupoCriado?.(novoGrupo);
 
       toast.success("Grupo criado com sucesso!");
       onFechar();
     } catch (err) {
-      console.error(err);
-      toast.error("Erro ao criar grupo");
+      console.error("Erro ao criar grupo:", err);
+
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Erro ao criar grupo"
+      );
+    } finally {
+      setCriando(false);
     }
   }
 
@@ -144,10 +230,49 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="font-semibold">Selecione membros:</p>
-            <span className="text-sm text-gray-500">{selecionadosCount} selecionado(s)</span>
+
+            <span className="text-sm text-gray-500">
+              {selecionadosCount} selecionado(s)
+            </span>
           </div>
 
-          <div className="max-h-64 overflow-y-auto border rounded p-2 grid grid-cols-2 gap-2">
+          <div className="relative mb-3">
+            <input
+              type="text"
+              value={buscaMembro}
+              onChange={(event) => setBuscaMembro(event.target.value)}
+              placeholder="Buscar membro pelo nome..."
+              className="
+                w-full border rounded-lg
+                px-3 py-2 pr-10
+                text-sm
+                focus:outline-none
+                focus:ring-2
+                focus:ring-green-600
+                focus:border-green-600
+              "
+            />
+
+            {buscaMembro && (
+              <button
+                type="button"
+                onClick={() => setBuscaMembro("")}
+                className="
+                  absolute right-3 top-1/2
+                  -translate-y-1/2
+                  text-gray-400
+                  hover:text-gray-700
+                  text-lg
+                "
+                title="Limpar busca"
+                aria-label="Limpar busca de membros"
+              >
+                &times;
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-64 overflow-y-auto border rounded p-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label className="flex items-center gap-2 select-none opacity-90">
               <input type="checkbox" checked readOnly disabled />
               <img
@@ -165,10 +290,19 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
             </label>
 
             {usuariosMutuos.length === 0 && (
-              <p className="col-span-2 text-gray-500">Nenhum usuário disponível.</p>
+              <p className="sm:col-span-2 text-sm text-gray-500 py-2">
+                Nenhum usuário disponível.
+              </p>
             )}
 
-            {usuariosMutuos.map((u) => (
+            {usuariosMutuos.length > 0 &&
+              usuariosFiltrados.length === 0 && (
+                <p className="sm:col-span-2 text-sm text-gray-500 py-2">
+                  Nenhum membro encontrado para “{buscaMembro}”.
+                </p>
+              )}
+
+            {usuariosFiltrados.map((u) => (
               <label
                 key={u.id}
                 className="flex items-center gap-2 cursor-pointer select-none"
@@ -200,10 +334,16 @@ export function ModalGrupos({ aberto, onFechar, usuarioId, token }: Props) {
         </div>
 
         <button
-          onClick={criarGrupo}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 mt-4 w-full"
+          type="button"
+          onClick={() => void criarGrupo()}
+          disabled={criando}
+          className="
+            bg-green-600 text-white px-4 py-2 rounded
+            hover:bg-green-700 mt-4 w-full
+            disabled:opacity-60 disabled:cursor-not-allowed
+          "
         >
-          Criar Grupo
+          {criando ? "Criando grupo..." : "Criar Grupo"}
         </button>
       </div>
     </div>

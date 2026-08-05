@@ -11,21 +11,20 @@ import {
   frequencia,
   updateTurma,
 } from "../controllers/turmasController.js";
-import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
-router.get("/como-professor", authenticateToken, listarTurmasComoProfessor);
-router.get("/:id/alunos", authenticateToken, getAlunosTurma);
-router.get("/minhas", authenticateToken, listarMinhasTurmas);
-router.post("/:id/alunos", authenticateToken, substituirAlunosTurma);
-router.get("/:id/frequencia", authenticateToken, frequencia);
-router.put("/:id/atribuir-professores", authenticateToken, setProfessoresTurma);
-router.put("/:id/atribuir-professor", authenticateToken, setProfessoresTurma);
-router.put("/:id/vincular-professor", authenticateToken, setProfessoresTurma);
-router.delete("/:id", authenticateToken, deleteTurma);
-router.put("/:id", authenticateToken, updateTurma);
-router.get("/", authenticateToken, listarTurmas);
-router.post("/", authenticateToken, criarTurma);
+router.get("/minhas", listarMinhasTurmas);
+router.get("/como-professor", listarTurmasComoProfessor);
+router.get("/:id/alunos", getAlunosTurma);
+router.post("/:id/alunos", substituirAlunosTurma);
+router.get("/:id/frequencia", frequencia);
+router.put("/:id/atribuir-professores", setProfessoresTurma);
+router.put("/:id/atribuir-professor", setProfessoresTurma);
+router.put("/:id/vincular-professor", setProfessoresTurma);
+router.delete("/:id", deleteTurma);
+router.put("/:id", updateTurma);
+router.get("/", listarTurmas);
+router.post("/", criarTurma);
 
 export default router;

@@ -4,7 +4,6 @@ import type { Request, Response } from "express";
 export async function getIndicacoes(req: Request, res: Response) {
   try {
     const { id } = req.params;
-
     const lista = await prisma.indicacao.findMany({
       where: { olheiroId: id },
       orderBy: { criadoEm: "desc" },
@@ -15,8 +14,18 @@ export async function getIndicacoes(req: Request, res: Response) {
         atleta: {
           select: {
             id: true,
+            usuarioId: true,
             nome: true,
             foto: true,
+
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                nomeDeUsuario: true,
+                foto: true,
+              },
+            },
           },
         },
         clube: {
@@ -43,9 +52,24 @@ export async function getIndicacoes(req: Request, res: Response) {
       criadoEm: i.criadoEm,
       status: i.status,
       atleta: {
-        id: i.atleta?.id ?? "",
-        nome: i.atleta?.nome ?? "",
-        foto: i.atleta?.foto ?? null,
+        id:
+          i.atleta?.id ?? "",
+        usuarioId:
+          i.atleta?.usuarioId ??
+          i.atleta?.usuario?.id ??
+          null,
+        nome:
+          i.atleta?.usuario?.nome ||
+          i.atleta?.nome ||
+          i.atleta?.usuario
+            ?.nomeDeUsuario ||
+          "Atleta",
+        foto:
+          i.atleta?.usuario?.foto ??
+          i.atleta?.foto ??
+          null,
+        usuario:
+          i.atleta?.usuario ?? null,
       },
       clube: i.clube
         ? {
@@ -78,7 +102,7 @@ export async function perfilOlheiro(req: Request, res: Response) {
   try {
     let { id } = req.params as { id: string };
     const meTipoUsuarioId = (req as any).user?.tipoUsuarioId as string | undefined;
-
+    const PONTOS_POR_INDICACAO_APROVADA = 10;
     if (id === "me" && meTipoUsuarioId) id = meTipoUsuarioId;
 
     const olheiro = await prisma.olheiro.findUnique({
@@ -100,20 +124,55 @@ export async function perfilOlheiro(req: Request, res: Response) {
     });
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado." });
 
-    const [indicacoesTot, indicacoesAprov, atletasAssinados] = await Promise.all([
-      prisma.indicacao.count({ where: { olheiroId: id } }),
-      prisma.indicacao.count({ where: { olheiroId: id, status: "APROVADA" } }),
-      prisma.indicacao.count({ where: { olheiroId: id, status: "APROVADA" } }),
-    ]);
-    const taxaAprov = indicacoesTot > 0 ? indicacoesAprov / indicacoesTot : 0;
+    const [
+      indicacoesTot,
+      indicacoesAprov,
+    ] = await Promise.all([
+      prisma.indicacao.count({
+        where: {
+          olheiroId: id,
+        },
+      }),
 
+      prisma.indicacao.count({
+        where: {
+          olheiroId: id,
+          status: "APROVADA",
+        },
+      }),
+    ]);
+
+    const taxaAprov = indicacoesTot > 0 ? indicacoesAprov / indicacoesTot : 0;
     const atletasUnicos = await prisma.indicacao.findMany({
       where: { olheiroId: id },
       select: { atletaId: true },
       distinct: ["atletaId"],
     });
 
-    const reputacaoPersistida = olheiro.reputacaoScore ?? 0;
+    const reputacaoCalculada =
+      indicacoesAprov *
+      PONTOS_POR_INDICACAO_APROVADA;
+
+      if (
+        Number(olheiro.reputacaoScore ?? 0) !==
+          reputacaoCalculada ||
+        Number(olheiro.totalIndicacoes ?? 0) !==
+          indicacoesTot
+      ) {
+        await prisma.olheiro.update({
+          where: {
+            id,
+          },
+
+          data: {
+            reputacaoScore:
+              reputacaoCalculada,
+
+            totalIndicacoes:
+              indicacoesTot,
+          },
+        });
+      }
 
     const payload = {
       tipo: "Olheiro" as const,
@@ -143,16 +202,16 @@ export async function perfilOlheiro(req: Request, res: Response) {
               logo: olheiro.colaboracaoClube.logo,
             }
           : null,
-        reputacaoScore: reputacaoPersistida,
+        reputacaoScore: reputacaoCalculada,
         totalIndicacoes: olheiro.totalIndicacoes,
       },
       metrics: {
         atletasAcompanhados: atletasUnicos.length,
         indicacoesEnviadas: indicacoesTot,
-        reputacaoScore: reputacaoPersistida,
+        reputacaoScore: reputacaoCalculada,
         indicacoesAprovadas: indicacoesAprov,
         taxaAprovacao: taxaAprov,
-        atletasAssinados: atletasAssinados,
+        atletasAssinados: null,
       },
     };
 

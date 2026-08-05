@@ -50,6 +50,13 @@ type SalaCopaEvento = {
   origem?: "AVULSA" | "LEARNING";
   metodologiaTitulo?: string | null;
   preco?: number | null;
+  precoAcesso?:
+    | number
+    | string
+    | null;
+
+  acessoPago?:
+    boolean;
   criadorUsuario?: {
     id?: string;
     nome?: string | null;
@@ -186,11 +193,14 @@ export default function SalaCopaEventoPage() {
   const [erro, setErro] = useState("");
   const [evento, setEvento] = useState<SalaCopaEvento | null>(null);
 
-  const preco = Number(evento?.acesso?.preco ?? evento?.preco ?? 0);
+  const preco = Number(
+    evento?.acesso?.preco ??
+      evento?.precoAcesso ??
+      evento?.preco ??
+      0
+  );
   const temPreco = Number.isFinite(preco) && preco > 0;
-
   const produtoTipo = evento?.acesso?.produtoTipo;
-
   const nomeProdutoParaLiberar =
     evento?.metodologiaTitulo ||
     evento?.titulo ||

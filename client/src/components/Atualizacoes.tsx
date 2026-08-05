@@ -55,6 +55,197 @@ function UpdateCard({
 export default function Atualizacoes() {
   return (
     <div className="space-y-4 text-sm text-gray-800">
+      <UpdateCard
+        type="atualizacao"
+        title="✨ Novidades da FootEra — 04/08/2026"
+      >
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            As <strong>aulas ao vivo</strong> receberam uma experiência
+            completa de transmissão, com câmera, microfone,
+            compartilhamento de tela, chat e gravação automática.
+          </li>
+
+          <li>
+            Lives finalizadas agora podem disponibilizar um{" "}
+            <strong>replay</strong>, exibido diretamente na página da aula.
+          </li>
+
+          <li>
+            Os replays ficam disponíveis por até{" "}
+            <strong>7 dias após a finalização</strong>, com indicação de
+            quanto tempo ainda resta para assistir.
+          </li>
+
+          <li>
+            Replays gratuitos podem ser acessados diretamente, enquanto
+            replays pagos continuam disponíveis para compra durante o
+            período de sete dias.
+          </li>
+
+          <li>
+            Perfis Creator agora podem mostrar uma seção de{" "}
+            <strong>Replays disponíveis</strong>, permitindo que visitantes
+            encontrem as transmissões recentes do perfil.
+          </li>
+
+          <li>
+            A página de eventos do Creator ganhou{" "}
+            <strong>pesquisa e ordenação</strong> por nome e data, além de
+            uma área especial para os eventos programados para hoje.
+          </li>
+
+          <li>
+            O chat das aulas ao vivo agora permite que cada usuário{" "}
+            <strong>apague as próprias mensagens</strong>.
+          </li>
+
+          <li>
+            O contador da transmissão mostra quantas pessoas estão{" "}
+            <strong>online durante a live</strong> e, depois da finalização,
+            passa a mostrar os <strong>acessos únicos</strong> da aula e
+            do replay.
+          </li>
+
+          <li>
+            A área <strong>Meus conteúdos</strong> do perfil Learning agora
+            reúne metodologias e aulas ao vivo compradas, assistidas,
+            recebidas por convite ou liberadas pela assinatura.
+          </li>
+
+          <li>
+            Aulas ao vivo agendadas aparecem entre os conteúdos em
+            andamento, e aulas finalizadas ficam registradas no histórico,
+            informando se o replay está disponível ou expirado.
+          </li>
+
+          <li>
+            Ao mudar uma conta Learning para outro tipo de perfil, o usuário
+            pode escolher se deseja manter o nome anterior ou utilizar o
+            novo nome informado para o perfil, marca ou organização.
+          </li>
+
+          <li>
+            Clubes, escolinhas e professores receberam melhorias no
+            gerenciamento de <strong>turmas</strong>, professores e atletas
+            vinculados.
+          </li>
+
+          <li>
+            O gerenciamento de elenco agora permite titulares e reservas,
+            com até <strong>22 jogadores</strong>, respeitando os atletas
+            vinculados à turma e à organização.
+          </li>
+
+          <li>
+            Atletas removidos de uma turma continuam disponíveis em
+            <strong>Fora da turma</strong> enquanto ainda possuírem vínculo
+            com o professor, clube ou escolinha.
+          </li>
+
+          <li>
+            Os perfis de clube, escolinha e professor ganharam uma exibição
+            mais organizada dos atletas vinculados, com pontuação, posição,
+            idade, categoria e opção <strong>Ver todos</strong>.
+          </li>
+
+          <li>
+            O perfil de Olheiro recebeu melhorias nas indicações e na
+            exibição da reputação, calculada de acordo com as indicações
+            aprovadas.
+          </li>
+
+          <li>
+            O painel administrativo passou a contabilizar corretamente
+            todos os tipos de conta, incluindo{" "}
+            <strong>Learning, Marca e Federação</strong>.
+          </li>
+
+          <li>
+            A distribuição de usuários do painel administrativo também
+            passou a incluir os novos tipos de perfil.
+          </li>
+        </ul>
+      </UpdateCard>
+
+      <UpdateCard
+        type="correcoes"
+        title="🐞 Correções e melhorias — 04/08/2026"
+      >
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            Correção na criação de eventos para impedir lives duplicadas
+            com o mesmo nome, horário e responsável.
+          </li>
+
+          <li>
+            Correção na exibição do preço das aulas ao vivo, evitando que
+            eventos pagos aparecessem incorretamente como gratuitos.
+          </li>
+
+          <li>
+            Correção no carregamento de data e horário das páginas públicas
+            dos eventos.
+          </li>
+
+          <li>
+            Correção na configuração de gravação do Amazon IVS e no
+            processamento dos replays das transmissões.
+          </li>
+
+          <li>
+            Ajustes para manter a câmera funcionando ao iniciar ou encerrar
+            o compartilhamento de tela durante uma live.
+          </li>
+
+          <li>
+            Ao finalizar uma transmissão, câmera, microfone e
+            compartilhamento de tela agora são encerrados automaticamente.
+          </li>
+
+          <li>
+            Correção na quantidade de jogadores escalados, contabilizando
+            corretamente titulares e reservas.
+          </li>
+
+          <li>
+            Ajustes para impedir que turmas ou atletas sem vínculo continuem
+            aparecendo nas opções de elenco.
+          </li>
+
+          <li>
+            Correção na listagem de turmas vinculadas a professores,
+            incluindo turmas criadas por diferentes organizações.
+          </li>
+
+          <li>
+            Correção na listagem de atletas vinculados, observados e
+            solicitados nos perfis de clubes, escolinhas e professores.
+          </li>
+
+          <li>
+            Correção no cálculo da reputação do Olheiro para refletir as
+            indicações aprovadas.
+          </li>
+
+          <li>
+            Ajustes de privacidade para que compras, assinaturas e histórico
+            de conteúdos Learning sejam exibidos somente para o próprio
+            usuário e para administradores autorizados.
+          </li>
+
+          <li>
+            Correção no total de usuários do dashboard administrativo, que
+            não estava contabilizando alguns dos novos tipos de conta.
+          </li>
+
+          <li>
+            O redirecionamento após a verificação de e-mail foi reduzido
+            para <strong>3 segundos</strong>.
+          </li>
+        </ul>
+      </UpdateCard>
+
       <UpdateCard type="atualizacao" title="✨ Novidades da FootEra — 24/07/2026">
         <ul className="list-disc list-inside space-y-1">
           <li>
@@ -108,7 +299,7 @@ export default function Atualizacoes() {
         <ul className="list-disc list-inside space-y-1">
           <li>
             Agora é possível <strong>mudar o tipo do seu perfil</strong>: quem criou conta
-            como <strong>Learning</strong> (só cursos) pode virar Atleta, Professores,
+            como <strong>Learning</strong> (cursos, aulas ao vivo e replays) pode virar Atleta, Professores,
             Olheiro, Clube, Escolinha, Federação ou Marca sem perder cursos, lives e
             progresso já conquistados — em Configurações {'>'} Mudar tipo de perfil.
           </li>
@@ -244,7 +435,7 @@ export default function Atualizacoes() {
             <strong>learnings</strong>.
           </li>
           <li>
-            Fluxo de assinatura melhorado: se o usuário já tem plano de learnings, ao
+            Fluxo de assinatura melhorado: se o usuário já tem o plano learning, ao
             “assinar metodologia” ele não vai para pagamento — a metodologia é liberada e
             passa a contar no limite de metodologias selecionadas.
           </li>
@@ -368,7 +559,7 @@ export default function Atualizacoes() {
         </p>
       </UpdateCard>
 
-      <UpdateCard type="atualizacao" title="✨ Proximas novidades da FootEra">
+      <UpdateCard type="atualizacao" title="✨ Próximas novidades da FootEra">
         <p className="font-medium">
           Estamos preparando muitas novidades para este ano de{" "}
           <strong>2026</strong> 💚  
@@ -378,11 +569,6 @@ export default function Atualizacoes() {
 
         <ul className="list-disc list-inside space-y-1 mt-2">
           <li>Professor avaliar o treino realizado pelo atleta;</li>
-
-          <li>
-            Adicionar <strong>titular e reserva</strong> no dia de competição,
-            com notificação automática aos atletas selecionados;
-          </li>
 
           <li>Tela de agendamento de treinos aprimorada para professores;</li>
 
@@ -394,8 +580,6 @@ export default function Atualizacoes() {
             Escolher se exercícios personalizados terão vídeo ou não;
           </li>
 
-          <li>Melhorias na página de Olheiros;</li>
-
           <li>
             Atleta avaliar o treino realizado, indicando dificuldade
             ou impossibilidade de conclusão;
@@ -403,11 +587,6 @@ export default function Atualizacoes() {
 
           <li>
             Validação correta das datas de eventos e notificações;
-          </li>
-
-          <li>
-            Visualização cruzada de treinos entre professores,
-            clubes e escolinhas;
           </li>
 
           <li>

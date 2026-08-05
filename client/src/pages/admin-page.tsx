@@ -179,7 +179,11 @@ const EMPTY_DASH = {
   totalProfessores: 0,
   totalOlheiros: 0,
   totalAdministradores: 0,
-  totalMidias: 0, 
+  totalLearning: 0,
+  totalMarcas: 0,
+  totalFederacoes: 0,
+  totalOutros: 0,
+  totalMidias: 0,
   totalVerificados: 0,
   totalNaoVerificados: 0,
 };
@@ -2388,8 +2392,6 @@ async function confirmarExcluirProfessor() {
         "Assinatura excluída com sucesso."
       );
 
-      // Se apagou o único item da página,
-      // volta uma página para não deixar a tela vazia.
       const proximaPagina =
         assinantes.length <= 1 && assPage > 1
           ? assPage - 1
@@ -2699,13 +2701,79 @@ async function confirmarExcluirProfessor() {
               <div className="bg-white p-3 sm:p-4 rounded shadow overflow-hidden">
               {(() => {
                 const distData = [
-                  { label: "Atletas", value: Number(dados.totalAtletas || 0) },
-                  { label: "Escolas de Futebol", value: Number(dados.totalEscolinhas || 0) },
-                  { label: "Clubes Profissionais", value: Number(dados.totalClubes || 0) },
-                  { label: "Professores", value: Number(dados.totalProfessores || 0) },
-                  { label: "Olheiros", value: Number(dados.totalOlheiros || 0) },
-                  { label: "Administradores", value: Number(dados.totalAdministradores || 0) },
-                ].filter((d) => d.value > 0); 
+                    {
+                      label: "Atletas",
+                      value: Number(
+                        dados.totalAtletas || 0
+                      ),
+                    },
+
+                    {
+                      label: "Escolas de Futebol",
+                      value: Number(
+                        dados.totalEscolinhas || 0
+                      ),
+                    },
+
+                    {
+                      label: "Clubes Profissionais",
+                      value: Number(
+                        dados.totalClubes || 0
+                      ),
+                    },
+
+                    {
+                      label: "Professores",
+                      value: Number(
+                        dados.totalProfessores || 0
+                      ),
+                    },
+
+                    {
+                      label: "Olheiros",
+                      value: Number(
+                        dados.totalOlheiros || 0
+                      ),
+                    },
+
+                    {
+                      label: "Learning",
+                      value: Number(
+                        dados.totalLearning || 0
+                      ),
+                    },
+
+                    {
+                      label: "Marcas",
+                      value: Number(
+                        dados.totalMarcas || 0
+                      ),
+                    },
+
+                    {
+                      label: "Federações",
+                      value: Number(
+                        dados.totalFederacoes || 0
+                      ),
+                    },
+
+                    {
+                      label: "Administradores",
+                      value: Number(
+                        dados.totalAdministradores || 0
+                      ),
+                    },
+
+                    {
+                      label: "Outros",
+                      value: Number(
+                        dados.totalOutros || 0
+                      ),
+                    },
+                  ].filter(
+                    (item) =>
+                      item.value > 0
+                  );
                 return <PieChart data={distData} size={150} />;
               })()}
             </div>
@@ -5681,11 +5749,15 @@ function PieChart({
 
   const colors = [
     "#14532D",
-    "#15803D", 
-    "#16A34A", 
+    "#166534",
+    "#15803D",
+    "#16A34A",
     "#22C55E",
     "#4ADE80",
+    "#86EFAC",
     "#BBF7D0",
+    "#0F766E",
+    "#5EEAD4",
   ];
 
   let currentAngle = 0;

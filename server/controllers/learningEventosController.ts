@@ -13,6 +13,85 @@ import { sendError } from "../utils/httpError.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
 
+const REPLAY_PUBLICO_DIAS = 7;
+
+const REPLAY_PUBLICO_MS =
+  REPLAY_PUBLICO_DIAS *
+  24 *
+  60 *
+  60 *
+  1000;
+
+function calcularValidadeReplay(
+  aula: any
+) {
+  const status = String(
+    aula?.status || ""
+  ).toUpperCase();
+
+  if (status !== "FINALIZADA") {
+    return {
+      replayExpiraEm: null,
+      replayExpirado: false,
+      segundosRestantes: null,
+    };
+  }
+
+  const finalizacaoRaw =
+    aula?.finalizouEm ||
+    aula?.dataFim ||
+    null;
+
+  if (!finalizacaoRaw) {
+    return {
+      replayExpiraEm: null,
+      replayExpirado: false,
+      segundosRestantes: null,
+    };
+  }
+
+  const finalizacao =
+    new Date(finalizacaoRaw);
+
+  if (
+    Number.isNaN(
+      finalizacao.getTime()
+    )
+  ) {
+    return {
+      replayExpiraEm: null,
+      replayExpirado: false,
+      segundosRestantes: null,
+    };
+  }
+
+  const expiraEm =
+    new Date(
+      finalizacao.getTime() +
+        REPLAY_PUBLICO_MS
+    );
+
+  const diferenca =
+    expiraEm.getTime() -
+    Date.now();
+
+  return {
+    replayExpiraEm:
+      expiraEm,
+
+    replayExpirado:
+      diferenca <= 0,
+
+    segundosRestantes:
+      Math.max(
+        0,
+        Math.floor(
+          diferenca / 1000
+        )
+      ),
+  };
+}
+
 function getBearerToken(req: Request) {
   const raw = req.headers.authorization || "";
   if (!raw.startsWith("Bearer ")) return "";
@@ -93,6 +172,22 @@ function getTipoUsuarioId(usuario: any) {
   );
 }
 
+function criarErroHttp(
+  mensagem: string,
+  statusCode: number
+) {
+  const erro: any =
+    new Error(mensagem);
+
+  erro.statusCode =
+    statusCode;
+
+  erro.status =
+    statusCode;
+
+  return erro;
+}
+
 async function criarOuBuscarUsuarioLearning(params: {
   nome: string;
   email: string;
@@ -115,6 +210,38 @@ async function criarOuBuscarUsuarioLearning(params: {
   });
 
   if (existente) {
+    const senha =
+      String(
+        params.senha || ""
+      );
+
+    if (!senha) {
+      throw criarErroHttp(
+        "Este e-mail já possui uma conta. Informe sua senha ou entre pela tela de login.",
+        401
+      );
+    }
+
+    if (!existente.senhaHash) {
+      throw criarErroHttp(
+        "Esta conta utiliza outro método de acesso. Entre pela tela de login.",
+        401
+      );
+    }
+
+    const senhaCorreta =
+      await bcrypt.compare(
+        senha,
+        existente.senhaHash
+      );
+
+    if (!senhaCorreta) {
+      throw criarErroHttp(
+        "E-mail ou senha inválidos.",
+        401
+      );
+    }
+
     return {
       usuario: existente,
       criadoAgora: false,
@@ -467,11 +594,35 @@ async function montarEventoResponse(params: {
 
   const isConvidadoFootEra =
     !!userId &&
-    Array.isArray(aula.convidados) &&
-    aula.convidados.some(
-      (c: any) => String(c.usuarioId || "") === String(userId)
+    (
+      String(
+        aula.convidadoUsuarioId ||
+          ""
+      ) === String(userId) ||
+      (
+        Array.isArray(
+          aula.convidados
+        ) &&
+        aula.convidados.some(
+          (convidado: any) =>
+            String(
+              convidado.usuarioId ||
+                ""
+            ) ===
+            String(userId)
+        )
+      )
     );
 
+  const validadeReplay =
+    calcularValidadeReplay(
+      aula
+    );
+
+  const replayExpirado =
+    validadeReplay
+      .replayExpirado;
+      
   const assinatura = await buscarAssinatura({
     usuarioId: userId,
     metodologiaId: aula.metodologiaId,
@@ -492,16 +643,34 @@ async function montarEventoResponse(params: {
       ? "METODOLOGIA_AVULSA"
       : "AULA_AO_VIVO";
 
-  const aulaAvulsaGratuita =
-    produtoTipo === "AULA_AO_VIVO" &&
-    (!aula.acessoPago || Number(aula.precoAcesso || 0) <= 0);
+  const precoAulaAoVivo =
+    Number(
+      aula.precoAcesso ?? 0
+    );
 
-  const temAcesso =
+  const aulaAvulsaPaga =
+    produtoTipo ===
+      "AULA_AO_VIVO" &&
+    Number.isFinite(
+      precoAulaAoVivo
+    ) &&
+    precoAulaAoVivo > 0;
+
+  const aulaAvulsaGratuita =
+    produtoTipo ===
+      "AULA_AO_VIVO" &&
+    !aulaAvulsaPaga;
+
+  const temAcessoBase =
     isOwner ||
     isConvidadoFootEra ||
     !!assinatura ||
     !!acessoAulaAvulsa ||
     aulaAvulsaGratuita;
+
+  const temAcesso =
+    temAcessoBase &&
+    !replayExpirado;
 
   const convidadosLista = Array.isArray(aula.convidados)
     ? aula.convidados
@@ -552,24 +721,64 @@ async function montarEventoResponse(params: {
       : `AULA_AO_VIVO:${aula.id}`;
 
   const preco =
-    produtoTipo === "AULA_AO_VIVO"
-      ? Number(aula.precoAcesso || 0)
-      : Number(
-          aula.metodologiaAvulsa?.precoAssinaturaMensal ||
-            aula.metodologia?.precoAssinaturaMensal ||
+    produtoTipo ===
+    "AULA_AO_VIVO"
+      ? precoAulaAoVivo
+
+      : produtoTipo ===
+        "METODOLOGIA_AVULSA"
+      ? Number(
+          aula
+            .metodologiaAvulsa
+            ?.precoAssinaturaMensal ??
             0
-        );
+        )
+    : 0;
 
   return {
     ...aula,
     streamKey: undefined,
-
+    ivsIngestEndpoint: undefined,
+    ivsStreamKeyArn: undefined,
+    ivsChannelArn: undefined,
+    ivsRecordingConfigurationArn:
+      undefined,
+    ivsRecordingS3Prefix:
+      undefined,
+    ivsRecordingId: undefined,
+    urlStream:
+      temAcesso &&
+      aula.status === "AO_VIVO"
+        ? aula.urlStream ?? null
+        : null,
+    videoGravadoUrl:
+      temAcesso &&
+      aula.status ===
+        "FINALIZADA" &&
+      aula.replayDisponivel ===
+        true &&
+      !replayExpirado
+        ? aula.videoGravadoUrl ??
+          null
+        : null,
+    replayDisponivel:
+      aula.replayDisponivel ===
+        true &&
+      !replayExpirado,
+    replayExpiraEm:
+      validadeReplay
+        .replayExpiraEm
+        ?.toISOString() ??
+      null,
+    replayExpirado,
+    segundosRestantes:
+      validadeReplay
+        .segundosRestantes,
     isOwner,
     temConvidado,
     pessoaDestaqueLabel,
     pessoaDestaqueNome,
     pessoaDestaqueDescricao,
-
     convidadoUsuario: aula.convidadoUsuario || null,
     convidados: convidadosLista,
     convidadoNome: temConvidado
@@ -583,30 +792,45 @@ async function montarEventoResponse(params: {
         aula.convidadoDescricao ||
         "Convidado FootEra"
       : null,
-
     acesso: {
       temAcesso,
       isOwner,
       isConvidadoFootEra,
-      precisaLogin: !userId,
-      precisaPagamento: !!userId && !temAcesso,
+      precisaLogin:
+        !replayExpirado &&
+        !userId &&
+        !temAcessoBase,
+      precisaPagamento:
+        !replayExpirado &&
+        !!userId &&
+        !temAcessoBase,
       produtoTipo,
       planoId,
       preco,
-      motivo: temAcesso
-        ? null
-        : !userId
-          ? "PRECISA_LOGIN"
-          : "PRECISA_PAGAMENTO",
+      replayExpiraEm:
+        validadeReplay
+          .replayExpiraEm
+          ?.toISOString() ??
+        null,
+      replayExpirado,
+      segundosRestantes:
+        validadeReplay
+          .segundosRestantes,
+      motivo:
+        replayExpirado
+          ? "REPLAY_EXPIRADO"
+          : temAcessoBase
+            ? null
+            : !userId
+              ? "PRECISA_LOGIN"
+              : "PRECISA_PAGAMENTO",
     },
-
     metodologia: aula.metodologia
       ? {
           ...aula.metodologia,
           origem: "LEARNING",
         }
       : null,
-
     metodologiaAvulsa: aula.metodologiaAvulsa
       ? {
           ...aula.metodologiaAvulsa,
@@ -640,6 +864,579 @@ export async function getAulaEventoPublica(req: Request, res: Response) {
   }
 }
 
+export async function listarMinhasAulasLearning(
+  req: Request,
+  res: Response
+) {
+  try {
+    const usuarioId =
+      String(
+        (req as any).userId ||
+          (req as any).user?.id ||
+          (req as any).userCtx?.id ||
+          ""
+      ).trim();
+
+    if (!usuarioId) {
+      return res.status(401).json({
+        message:
+          "Usuário não autenticado.",
+      });
+    }
+
+    const agora =
+      new Date();
+
+    const [
+      acessos,
+      presencas,
+      assinaturas,
+    ] = await Promise.all([
+      prisma.aulaAoVivoAcesso
+        .findMany({
+          where: {
+            usuarioId,
+
+            status:
+              "ATIVO",
+
+            OR: [
+              {
+                expiraEm:
+                  null,
+              },
+              {
+                expiraEm: {
+                  gt:
+                    agora,
+                },
+              },
+            ],
+          },
+
+          select: {
+            aulaAoVivoId:
+              true,
+
+            origem:
+              true,
+          },
+        }),
+
+      prisma.aulaAoVivoPresenca
+        .findMany({
+          where: {
+            usuarioId,
+          },
+
+          select: {
+            aulaAoVivoId:
+              true,
+
+            entrouAoVivo:
+              true,
+          },
+        }),
+
+      prisma.metodologiaAssinante
+        .findMany({
+          where: {
+            usuarioId,
+
+            status: {
+              in: [
+                MetodologiaAssinaturaStatus.ATIVA,
+                MetodologiaAssinaturaStatus.CONCLUIDA,
+              ],
+            },
+          },
+
+          select: {
+            metodologiaId:
+              true,
+
+            metodologiaAvulsaId:
+              true,
+
+            status:
+              true,
+
+            expiraEm:
+              true,
+          },
+        }),
+    ]);
+
+    const aulaIds =
+      new Set<string>();
+
+    const origemPorAula =
+      new Map<
+        string,
+        string
+      >();
+
+    for (
+      const acesso of acessos
+    ) {
+      if (
+        !acesso.aulaAoVivoId
+      ) {
+        continue;
+      }
+
+      aulaIds.add(
+        acesso.aulaAoVivoId
+      );
+
+      const origem =
+        String(
+          acesso.origem ||
+            ""
+        ).toUpperCase();
+
+      if (
+        origem.includes(
+          "GRATUIT"
+        )
+      ) {
+        origemPorAula.set(
+          acesso.aulaAoVivoId,
+          "GRATUITO"
+        );
+      } else {
+        origemPorAula.set(
+          acesso.aulaAoVivoId,
+          "COMPRA"
+        );
+      }
+    }
+
+    for (
+      const presenca of presencas
+    ) {
+      if (
+        !presenca.aulaAoVivoId
+      ) {
+        continue;
+      }
+
+      aulaIds.add(
+        presenca.aulaAoVivoId
+      );
+
+      if (
+        !origemPorAula.has(
+          presenca.aulaAoVivoId
+        )
+      ) {
+        origemPorAula.set(
+          presenca.aulaAoVivoId,
+          "PRESENCA"
+        );
+      }
+    }
+
+    const metodologiaIds =
+      new Set<string>();
+
+    const metodologiaAvulsaIds =
+      new Set<string>();
+
+    for (
+      const assinatura of
+      assinaturas
+    ) {
+      const status =
+        String(
+          assinatura.status ||
+            ""
+        ).toUpperCase();
+
+      const expirada =
+        assinatura.expiraEm &&
+        assinatura.expiraEm <=
+          agora;
+
+      if (
+        status === "ATIVA" &&
+        expirada
+      ) {
+        continue;
+      }
+
+      if (
+        assinatura.metodologiaId
+      ) {
+        metodologiaIds.add(
+          assinatura.metodologiaId
+        );
+      }
+
+      if (
+        assinatura
+          .metodologiaAvulsaId
+      ) {
+        metodologiaAvulsaIds.add(
+          assinatura
+            .metodologiaAvulsaId
+        );
+      }
+    }
+
+    const criterios: any[] =
+      [];
+
+    if (
+      aulaIds.size > 0
+    ) {
+      criterios.push({
+        id: {
+          in:
+            Array.from(
+              aulaIds
+            ),
+        },
+      });
+    }
+
+    if (
+      metodologiaIds.size >
+      0
+    ) {
+      criterios.push({
+        metodologiaId: {
+          in:
+            Array.from(
+              metodologiaIds
+            ),
+        },
+      });
+    }
+
+    if (
+      metodologiaAvulsaIds
+        .size > 0
+    ) {
+      criterios.push({
+        metodologiaAvulsaId: {
+          in:
+            Array.from(
+              metodologiaAvulsaIds
+            ),
+        },
+      });
+    }
+
+    if (
+      criterios.length ===
+      0
+    ) {
+      return res.json({
+        items: [],
+      });
+    }
+
+    const aulas =
+      await prisma.aulaAoVivo
+        .findMany({
+          where: {
+            status: {
+              not:
+                "CANCELADA",
+            },
+
+            OR:
+              criterios,
+          },
+
+          orderBy: {
+            dataInicio:
+              "desc",
+          },
+
+          select: {
+            id:
+              true,
+
+            titulo:
+              true,
+
+            descricao:
+              true,
+
+            status:
+              true,
+
+            dataInicio:
+              true,
+
+            dataFim:
+              true,
+
+            iniciouEm:
+              true,
+
+            finalizouEm:
+              true,
+
+            replayDisponivel:
+              true,
+
+            precoAcesso:
+              true,
+
+            acessoPago:
+              true,
+
+            thumbUrl:
+              true,
+
+            duracaoMin:
+              true,
+
+            metodologiaId:
+              true,
+
+            metodologiaAvulsaId:
+              true,
+
+            criadorUsuarioId:
+              true,
+
+            criadorUsuario: {
+              select: {
+                id:
+                  true,
+
+                nome:
+                  true,
+
+                nomeDeUsuario:
+                  true,
+
+                foto:
+                  true,
+              },
+            },
+
+            metodologia: {
+              select: {
+                titulo:
+                  true,
+
+                capaUrl:
+                  true,
+              },
+            },
+
+            metodologiaAvulsa: {
+              select: {
+                titulo:
+                  true,
+
+                capaUrl:
+                  true,
+              },
+            },
+          },
+        });
+
+    const SETE_DIAS_MS =
+      7 *
+      24 *
+      60 *
+      60 *
+      1000;
+
+    const items =
+      aulas.map((aula) => {
+        const finalizacaoRaw =
+          aula.finalizouEm ||
+          aula.dataFim ||
+          null;
+
+        const finalizacao =
+          finalizacaoRaw
+            ? new Date(
+                finalizacaoRaw
+              )
+            : null;
+
+        const replayExpiraEm =
+          finalizacao &&
+          !Number.isNaN(
+            finalizacao.getTime()
+          )
+            ? new Date(
+                finalizacao.getTime() +
+                  SETE_DIAS_MS
+              )
+            : null;
+
+        const replayExpirado =
+          aula.status ===
+            "FINALIZADA" &&
+          !!replayExpiraEm &&
+          replayExpiraEm <=
+            agora;
+
+        const acessoDireto =
+          aulaIds.has(
+            aula.id
+          );
+
+        let origemAcesso =
+          origemPorAula.get(
+            aula.id
+          ) || "";
+
+        if (
+          !origemAcesso &&
+          (
+            (
+              aula.metodologiaId &&
+              metodologiaIds.has(
+                aula.metodologiaId
+              )
+            ) ||
+            (
+              aula
+                .metodologiaAvulsaId &&
+              metodologiaAvulsaIds.has(
+                aula
+                  .metodologiaAvulsaId
+              )
+            )
+          )
+        ) {
+          origemAcesso =
+            "ASSINATURA";
+        }
+
+        if (
+          !origemAcesso &&
+          acessoDireto
+        ) {
+          origemAcesso =
+            "ACESSO";
+        }
+
+        return {
+          id:
+            aula.id,
+
+          titulo:
+            aula.titulo,
+
+          descricao:
+            aula.descricao,
+
+          status:
+            aula.status,
+
+          dataInicio:
+            aula.dataInicio,
+
+          iniciouEm:
+            aula.iniciouEm,
+
+          finalizouEm:
+            aula.finalizouEm ||
+            aula.dataFim,
+
+          duracaoMin:
+            aula.duracaoMin,
+
+          thumbUrl:
+            aula.thumbUrl ||
+            aula.metodologiaAvulsa
+              ?.capaUrl ||
+            aula.metodologia
+              ?.capaUrl ||
+            null,
+
+          replayDisponivel:
+            aula
+              .replayDisponivel ===
+              true &&
+            !replayExpirado,
+
+          replayExpiraEm:
+            replayExpiraEm
+              ?.toISOString() ??
+            null,
+
+          replayExpirado,
+
+          segundosRestantes:
+            replayExpiraEm
+              ? Math.max(
+                  0,
+                  Math.floor(
+                    (
+                      replayExpiraEm.getTime() -
+                      agora.getTime()
+                    ) /
+                      1000
+                  )
+                )
+              : null,
+
+          precoAcesso:
+            Number(
+              aula.precoAcesso ??
+                0
+            ),
+
+          acessoPago:
+            aula.acessoPago ===
+              true ||
+            Number(
+              aula.precoAcesso ??
+                0
+            ) > 0,
+
+          origemAcesso:
+            origemAcesso ||
+            "ACESSO",
+
+          criadorUsuario:
+            aula.criadorUsuario,
+
+          metodologiaId:
+            aula.metodologiaId,
+
+          metodologiaAvulsaId:
+            aula
+              .metodologiaAvulsaId,
+
+          metodologiaTitulo:
+            aula.metodologiaAvulsa
+              ?.titulo ||
+            aula.metodologia
+              ?.titulo ||
+            null,
+        };
+      });
+
+    return res.json({
+      items,
+    });
+  } catch (error: any) {
+    console.error(
+      "Erro ao listar aulas do Learning:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        error?.message ||
+        "Erro ao carregar suas aulas ao vivo.",
+    });
+  }
+}
+
 export async function inscreverAulaEvento(req: Request, res: Response) {
   try {
     const aulaId = String(req.params.aulaId || "").trim();
@@ -648,6 +1445,30 @@ export async function inscreverAulaEvento(req: Request, res: Response) {
     if (!aula) {
       return res.status(404).json({
         message: "Evento ao vivo não encontrado.",
+      });
+    }
+
+    const validadeReplay =
+      calcularValidadeReplay(
+        aula
+      );
+
+    if (
+      aula.status ===
+        "FINALIZADA" &&
+      validadeReplay
+        .replayExpirado
+    ) {
+      return res.status(410).json({
+        code:
+          "REPLAY_EXPIRADO",
+
+        message:
+          "Este replay não está mais disponível. O prazo de sete dias terminou.",
+
+        replayExpiraEm:
+          validadeReplay
+            .replayExpiraEm,
       });
     }
 
@@ -741,6 +1562,30 @@ export async function comprarAulaEvento(req: Request, res: Response) {
     if (!aula) {
       return res.status(404).json({
         message: "Evento ao vivo não encontrado.",
+      });
+    }
+
+    const validadeReplay =
+      calcularValidadeReplay(
+        aula
+      );
+
+    if (
+      aula.status ===
+        "FINALIZADA" &&
+      validadeReplay
+        .replayExpirado
+    ) {
+      return res.status(410).json({
+        code:
+          "REPLAY_EXPIRADO",
+
+        message:
+          "Este replay expirou e não pode mais ser comprado.",
+
+        replayExpiraEm:
+          validadeReplay
+            .replayExpiraEm,
       });
     }
 
@@ -886,8 +1731,16 @@ export async function getSalaCopaPublica(req: Request, res: Response) {
             inscricaoFim: aula.inscricaoFim || null,
             status: aula.status || "AGENDADA",
             thumbUrl: aula.thumbUrl || metodologia?.capaUrl || null,
-            urlStream: aula.urlStream || null,
-            videoGravadoUrl: aula.videoGravadoUrl || null,
+            urlStream:
+              evento.acesso?.temAcesso
+                ? evento.urlStream ?? null
+                : null,
+
+            videoGravadoUrl:
+              evento.acesso?.temAcesso
+                ? evento.videoGravadoUrl ??
+                  null
+                : null,
             replayDisponivel: aula.replayDisponivel ?? false,
             chatAtivo: aula.chatAtivo ?? true,
             gravacaoAtiva: aula.gravacaoAtiva ?? true,
@@ -1021,21 +1874,95 @@ export async function comprarSalaCopa(req: Request, res: Response) {
       });
     }
 
-    const acessoLiberado = await criarAcessoMetodologia({
-      usuarioId: userId,
-      metodologiaId: metodologiaId || null,
-      metodologiaAvulsaId: metodologiaAvulsaId || null,
-    });
+    if (metodologiaId) {
+      const planoId =
+        `METODOLOGIA:${metodologiaId}`;
+
+      return res.status(402).json({
+        ok: false,
+
+        message:
+          "Para acessar este conteúdo, assine o plano Learning.",
+
+        redirectTo:
+          `/pagamentos?planoId=${encodeURIComponent(
+            planoId
+          )}`,
+      });
+    }
+
+    const produto =
+      await prisma
+        .metodologiaAvulsa
+        .findUnique({
+          where: {
+            id:
+              metodologiaAvulsaId,
+          },
+
+          select: {
+            id: true,
+            precoAssinaturaMensal:
+              true,
+          },
+        });
+
+    if (!produto) {
+      return res.status(404).json({
+        message:
+          "Metodologia não encontrada.",
+      });
+    }
+
+    const preco =
+      Number(
+        produto
+          .precoAssinaturaMensal ??
+          0
+      );
+
+    const planoId =
+      `METODOLOGIA_AVULSA:${metodologiaAvulsaId}`;
+
+    if (preco > 0) {
+      return res.status(402).json({
+        ok: false,
+        message:
+          "Para acessar este conteúdo, conclua o pagamento.",
+        preco,
+        redirectTo:
+          `/pagamentos?planoId=${encodeURIComponent(
+            planoId
+          )}`,
+      });
+    }
+
+    const acessoLiberado =
+      await criarAcessoMetodologia({
+        usuarioId: userId,
+        metodologiaId:
+          metodologiaId ||
+          null,
+        metodologiaAvulsaId:
+          metodologiaAvulsaId ||
+          null,
+      });
 
     return res.json({
       ok: true,
-      message: "Acesso liberado para a Sala Copa.",
+      message:
+        "Acesso gratuito liberado.",
       acessoLiberado,
       acesso: {
         aulaId: null,
-        metodologiaId: metodologiaId || null,
-        metodologiaAvulsaId: metodologiaAvulsaId || null,
-        status: "CONFIRMADO",
+        metodologiaId:
+          metodologiaId ||
+          null,
+        metodologiaAvulsaId:
+          metodologiaAvulsaId ||
+          null,
+        status:
+          "CONFIRMADO",
       },
     });
   } catch (e: any) {

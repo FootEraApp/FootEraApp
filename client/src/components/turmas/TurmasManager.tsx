@@ -94,12 +94,14 @@ export default function TurmasManager({
   owner,
   professorId,
   initialTurmaId,
+  mostrarTodasDoProfessor = false,
 }: {
   open: boolean;
   onClose: () => void;
   owner?: Owner;
   professorId?: string;
   initialTurmaId?: string;
+  mostrarTodasDoProfessor?: boolean;
 }) {
   const getToken = () =>
     (Storage as any).token ??
@@ -206,47 +208,209 @@ export default function TurmasManager({
     [turmas, selecionada]
   );
 
-  const podeGerenciarTurma = useMemo(() => {
-    if (!turmaSelecionada) return false;
+  const podeGerenciarTurma =
+    useMemo(() => {
+      if (!turmaSelecionada) {
+        return false;
+      }
 
-    const professorIds = (turmaSelecionada.professorIds ?? []).map((x) =>
-      String(x).trim()
-    );
+      const professorIds =
+        (
+          turmaSelecionada.professorIds ??
+          []
+        ).map((id) =>
+          String(id).trim()
+        );
 
-    if (!owner && meuProfessorId) {
-      return professorIds.includes(String(meuProfessorId).trim());
-    }
+      const professorLogadoParticipa =
+        Boolean(meuProfessorId) &&
+        professorIds.includes(
+          String(meuProfessorId).trim()
+        );
 
-    if (owner?.id && turmaSelecionada.ownerId) {
-      return String(owner.id).trim() === String(turmaSelecionada.ownerId).trim();
-    }
+      if (professorLogadoParticipa) {
+        return true;
+      }
 
-    return false;
-  }, [turmaSelecionada, owner?.id, meuProfessorId]);
+      if (
+        owner?.id &&
+        turmaSelecionada.ownerId
+      ) {
+        return (
+          String(owner.id).trim() ===
+          String(
+            turmaSelecionada.ownerId
+          ).trim()
+        );
+      }
+
+      return false;
+    }, [
+      turmaSelecionada,
+      owner?.id,
+      meuProfessorId,
+    ]);
 
   const podeExcluirTurma = podeGerenciarTurma; 
-  const podeSairDaTurma = useMemo(() => {
-    if (!meuProfessorId) return false;
-    if (!turmaSelecionada) return false;
+  const podeSairDaTurma =
+    useMemo(() => {
+      if (
+        !meuProfessorId ||
+        !turmaSelecionada
+      ) {
+        return false;
+      }
 
-    const ids = (turmaSelecionada.professorIds ?? []).map((x) => String(x).trim());
-    const match = ids.includes(String(meuProfessorId).trim());
+      const participa =
+        (
+          turmaSelecionada
+            .professorIds ?? []
+        )
+          .map(String)
+          .includes(
+            String(meuProfessorId)
+          );
 
-    if (tipoUsuarioLogado === "professor") return match && !podeGerenciarTurma;
-    if (!tipoUsuarioLogado) return match && !podeGerenciarTurma;
+      return (
+        participa &&
+        !podeGerenciarTurma
+      );
+    }, [
+      meuProfessorId,
+      turmaSelecionada,
+      podeGerenciarTurma,
+    ]);
 
-    return false;
-  }, [meuProfessorId, turmaSelecionada, tipoUsuarioLogado, podeGerenciarTurma]);
+    function normalizarAtletasVinculados(
+    listaBruta: any[]
+  ): AtletaMin[] {
+    const mapa = new Map<
+      string,
+      AtletaMin
+    >();
 
-  function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
-    const m = String(mesZeroBased + 1).padStart(2, "0");
-    const d = String(dia).padStart(2, "0");
-    return `${ano}-${m}-${d}`;
+  for (const atleta of listaBruta) {
+
+    if (atleta?.vinculado === false) {
+      continue;
+    }
+
+    const usuarioId = String(
+      atleta?.usuarioId ??
+        atleta?.usuario?.id ??
+        ""
+    ).trim();
+
+    if (!usuarioId) {
+      continue;
+    }
+
+    const nome = String(
+      atleta?.nome ??
+        atleta?.usuario?.nome ??
+        ""
+    ).trim();
+
+    const sobrenome = String(
+      atleta?.sobrenome ??
+        atleta?.usuario?.sobrenome ??
+        ""
+    ).trim();
+
+    const nomeCompleto =
+      [nome, sobrenome]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || "Atleta";
+
+    mapa.set(usuarioId, {
+      usuarioId,
+      nome: nomeCompleto,
+      sobrenome:
+        sobrenome || undefined,
+    });
   }
 
-  function dateKeyLocal(date: Date): string {
-    return formatYMD(date.getFullYear(), date.getMonth(), date.getDate());
-  }
+  return Array.from(
+    mapa.values()
+  ).sort((a, b) =>
+    a.nome.localeCompare(
+      b.nome,
+      "pt-BR"
+    )
+  );
+}
+
+const carregarAtletasVinculados =
+  async (): Promise<AtletaMin[]> => {
+    const vinculo = owner
+      ? owner.tipo === "Clube"
+        ? "clube"
+        : "escolinha"
+      : "professor";
+
+    const entidadeId = owner?.id
+      ? String(owner.id)
+      : String(
+          professorAlvoId ||
+            meuProfessorId ||
+            ""
+        ).trim();
+
+    if (!entidadeId) {
+      setAlunos([]);
+      return [];
+    }
+
+    try {
+      const resposta = await axios.get(
+        `${API.BASE_URL}/api/gerenciar/atletas`,
+        {
+          headers,
+
+          params: {
+            vinculo,
+            id: entidadeId,
+            order: "nome_asc",
+            limit: 2000,
+          },
+        }
+      );
+
+      const listaBruta =
+        Array.isArray(
+          resposta.data?.atletas
+        )
+          ? resposta.data.atletas
+          : Array.isArray(
+              resposta.data?.items
+            )
+          ? resposta.data.items
+          : Array.isArray(
+              resposta.data
+            )
+          ? resposta.data
+          : [];
+
+      const vinculados =
+        normalizarAtletasVinculados(
+          listaBruta
+        );
+
+      setAlunos(vinculados);
+
+      return vinculados;
+    } catch (error) {
+      console.error(
+        "Erro ao carregar atletas vinculados:",
+        error
+      );
+
+      setAlunos([]);
+
+      return [];
+    }
+  };
 
   useEffect(() => {
     if (open) setFiltroProf(professorAlvoId || "");
@@ -268,9 +432,14 @@ export default function TurmasManager({
       try {
         if (!owner) {
           setProfs([]);
-          setAlunos([]);
 
-          const lista = await carregarTurmas(undefined, filtroProf);
+          await carregarAtletasVinculados();
+
+          const lista =
+            await carregarTurmas(
+              undefined,
+              filtroProf
+            );
           const tid = String(initialTurmaId ?? "").trim();
           let alvoId: string | undefined;
 
@@ -320,33 +489,7 @@ export default function TurmasManager({
           }))
         );
 
-        const resA = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
-          headers,
-          params: {
-            vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-            id: orgId,
-            order: "nome_asc",
-            limit: 1000,
-          },
-        });
-
-        const la = (resA.data?.atletas || []) as any[];
-
-        setAlunos(
-          la.map((a) => {
-            const usuarioId = String(a.usuarioId ?? a.usuario?.id ?? a.id);
-            const nome = String(a.nome ?? a.usuario?.nome ?? "").trim();
-            const sobrenome = String(a.sobrenome ?? a.usuario?.sobrenome ?? "").trim();
-            const nomeCompleto =
-              [nome, sobrenome].filter(Boolean).join(" ").trim() || "Atleta";
-
-            return {
-              usuarioId,
-              nome: nomeCompleto,
-              sobrenome: sobrenome || undefined,
-            };
-          })
-        );
+        await carregarAtletasVinculados();
 
         const lista = await carregarTurmas(owner, filtroProf);
         const tid = String(initialTurmaId ?? "").trim();
@@ -427,66 +570,268 @@ export default function TurmasManager({
     })();
   }, [open, selecionada, abaDireita, freqYear]);
 
-  const carregarTurmas = async (o?: Owner, professorFiltro?: string) => {
-    const resT = o
-      ? await axios.get(`${API.BASE_URL}/api/turmas`, {
+  const carregarTurmas = async (
+    o?: Owner,
+    professorFiltro?: string
+  ) => {
+    const profFiltro = String(
+      professorFiltro ??
+        filtroProf ??
+        ""
+    ).trim();
+
+    let resposta;
+
+    if (
+      mostrarTodasDoProfessor &&
+      profFiltro
+    ) {
+      resposta = await axios.get(
+        `${API.BASE_URL}/api/turmas`,
+        {
           headers,
-          params: { ownerTipo: o.tipo, ownerId: o.id },
-        })
-      : await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, {
+          params: {
+            professorId:
+              profFiltro,
+          },
+        }
+      );
+    } else if (o) {
+      resposta = await axios.get(
+        `${API.BASE_URL}/api/turmas`,
+        {
           headers,
-        });
-
-    const lt = (resT.data?.items || resT.data || []) as any[];
-
-    const parsed: TurmaMin[] = lt.map((t) => {
-      const professorIds = Array.isArray(t.professorIds) ? t.professorIds.map(String) : [];
-      const professorNomes = Array.isArray(t.professorNomes) ? t.professorNomes : [];
-
-      return {
-        id: String(t.id),
-        nome: String(t.nome ?? "Turma"),
-        descricao: t.descricao ? String(t.descricao) : null,
-        categoria: normalizarCategoriasTurma(t.categoria),
-        professorIds,
-        professorNomes,
-        professorNome: t.professorNome ?? (professorNomes.length ? professorNomes.join(", ") : null),
-        alunosCount: t.alunosCount ?? 0,
-
-        ownerTipo: (t.ownerTipo ?? t.organizacaoTipo ?? null) as any,
-        ownerId: t.ownerId ? String(t.ownerId) : null,
-        criadoPorProfessorId: t.criadoPorProfessorId ? String(t.criadoPorProfessorId) : null,
-      };
-    });
-
-    if (!o) {
-      const map = new Map<string, string>();
-
-      parsed.forEach((t) => {
-        const ids = (t.professorIds || []).map(String);
-        const nomes = Array.isArray(t.professorNomes) ? t.professorNomes : [];
-
-        ids.forEach((pid, idx) => {
-          const nome =
-            String(nomes[idx] ?? "").trim() ||
-            String(t.professorNome ?? "").trim() ||
-            "Professor";
-
-          if (pid && !map.has(pid)) map.set(pid, nome);
-        });
-      });
-
-      setProfs(Array.from(map.entries()).map(([id, nome]) => ({ id, nome })));
+          params: {
+            ownerTipo: o.tipo,
+            ownerId: o.id,
+          },
+        }
+      );
+    } else if (profFiltro) {
+      resposta = await axios.get(
+        `${API.BASE_URL}/api/turmas`,
+        {
+          headers,
+          params: {
+            professorId:
+              profFiltro,
+          },
+        }
+      );
+    } else {
+      resposta = await axios.get(
+        `${API.BASE_URL}/api/turmas/como-professor`,
+        {
+          headers,
+        }
+      );
     }
 
-    const profFiltro = (professorFiltro ?? filtroProf)?.trim();
+    const listaBruta =
+      Array.isArray(
+        resposta.data?.items
+      )
+        ? resposta.data.items
+        : Array.isArray(
+            resposta.data
+          )
+        ? resposta.data
+        : Array.isArray(
+            resposta.data?.data
+          )
+        ? resposta.data.data
+        : [];
+
+    const parsed: TurmaMin[] =
+      listaBruta.map(
+        (turma: any) => {
+          const professorIds =
+            Array.isArray(
+              turma?.professorIds
+            )
+              ? turma.professorIds.map(
+                  String
+                )
+              : [];
+
+          const professorNomes =
+            Array.isArray(
+              turma?.professorNomes
+            )
+              ? turma.professorNomes
+                  .map(String)
+                  .filter(Boolean)
+              : [];
+
+          const ownerTipo =
+            turma?.ownerTipo ??
+            turma?.organizacaoTipo ??
+            (turma?.clubeId
+              ? "Clube"
+              : turma?.escolinhaId
+              ? "Escolinha"
+              : null);
+
+          const ownerId =
+            turma?.ownerId ??
+            turma?.clubeId ??
+            turma?.escolinhaId ??
+            null;
+
+          return {
+            id: String(
+              turma.id
+            ),
+
+            nome: String(
+              turma.nome ??
+                "Turma"
+            ),
+
+            descricao:
+              turma.descricao
+                ? String(
+                    turma.descricao
+                  )
+                : null,
+
+            categoria:
+              normalizarCategoriasTurma(
+                turma.categoria
+              ),
+
+            professorIds,
+            professorNomes,
+
+            professorNome:
+              turma.professorNome ??
+              (professorNomes.length > 0
+                ? professorNomes.join(
+                    ", "
+                  )
+                : null),
+
+            alunosCount:
+              turma.alunosCount ??
+              turma._count?.membros ??
+              0,
+
+            ownerTipo:
+              ownerTipo as
+                | "Clube"
+                | "Escolinha"
+                | null,
+
+            ownerId:
+              ownerId
+                ? String(ownerId)
+                : null,
+
+            criadoPorProfessorId:
+              turma
+                .criadoPorProfessorId
+                ? String(
+                    turma
+                      .criadoPorProfessorId
+                  )
+                : null,
+          };
+        }
+      );
 
     const filtradas = profFiltro
-      ? parsed.filter((t) => (t.professorIds ?? []).includes(String(profFiltro)))
+      ? parsed.filter((turma) =>
+          (
+            turma.professorIds ??
+            []
+          ).includes(profFiltro)
+        )
       : parsed;
 
-    setTurmas(filtradas);
-    return filtradas;
+    const ordenadas = o
+      ? [...filtradas].sort(
+          (turmaA, turmaB) => {
+            const aExterna =
+              String(
+                turmaA.ownerId ??
+                  ""
+              ) !==
+              String(o.id);
+
+            const bExterna =
+              String(
+                turmaB.ownerId ??
+                  ""
+              ) !==
+              String(o.id);
+
+            return (
+              Number(aExterna) -
+              Number(bExterna)
+            );
+          }
+        )
+      : filtradas;
+
+    if (!o) {
+      const mapa =
+        new Map<
+          string,
+          string
+        >();
+
+      for (const turma of ordenadas) {
+        const ids =
+          (
+            turma.professorIds ??
+            []
+          ).map(String);
+
+        const nomes =
+          turma.professorNomes ??
+          [];
+
+        ids.forEach(
+          (professorId, index) => {
+            const nome =
+              String(
+                nomes[index] ??
+                  ""
+              ).trim() ||
+              String(
+                turma.professorNome ??
+                  ""
+              ).trim() ||
+              "Professor";
+
+            if (
+              professorId &&
+              !mapa.has(
+                professorId
+              )
+            ) {
+              mapa.set(
+                professorId,
+                nome
+              );
+            }
+          }
+        );
+      }
+
+      setProfs(
+        Array.from(
+          mapa.entries()
+        ).map(([id, nome]) => ({
+          id,
+          nome,
+        }))
+      );
+    }
+
+    setTurmas(ordenadas);
+
+    return ordenadas;
   };
 
   const onFiltrarProf = async (prof: string) => {
@@ -494,13 +839,34 @@ export default function TurmasManager({
     await carregarTurmas(owner, prof);
   };
 
-  const abrirTurma = async (id: string, turmaFromList?: TurmaMin) => {
+  const abrirTurma = async (
+    id: string,
+    turmaFromList?: TurmaMin
+  ) => {
+    const turma =
+      turmaFromList ??
+      turmas.find(
+        (item) =>
+          item.id === id
+      );
+
+    if (
+      owner &&
+      !turmaPertenceAoOwner(turma) &&
+      !professorLogadoParticipaDaTurma(
+        turma
+      )
+    ) {
+      toast.error(
+        "Essa turma pertence a outra organização e você não participa dela."
+      );
+
+      return;
+    }
+
     setSelecionada(id);
     setConfirmLeaveOpen(false);
     setLeaveAware(false);
-
-    const turma = turmaFromList ?? turmas.find((t) => t.id === id);
-
     setEditNomeTurma(turma?.nome || "");
     setEditCategoriasTurma(
       ordenarCategorias(normalizarCategoriasTurma(turma?.categoria))
@@ -514,27 +880,60 @@ export default function TurmasManager({
 
     const res = await axios.get(`${API.BASE_URL}/api/turmas/${id}/alunos`, { headers });
 
-    if (!owner && Array.isArray(res.data?.disponiveis)) {
-      const disponiveis = res.data.disponiveis as any[];
+    const vinculadosDaResposta =
+      Array.isArray(res.data?.alunos)
+        ? res.data.alunos.filter(
+            (atleta: any) =>
+              atleta?.vinculado === true
+          )
+        : [];
 
-      setAlunos(
-        disponiveis.map((d) => ({
-          usuarioId: String(d.usuarioId),
-          nome: String(d.usuario?.nome ?? "Atleta"),
-          sobrenome: undefined,
-        }))
+    if (
+      vinculadosDaResposta.length > 0
+    ) {
+      setAlunos((anteriores) =>
+        normalizarAtletasVinculados([
+          ...anteriores,
+          ...vinculadosDaResposta,
+        ])
       );
     }
 
-    const usuarioIds: string[] = Array.isArray(res.data?.usuarioIds)
-      ? res.data.usuarioIds.map(String) 
-      : Array.isArray(res.data?.alunos)
-        ? res.data.alunos.filter((x: any) => x?.inTurma).map((x: any) => String(x.usuarioId)).filter(Boolean)
+    const usuarioIds: string[] =
+      Array.isArray(
+        res.data?.usuarioIds
+      )
+        ? res.data.usuarioIds
+            .map(String)
+            .filter(Boolean)
+        : Array.isArray(
+            res.data?.alunos
+          )
+        ? res.data.alunos
+            .filter(
+              (atleta: any) =>
+                atleta?.inTurma ===
+                  true &&
+                atleta?.vinculado ===
+                  true
+            )
+            .map(
+              (atleta: any) =>
+                String(
+                  atleta.usuarioId
+                )
+            )
+            .filter(Boolean)
         : [];
 
-    const alunosTurma: TurmaAluno[] = Array.isArray(res.data?.alunos)
-      ? res.data.alunos
-          .map((a: any) => {
+    const alunosTurma: TurmaAluno[] =
+      Array.isArray(res.data?.alunos)
+        ? res.data.alunos
+            .filter(
+              (atleta: any) =>
+                atleta?.vinculado === true
+            )
+            .map((a: any) => {
             const u = a?.usuario ?? {};
             const nome = String(u?.nome ?? a?.nome ?? "").trim();
             const sobrenome = String(u?.sobrenome ?? a?.sobrenome ?? "").trim();
@@ -597,6 +996,17 @@ export default function TurmasManager({
         if (turmaAtualizada) await abrirTurma(selecionada, turmaAtualizada);
       }
 
+      window.dispatchEvent(
+        new CustomEvent(
+          "footera:turma-alterada",
+          {
+            detail: {
+              turmaId: selecionada,
+            },
+          }
+        )
+      );
+
       setEditandoInfoTurma(false);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || "Falha ao atualizar turma.");
@@ -652,6 +1062,8 @@ export default function TurmasManager({
       );
 
       const lista = await carregarTurmas(owner, filtroProf);
+
+      await carregarAtletasVinculados();
       const turmaAtualizada = lista.find((t) => String(t.id) === String(selecionada));
 
       if (turmaAtualizada) {
@@ -669,6 +1081,18 @@ export default function TurmasManager({
 
       setDirtyProf(false);
       setDirtyAlunos(false);
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "footera:turma-alterada",
+          {
+            detail: {
+              turmaId:
+                selecionada,
+            },
+          }
+        )
+      );
 
       toast.success(
         dirtyAlunos
@@ -703,6 +1127,18 @@ export default function TurmasManager({
         { headers }
       );
 
+      window.dispatchEvent(
+        new CustomEvent(
+          "footera:turma-alterada",
+          {
+            detail: {
+              turmaId: selecionada,
+              professorRemovido: true,
+            },
+          }
+        )
+      );
+
       toast.success("Você foi removido da turma. Ela não aparecerá mais para você.");
 
       const lista = await carregarTurmas(undefined, filtroProf);
@@ -734,7 +1170,22 @@ export default function TurmasManager({
 
     try {
       setDeletandoTurma(true);
-      await axios.delete(`${API.BASE_URL}/api/turmas/${turmaId}`, { headers });
+      await axios.delete(
+        `${API.BASE_URL}/api/turmas/${turmaId}`,
+        { headers }
+      );
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "footera:turma-alterada",
+          {
+            detail: {
+              turmaId,
+              removida: true,
+            },
+          }
+        )
+      );
 
       setConfirmDeleteOpen(false);
       toast.success("Turma excluída!");
@@ -794,6 +1245,18 @@ export default function TurmasManager({
 
       const turmaNova = lista.find((t) => t.id === novaId);
       if (novaId) await abrirTurma(novaId, turmaNova);
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "footera:turma-alterada",
+          {
+            detail: {
+              turmaId: novaId,
+              criada: true,
+            },
+          }
+        )
+      );
 
       toast.success("Turma criada!");
     } catch (e: any) {
@@ -892,6 +1355,65 @@ export default function TurmasManager({
 
   if (!open) return null;
 
+  const professorLogadoParticipaDaTurma = (
+    turma?: TurmaMin
+  ) => {
+    if (!turma || !meuProfessorId) {
+      return false;
+    }
+
+    return (
+      turma.professorIds ?? []
+    )
+      .map((id) =>
+        String(id).trim()
+      )
+      .includes(
+        String(meuProfessorId).trim()
+      );
+  };
+
+  const turmaPertenceAoOwner = (
+    turma?: TurmaMin
+  ) => {
+    if (!turma || !owner?.id) {
+      return false;
+    }
+
+    return (
+      String(
+        turma.ownerId ?? ""
+      ).trim() ===
+      String(owner.id).trim()
+    );
+  };
+
+  const turmaEhExternaParaUsuario = (
+    turma?: TurmaMin
+  ) => {
+    if (!owner?.id || !turma) {
+      return false;
+    }
+
+    if (
+      professorLogadoParticipaDaTurma(
+        turma
+      )
+    ) {
+      return false;
+    }
+
+    return !turmaPertenceAoOwner(
+      turma
+    );
+  };
+
+  const estaNoModoProfessorLogado =
+    Boolean(professorAlvoId) &&
+    Boolean(meuProfessorId) &&
+    String(professorAlvoId) ===
+      String(meuProfessorId);
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/40">
       <div
@@ -906,7 +1428,11 @@ export default function TurmasManager({
       >
         <div className="flex items-center justify-between border-b border-zinc-100 p-4">
           <div className="text-sm font-semibold text-zinc-900">
-            {owner ? `${owner.tipo} · Gerenciar turmas` : "Gerenciar turmas"}
+            {estaNoModoProfessorLogado
+              ? "Professor · Gerenciar turmas"
+              : owner
+              ? `${owner.tipo} · Gerenciar turmas`
+              : "Gerenciar turmas"}
           </div>
           <button onClick={fecharModal} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-50">
             <X className="h-5 w-5" />
@@ -950,35 +1476,97 @@ export default function TurmasManager({
                   <div className="p-4 text-center text-zinc-500">Nenhuma turma.</div>
                 ) : (
                   <ul className="overflow-visible">
-                    {turmas.map((t) => (
-                      <li
-                        key={t.id}
-                        onClick={() => abrirTurma(t.id, t)}
-                        className={`flex cursor-pointer items-center justify-between p-3 hover:bg-zinc-50 ${
-                          selecionada === t.id ? "bg-zinc-50" : ""
-                        }`}
-                      >
-                        <div>
-                          <div className="text-sm font-medium text-zinc-900">{t.nome}</div>
+                    {turmas.map((turma) => {
+                      const externa = turmaEhExternaParaUsuario(turma);
+                      return (
+                        <li
+                          key={turma.id}
+                          onClick={() => {
+                            if (externa) {
+                              toast.error(
+                                "Essa turma pertence a outra organização e está disponível somente para visualização."
+                              );
 
-                          {t.descricao ? (
-                            <div className="mt-0.5 line-clamp-2 text-xs text-zinc-600">
-                              <p>Descrição: {t.descricao}</p>
+                              return;
+                            }
+
+                            void abrirTurma(
+                              turma.id,
+                              turma
+                            );
+                          }}
+                          className={`
+                            flex items-center justify-between
+                            p-3
+                            ${
+                              externa
+                                ? "cursor-not-allowed bg-zinc-50/60 opacity-75"
+                                : "cursor-pointer hover:bg-zinc-50"
+                            }
+                            ${
+                              selecionada ===
+                              turma.id
+                                ? "bg-zinc-50"
+                                : ""
+                            }
+                          `}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-sm font-medium text-zinc-900">
+                                {turma.nome}
+                              </div>
+
+                              {externa && (
+                                <span
+                                  className="
+                                    rounded-full
+                                    border border-amber-200
+                                    bg-amber-50
+                                    px-2 py-0.5
+                                    text-[10px]
+                                    font-medium
+                                    text-amber-800
+                                  "
+                                >
+                                  Outra organização
+                                </span>
+                              )}
                             </div>
-                          ) : null}
 
-                          <div className="mt-2 text-xs text-zinc-500">
-                            {normalizarCategoriasTurma(t.categoria).length
-                              ? ordenarCategorias(normalizarCategoriasTurma(t.categoria)).join(", ")
-                              : "—"}{" "}
-                            · {t.professorNome || "Sem professor"}
+                            {turma.descricao ? (
+                              <div className="mt-0.5 line-clamp-2 text-xs text-zinc-600">
+                                <p>
+                                  Descrição:{" "}
+                                  {turma.descricao}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            <div className="mt-2 text-xs text-zinc-500">
+                              {normalizarCategoriasTurma(
+                                turma.categoria
+                              ).length
+                                ? ordenarCategorias(
+                                    normalizarCategoriasTurma(
+                                      turma.categoria
+                                    )
+                                  ).join(", ")
+                                : "—"}
+                              {" · "}
+                              {turma.professorNome ||
+                                "Sem professor"}
+                            </div>
                           </div>
-                        </div>
-                        <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-                          {t.alunosCount ?? 0} aluno(s)
-                        </span>
-                      </li>
-                    ))}
+
+                          <span className="shrink-0 rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
+                            {turma.alunosCount ??
+                              0}{" "}
+                            aluno(s)
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

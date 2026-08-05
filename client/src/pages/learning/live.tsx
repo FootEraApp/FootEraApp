@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   AlertCircle,
   CalendarClock,
+  Trash2,
   CheckCircle2,
   Clock,
   Loader2,
@@ -31,19 +32,84 @@ type AulaAoVivoDetalhe = {
   dataFim?: string | null;
   iniciouEm?: string | null;
   finalizouEm?: string | null;
-  
   urlStream?: string | null;
   videoGravadoUrl?: string | null;
   thumbUrl?: string | null;
-
   chatAtivo: boolean;
   gravacaoAtiva: boolean;
   replayDisponivel: boolean;
+  replayExpiraEm?:
+    | string
+    | null;
 
+  replayExpirado?:
+    boolean;
+
+  segundosRestantes?:
+    number
+    | null;
+
+  isOwner?:
+    boolean;
+
+  acesso?: {
+    temAcesso:
+      boolean;
+
+    isOwner:
+      boolean;
+
+    isConvidadoFootEra?:
+      boolean;
+
+    precisaLogin?:
+      boolean;
+
+    precisaPagamento?:
+      boolean;
+
+    produtoTipo?:
+      | "METODOLOGIA"
+      | "METODOLOGIA_AVULSA"
+      | "AULA_AO_VIVO";
+
+    planoId?:
+      string
+      | null;
+
+    preco?:
+      number
+      | null;
+
+    replayExpiraEm?:
+      string
+      | null;
+
+    replayExpirado?:
+      boolean;
+
+    segundosRestantes?:
+      number
+      | null;
+
+    motivo?:
+      | "PRECISA_LOGIN"
+      | "PRECISA_PAGAMENTO"
+      | "REPLAY_EXPIRADO"
+      | string
+      | null;
+  };
+  ivsRecordingStatus?:
+    | "CONFIGURADA"
+    | "PROCESSANDO"
+    | "DISPONIVEL"
+    | "NAO_CONFIGURADA"
+    | string
+    | null;
   totalMensagens?: number;
   totalParticipantes?: number;
   totalOnline?: number;
-
+  totalAcessosUnicos?: number;
   metodologia?: {
     id: string;
     titulo: string;
@@ -53,7 +119,6 @@ type AulaAoVivoDetalhe = {
       foto?: string | null;
     } | null;
   } | null;
-
   metodologiaAvulsa?: {
     id: string;
     titulo: string;
@@ -63,29 +128,24 @@ type AulaAoVivoDetalhe = {
       foto?: string | null;
     } | null;
   } | null;
-
   estrutura?: {
     id: string;
     titulo?: string | null;
   } | null;
-
   estruturaAvulsa?: {
     id: string;
     titulo?: string | null;
   } | null;
-
   item?: {
     id: string;
     titulo?: string | null;
     tipo?: string | null;
   } | null;
-
   itemAvulsa?: {
     id: string;
     titulo?: string | null;
     tipo?: string | null;
   } | null;
-
   metodologiaId?: string | null;
   metodologiaAvulsaId?: string | null;
   estruturaId?: string | null;
@@ -109,6 +169,14 @@ type ChatMessage = {
 
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
+
+function getUsuarioIdAtual() {
+  return String(
+    localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      ""
+  ).trim();
 }
 
 function getAulaIdFromUrl() {
@@ -226,15 +294,52 @@ export default function LearningLivePage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [
+    apagandoMensagemId,
+    setApagandoMensagemId,
+  ] = useState<string | null>(null);
+
+  const usuarioIdAtual = useMemo(
+    () => getUsuarioIdAtual(),
+    []
+  );
 
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [playerLoading, setPlayerLoading] = useState(false);
+  const [
+    replaySincronizando,
+    setReplaySincronizando,
+  ] = useState(false);
 
+  const [
+    replayMensagem,
+    setReplayMensagem,
+  ] = useState<string | null>(
+    null
+  );
   const isLive = aula?.status === "AO_VIVO";
   const isScheduled = aula?.status === "AGENDADA";
   const isFinished = aula?.status === "FINALIZADA";
   const isCanceled = aula?.status === "CANCELADA";
+  const totalAcessosUnicos =
+    aula?.totalAcessosUnicos ??
+    aula?.totalParticipantes ??
+    0;
 
+  const contadorPessoas =
+    isLive
+      ? aula?.totalOnline ?? 0
+      : isFinished
+      ? totalAcessosUnicos
+      : 0;
+
+  const textoContadorPessoas =
+    isLive
+      ? "online agora"
+      : isFinished
+      ? "acessos únicos"
+      : "participantes";
+      
   const metodologiaTitulo =
     aula?.metodologia?.titulo ||
     aula?.metodologiaAvulsa?.titulo ||
@@ -256,13 +361,32 @@ export default function LearningLivePage() {
     aula?.metodologiaAvulsa?.criadorUsuario?.foto ||
     null;
 
-  const streamAtual = useMemo(() => {
-    if (isLive) return aula?.urlStream || "";
-    if (isFinished && aula?.replayDisponivel) {
-      return aula?.videoGravadoUrl || aula?.urlStream || "";
-    }
-    return "";
-  }, [aula, isLive, isFinished]);
+  const streamAtual =
+    useMemo(() => {
+      if (isLive) {
+        return aula?.urlStream || "";
+      }
+
+      if (
+        isFinished &&
+        aula?.replayDisponivel &&
+        !aula?.replayExpirado
+      ) {
+        return (
+          aula?.videoGravadoUrl ||
+          ""
+        );
+      }
+
+      return "";
+    }, [
+      aula?.urlStream,
+      aula?.videoGravadoUrl,
+      aula?.replayDisponivel,
+      aula?.replayExpirado,
+      isLive,
+      isFinished,
+    ]);
 
   const liveBadge = useMemo(() => {
     if (!aula) return null;
@@ -315,6 +439,87 @@ export default function LearningLivePage() {
 
     return () => { window.clearInterval(interval); limparTimerConclusaoAoVivo(); };
   }, [aulaId]);
+
+  useEffect(() => {
+    if (!aulaId) {
+      return;
+    }
+
+    const ehDono =
+      aula?.acesso
+        ?.isOwner ===
+        true ||
+      aula?.isOwner ===
+        true;
+
+    if (!ehDono) {
+      return;
+    }
+
+    if (
+      aula?.replayExpirado
+    ) {
+      return;
+    }
+
+    if (
+      aula?.status !==
+        "FINALIZADA"
+    ) {
+      return;
+    }
+
+    if (
+      aula
+        .replayDisponivel
+    ) {
+      return;
+    }
+
+    if (
+      !aula
+        .gravacaoAtiva
+    ) {
+      return;
+    }
+
+    if (
+      aula
+        .ivsRecordingStatus ===
+        "NAO_CONFIGURADA"
+    ) {
+      return;
+    }
+
+    void sincronizarReplay(
+      false
+    );
+
+    const intervalo =
+      window.setInterval(
+        () => {
+          void sincronizarReplay(
+            false
+          );
+        },
+        30_000
+      );
+
+    return () => {
+      window.clearInterval(
+        intervalo
+      );
+    };
+  }, [
+    aulaId,
+    aula?.status,
+    aula?.replayDisponivel,
+    aula?.gravacaoAtiva,
+    aula?.ivsRecordingStatus,
+    aula?.replayExpirado,
+    aula?.isOwner,
+    aula?.acesso?.isOwner,
+  ]);
 
   useEffect(() => {
     if (!aulaId) return;
@@ -646,14 +851,36 @@ export default function LearningLivePage() {
         prev
           ? {
               ...prev,
+
               totalOnline:
-                typeof json?.totalOnline === "number"
+                typeof json
+                  ?.totalOnline ===
+                "number"
                   ? json.totalOnline
                   : prev.totalOnline,
+
               totalParticipantes:
-                typeof json?.totalParticipantes === "number"
-                  ? json.totalParticipantes
-                  : prev.totalParticipantes,
+                typeof json
+                  ?.totalParticipantes ===
+                "number"
+                  ? json
+                      .totalParticipantes
+                  : prev
+                      .totalParticipantes,
+
+              totalAcessosUnicos:
+                typeof json
+                  ?.totalAcessosUnicos ===
+                "number"
+                  ? json
+                      .totalAcessosUnicos
+                  : typeof json
+                      ?.totalParticipantes ===
+                    "number"
+                  ? json
+                      .totalParticipantes
+                  : prev
+                      .totalAcessosUnicos,
             }
           : prev
       );
@@ -664,59 +891,239 @@ export default function LearningLivePage() {
     }
   }
 
-  async function carregarAula(showLoading = true) {
+  async function sincronizarReplay(
+    mostrarErro = false
+  ) {
+    if (
+      !aulaId ||
+      replaySincronizando
+    ) {
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      return;
+    }
+
     try {
-      if (showLoading) setLoadingAula(true);
-      setPageError(null);
+      setReplaySincronizando(true);
 
-      const token = getToken();
-
-      const res = await fetch(`${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(json?.message || "Erro ao carregar aula ao vivo.");
-      }
-
-      const item = json?.item || json?.aula || json;
-
-      const acessoRes = await fetch(
-        `${API.BASE_URL}/api/learning/eventos/aulas/${aulaId}`,
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/replay/sincronizar`,
         {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
         }
       );
 
-      const acessoJson = await acessoRes.json().catch(() => ({}));
-      const acessoItem = acessoJson?.item || acessoJson?.evento || acessoJson;
+      const json =
+        await resposta
+          .json()
+          .catch(() => ({}));
 
-      if (
-        acessoRes.ok &&
-        acessoItem?.acesso &&
-        !acessoItem.acesso.temAcesso &&
-        !acessoItem.acesso.isOwner &&
-        !acessoItem.acesso.isConvidadoFootEra
-      ) {
-        const texto = String(item?.titulo || item?.descricao || "").toLowerCase();
-        const isCopa = texto.includes("copa");
+      if (resposta.status === 202) {
+        setReplayMensagem(
+          json?.message ||
+            "A gravação ainda está sendo processada."
+        );
 
-        if (isCopa) {
-          navigate(`/learning/evento/sala-copa?aulaId=${encodeURIComponent(aulaId)}`);
-        } else {
-          navigate(`/learning/evento/${encodeURIComponent(aulaId)}`);
+        setAula((anterior) =>
+          anterior
+            ? {
+                ...anterior,
+                ivsRecordingStatus:
+                  "PROCESSANDO",
+              }
+            : anterior
+        );
+
+        return;
+      }
+
+      if (!resposta.ok) {
+        const mensagem =
+          json?.message ||
+          "Não foi possível sincronizar o replay.";
+
+        setReplayMensagem(
+          mensagem
+        );
+
+        if (mostrarErro) {
+          toast.error(mensagem);
         }
 
         return;
       }
-      setAula(item);
-      programarConclusaoAulaAoVivo(item);
-    } catch (e: any) {
-      setPageError(e?.message || "Erro ao carregar aula ao vivo.");
+
+      const item =
+        json?.item ?? null;
+
+      setReplayMensagem(
+        "Replay disponível."
+      );
+
+      if (item) {
+        setAula((anterior) =>
+          anterior
+            ? {
+                ...anterior,
+                ...item,
+              }
+            : item
+        );
+      } else {
+        await carregarAula(false);
+      }
+    } catch (error: any) {
+      const mensagem =
+        error?.message ||
+        "Erro ao verificar o replay.";
+
+      setReplayMensagem(
+        mensagem
+      );
+
+      if (mostrarErro) {
+        toast.error(mensagem);
+      }
     } finally {
-      if (showLoading) setLoadingAula(false);
+      setReplaySincronizando(false);
+    }
+  }
+
+  async function carregarAula(
+    showLoading = true
+  ) {
+    try {
+      if (showLoading) {
+        setLoadingAula(
+          true
+        );
+      }
+
+      setPageError(
+        null
+      );
+
+      const token =
+        getToken();
+
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/learning/eventos/aulas/${encodeURIComponent(
+            aulaId
+          )}`,
+          {
+            headers:
+              token
+                ? {
+                    Authorization:
+                      `Bearer ${token}`,
+                  }
+                : {},
+          }
+        );
+
+      const json =
+        await resposta
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (!resposta.ok) {
+        throw new Error(
+          json?.message ||
+            "Erro ao carregar aula ao vivo."
+        );
+      }
+
+      const item =
+        json?.item ||
+        json?.evento ||
+        json;
+
+      const acesso =
+        item?.acesso ||
+        json?.acesso ||
+        null;
+
+      if (
+        item?.replayExpirado ||
+        acesso?.motivo ===
+          "REPLAY_EXPIRADO"
+      ) {
+        setAula(
+          item
+        );
+
+        setPageError(
+          "Este replay não está mais disponível. O prazo de sete dias após a finalização terminou."
+        );
+
+        return;
+      }
+
+      if (
+        acesso &&
+        !acesso.temAcesso &&
+        !acesso.isOwner &&
+        !acesso
+          .isConvidadoFootEra
+      ) {
+        const texto =
+          String(
+            item?.titulo ||
+              item?.descricao ||
+              ""
+          ).toLowerCase();
+
+        const isCopa =
+          texto.includes(
+            "copa"
+          );
+
+        if (isCopa) {
+          navigate(
+            `/learning/evento/sala-copa?aulaId=${encodeURIComponent(
+              aulaId
+            )}`
+          );
+        } else {
+          navigate(
+            `/learning/evento/${encodeURIComponent(
+              aulaId
+            )}`
+          );
+        }
+
+        return;
+      }
+
+      setAula(
+        item
+      );
+
+      programarConclusaoAulaAoVivo(
+        item
+      );
+    } catch (error: any) {
+      setPageError(
+        error?.message ||
+          "Erro ao carregar aula ao vivo."
+      );
+    } finally {
+      if (showLoading) {
+        setLoadingAula(
+          false
+        );
+      }
     }
   }
 
@@ -788,6 +1195,117 @@ export default function LearningLivePage() {
     }
   }
 
+  async function apagarMensagem(
+    mensagem: ChatMessage
+  ) {
+    if (
+      !aulaId ||
+      apagandoMensagemId
+    ) {
+      return;
+    }
+
+    const ehAutor =
+      String(mensagem.usuarioId) ===
+      String(usuarioIdAtual);
+
+    if (!ehAutor) {
+      toast.error(
+        "Você só pode apagar suas próprias mensagens."
+      );
+      return;
+    }
+
+    const confirmou =
+      window.confirm(
+        "Deseja apagar esta mensagem?"
+      );
+
+    if (!confirmou) {
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      toast.error(
+        "Você precisa estar logado."
+      );
+      return;
+    }
+
+    try {
+      setApagandoMensagemId(
+        mensagem.id
+      );
+
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/mensagens/${mensagem.id}/deletar`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const json =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          json?.message ||
+            "Não foi possível apagar a mensagem."
+        );
+      }
+
+      setMessages((anteriores) =>
+        anteriores.filter(
+          (item) =>
+            item.id !== mensagem.id
+        )
+      );
+
+      setAula((anterior) =>
+        anterior
+          ? {
+              ...anterior,
+
+              totalMensagens:
+                typeof json
+                  ?.totalMensagens ===
+                "number"
+                  ? json.totalMensagens
+                  : Math.max(
+                      0,
+                      Number(
+                        anterior
+                          .totalMensagens ??
+                          messages.length
+                      ) - 1
+                    ),
+            }
+          : anterior
+      );
+
+      toast.success(
+        "Mensagem apagada."
+      );
+    } catch (error: any) {
+      toast.error(
+        error?.message ||
+          "Falha ao apagar mensagem."
+      );
+    } finally {
+      setApagandoMensagemId(
+        null
+      );
+    }
+  }
+
   function voltarParaOrigem() {
     const metodologiaAvulsaId =
       aula?.metodologiaAvulsa?.id || aula?.metodologiaAvulsaId || "";
@@ -856,15 +1374,52 @@ export default function LearningLivePage() {
       );
     }
 
-    if (isFinished && !streamAtual) {
+    if (
+      isFinished &&
+      !streamAtual
+    ) {
+      const gravacaoNaoConfigurada =
+        aula?.ivsRecordingStatus ===
+        "NAO_CONFIGURADA";
+
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-white">
-          <div className="text-center px-6">
-            <CheckCircle2 className="w-14 h-14 mx-auto mb-4 text-emerald-300" />
-            <div className="text-2xl font-black">Live finalizada</div>
-            <p className="text-white/70 mt-2">
-              O replay ainda não está disponível.
+          <div className="max-w-lg px-6 text-center">
+            {replaySincronizando ? (
+              <Loader2 className="mx-auto mb-4 h-14 w-14 animate-spin text-emerald-300" />
+            ) : (
+              <CheckCircle2 className="mx-auto mb-4 h-14 w-14 text-emerald-300" />
+            )}
+
+            <div className="text-2xl font-black">
+              Live finalizada
+            </div>
+
+            <p className="mt-2 text-white/70">
+              {gravacaoNaoConfigurada
+                ? "Esta live não foi gravada pela AWS IVS, portanto não existe replay automático."
+                : replayMensagem ||
+                  "A gravação está sendo processada. Esta página verificará automaticamente quando o replay estiver pronto."}
             </p>
+
+            {!gravacaoNaoConfigurada && (
+              <button
+                type="button"
+                disabled={
+                  replaySincronizando
+                }
+                onClick={() =>
+                  void sincronizarReplay(
+                    true
+                  )
+                }
+                className="mt-5 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white hover:bg-white/20 disabled:opacity-60"
+              >
+                {replaySincronizando
+                  ? "Verificando..."
+                  : "Verificar replay agora"}
+              </button>
+            )}
           </div>
         </div>
       );
@@ -1012,8 +1567,15 @@ export default function LearningLivePage() {
             ) : null}
 
             <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold inline-flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              {aula?.totalOnline ?? 0} online
+              <Users className="h-4 w-4" />
+
+              {contadorPessoas}
+
+              {isLive
+                ? " online agora"
+                : isFinished
+                ? " acessos únicos"
+                : " participantes"}
             </span>
           </div>
         </div>
@@ -1091,9 +1653,37 @@ export default function LearningLivePage() {
                     </span>
                   )}
 
-                  <span className="rounded-md sm:rounded-lg bg-black/55 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs font-bold text-white inline-flex items-center gap-1 sm:gap-1.5 shadow">
-                    <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                    {aula?.totalOnline ?? 0}
+                  <span
+                    title={
+                      textoContadorPessoas
+                    }
+                    className="
+                      rounded-md
+                      bg-black/55
+                      px-2 py-1
+                      text-[9px]
+                      font-bold text-white
+                      shadow
+                      inline-flex
+                      items-center gap-1
+                      sm:rounded-lg
+                      sm:px-3
+                      sm:py-1.5
+                      sm:text-xs
+                      sm:gap-1.5
+                    "
+                  >
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+
+                    {contadorPessoas}
+
+                    <span className="hidden sm:inline">
+                      {isLive
+                        ? " online"
+                        : isFinished
+                        ? " acessos"
+                        : ""}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -1126,7 +1716,11 @@ export default function LearningLivePage() {
                         : isFinished && aula?.replayDisponivel
                           ? "O replay já está disponível para assistir novamente."
                           : isFinished
-                            ? "O replay ainda será disponibilizado pelo responsável."
+                            ? aula?.ivsRecordingStatus ===
+                              "NAO_CONFIGURADA"
+                              ? "Esta transmissão não possui gravação configurada."
+                              : replayMensagem ||
+                                "A gravação está sendo processada automaticamente."
                             : "Acompanhe as informações dessa aula ao vivo."}
                   </div>
                 </div>
@@ -1166,9 +1760,16 @@ export default function LearningLivePage() {
                 </div>
 
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-500">Participantes</span>
+                  <span className="text-slate-500">
+                    {isLive
+                      ? "Online agora"
+                      : isFinished
+                      ? "Acessos únicos"
+                      : "Participantes"}
+                  </span>
+
                   <span className="font-bold text-slate-800">
-                    {aula?.totalParticipantes ?? 0}
+                    {contadorPessoas}
                   </span>
                 </div>
 
@@ -1202,38 +1803,96 @@ export default function LearningLivePage() {
 
               <div className="h-[430px] overflow-y-auto p-5 space-y-4">
                 {messages.length ? (
-                  messages.map((msg) => (
-                    <div key={msg.id} className="flex items-start gap-3">
-                      <Avatar
-                        foto={msg.usuario?.foto}
-                        alt={msg.usuario?.nome || "Usuário"}
-                        className="h-9 w-9"
-                      />
+                  messages.map((msg) => {
+                    const ehMinhaMensagem =
+                      String(msg.usuarioId) ===
+                      String(usuarioIdAtual);
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="font-bold text-sm text-slate-800 truncate">
-                            {msg.usuario?.nome || "Usuário"}
-                          </div>
-                          <div className="text-xs text-slate-400 shrink-0">
-                            {formatarHora(msg.criadoEm)}
-                          </div>
-                        </div>
+                    const podeApagar =
+                      ehMinhaMensagem &&
+                      msg.tipo !== "SISTEMA";
 
-                        <div
-                          className={`mt-1 text-sm leading-relaxed ${
-                            msg.tipo === "ALERTA"
-                              ? "text-amber-700"
-                              : msg.tipo === "SISTEMA"
-                                ? "text-slate-500 italic"
+                    return (
+                      <div
+                        key={msg.id}
+                        className="flex items-start gap-3"
+                      >
+                        <Avatar
+                          foto={msg.usuario?.foto}
+                          alt={
+                            msg.usuario?.nome ||
+                            "Usuário"
+                          }
+                          className="h-9 w-9"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate text-sm font-bold text-slate-800">
+                                  {msg.usuario?.nome ||
+                                    "Usuário"}
+                                </div>
+
+                                <div className="shrink-0 text-xs text-slate-400">
+                                  {formatarHora(
+                                    msg.criadoEm
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {podeApagar && (
+                              <button
+                                type="button"
+                                disabled={
+                                  apagandoMensagemId ===
+                                  msg.id
+                                }
+                                onClick={() =>
+                                  void apagarMensagem(
+                                    msg
+                                  )
+                                }
+                                title="Apagar mensagem"
+                                aria-label="Apagar mensagem"
+                                className="
+                                  flex h-8 w-8
+                                  shrink-0 items-center
+                                  justify-center
+                                  rounded-full
+                                  text-red-500
+                                  hover:bg-red-50
+                                  disabled:opacity-50
+                                "
+                              >
+                                {apagandoMensagemId ===
+                                msg.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          <div
+                            className={`mt-1 text-sm leading-relaxed ${
+                              msg.tipo === "ALERTA"
+                                ? "text-amber-700"
+                                : msg.tipo ===
+                                  "SISTEMA"
+                                ? "italic text-slate-500"
                                 : "text-slate-700"
-                          }`}
-                        >
-                          {msg.mensagem}
+                            }`}
+                          >
+                            {msg.mensagem}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="h-full flex items-center justify-center text-center text-slate-500">
                     <div>

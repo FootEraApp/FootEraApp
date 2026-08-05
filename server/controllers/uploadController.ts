@@ -41,11 +41,6 @@ function baseUrlFromReq(req: Request) {
   return String(base).replace(/\/+$/, "");
 }
 
-// Antes: qualquer usuário logado podia anexar mídia a atletaId/clubeId/etc de
-// outra pessoa só informando o id no body. Agora exige que o alvo pertença a
-// quem está enviando (ou que seja admin, caso do fluxo de gestão de conteúdo
-// em formadores.tsx). Se nenhum campo de alvo for enviado, não há nada pra
-// checar (upload de perfil simples).
 async function verificarPosseAlvoUpload(params: {
   isAdminUser: boolean;
   requesterId: string;

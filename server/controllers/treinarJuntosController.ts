@@ -135,6 +135,7 @@ export const treinarJuntosController = {
       const relAtiva = await prisma.relacaoTreinamento.findFirst({
         where: {
           OR: orClauses,
+          ativo: true,
           encerradoEm: null,
         },
         select: {

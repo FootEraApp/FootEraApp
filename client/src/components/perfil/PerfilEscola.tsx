@@ -20,6 +20,7 @@ import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js"; 
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 type Props = { idDaUrl?: string; hasCreator?: boolean; creatorUsuarioId?: string | null };
 type UsuarioMin = {
@@ -109,6 +110,7 @@ type ProfessorItem = {
 type Turma = {
   id: string;
   nome: string;
+  categoria?: string | null;
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
   professorIds?: string[];      
@@ -215,6 +217,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   type SubAba = "vinculados" | "observados" | "solicitacoes";
   const [subAba, setSubAba] = useState<SubAba>("vinculados");
 
+  const [mostrarTodosVinculados, setMostrarTodosVinculados] = useState(false);
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [obsDraft, setObsDraft] = useState<Record<string, { nota: string; alertar: boolean }>>({});
@@ -223,6 +226,11 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(
     null
   );
+  const [contagensAtletas, setContagensAtletas] = useState({
+    vinculados: 0,
+    observados: 0,
+    solicitacoes: 0,
+  });
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
@@ -245,9 +253,106 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
+  const vinculadosParaExibir = vinculados ?? [];
+
+  const vinculadosVisiveis =
+    mostrarTodosVinculados
+      ? vinculadosParaExibir
+      : vinculadosParaExibir.slice(0, 5);
+
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
   const entidadeUsuarioId = (isOwn ? Storage.usuarioId : data?.escolinha?.usuarioId) ?? null;
-  
+
+  useEffect(() => {
+    setMostrarTodosVinculados(false);
+  }, [targetId, subAba]);
+
+  function extrairListaResposta(
+    payload: any,
+    chaves: string[] = []
+  ): any[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    for (const chave of chaves) {
+      if (Array.isArray(payload?.[chave])) {
+        return payload[chave];
+      }
+    }
+
+    return [];
+  }
+
+  async function carregarContagensAtletas() {
+    if (!token || !escolinhaId || !canEdit) return;
+
+    const [vinculadosResult, observadosResult, solicitacoesResult] =
+      await Promise.allSettled([
+        axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params: {
+            vinculo: "escolinha",
+            id: escolinhaId,
+          },
+        }),
+
+        axios.get(`${API.BASE_URL}/api/observados`, {
+          headers,
+          params: {
+            tipoUsuarioId: escolinhaId,
+            tipo: "Escolinha",
+          },
+        }),
+
+        axios.get(
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
+          { headers }
+        ),
+      ]);
+
+    const vinculadosLista =
+      vinculadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            vinculadosResult.value.data,
+            ["atletas", "items", "data"]
+          )
+        : null;
+
+    const observadosLista =
+      observadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            observadosResult.value.data,
+            ["observados", "items", "data"]
+          )
+        : null;
+
+    const solicitacoesLista =
+      solicitacoesResult.status === "fulfilled"
+        ? extrairListaResposta(
+            solicitacoesResult.value.data,
+            ["solicitacoes", "items", "data"]
+          )
+        : null;
+
+    setContagensAtletas((prev) => ({
+      vinculados:
+        vinculadosLista !== null
+          ? vinculadosLista.length
+          : prev.vinculados,
+
+      observados:
+        observadosLista !== null
+          ? observadosLista.length
+          : prev.observados,
+
+      solicitacoes:
+        solicitacoesLista !== null
+          ? solicitacoesLista.length
+          : prev.solicitacoes,
+    }));
+  }
+
   async function buscarPontuacaoRealDoUsuario(usuarioId: string): Promise<number | null> {
     if (!token || !usuarioId) return null;
 
@@ -266,6 +371,77 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       return null;
     }
   }
+
+  useEffect(() => {
+    if (
+      aba !== "atletas" ||
+      !token ||
+      !escolinhaId ||
+      !canEdit
+    ) {
+      return;
+    }
+
+    void carregarContagensAtletas();
+
+    const intervalId = window.setInterval(() => {
+      void carregarContagensAtletas();
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [aba, token, escolinhaId, canEdit]);
+
+  useEffect(() => {
+    if (!token || !escolinhaId || !canEdit) return;
+
+    function atualizarDadosDosAtletas() {
+      setVinculados(null);
+      setObservados(null);
+      setSolicitacoes(null);
+
+      void carregarContagensAtletas();
+    }
+
+    function aoAlterarVisibilidade() {
+      if (document.visibilityState === "visible") {
+        atualizarDadosDosAtletas();
+      }
+    }
+
+    window.addEventListener(
+      "focus",
+      atualizarDadosDosAtletas
+    );
+
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarDadosDosAtletas
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      aoAlterarVisibilidade
+    );
+
+    return () => {
+      window.removeEventListener(
+        "focus",
+        atualizarDadosDosAtletas
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarDadosDosAtletas
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        aoAlterarVisibilidade
+      );
+    };
+  }, [token, escolinhaId, canEdit]);
 
   useEffect(() => {
     setVinculados(null);
@@ -895,6 +1071,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         (arr ?? []).map((t: any) => ({
           id: String(t.id),
           nome: String(t.nome ?? t.titulo ?? "Turma"),
+          categoria: t.categoria ?? null,
           ownerTipo: t.ownerTipo ?? "Escolinha",
           ownerId: t.ownerId ?? escolinhaId,
           professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
@@ -914,12 +1091,22 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   }
 
   useEffect(() => {
-    if (aba === "professores" && canEdit) {
-      loadProfessores();
-      loadTurmas();
+    if (aba === "visao") {
+      void loadTurmas();
     }
+
+    if (aba === "professores" && canEdit) {
+      void loadProfessores();
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, canEdit, escolinhaId, token, entidadeUsuarioId]);
+  }, [
+    aba,
+    canEdit,
+    escolinhaId,
+    token,
+    entidadeUsuarioId,
+  ]);
 
   useEffect(() => {
     if (!token) return;
@@ -968,8 +1155,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       </div>
     );
 
-  const vinculadosCount = Array.isArray(vinculados) ? vinculados.length : 0;
-  const observadosCount = Array.isArray(observados) ? observados.length : 0;
   const nome = data.escolinha.nome || data.usuario?.nome || "Escola";
   const headerFoto: string | undefined =
     (typeof data.escolinha.logo === "string" && data.escolinha.logo) ||
@@ -1149,50 +1334,114 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           )}
 
           <SectionCard
-            title="Treinos"
+            title="Turmas da Escolinha"
             right={
-              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-                <Link
-                  href="/treinos"
-                  className="min-w-[92px] text-center text-sm font-semibold px-4 py-2 rounded-xl
-                            border border-green-300 bg-white text-green-900
-                            hover:bg-green-50 active:scale-[0.99] transition"
+              canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfessorSelecionado(undefined);
+                    setTurmasOpen(true);
+                  }}
+                  className="
+                    text-sm px-3 py-1.5 rounded-md
+                    bg-green-600 text-white
+                    inline-flex items-center gap-1
+                  "
                 >
-                  Ver todos
-                </Link>
-
-                {canEdit && (
-                  <>
-                    <Link
-                      href="/perfil/GerenciarProfessores"
-                      className="min-w-[160px] text-center text-sm font-semibold px-4 py-2 rounded-xl
-                                border border-green-300 bg-white text-green-900
-                                hover:bg-green-50 active:scale-[0.99] transition
-                                inline-flex items-center justify-center gap-2"
-                    >
-                      <PlusCircle className="w-4 h-4" />
-                      Gerenciar Professores
-                    </Link>
-
-                    <Link
-                      href="/treinos/novo"
-                      className="min-w-[150px] text-center text-sm font-semibold px-4 py-2 rounded-xl
-                                bg-green-600 text-white
-                                hover:bg-green-700 active:scale-[0.99] transition
-                                inline-flex items-center justify-center gap-2"
-                    >
-                      <PlusCircle className="w-4 h-4" />
-                      Criar novo treino
-                    </Link>
-                  </>
-                )}
-              </div>
+                  <PlusCircle className="w-4 h-4" />
+                  Administrar
+                </button>
+              ) : null
             }
           >
-            <p className="text-sm text-green-900/90 mt-2">
-              Crie treinos e agrupe seus atletas em <b>turmas</b>. Vincule cada
-              turma a um professor para facilitar a condução do treino.
-            </p>
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">
+                Carregando turmas…
+              </div>
+            ) : turmas.length > 0 ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {turmas.map((turma) => (
+                  <li
+                    key={turma.id}
+                    className="
+                      flex flex-col gap-3 rounded-xl
+                      border border-green-100 p-3
+                      sm:flex-row sm:items-center
+                      sm:justify-between sm:p-4
+                    "
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-green-900">
+                        {turma.nome}
+                      </div>
+
+                      <div className="text-xs text-green-900/70">
+                        {turma.categoria
+                          ? `Cat. ${turma.categoria}`
+                          : "Sem categoria"}
+
+                        {" • "}
+
+                        {typeof turma.alunosCount === "number"
+                          ? `${turma.alunosCount} alunos`
+                          : "—"}
+                      </div>
+
+                      <div className="mt-0.5 text-xs text-green-900/70">
+                        <b>Professores:</b>{" "}
+                        {turma.professorNome ||
+                          (turma.professorNomes?.length
+                            ? turma.professorNomes.join(", ")
+                            : "—")}
+                      </div>
+                    </div>
+
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfessorSelecionado(
+                            turma.professorIds?.[0]
+                          );
+
+                          setTurmasOpen(true);
+                        }}
+                        className="
+                          inline-flex w-full items-center
+                          justify-center rounded-lg
+                          border border-green-200
+                          px-3 py-2 text-sm text-green-800
+                          hover:bg-green-50 sm:w-auto
+                        "
+                      >
+                        Administrar
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid gap-3">
+                <EmptyState text="Nenhuma turma cadastrada na escolinha." />
+
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfessorSelecionado(undefined);
+                      setTurmasOpen(true);
+                    }}
+                    className="
+                      px-4 py-2 rounded-md
+                      border border-green-200 text-green-900
+                    "
+                  >
+                    Abrir gerenciamento
+                  </button>
+                )}
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard title="Atividade Recente">
@@ -1374,6 +1623,15 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               )}
             </div>
           </SectionCard>
+            {hasCreator && (
+                <ProfileReplaysSection
+                  creatorUsuarioId={
+                    creatorUsuarioId ||
+                    data.escolinha.usuarioId ||
+                    data.usuario?.id
+                  }
+                />
+              )}
         </div>
       )}
 
@@ -1381,9 +1639,21 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         <div className="mt-4 px-3 sm:px-4">
           <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
             {[
-              { id: "vinculados", label: "Vinculados" },
-              { id: "observados", label: "Observados" },
-              { id: "solicitacoes", label: "Solicitações" },
+              {
+                id: "vinculados",
+                label: "Vinculados",
+                count: contagensAtletas.vinculados,
+              },
+              {
+                id: "observados",
+                label: "Observados",
+                count: contagensAtletas.observados,
+              },
+              {
+                id: "solicitacoes",
+                label: "Solicitações",
+                count: contagensAtletas.solicitacoes,
+              },
             ].map((t) => (
               <button
                 key={t.id}
@@ -1392,7 +1662,19 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   subAba === t.id ? "bg-green-600 text-white" : "text-green-900"
                 }`}
               >
-                {t.label}
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <span>{t.label}</span>
+
+                  <span
+                    className={`inline-flex min-w-5 h-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
+                      subAba === t.id
+                        ? "bg-white/20 text-white"
+                        : "bg-green-100 text-green-900"
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
@@ -1400,7 +1682,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           <div className="mt-4 grid gap-4">
             {subAba === "vinculados" && (
               <SectionCard
-                title={`Atletas Vinculados (${vinculadosCount})`}
+                title="Atletas Vinculados"
                 right={
                   <Link
                     href="/perfil/GerenciarAtletas"
@@ -1410,54 +1692,108 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   </Link>
                 }
               >
-                {vinculados && vinculados.length > 0 ? (
-                  <ul className="grid grid-cols-1 gap-3">
-                    {vinculados.map((a) => (
-                      <li
-                        key={a.id}
-                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3"
-                      >
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">
-                            {a.nome}
-                          </div>
-                          <div className="text-xs text-green-900/70">
-                            {[
-                              a.posicao,
-                              a.idade ? `${a.idade} anos` : null,
-                              a.categoria,
-                            ]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </div>
-                        </div>
-                        {typeof a.pontuacao === "number" && (
-                          <span className="text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
-                            {a.pontuacao} pts
-                          </span>
-                        )}
-                        <Link
-                          href={`/perfil/${a.usuarioId}`}
-                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1"
+                {vinculadosParaExibir.length > 0 ? (
+                  <>
+                    <ul className="grid grid-cols-1 gap-3">
+                      {vinculadosVisiveis.map((a) => (
+                        <li
+                          key={a.atletaId ?? a.id}
+                          className="
+                            flex flex-col gap-3 rounded-xl
+                            border border-green-100 p-3
+                            sm:flex-row sm:items-center
+                          "
                         >
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <Avatar
+                              foto={a.foto ?? null}
+                              alt={a.nome}
+                              className="w-10 h-10 shrink-0"
+                            />
+
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-green-900 truncate">
+                                {a.nome}
+                              </div>
+
+                              <div className="text-xs text-green-900/70">
+                                {[
+                                  a.posicao,
+                                  a.idade != null
+                                    ? `${a.idade} anos`
+                                    : null,
+                                  a.categoria,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" • ")}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 sm:justify-end">
+                            {typeof a.pontuacao === "number" && (
+                              <span
+                                className="
+                                  text-[11px] px-2 py-0.5 rounded
+                                  bg-green-100 text-green-800
+                                  border border-green-200
+                                "
+                              >
+                                {a.pontuacao} pts
+                              </span>
+                            )}
+
+                            <Link
+                              href={`/perfil/${a.usuarioId ?? a.id}`}
+                              className="
+                                text-sm text-green-800
+                                inline-flex items-center gap-1
+                                whitespace-nowrap
+                              "
+                            >
+                              Ver perfil
+                              <ChevronRight className="w-4 h-4" />
+                            </Link>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {vinculadosParaExibir.length > 5 && (
+                      <div className="mt-4 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMostrarTodosVinculados(
+                              (valor) => !valor
+                            )
+                          }
+                          className="
+                            rounded-lg border border-green-200
+                            px-4 py-2 text-sm font-medium
+                            text-green-900 hover:bg-green-50
+                          "
+                        >
+                          {mostrarTodosVinculados
+                            ? "Mostrar menos"
+                            : `Ver todos (${vinculadosParaExibir.length})`}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div>
                     <EmptyState text="Nenhum atleta vinculado ainda" />
+
                     <div className="flex justify-center">
-                      <Link href="/explorar">
-                        <button className="px-3 sm:px-4 py-2 rounded-md border border-green-200 text-green-900">
-                          Ver atletas
-                        </button>
+                      <Link
+                        href="/explorar"
+                        className="
+                          px-3 sm:px-4 py-2 rounded-md
+                          border border-green-200 text-green-900
+                        "
+                      >
+                        Ver atletas
                       </Link>
                     </div>
                   </div>
@@ -1467,7 +1803,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
             {subAba === "observados" && (
               <SectionCard
-                title={`Atletas Observados (${observadosCount})`}
+                title="Atletas Observados"
                 right={
                   <Link
                     href="/explorar"
@@ -1778,103 +2114,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               </ul>
             ) : (
               <EmptyState text="Nenhum professor vinculado à escolinha." />
-            )}
-          </SectionCard>
-
-          <SectionCard title="Turmas da Escolinha">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-green-900/80">
-                Crie turmas e defina o professor responsável. Alunos vinculados
-                à escolinha podem ser adicionados às turmas.
-              </div>
-              <button
-                onClick={() => {
-                  setProfessorSelecionado(undefined);
-                  setTurmasOpen(true);
-                }}
-                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
-              >
-                <PlusCircle className="w-4 h-4" />
-                Nova turma
-              </button>
-            </div>
-
-            {turmasLoading ? (
-              <div className="text-sm text-green-900/70">
-                Carregando turmas…
-              </div>
-            ) : turmas.length ? (
-              <ul className="space-y-2">
-                {turmas.map((t) => (
-                  <li
-                    key={t.id}
-                    className="border rounded-xl p-3 flex flex-col gap-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium text-green-900">
-                          {t.nome}
-                        </div>
-                        <div className="text-xs text-green-900/70">
-                          {t.professorNome
-                            ? `Professor: ${t.professorNome}`
-                            : "Professor: —"}{" "}
-                          •{" "}
-                          {typeof t.alunosCount === "number"
-                            ? `${t.alunosCount} alunos`
-                            : "—"}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setProfessorSelecionado(t.professorIds?.[0]);
-                          setTurmasOpen(true);
-                        }}
-                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
-                      >
-                        Administrar
-                      </button>
-                    </div>
-
-                    {professores.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <select
-                          multiple
-                          className="border rounded px-3 py-2 text-sm"
-                          value={t.professorIds ?? []}
-                          onChange={async (e) => {
-                            const selectedIds = Array.from(e.target.selectedOptions)
-                              .map((o) => o.value)
-                              .filter(Boolean);
-
-                            try {
-                              await axios.put(
-                                `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
-                                { professorIds: selectedIds },
-                                { headers }
-                              );
-                              await loadTurmas();
-                              toast.success("Professores atualizados na turma!");
-                            } catch (err) {
-                              console.error(err);
-                              toast.error("Não foi possível atualizar os professores.");
-                            }
-                          }}
-                        >
-                          {professores.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nome}
-                              {p.cref ? ` • CREF ${p.cref}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState text="Nenhuma turma cadastrada na escolinha." />
             )}
           </SectionCard>
         </div>

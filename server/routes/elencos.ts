@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.js";
 import { requireMembership } from "../middlewares/requireMembership.js";
 import {
   listarElencos,
@@ -11,34 +10,36 @@ import {
   getEscalaPorDono,
   atletasVinculados,
   listarAtletasVinculados,
+  excluirElenco,
 } from "../controllers/elencosController.js";
 
 const router = Router();
 
+router.get("/escala-por-dono", getEscalaPorDono);
+router.get("/escala-por-turma", escalaPorTurma);
+router.get("/minha", listarElencosMinha);
+
+router.get("/atletas-vinculados", atletasVinculados);
+router.get("/atletas", listarAtletasVinculados);
+
 router.get(
   "/por-escolinha/:escolinhaId/escala",
-  authenticateToken,
   requireMembership,
   getEscalaPorDono
 );
 router.get(
   "/por-clube/:clubeId/escala",
-  authenticateToken,
   requireMembership,
   getEscalaPorDono
 );
 
-router.get("/escala-por-dono", authenticateToken, getEscalaPorDono);
-router.get("/escala-por-turma", authenticateToken, escalaPorTurma);
-router.get("/minha", authenticateToken, listarElencosMinha);
-
-router.get("/atletas-vinculados", authenticateToken, atletasVinculados);
-router.get("/atletas", authenticateToken, listarAtletasVinculados);
-
-router.get("/:id/escala", authenticateToken, getEscalaPorElencoId);
-
-router.get("/", authenticateToken, listarElencos);
-router.post("/", authenticateToken, criarElenco);
-router.put("/:id", authenticateToken, atualizarElenco);
+router.get("/:id/escala", getEscalaPorElencoId);
+router.delete(
+  "/:id",
+  excluirElenco
+);
+router.get("/", listarElencos);
+router.post("/", criarElenco);
+router.put("/:id", atualizarElenco);
 
 export default router;
