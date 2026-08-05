@@ -1,8 +1,3 @@
-// Grava a sessão (token, usuarioId, tipo, plano...) no storage certo depois
-// de login/cadastro/recuperação de conta. Antes essa lógica estava duplicada
-// em 4 lugares (login.tsx x3, cadastro.tsx x1) e tinha divergido: o handler
-// do Google em cadastro.tsx sempre usava sessionStorage, ignorando "lembrar
-// de mim", e não tinha o fallback de tipoUsuarioId que os outros 3 tinham.
 export type AuthSessionResponse = {
   usuario?: {
     id?: string;

@@ -227,19 +227,10 @@ export default function TurmasManager({
         professorIds.includes(
           String(meuProfessorId).trim()
         );
-
-      /*
-      * O professor logado pode administrar
-      * qualquer turma da qual participa.
-      */
       if (professorLogadoParticipa) {
         return true;
       }
 
-      /*
-      * Clube ou escolinha também pode administrar
-      * as turmas que pertencem à própria organização.
-      */
       if (
         owner?.id &&
         turmaSelecionada.ownerId
@@ -279,10 +270,6 @@ export default function TurmasManager({
             String(meuProfessorId)
           );
 
-      /*
-      * Professor pode sair quando participa,
-      * mas não é o criador da própria turma.
-      */
       return (
         participa &&
         !podeGerenciarTurma
@@ -302,10 +289,6 @@ export default function TurmasManager({
     >();
 
     for (const atleta of listaBruta) {
-      /*
-      * Quando o backend informar explicitamente
-      * que não existe vínculo, não inclui.
-      */
       if (atleta?.vinculado === false) {
         continue;
       }
@@ -338,10 +321,6 @@ export default function TurmasManager({
           .join(" ")
           .trim() || "Atleta";
 
-      /*
-      * Impede o mesmo atleta de aparecer
-      * mais de uma vez.
-      */
       mapa.set(usuarioId, {
         usuarioId,
         nome: nomeCompleto,
@@ -452,10 +431,6 @@ export default function TurmasManager({
         if (!owner) {
           setProfs([]);
 
-          /*
-          * Para professor, busca todos os atletas
-          * que ainda possuem vínculo ativo com ele.
-          */
           await carregarAtletasVinculados();
 
           const lista =
@@ -605,11 +580,6 @@ export default function TurmasManager({
 
     let resposta;
 
-    /*
-    * Quando um professor foi selecionado e
-    * queremos todas as turmas dele, não limita
-    * a busca pela organização.
-    */
     if (
       mostrarTodasDoProfessor &&
       profFiltro
@@ -636,11 +606,6 @@ export default function TurmasManager({
         }
       );
     } else if (profFiltro) {
-      /*
-      * Permite ao PerfilProfessor informar
-      * explicitamente qual professor deve
-      * ser consultado.
-      */
       resposta = await axios.get(
         `${API.BASE_URL}/api/turmas`,
         {
@@ -772,10 +737,6 @@ export default function TurmasManager({
         }
       );
 
-    /*
-    * Mesmo que o backend já filtre, mantém
-    * uma proteção no frontend.
-    */
     const filtradas = profFiltro
       ? parsed.filter((turma) =>
           (
@@ -785,11 +746,6 @@ export default function TurmasManager({
         )
       : parsed;
 
-    /*
-    * No contexto de clube/escolinha,
-    * coloca primeiro as turmas da própria
-    * organização. As externas ficam abaixo.
-    */
     const ordenadas = o
       ? [...filtradas].sort(
           (turmaA, turmaB) => {
@@ -815,10 +771,6 @@ export default function TurmasManager({
         )
       : filtradas;
 
-    /*
-    * Ao abrir como professor, monta a lista
-    * de professores presente nas turmas.
-    */
     if (!o) {
       const mapa =
         new Map<
@@ -926,11 +878,6 @@ export default function TurmasManager({
 
     const res = await axios.get(`${API.BASE_URL}/api/turmas/${id}/alunos`, { headers });
 
-        /*
-    * Acrescenta atletas válidos que vieram na
-    * resposta da turma sem apagar a lista completa
-    * carregada por /api/gerenciar/atletas.
-    */
     const vinculadosDaResposta =
       Array.isArray(res.data?.alunos)
         ? res.data.alunos.filter(
@@ -980,10 +927,6 @@ export default function TurmasManager({
     const alunosTurma: TurmaAluno[] =
       Array.isArray(res.data?.alunos)
         ? res.data.alunos
-            /*
-            * Atleta sem vínculo não deve aparecer
-            * nem em "Na turma" nem em "Fora da turma".
-            */
             .filter(
               (atleta: any) =>
                 atleta?.vinculado === true
@@ -1450,11 +1393,6 @@ export default function TurmasManager({
       return false;
     }
 
-    /*
-    * Mesmo que pertença a outro clube/escolinha,
-    * não é externa para o professor logado
-    * quando ele participa da turma.
-    */
     if (
       professorLogadoParticipaDaTurma(
         turma

@@ -32,7 +32,6 @@ const SLIDE_BG_FALLBACK = "#003c24";
 function corBordaFromImagem(r: number, g: number, b: number) {
   const brilho = (r * 299 + g * 587 + b * 114) / 1000;
 
-  // Se a cor for muito clara, escurece para ficar melhor como borda/fundo.
   const fator = brilho > 180 ? 0.55 : 0.85;
 
   return `rgb(${Math.round(r * fator)}, ${Math.round(g * fator)}, ${Math.round(

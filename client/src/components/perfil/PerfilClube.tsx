@@ -19,10 +19,10 @@ import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js";
+import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-type Props = { idDaUrl?: string; usuarioId?: string | null };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
 type PayloadClube = {
   tipo: "Clube";
@@ -376,9 +376,6 @@ export default function PerfilClube({
           : prev.solicitacoes,
     }));
 
-    /*
-    * Mantém também o KPI de atletas do cabeçalho atualizado.
-    */
     if (vinculadosLista !== null) {
       setAtletasHeaderCount(vinculadosLista.length);
     }
@@ -396,10 +393,6 @@ export default function PerfilClube({
 
     void carregarContagensAtletas();
 
-    /*
-    * Atualiza enquanto a aba Atletas estiver aberta,
-    * mesmo sem clicar nas subabas.
-    */
     const intervalId = window.setInterval(() => {
       void carregarContagensAtletas();
     }, 30_000);
@@ -1073,22 +1066,12 @@ export default function PerfilClube({
     if (!token || !clubeId || !canEdit) return;
 
     function atualizarDadosDosAtletas() {
-      /*
-      * Limpa as listas para que sejam buscadas novamente
-      * quando a respectiva subaba estiver aberta.
-      */
       setVinculados(null);
       setObservados(null);
       setSolicitacoes(null);
-
       setVinculadosPreview([]);
       setAtletasHeaderCount(null);
-
       setRefreshVinculosKey((valor) => valor + 1);
-
-      /*
-      * Atualiza os números superiores imediatamente.
-      */
       void carregarContagensAtletas();
     }
 
@@ -1544,6 +1527,16 @@ export default function PerfilClube({
               Toque em um evento para ver todos os detalhes e gerenciar inscrições.
             </p>
 
+            {hasCreator && (
+              <ProfileReplaysSection
+                creatorUsuarioId={
+                  creatorUsuarioId ||
+                  data.clube.usuarioId ||
+                  data.usuario?.id
+                }
+              />
+            )}
+
             <div className="mt-3">
               {eventosLoading ? (
                 <div className="text-sm text-green-900/70">Carregando eventos…</div>
@@ -1644,6 +1637,15 @@ export default function PerfilClube({
               </div>
             )}
           </div>
+          {hasCreator && (
+              <ProfileReplaysSection
+                creatorUsuarioId={
+                  creatorUsuarioId ||
+                  data.clube.usuarioId ||
+                  data.usuario?.id
+                }
+              />
+            )}
         </section>
       )}
 

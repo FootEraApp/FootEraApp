@@ -153,12 +153,6 @@ export async function perfilOlheiro(req: Request, res: Response) {
       indicacoesAprov *
       PONTOS_POR_INDICACAO_APROVADA;
 
-    /*
-    * Corrige dados antigos no banco.
-    *
-    * Exemplo:
-    * 2 indicações aprovadas = 20 pontos.
-    */
     if (
       Number(olheiro.reputacaoScore ?? 0) !==
         reputacaoCalculada ||

@@ -589,10 +589,6 @@ export default function PaginaElenco({
     ]
   );
 
-  /*
-  * Considera somente posições que estão visíveis
-  * na formação atual e não conta o mesmo atleta duas vezes.
-  */
   const elencoAtual = useMemo(() => {
     const vistos = new Set<string>();
     const titulares: Atleta[] = [];
@@ -902,13 +898,6 @@ export default function PaginaElenco({
       ? resposta.data
       : [];
 
-    /*
-     * Remove duplicações somente quando o ID
-     * realmente for o mesmo.
-     *
-     * Duas turmas com o mesmo nome e IDs
-     * diferentes continuam sendo duas turmas.
-     */
     const mapaTurmas =
       new Map<string, TurmaOpcao>();
 
@@ -945,13 +934,6 @@ export default function PaginaElenco({
 
     setTurmas(unicasPorId);
 
-    /*
-     * Mantém a turma selecionada caso ela
-     * ainda esteja vinculada ao usuário.
-     *
-     * Caso tenha sido apagada ou desvinculada,
-     * seleciona a primeira turma disponível.
-     */
     setTurmaId((atual) => {
       const aindaExiste =
         unicasPorId.some(
@@ -977,11 +959,6 @@ export default function PaginaElenco({
       erro
     );
 
-    /*
-    * Mantém os dados atuais na tela.
-    * Uma falha temporária não deve apagar
-    * o elenco que está sendo editado.
-    */
     setLoading(false);
   }
   }, []);
@@ -1025,10 +1002,6 @@ export default function PaginaElenco({
             alunosValidos
           );
 
-        /*
-        * Só altera o estado quando houve
-        * mudança real nos atletas.
-        */
         setTodosAtletas(
           (atletasAnteriores) => {
             const criarAssinatura = (
@@ -1078,18 +1051,7 @@ export default function PaginaElenco({
 
   useEffect(() => {
     function atualizarTurmasEAtletas() {
-      /*
-      * Atualiza a lista de turmas.
-      *
-      * Se a turma atual tiver sido apagada,
-      * carregarTurmas selecionará outra.
-      */
       void carregarTurmas();
-
-      /*
-      * Atualiza os atletas sem substituir
-      * os elencos que estão sendo editados.
-      */
       void carregarAtletasDaTurmaAtual();
     }
 
@@ -1463,18 +1425,10 @@ export default function PaginaElenco({
       );
 
       setActiveIndex((indiceAtual) => {
-        /*
-        * Excluiu um item anterior ao ativo:
-        * o mesmo elenco ativo passa uma posição para trás.
-        */
         if (index < indiceAtual) {
           return indiceAtual - 1;
         }
 
-        /*
-        * Excluiu o próprio elenco ativo:
-        * tenta manter a mesma posição ou usa a última.
-        */
         if (index === indiceAtual) {
           return Math.min(
             indiceAtual,
@@ -1619,11 +1573,6 @@ export default function PaginaElenco({
           return prev;
         }
 
-        /*
-        * Se era reserva e foi para o campo,
-        * remove diretamente das reservas
-        * deste mesmo elenco.
-        */
         e.reservasIds =
           e.reservasIds.filter(
             (id) =>
@@ -1691,9 +1640,6 @@ export default function PaginaElenco({
       return null;
     }
 
-    /*
-    * Começa com todas as posições vazias.
-    */
     const escala =
       POSICOES.reduce(
         (resultado, posicao) => {
@@ -1708,10 +1654,6 @@ export default function PaginaElenco({
         >
       );
 
-    /*
-    * Preenche somente as posições
-    * exibidas pela formação atual.
-    */
     for (
       const posicao
       of posicoesDaFormacao
@@ -1813,15 +1755,6 @@ export default function PaginaElenco({
       return;
     }
 
-    /*
-    * Permite salvar um elenco incompleto.
-    *
-    * Exemplos válidos:
-    * - 2 titulares;
-    * - 1 titular e 1 reserva;
-    * - 8 titulares e 2 reservas;
-    * - 11 titulares e 11 reservas.
-    */
     if (totalSelecionadosSalvar < 2) {
       toast.error(
         "Adicione pelo menos 2 jogadores ao elenco antes de salvar."
@@ -2017,10 +1950,6 @@ export default function PaginaElenco({
   const contarJogadoresDoElenco = (
     elenco: ElencoUI
   ) => {
-    /*
-    * Conta apenas posições que pertencem
-    * à formação desse elenco.
-    */
     const posicoesVisiveis: PosicaoCampo[] = [
       "GOL",
 
@@ -2050,10 +1979,6 @@ export default function PaginaElenco({
       }
     }
 
-    /*
-    * Remove reservas repetidas e impede
-    * que um titular seja contado novamente.
-    */
     const reservasIdsValidas = Array.from(
       new Set(elenco.reservasIds)
     )

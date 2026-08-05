@@ -266,8 +266,13 @@ export async function listarPublicos(req: Request & { user?: any }, res: Respons
   try {
     const creatorUsuarioId = String(req.query.creatorUsuarioId || "").trim();
 
+    const agora = new Date();
+
     const where: any = {
       status: "ABERTO",
+      dataEvento: {
+        gte: agora,
+      },
     };
 
     if (creatorUsuarioId) {

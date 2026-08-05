@@ -285,10 +285,6 @@ export default function GerenciarOrganizacao({
         }
       );
 
-      /*
-      * Remove imediatamente sem precisar esperar
-      * uma nova consulta.
-      */
       setGestores((atual) =>
         atual.filter(
           (item) => item.id !== gestor.id
@@ -329,23 +325,13 @@ export default function GerenciarOrganizacao({
       }
     }
 
-    /*
-    * Carregamento inicial.
-    */
     atualizarResponsaveis();
 
-    /*
-    * Atualiza ao voltar para a janela.
-    */
     window.addEventListener(
       "focus",
       atualizarResponsaveis
     );
 
-    /*
-    * Atualiza quando a aplicação informa
-    * que algum vínculo foi alterado.
-    */
     window.addEventListener(
       "footera:vinculo-treino-alterado",
       atualizarResponsaveis
@@ -356,10 +342,6 @@ export default function GerenciarOrganizacao({
       atualizarAoVoltar
     );
 
-    /*
-    * Garante atualização caso a alteração tenha sido
-    * feita por outro usuário ou dispositivo.
-    */
     const intervalId = window.setInterval(
       atualizarResponsaveis,
       20_000

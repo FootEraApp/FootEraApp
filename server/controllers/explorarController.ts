@@ -90,21 +90,46 @@ function ordenarDestaquesProNome<T>(
   items: T[],
   getName: (item: T) => string
 ): T[] {
-  return [...items].sort((a: any, b: any) => {
-    const ad = isDestaqueItem(a) ? 1 : 0;
-    const bd = isDestaqueItem(b) ? 1 : 0;
+  function prioridade(item: any) {
+    if (isDestaqueItem(item)) {
+      return 0;
+    }
 
-    if (ad !== bd) return bd - ad;
+    if (item?.isPro === true) {
+      return 1;
+    }
 
-    const ap = a?.isPro === true ? 1 : 0;
-    const bp = b?.isPro === true ? 1 : 0;
+    return 2;
+  }
 
-    if (ap !== bp) return bp - ap;
+  return [...items].sort(
+    (a: any, b: any) => {
+      const prioridadeA =
+        prioridade(a);
 
-    return getName(a).localeCompare(getName(b), "pt-BR", {
-      sensitivity: "base",
-    });
-  });
+      const prioridadeB =
+        prioridade(b);
+
+      if (
+        prioridadeA !==
+        prioridadeB
+      ) {
+        return (
+          prioridadeA -
+          prioridadeB
+        );
+      }
+
+      return getName(a).localeCompare(
+        getName(b),
+        "pt-BR",
+        {
+          sensitivity:
+            "base",
+        }
+      );
+    }
+  );
 }
 
 export async function listarAtletasExplorar(req: Request, res: Response) {
@@ -143,6 +168,7 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -262,6 +288,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -345,6 +372,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -406,6 +434,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -481,6 +510,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -556,6 +586,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -626,6 +657,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -690,6 +722,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -746,6 +779,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
+            dataCriacao: true,
             assinatura: {
               select: {
                 plano: true,
@@ -890,6 +924,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
+              dataCriacao: true,
               assinatura: {
                 select: {
                   plano: true,
@@ -934,6 +969,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
+              dataCriacao: true,
               assinatura: {
                 select: {
                   plano: true,
@@ -965,6 +1001,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
+              dataCriacao: true,
               assinatura: {
                 select: {
                   plano: true,
@@ -1003,6 +1040,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
+              dataCriacao: true,
               assinatura: {
                 select: {
                   plano: true,
@@ -1041,6 +1079,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
+              dataCriacao: true,
               assinatura: {
                 select: {
                   plano: true,
@@ -1082,6 +1121,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
               foto: true,
               cidade: true,
               estado: true,
+              dataCriacao: true,
               tipo: true,
               assinatura: {
                 select: {

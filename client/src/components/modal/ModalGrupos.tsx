@@ -161,11 +161,6 @@ export function ModalGrupos({ aberto, onFechar, onGrupoCriado, usuarioId, token 
         );
       }
 
-      /*
-      * O backend devolve o grupo completo, com membros.
-      * Aqui transformamos para o formato usado na lista
-      * lateral da página mensagens.tsx.
-      */
       const novoGrupo: GrupoParaLista = {
         id: data.id,
         nome: data.nome,
@@ -179,10 +174,6 @@ export function ModalGrupos({ aberto, onFechar, onGrupoCriado, usuarioId, token 
         ultimaMensagemEm: null,
       };
 
-      /*
-      * Envia o grupo diretamente para mensagens.tsx.
-      * Isso faz aparecer imediatamente, sem reload.
-      */
       onGrupoCriado?.(novoGrupo);
 
       toast.success("Grupo criado com sucesso!");

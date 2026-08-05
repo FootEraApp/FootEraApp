@@ -762,12 +762,6 @@ export default function PaginaMensagens() {
       const node = cardRef.current;
       if (!node) { toast.error("Falha ao preparar o card para captura."); return; }
 
-      const dataUrl = await htmlToImage.toPng(node, {
-        cacheBust: false,
-        pixelRatio: 2,
-        imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-      });
-
       if (resp.ok) {
         const saved: Mensagem = await resp.json();
         reconcilePrivadaByClientId(saved);
@@ -937,11 +931,6 @@ export default function PaginaMensagens() {
     socket.on("grupoCriado", (novoGrupo: Grupo) => {
       if (!novoGrupo?.id) return;
 
-      /*
-      * Adiciona o grupo imediatamente à lista.
-      * A verificação evita duplicação caso o evento seja recebido
-      * mais de uma vez.
-      */
       setGrupos((prev) => {
         const grupoJaExiste = prev.some(
           (grupo) => grupo.id === novoGrupo.id
@@ -958,18 +947,11 @@ export default function PaginaMensagens() {
         return [novoGrupo, ...prev];
       });
 
-      /*
-      * Como o grupo acabou de ser criado, ainda não possui
-      * mensagens para exibir na prévia.
-      */
       setLastMsgByGroup((prev) => ({
         ...prev,
         [novoGrupo.id]: "",
       }));
 
-      /*
-      * Coloca o grupo recém-criado no início da lista.
-      */
       setLastMsgAtByGroup((prev) => ({
         ...prev,
         [novoGrupo.id]: Date.now(),
@@ -1243,10 +1225,8 @@ export default function PaginaMensagens() {
       alvoAtual?.tipo === "grupo" &&
       alvoAtual.grupo.id === grupoId;
 
-    // Remove imediatamente da lista lateral
     setGrupos((prev) => prev.filter((grupo) => grupo.id !== grupoId));
 
-    // Limpa os dados usados para ordenar/exibir a última mensagem
     setLastMsgByGroup((prev) => {
       const next = { ...prev };
       delete next[grupoId];
@@ -1259,10 +1239,8 @@ export default function PaginaMensagens() {
       return next;
     });
 
-    // Remove o cache local das mensagens desse grupo
     localStorage.removeItem(`conversa_grupo_${grupoId}`);
 
-    // Impede que o grupo removido seja reaberto automaticamente
     try {
       const raw = localStorage.getItem("mensagens_last_target");
 
@@ -1297,8 +1275,6 @@ export default function PaginaMensagens() {
       setGrupoDetalhe(null);
       setMostrarInfoGrupo(false);
       setModalAdicionarMembrosAberto(false);
-
-      // No celular, abre novamente a lista de conversas
       setShowSidebar(true);
     }
   }
@@ -1822,11 +1798,6 @@ function stripConvocacaoTag(text: string) {
   const renderizarMensagemGrupoWhats = (msg: MensagemGrupo) => {
     const isMine = msg.usuarioId === usuarioId;
 
-    /*
-    * As mensagens carregadas do backend já possuem msg.usuario.
-    * Para mensagens otimistas ou antigas do cache, usamos também
-    * os dados da lista de membros do grupo.
-    */
     const membroDoGrupo = grupoDetalhe?.membros.find(
       (membro) => membro.id === msg.usuarioId
     );
@@ -1860,7 +1831,6 @@ function stripConvocacaoTag(text: string) {
             isMine ? "flex-row-reverse" : "flex-row"
           }`}
         >
-          {/* Foto de quem enviou */}
           <button
             type="button"
             onClick={() => navigate(`/perfil/${msg.usuarioId}`)}
@@ -1880,7 +1850,6 @@ function stripConvocacaoTag(text: string) {
               isMine ? "items-end" : "items-start"
             }`}
           >
-            {/* Nome de quem enviou */}
             <div
               className={`mb-1 px-1 text-[12px] font-semibold truncate max-w-full ${
                 isMine ? "text-green-900 text-right" : "text-gray-700"
@@ -1889,7 +1858,6 @@ function stripConvocacaoTag(text: string) {
               {nomeRemetente}
             </div>
 
-            {/* Balão da mensagem */}
             <div
               className={`${bubble} max-w-full px-3 py-2 shadow-sm relative`}
             >
@@ -1912,8 +1880,6 @@ function stripConvocacaoTag(text: string) {
                 </button>
               )}
             </div>
-
-            {/* Horário */}
             <div className={horarioClass}>
               {new Date(msg.criadaEm).toLocaleTimeString("pt-BR", {
                 hour: "2-digit",
@@ -2460,10 +2426,6 @@ function stripConvocacaoTag(text: string) {
         usuarioId={usuarioId ?? ""}
         token={token}
         onGrupoCriado={(novoGrupo) => {
-          /*
-          * Remove uma possível cópia recebida pelo socket
-          * e insere o grupo no início.
-          */
           setGrupos((prev) => [
             novoGrupo,
             ...prev.filter(
@@ -2481,10 +2443,6 @@ function stripConvocacaoTag(text: string) {
             [novoGrupo.id]: Date.now(),
           }));
 
-          /*
-          * Limpa uma busca ativa para evitar que o novo grupo
-          * fique escondido por causa do filtro.
-          */
           setSearchTerm("");
         }}
       />

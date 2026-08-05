@@ -4,6 +4,7 @@ import {
   IvsClient,
   CreateChannelCommand,
   CreateStreamKeyCommand,
+  GetRecordingConfigurationCommand,
 } from "@aws-sdk/client-ivs";
 import {
   S3Client,
@@ -283,80 +284,161 @@ function sanitizeAulaForResponse(aula: any, isOwner: boolean) {
 
 const LIVE_ONLINE_WINDOW_SECONDS = 30;
 
-async function calcularMetricasPresencaAula(aulaId: string, status?: string | null) {
-  const desde = new Date(Date.now() - LIVE_ONLINE_WINDOW_SECONDS * 1000);
+async function calcularMetricasPresencaAula(
+  aulaId: string,
+  status?: string | null
+) {
+  const desde = new Date(
+    Date.now() -
+      LIVE_ONLINE_WINDOW_SECONDS *
+        1000
+  );
 
   const totalOnline =
     status === "AO_VIVO"
-      ? await prisma.aulaAoVivoPresenca.count({
-          where: {
-            aulaAoVivoId: aulaId,
-            entrouAoVivo: true,
-            ultimoPingEm: {
-              gte: desde,
+      ? await prisma
+          .aulaAoVivoPresenca
+          .count({
+            where: {
+              aulaAoVivoId:
+                aulaId,
+
+              entrouAoVivo:
+                true,
+
+              ultimoPingEm: {
+                gte: desde,
+              },
             },
-          },
-        })
+          })
       : 0;
 
-  const totalParticipantes = await prisma.aulaAoVivoPresenca.count({
-    where: {
-      aulaAoVivoId: aulaId,
-      entrouAoVivo: true,
-    },
-  });
+  const totalAcessosUnicos =
+    await prisma
+      .aulaAoVivoPresenca
+      .count({
+        where: {
+          aulaAoVivoId:
+            aulaId,
+        },
+      });
 
   return {
     totalOnline,
-    totalParticipantes,
+    totalParticipantes:
+      totalAcessosUnicos,
+    totalAcessosUnicos,
   };
 }
 
-async function registrarPresencaInterna(aulaId: string, usuarioId: string) {
-  const aula = await prisma.aulaAoVivo.findUnique({
-    where: { id: aulaId },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
+async function registrarPresencaInterna(
+  aulaId: string,
+  usuarioId: string
+) {
+  const aula =
+    await prisma.aulaAoVivo
+      .findUnique({
+        where: {
+          id: aulaId,
+        },
+
+        select: {
+          id: true,
+          status: true,
+        },
+      });
 
   if (!aula) {
-    throw new Error("Aula ao vivo não encontrada.");
+    throw new Error(
+      "Aula ao vivo não encontrada."
+    );
   }
 
-  const agora = new Date();
+  const agora =
+    new Date();
 
-  if (aula.status === "AO_VIVO") {
-    await prisma.aulaAoVivoPresenca.upsert({
-      where: {
-        aulaAoVivoId_usuarioId: {
-          aulaAoVivoId: aulaId,
-          usuarioId,
+  const estaAoVivo =
+    aula.status ===
+    "AO_VIVO";
+
+  const estaEmReplay =
+    aula.status ===
+    "FINALIZADA";
+
+  if (
+    estaAoVivo ||
+    estaEmReplay
+  ) {
+    const dadosAtualizacao: {
+      ultimoPingEm: Date;
+      saiuEm: null;
+      entrouAoVivo?: boolean;
+    } = {
+      ultimoPingEm:
+        agora,
+
+      saiuEm:
+        null,
+    };
+
+    if (estaAoVivo) {
+      dadosAtualizacao
+        .entrouAoVivo =
+        true;
+    }
+
+    await prisma
+      .aulaAoVivoPresenca
+      .upsert({
+        where: {
+          aulaAoVivoId_usuarioId:
+            {
+              aulaAoVivoId:
+                aulaId,
+
+              usuarioId,
+            },
         },
-      },
-      create: {
-        aulaAoVivoId: aulaId,
-        usuarioId,
-        entrouEm: agora,
-        ultimoPingEm: agora,
-        saiuEm: null,
-        entrouAoVivo: true,
-      },
-      update: {
-        ultimoPingEm: agora,
-        saiuEm: null,
-        entrouAoVivo: true,
-      },
-    });
+
+        create: {
+          aulaAoVivoId:
+            aulaId,
+
+          usuarioId,
+
+          entrouEm:
+            agora,
+
+          ultimoPingEm:
+            agora,
+
+          saiuEm:
+            null,
+
+          entrouAoVivo:
+            estaAoVivo,
+        },
+
+        update:
+          dadosAtualizacao,
+      });
   }
 
-  const metricas = await calcularMetricasPresencaAula(aulaId, aula.status);
+  const metricas =
+    await calcularMetricasPresencaAula(
+      aulaId,
+      aula.status
+    );
 
   await prisma.aulaAoVivo.update({
-    where: { id: aulaId },
+    where: {
+      id: aulaId,
+    },
+
     data: {
-      totalParticipantes: metricas.totalParticipantes,
+      totalParticipantes:
+        metricas
+          .totalAcessosUnicos,
     },
   });
 
@@ -377,6 +459,16 @@ export async function getAulaAoVivo(req: AuthRequest, res: Response) {
     }
 
     const owner = isDonoDaAula(aula, userId);
+
+    if (!owner) {
+      return res.status(403).json({
+        code:
+          "ROTA_INTERNA_DO_CRIADOR",
+
+        message:
+          "Essa rota é exclusiva do responsável pela transmissão. Utilize a página pública do evento.",
+      });
+    }
 
     const metricas = await calcularMetricasPresencaAula(aula.id, aula.status);
 
@@ -443,12 +535,159 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
 
     const channelName = `footera-aula-${aula.id}`.slice(0, 128);
 
-    const recordingConfigurationArn =
+    const gravacaoSolicitada =
       aula.gravacaoAtiva &&
-      process.env.IVS_RECORDING_ENABLED === "true" &&
-      process.env.IVS_RECORDING_CONFIGURATION_ARN
-        ? process.env.IVS_RECORDING_CONFIGURATION_ARN
-        : undefined;
+      process.env
+        .IVS_RECORDING_ENABLED ===
+        "true";
+
+    const arnConfiguracaoGravacao =
+      String(
+        process.env
+          .IVS_RECORDING_CONFIGURATION_ARN ||
+          ""
+      ).trim();
+
+    let recordingConfigurationArn:
+      | string
+      | undefined;
+
+    if (gravacaoSolicitada) {
+      if (!arnConfiguracaoGravacao) {
+        await prisma.aulaAoVivo.update({
+          where: {
+            id: aula.id,
+          },
+          data: {
+            ivsRecordingConfigurationArn:
+              null,
+            ivsRecordingStatus:
+              "NAO_CONFIGURADA",
+          },
+        });
+
+        return res.status(503).json({
+          code:
+            "IVS_RECORDING_ARN_NAO_CONFIGURADO",
+
+          message:
+            "A gravação automática está ativa, mas IVS_RECORDING_CONFIGURATION_ARN não foi configurado no servidor.",
+        });
+      }
+
+      const padraoArn =
+        /^arn:aws:ivs:([a-z0-9-]+):(\d{12}):recording-configuration\/([A-Za-z0-9-]+)$/;
+
+      const resultadoArn =
+        arnConfiguracaoGravacao.match(
+          padraoArn
+        );
+
+      if (!resultadoArn) {
+        await prisma.aulaAoVivo.update({
+          where: {
+            id: aula.id,
+          },
+          data: {
+            ivsRecordingConfigurationArn:
+              null,
+            ivsRecordingStatus:
+              "NAO_CONFIGURADA",
+          },
+        });
+
+        return res.status(500).json({
+          code:
+            "IVS_RECORDING_ARN_INVALIDO",
+
+          message:
+            "IVS_RECORDING_CONFIGURATION_ARN está inválido. Informe o ARN real de uma Recording Configuration do Amazon IVS, e não a AWS Access Key.",
+        });
+      }
+
+      const [
+        ,
+        regiaoArn,
+        contaArn,
+      ] = resultadoArn;
+
+      const regiaoConfigurada =
+        getAwsRegion();
+
+      if (
+        regiaoArn !==
+        regiaoConfigurada
+      ) {
+        return res.status(500).json({
+          code:
+            "IVS_RECORDING_REGIAO_DIFERENTE",
+
+          message:
+            `A configuração de gravação pertence à região ${regiaoArn}, mas o servidor está usando ${regiaoConfigurada}.`,
+        });
+      }
+
+      const contaConfigurada =
+        String(
+          process.env
+            .AWS_ACCOUNT_ID || ""
+        ).trim();
+
+      if (
+        contaConfigurada &&
+        contaArn !==
+          contaConfigurada
+      ) {
+        return res.status(500).json({
+          code:
+            "IVS_RECORDING_CONTA_DIFERENTE",
+
+          message:
+            "A configuração de gravação pertence a outra conta AWS.",
+        });
+      }
+
+      const configuracaoResposta =
+        await ivs.send(
+          new GetRecordingConfigurationCommand({
+            arn:
+              arnConfiguracaoGravacao,
+          })
+        );
+
+      const configuracao =
+        configuracaoResposta
+          .recordingConfiguration;
+
+      if (
+        !configuracao ||
+        configuracao.state !==
+          "ACTIVE"
+      ) {
+        await prisma.aulaAoVivo.update({
+          where: {
+            id: aula.id,
+          },
+          data: {
+            ivsRecordingConfigurationArn:
+              null,
+            ivsRecordingStatus:
+              "NAO_CONFIGURADA",
+          },
+        });
+
+        return res.status(503).json({
+          code:
+            "IVS_RECORDING_NAO_ATIVA",
+
+          message:
+            "A configuração de gravação do Amazon IVS ainda não está ativa.",
+        });
+      }
+
+      recordingConfigurationArn =
+        arnConfiguracaoGravacao;
+    }
 
     const command = new CreateChannelCommand({
       name: channelName,
@@ -491,6 +730,12 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
       });
     }
 
+    const accountId =
+      recordingConfigurationArn
+        ?.split(":")[4] ||
+      process.env.AWS_ACCOUNT_ID ||
+      null;
+
     const updated = await prisma.aulaAoVivo.update({
       where: { id: aula.id },
       data: {
@@ -502,9 +747,11 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
         urlStream: channel.playbackUrl,
 
         ivsRecordingConfigurationArn: recordingConfigurationArn || null,
-        ivsRecordingS3Prefix: recordingConfigurationArn
-          ? `ivs/v1/886789338729/`
-          : null,
+        ivsRecordingS3Prefix:
+          recordingConfigurationArn &&
+          accountId
+            ? `ivs/v1/${accountId}/`
+            : null,
         ivsRecordingStatus: recordingConfigurationArn ? "CONFIGURADA" : null,
       },
     });
@@ -521,12 +768,47 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
       },
     });
   } catch (error: any) {
-    console.error("Erro em getBroadcastConfig:", error);
+    console.error(
+      "Erro em getBroadcastConfig:",
+      error
+    );
+
+    if (
+      error?.name ===
+        "ResourceNotFoundException" ||
+      error?.Code ===
+        "ResourceNotFoundException"
+    ) {
+      return res.status(503).json({
+        code:
+          "IVS_RECORDING_CONFIG_NAO_ENCONTRADA",
+
+        message:
+          "A configuração de gravação informada não foi encontrada na conta ou região da AWS. Revise IVS_RECORDING_CONFIGURATION_ARN.",
+      });
+    }
+
+    if (
+      error?.name ===
+        "AccessDeniedException" ||
+      error?.name ===
+        "UnauthorizedException"
+    ) {
+      return res.status(403).json({
+        code:
+          "IVS_SEM_PERMISSAO",
+
+        message:
+          "As credenciais da AWS não possuem permissão para criar ou consultar canais e configurações de gravação do IVS.",
+      });
+    }
 
     return res.status(500).json({
+      code:
+        "IVS_BROADCAST_CONFIG_ERROR",
+
       message:
-        error?.message ||
-        "Erro ao preparar configuração da transmissão IVS.",
+        "Não foi possível preparar a transmissão no Amazon IVS.",
     });
   }
 }
@@ -931,22 +1213,37 @@ export async function finalizarAulaAoVivo(req: AuthRequest, res: Response) {
 
     const agora = new Date();
 
+    const inicioReal =
+      aula.iniciouEm ||
+      aula.dataInicio ||
+      agora;
+
+    const inicioTimestamp =
+      new Date(inicioReal).getTime();
+
+    const duracaoMin =
+      Number.isFinite(inicioTimestamp)
+        ? Math.max(
+            1,
+            Math.ceil(
+              (
+                agora.getTime() -
+                inicioTimestamp
+              ) /
+                60_000
+            )
+          )
+        : null;
+
     const updated = await prisma.aulaAoVivo.update({
       where: { id },
       data: {
         status: "FINALIZADA",
         finalizouEm: agora,
-
-        /*
-        * Use o horário real da finalização.
-        * Evita manter um término previsto
-        * anterior ao início real.
-        */
         dataFim: agora,
-
+        duracaoMin,
         chatAtivo: false,
         replayDisponivel: false,
-
         ivsRecordingStatus:
           aula.gravacaoAtiva &&
           aula.ivsRecordingConfigurationArn
@@ -1093,8 +1390,14 @@ export async function registrarPresencaAulaAoVivo(req: AuthRequest, res: Respons
 
     return res.json({
       ok: true,
-      totalOnline: metricas.totalOnline,
-      totalParticipantes: metricas.totalParticipantes,
+      totalOnline:
+        metricas.totalOnline,
+      totalParticipantes:
+        metricas
+          .totalParticipantes,
+      totalAcessosUnicos:
+        metricas
+          .totalAcessosUnicos,
     });
   } catch (error: any) {
     console.error("Erro em registrarPresencaAulaAoVivo:", error);
@@ -1138,8 +1441,14 @@ export async function sairPresencaAulaAoVivo(req: AuthRequest, res: Response) {
 
     return res.json({
       ok: true,
-      totalOnline: metricas.totalOnline,
-      totalParticipantes: metricas.totalParticipantes,
+      totalOnline:
+        metricas.totalOnline,
+      totalParticipantes:
+        metricas
+          .totalParticipantes,
+      totalAcessosUnicos:
+        metricas
+          .totalAcessosUnicos,
     });
   } catch (error: any) {
     console.error("Erro em sairPresencaAulaAoVivo:", error);
@@ -1340,15 +1649,403 @@ export async function deletarMensagemAulaAoVivo(req: AuthRequest, res: Response)
       },
     });
 
+    const totalMensagens =
+      await prisma
+        .aulaAoVivoMensagem
+        .count({
+          where: {
+            aulaAoVivoId:
+              id,
+
+            deletada:
+              false,
+          },
+        });
+
+    await prisma.aulaAoVivo.update({
+      where: {
+        id,
+      },
+
+      data: {
+        totalMensagens,
+      },
+    });
+
     return res.json({
       message: "Mensagem removida.",
       item: updated,
+      totalMensagens,
     });
   } catch (error) {
     console.error("Erro em deletarMensagemAulaAoVivo:", error);
 
     return res.status(500).json({
       message: "Erro ao remover mensagem.",
+    });
+  }
+}
+
+const REPLAY_PUBLICO_DIAS = 7;
+
+const REPLAY_PUBLICO_MS =
+  REPLAY_PUBLICO_DIAS *
+  24 *
+  60 *
+  60 *
+  1000;
+
+function calcularDuracaoReplaySegundos(
+  aula: any
+) {
+  const inicio =
+    aula.iniciouEm ||
+    aula.dataInicio ||
+    null;
+
+  const fim =
+    aula.finalizouEm ||
+    aula.dataFim ||
+    null;
+
+  if (inicio && fim) {
+    const inicioTimestamp =
+      new Date(inicio).getTime();
+
+    const fimTimestamp =
+      new Date(fim).getTime();
+
+    if (
+      Number.isFinite(
+        inicioTimestamp
+      ) &&
+      Number.isFinite(
+        fimTimestamp
+      ) &&
+      fimTimestamp >=
+        inicioTimestamp
+    ) {
+      return Math.floor(
+        (
+          fimTimestamp -
+          inicioTimestamp
+        ) /
+          1000
+      );
+    }
+  }
+
+  const duracaoMin =
+    Number(
+      aula.duracaoMin || 0
+    );
+
+  return duracaoMin > 0
+    ? duracaoMin * 60
+    : 0;
+}
+
+export async function listarReplaysPublicosCriador(
+  req: Request,
+  res: Response
+) {
+  try {
+    const usuarioId =
+      String(
+        req.params.usuarioId ||
+          ""
+      ).trim();
+
+    if (!usuarioId) {
+      return res.status(400).json({
+        message:
+          "Usuário criador não informado.",
+      });
+    }
+
+    const agora =
+      new Date();
+
+    const limite =
+      new Date(
+        agora.getTime() -
+          REPLAY_PUBLICO_MS
+      );
+
+    const aulas =
+      await prisma.aulaAoVivo.findMany({
+        where: {
+          status:
+            "FINALIZADA",
+
+          replayDisponivel:
+            true,
+
+          videoGravadoUrl: {
+            not: null,
+          },
+
+          AND: [
+            {
+              OR: [
+                {
+                  criadorUsuarioId:
+                    usuarioId,
+                },
+
+                {
+                  metodologia: {
+                    criadorUsuarioId:
+                      usuarioId,
+                  },
+                },
+
+                {
+                  metodologiaAvulsa: {
+                    criadorUsuarioId:
+                      usuarioId,
+                  },
+                },
+              ],
+            },
+
+            {
+              OR: [
+                {
+                  finalizouEm: {
+                    gte:
+                      limite,
+
+                    lte:
+                      agora,
+                  },
+                },
+                {
+                  finalizouEm:
+                    null,
+
+                  dataFim: {
+                    gte:
+                      limite,
+
+                    lte:
+                      agora,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+
+        orderBy: {
+          finalizouEm:
+            "desc",
+        },
+
+        take:
+          30,
+
+        select: {
+          id: true,
+          titulo: true,
+          descricao: true,
+
+          dataInicio: true,
+          dataFim: true,
+          iniciouEm: true,
+          finalizouEm: true,
+
+          duracaoMin: true,
+          thumbUrl: true,
+
+          precoAcesso: true,
+          acessoPago: true,
+
+          criadorUsuarioId:
+            true,
+
+          criadorUsuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario: true,
+              foto: true,
+              tipo: true,
+            },
+          },
+
+          metodologia: {
+            select: {
+              id: true,
+              titulo: true,
+              capaUrl: true,
+
+              criadorUsuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  nomeDeUsuario:
+                    true,
+                  foto: true,
+                  tipo: true,
+                },
+              },
+            },
+          },
+
+          metodologiaAvulsa: {
+            select: {
+              id: true,
+              titulo: true,
+              capaUrl: true,
+
+              criadorUsuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  nomeDeUsuario:
+                    true,
+                  foto: true,
+                  tipo: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+    const items =
+      aulas
+        .map((aula) => {
+          const finalizouEm =
+            aula.finalizouEm ||
+            aula.dataFim;
+
+          if (!finalizouEm) {
+            return null;
+          }
+
+          const expiraEm =
+            new Date(
+              finalizouEm.getTime() +
+                REPLAY_PUBLICO_MS
+            );
+
+          const segundosRestantes =
+            Math.max(
+              0,
+              Math.floor(
+                (
+                  expiraEm.getTime() -
+                  agora.getTime()
+                ) /
+                  1000
+              )
+            );
+
+          if (
+            segundosRestantes <=
+            0
+          ) {
+            return null;
+          }
+
+          const criador =
+            aula.criadorUsuario ||
+            aula
+              .metodologiaAvulsa
+              ?.criadorUsuario ||
+            aula.metodologia
+              ?.criadorUsuario ||
+            null;
+
+          const preco =
+            Number(
+              aula.precoAcesso ??
+                0
+            );
+
+          const acessoPago =
+            aula.acessoPago ===
+              true ||
+            (
+              Number.isFinite(
+                preco
+              ) &&
+              preco > 0
+            );
+
+          return {
+            id:
+              aula.id,
+
+            titulo:
+              aula.titulo,
+
+            descricao:
+              aula.descricao,
+
+            dataInicio:
+              aula.dataInicio,
+
+            iniciouEm:
+              aula.iniciouEm,
+
+            finalizouEm,
+
+            duracaoSegundos:
+              calcularDuracaoReplaySegundos(
+                aula
+              ),
+
+            thumbUrl:
+              aula.thumbUrl ||
+              aula.metodologiaAvulsa
+                ?.capaUrl ||
+              aula.metodologia
+                ?.capaUrl ||
+              null,
+
+            acessoPago,
+
+            precoAcesso:
+              acessoPago
+                ? preco
+                : 0,
+
+            replayExpiraEm:
+              expiraEm,
+
+            segundosRestantes,
+
+            criador,
+
+            metodologiaTitulo:
+              aula
+                .metodologiaAvulsa
+                ?.titulo ||
+              aula.metodologia
+                ?.titulo ||
+              null,
+          };
+        })
+        .filter(Boolean);
+
+    return res.json({
+      items,
+
+      validadeDias:
+        REPLAY_PUBLICO_DIAS,
+    });
+  } catch (error) {
+    console.error(
+      "Erro ao listar replays públicos:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Erro ao carregar replays.",
     });
   }
 }
@@ -1625,14 +2322,6 @@ function montarUrlS3Publica(
   bucket: string,
   key: string
 ) {
-  /*
-   * Em produção, prefira uma URL pública
-   * do CloudFront apontando para o bucket.
-   *
-   * Exemplo:
-   * IVS_RECORDING_PUBLIC_BASE_URL=
-   * https://videos.footera.app.br
-   */
   const basePublica = String(
     process.env
       .IVS_RECORDING_PUBLIC_BASE_URL ||
@@ -1747,11 +2436,6 @@ export async function sincronizarReplayAulaAoVivo(req: AuthRequest, res: Respons
     const accountId = process.env.AWS_ACCOUNT_ID || "886789338729";
     const prefix = `ivs/v1/${accountId}/${channelId}/`;
 
-    /*
-    * Busca todas as páginas.
-    * Uma gravação longa pode gerar milhares
-    * de segmentos HLS.
-    */
     const objetos =
       await listarTodosObjetosS3(
         bucket,
@@ -1800,12 +2484,6 @@ export async function sincronizarReplayAulaAoVivo(req: AuthRequest, res: Respons
         masterKey
       );
 
-    /*
-    * Prefixo exato da gravação encontrada.
-    *
-    * Impede pegar playlist ou thumbnail
-    * de uma transmissão anterior.
-    */
     const prefixoDaGravacao =
       masterKey.replace(
         /\/media\/hls\/master\.m3u8$/,
@@ -1819,11 +2497,6 @@ export async function sincronizarReplayAulaAoVivo(req: AuthRequest, res: Respons
         )
       );
 
-    /*
-    * O master.m3u8 é preferível porque permite
-    * qualidade adaptativa conforme a internet
-    * do usuário.
-    */
     const replayKeyPreferido = masterKey;
 
     const videoGravadoUrl = montarUrlS3Publica(bucket, replayKeyPreferido);

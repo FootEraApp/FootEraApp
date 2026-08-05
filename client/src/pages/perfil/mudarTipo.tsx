@@ -390,20 +390,10 @@ export default function MudarTipoPerfilPage() {
 
       const payload: any = {
         tipo: tipoSelecionado,
-
-        /*
-        * Nome que ficará salvo em Usuario.nome.
-        */
         nome:
           nomeFinalPerfil.trim(),
-
-        /*
-        * Nome que ficará salvo em
-        * Usuario.nomeDeUsuario.
-        */
         nomeDeUsuario:
           usernameFinal,
-
         escolhaNomePerfil,
       };
 
@@ -430,13 +420,6 @@ export default function MudarTipoPerfilPage() {
       }
 
       if (isOrganizacao) {
-        /*
-        * O nome da entidade continua sendo
-        * sempre o nome informado aqui.
-        *
-        * A escolha acima controla o nome do
-        * usuário proprietário do perfil.
-        */
         payload.nomeOrganizacao =
           nomeOrganizacao.trim();
 
@@ -536,11 +519,6 @@ export default function MudarTipoPerfilPage() {
       }
 
       toast.success("Tipo de perfil atualizado com sucesso!");
-      
-      if (tipoLower === "federacao" || tipoLower === "marca") {
-        window.location.href = "/creator/dashboard";
-        return;
-      }
 
       window.location.href = "/perfil";
     } catch (e: any) {

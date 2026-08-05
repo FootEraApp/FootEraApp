@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
-  BookOpen,
-  GraduationCap,
-  Mail,
-  User,
-  Trophy,
-  CalendarDays,
   Pencil,
-  BadgeCheck,
 } from "lucide-react";
 import { Link } from "wouter";
 import { API } from "../../config.js";
@@ -16,12 +9,88 @@ import Storage from "../../../../server/utils/storage.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import ProfilePostsSection from "./ProfilePostsSection.js";
 
+type AulaLearningPerfil = {
+  id: string;
+  titulo: string;
+
+  descricao?:
+    | string
+    | null;
+
+  status:
+    | "AGENDADA"
+    | "AO_VIVO"
+    | "FINALIZADA"
+    | "CANCELADA"
+    | string;
+
+  dataInicio?:
+    | string
+    | null;
+
+  iniciouEm?:
+    | string
+    | null;
+
+  finalizouEm?:
+    | string
+    | null;
+
+  replayDisponivel?:
+    boolean;
+
+  replayExpiraEm?:
+    | string
+    | null;
+
+  replayExpirado?:
+    boolean;
+
+  precoAcesso?:
+    number | null;
+
+  acessoPago?:
+    boolean;
+
+  origemAcesso?:
+    | "COMPRA"
+    | "GRATUITO"
+    | "PRESENCA"
+    | "ASSINATURA"
+    | "CONVITE"
+    | string
+    | null;
+
+  criadorUsuario?: {
+    id?: string | null;
+    nome?: string | null;
+    nomeDeUsuario?: string | null;
+    foto?: string | null;
+  } | null;
+};
+
 export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
   const [data, setData] = useState<any>(null);
   const [aba, setAba] = useState<"perfil" | "cursos" | "conquistas" | "postagens">("perfil");
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<any[]>([]);
   const [progressoCursos, setProgressoCursos] = useState<Record<string, number>>({});
+  const [
+    aulasLearning,
+    setAulasLearning,
+  ] = useState<
+    AulaLearningPerfil[]
+  >([]);
+
+  const [
+    aulasLearningLoading,
+    setAulasLearningLoading,
+  ] = useState(false);
+
+  const [
+    aulasLearningErro,
+    setAulasLearningErro,
+  ] = useState("");
 
   const token =
     Storage.token ||
@@ -35,8 +104,29 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
     sessionStorage.getItem("usuarioId") ||
     "";
 
-  const isOwn = !idDaUrl || idDaUrl === meuId;
-  const id = isOwn ? "me" : idDaUrl;
+  const isOwnPelaRota =
+    !idDaUrl ||
+    idDaUrl === meuId;
+
+  const id =
+    isOwnPelaRota
+      ? "me"
+      : idDaUrl;
+
+  const usuarioIdDoPerfil =
+    String(
+      data?.usuario?.id ||
+        data?.learning?.usuarioId ||
+        ""
+    );
+
+  const isOwn =
+    isOwnPelaRota ||
+    (
+      !!meuId &&
+      usuarioIdDoPerfil ===
+        meuId
+    );
 
   useEffect(() => {
     if (!token || !id) return;
@@ -55,6 +145,105 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
     data?.learning?.usuarioId ??
     idDaUrl ??
     meuId;
+
+  useEffect(() => {
+    if (
+      !data ||
+      !isOwn ||
+      !token
+    ) {
+      setAulasLearning([]);
+      setAulasLearningErro("");
+      return;
+    }
+
+    let cancelado = false;
+
+    async function carregarAulasLearning() {
+      try {
+        setAulasLearningLoading(true);
+        setAulasLearningErro("");
+
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/learning/eventos/minhas-aulas`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        if (cancelado) {
+          return;
+        }
+
+        const items =
+          Array.isArray(
+            resposta.data?.items
+          )
+            ? resposta.data.items
+            : [];
+
+        setAulasLearning(items);
+      } catch (error: any) {
+        const status =
+          error?.response?.status;
+
+        const mensagemBackend =
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          "Não foi possível carregar suas aulas ao vivo.";
+
+        console.error(
+          "Erro ao carregar aulas Learning:",
+          {
+            status,
+            mensagem:
+              mensagemBackend,
+            resposta:
+              error?.response?.data,
+            url:
+              `${API.BASE_URL}/api/learning/eventos/minhas-aulas`,
+          }
+        );
+
+        if (!cancelado) {
+          setAulasLearning([]);
+
+          if (status === 401) {
+            setAulasLearningErro(
+              "Sua sessão expirou. Entre novamente para carregar seus conteúdos."
+            );
+          } else if (status === 404) {
+            setAulasLearningErro(
+              "A rota de aulas do Learning ainda não foi registrada no servidor."
+            );
+          } else {
+            setAulasLearningErro(
+              mensagemBackend
+            );
+          }
+        }
+      } finally {
+        if (!cancelado) {
+          setAulasLearningLoading(false);
+        }
+      }
+    }
+
+    void carregarAulasLearning();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    data,
+    isOwn,
+    token,
+  ]);
 
   useEffect(() => {
     if (!token || !usuarioIdParaConquistas) return;
@@ -220,6 +409,67 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
     };
   }, [token, data?.conteudos]);
 
+  function formatarDataAula(
+    valor?: string | null
+  ) {
+    if (!valor) {
+      return "Data não informada";
+    }
+
+    const data =
+      new Date(valor);
+
+    if (
+      Number.isNaN(
+        data.getTime()
+      )
+    ) {
+      return "Data não informada";
+    }
+
+    return data.toLocaleString(
+      "pt-BR",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
+  }
+
+  function formatarOrigemAcesso(
+    origem?: string | null
+  ) {
+    const valor =
+      String(
+        origem || ""
+      ).toUpperCase();
+
+    if (valor === "COMPRA") {
+      return "Acesso comprado";
+    }
+
+    if (valor === "GRATUITO") {
+      return "Acesso gratuito";
+    }
+
+    if (valor === "PRESENCA") {
+      return "Aula assistida";
+    }
+
+    if (valor === "ASSINATURA") {
+      return "Incluída na assinatura";
+    }
+
+    if (valor === "CONVITE") {
+      return "Você foi convidado";
+    }
+
+    return "Acesso liberado";
+  }
+
   if (!data) {
     return (
       <div className="p-10 text-center text-red-600">
@@ -248,7 +498,159 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
     };
   });
 
+  const aulasComoCursos =
+    aulasLearning
+      .filter((aula) => {
+        const status =
+          String(
+            aula.status || ""
+          ).toUpperCase();
+
+        return (
+          status !==
+          "CANCELADA"
+        );
+      })
+      .map((aula) => {
+        const status =
+          String(
+            aula.status || ""
+          ).toUpperCase();
+
+        const finalizada =
+          status ===
+          "FINALIZADA";
+
+        return {
+          key:
+            `AULA_AO_VIVO:${aula.id}`,
+
+          id:
+            aula.id,
+
+          aulaId:
+            aula.id,
+
+          tipoConteudo:
+            "AULA_AO_VIVO",
+
+          titulo:
+            aula.titulo,
+
+          descricao:
+            aula.descricao,
+
+          status:
+            aula.status,
+
+          dataInicio:
+            aula.dataInicio,
+
+          iniciouEm:
+            aula.iniciouEm,
+
+          finalizouEm:
+            aula.finalizouEm,
+
+          replayDisponivel:
+            aula.replayDisponivel ===
+            true,
+
+          replayExpiraEm:
+            aula.replayExpiraEm,
+
+          replayExpirado:
+            aula.replayExpirado ===
+            true,
+
+          precoAcesso:
+            Number(
+              aula.precoAcesso ??
+                0
+            ),
+
+          acessoPago:
+            aula.acessoPago ===
+            true,
+
+          origemAcesso:
+            aula.origemAcesso,
+
+          criadorUsuario:
+            aula.criadorUsuario,
+
+          progressoPercentual:
+            finalizada
+              ? 100
+              : 0,
+
+          progresso:
+            finalizada
+              ? 100
+              : 0,
+        };
+      });
+
+  const todosOsCursos = [
+    ...conteudos.map(
+      (curso: any) => ({
+        ...curso,
+
+        key:
+          `METODOLOGIA:${
+            getCursoIdentity(
+              curso
+            ).key
+          }`,
+
+        tipoConteudo:
+          "METODOLOGIA",
+      })
+    ),
+
+    ...aulasComoCursos,
+  ];
+
   function getCursoHref(curso: any) {
+
+    if (
+      curso.tipoConteudo ===
+      "AULA_AO_VIVO"
+    ) {
+      const aulaId =
+        String(
+          curso.aulaId ||
+            curso.id ||
+            ""
+        );
+
+      const status =
+        String(
+          curso.status ||
+            ""
+        ).toUpperCase();
+
+      if (
+        status === "AO_VIVO" ||
+        (
+          status ===
+            "FINALIZADA" &&
+          curso.replayDisponivel ===
+            true &&
+          curso.replayExpirado !==
+            true
+        )
+      ) {
+        return `/learning/live?aulaId=${encodeURIComponent(
+          aulaId
+        )}`;
+      }
+
+      return `/learning/evento/${encodeURIComponent(
+        aulaId
+      )}`;
+    }
+
     const origem = String(
       curso.origem ||
         curso.origemTipo ||
@@ -276,22 +678,21 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
     return `/learning/${encodeURIComponent(metodologiaId)}`;
   }
 
-  const cursosFinalizados = conteudos.filter((item: any) => {
-  const status = String(item.status || item.assinatura?.status || "").toUpperCase();
-  const progresso = Number(item.progressoPercentual ?? item.progresso ?? 0);
+  const cursosFinalizados = todosOsCursos.filter((item: any) => {
+    const status = String(item.status || item.assinatura?.status || "").toUpperCase();
+    const progresso = Number(item.progressoPercentual ?? item.progresso ?? 0);
 
-    return status === "CONCLUIDA" || status === "CONCLUÍDA" || progresso >= 100;
-  });
+      return status === "CONCLUIDA" || status === "CONCLUÍDA" || progresso >= 100;
+    });
 
-  const cursosEmAndamento = conteudos.filter((item: any) => {
+  const cursosEmAndamento = todosOsCursos.filter((item: any) => {
     const status = String(item.status || item.assinatura?.status || "").toUpperCase();
     const progresso = Number(item.progressoPercentual ?? item.progresso ?? 0);
 
     return status !== "CONCLUIDA" && status !== "CONCLUÍDA" && progresso < 100;
   });
 
-  const totalLearningsConcluidos =
-    Number(data.metricas?.finalizados ?? 0) || cursosFinalizados.length;
+  const totalLearningsConcluidos = cursosFinalizados.length;
 
   const totalConquistasECertificados =
     earnedBadges.length + certificados.length;
@@ -337,12 +738,32 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
       />
 
       <div className="max-w-3xl mx-auto px-4 mt-5">
-        <div className="mt-4 grid grid-cols-4 gap-2 mb-4">
+        <div className={`mt-4 grid gap-2 mb-4 ${
+            isOwn
+              ? "grid-cols-4"
+              : "grid-cols-3"
+          }`}>
           {[
             ["perfil", "Perfil"],
-            ["cursos", "Meus cursos"],
-            ["conquistas", "Conquistas"],
-            ["postagens", "Postagens"],
+
+            ...(isOwn
+              ? [
+                  [
+                    "cursos",
+                    "Meus conteúdos",
+                  ],
+                ]
+              : []),
+
+            [
+              "conquistas",
+              "Conquistas",
+            ],
+
+            [
+              "postagens",
+              "Postagens",
+            ],
           ].map(([key, label]) => (
             <button
               key={key}
@@ -413,14 +834,6 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
                     <strong>CEP:</strong> {usuario.cep}
                   </p>
                 )}
-
-                <p>
-                  <strong>Certificados:</strong> {certificados.length}
-                </p>
-
-                <p>
-                  <strong>Conquistas:</strong> {earnedBadges.length}
-                </p>
               </div>
 
               {isOwn && (
@@ -438,10 +851,22 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
 
         {aba === "cursos" && (
           <div className="space-y-6">
+            {aulasLearningLoading && (
+              <div className="rounded-xl border border-green-100 bg-white/70 p-4 text-sm text-green-900/70">
+                Carregando aulas ao vivo…
+              </div>
+            )}
+
+            {aulasLearningErro && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {aulasLearningErro}
+              </div>
+            )}
+
             <section className="border rounded-2xl p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="text-2xl font-bold text-green-900">
-                  Cursos em andamento
+                  Conteúdos em andamento
                 </h2>
 
                 <Link
@@ -454,22 +879,63 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
 
               {cursosEmAndamento.length === 0 ? (
                 <p className="text-green-900/70 text-base">
-                  Você ainda não possui cursos em andamento.
+                  Você ainda não possui conteúdos em andamento.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-3">
                   {cursosEmAndamento.map((curso: any) => (
                     <Link
-                      key={curso.id}
+                      key={
+                        curso.key ||
+                        `${curso.tipoConteudo}:${curso.id}`
+                      }
                       href={getCursoHref(curso)}
                       className="block border rounded-xl px-4 py-3 hover:bg-green-50"
                     >
                       <p className="font-semibold text-green-900 text-base">
-                        {curso.titulo || curso.nome || "Curso"}
+                        {curso.titulo ||
+                          curso.nome ||
+                          (
+                            curso.tipoConteudo ===
+                            "AULA_AO_VIVO"
+                              ? "Aula ao vivo"
+                              : "Curso"
+                          )}
                       </p>
-                      <p className="text-sm text-green-900/60">
-                        Progresso: {Math.round(Number(curso.progressoPercentual ?? curso.progresso ?? 0))}%
-                      </p>
+
+                      {curso.tipoConteudo ===
+                      "AULA_AO_VIVO" ? (
+                        <>
+                          <p className="mt-1 text-sm text-green-900/65">
+                            {String(
+                              curso.status
+                            ).toUpperCase() ===
+                            "AO_VIVO"
+                              ? "Ao vivo agora"
+                              : `Agendada para ${formatarDataAula(
+                                  curso.dataInicio
+                                )}`}
+                          </p>
+
+                          <p className="mt-1 text-xs font-medium text-green-700">
+                            {formatarOrigemAcesso(
+                              curso.origemAcesso
+                            )}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-green-900/60">
+                          Progresso:{" "}
+                          {Math.round(
+                            Number(
+                              curso.progressoPercentual ??
+                                curso.progresso ??
+                                0
+                            )
+                          )}
+                          %
+                        </p>
+                      )}
                     </Link>
                   ))}
                 </div>
@@ -478,27 +944,63 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
 
             <section className="border rounded-2xl p-5">
               <h2 className="text-2xl font-bold text-green-900 mb-4">
-                Cursos finalizados
+                Conteúdos finalizados
               </h2>
 
               {cursosFinalizados.length === 0 ? (
                 <p className="text-green-900/70">
-                  Você ainda não finalizou nenhum curso.
+                  Você ainda não finalizou nenhum conteúdo.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-3">
                   {cursosFinalizados.map((curso: any) => (
                     <Link
-                      key={curso.id}
+                      key={
+                        curso.key ||
+                        `${curso.tipoConteudo}:${curso.id}`
+                      }
                       href={getCursoHref(curso)}
                       className="block border rounded-xl p-4 hover:bg-green-50"
                     >
                       <p className="font-bold text-green-900">
                         {curso.titulo || curso.nome || "Curso"}
                       </p>
-                      <p className="text-sm text-green-900/60">
-                        Curso concluído
-                      </p>
+                      {curso.tipoConteudo ===
+                        "AULA_AO_VIVO" ? (
+                          <>
+                            <p className="text-sm text-green-900/60">
+                              Finalizada em{" "}
+                              {formatarDataAula(
+                                curso.finalizouEm
+                              )}
+                            </p>
+
+                            <p className="mt-1 text-xs font-medium text-green-700">
+                              {formatarOrigemAcesso(
+                                curso.origemAcesso
+                              )}
+                            </p>
+
+                            {curso.replayDisponivel &&
+                            !curso.replayExpirado ? (
+                              <p className="mt-2 text-sm font-semibold text-green-800">
+                                Replay disponível
+                              </p>
+                            ) : curso.replayExpirado ? (
+                              <p className="mt-2 text-sm font-semibold text-amber-700">
+                                Replay expirado
+                              </p>
+                            ) : (
+                              <p className="mt-2 text-sm text-green-900/60">
+                                Replay ainda não disponível
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-green-900/60">
+                            Curso concluído
+                          </p>
+                        )}
                     </Link>
                   ))}
                 </div>

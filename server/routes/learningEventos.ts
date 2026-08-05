@@ -1,5 +1,7 @@
-// server/routes/learningEventosRoutes.ts
-import { Router } from "express";
+import {
+  Router,
+} from "express";
+
 import {
   getSalaCopaPublica,
   inscreverSalaCopa,
@@ -7,15 +9,50 @@ import {
   getAulaEventoPublica,
   inscreverAulaEvento,
   comprarAulaEvento,
+  listarMinhasAulasLearning,
 } from "../controllers/learningEventosController.js";
 
-const router = Router();
+import {
+  authenticateToken,
+} from "../middlewares/auth.js";
 
-router.get("/aulas/:aulaId", getAulaEventoPublica);
-router.post("/aulas/:aulaId/inscrever", inscreverAulaEvento);
-router.post("/aulas/:aulaId/comprar", comprarAulaEvento);
-router.get("/sala-copa", getSalaCopaPublica);
-router.post("/sala-copa/inscrever", inscreverSalaCopa);
-router.post("/sala-copa/comprar", comprarSalaCopa);
+const router =
+  Router();
+
+router.get(
+  "/minhas-aulas",
+  authenticateToken,
+  listarMinhasAulasLearning
+);
+
+router.get(
+  "/aulas/:aulaId",
+  getAulaEventoPublica
+);
+
+router.post(
+  "/aulas/:aulaId/inscrever",
+  inscreverAulaEvento
+);
+
+router.post(
+  "/aulas/:aulaId/comprar",
+  comprarAulaEvento
+);
+
+router.get(
+  "/sala-copa",
+  getSalaCopaPublica
+);
+
+router.post(
+  "/sala-copa/inscrever",
+  inscreverSalaCopa
+);
+
+router.post(
+  "/sala-copa/comprar",
+  comprarSalaCopa
+);
 
 export default router;

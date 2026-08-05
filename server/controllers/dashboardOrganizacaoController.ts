@@ -127,9 +127,6 @@ export async function getDashboardOrganizacao(req: any, res: Response) {
             ],
           };
 
-    /*
-    * Filtro utilizado nas consultas de SubmissaoTreino.
-    */
     const whereSubmissaoOrganizacao:
       Prisma.SubmissaoTreinoWhereInput = {
       treinoAgendado: {

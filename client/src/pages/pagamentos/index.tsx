@@ -113,6 +113,16 @@ type AulaAoVivoPaga = {
   descricao?: string | null;
   dataInicio: string;
   dataFim?: string | null;
+  finalizouEm?: 
+    string | null;
+  replayDisponivel?:
+    boolean;
+  ehReplay?:
+    boolean;
+  replayExpiraEm?:
+    string | null;
+  segundosRestantes?:
+    number | null;
   inscricaoInicio?: string | null;
   inscricaoFim?: string | null;
   precoAcesso: number;
@@ -528,6 +538,68 @@ function formatDateTimeBR(iso?: string | null) {
   });
 }
 
+function formatarTempoRestanteReplay(
+  replayExpiraEm?: string | null,
+  agora = Date.now()
+) {
+  const expiraTs =
+    toTs(replayExpiraEm);
+
+  if (expiraTs === null) {
+    return "";
+  }
+
+  const diferenca =
+    expiraTs - agora;
+
+  if (diferenca <= 0) {
+    return "Replay expirado";
+  }
+
+  const MINUTO_MS =
+    60 * 1000;
+
+  const HORA_MS =
+    60 * MINUTO_MS;
+
+  const DIA_MS =
+    24 * HORA_MS;
+
+  const dias =
+    Math.floor(
+      diferenca / DIA_MS
+    );
+
+  if (dias >= 1) {
+    return `Expira em ${dias} dia${
+      dias === 1 ? "" : "s"
+    }`;
+  }
+
+  const horas =
+    Math.floor(
+      diferenca / HORA_MS
+    );
+
+  if (horas >= 1) {
+    return `Expira em ${horas} hora${
+      horas === 1 ? "" : "s"
+    }`;
+  }
+
+  const minutos =
+    Math.max(
+      1,
+      Math.ceil(
+        diferenca / MINUTO_MS
+      )
+    );
+
+  return `Expira em ${minutos} minuto${
+    minutos === 1 ? "" : "s"
+  }`;
+}
+
 function getNomeUsuarioPagamento(usuario?: UsuarioResumoPagamento | null) {
   if (!usuario) return "";
 
@@ -785,6 +857,12 @@ export default function PagamentosPage() {
   const [metodologiasAvulsas, setMetodologiasAvulsas] = useState<MetodologiaAvulsa[]>([]);
   const [buscaMetod, setBuscaMetod] = useState("");
   const [aulasAoVivoPagas, setAulasAoVivoPagas] = useState<AulaAoVivoPaga[]>([]);
+  const [
+    agoraPagamentos,
+    setAgoraPagamentos,
+  ] = useState(
+    () => Date.now()
+  );
   const [pickAulasAoVivo, setPickAulasAoVivo] = useState<Record<string, boolean>>({});
   const [buscaAulaAoVivo, setBuscaAulaAoVivo] = useState("");
   const [filtroNivelMetod, setFiltroNivelMetod] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
@@ -975,7 +1053,11 @@ export default function PagamentosPage() {
       items.push({
         planoId: aula.planoId || `AULA_AO_VIVO:${aula.id}`,
         periodicidade: "Mensal",
-        label: `Evento ao vivo: ${aula.titulo}`,
+        label:
+          aula.status ===
+          "FINALIZADA"
+            ? `Replay: ${aula.titulo}`
+            : `Evento ao vivo: ${aula.titulo}`,
         price: Number(aula.precoAcesso ?? 0),
         categoria: "AULA_AO_VIVO",
       });
@@ -1150,6 +1232,24 @@ export default function PagamentosPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headers]);
+
+  useEffect(() => {
+    const intervalo =
+      window.setInterval(
+        () => {
+          setAgoraPagamentos(
+            Date.now()
+          );
+        },
+        60_000
+      );
+
+    return () => {
+      window.clearInterval(
+        intervalo
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1386,45 +1486,197 @@ export default function PagamentosPage() {
     filtroPublicoMetod, 
     ]);
 
-    const aulasAoVivoFiltradas = useMemo(() => {
-    const q = buscaAulaAoVivo.trim().toLowerCase();
-    const agora = Date.now();
+  const aulasAoVivoFiltradas =
+    useMemo(() => {
+      const q =
+        buscaAulaAoVivo
+          .trim()
+          .toLowerCase();
 
-    return aulasAoVivoPagas
-      .filter((aula) => {
-        const status = String(aula.status || "").toUpperCase();
+      return aulasAoVivoPagas
+        .filter((aula) => {
+          const status =
+            String(
+              aula.status ||
+                ""
+            ).toUpperCase();
 
-        if (status === "CANCELADA" || status === "FINALIZADA") {
-          return false;
-        }
+          const preco =
+            Number(
+              aula.precoAcesso ??
+              0
+            );
 
-        const inicioTs = new Date(aula.dataInicio).getTime();
+          if (
+            aula.acessoPago !==
+              true ||
+            !Number.isFinite(
+              preco
+            ) ||
+            preco <= 0
+          ) {
+            return false;
+          }
 
-        if (!Number.isFinite(inicioTs)) {
-          return false;
-        }
+          if (
+            status ===
+            "CANCELADA"
+          ) {
+            return false;
+          }
 
-        if (inicioTs < agora && status !== "AO_VIVO") {
-          return false;
-        }
+          if (
+            status ===
+            "FINALIZADA"
+          ) {
+            if (
+              aula
+                .replayDisponivel !==
+              true
+            ) {
+              return false;
+            }
 
-        if (q) {
-          const encontrou =
-            String(aula.titulo || "").toLowerCase().includes(q) ||
-            String(aula.descricao || "").toLowerCase().includes(q);
+            const expiraTs =
+              toTs(
+                aula
+                  .replayExpiraEm
+              );
 
-          if (!encontrou) return false;
-        }
+            if (
+              expiraTs ===
+                null ||
+              expiraTs <=
+                agoraPagamentos
+            ) {
+              return false;
+            }
+          } else if (
+            status ===
+            "AGENDADA"
+          ) {
+            const inicioTs =
+              toTs(
+                aula.dataInicio
+              );
 
-        return true;
-      })
-      .sort((a, b) => {
-        return (
-          new Date(a.dataInicio).getTime() -
-          new Date(b.dataInicio).getTime()
-        );
-      });
-  }, [aulasAoVivoPagas, buscaAulaAoVivo]);
+            if (
+              inicioTs ===
+                null ||
+              inicioTs <
+                agoraPagamentos
+            ) {
+              return false;
+            }
+          } else if (
+            status !==
+            "AO_VIVO"
+          ) {
+            return false;
+          }
+
+          if (q) {
+            const encontrou =
+              String(
+                aula.titulo ||
+                  ""
+              )
+                .toLowerCase()
+                .includes(q) ||
+              String(
+                aula.descricao ||
+                  ""
+              )
+                .toLowerCase()
+                .includes(q);
+
+            if (
+              !encontrou
+            ) {
+              return false;
+            }
+          }
+
+          return true;
+        })
+        .sort((a, b) => {
+          const rank = (
+            status: string
+          ) => {
+            const normalizado =
+              String(
+                status ||
+                  ""
+              ).toUpperCase();
+
+            if (
+              normalizado ===
+              "AO_VIVO"
+            ) {
+              return 0;
+            }
+
+            if (
+              normalizado ===
+              "AGENDADA"
+            ) {
+              return 1;
+            }
+
+            return 2;
+          };
+
+          const diferencaRank =
+            rank(a.status) -
+            rank(b.status);
+
+          if (
+            diferencaRank !==
+            0
+          ) {
+            return diferencaRank;
+          }
+
+          if (
+            a.status ===
+              "FINALIZADA" &&
+            b.status ===
+              "FINALIZADA"
+          ) {
+            return (
+              (
+                toTs(
+                  a.replayExpiraEm
+                ) ??
+                Infinity
+              ) -
+              (
+                toTs(
+                  b.replayExpiraEm
+                ) ??
+                Infinity
+              )
+            );
+          }
+
+          return (
+            (
+              toTs(
+                a.dataInicio
+              ) ?? 0
+            ) -
+            (
+              toTs(
+                b.dataInicio
+              ) ?? 0
+            )
+          );
+        });
+    }, [
+      aulasAoVivoPagas,
+      buscaAulaAoVivo,
+      agoraPagamentos,
+    ]);
 
   const checkoutError = useMemo(() => {
     if (bloquearCheckoutPorTrial) return "Trial ativo (aguarde faltar 7 dias).";
@@ -2256,8 +2508,14 @@ export default function PagamentosPage() {
         </div>
 
         <p className="text-sm text-gray-700 mb-4">
-          Pague por <b>aula ao vivo única</b>. Você compra o acesso a um evento específico,
-          sem assinar uma metodologia inteira.
+          Pague por uma{" "}
+          <b>
+            aula ao vivo ou replay
+          </b>
+          . Eventos finalizados continuam
+          disponíveis para compra durante os
+          sete dias em que o replay estiver
+          ativo.
         </p>
 
         <input
@@ -2272,6 +2530,25 @@ export default function PagamentosPage() {
             .map((aula) => {
               const checked = !!pickAulasAoVivo[aula.id];
               const dataLabel = formatDateTimeBR(aula.dataInicio);
+              const ehReplay =
+                aula.status ===
+                  "FINALIZADA" &&
+                aula.replayDisponivel ===
+                  true;
+
+              const finalizacaoLabel =
+                formatDateTimeBR(
+                  aula.finalizouEm ||
+                    aula.dataFim
+                );
+
+              const validadeReplayLabel =
+                ehReplay
+                  ? formatarTempoRestanteReplay(
+                      aula.replayExpiraEm,
+                      agoraPagamentos
+                    )
+                  : "";
               const criadorLabel = getCriadorLabel(aula);
               const convidadosLabel = getConvidadosLabel(aula);
 
@@ -2308,8 +2585,30 @@ export default function PagamentosPage() {
                       </div>
 
                       <div className="text-sm text-gray-700">
-                        <b>Status:</b> {aula.status}
+                        <b>Status:</b>{" "}
+
+                        {ehReplay
+                          ? "Replay disponível"
+                          : aula.status ===
+                            "AO_VIVO"
+                          ? "Ao vivo agora"
+                          : "Agendada"}
                       </div>
+
+                      {ehReplay &&
+                      finalizacaoLabel ? (
+                        <div className="text-sm text-gray-700">
+                          <b>Finalizada em:</b>{" "}
+                          {finalizacaoLabel}
+                        </div>
+                      ) : null}
+
+                      {ehReplay &&
+                      validadeReplayLabel ? (
+                        <div className="mt-2 w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                          {validadeReplayLabel}
+                        </div>
+                      ) : null}
 
                       {criadorLabel ? (
                         <div className="text-sm text-gray-700 mt-2">
@@ -2342,7 +2641,7 @@ export default function PagamentosPage() {
 
           {aulasAoVivoFiltradas.length === 0 ? (
             <div className="rounded-xl border border-dashed p-4 text-sm text-gray-500">
-              Nenhum evento ao vivo pago disponível no momento.
+              Nenhum evento ao vivo pago ou replay disponível no momento.
             </div>
           ) : null}
         </div>

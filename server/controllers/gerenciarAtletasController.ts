@@ -131,10 +131,6 @@ async function buscarProfessorIdsDaOrganizacao(
           not: null,
         },
 
-        /*
-         * atletaId null identifica a relação:
-         * professor ↔ organização.
-         */
         atletaId: null,
 
         ativo: true,
@@ -236,11 +232,6 @@ export const gerenciarAtletasController = {
               },
         ];
 
-        /*
-        * Um atleta vinculado diretamente a um
-        * professor pertencente à organização também
-        * é considerado disponível para suas turmas.
-        */
         if (professorIds.length > 0) {
           vinculosPermitidos.push({
             professorId: {
@@ -251,9 +242,6 @@ export const gerenciarAtletasController = {
 
         whereByVinculo = {
           OR: [
-            /*
-            * Vínculo direto salvo na tabela Atleta.
-            */
             vinculo === "clube"
               ? {
                   clubeId: entidadeId,
@@ -262,11 +250,6 @@ export const gerenciarAtletasController = {
                   escolinhaId: entidadeId,
                 },
 
-            /*
-            * Relação de treinamento ativa:
-            * - diretamente com a organização;
-            * - ou com um professor da organização.
-            */
             {
               relacoesTreinamento: {
                 some: {
@@ -402,12 +385,6 @@ export const gerenciarAtletasController = {
         return {
           id: a.id,
           usuarioId: a.usuarioId,
-
-          /*
-          * O nome do perfil do usuário tem prioridade.
-          * Exemplo: "Atleta Pro" em vez do nome genérico
-          * "Atleta" salvo na tabela Atleta.
-          */
           nome:
             nomeUsuario ||
             nomeCadastroAtleta ||
@@ -490,13 +467,6 @@ export const gerenciarAtletasController = {
           ? { clubeId: entidadeId }
           : { escolinhaId: entidadeId };
 
-      /*
-      * Busca os vínculos existentes nas tabelas oficiais
-      * ProfessorClube e ProfessorEscolinha.
-      *
-      * Isso mantém funcionando os vínculos que já existiam
-      * antes da criação das relações de treinamento.
-      */
       const vinculosDiretos =
         vinculo === "clube"
           ? await prisma.professorClube.findMany({
@@ -516,10 +486,6 @@ export const gerenciarAtletasController = {
               },
             });
 
-      /*
-      * Também considera as novas relações de treinamento
-      * professor ↔ organização que estejam realmente ativas.
-      */
       const relacoesAtivas =
         await prisma.relacaoTreinamento.findMany({
           where: {
@@ -539,14 +505,6 @@ export const gerenciarAtletasController = {
           },
         });
 
-      /*
-      * Junta as duas fontes e elimina duplicados.
-      *
-      * Assim:
-      * - vínculos antigos de ProfessorClube aparecem;
-      * - vínculos novos de RelacaoTreinamento aparecem;
-      * - o mesmo professor não aparece duas vezes.
-      */
       const profIds = Array.from(
         new Set(
           [

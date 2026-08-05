@@ -16,6 +16,7 @@ import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 const ACHIEVEMENTS: Record<
   string,
@@ -239,7 +240,7 @@ export default function PerfilProfessor({
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "atletas" | "conquistas" | "postagens";
+  type Aba = "visao" | "atletas" | "eventos" | "conquistas" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
@@ -294,29 +295,43 @@ export default function PerfilProfessor({
 
   const escolinhaAtual = orgsDisponiveis.find((o) => o.id === escolinhaSelecionada);
   const clubeAtual = orgsDisponiveis.find((o) => o.id === clubeSelecionado);
-  const escolinhaVinculada =
-    orgsDisponiveis.find((o) => o.id === data?.professor?.escolinhaId) ||
-    orgsVinculadas.find((o) => o.tipo === "Escolinha") ||
-    null;
 
-  const clubeVinculado =
-    orgsDisponiveis.find((o) => o.id === data?.professor?.clubeId) ||
-    orgsVinculadas.find((o) => o.tipo === "Clube") ||
-    null;
+  const abas: Array<{
+    id: Aba;
+    label: string;
+  }> = [
+    {
+      id: "visao",
+      label: "Visão Geral",
+    },
 
-  const abas = [
-    { id: "visao", label: "Visão Geral" },
-    { id: "atletas", label: "Atletas" },
-    { id: "conquistas", label: "Conquistas" },
-    { id: "postagens", label: "Postagens" },
-  ] as const;
+    {
+      id: "atletas",
+      label: "Atletas",
+    },
 
-  const owner = useMemo(() => {
-    const { clubeId, escolinhaId } = data?.professor ?? {};
-    if (clubeId) return { tipo: "Clube" as const, id: clubeId };
-    if (escolinhaId) return { tipo: "Escolinha" as const, id: escolinhaId };
-    return undefined;
-  }, [data?.professor?.clubeId, data?.professor?.escolinhaId]);
+    ...(hasCreator
+      ? [
+          {
+            id:
+              "eventos" as Aba,
+
+            label:
+              "Eventos",
+          },
+        ]
+      : []),
+
+    {
+      id: "conquistas",
+      label: "Conquistas",
+    },
+
+    {
+      id: "postagens",
+      label: "Postagens",
+    },
+  ];
 
   const rawToken =
     Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
@@ -446,13 +461,6 @@ export default function PerfilProfessor({
     setTurmasLoading(true);
 
     try {
-      /*
-      * O perfil precisa mostrar todas as turmas
-      * ligadas ao professor em TurmaProfessor.
-      *
-      * Não deve limitar pelo clube/escolinha
-      * atualmente vinculado ao perfil.
-      */
       const resposta = await axios.get(
         `${API.BASE_URL}/api/turmas`,
         {
@@ -498,10 +506,6 @@ export default function PerfilProfessor({
               )
             : [];
 
-        /*
-        * Segurança extra: mantém somente
-        * turmas realmente ligadas ao professor.
-        */
         if (
           !professorIds.includes(
             String(professorId)
@@ -1515,7 +1519,6 @@ export default function PerfilProfessor({
 
       {aba === "atletas" && (
         <div className="mt-4 px-3 sm:px-4">
-          {/* Subabas e contadores */}
           <div
             className={`
               bg-white/90 rounded-xl p-1 grid gap-1
@@ -1591,7 +1594,6 @@ export default function PerfilProfessor({
           </div>
 
           <div className="mt-4 grid gap-4">
-            {/* Vinculados */}
             {subAba === "vinculados" && (
               <SectionCard
                 title="Atletas Vinculados"
@@ -1643,11 +1645,6 @@ export default function PerfilProfessor({
                                     atleta.idade != null
                                       ? `${atleta.idade} anos`
                                       : null,
-
-                                    /*
-                                    * Mostra somente o valor:
-                                    * "Sub15", e não "Cat. Sub15".
-                                    */
                                     atleta.categoria,
                                   ]
                                     .filter(Boolean)
@@ -1732,7 +1729,6 @@ export default function PerfilProfessor({
               </SectionCard>
             )}
 
-            {/* Observados */}
             {subAba === "observados" && (
               <SectionCard
                 title="Atletas Observados"
@@ -1907,7 +1903,6 @@ export default function PerfilProfessor({
               </SectionCard>
             )}
 
-            {/* Solicitações */}
             {subAba === "solicitacoes" && canEdit && (
               <SectionCard
                 title="Solicitações de Atletas"
@@ -1988,6 +1983,17 @@ export default function PerfilProfessor({
               </SectionCard>
             )}
           </div>
+        </div>
+      )}
+
+      {aba === "eventos" && (
+        <div className="mt-4 px-4">
+          <ProfileReplaysSection
+            creatorUsuarioId={
+              creatorUsuarioId ||
+              usuarioPerfilId
+            }
+          />
         </div>
       )}
 

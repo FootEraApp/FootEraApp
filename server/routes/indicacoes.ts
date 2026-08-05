@@ -303,11 +303,6 @@ router.get("/olheiros/:id/indicacoes", async (req, res) => {
           i.atleta.usuario?.id ??
           null,
 
-        /*
-        * Prioriza o nome de perfil.
-        * Exemplo: "Atleta Pro", em vez do
-        * campo genérico "Atleta".
-        */
         nome:
           i.atleta.usuario?.nome ||
           i.atleta.nome ||

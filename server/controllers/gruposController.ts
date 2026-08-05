@@ -190,10 +190,6 @@ export async function criarGrupo(
       grupo.owner?.nomeDeUsuario?.trim() ||
       "Um usuário";
 
-    /*
-    * Notifica somente os usuários adicionados.
-    * O criador não precisa receber notificação sobre o próprio grupo.
-    */
     const resultadosNotificacoes = await Promise.allSettled(
       membrosUnicos.map((membroId) =>
         criarNotificacaoEEnviarPush({
@@ -546,10 +542,6 @@ export async function alterarTipoMembroGrupo(req: AuthenticatedRequest, res: Res
       },
     });
 
-    /*
-    * Só notifica quando realmente houve uma promoção.
-    * Se a pessoa já era admin, não cria outra notificação.
-    */
     const foiPromovidoAAdministrador =
       tipo === "ADMIN" &&
       tipoAnterior !== TipoMembro.ADMIN;
@@ -568,10 +560,6 @@ export async function alterarTipoMembroGrupo(req: AuthenticatedRequest, res: Res
           link: `/mensagens?grupoId=${grupoId}`,
         });
       } catch (error) {
-        /*
-        * A promoção já aconteceu. Uma eventual falha de push
-        * não deve desfazer ou impedir a alteração do cargo.
-        */
         console.warn(
           "[alterarTipoMembroGrupo] falha ao enviar notificação:",
           error
@@ -761,8 +749,7 @@ export async function deletarGrupo(
         error: "Grupo não encontrado.",
       });
     }
-
-    // Apenas o dono pode apagar o grupo inteiro
+    
     if (grupo.ownerId !== userId) {
       return res.status(403).json({
         error: "Apenas o dono pode apagar este grupo.",
@@ -777,10 +764,6 @@ export async function deletarGrupo(
     );
 
     await prisma.$transaction(async (tx) => {
-      /*
-       * Primeiro buscamos os desafios porque existem submissões
-       * vinculadas a eles.
-       */
       const desafios = await tx.desafioEmGrupo.findMany({
         where: {
           grupoId,
@@ -792,10 +775,6 @@ export async function deletarGrupo(
 
       const desafiosIds = desafios.map((desafio) => desafio.id);
 
-      /*
-       * As mensagens devem ser apagadas antes dos desafios,
-       * pois algumas mensagens podem apontar para desafioEmGrupoId.
-       */
       await tx.mensagemGrupo.deleteMany({
         where: {
           grupoId,

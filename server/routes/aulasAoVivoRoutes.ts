@@ -15,16 +15,21 @@ import {
   criarAulaAoVivoAvulsa,
   sincronizarReplayAulaAoVivo,
   registrarPresencaAulaAoVivo,
-  sairPresencaAulaAoVivo
+  sairPresencaAulaAoVivo,
+  listarReplaysPublicosCriador,
 } from "../controllers/aulasAoVivoController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
+router.get(
+  "/replays/criador/:usuarioId",
+  listarReplaysPublicosCriador
+);
+
 router.use(authenticateToken);
 
 router.get("/minhas", listarMinhasAulasAoVivo);
-
 router.post("/:id/broadcast-config", getBroadcastConfig);
 router.post("/:id/iniciar", iniciarAulaAoVivo);
 router.post("/:id/finalizar", finalizarAulaAoVivo);

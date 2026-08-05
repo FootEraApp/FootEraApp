@@ -495,81 +495,302 @@ function extractAulaAoVivoId(planoId: string) {
     .trim();
 }
 
-async function assertAulaAoVivoDisponivelParaCompra(planoId: string) {
-  const planoNorm = normalizePlanoId(planoId);
+const REPLAY_COMPRA_DIAS =
+  7;
 
-  if (!isAulaAoVivo(planoNorm)) return null;
+const REPLAY_COMPRA_MS =
+  REPLAY_COMPRA_DIAS *
+  24 *
+  60 *
+  60 *
+  1000;
 
-  const aulaAoVivoId = extractAulaAoVivoId(planoNorm);
-  const agora = new Date();
+function calcularValidadeReplayCompra(
+  aula: {
+    finalizouEm?:
+      | Date
+      | string
+      | null;
 
-  const aula = await prisma.aulaAoVivo.findUnique({
-    where: {
-      id: aulaAoVivoId,
-    },
-    select: {
-      id: true,
-      titulo: true,
-      dataInicio: true,
-      dataFim: true,
-      status: true,
-      acessoPago: true,
-      precoAcesso: true,
-    },
-  });
+    dataFim?:
+      | Date
+      | string
+      | null;
+  }
+) {
+  const finalizacaoRaw =
+    aula.finalizouEm ||
+    aula.dataFim ||
+    null;
+
+  if (!finalizacaoRaw) {
+    return {
+      finalizouEm: null,
+      replayExpiraEm: null,
+      replayExpirado: true,
+      segundosRestantes: 0,
+    };
+  }
+
+  const finalizouEm =
+    finalizacaoRaw instanceof Date
+      ? finalizacaoRaw
+      : new Date(
+          finalizacaoRaw
+        );
+
+  if (
+    Number.isNaN(
+      finalizouEm.getTime()
+    )
+  ) {
+    return {
+      finalizouEm: null,
+      replayExpiraEm: null,
+      replayExpirado: true,
+      segundosRestantes: 0,
+    };
+  }
+
+  const replayExpiraEm =
+    new Date(
+      finalizouEm.getTime() +
+        REPLAY_COMPRA_MS
+    );
+
+  const diferenca =
+    replayExpiraEm.getTime() -
+    Date.now();
+
+  return {
+    finalizouEm,
+    replayExpiraEm,
+
+    replayExpirado:
+      diferenca <= 0,
+
+    segundosRestantes:
+      Math.max(
+        0,
+        Math.floor(
+          diferenca / 1000
+        )
+      ),
+  };
+}
+
+async function assertAulaAoVivoDisponivelParaCompra(
+  planoId: string
+) {
+  const planoNorm =
+    normalizePlanoId(
+      planoId
+    );
+
+  if (
+    !isAulaAoVivo(
+      planoNorm
+    )
+  ) {
+    return null;
+  }
+
+  const aulaAoVivoId =
+    extractAulaAoVivoId(
+      planoNorm
+    );
+
+  const agora =
+    new Date();
+
+  const aula =
+    await prisma.aulaAoVivo
+      .findUnique({
+        where: {
+          id:
+            aulaAoVivoId,
+        },
+
+        select: {
+          id:
+            true,
+
+          titulo:
+            true,
+
+          dataInicio:
+            true,
+
+          dataFim:
+            true,
+
+          finalizouEm:
+            true,
+
+          status:
+            true,
+
+          acessoPago:
+            true,
+
+          precoAcesso:
+            true,
+
+          replayDisponivel:
+            true,
+
+          videoGravadoUrl:
+            true,
+        },
+      });
 
   if (!aula) {
-    const err: any = new Error("Evento ao vivo não encontrado.");
-    err.statusCode = 404;
-    err.code = "AULA_AO_VIVO_NOT_FOUND";
-    throw err;
+    const erro: any =
+      new Error(
+        "Evento ao vivo não encontrado."
+      );
+
+    erro.statusCode =
+      404;
+
+    erro.code =
+      "AULA_AO_VIVO_NOT_FOUND";
+
+    throw erro;
   }
 
-  const valor = Number(aula.precoAcesso || 0);
-
-  if (!aula.acessoPago || valor <= 0) {
-    const err: any = new Error(
-      "Este evento ao vivo não está disponível para compra."
+  const valor =
+    Number(
+      aula.precoAcesso ??
+      0
     );
-    err.statusCode = 400;
-    err.code = "AULA_AO_VIVO_INDISPONIVEL";
-    throw err;
+
+  if (
+    aula.acessoPago !==
+      true ||
+    !Number.isFinite(
+      valor
+    ) ||
+    valor <= 0
+  ) {
+    const erro: any =
+      new Error(
+        "Este evento não possui acesso pago."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_GRATUITA";
+
+    throw erro;
   }
 
   if (
-    aula.status === "FINALIZADA" ||
-    aula.status === "CANCELADA"
+    aula.status ===
+    "CANCELADA"
   ) {
-    const err: any = new Error(
-      "Este evento ao vivo já foi finalizado ou cancelado e não pode mais ser comprado."
-    );
-    err.statusCode = 400;
-    err.code = "AULA_AO_VIVO_ENCERRADA";
-    throw err;
+    const erro: any =
+      new Error(
+        "Este evento foi cancelado e não pode ser comprado."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_CANCELADA";
+
+    throw erro;
   }
 
   if (
-    aula.status === "AGENDADA" &&
-    new Date(aula.dataInicio).getTime() < agora.getTime()
+    aula.status ===
+    "FINALIZADA"
   ) {
-    const err: any = new Error(
-      "Este evento ao vivo já passou e não pode mais ser comprado."
-    );
-    err.statusCode = 400;
-    err.code = "AULA_AO_VIVO_EXPIRADA";
-    throw err;
+    if (
+      aula.replayDisponivel !==
+        true ||
+      !aula.videoGravadoUrl
+    ) {
+      const erro: any =
+        new Error(
+          "O replay desta aula ainda não está disponível."
+        );
+
+      erro.statusCode =
+        409;
+
+      erro.code =
+        "REPLAY_NAO_DISPONIVEL";
+
+      throw erro;
+    }
+
+    const validade =
+      calcularValidadeReplayCompra(
+        aula
+      );
+
+    if (
+      validade.replayExpirado
+    ) {
+      const erro: any =
+        new Error(
+          "O prazo de sete dias para comprar este replay terminou."
+        );
+
+      erro.statusCode =
+        410;
+
+      erro.code =
+        "REPLAY_EXPIRADO";
+
+      throw erro;
+    }
+
+    return aula;
   }
 
   if (
-    aula.status !== "AGENDADA" &&
-    aula.status !== "AO_VIVO"
+    aula.status ===
+      "AGENDADA" &&
+    aula.dataInicio.getTime() <
+      agora.getTime()
   ) {
-    const err: any = new Error(
-      "Este evento ao vivo não está disponível para compra."
-    );
-    err.statusCode = 400;
-    err.code = "AULA_AO_VIVO_INDISPONIVEL";
-    throw err;
+    const erro: any =
+      new Error(
+        "Este evento já passou e ainda não possui replay disponível."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_EXPIRADA";
+
+    throw erro;
+  }
+
+  if (
+    aula.status !==
+      "AGENDADA" &&
+    aula.status !==
+      "AO_VIVO"
+  ) {
+    const erro: any =
+      new Error(
+        "Este evento não está disponível para compra."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_INDISPONIVEL";
+
+    throw erro;
   }
 
   return aula;
@@ -2771,103 +2992,334 @@ export async function getAulasAoVivoPagas(
   res: Response
 ) {
   try {
-    const agora = new Date();
+    const agora =
+      new Date();
 
-    const items = await prisma.aulaAoVivo.findMany({
-      where: {
-        metodologiaId: null,
-        metodologiaAvulsaId: null,
+    const limiteReplay =
+      new Date(
+        agora.getTime() -
+          REPLAY_COMPRA_MS
+      );
 
-        acessoPago: true,
+    const aulas =
+      await prisma
+        .aulaAoVivo
+        .findMany({
+          where: {
+            metodologiaId:
+              null,
 
-        precoAcesso: {
-          gt: 0,
-        },
+            metodologiaAvulsaId:
+              null,
 
-        OR: [
-          {
-            status: "AGENDADA",
-            dataInicio: {
-              gte: agora,
+            acessoPago:
+              true,
+
+            precoAcesso: {
+              gt:
+                0,
             },
+
+            OR: [
+              {
+                status:
+                  "AGENDADA",
+
+                dataInicio: {
+                  gte:
+                    agora,
+                },
+              },
+
+              {
+                status:
+                  "AO_VIVO",
+              },
+
+              {
+                status:
+                  "FINALIZADA",
+
+                replayDisponivel:
+                  true,
+
+                videoGravadoUrl: {
+                  not:
+                    null,
+                },
+
+                OR: [
+                  {
+                    finalizouEm: {
+                      gte:
+                        limiteReplay,
+
+                      lte:
+                        agora,
+                    },
+                  },
+
+                  {
+                    finalizouEm:
+                      null,
+
+                    dataFim: {
+                      gte:
+                        limiteReplay,
+
+                      lte:
+                        agora,
+                    },
+                  },
+                ],
+              },
+            ],
           },
-          {
-            status: "AO_VIVO",
-          },
-        ],
-      },
 
-      orderBy: {
-        dataInicio: "asc",
-      },
-
-      select: {
-        id: true,
-        titulo: true,
-        descricao: true,
-        dataInicio: true,
-        dataFim: true,
-        inscricaoInicio: true,
-        inscricaoFim: true,
-        precoAcesso: true,
-        acessoPago: true,
-        status: true,
-        totalParticipantes: true,
-
-        criadorUsuarioId: true,
-        criadorUsuario: {
           select: {
-            id: true,
-            nome: true,
-            nomeDeUsuario: true,
-            email: true,
-            tipo: true,
-          },
-        },
+            id:
+              true,
 
-        convidadoUsuarioId: true,
-        convidadoNome: true,
-        convidadoDescricao: true,
-        convidadoUsuario: {
-          select: {
-            id: true,
-            nome: true,
-            nomeDeUsuario: true,
-            email: true,
-            tipo: true,
-          },
-        },
+            titulo:
+              true,
 
-        convidados: {
-          orderBy: {
-            ordem: "asc",
-          },
-          include: {
-            usuario: {
+            descricao:
+              true,
+
+            dataInicio:
+              true,
+
+            dataFim:
+              true,
+
+            finalizouEm:
+              true,
+
+            inscricaoInicio:
+              true,
+
+            inscricaoFim:
+              true,
+
+            precoAcesso:
+              true,
+
+            acessoPago:
+              true,
+
+            status:
+              true,
+
+            replayDisponivel:
+              true,
+
+            totalParticipantes:
+              true,
+
+            criadorUsuarioId:
+              true,
+
+            criadorUsuario: {
               select: {
-                id: true,
-                nome: true,
-                nomeDeUsuario: true,
-                email: true,
-                tipo: true,
+                id:
+                  true,
+
+                nome:
+                  true,
+
+                nomeDeUsuario:
+                  true,
+
+                email:
+                  true,
+
+                tipo:
+                  true,
+              },
+            },
+
+            convidadoUsuarioId:
+              true,
+
+            convidadoNome:
+              true,
+
+            convidadoDescricao:
+              true,
+
+            convidadoUsuario: {
+              select: {
+                id:
+                  true,
+
+                nome:
+                  true,
+
+                nomeDeUsuario:
+                  true,
+
+                email:
+                  true,
+
+                tipo:
+                  true,
+              },
+            },
+
+            convidados: {
+              orderBy: {
+                ordem:
+                  "asc",
+              },
+
+              include: {
+                usuario: {
+                  select: {
+                    id:
+                      true,
+
+                    nome:
+                      true,
+
+                    nomeDeUsuario:
+                      true,
+
+                    email:
+                      true,
+
+                    tipo:
+                      true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    });
+        });
+
+    const items =
+      aulas
+        .map((aula) => {
+          const ehReplay =
+            aula.status ===
+            "FINALIZADA";
+
+          const validade =
+            ehReplay
+              ? calcularValidadeReplayCompra(
+                  aula
+                )
+              : null;
+
+          if (
+            ehReplay &&
+            (
+              !validade ||
+              validade
+                .replayExpirado
+            )
+          ) {
+            return null;
+          }
+
+          return {
+            ...aula,
+
+            precoAcesso:
+              Number(
+                aula.precoAcesso ??
+                0
+              ),
+
+            planoId:
+              `AULA_AO_VIVO:${aula.id}`,
+
+            ehReplay,
+
+            replayExpiraEm:
+              validade
+                ?.replayExpiraEm
+                ?.toISOString() ??
+              null,
+
+            segundosRestantes:
+              validade
+                ?.segundosRestantes ??
+              null,
+          };
+        })
+        .filter(
+          (
+            item
+          ): item is NonNullable<
+            typeof item
+          > =>
+            item !== null
+        );
+
+    items.sort(
+      (a, b) => {
+        const rank = (
+          status: string
+        ) => {
+          if (
+            status ===
+            "AO_VIVO"
+          ) {
+            return 0;
+          }
+
+          if (
+            status ===
+            "AGENDADA"
+          ) {
+            return 1;
+          }
+
+          return 2;
+        };
+
+        const diferencaRank =
+          rank(a.status) -
+          rank(b.status);
+
+        if (
+          diferencaRank !== 0
+        ) {
+          return diferencaRank;
+        }
+
+        if (
+          a.status ===
+          "FINALIZADA"
+        ) {
+          return (
+            new Date(
+              a.replayExpiraEm ||
+                0
+            ).getTime() -
+            new Date(
+              b.replayExpiraEm ||
+                0
+            ).getTime()
+          );
+        }
+
+        return (
+          a.dataInicio.getTime() -
+          b.dataInicio.getTime()
+        );
+      }
+    );
 
     return res.json({
-      items: items.map((aula: any) => ({
-        ...aula,
-        precoAcesso: Number(aula.precoAcesso || 0),
-        planoId: `AULA_AO_VIVO:${aula.id}`,
-      })),
+      items,
+      validadeReplayDias:
+        REPLAY_COMPRA_DIAS,
     });
-  } catch (e: any) {
+  } catch (error: any) {
     return sendError(
       res,
-      e,
+      error,
       "Erro ao listar eventos ao vivo pagos."
     );
   }

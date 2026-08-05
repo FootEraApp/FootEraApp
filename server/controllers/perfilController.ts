@@ -1,6 +1,6 @@
 // server/controllers/perfilController
 import { Request, Response } from "express";
-import { Categoria, PosicaoCampo } from "@prisma/client";
+import { Categoria, PosicaoCampo, MetodologiaAssinaturaStatus } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
 import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
@@ -2517,12 +2517,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       indicacoesAprovadas *
       PONTOS_POR_INDICACAO_APROVADA;
 
-    /*
-    * Corrige registros antigos do banco.
-    *
-    * Exemplo:
-    * 2 indicações aprovadas × 10 = 20 pontos.
-    */
     if (
       Number(
         olheiro.reputacaoScore ?? 0
@@ -2821,7 +2815,7 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
   }
 };
 
-export const getPerfilLearning = async (req: Request, res: Response) => {
+export const getPerfilLearning = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id || "").trim();
 
@@ -2858,15 +2852,49 @@ export const getPerfilLearning = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Perfil Learning não encontrado." });
     }
 
-    const assinaturas = await prisma.metodologiaAssinante.findMany({
-      where: { usuarioId: learning.usuarioId },
-      take: 20,
-      orderBy: { iniciouEm: "desc" },
-      include: {
-        metodologia: true,
-        metodologiaAvulsa: true,
-      },
-    });
+    const solicitanteId =
+      String(
+        req.userId ||
+          req.user?.id ||
+          ""
+      ).trim();
+
+    const podeVerConteudos =
+      solicitanteId ===
+        learning.usuarioId ||
+      isAdminFromReq(req);
+
+    const assinaturas =
+      podeVerConteudos
+        ? await prisma
+            .metodologiaAssinante
+            .findMany({
+              where: {
+                usuarioId:
+                  learning.usuarioId,
+
+                status: {
+                  in: [
+                    MetodologiaAssinaturaStatus.ATIVA,
+                    MetodologiaAssinaturaStatus.CONCLUIDA,
+                  ],
+                },
+              },
+
+              orderBy: {
+                iniciouEm:
+                  "desc",
+              },
+
+              include: {
+                metodologia:
+                  true,
+
+                metodologiaAvulsa:
+                  true,
+              },
+            })
+        : [];
 
     const totalSeguidores = await prisma.seguidor.count({
       where: {
@@ -3110,13 +3138,6 @@ export const upgradeLearningProfile =
         });
       }
 
-      /*
-       * Para pessoa, o novo nome vem do
-       * campo Nome.
-       *
-       * Para organização, vem de
-       * Nome da organização.
-       */
       const nomeNovoInformado =
         isOrganizacao
           ? nomeOrganizacao
@@ -3131,9 +3152,6 @@ export const upgradeLearningProfile =
           ? "NOVO"
           : "ANTIGO";
 
-      /*
-       * Nome salvo em Usuario.nome.
-       */
       const nomeFinal =
         escolhaNomePerfil ===
         "NOVO"
@@ -3202,10 +3220,6 @@ export const upgradeLearningProfile =
         });
       }
 
-      /*
-       * Agora o resultado da transação é
-       * armazenado nesta variável.
-       */
       const tipoUsuarioId =
         await prisma.$transaction(
           async (tx) => {
@@ -3505,11 +3519,6 @@ export const upgradeLearningProfile =
         tipo:
           tipoValidado,
 
-        /*
-         * ID do Atleta, Professor,
-         * Olheiro, Clube, Escolinha,
-         * Federação ou Marca criado.
-         */
         tipoUsuarioId,
 
         usuario: {

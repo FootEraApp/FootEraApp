@@ -695,13 +695,6 @@ export default function CreatorEventosPage() {
             return dataA - dataB;
           }
 
-          /*
-          * Eventos futuros ficam primeiro,
-          * começando pelo mais próximo.
-          *
-          * Eventos passados ficam depois,
-          * começando pelo mais recente.
-          */
           const futuroA =
             dataA >= agora;
 

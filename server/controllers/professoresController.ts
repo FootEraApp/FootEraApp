@@ -352,9 +352,6 @@ export const listarProfessores = async (req: Request, res: Response) => {
       .trim()
       .toLowerCase();
 
-    /*
-    * Coloque o novo bloco aqui.
-    */
     const filtrosAnd: any[] = [];
 
     if (q) {
@@ -873,10 +870,6 @@ async function limparTurmasIncompativeisDoProfessor(
         return false;
       }
 
-      /*
-       * Turmas sem clube e sem escolinha são turmas
-       * próprias do professor. Elas devem permanecer.
-       */
       const turmaDeOrganizacao =
         Boolean(turma.clubeId) ||
         Boolean(turma.escolinhaId);
@@ -885,19 +878,10 @@ async function limparTurmasIncompativeisDoProfessor(
         return false;
       }
 
-      /*
-       * Ao remover completamente o vínculo,
-       * retira o professor de todas as turmas
-       * pertencentes a organizações.
-       */
       if (!novaOrganizacao) {
         return true;
       }
 
-      /*
-       * Ao trocar de organização, mantém somente
-       * turmas pertencentes à organização nova.
-       */
       if (
         novaOrganizacao.tipo === "Clube"
       ) {
@@ -1077,10 +1061,6 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
         }
       );
 
-      /*
-      * Encerra qualquer vínculo anterior do professor
-      * com outra organização.
-      */
       await tx.relacaoTreinamento.updateMany({
         where: {
           professorId,
@@ -1093,10 +1073,6 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
         },
       });
 
-      /*
-      * Procura um vínculo histórico com essa organização
-      * para reativá-lo, evitando registros duplicados.
-      */
       const relacaoAnterior =
         await tx.relacaoTreinamento.findFirst({
           where: {

@@ -545,10 +545,6 @@ const GerenciarProfessores: React.FC = () => {
       atualizarAoVoltarParaPagina
     );
 
-    /*
-    * Garante atualização caso o vínculo seja alterado
-    * por outro usuário ou em outro dispositivo.
-    */
     const intervalId = window.setInterval(() => {
       atualizarProfessores();
     }, 20_000);

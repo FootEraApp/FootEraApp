@@ -525,10 +525,6 @@ function limparEscala(
     Object.values(PosicaoCampo)
   );
 
-  /*
-   * Impede o mesmo atleta de ocupar
-   * duas posições ao mesmo tempo.
-   */
   const atletasUsados =
     new Set<string>();
 
@@ -904,14 +900,6 @@ export async function criarElenco(
       });
     }
 
-    /*
-     * Estes valores já foram:
-     * - filtrados pela turma;
-     * - deduplicados;
-     * - limitados a 11 titulares;
-     * - limitados a 11 reservas;
-     * - validados com mínimo de 2 jogadores.
-     */
     const {
       escalaLimpa,
       reservasValidas,
@@ -949,14 +937,7 @@ export async function criarElenco(
 
           formacao:
             formacao ?? null,
-
-          /*
-           * Continua 11 porque este campo
-           * representa o máximo de titulares.
-           * As reservas são armazenadas separadamente.
-           */
           maxJogadores: 11,
-
           turmaId:
             String(turmaId),
         },

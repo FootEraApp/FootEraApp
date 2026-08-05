@@ -10,6 +10,7 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -164,7 +165,7 @@ export default function PerfilOlheiro({
     mostrarEmail: boolean;
   } | null>(null);
 
-  type Aba = "visao" | "atletas" | "indicacoes" | "postagens";
+  type Aba = "visao" | "atletas" | "eventos" | "indicacoes" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
   type SubAbaAtletas = "observados";
   const [subAbaAtletas, setSubAbaAtletas] = useState<SubAbaAtletas>("observados");
@@ -371,10 +372,6 @@ export default function PerfilOlheiro({
           : anteriores
       );
 
-      /*
-      * Busca novamente todas as métricas,
-      * incluindo reputação e taxa.
-      */
       const perfilAtualizado =
         await axios.get<PayloadOlheiro>(
           `${API.BASE_URL}/api/perfil/olheiro/${targetId}`,
@@ -593,6 +590,17 @@ async function salvarNota(atletaId: string) {
             { id: "visao", label: "Visão Geral" },
             { id: "atletas", label: "Atletas" },
             { id: "indicacoes", label: "Indicações" },
+            ...(mostrarCreator
+              ? [
+                  {
+                    id:
+                      "eventos",
+
+                    label:
+                      "Eventos",
+                  },
+                ]
+              : []),
             { id: "postagens", label: "Postagens" },
           ].map(t => (
             <button
@@ -1015,6 +1023,16 @@ async function salvarNota(atletaId: string) {
             )}
           </SectionCard>
         </div>
+      )}
+
+      {aba === "eventos" && (
+        <section className="mt-5 px-3 sm:px-4">
+          <ProfileReplaysSection
+            creatorUsuarioId={
+              creatorLinkUsuarioId
+            }
+          />
+        </section>
       )}
 
       {aba === "postagens" && (

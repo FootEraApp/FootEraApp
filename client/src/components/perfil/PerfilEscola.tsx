@@ -20,6 +20,7 @@ import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js"; 
+import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
 
 type Props = { idDaUrl?: string; hasCreator?: boolean; creatorUsuarioId?: string | null };
 type UsuarioMin = {
@@ -1534,6 +1535,16 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               )}
             </div>
           </SectionCard>
+
+            {hasCreator && (
+              <ProfileReplaysSection
+                creatorUsuarioId={
+                  creatorUsuarioId ||
+                  data.escolinha.usuarioId ||
+                  data.usuario?.id
+                }
+              />
+            )}
         </div>
       )}
 

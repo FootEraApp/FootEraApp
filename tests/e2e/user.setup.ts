@@ -72,8 +72,6 @@ async function loginAndSaveState(page: Page, config: LoginConfig) {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
-
-    // O login usa isso para pular alguns efeitos/manutenção em E2E.
     // @ts-ignore
     window.Cypress = true;
 
@@ -99,12 +97,10 @@ async function loginAndSaveState(page: Page, config: LoginConfig) {
   await userInput.fill(user);
   await passInput.fill(pass);
 
-  // Força salvar em localStorage para o storageState reaproveitar nos próximos testes.
   await rememberInput.check();
 
   await page.getByRole("button", { name: /^Entrar$/i }).click();
 
-  // Usuário comum deve ir para /perfil. Admin iria para /admin.
   await expect(page).toHaveURL(/\/perfil/, { timeout: 60_000 });
 
   await page.evaluate((expectedTipo) => {
