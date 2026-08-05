@@ -487,10 +487,6 @@ async function criarSolicitacaoVinculoCadastro(params: {
   await recomputeAndEmitBadge(destinatarioId);
 }
 
-// Só formaliza os campos que já eram checados manualmente (obrigatórios pra
-// todo tipo de usuário). Os ~40 campos específicos de cada tipo (clube,
-// escolinha, professor, olheiro etc.) passam intactos via .passthrough() —
-// validar cada um deles exigiria testar os 10 fluxos de cadastro reais.
 const cadastrarUsuarioBaseSchema = z
   .object({
     nome: z.string().trim().optional(),

@@ -18,7 +18,7 @@ export default function PaginaVerificarEmail() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState<string>("");
-  const [countdown, setCountdown] = useState<number>(10);
+  const [countdown, setCountdown] = useState<number>(3);
 
   const verificarAgora = async () => {
     if (!token) {
@@ -39,7 +39,7 @@ export default function PaginaVerificarEmail() {
       if (data?.ok) {
         setStatus("success");
         setMessage(data?.message || "E-mail verificado com sucesso!");
-        setCountdown(10);
+        setCountdown(3);
       } else {
         setStatus("error");
         setMessage(data?.message || "Não foi possível verificar o e-mail.");
@@ -58,9 +58,20 @@ export default function PaginaVerificarEmail() {
   };
 
   useEffect(() => {
-    if (status !== "success") return;
-    const t = setInterval(() => setCountdown((c) => c - 1), 1000);
-    return () => clearInterval(t);
+    if (status !== "success") {
+      return;
+    }
+
+    const intervalo =
+      window.setInterval(() => {
+        setCountdown((anterior) =>
+          Math.max(0, anterior - 1)
+        );
+      }, 1000);
+
+    return () => {
+      window.clearInterval(intervalo);
+    };
   }, [status]);
 
   useEffect(() => {
@@ -126,7 +137,7 @@ export default function PaginaVerificarEmail() {
             <ul className="list-disc list-inside space-y-1 text-white/95">
               <li>Clique em “Verificar e-mail”.</li>
               <li>Se o token estiver válido, sua conta será ativada.</li>
-              <li>Você será redirecionado para o login em 10 segundos.</li>
+              <li>Você será redirecionado para o login em 3 segundos.</li>
             </ul>
           </div>
         </div>

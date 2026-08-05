@@ -5,50 +5,14 @@ import { prisma } from "../prisma.js";
 
 const SECRET = process.env.JWT_SECRET || "footera_secret"
 
-export const adminDashboard = async (_: Request, res: Response) => {
+export const adminDashboard = async (
+  _: Request,
+  res: Response
+) => {
   try {
-    const porTipo = await prisma.usuario.groupBy({
-      by: ["tipo"],
-      _count: { _all: true },
-    });
-
-    const map = Object.fromEntries(
-      porTipo.map((r) => [r.tipo, r._count._all])
-    );
-
-    const totalAtletas         = map.Atleta      ?? 0;
-    const totalClubes          = map.Clube       ?? 0;
-    const totalEscolinhas      = map.Escolinha   ?? 0;
-    const totalAdministradores = map.Admin       ?? 0;
-    const totalProfessores     = map.Professor   ?? 0;
-    const totalOlheiros        = map.Olheiro     ?? 0;
-
-    const totalUsuarios =
-      totalAtletas +
-      totalClubes +
-      totalEscolinhas +
-      totalAdministradores +
-      totalProfessores +
-      totalOlheiros;
-
-    const totalVerificados = await prisma.usuario.count({ where: { verified: true } });
-    const totalNaoVerificados = await prisma.usuario.count({ where: { verified: false } });
-    const totalPostsCriados = await prisma.postagem.count();
-    const totalTreinos = await prisma.treinoProgramado.count();
-    const totalDesafios = await prisma.desafioOficial.count();
-    const exercicios = await prisma.exercicio.findMany();
-    const professores = await prisma.professor.findMany({ include: { usuario: true } });
-    const treinos = await prisma.treinoProgramado.findMany();
-    const desafios = await prisma.desafioOficial.findMany();
-
-    res.json({
+    const [
+      porTipo,
       totalUsuarios,
-      totalAtletas,
-      totalClubes,
-      totalEscolinhas,
-      totalAdministradores,
-      totalProfessores,
-      totalOlheiros,
       totalVerificados,
       totalNaoVerificados,
       totalPostsCriados,
@@ -58,10 +22,133 @@ export const adminDashboard = async (_: Request, res: Response) => {
       professores,
       treinos,
       desafios,
+    ] = await Promise.all([
+      prisma.usuario.groupBy({
+        by: ["tipo"],
+
+        _count: {
+          _all: true,
+        },
+      }),
+
+      prisma.usuario.count(),
+
+      prisma.usuario.count({
+        where: {
+          verified: true,
+        },
+      }),
+
+      prisma.usuario.count({
+        where: {
+          verified: false,
+        },
+      }),
+      prisma.postagem.count(),
+      prisma.treinoProgramado.count(),
+      prisma.desafioOficial.count(),
+      prisma.exercicio.findMany(),
+      prisma.professor.findMany({
+        include: {
+          usuario: true,
+        },
+      }),
+      prisma.treinoProgramado.findMany(),
+      prisma.desafioOficial.findMany(),
+    ]);
+
+    const mapaPorTipo =
+      Object.fromEntries(
+        porTipo.map((registro) => [
+          String(
+            registro.tipo || ""
+          ),
+          registro._count._all,
+        ])
+      ) as Record<string, number>;
+
+    const totalAtletas =
+      mapaPorTipo.Atleta ?? 0;
+
+    const totalClubes =
+      mapaPorTipo.Clube ?? 0;
+
+    const totalEscolinhas =
+      mapaPorTipo.Escolinha ?? 0;
+
+    const totalAdministradores =
+      mapaPorTipo.Admin ?? 0;
+
+    const totalProfessores =
+      mapaPorTipo.Professor ?? 0;
+
+    const totalOlheiros =
+      mapaPorTipo.Olheiro ?? 0;
+
+    const totalLearning =
+      mapaPorTipo.Learning ?? 0;
+
+    const totalMarcas =
+      mapaPorTipo.Marca ?? 0;
+
+    const totalFederacoes =
+      mapaPorTipo.Federacao ?? 0;
+
+    const totalTiposConhecidos =
+      totalAtletas +
+      totalClubes +
+      totalEscolinhas +
+      totalAdministradores +
+      totalProfessores +
+      totalOlheiros +
+      totalLearning +
+      totalMarcas +
+      totalFederacoes;
+
+    const totalOutros =
+      Math.max(
+        0,
+        totalUsuarios -
+          totalTiposConhecidos
+      );
+
+    return res.json({
+      totalUsuarios,
+
+      totalAtletas,
+      totalClubes,
+      totalEscolinhas,
+      totalAdministradores,
+      totalProfessores,
+      totalOlheiros,
+
+      totalLearning,
+      totalMarcas,
+      totalFederacoes,
+      totalOutros,
+
+      totalVerificados,
+      totalNaoVerificados,
+
+      totalPostsCriados,
+      totalTreinos,
+      totalDesafios,
+
+      exercicios,
+      professores,
+      treinos,
+      desafios,
     });
   } catch (error) {
-    console.error("Erro no dashboard admin:", error);
-    res.status(500).json({ error: "Erro ao carregar dados do painel" });
+    console.error(
+      "Erro no dashboard admin:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Erro ao carregar dados do painel",
+    });
   }
 };
 

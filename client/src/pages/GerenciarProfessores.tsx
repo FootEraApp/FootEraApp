@@ -477,7 +477,15 @@ const GerenciarProfessores: React.FC = () => {
   }, [tipo, orgSelecionada, orgs]);
 
   const carregarProfessores = async () => {
-    if (!contextoTipo || contextoTipo === "Professor" || !contextoTipoUsuarioId) return;
+    if (
+      !contextoTipo ||
+      contextoTipo === "Professor" ||
+      !contextoTipoUsuarioId
+    ) {
+      setProfessores([]);
+      setTotalProfessoresMetric(0);
+      return;
+    }
 
     if (
       tipo === "Professor" &&
@@ -492,52 +500,141 @@ const GerenciarProfessores: React.FC = () => {
       setProfError(null);
       setProfLoading(true);
 
-      const vinculo = contextoTipo === "Clube" ? "clube" : "escolinha";
-      const resGerenciar = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
-        headers,
-        params: {
-          vinculo,
-          id: contextoTipoUsuarioId, 
-          search: q.trim() || undefined,
-        },
-      });
+      const vinculo =
+        contextoTipo === "Clube"
+          ? "clube"
+          : "escolinha";
 
-      let lista = (resGerenciar.data?.professores || resGerenciar.data || []) as any[];
+      const resGerenciar = await axios.get(
+        `${API.BASE_URL}/api/gerenciar/professores`,
+        {
+          headers,
+          params: {
+            vinculo,
+            id: contextoTipoUsuarioId,
+            search: q.trim() || undefined,
+          },
+        }
+      );
 
-      if (!lista.length) {
-        const params: any = {
-          organizacaoId: contextoTipoUsuarioId,
-          tipoUsuarioId: contextoTipoUsuarioId,
-          search: q.trim() || undefined,
-        };
+      const resposta = resGerenciar.data;
 
-        if (contextoTipo === "Clube") params.clubeId = contextoTipoUsuarioId;
-        if (contextoTipo === "Escola") params.escolinhaId = contextoTipoUsuarioId;
-
-        const { data } = await axios.get(`${API.BASE_URL}/api/professores`, { headers, params });
-        lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
-      }
+      const lista: any[] = Array.isArray(
+        resposta?.professores
+      )
+        ? resposta.professores
+        : Array.isArray(resposta)
+        ? resposta
+        : Array.isArray(resposta?.items)
+        ? resposta.items
+        : Array.isArray(resposta?.data)
+        ? resposta.data
+        : [];
 
       const mapped = lista.map((p) => ({
         id: String(p.id),
-        usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
-        nome: p.nome ?? p.usuario?.nome ?? "Professor",
+        usuarioId:
+          p.usuarioId ??
+          p.usuario?.id ??
+          null,
+        nome:
+          p.nome ??
+          p.usuario?.nome ??
+          "Professor",
         cref: p.cref ?? null,
-        foto: fotoPerfilOuFallback(p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null),
-        turmas: p._count?.turmas ?? p.turmasCount ?? 0,
+        foto: fotoPerfilOuFallback(
+          p.fotoUrl ??
+            p.foto ??
+            p.usuario?.foto ??
+            null
+        ),
+        turmas:
+          p._count?.turmas ??
+          p.turmasCount ??
+          0,
       }));
 
       setProfessores(mapped);
       setTotalProfessoresMetric(mapped.length);
-          
-      } catch (e: any) {
+    } catch (e: any) {
       setProfessores([]);
       setTotalProfessoresMetric(0);
-      setProfError(e?.response?.data?.message || e?.message || "Falha ao carregar professores.");
+
+      setProfError(
+        e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.message ||
+          "Falha ao carregar professores."
+      );
     } finally {
       setProfLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!token) return;
+    if (contextoTipo === "Professor") return;
+    if (!contextoTipoUsuarioId) return;
+    if (aba !== "professores") return;
+
+    function atualizarProfessores() {
+      void carregarProfessores();
+    }
+
+    function atualizarAoVoltarParaPagina() {
+      if (document.visibilityState === "visible") {
+        atualizarProfessores();
+      }
+    }
+
+    window.addEventListener(
+      "focus",
+      atualizarProfessores
+    );
+
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarProfessores
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      atualizarAoVoltarParaPagina
+    );
+
+    const intervalId = window.setInterval(() => {
+      atualizarProfessores();
+    }, 20_000);
+
+    return () => {
+      window.removeEventListener(
+        "focus",
+        atualizarProfessores
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarProfessores
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        atualizarAoVoltarParaPagina
+      );
+
+      window.clearInterval(intervalId);
+    };
+  }, [
+    token,
+    aba,
+    contextoTipo,
+    contextoTipoUsuarioId,
+    tipo,
+    orgSelecionada?.ownerId,
+    orgSelecionada?.tipo,
+    podeVerProfessores,
+    q,
+  ]);
 
   const carregarTurmas = async () => {
     if (!contextoTipo) return;
@@ -1034,8 +1131,8 @@ const GerenciarProfessores: React.FC = () => {
                 Professores vinculados
               </div>
 
-              <div className="mt-1 text-xs text-zinc-500 sm:hidden">
-                No celular, use os cards abaixo para acessar as ações.
+              <div className="mt-1 text-xs text-zinc-500 xl:hidden">
+                Use os cards abaixo para acessar todas as ações.
               </div>
             </div>
 
@@ -1074,9 +1171,12 @@ const GerenciarProfessores: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="sm:hidden divide-y divide-zinc-100">
+              <div className="xl:hidden grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
                 {professores.map((p) => (
-                  <div key={p.id} className="p-4">
+                  <div
+                    key={p.id}
+                    className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+                  >
                     <div className="flex items-start gap-3">
                       <AvatarSeguro
                         foto={p.foto}
@@ -1105,21 +1205,32 @@ const GerenciarProfessores: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={() => {
                           setProfessorSelecionado(p.id);
+                          setTurmaSelecionadaId(undefined);
                           setTurmasOpen(true);
                         }}
-                        className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                        className="
+                          inline-flex min-h-10 items-center justify-center
+                          rounded-xl border border-zinc-200 bg-white
+                          px-3 py-2 text-xs font-semibold text-zinc-700
+                          hover:bg-zinc-50
+                        "
                       >
-                        Turmas
+                        Administrar turmas
                       </button>
 
                       <Link
                         href={`/perfil/${p.usuarioId ?? p.id}`}
-                        className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                        className="
+                          inline-flex min-h-10 items-center justify-center gap-1
+                          rounded-xl bg-emerald-600 px-3 py-2
+                          text-xs font-semibold text-white
+                          hover:bg-emerald-700
+                        "
                       >
                         Ver perfil
                         <ChevronRight className="h-4 w-4" />
@@ -1129,7 +1240,7 @@ const GerenciarProfessores: React.FC = () => {
                 ))}
               </div>
 
-              <div className="hidden sm:block overflow-x-auto">
+              <div className="hidden xl:block overflow-x-auto">
                 <table className="w-full min-w-[900px] table-auto">
                   <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
                     <tr>
@@ -1361,16 +1472,47 @@ const GerenciarProfessores: React.FC = () => {
         open={turmasOpen}
         onClose={() => {
           setTurmasOpen(false);
-          carregarTurmas();
-          if (contextoTipo !== "Professor") carregarProfessores();
+
+          void carregarTurmas();
+
+          if (
+            contextoTipo !==
+            "Professor"
+          ) {
+            void carregarProfessores();
+          }
         }}
-        owner={tipo === "Professor" && subAbaTurmas === "minhas" ? undefined : owner}
-        professorId={
-          tipo === "Professor" && subAbaTurmas === "minhas"
-            ? (professorIdLogado ?? undefined)
-            : (contextoTipo === "Professor" ? (professorIdLogado ?? undefined) : professorSelecionado)
+        owner={
+          tipo === "Professor" &&
+          subAbaTurmas ===
+            "minhas"
+            ? undefined
+            : owner
         }
-        initialTurmaId={turmaSelecionadaId}
+        professorId={
+          tipo === "Professor" &&
+          subAbaTurmas ===
+            "minhas"
+            ? professorIdLogado ??
+              undefined
+            : contextoTipo ===
+              "Professor"
+            ? professorIdLogado ??
+              undefined
+            : professorSelecionado
+        }
+        initialTurmaId={
+          turmaSelecionadaId
+        }
+        mostrarTodasDoProfessor={
+          Boolean(
+            tipo === "Professor" &&
+              subAbaTurmas ===
+                "minhas"
+              ? professorIdLogado
+              : professorSelecionado
+          )
+        }
       />
 
       <div className="h-24 sm:h-20 lg:h-16" aria-hidden="true" />

@@ -19,6 +19,7 @@ import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -247,6 +248,7 @@ export default function PerfilClube({
   const [aba, setAba] = useState<AbaTopo>("perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
+  const [mostrarTodosVinculados, setMostrarTodosVinculados] = useState(false);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
   const [vinculadosPreview, setVinculadosPreview] = useState<AtletaItem[]>([]);
@@ -259,6 +261,11 @@ export default function PerfilClube({
   const [atletasHeaderCount, setAtletasHeaderCount] = useState<number | null>(
     null
   );
+  const [contagensAtletas, setContagensAtletas] = useState({
+    vinculados: 0,
+    observados: 0,
+    solicitacoes: 0,
+  });
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -281,10 +288,132 @@ export default function PerfilClube({
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
+  const vinculadosParaExibir = vinculados ?? vinculadosPreview;
+
+  const vinculadosVisiveis =
+    mostrarTodosVinculados
+      ? vinculadosParaExibir
+      : vinculadosParaExibir.slice(0, 5);
+
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
   const entidadeUsuarioId = isOwn
     ? Storage.usuarioId
     : data?.clube?.usuarioId ?? null;
+
+  useEffect(() => {
+    setMostrarTodosVinculados(false);
+  }, [targetId, subAba]);
+
+  function extrairListaResposta(
+    payload: any,
+    chaves: string[] = []
+  ): any[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    for (const chave of chaves) {
+      if (Array.isArray(payload?.[chave])) {
+        return payload[chave];
+      }
+    }
+
+    return [];
+  }
+
+  async function carregarContagensAtletas() {
+    if (!token || !clubeId || !canEdit) return;
+
+    const [vinculadosResult, observadosResult, solicitacoesResult] =
+      await Promise.allSettled([
+        axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params: {
+            vinculo: "clube",
+            id: clubeId,
+          },
+        }),
+
+        axios.get(`${API.BASE_URL}/api/observados`, {
+          headers,
+          params: {
+            tipoUsuarioId: clubeId,
+            tipo: "Clube",
+          },
+        }),
+
+        axios.get(
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
+          { headers }
+        ),
+      ]);
+
+    const vinculadosLista =
+      vinculadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            vinculadosResult.value.data,
+            ["atletas", "items", "data"]
+          )
+        : null;
+
+    const observadosLista =
+      observadosResult.status === "fulfilled"
+        ? extrairListaResposta(
+            observadosResult.value.data,
+            ["observados", "items", "data"]
+          )
+        : null;
+
+    const solicitacoesLista =
+      solicitacoesResult.status === "fulfilled"
+        ? extrairListaResposta(
+            solicitacoesResult.value.data,
+            ["solicitacoes", "items", "data"]
+          )
+        : null;
+
+    setContagensAtletas((prev) => ({
+      vinculados:
+        vinculadosLista !== null
+          ? vinculadosLista.length
+          : prev.vinculados,
+
+      observados:
+        observadosLista !== null
+          ? observadosLista.length
+          : prev.observados,
+
+      solicitacoes:
+        solicitacoesLista !== null
+          ? solicitacoesLista.length
+          : prev.solicitacoes,
+    }));
+
+    if (vinculadosLista !== null) {
+      setAtletasHeaderCount(vinculadosLista.length);
+    }
+  }
+
+  useEffect(() => {
+    if (
+      aba !== "atletas" ||
+      !token ||
+      !clubeId ||
+      !canEdit
+    ) {
+      return;
+    }
+
+    void carregarContagensAtletas();
+
+    const intervalId = window.setInterval(() => {
+      void carregarContagensAtletas();
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [aba, token, clubeId, canEdit]);
 
   useEffect(() => {
     setAba("perfil");
@@ -578,19 +707,63 @@ export default function PerfilClube({
     const cancel = { v: false };
 
     async function fetchVinculados() {
-      const tipoId = clubeId;
-      if (!tipoId) {
-        if (!cancel.v) setVinculados([]);
+      if (!clubeId) {
+        if (!cancel.v) {
+          setVinculados([]);
+        }
+
         return;
       }
+
       try {
-        const { data: lista } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
+        const { data: resp } = await axios.get<{
+          atletas: AtletaItem[];
+        }>(
+          `${API.BASE_URL}/api/gerenciar/atletas`,
+          {
+            headers,
+            params: {
+              vinculo: "clube",
+              id: clubeId,
+              order: "pontuacao_desc",
+            },
+          }
         );
-        if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
+
+        const base = Array.isArray(resp?.atletas)
+          ? resp.atletas
+          : [];
+
+        const comPontuacaoReal = await Promise.all(
+          base.map(async (atleta) => {
+            const usuarioId = String(
+              atleta.usuarioId || ""
+            ).trim();
+
+            const pontuacao = usuarioId
+              ? await fetchPontuacaoTotalByUsuarioId(
+                  usuarioId,
+                  headers
+                )
+              : null;
+
+            return {
+              ...atleta,
+              pontuacao:
+                typeof pontuacao === "number"
+                  ? pontuacao
+                  : atleta.pontuacao ?? null,
+            };
+          })
+        );
+
+        if (!cancel.v) {
+          setVinculados(comPontuacaoReal);
+        }
       } catch {
-        if (!cancel.v) setVinculados([]);
+        if (!cancel.v) {
+          setVinculados([]);
+        }
       }
     }
 
@@ -913,6 +1086,7 @@ export default function PerfilClube({
         (arr ?? []).map((t: any) => ({
           id: String(t.id),
           nome: String(t.nome ?? t.titulo ?? "Turma"),
+          categoria: t.categoria ?? null,
           ownerTipo: t.ownerTipo ?? "Clube",
           ownerId: t.ownerId ?? clubeId,
           professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
@@ -932,12 +1106,22 @@ export default function PerfilClube({
   }
 
   useEffect(() => {
-    if (aba === "professores" && canEdit) {
-      loadProfessores();
-      loadTurmas();
+    if (aba === "perfil") {
+      void loadTurmas();
     }
+
+    if (aba === "professores" && canEdit) {
+      void loadProfessores();
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, canEdit, token, clubeId, entidadeUsuarioId]);
+  }, [
+    aba,
+    canEdit,
+    token,
+    clubeId,
+    entidadeUsuarioId,
+  ]);
 
   useEffect(() => {
     if (aba === "eventos") {
@@ -947,21 +1131,56 @@ export default function PerfilClube({
   }, [aba, token, clubeId, hasCreator, creatorUsuarioId, entidadeUsuarioId]);
 
   useEffect(() => {
-    function atualizarVinculos() {
+    if (!token || !clubeId || !canEdit) return;
+
+    function atualizarDadosDosAtletas() {
       setVinculados(null);
+      setObservados(null);
+      setSolicitacoes(null);
       setVinculadosPreview([]);
       setAtletasHeaderCount(null);
-      setRefreshVinculosKey((k) => k + 1);
+      setRefreshVinculosKey((valor) => valor + 1);
+      void carregarContagensAtletas();
     }
 
-    window.addEventListener("focus", atualizarVinculos);
-    window.addEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+    function aoAlterarVisibilidade() {
+      if (document.visibilityState === "visible") {
+        atualizarDadosDosAtletas();
+      }
+    }
+
+    window.addEventListener(
+      "focus",
+      atualizarDadosDosAtletas
+    );
+
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      atualizarDadosDosAtletas
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      aoAlterarVisibilidade
+    );
 
     return () => {
-      window.removeEventListener("focus", atualizarVinculos);
-      window.removeEventListener("footera:vinculo-treino-alterado", atualizarVinculos);
+      window.removeEventListener(
+        "focus",
+        atualizarDadosDosAtletas
+      );
+
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        atualizarDadosDosAtletas
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        aoAlterarVisibilidade
+      );
     };
-  }, []);
+  }, [token, clubeId, canEdit]);
 
   async function salvarObservado(atletaId: string) {
     if (!token || !clubeId) return;
@@ -1263,6 +1482,117 @@ export default function PerfilClube({
             )}
           </div>
 
+          <SectionCard
+            title="Turmas do Clube"
+            right={
+              canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfessorSelecionado(undefined);
+                    setTurmasOpen(true);
+                  }}
+                  className="
+                    text-sm px-3 py-1.5 rounded-md
+                    bg-green-600 text-white
+                    inline-flex items-center gap-1
+                  "
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Administrar
+                </button>
+              ) : null
+            }
+          >
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">
+                Carregando turmas…
+              </div>
+            ) : turmas.length > 0 ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {turmas.map((turma) => (
+                  <li
+                    key={turma.id}
+                    className="
+                      flex flex-col gap-3 rounded-xl
+                      border border-green-100 p-3
+                      sm:flex-row sm:items-center
+                      sm:justify-between sm:p-4
+                    "
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-green-900">
+                        {turma.nome}
+                      </div>
+
+                      <div className="text-xs text-green-900/70">
+                        {turma.categoria
+                          ? `Cat. ${turma.categoria}`
+                          : "Sem categoria"}
+
+                        {" • "}
+
+                        {typeof turma.alunosCount === "number"
+                          ? `${turma.alunosCount} alunos`
+                          : "—"}
+                      </div>
+
+                      <div className="mt-0.5 text-xs text-green-900/70">
+                        <b>Professores:</b>{" "}
+                        {turma.professorNome ||
+                          (turma.professorNomes?.length
+                            ? turma.professorNomes.join(", ")
+                            : "—")}
+                      </div>
+                    </div>
+
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfessorSelecionado(
+                            turma.professorIds?.[0]
+                          );
+
+                          setTurmasOpen(true);
+                        }}
+                        className="
+                          inline-flex w-full items-center
+                          justify-center rounded-lg
+                          border border-green-200
+                          px-3 py-2 text-sm text-green-800
+                          hover:bg-green-50 sm:w-auto
+                        "
+                      >
+                        Administrar
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid gap-3">
+                <EmptyState text="Nenhuma turma cadastrada no clube." />
+
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfessorSelecionado(undefined);
+                      setTurmasOpen(true);
+                    }}
+                    className="
+                      px-4 py-2 rounded-md
+                      border border-green-200 text-green-900
+                    "
+                  >
+                    Abrir gerenciamento
+                  </button>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Atividade Recente</h3>
 
@@ -1368,7 +1698,7 @@ export default function PerfilClube({
                 href={hasCreator ? "/creator/eventos" : `/eventos/clubes/${clubeIdStr}`}
                 className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
               >
-                Ver eventos
+                Ver todos os meus eventos
               </Link>
             </div>
 
@@ -1460,7 +1790,7 @@ export default function PerfilClube({
                 </div>
               ) : (
                 <div className="text-sm text-green-900/70">
-                  Nenhum evento criado ainda.
+                  Nenhum evento criado para os próximos dias.
                 </div>
               )}
             </div>
@@ -1469,14 +1799,23 @@ export default function PerfilClube({
               <div className="mt-4">
                 <Link
                   href={hasCreator ? "/creator/eventos/novo" : `/eventos/clubes/${clubeIdStr}/novo`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white font-semibold px-4 py-2"
                 >
                   <span>+</span> Criar novo evento
                 </Link>
               </div>
             )}
           </div>
-        </section>
+          {hasCreator && (
+              <ProfileReplaysSection
+                creatorUsuarioId={
+                  creatorUsuarioId ||
+                  data.clube.usuarioId ||
+                  data.usuario?.id
+                }
+              />
+            )}
+          </section>
       )}
 
       {aba === "postagens" && (
@@ -1501,9 +1840,21 @@ export default function PerfilClube({
         <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <div className="grid grid-cols-3 gap-2">
             {[
-              { key: "vinculados", label: "Vinculados" },
-              { key: "observados", label: "Observados" },
-              { key: "solicitacoes", label: "Solicitações" },
+              {
+                key: "vinculados",
+                label: "Vinculados",
+                count: contagensAtletas.vinculados,
+              },
+              {
+                key: "observados",
+                label: "Observados",
+                count: contagensAtletas.observados,
+              },
+              {
+                key: "solicitacoes",
+                label: "Solicitações",
+                count: contagensAtletas.solicitacoes,
+              },
             ].map((t) => (
               <button
                 key={t.key}
@@ -1514,18 +1865,26 @@ export default function PerfilClube({
                     : "bg-white/70 text-green-900 hover:bg-white"
                 }`}
               >
-                {t.label}
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <span>{t.label}</span>
+
+                  <span
+                    className={`inline-flex min-w-5 h-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
+                      subAba === t.key
+                        ? "bg-green-700 text-white"
+                        : "bg-green-100 text-green-900"
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
 
           {subAba === "vinculados" && (
             <SectionCard
-              title={`Atletas Vinculados${
-                typeof atletasHeaderCount === "number"
-                  ? ` (${atletasHeaderCount})`
-                  : ""
-              }`}
+              title="Atletas Vinculados"
               right={
                 <Link
                   href="/perfil/GerenciarAtletas"
@@ -1535,55 +1894,119 @@ export default function PerfilClube({
                 </Link>
               }
             >
-              {vinculadosPreview.length > 0 ? (
-                <ul className="space-y-2">
-                  {vinculadosPreview.map((a) => (
-                    <li
-                      key={a.atletaId}
-                      className="flex items-center gap-3"
-                    >
-                      <Avatar
-                        foto={a.foto ?? null}
-                        alt={a.nome}
-                        className="w-9 h-9"
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-green-900">
-                          {a.nome}
-                        </div>
-                        <div className="text-xs text-green-900/70">
-                          {[
-                            a.posicao,
-                            a.categoria,
-                            a.pontuacao != null
-                              ? `${a.pontuacao} pts`
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" • ")}
-                        </div>
-                      </div>
-                      <Link
-                        href={`/perfil/${a.usuarioId ?? a.id}`}
-                        className="text-xs text-green-800"
-                      
+              {vinculadosParaExibir.length > 0 ? (
+                <>
+                  <ul className="grid grid-cols-1 gap-3">
+                    {vinculadosVisiveis.map((a) => (
+                      <li
+                        key={a.atletaId || a.id}
+                        className="
+                          flex flex-col gap-3 rounded-xl
+                          border border-green-100 p-3
+                          sm:flex-row sm:items-center
+                        "
                       >
-                        Ver
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <Avatar
+                            foto={a.foto ?? null}
+                            alt={a.nome}
+                            className="w-10 h-10 shrink-0"
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-green-900 truncate">
+                              {a.nome}
+                            </div>
+
+                            <div className="text-xs text-green-900/70">
+                              {[
+                                a.posicao,
+                                a.idade != null
+                                  ? `${a.idade} anos`
+                                  : null,
+                                a.categoria,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 sm:justify-end">
+                          {typeof a.pontuacao === "number" && (
+                            <span
+                              className="
+                                text-[11px] px-2 py-0.5 rounded
+                                bg-green-100 text-green-800
+                                border border-green-200
+                              "
+                            >
+                              {a.pontuacao} pts
+                            </span>
+                          )}
+
+                          <Link
+                            href={`/perfil/${a.usuarioId ?? a.id}`}
+                            className="
+                              text-sm text-green-800
+                              inline-flex items-center gap-1
+                              whitespace-nowrap
+                            "
+                          >
+                            Ver perfil
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {vinculadosParaExibir.length > 5 && (
+                    <div className="mt-4 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMostrarTodosVinculados(
+                            (valor) => !valor
+                          )
+                        }
+                        className="
+                          rounded-lg border border-green-200
+                          px-4 py-2 text-sm font-medium
+                          text-green-900 hover:bg-green-50
+                        "
+                      >
+                        {mostrarTodosVinculados
+                          ? "Mostrar menos"
+                          : `Ver todos (${vinculadosParaExibir.length})`}
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
-                <p className="text-sm text-green-900/70">
-                  Nenhum atleta vinculado ainda.
-                </p>
+                <div>
+                  <EmptyState text="Nenhum atleta vinculado ainda" />
+
+                  <div className="flex justify-center">
+                    <Link
+                      href="/explorar"
+                      className="
+                        px-4 py-2 rounded-md
+                        border border-green-200
+                        text-green-900
+                      "
+                    >
+                      Ver atletas
+                    </Link>
+                  </div>
+                </div>
               )}
             </SectionCard>
           )}
 
           {subAba === "observados" && (
             <SectionCard
-              title={`Atletas Observados (${observados?.length ?? 0})`}
+              title="Atletas Observados"
               
             >
               {observados && observados.length > 0 ? (
@@ -1811,102 +2234,6 @@ export default function PerfilClube({
               </ul>
             ) : (
               <EmptyState text="Nenhum professor vinculado ao clube." />
-            )}
-          </SectionCard>
-
-          <SectionCard title="Turmas do Clube">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-green-900/80">
-                Gerencie turmas do clube e defina o professor responsável.
-              </div>
-              <button
-                onClick={() => {
-                  setProfessorSelecionado(undefined);
-                  setTurmasOpen(true);
-                }}
-                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
-              >
-                <PlusCircle className="w-4 h-4" />
-                Nova turma
-              </button>
-            </div>
-
-            {turmasLoading ? (
-              <div className="text-sm text-green-900/70">
-                Carregando turmas…
-              </div>
-            ) : turmas.length ? (
-              <ul className="space-y-2">
-                {turmas.map((t) => (
-                  <li
-                    key={t.id}
-                    className="border rounded-xl p-3 flex flex-col gap-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium text-green-900">
-                          {t.nome}
-                        </div>
-                        <div className="text-xs text-green-900/70">
-                          {t.professorNome
-                            ? `Professor: ${t.professorNome}`
-                            : "Professor: —"}{" "}
-                          •{" "}
-                          {typeof t.alunosCount === "number"
-                            ? `${t.alunosCount} alunos`
-                            : "—"}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setProfessorSelecionado(t.professorIds?.[0]);
-                          setTurmasOpen(true);
-                        }}
-                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
-                      >
-                        Administrar
-                      </button>
-                    </div>
-
-                    {professores.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <select
-                          multiple
-                          className="border rounded px-3 py-2 text-sm"
-                          value={t.professorIds ?? []}
-                          onChange={async (e) => {
-                            const selectedIds = Array.from(e.target.selectedOptions)
-                              .map((o) => o.value)
-                              .filter(Boolean);
-
-                            try {
-                              await axios.put(
-                                `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
-                                { professorIds: selectedIds },
-                                { headers }
-                              );
-                              await loadTurmas();
-                              toast.success("Professores atualizados na turma!");
-                            } catch (err) {
-                              console.error(err);
-                              toast.error("Não foi possível atualizar os professores.");
-                            }
-                          }}
-                        >
-                          {professores.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nome}
-                              {p.cref ? ` • CREF ${p.cref}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState text="Nenhuma turma cadastrada no clube." />
             )}
           </SectionCard>
         </section>

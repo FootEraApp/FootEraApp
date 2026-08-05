@@ -29,14 +29,38 @@ const ENABLE_EVENTOS_TAB = false;
 type UsuarioBasic = {
   id: string;
   nome: string;
-  nomeDeUsuario?: string | null;
-  email?: string | null;
-  verified?: boolean | null;
-  destaque?: boolean | null;
-  foto?: string | null;
-  cidade?: string | null;
-  estado?: string | null;
-  assinatura?: { status?: string | null; plano?: string | null } | null;
+  nomeDeUsuario?:
+    | string
+    | null;
+  email?:
+    | string
+    | null;
+  verified?:
+    | boolean
+    | null;
+  destaque?:
+    | boolean
+    | null;
+  foto?:
+    | string
+    | null;
+  cidade?:
+    | string
+    | null;
+  estado?:
+    | string
+    | null;
+  dataCriacao?:
+    | string
+    | null;
+  assinatura?: {
+    status?:
+      | string
+      | null;
+    plano?:
+      | string
+      | null;
+  } | null;
 };
 
 type AtletaItem = {
@@ -167,6 +191,44 @@ type RankItem = {
 };
 
 type AbaExplorar = "atletas" | "escolas" | "clubes" | "profissionais" | "outros" | "eventos";
+
+type AbaOrdenavel =
+  Exclude<
+    AbaExplorar,
+    "eventos"
+  >;
+
+type OrdenacaoExplorar =
+  | "nome_asc"
+  | "nome_desc"
+  | "recentes"
+  | "antigos"
+  | "pontuacao_desc"
+  | "pontuacao_asc";
+
+type OrdenacaoPorAba =
+  Record<
+    AbaOrdenavel,
+    OrdenacaoExplorar
+  >;
+
+const ORDENACAO_INICIAL: OrdenacaoPorAba =
+  {
+    atletas:
+      "nome_asc",
+
+    escolas:
+      "nome_asc",
+
+    clubes:
+      "nome_asc",
+
+    profissionais:
+      "nome_asc",
+
+    outros:
+      "nome_asc",
+  };
 
 type EventoItem = {
   id: string;
@@ -352,22 +414,309 @@ function shouldShowProBadgeOnAvatar(x: any): boolean {
   return isItemPro(x);
 }
 
-function sortProThenName<T>(arr: T[], getName: (x: T) => string) {
-  return [...arr].sort((a, b) => {
-    const ad = isItemDestaque(a) ? 1 : 0;
-    const bd = isItemDestaque(b) ? 1 : 0;
+function ProfileStatusBadges({
+  item,
+  align = "center",
+}: {
+  item: any;
+  align?:
+    | "center"
+    | "start";
+}) {
+  const verificado =
+    shouldShowVerified(item);
 
-    if (ad !== bd) return bd - ad;
+  const destaque =
+    isItemDestaque(item);
 
-    const ap = isItemPro(a) ? 1 : 0;
-    const bp = isItemPro(b) ? 1 : 0;
+  if (
+    !verificado &&
+    !destaque
+  ) {
+    return null;
+  }
 
-    if (ap !== bp) return bp - ap;
+  return (
+    <div
+      className={`mt-1 flex flex-wrap gap-1 ${
+        align === "start"
+          ? "justify-start"
+          : "justify-center"
+      }`}
+    >
+      {verificado && (
+        <Pill tone="emerald">
+          <CheckCircle2 className="h-3.5 w-3.5" />
 
-    return getName(a).localeCompare(getName(b), "pt-BR", {
-      sensitivity: "base",
-    });
-  });
+          Verificado
+        </Pill>
+      )}
+
+      {destaque && (
+        <Pill tone="amber">
+          <Star
+            className="h-3.5 w-3.5"
+            fill="currentColor"
+          />
+
+          Destaque
+        </Pill>
+      )}
+    </div>
+  );
+}
+
+function prioridadePerfil(
+  item: any
+) {
+  if (
+    isItemDestaque(item)
+  ) {
+    return 0;
+  }
+  if (
+    isItemPro(item)
+  ) {
+    return 1;
+  }
+
+  return 2;
+}
+
+function compararNomeExplorar(
+  nomeA: string,
+  nomeB: string
+) {
+  return String(
+    nomeA || ""
+  ).localeCompare(
+    String(
+      nomeB || ""
+    ),
+    "pt-BR",
+    {
+      sensitivity:
+        "base",
+
+      numeric:
+        true,
+    }
+  );
+}
+
+function obterTimestampCriacao(
+  item: any
+) {
+  const valor =
+    item?.usuario
+      ?.dataCriacao ??
+    item?.dataCriacao ??
+    item?.criadoEm ??
+    item?.createdAt ??
+    null;
+
+  if (!valor) {
+    return null;
+  }
+
+  const timestamp =
+    new Date(
+      valor
+    ).getTime();
+
+  return Number.isFinite(
+    timestamp
+  )
+    ? timestamp
+    : null;
+}
+
+function ordenarExplorar<T>(
+  itens: T[],
+  ordenacao:
+    OrdenacaoExplorar,
+  getNome:
+    (item: T) => string,
+  getPontuacao?:
+    (
+      item: T
+    ) =>
+      number
+      | null
+      | undefined
+) {
+  return [...itens].sort(
+    (itemA, itemB) => {
+
+      const prioridadeA =
+        prioridadePerfil(
+          itemA
+        );
+
+      const prioridadeB =
+        prioridadePerfil(
+          itemB
+        );
+
+      if (
+        prioridadeA !==
+        prioridadeB
+      ) {
+        return (
+          prioridadeA -
+          prioridadeB
+        );
+      }
+
+      const nomeA =
+        getNome(
+          itemA
+        );
+
+      const nomeB =
+        getNome(
+          itemB
+        );
+
+      const comparacaoNome =
+        compararNomeExplorar(
+          nomeA,
+          nomeB
+        );
+
+      if (
+        ordenacao ===
+        "nome_asc"
+      ) {
+        return comparacaoNome;
+      }
+
+      if (
+        ordenacao ===
+        "nome_desc"
+      ) {
+        return -comparacaoNome;
+      }
+
+      if (
+        ordenacao ===
+          "recentes" ||
+        ordenacao ===
+          "antigos"
+      ) {
+        const dataA =
+          obterTimestampCriacao(
+            itemA
+          );
+
+        const dataB =
+          obterTimestampCriacao(
+            itemB
+          );
+
+        if (
+          dataA === null &&
+          dataB === null
+        ) {
+          return comparacaoNome;
+        }
+
+        if (
+          dataA === null
+        ) {
+          return 1;
+        }
+
+        if (
+          dataB === null
+        ) {
+          return -1;
+        }
+
+        const comparacaoData =
+          ordenacao ===
+          "recentes"
+            ? dataB - dataA
+            : dataA - dataB;
+
+        return (
+          comparacaoData ||
+          comparacaoNome
+        );
+      }
+
+      if (
+        ordenacao ===
+          "pontuacao_desc" ||
+        ordenacao ===
+          "pontuacao_asc"
+      ) {
+        const valorA =
+          getPontuacao?.(
+            itemA
+          );
+
+        const valorB =
+          getPontuacao?.(
+            itemB
+          );
+
+        const numeroA =
+          valorA != null &&
+          Number.isFinite(
+            Number(valorA)
+          )
+            ? Number(
+                valorA
+              )
+            : null;
+
+        const numeroB =
+          valorB != null &&
+          Number.isFinite(
+            Number(valorB)
+          )
+            ? Number(
+                valorB
+              )
+            : null;
+
+        if (
+          numeroA === null &&
+          numeroB === null
+        ) {
+          return comparacaoNome;
+        }
+
+        if (
+          numeroA === null
+        ) {
+          return 1;
+        }
+
+        if (
+          numeroB === null
+        ) {
+          return -1;
+        }
+
+        const comparacaoPontuacao =
+          ordenacao ===
+          "pontuacao_desc"
+            ? numeroB -
+              numeroA
+            : numeroA -
+              numeroB;
+
+        return (
+          comparacaoPontuacao ||
+          comparacaoNome
+        );
+      }
+
+      return comparacaoNome;
+    }
+  );
 }
 
 const normKey = (s?: string | null) =>
@@ -408,6 +757,43 @@ function Tab({
 function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<AbaExplorar>("atletas");
+  const [
+    ordenacaoPorAba,
+    setOrdenacaoPorAba,
+  ] = useState<OrdenacaoPorAba>(
+    ORDENACAO_INICIAL
+  );
+
+  const abaOrdenavel:
+    AbaOrdenavel | null =
+    aba === "eventos"
+      ? null
+      : aba;
+
+  const ordenacaoAtual =
+    abaOrdenavel
+      ? ordenacaoPorAba[
+          abaOrdenavel
+        ]
+      : "nome_asc";
+
+  function alterarOrdenacao(
+    valor:
+      OrdenacaoExplorar
+  ) {
+    if (!abaOrdenavel) {
+      return;
+    }
+
+    setOrdenacaoPorAba(
+      (anterior) => ({
+        ...anterior,
+
+        [abaOrdenavel]:
+          valor,
+      })
+    );
+  }
   const [dados, setDados] = useState<DadosExplorar>({
     atletas: [],
     professores: [],
@@ -714,8 +1100,22 @@ function Explorar() {
       return true;
     });
 
-    return sortProThenName(base, (a) => (a as any)?.usuario?.nome ?? "");
-  }, [dados.atletas, filtrosKey, busca, pontosCache, mostrarFavoritos, favoritosPerfilIds]);
+    return ordenarExplorar(
+      base,
+      ordenacaoPorAba
+        .atletas,
+
+      (atleta) =>
+        atleta.usuario
+          ?.nome ??
+        "",
+
+      (atleta) =>
+        getAtletaMeta(
+          atleta
+        ).pontuacao
+    );
+  }, [dados.atletas, filtrosKey, busca, pontosCache, mostrarFavoritos, favoritosPerfilIds, ordenacaoPorAba.atletas]);
 
   const eventosFiltrados = useMemo(() => {
     const q = (busca || "").toLowerCase();
@@ -768,8 +1168,19 @@ function Explorar() {
       return true;
     });
 
-    return sortProThenName(base, (e) => (e as any)?.nome ?? "");
-  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs), mostrarFavoritos, favoritosPerfilIds]);
+    return ordenarExplorar(
+      base,
+
+      ordenacaoPorAba
+        .escolas,
+
+      (escola) =>
+        escola.nome ??
+        escola.usuario
+          ?.nome ??
+        ""
+    );
+  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs), mostrarFavoritos, favoritosPerfilIds, ordenacaoPorAba.escolas]);
 
   const clubesFiltrados = useMemo(() => {
     const q = normText(busca);
@@ -792,8 +1203,19 @@ function Explorar() {
       return true; 
     });
 
-    return sortProThenName(base, (c) => (c as any)?.nome ?? "");
-  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs), favoritosPerfilIds, mostrarFavoritos]);
+    return ordenarExplorar(
+      base,
+
+      ordenacaoPorAba
+        .clubes,
+
+      (clube) =>
+        clube.nome ??
+        clube.usuario
+          ?.nome ??
+        ""
+    );
+  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs), favoritosPerfilIds, mostrarFavoritos, ordenacaoPorAba.clubes]);
 
   const profissionaisFiltrados = useMemo(() => {
     const q = normText(busca);
@@ -829,8 +1251,18 @@ function Explorar() {
       return true;
     });
 
-    return sortProThenName(base, (p) => (p as any)?.usuario?.nome ?? "");
-  }, [profissionais, busca, JSON.stringify(filtrosProf), mostrarFavoritos, favoritosPerfilIds]);
+    return ordenarExplorar(
+      base,
+
+      ordenacaoPorAba
+        .profissionais,
+
+      (profissional) =>
+        profissional.usuario
+          ?.nome ??
+        ""
+    );
+  }, [profissionais, busca, JSON.stringify(filtrosProf), mostrarFavoritos, favoritosPerfilIds, ordenacaoPorAba.profissionais]);
 
   const outrosFiltrados = useMemo(() => {
     const todos = [
@@ -878,9 +1310,19 @@ function Explorar() {
       return true;
     });
 
-    return sortProThenName(
+    return ordenarExplorar(
       filtrados,
-      (x) => x.nome ?? x.usuario?.nome ?? x.usuario?.nomeDeUsuario ?? ""
+
+      ordenacaoPorAba
+        .outros,
+
+      (item) =>
+        item.nome ??
+        item.usuario
+          ?.nome ??
+        item.usuario
+          ?.nomeDeUsuario ??
+        ""
     );
   }, [
     dados.learning,
@@ -889,7 +1331,8 @@ function Explorar() {
     busca,
     JSON.stringify(filtrosOutros),
     mostrarFavoritos,
-    favoritosPerfilIds
+    favoritosPerfilIds,
+    ordenacaoPorAba.outros
   ]);
 
   useEffect(() => setShowCountAtletas(BATCH), [
@@ -927,6 +1370,60 @@ function Explorar() {
     JSON.stringify(filtrosOutros),
     mostrarFavoritos,
     favoritosPerfilIds.length,
+  ]);
+
+  useEffect(() => {
+    if (
+      aba === "atletas"
+    ) {
+      setShowCountAtletas(
+        BATCH
+      );
+
+      return;
+    }
+
+    if (
+      aba === "escolas"
+    ) {
+      setShowCountEscolas(
+        BATCH
+      );
+
+      return;
+    }
+
+    if (
+      aba === "clubes"
+    ) {
+      setShowCountClubes(
+        BATCH
+      );
+
+      return;
+    }
+
+    if (
+      aba ===
+      "profissionais"
+    ) {
+      setShowCountProfs(
+        BATCH
+      );
+
+      return;
+    }
+
+    if (
+      aba === "outros"
+    ) {
+      setShowCountOutros(
+        BATCH
+      );
+    }
+  }, [
+    aba,
+    ordenacaoAtual,
   ]);
 
   useEffect(() => {
@@ -1433,7 +1930,81 @@ function Explorar() {
               </Tab>
             )}
           </div>
+            {abaOrdenavel && (
+              <div className="mt-3 flex justify-end">
+                <label
+                  className="
+                    flex w-full
+                    items-center gap-2
+                    sm:w-auto
+                  "
+                >
+                  <span
+                    className="
+                      hidden text-sm
+                      font-medium
+                      text-green-900/80
+                      sm:inline
+                    "
+                  >
+                    Ordenar:
+                  </span>
 
+                  <select
+                    value={
+                      ordenacaoAtual
+                    }
+                    onChange={(evento) =>
+                      alterarOrdenacao(
+                        evento.target
+                          .value as
+                          OrdenacaoExplorar
+                      )
+                    }
+                    className="
+                      w-full rounded-xl
+                      border border-green-200
+                      bg-white px-3 py-2
+                      text-sm text-green-900
+                      outline-none
+                      focus:ring-2
+                      focus:ring-green-100
+                      sm:w-auto
+                      sm:min-w-[250px]
+                    "
+                  >
+                    <option value="nome_asc">
+                      Destaques primeiro • Nome A-Z
+                    </option>
+
+                    <option value="nome_desc">
+                      Destaques primeiro • Nome Z-A
+                    </option>
+
+                    <option value="recentes">
+                      Destaques primeiro • Mais recentes
+                    </option>
+
+                    <option value="antigos">
+                      Destaques primeiro • Mais antigos
+                    </option>
+
+                    {aba ===
+                      "atletas" && (
+                      <>
+                        <option value="pontuacao_desc">
+                          Destaques primeiro • Maior pontuação
+                        </option>
+
+                        <option value="pontuacao_asc">
+                          Destaques primeiro • Menor pontuação
+                        </option>
+                      </>
+                    )}
+                  </select>
+                </label>
+              </div>
+            )}
         </div>
        </div>
 
@@ -1852,7 +2423,7 @@ function Explorar() {
       <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         {aba === "atletas" && (
           <>
-            <h2 className="text-base sm:text-lg font-bold mb-2">Atletas em Destaque</h2>
+            <h2 className="text-base sm:text-lg font-bold mb-2">Atletas</h2>
 
             {carregandoDados && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
@@ -1896,15 +2467,9 @@ function Explorar() {
                             {nome}
                           </p>
 
-                          <div className="mt-1 flex flex-wrap gap-1 justify-center">
-                            {shouldShowVerified(a) && (
-                              <Pill tone="emerald">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
-                              </Pill>
-                            )}
-
-                    
-                          </div>
+                          <ProfileStatusBadges
+                            item={a}
+                          />
 
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {categoria && (
@@ -2030,15 +2595,10 @@ function Explorar() {
                         {e.siteOficial || "Site indisponível"}
                       </p>
 
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {shouldShowVerified(e) && (
-                          <Pill tone="emerald">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
-                          </Pill>
-                        )}
-
-                        
-                      </div>
+                      <ProfileStatusBadges
+                        item={e}
+                        align="start"
+                      />
                     </div>
                   </div>
                 );
@@ -2112,14 +2672,10 @@ function Explorar() {
 
                       <p className="text-xs text-gray-600">Clube Profissional</p>
 
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {shouldShowVerified(c) && (
-                          <Pill tone="emerald">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
-                          </Pill>
-                        )}
-                        
-                      </div>
+                      <ProfileStatusBadges
+                        item={c}
+                        align="start"
+                      />
                     </div>
                   </div>
                 );
@@ -2188,13 +2744,9 @@ function Explorar() {
                           {p.usuario.nome}
                         </p>
 
-                        <div className="mt-1 flex flex-wrap gap-1 justify-center">
-                          {shouldShowVerified(p) && (
-                            <Pill tone="emerald">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Verificado
-                            </Pill>
-                          )}
-                        </div>
+                        <ProfileStatusBadges
+                          item={p}
+                        />
 
                         {(() => {
                           const cidade = p.usuario?.cidade ?? "";
@@ -2211,7 +2763,14 @@ function Explorar() {
                           );
                         })()}
 
-                        <Pill tone="amber" className="mt-1">
+                        <Pill
+                          tone={
+                            p.role === "Professor"
+                              ? "sky"
+                              : "rose"
+                          }
+                          className="mt-1"
+                        >
                           {p.role}
                         </Pill>
                       </div>
@@ -2286,12 +2845,9 @@ function Explorar() {
                           {nome}
                         </p>
 
-                        {shouldShowVerified(item) && (
-                          <Pill tone="emerald" className="mt-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Verificado
-                          </Pill>
-                        )}
+                        <ProfileStatusBadges
+                          item={item}
+                        />
 
                         {(cidade || estado) && (
                           <p className="mt-1 text-xs text-gray-600 flex items-center gap-1 text-center">

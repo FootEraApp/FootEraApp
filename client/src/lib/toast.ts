@@ -16,10 +16,6 @@ function emit(message: string, type: ToastType) {
   listeners.forEach((listener) => listener(event));
 }
 
-// Substitui alert()/confirm() de mensagem única por uma notificação não
-// bloqueante. Importável de qualquer lugar (não precisa estar dentro de um
-// componente React) — o <ToastContainer /> montado em App.tsx é quem
-// desenha na tela.
 export const toast = {
   success: (message: string) => emit(message, "success"),
   error: (message: string) => emit(message, "error"),

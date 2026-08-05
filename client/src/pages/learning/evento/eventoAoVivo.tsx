@@ -38,6 +38,8 @@ type EventoLanding = {
   replayDisponivel?: boolean;
   chatAtivo?: boolean;
   gravacaoAtiva?: boolean;
+  precoAcesso?: number | string | null;
+  acessoPago?: boolean;
   convidadoUsuario?: {
     id?: string;
     nome?: string | null;
@@ -273,8 +275,10 @@ export default function LearningEventoAoVivoPage() {
   
   const preco = Number(
     evento?.acesso?.preco ??
-      evento?.metodologiaAvulsa?.precoAssinaturaMensal ??
-      evento?.metodologia?.precoAssinaturaMensal ??
+      evento?.precoAcesso ??
+      evento
+        ?.metodologiaAvulsa
+        ?.precoAssinaturaMensal ??
       0
   );
 

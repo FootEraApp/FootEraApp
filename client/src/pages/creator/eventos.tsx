@@ -14,6 +14,8 @@ import {
   XCircle,
   Pencil,
   Trash2,
+  Search,
+  ArrowUpDown,
 } from "lucide-react";
 import CoverImage from "../../components/shared/CoverImage.js";
 
@@ -26,6 +28,9 @@ type EventoListItem = {
   dataEvento: string;
   cidade?: string | null;
   estado?: string | null;
+  pais?: string | null;
+  local?: string | null;
+  endereco?: string | null;
   status: "ABERTO" | "ENCERRADO" | "CANCELADO";
   linkInscricao?: string | null;
 };
@@ -83,6 +88,26 @@ type AulaAoVivoResumo = {
     capaUrl?: string | null;
   } | null;
 };
+
+type OrdenacaoEventos =
+  | "data_proxima"
+  | "data_antiga"
+  | "nome_asc"
+  | "nome_desc";
+
+type ItemEventoUnificado =
+  | {
+      kind: "AULA_AO_VIVO";
+      id: string;
+      data: string;
+      aula: AulaAoVivoResumo;
+    }
+  | {
+      kind: "EVENTO";
+      id: string;
+      data: string;
+      evento: EventoListItem;
+    };
 
 const FRONTEND_BASE_URL =
   import.meta.env.VITE_FRONTEND_BASE_URL ||
@@ -150,6 +175,79 @@ function getMetodologiaUrl(aula: AulaAoVivoResumo) {
 }
 
 const TIMEZONE_BR = "America/Sao_Paulo";
+
+function obterChaveDataBrasil(
+  value?: string | Date | null
+): string {
+  if (!value) return "";
+
+  const data =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  if (Number.isNaN(data.getTime())) {
+    return "";
+  }
+
+  const partes = new Intl.DateTimeFormat(
+    "pt-BR",
+    {
+      timeZone: TIMEZONE_BR,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }
+  ).formatToParts(data);
+
+  const ano =
+    partes.find(
+      (parte) => parte.type === "year"
+    )?.value ?? "";
+
+  const mes =
+    partes.find(
+      (parte) => parte.type === "month"
+    )?.value ?? "";
+
+  const dia =
+    partes.find(
+      (parte) => parte.type === "day"
+    )?.value ?? "";
+
+  return `${ano}-${mes}-${dia}`;
+}
+
+function eventoEhHoje(
+  value?: string | null
+): boolean {
+  if (!value) return false;
+
+  return (
+    obterChaveDataBrasil(value) ===
+    obterChaveDataBrasil(new Date())
+  );
+}
+
+function obterTimestampEvento(
+  item: ItemEventoUnificado
+): number {
+  const timestamp = new Date(
+    item.data
+  ).getTime();
+
+  return Number.isFinite(timestamp)
+    ? timestamp
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function obterTituloEvento(
+  item: ItemEventoUnificado
+): string {
+  return item.kind === "AULA_AO_VIVO"
+    ? item.aula.titulo
+    : item.evento.titulo;
+}
 
 function formatarDataHoraLive(value?: string | null) {
   if (!value) return "Sem data definida";
@@ -316,6 +414,11 @@ export default function CreatorEventosPage() {
   const [lives, setLives] = useState<AulaAoVivoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [ordenacao, setOrdenacao] =
+    useState<OrdenacaoEventos>(
+      "data_proxima"
+    );
 
   async function carregarTudo() {
     try {
@@ -366,7 +469,7 @@ export default function CreatorEventosPage() {
 
       await carregarTudo();
     } catch (e: any) {
-      window.toast.error(
+      toast.error(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
           "Erro ao apagar evento."
@@ -384,7 +487,7 @@ export default function CreatorEventosPage() {
     const origem = getOrigemAula(aula);
 
     if (aula.status === "AO_VIVO") {
-      window.toast.error("Finalize a transmissão antes de apagar este evento.");
+      toast.error("Finalize a transmissão antes de apagar este evento.");
       return;
     }
 
@@ -409,7 +512,7 @@ export default function CreatorEventosPage() {
       }
 
       if (!origem.metodologiaId || !origem.estruturaId || !origem.itemId) {
-        window.toast.error(
+        toast.error(
           "Não foi possível encontrar a estrutura/item desta aula para apagar somente ela."
         );
         return;
@@ -435,7 +538,7 @@ export default function CreatorEventosPage() {
 
       await carregarTudo();
     } catch (e: any) {
-      window.toast.error(
+      toast.error(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
           "Erro ao apagar aula ao vivo."
@@ -445,26 +548,582 @@ export default function CreatorEventosPage() {
     }
   }
 
-  const listaUnificada = useMemo(() => {
-    return [
-      ...lives.map((aula) => ({
-        kind: "AULA_AO_VIVO" as const,
-        id: aula.id,
-        data: aula.dataInicio,
-        aula,
-      })),
-      ...lista.map((evento) => ({
-        kind: "EVENTO" as const,
-        id: evento.id,
-        data: evento.dataEvento,
-        evento,
-      })),
-    ].sort((a, b) => {
-      const da = new Date(a.data || 0).getTime();
-      const db = new Date(b.data || 0).getTime();
-      return da - db;
-    });
-  }, [lives, lista]);
+  const listaUnificada =
+    useMemo<ItemEventoUnificado[]>(
+      () => [
+        ...lives.map(
+          (aula): ItemEventoUnificado => ({
+            kind: "AULA_AO_VIVO",
+            id: aula.id,
+            data: aula.dataInicio,
+            aula,
+          })
+        ),
+
+        ...lista.map(
+          (evento): ItemEventoUnificado => ({
+            kind: "EVENTO",
+            id: evento.id,
+            data: evento.dataEvento,
+            evento,
+          })
+        ),
+      ],
+      [lives, lista]
+    );
+
+  const itensFiltradosOrdenados =
+    useMemo(() => {
+      const termo =
+        normalizarTexto(busca.trim());
+
+      const filtrados =
+        listaUnificada.filter((item) => {
+          if (!termo) {
+            return true;
+          }
+
+          if (
+            item.kind ===
+            "AULA_AO_VIVO"
+          ) {
+            const aula = item.aula;
+
+            const statusInfo =
+              getLiveStatusInfo(
+                aula.status
+              );
+
+            const origemInfo =
+              getOrigemAula(aula);
+
+            const convidados =
+              getConvidadosLabel(aula);
+
+            const textoPesquisa = [
+              aula.titulo,
+              aula.descricao,
+              aula.status,
+              statusInfo.label,
+              origemInfo.label,
+              convidados,
+              aula.metodologia?.titulo,
+              aula.metodologiaAvulsa
+                ?.titulo,
+              formatarDataHoraLive(
+                aula.dataInicio
+              ),
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            return normalizarTexto(
+              textoPesquisa
+            ).includes(termo);
+          }
+
+          const evento =
+            item.evento;
+
+          const textoPesquisa = [
+            evento.titulo,
+            evento.descricao,
+            evento.tipoLabel,
+            labelEventoTipo(
+              evento.tipo
+            ),
+            evento.status,
+            evento.cidade,
+            evento.estado,
+            evento.pais,
+            evento.local,
+            evento.endereco,
+            formatarDataHoraLive(
+              evento.dataEvento
+            ),
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          return normalizarTexto(
+            textoPesquisa
+          ).includes(termo);
+        });
+
+      const agora = Date.now();
+
+      return [...filtrados].sort(
+        (itemA, itemB) => {
+          if (
+            ordenacao === "nome_asc" ||
+            ordenacao === "nome_desc"
+          ) {
+            const comparacao =
+              obterTituloEvento(
+                itemA
+              ).localeCompare(
+                obterTituloEvento(
+                  itemB
+                ),
+                "pt-BR",
+                {
+                  sensitivity: "base",
+                }
+              );
+
+            return ordenacao ===
+              "nome_asc"
+              ? comparacao
+              : -comparacao;
+          }
+
+          const dataA =
+            obterTimestampEvento(
+              itemA
+            );
+
+          const dataB =
+            obterTimestampEvento(
+              itemB
+            );
+
+          if (
+            ordenacao ===
+            "data_antiga"
+          ) {
+            return dataA - dataB;
+          }
+
+          const futuroA =
+            dataA >= agora;
+
+          const futuroB =
+            dataB >= agora;
+
+          if (
+            futuroA &&
+            !futuroB
+          ) {
+            return -1;
+          }
+
+          if (
+            !futuroA &&
+            futuroB
+          ) {
+            return 1;
+          }
+
+          if (
+            futuroA &&
+            futuroB
+          ) {
+            return dataA - dataB;
+          }
+
+          return dataB - dataA;
+        }
+      );
+    }, [
+      listaUnificada,
+      busca,
+      ordenacao,
+    ]);
+
+  const eventosDeHoje =
+    useMemo(
+      () =>
+        itensFiltradosOrdenados.filter(
+          (item) =>
+            eventoEhHoje(item.data)
+        ),
+      [itensFiltradosOrdenados]
+    );
+
+  const outrosEventos =
+    useMemo(
+      () =>
+        itensFiltradosOrdenados.filter(
+          (item) =>
+            !eventoEhHoje(item.data)
+        ),
+      [itensFiltradosOrdenados]
+    );
+
+  const renderizarEvento = (
+    item: ItemEventoUnificado
+  ) => {
+    if (item.kind === "AULA_AO_VIVO") {
+      const aula = item.aula;
+
+      const statusInfo =
+        getLiveStatusInfo(aula.status);
+
+      const origemInfo =
+        getOrigemAula(aula);
+
+      const convidadosLabel =
+        getConvidadosLabel(aula);
+
+      const capa =
+        aula.thumbUrl ||
+        aula.metodologia?.capaUrl ||
+        aula.metodologiaAvulsa?.capaUrl ||
+        AVATAR_FALLBACK;
+
+      return (
+        <li
+          key={`live_${aula.id}`}
+          className="
+            rounded-2xl border
+            bg-white p-4 shadow-sm
+          "
+        >
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div
+              className="
+                h-20 w-20 shrink-0
+                overflow-hidden rounded-2xl
+                bg-emerald-50
+              "
+            >
+              <CoverImage
+                src={capa}
+                alt={aula.titulo}
+                pasta="metodologias"
+                className="h-full w-full"
+              />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <span
+                      className={`
+                        inline-flex items-center gap-1
+                        rounded-full border
+                        px-3 py-1
+                        text-xs font-bold
+                        ${statusInfo.className}
+                      `}
+                    >
+                      {statusInfo.icon}
+                      {statusInfo.label}
+                    </span>
+
+                    {aula.gravacaoAtiva && (
+                      <span
+                        className="
+                          inline-flex items-center gap-1
+                          rounded-full
+                          border border-emerald-200
+                          bg-emerald-50
+                          px-3 py-1
+                          text-xs font-bold
+                          text-emerald-700
+                        "
+                      >
+                        <PlayCircle className="h-4 w-4" />
+                        Gravação ativa
+                      </span>
+                    )}
+
+                    <span
+                      className={`
+                        inline-flex items-center gap-1
+                        rounded-full border
+                        px-3 py-1
+                        text-xs font-bold
+                        ${origemInfo.className}
+                      `}
+                    >
+                      {origemInfo.label}
+                    </span>
+                  </div>
+
+                  <h3 className="font-extrabold leading-tight text-green-950">
+                    {aula.titulo}
+                  </h3>
+
+                  {aula.descricao && (
+                    <p className="mt-1 line-clamp-2 text-sm text-green-900/70">
+                      {aula.descricao}
+                    </p>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap gap-3 text-sm text-green-900/70">
+                    <span>
+                      {formatarDataHoraLive(
+                        aula.dataInicio
+                      )}
+                    </span>
+
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+
+                      {aula.totalParticipantes ?? 0}{" "}
+                      participantes
+                    </span>
+                  </div>
+
+                  {convidadosLabel && (
+                    <div
+                      className="
+                        mt-2 rounded-xl
+                        border border-emerald-100
+                        bg-emerald-50
+                        px-3 py-2
+                        text-sm text-green-900
+                      "
+                    >
+                      <b>Convidados:</b>{" "}
+                      {convidadosLabel}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      editarLiveLearning(aula)
+                    }
+                    className="
+                      flex h-9 w-9
+                      items-center justify-center
+                      rounded-full
+                      border border-emerald-200
+                      bg-white text-emerald-800
+                      hover:bg-emerald-50
+                    "
+                    title="Editar aula ao vivo"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={
+                      apagandoId ===
+                      `live_${aula.id}`
+                    }
+                    onClick={() =>
+                      apagarLiveLearning(aula)
+                    }
+                    className="
+                      flex h-9 w-9
+                      items-center justify-center
+                      rounded-full
+                      border border-red-200
+                      bg-white text-red-600
+                      hover:bg-red-50
+                      disabled:opacity-50
+                    "
+                    title="Apagar aula ao vivo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href =
+                  `/learning/live-studio?aulaId=${aula.id}`;
+              }}
+              className="
+                h-11 rounded-xl
+                bg-green-700
+                font-bold text-white
+                hover:bg-green-800
+              "
+            >
+              {statusInfo.buttonLabel}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href =
+                  getEventoPublicoUrl(aula);
+              }}
+              className="
+                h-11 rounded-xl
+                border border-emerald-200
+                bg-emerald-50
+                font-bold text-emerald-800
+                hover:bg-emerald-100
+              "
+            >
+              Ver página do evento
+            </button>
+
+            {origemInfo.tipo ===
+            "EVENTO_AVULSO" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href =
+                    `/creator/eventos/novo?aulaId=${aula.id}`;
+                }}
+                className="
+                  h-11 rounded-xl
+                  border border-slate-200
+                  bg-white
+                  font-bold text-slate-800
+                  hover:bg-slate-50
+                "
+              >
+                Editar evento
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href =
+                    getMetodologiaUrl(aula);
+                }}
+                className="
+                  h-11 rounded-xl
+                  border border-slate-200
+                  bg-white
+                  font-bold text-slate-800
+                  hover:bg-slate-50
+                "
+              >
+                Ver metodologia
+              </button>
+            )}
+          </div>
+        </li>
+      );
+    }
+
+    const evento = item.evento;
+
+    return (
+      <li
+        key={`evento_${evento.id}`}
+        className="
+          rounded-2xl border
+          bg-white p-4 shadow-sm
+        "
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <div className="min-w-0">
+            <div className="font-bold text-green-950">
+              {evento.titulo}
+            </div>
+
+            <div className="mt-1 text-sm text-green-900/70">
+              {evento.tipoLabel ||
+                labelEventoTipo(evento.tipo)}
+
+              {" • "}
+
+              {formatarDataHoraLive(
+                evento.dataEvento
+              )}
+
+              {evento.cidade
+                ? ` • ${evento.cidade}${
+                    evento.estado
+                      ? ` - ${evento.estado}`
+                      : ""
+                  }`
+                : ""}
+            </div>
+
+            {(evento.local ||
+              evento.endereco) && (
+              <div className="mt-1 text-sm text-green-900/70">
+                {evento.local ||
+                  evento.endereco}
+              </div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-start gap-2">
+            <span
+              className="
+                h-fit rounded
+                bg-green-100
+                px-2 py-1
+                text-xs text-green-900
+              "
+            >
+              {evento.status}
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                editarEventoNormal(
+                  evento.id
+                )
+              }
+              className="
+                flex h-9 w-9
+                items-center justify-center
+                rounded-full
+                border border-emerald-200
+                bg-white text-emerald-800
+                hover:bg-emerald-50
+              "
+              title="Editar evento"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              disabled={
+                apagandoId ===
+                `evento_${evento.id}`
+              }
+              onClick={() =>
+                apagarEventoNormal(
+                  evento.id
+                )
+              }
+              className="
+                flex h-9 w-9
+                items-center justify-center
+                rounded-full
+                border border-red-200
+                bg-white text-red-600
+                hover:bg-red-50
+                disabled:opacity-50
+              "
+              title="Apagar evento"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {evento.descricao && (
+          <p className="mt-2 line-clamp-3 text-sm text-green-900/80">
+            {evento.descricao}
+          </p>
+        )}
+
+        <div className="mt-3 flex gap-3">
+          <Link
+            href={`/eventos/${evento.id}`}
+            className="text-sm text-green-800 underline"
+          >
+            Ver detalhes
+          </Link>
+        </div>
+      </li>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-cream text-green-900 pb-20">
@@ -502,216 +1161,174 @@ export default function CreatorEventosPage() {
           </div>
         </div>
 
+        <div className="mb-4 rounded-2xl border bg-white p-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_250px]">
+            <label className="relative block">
+              <Search
+                className="
+                  pointer-events-none
+                  absolute left-3 top-1/2
+                  h-5 w-5
+                  -translate-y-1/2
+                  text-green-900/50
+                "
+              />
+
+              <input
+                type="search"
+                value={busca}
+                onChange={(event) =>
+                  setBusca(
+                    event.target.value
+                  )
+                }
+                placeholder="Pesquisar por nome, data, tipo, status, local ou convidado..."
+                className="
+                  h-11 w-full rounded-xl
+                  border border-green-200
+                  bg-white pl-10 pr-4
+                  text-sm text-green-950
+                  outline-none
+                  placeholder:text-green-900/50
+                  focus:border-green-500
+                  focus:ring-2
+                  focus:ring-green-100
+                "
+              />
+            </label>
+
+            <label className="relative block">
+              <ArrowUpDown
+                className="
+                  pointer-events-none
+                  absolute left-3 top-1/2
+                  h-5 w-5
+                  -translate-y-1/2
+                  text-green-900/50
+                "
+              />
+
+              <select
+                value={ordenacao}
+                onChange={(event) =>
+                  setOrdenacao(
+                    event.target
+                      .value as OrdenacaoEventos
+                  )
+                }
+                className="
+                  h-11 w-full appearance-none
+                  rounded-xl
+                  border border-green-200
+                  bg-white pl-10 pr-4
+                  text-sm text-green-950
+                  outline-none
+                  focus:border-green-500
+                  focus:ring-2
+                  focus:ring-green-100
+                "
+              >
+                <option value="data_proxima">
+                  Data mais próxima
+                </option>
+
+                <option value="data_antiga">
+                  Data mais antiga
+                </option>
+
+                <option value="nome_asc">
+                  Nome A–Z
+                </option>
+
+                <option value="nome_desc">
+                  Nome Z–A
+                </option>
+              </select>
+            </label>
+          </div>
+
+          {busca.trim() && (
+            <div className="mt-3 text-xs text-green-900/60">
+              {itensFiltradosOrdenados.length}{" "}
+              resultado(s) encontrado(s)
+            </div>
+          )}
+        </div>
+
         {loading ? (
-          <div className="text-center py-8">Carregando eventos...</div>
-        ) : listaUnificada.length === 0 ? (
-          <div className="bg-white rounded-2xl border p-6 text-center text-green-900/70">
-            Nenhum evento criado ainda.
+          <div className="py-8 text-center">
+            Carregando eventos...
+          </div>
+        ) : itensFiltradosOrdenados.length ===
+          0 ? (
+          <div className="rounded-2xl border bg-white p-6 text-center text-green-900/70">
+            {busca.trim()
+              ? "Nenhum evento encontrado para essa pesquisa."
+              : "Nenhum evento criado ainda."}
           </div>
         ) : (
-          <ul className="grid gap-3">
-            {listaUnificada.map((item) => {
-              if (item.kind === "AULA_AO_VIVO") {
-                const aula = item.aula;
-                const statusInfo = getLiveStatusInfo(aula.status);
-                const origemInfo = getOrigemAula(aula);
-                const convidadosLabel = getConvidadosLabel(aula);
-
-                const capa =
-                  aula.thumbUrl ||
-                  aula.metodologia?.capaUrl ||
-                  aula.metodologiaAvulsa?.capaUrl ||
-                  AVATAR_FALLBACK;
-
-                return (
-                  <li key={`live_${aula.id}`} className="bg-white rounded-2xl border p-4 shadow-sm">
-                    <div className="flex gap-3">
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden bg-emerald-50 shrink-0">
-                        <CoverImage
-                          src={capa}
-                          alt={aula.titulo}
-                          pasta="metodologias"
-                          className="w-full h-full"
-                        />
-                      </div>
-                          
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap gap-2 mb-2">
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold ${statusInfo.className}`}
-                              >
-                                {statusInfo.icon}
-                                {statusInfo.label}
-                              </span>
-
-                              {aula.gravacaoAtiva ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                                  <PlayCircle className="w-4 h-4" />
-                                  Gravação ativa
-                                </span>
-                              ) : null}
-
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold ${origemInfo.className}`}
-                              >
-                                {origemInfo.label}
-                              </span>
-
-                            </div>
-
-                            <h3 className="font-extrabold text-green-950 leading-tight">
-                              {aula.titulo}
-                            </h3>
-
-                            {aula.descricao ? (
-                              <p className="text-sm text-green-900/70 mt-1 line-clamp-2">
-                                {aula.descricao}
-                              </p>
-                            ) : null}
-
-                            <div className="mt-2 flex flex-wrap gap-3 text-sm text-green-900/70">
-                              <span>{formatarDataHoraLive(aula.dataInicio)}</span>
-                              <span className="inline-flex items-center gap-1">
-                                <Users className="w-4 h-4" />
-                                {aula.totalParticipantes ?? 0} participantes
-                              </span>
-                            </div>
-
-                            {convidadosLabel ? (
-                              <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-green-900">
-                                <b>Convidados:</b> {convidadosLabel}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="flex shrink-0 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => editarLiveLearning(aula)}
-                              className="h-9 w-9 rounded-full border border-emerald-200 bg-white text-emerald-800 flex items-center justify-center hover:bg-emerald-50"
-                              title="Editar aula ao vivo"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={apagandoId === `live_${aula.id}`}
-                              onClick={() => apagarLiveLearning(aula)}
-                              className="h-9 w-9 rounded-full border border-red-200 bg-white text-red-600 flex items-center justify-center hover:bg-red-50 disabled:opacity-50"
-                              title="Apagar aula ao vivo"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          window.location.href = `/learning/live-studio?aulaId=${aula.id}`;
-                        }}
-                        className="h-11 rounded-xl bg-green-700 text-white font-bold"
-                      >
-                        {statusInfo.buttonLabel}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          window.location.href = getEventoPublicoUrl(aula);
-                        }}
-                        className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold"
-                      >
-                        Ver página do evento
-                      </button>
-
-                      {origemInfo.tipo === "EVENTO_AVULSO" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            window.location.href = `/creator/eventos/novo?aulaId=${aula.id}`;
-                          }}
-                          className="h-11 rounded-xl border border-slate-200 bg-white text-slate-800 font-bold"
-                        >
-                          Editar evento
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            window.location.href = getMetodologiaUrl(aula);
-                          }}
-                          className="h-11 rounded-xl border border-slate-200 bg-white text-slate-800 font-bold"
-                        >
-                          Ver metodologia
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              }
-
-              const e = item.evento;
-
-              return (
-                <li key={`evento_${e.id}`} className="bg-white rounded-2xl border p-4 shadow-sm">
-                  <div className="flex justify-between gap-3">
-                    <div>
-                      <div className="font-bold">{e.titulo}</div>
-                      <div className="text-sm text-green-900/70">
-                        {e.tipoLabel || labelEventoTipo(e.tipo)} •{" "}
-                        {new Date(e.dataEvento).toLocaleString()}
-                        {e.cidade ? ` • ${e.cidade}${e.estado ? " - " + e.estado : ""}` : ""}
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <span className="h-fit text-xs px-2 py-1 rounded bg-green-100 text-green-900">
-                        {e.status}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => editarEventoNormal(e.id)}
-                        className="h-9 w-9 rounded-full border border-emerald-200 bg-white text-emerald-800 flex items-center justify-center hover:bg-emerald-50"
-                        title="Editar evento"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={apagandoId === `evento_${e.id}`}
-                        onClick={() => apagarEventoNormal(e.id)}
-                        className="h-9 w-9 rounded-full border border-red-200 bg-white text-red-600 flex items-center justify-center hover:bg-red-50 disabled:opacity-50"
-                        title="Apagar evento"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+          <div className="grid gap-6">
+            {eventosDeHoje.length > 0 && (
+              <section
+                className="
+                  rounded-2xl
+                  border border-emerald-300
+                  bg-emerald-50/70
+                  p-3 sm:p-4
+                "
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <div
+                    className="
+                      flex h-10 w-10
+                      items-center justify-center
+                      rounded-full
+                      bg-emerald-600
+                      text-white
+                    "
+                  >
+                    <CalendarClock className="h-5 w-5" />
                   </div>
 
-                  {e.descricao && (
-                    <p className="text-sm text-green-900/80 mt-2 line-clamp-3">
-                      {e.descricao}
+                  <div>
+                    <h2 className="font-extrabold text-emerald-950">
+                      Eventos de hoje
+                    </h2>
+
+                    <p className="text-xs text-emerald-900/70">
+                      {eventosDeHoje.length}{" "}
+                      evento(s) programado(s)
+                      para hoje
                     </p>
-                  )}
-
-                  <div className="mt-3 flex gap-3">
-                    <Link href={`/eventos/${e.id}`} className="text-sm underline text-green-800">
-                      Ver detalhes
-                    </Link>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
+                </div>
+
+                <ul className="grid gap-3">
+                  {eventosDeHoje.map(
+                    renderizarEvento
+                  )}
+                </ul>
+              </section>
+            )}
+
+            {outrosEventos.length > 0 && (
+              <section>
+                <div className="mb-3">
+                  <h2 className="font-bold text-green-950">
+                    {eventosDeHoje.length > 0
+                      ? "Outros eventos"
+                      : "Todos os eventos"}
+                  </h2>
+                </div>
+
+                <ul className="grid gap-3">
+                  {outrosEventos.map(
+                    renderizarEvento
+                  )}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
       </div>
     </div>

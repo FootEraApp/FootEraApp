@@ -1491,6 +1491,7 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
       return {
         id: String(t.id),
         nome: String(t.nome ?? ""),
+        createdAt: (t as any).createdAt ?? null,
         descricao: t.descricao ?? undefined,
         nivel: String((t as any).nivel ?? ""),
         dataAgendada: (t as any).dataAgendada ?? undefined,
@@ -3672,10 +3673,6 @@ export async function restaurarTreinos(req: Request, res: Response) {
   return res.json({ ok: true, restaurados: restaurados.length });
 }
 
-// Só formaliza os 3 campos mais básicos (nome/nivel/exercicios), que já eram
-// checados manualmente mais abaixo. tipoTreino/categoria têm normalização
-// própria (aceitam "fisico"/"físico" etc.) e ficam como estão — não é
-// validação simples, é lógica de negócio que não deve ir pro schema.
 const criarTreinoProgramadoBaseSchema = z
   .object({
     nome: z.string().trim().min(1, "nome é obrigatório"),
@@ -4704,9 +4701,6 @@ export async function criarTreinoProgramado(
   }
 }
 
-// Update parcial — todo campo é opcional. Só garante o tipo de quem já é
-// gravado direto no Prisma sem checagem (nivel, exercicios); o resto segue
-// como estava.
 const atualizarTreinoProgramadoBaseSchema = z
   .object({
     nome: z.string().trim().min(1, "nome não pode ser vazio").optional(),

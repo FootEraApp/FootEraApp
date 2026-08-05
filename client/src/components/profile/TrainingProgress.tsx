@@ -277,6 +277,11 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const { data: atividades = [] } = useQuery<any[]>({
     queryKey: ["perfilAtividades", targetUserId],
     enabled: Boolean(token && targetUserId),
+
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+
     queryFn: async () => {
       const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/atividades`;
       const r = await fetch(url, { headers });
@@ -288,6 +293,11 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const { data: conquistasEarned = [] } = useQuery<Earned[]>({
     queryKey: ["conquistas-earned", targetUserId],
     enabled: Boolean(token && targetUserId),
+
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+
     queryFn: async () => {
       const ownerId = targetUserId;
       const url = `${API.BASE_URL.replace(/\/+$/, "")}/api/conquistas/${encodeURIComponent(ownerId)}?sync=1`;
@@ -331,10 +341,16 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const base = `${API.BASE_URL}/api/treinos/agendados`;
   const url = `${base}?atletaId=${encodeURIComponent(atletaId)}&apenasFuturos=1&apenasComSubmissao=0`;
 
-  const { data: treinosAgendados = [], isLoading: isLoadingTreinos } = useQuery<Training[]>({
-    queryKey: ["treinosAgendados", atletaId],
-    enabled: Boolean(token && atletaId),
-    queryFn: async () => {
+  const { data: treinosAgendados = [], isLoading: isLoadingTreinos } =
+    useQuery<Training[]>({
+      queryKey: ["treinosAgendados", atletaId],
+      enabled: Boolean(token && atletaId),
+
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+
+      queryFn: async () => {
       const r = await fetch(url, { headers });
       if (!r.ok) throw new Error((await r.text()) || "Erro ao buscar treinos agendados");
       const raw = await r.json();
@@ -393,6 +409,11 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const { data: resumo, isLoading: isLoadingResumo } = useQuery({
     queryKey: ["perfilResumoTreinos", targetUserId],
     enabled: Boolean(token && targetUserId),
+
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+
     queryFn: async () => {
       const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/treinos`, { headers });
       if (!r.ok) throw new Error("Erro ao buscar resumo de treinos");
@@ -403,6 +424,11 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery({
     queryKey: ["pontuacaoPerfil", targetUserId],
     enabled: Boolean(token && targetUserId),
+
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+
     queryFn: async () => {
       const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/pontuacao`;
       const r = await fetch(url, { headers });
@@ -517,26 +543,73 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   }, [upcomingTrainings, debugLoggedIds]);
 
   useEffect(() => {
-    const keyId = atletaId || targetUserId;
+    const refetchTreinos = () => {
+      if (!atletaId) return;
 
-    const refetchTreinos = () =>
-      qc.invalidateQueries({ queryKey: ["treinosAgendados", keyId] });
+      void qc.invalidateQueries({
+        queryKey: ["treinosAgendados", atletaId],
+      });
+    };
 
-    const refetchResumo = () => {
-      qc.invalidateQueries({ queryKey: ["perfilResumoTreinos", targetUserId] });
-      qc.invalidateQueries({ queryKey: ["pontuacaoPerfil", targetUserId] });
-      qc.invalidateQueries({ queryKey: ["perfilAtividades", targetUserId] });
+    const refetchDashboard = () => {
+      void Promise.all([
+        qc.invalidateQueries({
+          queryKey: ["perfilResumoTreinos", targetUserId],
+        }),
+
+        qc.invalidateQueries({
+          queryKey: ["pontuacaoPerfil", targetUserId],
+        }),
+
+        qc.invalidateQueries({
+          queryKey: ["perfilAtividades", targetUserId],
+        }),
+
+        qc.invalidateQueries({
+          queryKey: ["conquistas-earned", targetUserId],
+        }),
+      ]);
+    };
+
+    const refetchTreinoConcluido = () => {
+      refetchTreinos();
+      refetchDashboard();
     };
 
     window.addEventListener("treino:agendado", refetchTreinos);
-    window.addEventListener("treino:submetido", refetchTreinos);
-    window.addEventListener("perfil:refresh", refetchResumo);
-    window.addEventListener("metodologia:concluida", refetchResumo);
+    window.addEventListener("treino:submetido", refetchTreinoConcluido);
+    window.addEventListener("treino:concluido", refetchTreinoConcluido);
+    window.addEventListener("perfil:refresh", refetchDashboard);
+    window.addEventListener("metodologia:concluida", refetchDashboard);
+    window.addEventListener("treino:avaliado", refetchTreinoConcluido);
+    
     return () => {
       window.removeEventListener("treino:agendado", refetchTreinos);
-      window.removeEventListener("treino:submetido", refetchTreinos);
-      window.removeEventListener("perfil:refresh", refetchResumo);
-      window.removeEventListener("metodologia:concluida", refetchResumo);
+
+      window.removeEventListener(
+        "treino:submetido",
+        refetchTreinoConcluido
+      );
+
+      window.removeEventListener(
+        "treino:concluido",
+        refetchTreinoConcluido
+      );
+
+      window.removeEventListener(
+        "perfil:refresh",
+        refetchDashboard
+      );
+
+      window.removeEventListener(
+        "metodologia:concluida",
+        refetchDashboard
+      );
+
+      window.removeEventListener(
+        "treino:avaliado",
+        refetchTreinoConcluido
+      );
     };
   }, [qc, atletaId, targetUserId]);
 

@@ -1,6 +1,6 @@
 // client/src/pages/learning/live-studio.tsx
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   Send,
   Square,
   Video,
+  Trash2,
   MoreHorizontal,
   Users,
   MessageCircle,
@@ -80,6 +81,14 @@ function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 }
 
+function getUsuarioIdAtual() {
+  return String(
+    localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      ""
+  ).trim();
+}
+
 function formatarDataHora(value?: string | null) {
   if (!value) return "Sem data";
   const date = new Date(value);
@@ -128,50 +137,6 @@ const VIDEO_FULL_HD = {
   height: 1080,
 };
 
-const CAMERA_PIP_POSITION = {
-  index: 1,
-  x: 930,
-  y: 36,
-  width: 300,
-  height: 169,
-};
-
-function getCoverVideoPosition(track?: MediaStreamTrack) {
-  const settings = track?.getSettings?.();
-
-  const sourceWidth = Number(settings?.width || 1280);
-  const sourceHeight = Number(settings?.height || 720);
-
-  const canvasWidth = 1280;
-  const canvasHeight = 720;
-
-  const sourceRatio = sourceWidth / sourceHeight;
-  const canvasRatio = canvasWidth / canvasHeight;
-
-  let width = canvasWidth;
-  let height = canvasHeight;
-  let x = 0;
-  let y = 0;
-
-  if (sourceRatio > canvasRatio) {
-    height = canvasHeight;
-    width = Math.round(canvasHeight * sourceRatio);
-    x = Math.round((canvasWidth - width) / 2);
-  } else {
-    width = canvasWidth;
-    height = Math.round(canvasWidth / sourceRatio);
-    y = Math.round((canvasHeight - height) / 2);
-  }
-
-  return {
-    index: 0,
-    x,
-    y,
-    width,
-    height,
-  };
-}
-
 export default function LearningLiveStudioPage() {
   const [, navigate] = useLocation();
 
@@ -181,6 +146,49 @@ export default function LearningLiveStudioPage() {
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+
+  const conectarPreviewCamera =
+    useCallback(
+      (
+        elemento:
+          HTMLVideoElement | null
+      ) => {
+        previewRef.current =
+          elemento;
+
+        if (!elemento) {
+          return;
+        }
+
+        const streamAtual =
+          cameraStreamRef.current;
+
+        if (!streamAtual) {
+          elemento.srcObject =
+            null;
+
+          return;
+        }
+
+        if (
+          elemento.srcObject !==
+          streamAtual
+        ) {
+          elemento.srcObject =
+            streamAtual;
+        }
+
+        void elemento
+          .play()
+          .catch((erro) => {
+            console.warn(
+              "[LIVE] Não foi possível iniciar o preview da câmera:",
+              erro
+            );
+          });
+      },
+      []
+    );
 
   const placeholderStreamRef = useRef<MediaStream | null>(null);
   const screenCanvasStreamRef = useRef<MediaStream | null>(null);
@@ -208,7 +216,15 @@ export default function LearningLiveStudioPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [
+  apagandoMensagemId,
+    setApagandoMensagemId,
+  ] = useState<string | null>(null);
 
+  const usuarioIdAtual = useMemo(
+    () => getUsuarioIdAtual(),
+    []
+  );
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState("");
@@ -380,11 +396,41 @@ export default function LearningLiveStudioPage() {
   }, []);
 
   useEffect(() => {
-    if (previewRef.current && cameraStream) {
-      previewRef.current.srcObject = cameraStream;
-      previewRef.current.play().catch(() => null);
+    const elemento =
+      previewRef.current;
+
+    const streamAtual =
+      cameraStreamRef.current ||
+      cameraStream;
+
+    if (
+      !elemento ||
+      !streamAtual
+    ) {
+      return;
     }
-  }, [cameraStream]);
+
+    if (
+      elemento.srcObject !==
+      streamAtual
+    ) {
+      elemento.srcObject =
+        streamAtual;
+    }
+
+    void elemento
+      .play()
+      .catch((erro) => {
+        console.warn(
+          "[LIVE] Falha ao atualizar preview da câmera:",
+          erro
+        );
+      });
+  }, [
+    cameraStream,
+    screenEnabled,
+    cameraEnabled,
+  ]);
 
   useEffect(() => {
     if (screenPreviewRef.current && screenStream) {
@@ -392,6 +438,17 @@ export default function LearningLiveStudioPage() {
       screenPreviewRef.current.play().catch(() => null);
     }
   }, [screenStream]);
+
+  useEffect(() => {
+    if (!isFinished) {
+      return;
+    }
+
+    encerrarCapturasLocais();
+    setBroadcastClient(
+      null
+    );
+  }, [isFinished]);
 
   async function registrarPresenca(showError = false) {
     if (!aulaId) return;
@@ -539,372 +596,649 @@ export default function LearningLiveStudioPage() {
     }
   }
 
-function criarPlaceholderVideoStream(texto = "Sem câmera") {
-  pararStream(placeholderStreamRef.current);
+  async function apagarMensagem(
+    mensagem: ChatMessage
+  ) {
+    if (
+      !aulaId ||
+      apagandoMensagemId
+    ) {
+      return;
+    }
 
-  const canvas = document.createElement("canvas");
-  canvas.width = VIDEO_FULL_HD.width;
-  canvas.height = VIDEO_FULL_HD.height;
+    const ehAutor =
+      String(mensagem.usuarioId) ===
+      String(usuarioIdAtual);
 
-  const ctx = canvas.getContext("2d");
+    if (!ehAutor) {
+      toast.error(
+        "Você só pode apagar suas próprias mensagens."
+      );
+      return;
+    }
 
-  function desenhar() {
-    if (!ctx) return;
+    const confirmou =
+      window.confirm(
+        "Deseja apagar esta mensagem?"
+      );
 
-    ctx.fillStyle = "#0b4a2f";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!confirmou) {
+      return;
+    }
 
-    ctx.fillStyle = "#f5f2e8";
-    ctx.font = "bold 54px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("FootEra Learning", canvas.width / 2, canvas.height / 2 - 35);
+    const token = getToken();
 
-    ctx.font = "32px Arial";
-    ctx.fillText(texto, canvas.width / 2, canvas.height / 2 + 25);
+    if (!token) {
+      toast.error(
+        "Você precisa estar logado."
+      );
+      return;
+    }
 
-    ctx.font = "22px Arial";
-    ctx.fillText("Transmissão sem câmera ativa", canvas.width / 2, canvas.height / 2 + 70);
+    try {
+      setApagandoMensagemId(
+        mensagem.id
+      );
+
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/aulas-ao-vivo/${aulaId}/mensagens/${mensagem.id}/deletar`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const json =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          json?.message ||
+            "Não foi possível apagar a mensagem."
+        );
+      }
+
+      setMessages((anteriores) =>
+        anteriores.filter(
+          (item) =>
+            item.id !== mensagem.id
+        )
+      );
+
+      setAula((anterior) =>
+        anterior
+          ? {
+              ...anterior,
+
+              totalMensagens:
+                typeof json
+                  ?.totalMensagens ===
+                "number"
+                  ? json.totalMensagens
+                  : Math.max(
+                      0,
+                      Number(
+                        anterior
+                          .totalMensagens ??
+                          messages.length
+                      ) - 1
+                    ),
+            }
+          : anterior
+      );
+
+      toast.success(
+        "Mensagem apagada."
+      );
+    } catch (error: any) {
+      toast.error(
+        error?.message ||
+          "Falha ao apagar mensagem."
+      );
+    } finally {
+      setApagandoMensagemId(
+        null
+      );
+    }
   }
 
-  desenhar();
+  function criarPlaceholderVideoStream(texto = "Sem câmera") {
+    pararStream(placeholderStreamRef.current);
 
-  const interval = window.setInterval(desenhar, 1000);
+    const canvas = document.createElement("canvas");
+    canvas.width = VIDEO_FULL_HD.width;
+    canvas.height = VIDEO_FULL_HD.height;
 
-  const stream = canvas.captureStream(30);
+    const ctx = canvas.getContext("2d");
 
-  stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-    window.clearInterval(interval);
-  });
+    function desenhar() {
+      if (!ctx) return;
 
-  placeholderStreamRef.current = stream;
-
-  return stream;
-}
-
-function pararProgramCanvasStream() {
-  if (programAnimationFrameRef.current) {
-    cancelAnimationFrame(programAnimationFrameRef.current);
-    programAnimationFrameRef.current = null;
-  }
-
-  pararStream(programCanvasStreamRef.current);
-  programCanvasStreamRef.current = null;
-}
-
-function criarVideoFonte(stream: MediaStream) {
-  const video = document.createElement("video");
-
-  video.srcObject = stream;
-  video.muted = true;
-  video.playsInline = true;
-  video.autoplay = true;
-
-  video.play().catch(() => null);
-
-  return video;
-}
-
-function desenharCover(
-  ctx: CanvasRenderingContext2D,
-  video: HTMLVideoElement,
-  x: number,
-  y: number,
-  width: number,
-  height: number
-) {
-  const videoWidth = video.videoWidth || 1280;
-  const videoHeight = video.videoHeight || 720;
-
-  const scale = Math.max(width / videoWidth, height / videoHeight);
-
-  const drawWidth = videoWidth * scale;
-  const drawHeight = videoHeight * scale;
-
-  const dx = x + (width - drawWidth) / 2;
-  const dy = y + (height - drawHeight) / 2;
-
-  ctx.drawImage(video, dx, dy, drawWidth, drawHeight);
-}
-
-function desenharRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
-
-function criarProgramaIvsStream(
-  telaStream?: MediaStream | null,
-  cameraRealStream?: MediaStream | null
-) {
-  pararProgramCanvasStream();
-
-  const canvas = document.createElement("canvas");
-  canvas.width = VIDEO_FULL_HD.width;
-  canvas.height = VIDEO_FULL_HD.height;
-
-  const ctx = canvas.getContext("2d");
-
-  const telaVideo =
-    telaStream?.getVideoTracks().length ? criarVideoFonte(telaStream) : null;
-
-  const cameraVideo =
-    cameraRealStream?.getVideoTracks().length ? criarVideoFonte(cameraRealStream) : null;
-
-  function desenhar() {
-    if (!ctx) return;
-
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (telaVideo) {
-      desenharCover(ctx, telaVideo, 0, 0, canvas.width, canvas.height);
-    } else if (cameraVideo) {
-      desenharCover(ctx, cameraVideo, 0, 0, canvas.width, canvas.height);
-    } else {
       ctx.fillStyle = "#0b4a2f";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       ctx.fillStyle = "#f5f2e8";
+      ctx.font = "bold 54px Arial";
       ctx.textAlign = "center";
-      ctx.font = "bold 72px Arial";
-      ctx.fillText("FootEra Learning", canvas.width / 2, canvas.height / 2 - 45);
-      ctx.font = "40px Arial";
-      ctx.fillText("Transmissão sem câmera ativa", canvas.width / 2, canvas.height / 2 + 25);
+      ctx.fillText("FootEra Learning", canvas.width / 2, canvas.height / 2 - 35);
+
+      ctx.font = "32px Arial";
+      ctx.fillText(texto, canvas.width / 2, canvas.height / 2 + 25);
+
+      ctx.font = "22px Arial";
+      ctx.fillText("Transmissão sem câmera ativa", canvas.width / 2, canvas.height / 2 + 70);
     }
 
-    if (telaVideo && cameraVideo) {
-      const pipW = 420;
-      const pipH = 236;
-      const pipX = canvas.width - pipW - 54;
-      const pipY = 54;
-      const radius = 18;
+    desenhar();
 
-      ctx.save();
+    const interval = window.setInterval(desenhar, 1000);
 
-      desenharRoundedRect(ctx, pipX, pipY, pipW, pipH, radius);
-      ctx.clip();
+    const stream = canvas.captureStream(30);
 
-      ctx.fillStyle = "#000";
-      ctx.fillRect(pipX, pipY, pipW, pipH);
+    stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      window.clearInterval(interval);
+    });
 
-      desenharCover(ctx, cameraVideo, pipX, pipY, pipW, pipH);
+    placeholderStreamRef.current = stream;
 
-      ctx.restore();
-
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      desenharRoundedRect(ctx, pipX, pipY, pipW, pipH, radius);
-      ctx.stroke();
-    }
-
-    programAnimationFrameRef.current = requestAnimationFrame(desenhar);
+    return stream;
   }
 
-  desenhar();
+  function pararProgramCanvasStream() {
+    if (programAnimationFrameRef.current) {
+      cancelAnimationFrame(programAnimationFrameRef.current);
+      programAnimationFrameRef.current = null;
+    }
 
-  const stream = canvas.captureStream(30);
-  programCanvasStreamRef.current = stream;
+    pararStream(programCanvasStreamRef.current);
+    programCanvasStreamRef.current = null;
+  }
 
-  return stream;
-}
+  function criarVideoFonte(
+    stream: MediaStream
+  ) {
+    const video =
+      document.createElement(
+        "video"
+      );
 
-async function atualizarProgramaIvs(client = broadcastClient) {
-  if (!client) return;
+    video.srcObject =
+      stream;
 
-  try {
-    try {
-      client.removeVideoInputDevice?.("screen");
-    } catch {}
+    video.muted =
+      true;
 
-    try {
-      client.removeVideoInputDevice?.("camera");
-    } catch {}
+    video.playsInline =
+      true;
 
-    try {
-      client.removeVideoInputDevice?.("program");
-    } catch {}
+    video.autoplay =
+      true;
 
-    const telaAtual = screenStreamRef.current;
+    const iniciarVideo =
+      () => {
+        void video
+          .play()
+          .catch(() => null);
+      };
 
-    const cameraReal =
-      cameraEnabled && !usandoPlaceholderCamera
-        ? cameraStreamRef.current
-        : null;
-
-    const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
-
-    const dimensao = client.getCanvasDimensions?.() || {
-      width: VIDEO_FULL_HD.width,
-      height: VIDEO_FULL_HD.height,
-    };
-    
-    await client.addVideoInputDevice(
-      programaStream,
-      "program",
+    video.addEventListener(
+      "loadedmetadata",
+      iniciarVideo,
       {
-        index: 0,
-        x: 0,
-        y: 0,
-        width: dimensao.width,
-        height: dimensao.height,
+        once: true,
       }
     );
 
-    console.log("[IVS] Programa atualizado: tela principal + câmera real opcional.");
-  } catch (e) {
-    console.error("[IVS] Erro ao atualizar programa:", e);
-  }
-}
-
-function criarScreenCoverStream(sourceStream: MediaStream) {
-  pararStream(screenCanvasStreamRef.current);
-
-  const video = document.createElement("video");
-  video.srcObject = sourceStream;
-  video.muted = true;
-  video.playsInline = true;
-  video.autoplay = true;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = VIDEO_FULL_HD.width;
-  canvas.height = VIDEO_FULL_HD.height;
-
-  const ctx = canvas.getContext("2d");
-
-  let animationFrame = 0;
-
-  function desenharCover() {
-    if (!ctx) return;
-
-    const videoWidth = video.videoWidth || 1280;
-    const videoHeight = video.videoHeight || 720;
-
-    const canvasWidth = canvas.width;
-    const canvasHeight = canvas.height;
-
-    const scale = Math.max(
-      canvasWidth / videoWidth,
-      canvasHeight / videoHeight
+    video.addEventListener(
+      "canplay",
+      iniciarVideo,
+      {
+        once: true,
+      }
     );
 
-    const drawWidth = videoWidth * scale;
-    const drawHeight = videoHeight * scale;
+    iniciarVideo();
 
-    const dx = (canvasWidth - drawWidth) / 2;
-    const dy = (canvasHeight - drawHeight) / 2;
-
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-    ctx.drawImage(video, dx, dy, drawWidth, drawHeight);
-
-    animationFrame = requestAnimationFrame(desenharCover);
+    return video;
   }
 
-  video.onloadedmetadata = async () => {
-    await video.play().catch(() => null);
-    desenharCover();
-  };
+  function desenharCover(
+    ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): boolean {
 
-  sourceStream.getVideoTracks()[0]?.addEventListener("ended", () => {
-    cancelAnimationFrame(animationFrame);
-  });
 
-  const canvasStream = canvas.captureStream(30);
-  screenCanvasStreamRef.current = canvasStream;
-
-  return canvasStream;
-}
-
-async function inicializarDispositivos() {
-  try {
-    setBroadcastError(null);
-
-    if (!navigator.mediaDevices?.getUserMedia || !navigator.mediaDevices?.enumerateDevices) {
-      throw new Error(
-        "Seu navegador não suporta acesso à câmera/microfone. Use Google Chrome ou Microsoft Edge."
-      );
+    if (
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0
+    ) {
+      return false;
     }
+
+    const videoWidth =
+      video.videoWidth;
+
+    const videoHeight =
+      video.videoHeight;
+
+    const scale = Math.max(
+      width / videoWidth,
+      height / videoHeight
+    );
+
+    const drawWidth =
+      videoWidth * scale;
+
+    const drawHeight =
+      videoHeight * scale;
+
+    const dx =
+      x +
+      (width - drawWidth) / 2;
+
+    const dy =
+      y +
+      (height - drawHeight) /
+        2;
 
     try {
-      const permissaoAudio = await navigator.mediaDevices.getUserMedia({
-        video: false,
-        audio: true,
-      });
+      ctx.drawImage(
+        video,
+        dx,
+        dy,
+        drawWidth,
+        drawHeight
+      );
 
-      permissaoAudio.getTracks().forEach((track) => track.stop());
-    } catch (permissionError) {
-      console.warn("[LIVE] Permissão inicial de áudio falhou:", permissionError);
+      return true;
+    } catch (error) {
+      console.warn(
+        "[IVS] Fonte de vídeo ainda não está pronta:",
+        error
+      );
+
+      return false;
     }
+  }
 
-    const dispositivos = await navigator.mediaDevices.enumerateDevices();
-    const cams = dispositivos.filter((d) => d.kind === "videoinput");
-    const mics = dispositivos.filter((d) => d.kind === "audioinput");
+  function desenharRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
+  ) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  }
 
-    console.log("[LIVE] Dispositivos encontrados:", {
-      cameras: cams,
-      microphones: mics,
-    });
+  function criarProgramaIvsStream(
+    telaStream?: MediaStream | null,
+    cameraRealStream?: MediaStream | null
+  ) {
+    pararProgramCanvasStream();
 
-    setCameras(cams);
-    setMicrophones(mics);
+    const canvas = document.createElement("canvas");
+    canvas.width = VIDEO_FULL_HD.width;
+    canvas.height = VIDEO_FULL_HD.height;
 
-    const cameraIdInicial = selectedCameraId || cams[0]?.deviceId || "";
-    const micIdInicial = selectedMicId || mics[0]?.deviceId || "";
+    const ctx = canvas.getContext("2d");
 
-    setSelectedCameraId(cameraIdInicial);
-    setSelectedMicId(micIdInicial);
+    const telaVideo =
+      telaStream?.getVideoTracks().length ? criarVideoFonte(telaStream) : null;
 
-    let abriuCameraReal = false;
-    let abriuMicrofone = false;
+    const cameraVideo =
+      cameraRealStream?.getVideoTracks().length ? criarVideoFonte(cameraRealStream) : null;
 
-    if (cams.length > 0) {
+    function desenhar() {
+      if (!ctx) {
+        return;
+      }
+
       try {
-        const novoVideoStream = await navigator.mediaDevices.getUserMedia({
-          video: cameraIdInicial
-            ? { deviceId: { exact: cameraIdInicial } }
-            : true,
-          audio: false,
-        });
+        ctx.fillStyle = "#000";
 
-        novoVideoStream.getVideoTracks().forEach((track) => {
-          track.enabled = cameraEnabled;
-        });
+        ctx.fillRect(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
 
-        pararStream(cameraStreamRef.current);
+        const desenhouTela =
+          telaVideo
+            ? desenharCover(
+                ctx,
+                telaVideo,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+              )
+            : false;
 
-        setUsandoPlaceholderCamera(false);
-        setCameraStream(novoVideoStream);
-        cameraStreamRef.current = novoVideoStream;
+        const desenhouCameraPrincipal =
+          !desenhouTela &&
+          cameraVideo
+            ? desenharCover(
+                ctx,
+                cameraVideo,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+              )
+            : false;
 
-        if (previewRef.current) {
-          previewRef.current.srcObject = novoVideoStream;
-          await previewRef.current.play().catch(() => null);
+        if (
+          !desenhouTela &&
+          !desenhouCameraPrincipal
+        ) {
+          ctx.fillStyle =
+            "#0b4a2f";
+
+          ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+          ctx.fillStyle =
+            "#f5f2e8";
+
+          ctx.textAlign =
+            "center";
+
+          ctx.font =
+            "bold 72px Arial";
+
+          ctx.fillText(
+            "FootEra Learning",
+            canvas.width / 2,
+            canvas.height / 2 -
+              45
+          );
+
+          ctx.font =
+            "40px Arial";
+
+          ctx.fillText(
+            "Preparando vídeo…",
+            canvas.width / 2,
+            canvas.height / 2 +
+              25
+          );
         }
 
-        abriuCameraReal = true;
-      } catch (cameraError: any) {
-        console.warn("[LIVE] Câmera real falhou. Usando placeholder:", cameraError);
+        if (
+          desenhouTela &&
+          cameraVideo
+        ) {
+          const pipW =
+            420;
 
-        const placeholder = criarPlaceholderVideoStream("Câmera indisponível");
+          const pipH =
+            236;
+
+          const pipX =
+            canvas.width -
+            pipW -
+            54;
+
+          const pipY =
+            54;
+
+          const radius =
+            18;
+
+          ctx.save();
+
+          desenharRoundedRect(
+            ctx,
+            pipX,
+            pipY,
+            pipW,
+            pipH,
+            radius
+          );
+
+          ctx.clip();
+
+          ctx.fillStyle =
+            "#000";
+
+          ctx.fillRect(
+            pipX,
+            pipY,
+            pipW,
+            pipH
+          );
+
+          const desenhouCameraPip =
+            desenharCover(
+              ctx,
+              cameraVideo,
+              pipX,
+              pipY,
+              pipW,
+              pipH
+            );
+
+          ctx.restore();
+
+          if (desenhouCameraPip) {
+            ctx.lineWidth =
+              4;
+
+            ctx.strokeStyle =
+              "rgba(255,255,255,0.85)";
+
+            desenharRoundedRect(
+              ctx,
+              pipX,
+              pipY,
+              pipW,
+              pipH,
+              radius
+            );
+
+            ctx.stroke();
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "[IVS] Falha ao desenhar frame:",
+          error
+        );
+      } finally {
+        programAnimationFrameRef.current =
+          requestAnimationFrame(
+            desenhar
+          );
+      }
+    }
+
+    desenhar();
+
+    const stream = canvas.captureStream(30);
+    programCanvasStreamRef.current = stream;
+
+    return stream;
+  }
+
+  async function atualizarProgramaIvs(client = broadcastClient) {
+    if (!client) return;
+
+    try {
+      try {
+        client.removeVideoInputDevice?.("screen");
+      } catch {}
+
+      try {
+        client.removeVideoInputDevice?.("camera");
+      } catch {}
+
+      try {
+        client.removeVideoInputDevice?.("program");
+      } catch {}
+
+      const telaAtual = screenStreamRef.current;
+
+      const cameraAtual =
+        cameraStreamRef.current;
+
+      const possuiCameraAtiva =
+        cameraAtual
+          ?.getVideoTracks()
+          .some(
+            (track) =>
+              track.readyState ===
+                "live" &&
+              track.enabled
+          ) === true;
+
+      const cameraReal =
+        possuiCameraAtiva &&
+        !usandoPlaceholderCamera
+          ? cameraAtual
+          : null;
+
+      const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
+
+      const dimensao = client.getCanvasDimensions?.() || {
+        width: VIDEO_FULL_HD.width,
+        height: VIDEO_FULL_HD.height,
+      };
+      
+      await client.addVideoInputDevice(
+        programaStream,
+        "program",
+        {
+          index: 0,
+          x: 0,
+          y: 0,
+          width: dimensao.width,
+          height: dimensao.height,
+        }
+      );
+
+      console.log("[IVS] Programa atualizado: tela principal + câmera real opcional.");
+    } catch (e) {
+      console.error("[IVS] Erro ao atualizar programa:", e);
+    }
+  }
+
+  async function inicializarDispositivos() {
+    try {
+      setBroadcastError(null);
+
+      if (!navigator.mediaDevices?.getUserMedia || !navigator.mediaDevices?.enumerateDevices) {
+        throw new Error(
+          "Seu navegador não suporta acesso à câmera/microfone. Use Google Chrome ou Microsoft Edge."
+        );
+      }
+
+      try {
+        const permissaoAudio = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: true,
+        });
+
+        permissaoAudio.getTracks().forEach((track) => track.stop());
+      } catch (permissionError) {
+        console.warn("[LIVE] Permissão inicial de áudio falhou:", permissionError);
+      }
+
+      const dispositivos = await navigator.mediaDevices.enumerateDevices();
+      const cams = dispositivos.filter((d) => d.kind === "videoinput");
+      const mics = dispositivos.filter((d) => d.kind === "audioinput");
+
+      console.log("[LIVE] Dispositivos encontrados:", {
+        cameras: cams,
+        microphones: mics,
+      });
+
+      setCameras(cams);
+      setMicrophones(mics);
+
+      const cameraIdInicial = selectedCameraId || cams[0]?.deviceId || "";
+      const micIdInicial = selectedMicId || mics[0]?.deviceId || "";
+
+      setSelectedCameraId(cameraIdInicial);
+      setSelectedMicId(micIdInicial);
+
+      let abriuCameraReal = false;
+      let abriuMicrofone = false;
+
+      if (cams.length > 0) {
+        try {
+          const novoVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: cameraIdInicial
+              ? { deviceId: { exact: cameraIdInicial } }
+              : true,
+            audio: false,
+          });
+
+          novoVideoStream.getVideoTracks().forEach((track) => {
+            track.enabled = cameraEnabled;
+          });
+
+          pararStream(cameraStreamRef.current);
+
+          setUsandoPlaceholderCamera(false);
+          setCameraStream(novoVideoStream);
+          cameraStreamRef.current = novoVideoStream;
+
+          if (previewRef.current) {
+            previewRef.current.srcObject = novoVideoStream;
+            await previewRef.current.play().catch(() => null);
+          }
+
+          abriuCameraReal = true;
+        } catch (cameraError: any) {
+          console.warn("[LIVE] Câmera real falhou. Usando placeholder:", cameraError);
+
+          const placeholder = criarPlaceholderVideoStream("Câmera indisponível");
+
+          setUsandoPlaceholderCamera(true);
+          pararStream(cameraStreamRef.current);
+
+          setCameraStream(placeholder);
+          cameraStreamRef.current = placeholder;
+
+          if (previewRef.current) {
+            previewRef.current.srcObject = placeholder;
+            await previewRef.current.play().catch(() => null);
+          }
+
+          setCameraEnabled(false);
+        }
+      } else {
+        const placeholder = criarPlaceholderVideoStream("Nenhuma câmera encontrada");
 
         setUsandoPlaceholderCamera(true);
         pararStream(cameraStreamRef.current);
-
         setCameraStream(placeholder);
         cameraStreamRef.current = placeholder;
 
@@ -915,338 +1249,386 @@ async function inicializarDispositivos() {
 
         setCameraEnabled(false);
       }
-    } else {
-      const placeholder = criarPlaceholderVideoStream("Nenhuma câmera encontrada");
 
-      setUsandoPlaceholderCamera(true);
-      pararStream(cameraStreamRef.current);
-      setCameraStream(placeholder);
-      cameraStreamRef.current = placeholder;
+      if (mics.length > 0) {
+        try {
+          const novoAudioStream = await navigator.mediaDevices.getUserMedia({
+            video: false,
+            audio: micIdInicial
+              ? { deviceId: { exact: micIdInicial } }
+              : true,
+          });
 
-      if (previewRef.current) {
-        previewRef.current.srcObject = placeholder;
-        await previewRef.current.play().catch(() => null);
+          novoAudioStream.getAudioTracks().forEach((track) => {
+            track.enabled = micEnabled;
+          });
+
+          pararStream(micStreamRef.current);
+
+          setMicStream(novoAudioStream);
+          micStreamRef.current = novoAudioStream;
+
+          abriuMicrofone = true;
+        } catch (micError: any) {
+          console.error("[LIVE] Erro ao abrir microfone:", micError);
+
+          setBroadcastError(
+            "Não foi possível abrir o microfone selecionado. Verifique se ele não está sendo usado por outro aplicativo."
+          );
+        }
       }
 
+      if (!abriuCameraReal) {
+        console.warn("[LIVE] Live continuará sem câmera real, usando vídeo placeholder.");
+      }
+
+      if (mics.length === 0) {
+        setBroadcastError(
+          "Nenhum microfone foi encontrado. Você ainda pode compartilhar a tela, mas a live ficará sem áudio."
+        );
+      }
+
+      if (abriuMicrofone) {
+        console.log("[LIVE] Microfone ativo.");
+      }
+    } catch (e: any) {
+      console.error("[LIVE] Erro geral ao inicializar dispositivos:", e);
+
+      let mensagem =
+        "Não foi possível acessar os dispositivos. Verifique as permissões do navegador.";
+
+      if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
+        mensagem =
+          "Permissão negada para câmera/microfone. Clique no cadeado do navegador e permita câmera e microfone para este site.";
+      }
+
+      if (e?.name === "NotFoundError" || e?.name === "DevicesNotFoundError") {
+        mensagem =
+          "Nenhuma câmera ou microfone foi encontrado. Conecte os dispositivos e recarregue a página.";
+      }
+
+      if (e?.name === "SecurityError") {
+        mensagem =
+          "O navegador bloqueou o acesso por segurança. Use localhost, HTTPS, Google Chrome ou Microsoft Edge.";
+      }
+
+      setBroadcastError(mensagem);
+    }
+  }
+
+  async function trocarCameraDuranteLive(cameraId: string) {
+    if (!broadcastClient) return false;
+
+    let novoVideoStream: MediaStream;
+
+    try {
+      novoVideoStream = await navigator.mediaDevices.getUserMedia({
+        video: cameraId ? { deviceId: { exact: cameraId } } : true,
+        audio: false,
+      });
+
+      novoVideoStream.getVideoTracks().forEach((track) => {
+        track.enabled = cameraEnabled;
+      });
+
+      setUsandoPlaceholderCamera(false);
+    } catch (e) {
+      console.warn("[IVS] Câmera falhou durante a live. Usando placeholder:", e);
+
+      novoVideoStream = criarPlaceholderVideoStream("Câmera indisponível");
       setCameraEnabled(false);
+      setUsandoPlaceholderCamera(true);
     }
 
-    if (mics.length > 0) {
-      try {
-        const novoAudioStream = await navigator.mediaDevices.getUserMedia({
-          video: false,
-          audio: micIdInicial
-            ? { deviceId: { exact: micIdInicial } }
-            : true,
-        });
 
-        novoAudioStream.getAudioTracks().forEach((track) => {
-          track.enabled = micEnabled;
-        });
+    pararStream(cameraStreamRef.current);
 
-        pararStream(micStreamRef.current);
+    setCameraStream(novoVideoStream);
+    cameraStreamRef.current = novoVideoStream;
 
-        setMicStream(novoAudioStream);
-        micStreamRef.current = novoAudioStream;
+    await atualizarProgramaIvs(broadcastClient);
 
-        abriuMicrofone = true;
-      } catch (micError: any) {
-        console.error("[LIVE] Erro ao abrir microfone:", micError);
-
-        setBroadcastError(
-          "Não foi possível abrir o microfone selecionado. Verifique se ele não está sendo usado por outro aplicativo."
-        );
-      }
+    if (previewRef.current) {
+      previewRef.current.srcObject = novoVideoStream;
+      await previewRef.current.play().catch(() => null);
     }
 
-    if (!abriuCameraReal) {
-      console.warn("[LIVE] Live continuará sem câmera real, usando vídeo placeholder.");
-    }
-
-    if (mics.length === 0) {
-      setBroadcastError(
-        "Nenhum microfone foi encontrado. Você ainda pode compartilhar a tela, mas a live ficará sem áudio."
-      );
-    }
-
-    if (abriuMicrofone) {
-      console.log("[LIVE] Microfone ativo.");
-    }
-  } catch (e: any) {
-    console.error("[LIVE] Erro geral ao inicializar dispositivos:", e);
-
-    let mensagem =
-      "Não foi possível acessar os dispositivos. Verifique as permissões do navegador.";
-
-    if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
-      mensagem =
-        "Permissão negada para câmera/microfone. Clique no cadeado do navegador e permita câmera e microfone para este site.";
-    }
-
-    if (e?.name === "NotFoundError" || e?.name === "DevicesNotFoundError") {
-      mensagem =
-        "Nenhuma câmera ou microfone foi encontrado. Conecte os dispositivos e recarregue a página.";
-    }
-
-    if (e?.name === "SecurityError") {
-      mensagem =
-        "O navegador bloqueou o acesso por segurança. Use localhost, HTTPS, Google Chrome ou Microsoft Edge.";
-    }
-
-    setBroadcastError(mensagem);
-  }
-}
-
-function getMainVideoPosition() {
-  if (screenStreamRef.current?.getVideoTracks().length) {
-    return {
-      index: 1,
-      x: 920,
-      y: 30,
-      width: 320,
-      height: 180,
-    };
+    return true;
   }
 
-  return {
-    index: 0,
-    x: 0,
-    y: 0,
-    width: 1280,
-    height: 720,
-  };
-}
+  async function trocarMicrofoneDuranteLive(micId: string) {
+    if (!broadcastClient) return false;
 
-async function trocarCameraDuranteLive(cameraId: string) {
-  if (!broadcastClient) return false;
-
-  let novoVideoStream: MediaStream;
-
-  try {
-    novoVideoStream = await navigator.mediaDevices.getUserMedia({
-      video: cameraId ? { deviceId: { exact: cameraId } } : true,
-      audio: false,
+    const novoAudioStream = await navigator.mediaDevices.getUserMedia({
+      video: false,
+      audio: micId ? { deviceId: { exact: micId } } : true,
     });
 
-    novoVideoStream.getVideoTracks().forEach((track) => {
-      track.enabled = cameraEnabled;
+    novoAudioStream.getAudioTracks().forEach((track) => {
+      track.enabled = micEnabled;
     });
 
-    setUsandoPlaceholderCamera(false);
-  } catch (e) {
-    console.warn("[IVS] Câmera falhou durante a live. Usando placeholder:", e);
-
-    novoVideoStream = criarPlaceholderVideoStream("Câmera indisponível");
-    setCameraEnabled(false);
-    setUsandoPlaceholderCamera(true);
-  }
-
-
-  pararStream(cameraStreamRef.current);
-
-  setCameraStream(novoVideoStream);
-  cameraStreamRef.current = novoVideoStream;
-
-  await atualizarProgramaIvs(broadcastClient);
-
-  if (previewRef.current) {
-    previewRef.current.srcObject = novoVideoStream;
-    await previewRef.current.play().catch(() => null);
-  }
-
-  return true;
-}
-
-async function trocarMicrofoneDuranteLive(micId: string) {
-  if (!broadcastClient) return false;
-
-  const novoAudioStream = await navigator.mediaDevices.getUserMedia({
-    video: false,
-    audio: micId ? { deviceId: { exact: micId } } : true,
-  });
-
-  novoAudioStream.getAudioTracks().forEach((track) => {
-    track.enabled = micEnabled;
-  });
-
-  try {
-    broadcastClient.removeAudioInputDevice?.("microphone");
-  } catch (e) {
-    console.warn("[IVS] Falha ao remover microfone antigo:", e);
-  }
-
-  const audioProcessado = criarAudioLiveComVolume(novoAudioStream);
-
-  await broadcastClient.addAudioInputDevice(audioProcessado, "microphone");
-
-  pararStream(micStreamRef.current);
-
-  setMicStream(novoAudioStream);
-  micStreamRef.current = novoAudioStream;
-
-  return true;
-}
-
-async function trocarDispositivo(
-  cameraId = selectedCameraId,
-  micId = selectedMicId,
-  tipo?: "camera" | "microfone" | "ambos"
-) {
-  if (switchingDevice) return;
-
-  try {
-    setSwitchingDevice(true);
-    setBroadcastError(null);
-
-    const liveAtiva = isLive || !!broadcastClient;
-
-    if (liveAtiva && broadcastClient) {
-      if (tipo === "camera") {
-        await trocarCameraDuranteLive(cameraId);
-      } else if (tipo === "microfone") {
-        await trocarMicrofoneDuranteLive(micId);
-      } else {
-        await trocarCameraDuranteLive(cameraId);
-        await trocarMicrofoneDuranteLive(micId);
-      }
-
-      return;
+    try {
+      broadcastClient.removeAudioInputDevice?.("microphone");
+    } catch (e) {
+      console.warn("[IVS] Falha ao remover microfone antigo:", e);
     }
 
-    if (tipo === "camera" || tipo === "ambos" || !tipo) {
-      let novoVideoStream: MediaStream;
+    const audioProcessado = criarAudioLiveComVolume(novoAudioStream);
 
-      try {
-        novoVideoStream = await navigator.mediaDevices.getUserMedia({
-          video: cameraId ? { deviceId: { exact: cameraId } } : true,
-          audio: false,
-        });
+    await broadcastClient.addAudioInputDevice(audioProcessado, "microphone");
 
-        novoVideoStream.getVideoTracks().forEach((track) => {
-          track.enabled = cameraEnabled;
-        });
+    pararStream(micStreamRef.current);
 
-        setUsandoPlaceholderCamera(false);
-      } catch (cameraError) {
-        console.warn("[LIVE] Falha ao trocar câmera. Usando placeholder:", cameraError);
+    setMicStream(novoAudioStream);
+    micStreamRef.current = novoAudioStream;
 
-        novoVideoStream = criarPlaceholderVideoStream("Câmera indisponível");
-        setCameraEnabled(false);
-        setUsandoPlaceholderCamera(true);
-      }
-
-      pararStream(cameraStreamRef.current);
-
-      setCameraStream(novoVideoStream);
-      cameraStreamRef.current = novoVideoStream;
-
-      if (previewRef.current) {
-        previewRef.current.srcObject = novoVideoStream;
-        await previewRef.current.play().catch(() => null);
-      }
-    }
-
-    if (tipo === "microfone" || tipo === "ambos" || !tipo) {
-      try {
-        const novoAudioStream = await navigator.mediaDevices.getUserMedia({
-          video: false,
-          audio: micId ? { deviceId: { exact: micId } } : true,
-        });
-
-        novoAudioStream.getAudioTracks().forEach((track) => {
-          track.enabled = micEnabled;
-        });
-
-        pararStream(micStreamRef.current);
-
-        setMicStream(novoAudioStream);
-        micStreamRef.current = novoAudioStream;
-      } catch (micError: any) {
-        console.error("[LIVE] Falha ao trocar microfone:", micError);
-
-        setBroadcastError(
-          "Falha ao trocar microfone. Verifique se ele não está sendo usado por outro aplicativo."
-        );
-      }
-    }
-  } finally {
-    setSwitchingDevice(false);
+    return true;
   }
-}
+
+  async function trocarDispositivo(
+    cameraId = selectedCameraId,
+    micId = selectedMicId,
+    tipo?: "camera" | "microfone" | "ambos"
+  ) {
+    if (switchingDevice) return;
+
+    try {
+      setSwitchingDevice(true);
+      setBroadcastError(null);
+
+      const liveAtiva = isLive || !!broadcastClient;
+
+      if (liveAtiva && broadcastClient) {
+        if (tipo === "camera") {
+          await trocarCameraDuranteLive(cameraId);
+        } else if (tipo === "microfone") {
+          await trocarMicrofoneDuranteLive(micId);
+        } else {
+          await trocarCameraDuranteLive(cameraId);
+          await trocarMicrofoneDuranteLive(micId);
+        }
+
+        return;
+      }
+
+      if (tipo === "camera" || tipo === "ambos" || !tipo) {
+        let novoVideoStream: MediaStream;
+
+        try {
+          novoVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: cameraId ? { deviceId: { exact: cameraId } } : true,
+            audio: false,
+          });
+
+          novoVideoStream.getVideoTracks().forEach((track) => {
+            track.enabled = cameraEnabled;
+          });
+
+          setUsandoPlaceholderCamera(false);
+        } catch (cameraError) {
+          console.warn("[LIVE] Falha ao trocar câmera. Usando placeholder:", cameraError);
+
+          novoVideoStream = criarPlaceholderVideoStream("Câmera indisponível");
+          setCameraEnabled(false);
+          setUsandoPlaceholderCamera(true);
+        }
+
+        pararStream(cameraStreamRef.current);
+
+        setCameraStream(novoVideoStream);
+        cameraStreamRef.current = novoVideoStream;
+
+        if (previewRef.current) {
+          previewRef.current.srcObject = novoVideoStream;
+          await previewRef.current.play().catch(() => null);
+        }
+      }
+
+      if (tipo === "microfone" || tipo === "ambos" || !tipo) {
+        try {
+          const novoAudioStream = await navigator.mediaDevices.getUserMedia({
+            video: false,
+            audio: micId ? { deviceId: { exact: micId } } : true,
+          });
+
+          novoAudioStream.getAudioTracks().forEach((track) => {
+            track.enabled = micEnabled;
+          });
+
+          pararStream(micStreamRef.current);
+
+          setMicStream(novoAudioStream);
+          micStreamRef.current = novoAudioStream;
+        } catch (micError: any) {
+          console.error("[LIVE] Falha ao trocar microfone:", micError);
+
+          setBroadcastError(
+            "Falha ao trocar microfone. Verifique se ele não está sendo usado por outro aplicativo."
+          );
+        }
+      }
+    } finally {
+      setSwitchingDevice(false);
+    }
+  }
 
   function pararStream(stream: MediaStream | null) {
     if (!stream) return;
     stream.getTracks().forEach((track) => track.stop());
   }
 
-async function pararBroadcastSeguro(client: any) {
-  if (!client?.stopBroadcast) return;
+  async function pararBroadcastSeguro(client: any) {
+    if (!client?.stopBroadcast) return;
 
-  try {
-    const result = client.stopBroadcast();
+    try {
+      const result = client.stopBroadcast();
 
-    if (result && typeof result.then === "function") {
-      await result;
+      if (result && typeof result.then === "function") {
+        await result;
+      }
+    } catch (e) {
+      console.warn("[IVS] Erro ignorado ao parar broadcast:", e);
     }
-  } catch (e) {
-    console.warn("[IVS] Erro ignorado ao parar broadcast:", e);
-  }
-}
-
-function pararAudioLiveProcessado() {
-  pararStream(liveMicProcessedStreamRef.current);
-  liveMicProcessedStreamRef.current = null;
-
-  if (liveMicGainRef.current) {
-    try {
-      liveMicGainRef.current.disconnect();
-    } catch {}
-    liveMicGainRef.current = null;
   }
 
-  if (liveMicSourceRef.current) {
-    try {
-      liveMicSourceRef.current.disconnect();
-    } catch {}
-    liveMicSourceRef.current = null;
+  function pararAudioLiveProcessado() {
+    pararStream(liveMicProcessedStreamRef.current);
+    liveMicProcessedStreamRef.current = null;
+
+    if (liveMicGainRef.current) {
+      try {
+        liveMicGainRef.current.disconnect();
+      } catch {}
+      liveMicGainRef.current = null;
+    }
+
+    if (liveMicSourceRef.current) {
+      try {
+        liveMicSourceRef.current.disconnect();
+      } catch {}
+      liveMicSourceRef.current = null;
+    }
+
+    if (liveMicAudioContextRef.current) {
+      liveMicAudioContextRef.current.close().catch(() => null);
+      liveMicAudioContextRef.current = null;
+    }
+
+    liveMicDestinationRef.current = null;
   }
 
-  if (liveMicAudioContextRef.current) {
-    liveMicAudioContextRef.current.close().catch(() => null);
-    liveMicAudioContextRef.current = null;
+  function encerrarCapturasLocais() {
+    pararProgramCanvasStream();
+
+    pararAudioLiveProcessado();
+
+    pararStream(
+      cameraStreamRef.current
+    );
+
+    pararStream(
+      micStreamRef.current
+    );
+
+    pararStream(
+      screenStreamRef.current
+    );
+
+    pararStream(
+      placeholderStreamRef.current
+    );
+
+    pararStream(
+      screenCanvasStreamRef.current
+    );
+
+    cameraStreamRef.current =
+      null;
+
+    micStreamRef.current =
+      null;
+
+    screenStreamRef.current =
+      null;
+
+    placeholderStreamRef.current =
+      null;
+
+    screenCanvasStreamRef.current =
+      null;
+
+    if (previewRef.current) {
+      previewRef.current.srcObject =
+        null;
+    }
+
+    if (
+      screenPreviewRef.current
+    ) {
+      screenPreviewRef.current
+        .srcObject = null;
+    }
+
+    setCameraStream(
+      null
+    );
+
+    setMicStream(
+      null
+    );
+
+    setScreenStream(
+      null
+    );
+
+    setCameraEnabled(
+      false
+    );
+
+    setMicEnabled(
+      false
+    );
+
+    setScreenEnabled(
+      false
+    );
+
+    setUsandoPlaceholderCamera(
+      false
+    );
+
+    fecharTesteMicrofone();
   }
 
-  liveMicDestinationRef.current = null;
-}
+  function criarAudioLiveComVolume(stream: MediaStream) {
+    pararAudioLiveProcessado();
 
-function criarAudioLiveComVolume(stream: MediaStream) {
-  pararAudioLiveProcessado();
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
 
-  const AudioContextClass =
-    window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) {
+      return stream;
+    }
 
-  if (!AudioContextClass) {
-    return stream;
+    const audioContext = new AudioContextClass();
+    const source = audioContext.createMediaStreamSource(stream);
+    const gain = audioContext.createGain();
+    const destination = audioContext.createMediaStreamDestination();
+
+    gain.gain.value = micInputVolume / 100;
+
+    source.connect(gain);
+    gain.connect(destination);
+
+    liveMicAudioContextRef.current = audioContext;
+    liveMicSourceRef.current = source;
+    liveMicGainRef.current = gain;
+    liveMicDestinationRef.current = destination;
+    liveMicProcessedStreamRef.current = destination.stream;
+
+    return destination.stream;
   }
-
-  const audioContext = new AudioContextClass();
-  const source = audioContext.createMediaStreamSource(stream);
-  const gain = audioContext.createGain();
-  const destination = audioContext.createMediaStreamDestination();
-
-  gain.gain.value = micInputVolume / 100;
-
-  source.connect(gain);
-  gain.connect(destination);
-
-  liveMicAudioContextRef.current = audioContext;
-  liveMicSourceRef.current = source;
-  liveMicGainRef.current = gain;
-  liveMicDestinationRef.current = destination;
-  liveMicProcessedStreamRef.current = destination.stream;
-
-  return destination.stream;
-}
 
   function pararMonitoramentoMicrofone() {
     if (micTestAnimationFrameRef.current) {
@@ -1280,226 +1662,235 @@ function criarAudioLiveComVolume(stream: MediaStream) {
     setMicTestLevel(0);
   }
 
-async function iniciarMonitoramentoMicrofone(micId?: string) {
-  try {
-    setMicTestStarting(true);
-    setMicTestError(null);
+  async function iniciarMonitoramentoMicrofone(micId?: string) {
+    try {
+      setMicTestStarting(true);
+      setMicTestError(null);
 
-    pararMonitoramentoMicrofone();
+      pararMonitoramentoMicrofone();
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("Seu navegador não permite testar microfone nesta página.");
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: false,
-      audio: micId
-        ? {
-            deviceId: { exact: micId },
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          }
-        : {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-    });
-
-    micTestStreamRef.current = stream;
-
-    const AudioContextClass =
-      window.AudioContext || (window as any).webkitAudioContext;
-
-    if (!AudioContextClass) {
-      throw new Error("Seu navegador não suporta monitoramento de áudio.");
-    }
-
-    const audioContext = new AudioContextClass();
-    micTestAudioContextRef.current = audioContext;
-
-    const source = audioContext.createMediaStreamSource(stream);
-    const analyser = audioContext.createAnalyser();
-    const gain = audioContext.createGain();
-
-    analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.75;
-    gain.gain.value = 0;
-
-    source.connect(analyser);
-    source.connect(gain);
-    gain.connect(audioContext.destination);
-
-    micTestSourceRef.current = source;
-    micTestGainRef.current = gain;
-    setMicTestListening(false);
-
-    const dataArray = new Uint8Array(analyser.fftSize);
-
-    function atualizarVolume() {
-      analyser.getByteTimeDomainData(dataArray);
-
-      let soma = 0;
-
-      for (let i = 0; i < dataArray.length; i++) {
-        const valor = (dataArray[i] - 128) / 128;
-        soma += valor * valor;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Seu navegador não permite testar microfone nesta página.");
       }
 
-      const rms = Math.sqrt(soma / dataArray.length);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: micId
+          ? {
+              deviceId: { exact: micId },
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          : {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+      });
 
-      const volume = Math.min(100, Math.round(rms * 320));
+      micTestStreamRef.current = stream;
 
-      setMicTestLevel(volume);
+      const AudioContextClass =
+        window.AudioContext || (window as any).webkitAudioContext;
 
-      micTestAnimationFrameRef.current = requestAnimationFrame(atualizarVolume);
-    }
+      if (!AudioContextClass) {
+        throw new Error("Seu navegador não suporta monitoramento de áudio.");
+      }
 
-    atualizarVolume();
-  } catch (e: any) {
-    console.error("[MIC TEST] Erro ao testar microfone:", e);
+      const audioContext = new AudioContextClass();
+      micTestAudioContextRef.current = audioContext;
 
-    let mensagem = "Não foi possível testar o microfone selecionado.";
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      const gain = audioContext.createGain();
 
-    if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
-      mensagem =
-        "Permissão negada para o microfone. Clique no cadeado do navegador e permita o uso do microfone.";
-    }
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.75;
+      gain.gain.value = 0;
 
-    if (e?.name === "NotFoundError" || e?.name === "DevicesNotFoundError") {
-      mensagem =
-        "Nenhum microfone foi encontrado. Conecte um microfone e tente novamente.";
-    }
+      source.connect(analyser);
+      source.connect(gain);
+      gain.connect(audioContext.destination);
 
-    if (e?.name === "NotReadableError" || e?.name === "TrackStartError") {
-      mensagem =
-        "O microfone está sendo usado por outro aplicativo. Feche Discord, OBS, Teams ou outro app e tente novamente.";
-    }
+      micTestSourceRef.current = source;
+      micTestGainRef.current = gain;
+      setMicTestListening(false);
 
-    setMicTestError(mensagem);
-    setMicTestLevel(0);
-  } finally {
-    setMicTestStarting(false);
-  }
-}
+      const dataArray = new Uint8Array(analyser.fftSize);
 
-async function abrirTesteMicrofone() {
-  const idInicial = selectedMicId || microphones[0]?.deviceId || "";
+      function atualizarVolume() {
+        analyser.getByteTimeDomainData(dataArray);
 
-  setMicTestSelectedId(idInicial);
-  setMicTestOpen(true);
+        let soma = 0;
 
-  await iniciarMonitoramentoMicrofone(idInicial);
-}
+        for (let i = 0; i < dataArray.length; i++) {
+          const valor = (dataArray[i] - 128) / 128;
+          soma += valor * valor;
+        }
 
-function fecharTesteMicrofone() {
-  pararMonitoramentoMicrofone();
-  setMicTestOpen(false);
-  setMicTestError(null);
-}
+        const rms = Math.sqrt(soma / dataArray.length);
 
-async function trocarMicrofoneDoTeste(micId: string) {
-  setMicTestSelectedId(micId);
-  setMicTestListening(false);
-  await iniciarMonitoramentoMicrofone(micId);
-}
+        const volume = Math.min(100, Math.round(rms * 320));
 
-async function toggleEscutarMicrofoneTeste() {
-  try {
-    if (!micTestAudioContextRef.current || !micTestGainRef.current) {
-      await iniciarMonitoramentoMicrofone(micTestSelectedId);
-    }
+        setMicTestLevel(volume);
 
-    if (micTestAudioContextRef.current?.state === "suspended") {
-      await micTestAudioContextRef.current.resume();
-    }
+        micTestAnimationFrameRef.current = requestAnimationFrame(atualizarVolume);
+      }
 
-    const next = !micTestListening;
+      atualizarVolume();
+    } catch (e: any) {
+      console.error("[MIC TEST] Erro ao testar microfone:", e);
 
-    if (micTestGainRef.current) {
-      micTestGainRef.current.gain.value = next ? micMonitorVolume / 100 : 0;
-    }
+      let mensagem = "Não foi possível testar o microfone selecionado.";
 
-    setMicTestListening(next);
-  } catch (e) {
-    console.error("[MIC TEST] Erro ao alternar escuta do microfone:", e);
-    setMicTestError("Não foi possível reproduzir o áudio do microfone.");
-  }
-}
+      if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
+        mensagem =
+          "Permissão negada para o microfone. Clique no cadeado do navegador e permita o uso do microfone.";
+      }
 
-async function aplicarMicrofoneTestado() {
-  if (!micTestSelectedId) return;
+      if (e?.name === "NotFoundError" || e?.name === "DevicesNotFoundError") {
+        mensagem =
+          "Nenhum microfone foi encontrado. Conecte um microfone e tente novamente.";
+      }
 
-  setSelectedMicId(micTestSelectedId);
+      if (e?.name === "NotReadableError" || e?.name === "TrackStartError") {
+        mensagem =
+          "O microfone está sendo usado por outro aplicativo. Feche Discord, OBS, Teams ou outro app e tente novamente.";
+      }
 
-  await trocarDispositivo(selectedCameraId, micTestSelectedId, "microfone");
-
-  fecharTesteMicrofone();
-}
-
-async function toggleCamera() {
-  const next = !cameraEnabled;
-
-  if (!next) {
-    cameraStream?.getVideoTracks().forEach((track) => {
-      track.enabled = false;
-    });
-
-    setCameraEnabled(false);
-    return;
-  }
-
-  try {
-    const novoVideoStream = await navigator.mediaDevices.getUserMedia({
-      video: selectedCameraId
-        ? { deviceId: { exact: selectedCameraId } }
-        : true,
-      audio: false,
-    });
-
-    novoVideoStream.getVideoTracks().forEach((track) => {
-      track.enabled = true;
-    });
-
-    pararStream(cameraStreamRef.current);
-
-    setUsandoPlaceholderCamera(false);
-    setCameraStream(novoVideoStream);
-    cameraStreamRef.current = novoVideoStream;
-    setCameraEnabled(true);
-
-    if (previewRef.current) {
-      previewRef.current.srcObject = novoVideoStream;
-      await previewRef.current.play().catch(() => null);
-    }
-
-    if (broadcastClient) {
-      await atualizarProgramaIvs(broadcastClient);
-    }
-  } catch (e) {
-    console.warn("[LIVE] Não foi possível ligar câmera real. Mantendo placeholder:", e);
-
-    const placeholder = criarPlaceholderVideoStream("Câmera indisponível");
-
-    setUsandoPlaceholderCamera(true);
-    pararStream(cameraStreamRef.current);
-
-    setCameraStream(placeholder);
-    cameraStreamRef.current = placeholder;
-
-    if (broadcastClient) {
-      await atualizarProgramaIvs(broadcastClient);
-    }
-
-    setCameraEnabled(false);
-
-    if (previewRef.current) {
-      previewRef.current.srcObject = placeholder;
-      await previewRef.current.play().catch(() => null);
+      setMicTestError(mensagem);
+      setMicTestLevel(0);
+    } finally {
+      setMicTestStarting(false);
     }
   }
-}
+
+  async function abrirTesteMicrofone() {
+    const idInicial = selectedMicId || microphones[0]?.deviceId || "";
+
+    setMicTestSelectedId(idInicial);
+    setMicTestOpen(true);
+
+    await iniciarMonitoramentoMicrofone(idInicial);
+  }
+
+  function fecharTesteMicrofone() {
+    pararMonitoramentoMicrofone();
+    setMicTestOpen(false);
+    setMicTestError(null);
+  }
+
+  async function trocarMicrofoneDoTeste(micId: string) {
+    setMicTestSelectedId(micId);
+    setMicTestListening(false);
+    await iniciarMonitoramentoMicrofone(micId);
+  }
+
+  async function toggleEscutarMicrofoneTeste() {
+    try {
+      if (!micTestAudioContextRef.current || !micTestGainRef.current) {
+        await iniciarMonitoramentoMicrofone(micTestSelectedId);
+      }
+
+      if (micTestAudioContextRef.current?.state === "suspended") {
+        await micTestAudioContextRef.current.resume();
+      }
+
+      const next = !micTestListening;
+
+      if (micTestGainRef.current) {
+        micTestGainRef.current.gain.value = next ? micMonitorVolume / 100 : 0;
+      }
+
+      setMicTestListening(next);
+    } catch (e) {
+      console.error("[MIC TEST] Erro ao alternar escuta do microfone:", e);
+      setMicTestError("Não foi possível reproduzir o áudio do microfone.");
+    }
+  }
+
+  async function aplicarMicrofoneTestado() {
+    if (!micTestSelectedId) return;
+    setSelectedMicId(micTestSelectedId);
+    await trocarDispositivo(selectedCameraId, micTestSelectedId, "microfone");
+    fecharTesteMicrofone();
+  }
+
+  async function toggleCamera() {
+    const next = !cameraEnabled;
+
+    if (!next) {
+      cameraStreamRef.current
+        ?.getVideoTracks()
+        .forEach((track) => {
+          track.enabled =
+            false;
+        });
+
+      setCameraEnabled(
+        false
+      );
+
+      if (broadcastClient) {
+        await atualizarProgramaIvs(
+          broadcastClient
+        );
+      }
+
+      return;
+    }
+
+    try {
+      const novoVideoStream = await navigator.mediaDevices.getUserMedia({
+        video: selectedCameraId
+          ? { deviceId: { exact: selectedCameraId } }
+          : true,
+        audio: false,
+      });
+
+      novoVideoStream.getVideoTracks().forEach((track) => {
+        track.enabled = true;
+      });
+
+      pararStream(cameraStreamRef.current);
+
+      setUsandoPlaceholderCamera(false);
+      setCameraStream(novoVideoStream);
+      cameraStreamRef.current = novoVideoStream;
+      setCameraEnabled(true);
+
+      if (previewRef.current) {
+        previewRef.current.srcObject = novoVideoStream;
+        await previewRef.current.play().catch(() => null);
+      }
+
+      if (broadcastClient) {
+        await atualizarProgramaIvs(broadcastClient);
+      }
+    } catch (e) {
+      console.warn("[LIVE] Não foi possível ligar câmera real. Mantendo placeholder:", e);
+
+      const placeholder = criarPlaceholderVideoStream("Câmera indisponível");
+
+      setUsandoPlaceholderCamera(true);
+      pararStream(cameraStreamRef.current);
+
+      setCameraStream(placeholder);
+      cameraStreamRef.current = placeholder;
+
+      if (broadcastClient) {
+        await atualizarProgramaIvs(broadcastClient);
+      }
+
+      setCameraEnabled(false);
+
+      if (previewRef.current) {
+        previewRef.current.srcObject = placeholder;
+        await previewRef.current.play().catch(() => null);
+      }
+    }
+  }
 
   function toggleMic() {
     if (!micStream) return;
@@ -1517,71 +1908,195 @@ async function toggleCamera() {
     }
   }
 
+  async function encerrarCompartilhamentoTela(
+    atualizarPrograma = true
+  ) {
+    const telaAnterior =
+      screenStreamRef.current;
+
+    const canvasAnterior =
+      screenCanvasStreamRef.current;
+
+    screenStreamRef.current =
+      null;
+
+    screenCanvasStreamRef.current =
+      null;
+
+    pararStream(
+      telaAnterior
+    );
+
+    pararStream(
+      canvasAnterior
+    );
+
+    setScreenStream(
+      null
+    );
+
+    setScreenEnabled(
+      false
+    );
+
+    if (
+      cameraEnabled &&
+      !usandoPlaceholderCamera
+    ) {
+      cameraStreamRef.current
+        ?.getVideoTracks()
+        .forEach((track) => {
+          if (
+            track.readyState ===
+            "live"
+          ) {
+            track.enabled =
+              true;
+          }
+        });
+    }
+
+    if (
+      screenPreviewRef.current
+    ) {
+      screenPreviewRef.current
+        .srcObject = null;
+    }
+
+    if (
+      atualizarPrograma &&
+      broadcastClient
+    ) {
+      await atualizarProgramaIvs(
+        broadcastClient
+      );
+    }
+  }
+
   async function toggleScreenShare() {
     if (isNativeApp) {
       setBroadcastError(
         "Compartilhar tela está disponível apenas pelo site no navegador. No app Android, use câmera e microfone."
       );
+
       return;
     }
 
     if (screenEnabled) {
-      pararStream(screenCanvasStreamRef.current);
-      screenCanvasStreamRef.current = null;
-
-      pararStream(screenStreamRef.current);
-      setScreenStream(null);
-      screenStreamRef.current = null;
-      setScreenEnabled(false);
-
-      if (broadcastClient) {
-        try {
-          await atualizarProgramaIvs(broadcastClient);
-          console.log("[IVS] Tela removida; programa atualizado.");
-        } catch (e: any) {
-          console.error("[IVS] Falha ao atualizar programa após remover tela:", e);
-        }
-      }
+      await encerrarCompartilhamentoTela(
+        true
+      );
 
       return;
     }
-  
-    if (broadcastClient) {
-      await atualizarProgramaIvs(broadcastClient);
-    }
 
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
+      const stream =
+        await navigator.mediaDevices
+          .getDisplayMedia({
+            video: {
+              width: {
+                ideal: 1920,
+              },
+
+              height: {
+                ideal: 1080,
+              },
+
+              frameRate: {
+                ideal: 30,
+              },
+            },
+
+            audio: false,
+          });
+
+      const track =
+        stream.getVideoTracks()[0];
+
+      if (!track) {
+        pararStream(stream);
+
+        throw new Error(
+          "Nenhuma tela foi selecionada."
+        );
+      }
+
+      screenStreamRef.current =
+        stream;
+
+      setScreenStream(
+        stream
+      );
+
+      setScreenEnabled(
+        true
+      );
+
+      track.addEventListener(
+        "ended",
+        () => {
+          void encerrarCompartilhamentoTela(
+            true
+          );
         },
-        audio: false,
-      });
+        {
+          once: true,
+        }
+      );
 
-      stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        setScreenEnabled(false);
-        setScreenStream(null);
-        screenStreamRef.current = null;
-      });
+      if (
+        screenPreviewRef.current
+      ) {
+        screenPreviewRef.current
+          .srcObject = stream;
 
-      setScreenStream(stream);
-      screenStreamRef.current = stream;
-      setScreenEnabled(true);
+        await screenPreviewRef.current
+          .play()
+          .catch(() => null);
+      }
+
+      if (
+        cameraEnabled &&
+        !usandoPlaceholderCamera
+      ) {
+        cameraStreamRef.current
+          ?.getVideoTracks()
+          .forEach((track) => {
+            if (
+              track.readyState ===
+              "live"
+            ) {
+              track.enabled =
+                true;
+            }
+          });
+      }
 
       if (broadcastClient) {
-        await atualizarProgramaIvs(broadcastClient);
+        await atualizarProgramaIvs(
+          broadcastClient
+        );
+      }
+    } catch (error: any) {
+      if (
+        error?.name ===
+        "NotAllowedError"
+      ) {
+        return;
       }
 
-      if (screenPreviewRef.current) {
-        screenPreviewRef.current.srcObject = stream;
-      }
+      console.error(
+        "[LIVE] Erro ao compartilhar tela:",
+        error
+      );
 
-    } catch {
+      setBroadcastError(
+        error?.message ||
+          "Não foi possível compartilhar a tela."
+      );
     }
   }
-  
 
   async function buscarBroadcastConfig() {
     const token = getToken();
@@ -1619,186 +2134,185 @@ async function toggleCamera() {
     };
   }
 
-async function criarBroadcastClient(config: BroadcastConfig) {
-console.log("🚨 TESTE NOVO CÓDIGO LIVE STUDIO 1080P - ENTROU AQUI 🚨");
+  async function criarBroadcastClient(config: BroadcastConfig) {
 
-  if (!cameraStream?.getVideoTracks().length && !screenStream?.getVideoTracks().length) {
-    throw new Error("Ligue a câmera ou compartilhe a tela antes de iniciar a live.");
-  }
+    if (!cameraStream?.getVideoTracks().length && !screenStream?.getVideoTracks().length) {
+      throw new Error("Ligue a câmera ou compartilhe a tela antes de iniciar a live.");
+    }
 
-  const mod: any = await import("amazon-ivs-web-broadcast");
+    const mod: any = await import("amazon-ivs-web-broadcast");
 
-  const IVSBroadcastClient =
-    mod.IVSBroadcastClient ||
-    mod.default?.IVSBroadcastClient ||
-    mod.default ||
-    mod;
+    const IVSBroadcastClient =
+      mod.IVSBroadcastClient ||
+      mod.default?.IVSBroadcastClient ||
+      mod.default ||
+      mod;
 
-  if (!IVSBroadcastClient?.create) {
-    console.log("[IVS] módulo carregado:", mod);
-    throw new Error("IVS Broadcast SDK não carregou corretamente.");
-  }
+    if (!IVSBroadcastClient?.create) {
+      console.log("[IVS] módulo carregado:", mod);
+      throw new Error("IVS Broadcast SDK não carregou corretamente.");
+    }
 
-  const streamConfig = {
-    maxResolution: {
+    const streamConfig = {
+      maxResolution: {
+        width: VIDEO_FULL_HD.width,
+        height: VIDEO_FULL_HD.height,
+      },
+      maxFramerate: 30,
+      maxBitrate: 8500,
+    };
+
+
+    const endpointIvs = normalizarIvsIngestEndpoint(config.ingestEndpoint);
+    const streamKeyLimpa = String(config.streamKey || "").trim();
+
+    if (!endpointIvs) {
+      throw new Error("Ingest endpoint do IVS não informado.");
+    }
+
+    if (!streamKeyLimpa) {
+      throw new Error("Stream key do IVS não informada.");
+    }
+
+    if (
+      !screenStream?.getVideoTracks().length &&
+      cameraStream?.getVideoTracks().length &&
+      !usandoPlaceholderCamera
+    ) {
+      cameraStream.getVideoTracks().forEach((track) => {
+        track.enabled = true;
+      });
+
+      setCameraEnabled(true);
+    }
+
+    if (micStream?.getAudioTracks().length) {
+      micStream.getAudioTracks().forEach((track) => {
+        track.enabled = true;
+      });
+      setMicEnabled(true);
+    }
+
+    console.log("[IVS] Criando client corrigido:", {
+      endpointOriginal: config.ingestEndpoint,
+      endpointIvs,
+      streamConfig,
+      streamConfigKeys: Object.keys(streamConfig || {}),
+      hasClientStaticPreset: !!IVSBroadcastClient.STANDARD_LANDSCAPE,
+      cameraVideoTracks: cameraStream?.getVideoTracks().map((track) => ({
+        id: track.id,
+        label: track.label,
+        enabled: track.enabled,
+        readyState: track.readyState,
+        settings: track.getSettings?.(),
+      })) || [],
+      micAudioTracks: micStream?.getAudioTracks().map((track) => ({
+        id: track.id,
+        label: track.label,
+        enabled: track.enabled,
+        readyState: track.readyState,
+        settings: track.getSettings?.(),
+      })) || [],
+      screenVideoTracks: screenStream?.getVideoTracks().map((track) => ({
+        id: track.id,
+        label: track.label,
+        enabled: track.enabled,
+        readyState: track.readyState,
+        settings: track.getSettings?.(),
+      })) || [],
+    });
+
+    const client = IVSBroadcastClient.create({
+      streamConfig,
+      ingestEndpoint: endpointIvs,
+    });
+
+  console.log("[IVS DEBUG] canvasDimensions logo após create:", client.getCanvasDimensions?.());
+  console.log("[IVS DEBUG] client criado com streamConfig:", streamConfig);
+
+    client.on?.("connectionStateChange", (state: any) => {
+      console.log("[IVS] connectionStateChange:", state);
+    });
+
+    client.on?.("error", (err: any) => {
+      console.error("[IVS] client error:", err);
+    });
+
+    if (micStream?.getAudioTracks().length) {
+      const audioProcessado = criarAudioLiveComVolume(micStream);
+
+      await client.addAudioInputDevice(audioProcessado, "microphone");
+
+      console.log("[IVS] áudio adicionado com volume:", micInputVolume);
+    }
+
+    const telaAtual = screenStreamRef.current;
+
+    const cameraReal =
+      cameraEnabled && !usandoPlaceholderCamera
+        ? cameraStreamRef.current
+        : null;
+
+    const temTela = !!telaAtual?.getVideoTracks().length;
+    const temCameraReal = !!cameraReal?.getVideoTracks().length;
+    const temCameraQualquer = !!cameraStreamRef.current?.getVideoTracks().length;
+
+    if (!temTela && !temCameraReal && !temCameraQualquer) {
+      throw new Error("Nenhuma fonte de vídeo ativa para transmitir.");
+    }
+
+    const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
+
+  console.log("[IVS DEBUG] programaStream tracks:", programaStream.getVideoTracks().map((track) => ({
+    id: track.id,
+    label: track.label,
+    enabled: track.enabled,
+    readyState: track.readyState,
+    settings: track.getSettings?.(),
+  })));
+
+    const dimensao = client.getCanvasDimensions?.() || {
       width: VIDEO_FULL_HD.width,
       height: VIDEO_FULL_HD.height,
-    },
-    maxFramerate: 30,
-    maxBitrate: 8500,
-  };
+    };
 
+  console.log("[IVS DEBUG] posição enviada para addVideoInputDevice:", {
+    index: 0,
+    x: 0,
+    y: 0,
+    width: dimensao.width,
+    height: dimensao.height,
+  });
 
-  const endpointIvs = normalizarIvsIngestEndpoint(config.ingestEndpoint);
-  const streamKeyLimpa = String(config.streamKey || "").trim();
+    await client.addVideoInputDevice(
+      programaStream,
+      "program",
+      {
+        index: 0,
+        x: 0,
+        y: 0,
+        width: dimensao.width,
+        height: dimensao.height,
+      }
+    );
 
-  if (!endpointIvs) {
-    throw new Error("Ingest endpoint do IVS não informado.");
-  }
-
-  if (!streamKeyLimpa) {
-    throw new Error("Stream key do IVS não informada.");
-  }
-
-  if (
-    !screenStream?.getVideoTracks().length &&
-    cameraStream?.getVideoTracks().length &&
-    !usandoPlaceholderCamera
-  ) {
-    cameraStream.getVideoTracks().forEach((track) => {
-      track.enabled = true;
+    console.log("[IVS] Programa adicionado como único vídeo principal.", {
+      temTela,
+      temCameraReal,
+      usandoPlaceholderCamera,
     });
 
-    setCameraEnabled(true);
-  }
-
-  if (micStream?.getAudioTracks().length) {
-    micStream.getAudioTracks().forEach((track) => {
-      track.enabled = true;
+    console.log("[IVS] devices no client:", {
+      programDevice: client.getVideoInputDevice?.("program"),
+      cameraDevice: client.getVideoInputDevice?.("camera"),
+      screenDevice: client.getVideoInputDevice?.("screen"),
+      audioDevice: client.getAudioInputDevice?.("microphone"),
+      canvasDimensions: client.getCanvasDimensions?.(),
     });
-    setMicEnabled(true);
+
+    setBroadcastClient(client);
+    return client;
   }
-
-  console.log("[IVS] Criando client corrigido:", {
-    endpointOriginal: config.ingestEndpoint,
-    endpointIvs,
-    streamConfig,
-    streamConfigKeys: Object.keys(streamConfig || {}),
-    hasClientStaticPreset: !!IVSBroadcastClient.STANDARD_LANDSCAPE,
-    cameraVideoTracks: cameraStream?.getVideoTracks().map((track) => ({
-      id: track.id,
-      label: track.label,
-      enabled: track.enabled,
-      readyState: track.readyState,
-      settings: track.getSettings?.(),
-    })) || [],
-    micAudioTracks: micStream?.getAudioTracks().map((track) => ({
-      id: track.id,
-      label: track.label,
-      enabled: track.enabled,
-      readyState: track.readyState,
-      settings: track.getSettings?.(),
-    })) || [],
-    screenVideoTracks: screenStream?.getVideoTracks().map((track) => ({
-      id: track.id,
-      label: track.label,
-      enabled: track.enabled,
-      readyState: track.readyState,
-      settings: track.getSettings?.(),
-    })) || [],
-  });
-
-  const client = IVSBroadcastClient.create({
-    streamConfig,
-    ingestEndpoint: endpointIvs,
-  });
-
-console.log("[IVS DEBUG] canvasDimensions logo após create:", client.getCanvasDimensions?.());
-console.log("[IVS DEBUG] client criado com streamConfig:", streamConfig);
-
-  client.on?.("connectionStateChange", (state: any) => {
-    console.log("[IVS] connectionStateChange:", state);
-  });
-
-  client.on?.("error", (err: any) => {
-    console.error("[IVS] client error:", err);
-  });
-
-  if (micStream?.getAudioTracks().length) {
-    const audioProcessado = criarAudioLiveComVolume(micStream);
-
-    await client.addAudioInputDevice(audioProcessado, "microphone");
-
-    console.log("[IVS] áudio adicionado com volume:", micInputVolume);
-  }
-
-  const telaAtual = screenStreamRef.current;
-
-  const cameraReal =
-    cameraEnabled && !usandoPlaceholderCamera
-      ? cameraStreamRef.current
-      : null;
-
-  const temTela = !!telaAtual?.getVideoTracks().length;
-  const temCameraReal = !!cameraReal?.getVideoTracks().length;
-  const temCameraQualquer = !!cameraStreamRef.current?.getVideoTracks().length;
-
-  if (!temTela && !temCameraReal && !temCameraQualquer) {
-    throw new Error("Nenhuma fonte de vídeo ativa para transmitir.");
-  }
-
-  const programaStream = criarProgramaIvsStream(telaAtual, cameraReal);
-
-console.log("[IVS DEBUG] programaStream tracks:", programaStream.getVideoTracks().map((track) => ({
-  id: track.id,
-  label: track.label,
-  enabled: track.enabled,
-  readyState: track.readyState,
-  settings: track.getSettings?.(),
-})));
-
-  const dimensao = client.getCanvasDimensions?.() || {
-    width: VIDEO_FULL_HD.width,
-    height: VIDEO_FULL_HD.height,
-  };
-
-console.log("[IVS DEBUG] posição enviada para addVideoInputDevice:", {
-  index: 0,
-  x: 0,
-  y: 0,
-  width: dimensao.width,
-  height: dimensao.height,
-});
-
-  await client.addVideoInputDevice(
-    programaStream,
-    "program",
-    {
-      index: 0,
-      x: 0,
-      y: 0,
-      width: dimensao.width,
-      height: dimensao.height,
-    }
-  );
-
-  console.log("[IVS] Programa adicionado como único vídeo principal.", {
-    temTela,
-    temCameraReal,
-    usandoPlaceholderCamera,
-  });
-
-  console.log("[IVS] devices no client:", {
-    programDevice: client.getVideoInputDevice?.("program"),
-    cameraDevice: client.getVideoInputDevice?.("camera"),
-    screenDevice: client.getVideoInputDevice?.("screen"),
-    audioDevice: client.getAudioInputDevice?.("microphone"),
-    canvasDimensions: client.getCanvasDimensions?.(),
-  });
-
-  setBroadcastClient(client);
-  return client;
-}
 
   async function iniciarLive() {
     try {
@@ -1985,6 +2499,8 @@ if (!iniciarRes.ok) {
         throw new Error(finalizarJson?.message || "Erro ao finalizar aula ao vivo.");
       }
 
+      encerrarCapturasLocais();
+
       setBroadcastError("Live finalizada. Processando replay no S3...");
 
       window.setTimeout(() => {
@@ -2153,66 +2669,66 @@ if (!iniciarRes.ok) {
                 </button>
               ) : null}
 
-{navegadorPossivelmenteIncompativel ? (
-  <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 flex items-start gap-3">
-    <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-    <div>
-      <div className="font-bold">Recomendamos usar Google Chrome</div>
-      <div className="text-sm mt-1">
-        Para transmitir aulas ao vivo, use preferencialmente Google Chrome ou Microsoft Edge,
-        sem VPN, bloqueador de anúncios ou proteção WebRTC ativa. Alguns navegadores, como Opera GX,
-        podem bloquear a transmissão mesmo com câmera e microfone funcionando.
-      </div>
-    </div>
-  </div>
-) : null}
+              {navegadorPossivelmenteIncompativel ? (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-bold">Recomendamos usar Google Chrome</div>
+                    <div className="text-sm mt-1">
+                      Para transmitir aulas ao vivo, use preferencialmente Google Chrome ou Microsoft Edge,
+                      sem VPN, bloqueador de anúncios ou proteção WebRTC ativa. Alguns navegadores, como Opera GX,
+                      podem bloquear a transmissão mesmo com câmera e microfone funcionando.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
-<div className="relative overflow-hidden rounded-[24px] bg-[#021e14] border border-slate-900">
-  {screenEnabled && screenStream ? (
-    <>
-      <video
-        ref={screenPreviewRef}
-        autoPlay
-        muted
-        playsInline
-        className="w-full aspect-video object-contain bg-black"
-      />
+              <div className="relative overflow-hidden rounded-[24px] bg-[#021e14] border border-slate-900">
+                {screenEnabled && screenStream ? (
+                  <>
+                    <video
+                      ref={screenPreviewRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full aspect-video object-contain bg-black"
+                    />
 
-      {cameraEnabled && !usandoPlaceholderCamera && cameraStream ? (
-        <div className="absolute right-4 top-4 w-[260px] max-w-[36%] overflow-hidden rounded-2xl border-2 border-white/70 bg-black shadow-xl">
-          <video
-            ref={previewRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full aspect-video object-cover"
-          />
-          <div className="absolute left-2 bottom-2 rounded-lg bg-black/60 px-2 py-1 text-xs font-semibold text-white">
-            Câmera
-          </div>
-        </div>
-      ) : null}
-    </>
-  ) : (
-    <>
-      <video
-        ref={previewRef}
-        autoPlay
-        muted
-        playsInline
-        className="w-full aspect-video object-contain bg-black"
-      />
+                    {cameraEnabled && !usandoPlaceholderCamera && cameraStream ? (
+                      <div className="absolute right-4 top-4 w-[260px] max-w-[36%] overflow-hidden rounded-2xl border-2 border-white/70 bg-black shadow-xl">
+                        <video
+                          ref={conectarPreviewCamera}
+                          autoPlay
+                          muted
+                          playsInline
+                          className="w-full aspect-video object-cover"
+                        />
+                        <div className="absolute left-2 bottom-2 rounded-lg bg-black/60 px-2 py-1 text-xs font-semibold text-white">
+                          Câmera
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <video
+                      ref={conectarPreviewCamera}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full aspect-video object-contain bg-black"
+                    />
 
-      {!cameraEnabled && !usandoPlaceholderCamera ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-          <div className="text-center">
-            <CameraOff className="w-12 h-12 mx-auto mb-3 opacity-80" />
-            <div className="font-bold">Câmera desligada</div>
-          </div>
-        </div>
-      ) : null}
-    </>
-  )}
+                    {!cameraEnabled && !usandoPlaceholderCamera ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+                        <div className="text-center">
+                          <CameraOff className="w-12 h-12 mx-auto mb-3 opacity-80" />
+                          <div className="font-bold">Câmera desligada</div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
 
                 <div className="absolute left-4 bottom-4 flex items-center gap-2">
                   {isLive ? (
@@ -2609,38 +3125,96 @@ if (!iniciarRes.ok) {
 
               <div className="h-[430px] overflow-y-auto p-5 space-y-4">
                 {messages.length ? (
-                  messages.map((msg) => (
-                    <div key={msg.id} className="flex items-start gap-3">
-                      <Avatar
-                        foto={msg.usuario?.foto}
-                        alt={msg.usuario?.nome || "Usuário"}
-                        className="h-9 w-9"
-                      />
+                  messages.map((msg) => {
+                    const ehMinhaMensagem =
+                      String(msg.usuarioId) ===
+                      String(usuarioIdAtual);
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="font-bold text-sm text-slate-800 truncate">
-                            {msg.usuario?.nome || "Usuário"}
-                          </div>
-                          <div className="text-xs text-slate-400 shrink-0">
-                            {formatarHora(msg.criadoEm)}
-                          </div>
-                        </div>
+                    const podeApagar =
+                      ehMinhaMensagem &&
+                      msg.tipo !== "SISTEMA";
 
-                        <div
-                          className={`mt-1 text-sm leading-relaxed ${
-                            msg.tipo === "ALERTA"
-                              ? "text-amber-700"
-                              : msg.tipo === "SISTEMA"
-                                ? "text-slate-500 italic"
+                    return (
+                      <div
+                        key={msg.id}
+                        className="flex items-start gap-3"
+                      >
+                        <Avatar
+                          foto={msg.usuario?.foto}
+                          alt={
+                            msg.usuario?.nome ||
+                            "Usuário"
+                          }
+                          className="h-9 w-9"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate text-sm font-bold text-slate-800">
+                                  {msg.usuario?.nome ||
+                                    "Usuário"}
+                                </div>
+
+                                <div className="shrink-0 text-xs text-slate-400">
+                                  {formatarHora(
+                                    msg.criadoEm
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {podeApagar && (
+                              <button
+                                type="button"
+                                disabled={
+                                  apagandoMensagemId ===
+                                  msg.id
+                                }
+                                onClick={() =>
+                                  void apagarMensagem(
+                                    msg
+                                  )
+                                }
+                                title="Apagar mensagem"
+                                aria-label="Apagar mensagem"
+                                className="
+                                  flex h-8 w-8
+                                  shrink-0 items-center
+                                  justify-center
+                                  rounded-full
+                                  text-red-500
+                                  hover:bg-red-50
+                                  disabled:opacity-50
+                                "
+                              >
+                                {apagandoMensagemId ===
+                                msg.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          <div
+                            className={`mt-1 text-sm leading-relaxed ${
+                              msg.tipo === "ALERTA"
+                                ? "text-amber-700"
+                                : msg.tipo ===
+                                  "SISTEMA"
+                                ? "italic text-slate-500"
                                 : "text-slate-700"
-                          }`}
-                        >
-                          {msg.mensagem}
+                            }`}
+                          >
+                            {msg.mensagem}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="h-full flex items-center justify-center text-center text-slate-500">
                     <div>

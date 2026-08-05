@@ -5,7 +5,6 @@ import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { EVENTO_TIPOS, EventoTipo } from "@/utils/eventos.js";
-import { min } from "date-fns";
 
 type Props = { clubeId: string };
 
@@ -99,12 +98,12 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
         headers,
       });
 
-      window.toast.success("Evento criado com sucesso!");
+      toast.success("Evento criado com sucesso!");
       setLocation(`/eventos/clubes/${clubeId}`);
     } catch (e: any) {
       const msg = e?.response?.data?.error || "Erro ao criar evento.";
       setErro(msg);
-      window.toast.error(msg);
+      toast.error(msg);
     } finally {
       setSalvando(false);
     }

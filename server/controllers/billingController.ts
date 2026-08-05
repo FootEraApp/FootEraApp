@@ -495,6 +495,307 @@ function extractAulaAoVivoId(planoId: string) {
     .trim();
 }
 
+const REPLAY_COMPRA_DIAS =
+  7;
+
+const REPLAY_COMPRA_MS =
+  REPLAY_COMPRA_DIAS *
+  24 *
+  60 *
+  60 *
+  1000;
+
+function calcularValidadeReplayCompra(
+  aula: {
+    finalizouEm?:
+      | Date
+      | string
+      | null;
+
+    dataFim?:
+      | Date
+      | string
+      | null;
+  }
+) {
+  const finalizacaoRaw =
+    aula.finalizouEm ||
+    aula.dataFim ||
+    null;
+
+  if (!finalizacaoRaw) {
+    return {
+      finalizouEm: null,
+      replayExpiraEm: null,
+      replayExpirado: true,
+      segundosRestantes: 0,
+    };
+  }
+
+  const finalizouEm =
+    finalizacaoRaw instanceof Date
+      ? finalizacaoRaw
+      : new Date(
+          finalizacaoRaw
+        );
+
+  if (
+    Number.isNaN(
+      finalizouEm.getTime()
+    )
+  ) {
+    return {
+      finalizouEm: null,
+      replayExpiraEm: null,
+      replayExpirado: true,
+      segundosRestantes: 0,
+    };
+  }
+
+  const replayExpiraEm =
+    new Date(
+      finalizouEm.getTime() +
+        REPLAY_COMPRA_MS
+    );
+
+  const diferenca =
+    replayExpiraEm.getTime() -
+    Date.now();
+
+  return {
+    finalizouEm,
+    replayExpiraEm,
+
+    replayExpirado:
+      diferenca <= 0,
+
+    segundosRestantes:
+      Math.max(
+        0,
+        Math.floor(
+          diferenca / 1000
+        )
+      ),
+  };
+}
+
+async function assertAulaAoVivoDisponivelParaCompra(
+  planoId: string
+) {
+  const planoNorm =
+    normalizePlanoId(
+      planoId
+    );
+
+  if (
+    !isAulaAoVivo(
+      planoNorm
+    )
+  ) {
+    return null;
+  }
+
+  const aulaAoVivoId =
+    extractAulaAoVivoId(
+      planoNorm
+    );
+
+  const agora =
+    new Date();
+
+  const aula =
+    await prisma.aulaAoVivo
+      .findUnique({
+        where: {
+          id:
+            aulaAoVivoId,
+        },
+
+        select: {
+          id:
+            true,
+
+          titulo:
+            true,
+
+          dataInicio:
+            true,
+
+          dataFim:
+            true,
+
+          finalizouEm:
+            true,
+
+          status:
+            true,
+
+          acessoPago:
+            true,
+
+          precoAcesso:
+            true,
+
+          replayDisponivel:
+            true,
+
+          videoGravadoUrl:
+            true,
+        },
+      });
+
+  if (!aula) {
+    const erro: any =
+      new Error(
+        "Evento ao vivo não encontrado."
+      );
+
+    erro.statusCode =
+      404;
+
+    erro.code =
+      "AULA_AO_VIVO_NOT_FOUND";
+
+    throw erro;
+  }
+
+  const valor =
+    Number(
+      aula.precoAcesso ??
+      0
+    );
+
+  if (
+    aula.acessoPago !==
+      true ||
+    !Number.isFinite(
+      valor
+    ) ||
+    valor <= 0
+  ) {
+    const erro: any =
+      new Error(
+        "Este evento não possui acesso pago."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_GRATUITA";
+
+    throw erro;
+  }
+
+  if (
+    aula.status ===
+    "CANCELADA"
+  ) {
+    const erro: any =
+      new Error(
+        "Este evento foi cancelado e não pode ser comprado."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_CANCELADA";
+
+    throw erro;
+  }
+
+  if (
+    aula.status ===
+    "FINALIZADA"
+  ) {
+    if (
+      aula.replayDisponivel !==
+        true ||
+      !aula.videoGravadoUrl
+    ) {
+      const erro: any =
+        new Error(
+          "O replay desta aula ainda não está disponível."
+        );
+
+      erro.statusCode =
+        409;
+
+      erro.code =
+        "REPLAY_NAO_DISPONIVEL";
+
+      throw erro;
+    }
+
+    const validade =
+      calcularValidadeReplayCompra(
+        aula
+      );
+
+    if (
+      validade.replayExpirado
+    ) {
+      const erro: any =
+        new Error(
+          "O prazo de sete dias para comprar este replay terminou."
+        );
+
+      erro.statusCode =
+        410;
+
+      erro.code =
+        "REPLAY_EXPIRADO";
+
+      throw erro;
+    }
+
+    return aula;
+  }
+
+  if (
+    aula.status ===
+      "AGENDADA" &&
+    aula.dataInicio.getTime() <
+      agora.getTime()
+  ) {
+    const erro: any =
+      new Error(
+        "Este evento já passou e ainda não possui replay disponível."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_EXPIRADA";
+
+    throw erro;
+  }
+
+  if (
+    aula.status !==
+      "AGENDADA" &&
+    aula.status !==
+      "AO_VIVO"
+  ) {
+    const erro: any =
+      new Error(
+        "Este evento não está disponível para compra."
+      );
+
+    erro.statusCode =
+      400;
+
+    erro.code =
+      "AULA_AO_VIVO_INDISPONIVEL";
+
+    throw erro;
+  }
+
+  return aula;
+}
+
 function extractMetodologiaId(planoId: string) {
   return String(planoId || "")
     .replace(/^METODOLOGIA_AVULSA:/i, "")
@@ -1200,6 +1501,10 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const isAula = isAulaAoVivo(planoNorm);
     const isPlanoPrincipal = !isAvulsa && !isLearningMetodologia && !isAula;
 
+    if (isAula) {
+      await assertAulaAoVivoDisponivelParaCompra(planoNorm);
+    }
+
     if (isPlanoPrincipal && !findPlan(planoNorm)) {
       return res.status(400).json({ message: "Plano inválido" });
     }
@@ -1695,6 +2000,11 @@ export async function startCheckout(req: Request, res: Response) {
 
     const planoNorm = normalizePlanoId(planoId);
 
+    const aulaAoVivoParaCheckout =
+      isAulaAoVivo(planoNorm)
+        ? await assertAulaAoVivoDisponivelParaCompra(planoNorm)
+        : null;
+
     if (
       isMetodologiaAvulsa(planoNorm) ||
       isMetodologiaLearning(planoNorm) ||
@@ -1758,43 +2068,29 @@ export async function startCheckout(req: Request, res: Response) {
     });
 
     if (total === 0) {
-      const pid = normalizePlanoId(planoId);
+      await approvePaymentAndProvision(
+        pagamento.id,
+        [
+          {
+            planoId: planoNorm,
+            periodicidade,
+          },
+        ]
+      );
 
-      if (isMetodologiaAvulsa(pid)) {
-        const metodologiaAvulsaId = extractMetodologiaId(pid);
-
-        await prisma.metodologiaAssinante.upsert({
-          where: {
-            metodologiaAvulsaId_usuarioId: {
-              metodologiaAvulsaId,
-              usuarioId: pagamento.usuarioId,
-            },
-          },
-          update: {
-            status: "ATIVA",
-            cancelouEm: null,
-            origem: "AVULSA",
-            metodologiaId: null,
-            metodologiaAvulsaId,
-          },
-          create: {
-            usuarioId: pagamento.usuarioId,
-            metodologiaId: null,
-            metodologiaAvulsaId,
-            origem: "AVULSA",
-            status: "ATIVA",
-          },
-        });
-      } else {
-        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
+      if (cupomRow) {
+        await resgatarCupom(
+          cupomRow.id,
+          usuarioId,
+          pagamento.id
+        );
       }
-
-      if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
 
       return res.json({
         status: "APROVADO",
         pagamento,
-        message: "Compra aprovada sem cobrança (cupom/presente).",
+        message:
+          "Compra aprovada sem cobrança (cupom/presente).",
       });
     }
 
@@ -1839,13 +2135,25 @@ export async function startCheckout(req: Request, res: Response) {
     }
 
     let planTitle = "Plano";
-    if (isMetodologiaAvulsa(normalizePlanoId(planoId))) {
-      const mid = extractMetodologiaId(normalizePlanoId(planoId));
+
+    if (isMetodologiaAvulsa(planoNorm)) {
+      const mid = extractMetodologiaId(planoNorm);
       const pr = await computeMetodologiaAvulsaPricing(mid);
+
       planTitle = `Metodologia Avulsa: ${pr.titulo}`;
+    } else if (isAulaAoVivo(planoNorm)) {
+      planTitle = `Evento ao vivo: ${
+        aulaAoVivoParaCheckout?.titulo ?? "Evento ao vivo"
+      }`;
     } else {
-      const plan = findPlan(planoId);
-      if (!plan) return res.status(400).json({ message: "Plano inválido" });
+      const plan = findPlan(planoNorm);
+
+      if (!plan) {
+        return res.status(400).json({
+          message: "Plano inválido",
+        });
+      }
+
       planTitle = plan.title;
     }
 
@@ -1979,6 +2287,10 @@ export async function startCheckoutBundle(req: Request, res: Response) {
 
     for (const it of normalizedItems) {
       assertPlanoPermitido(tipo, it.planoId);
+
+      if (isAulaAoVivo(it.planoId)) {
+        await assertAulaAoVivoDisponivelParaCompra(it.planoId);
+      }
 
       if (
         !isMetodologiaAvulsa(it.planoId) &&
@@ -2258,7 +2570,7 @@ export async function switchPlan(req: Request, res: Response) {
 
 function isProviderWebhookAuthorized(req: Request): boolean {
   const expected = process.env.BILLING_WEBHOOK_SECRET || "";
-  if (!expected) return false; // fail-closed: sem segredo configurado, endpoint fica bloqueado
+  if (!expected) return false;
 
   const received = String(req.headers["x-webhook-secret"] || "");
   const expectedBuf = Buffer.from(expected);
@@ -2293,8 +2605,6 @@ export async function providerWebhook(req: Request, res: Response) {
 
     if (!pagamento) return res.status(404).json({ message: "Pagamento não encontrado" });
 
-    // Pagamentos reais do Mercado Pago só podem ser confirmados via mercadoPagoWebhook,
-    // que verifica o status de verdade na API do MP — nunca por este endpoint genérico.
     if (pagamento.provider === "MERCADOPAGO") {
       return res.status(403).json({ message: "Use o webhook oficial do Mercado Pago para este pagamento" });
     }
@@ -2302,25 +2612,19 @@ export async function providerWebhook(req: Request, res: Response) {
     const now = new Date();
 
     if (tipo === "payment_approved") {
-      await prisma.pagamento.update({
-        where: { id: pagamento.id },
-        data: { status: PagamentoStatus.APROVADO, pagoEm: pagamento.pagoEm ?? now },
-      });
-
       if (pagamento.plano !== "BUNDLE") {
-      const pid = normalizePlanoId(pagamento.plano);
+        await approvePaymentAndProvision(
+          pagamento.id,
+          [
+            {
+              planoId: pagamento.plano,
+              periodicidade: pagamento.periodicidade,
+            },
+          ]
+        );
 
-      if (isMetodologiaAvulsa(pid)) {
-        const mid = extractMetodologiaId(pid);
-        await prisma.metodologiaAssinante.upsert({
-          where: { metodologiaId_usuarioId: { metodologiaId: mid, usuarioId: pagamento.usuarioId } },
-          update: { status: "ATIVA", cancelouEm: null },
-          create: { metodologiaId: mid, usuarioId: pagamento.usuarioId, status: "ATIVA" },
-        });
-      } else {
-        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
+        return res.json({ ok: true });
       }
-    }
 
       return res.json({ ok: true });
     }
@@ -2395,22 +2699,15 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         return res.status(200).json({ ok: true });
       }
 
-      await prisma.pagamento.update({
-        where: { id: pagamento.id },
-        data: { status: PagamentoStatus.APROVADO, pagoEm: pagamento.pagoEm ?? now },
-      });
-      const pid = normalizePlanoId(pagamento.plano);
-
-      if (isMetodologiaAvulsa(pid)) {
-        const metodologiaId = extractMetodologiaId(pid);
-        await prisma.metodologiaAssinante.upsert({
-          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId: pagamento.usuarioId } },
-          update: { status: "ATIVA", cancelouEm: null },
-          create: { metodologiaId, usuarioId: pagamento.usuarioId, status: "ATIVA" },
-        });
-      } else {
-        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
-      }
+      await approvePaymentAndProvision(
+        pagamento.id,
+        [
+          {
+            planoId: pagamento.plano,
+            periodicidade: pagamento.periodicidade,
+          },
+        ]
+      );
 
       return res.status(200).json({ ok: true });
     }
@@ -2690,87 +2987,325 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
   }
 }
 
-export async function getAulasAoVivoPagas(req: AuthenticatedRequest, res: Response) {
+export async function getAulasAoVivoPagas(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const items = await prisma.aulaAoVivo.findMany({
-      where: {
-        metodologiaId: null,
-        metodologiaAvulsaId: null,
-        acessoPago: true,
-        precoAcesso: {
-          gt: 0,
-        },
-        status: {
-          in: ["AGENDADA", "AO_VIVO", "FINALIZADA"],
-        },
-      },
-      orderBy: {
-        dataInicio: "asc",
-      },
-      select: {
-        id: true,
-        titulo: true,
-        descricao: true,
-        dataInicio: true,
-        dataFim: true,
-        inscricaoInicio: true,
-        inscricaoFim: true,
-        precoAcesso: true,
-        acessoPago: true,
-        status: true,
-        totalParticipantes: true,
+    const agora =
+      new Date();
 
-        criadorUsuarioId: true,
-        criadorUsuario: {
+    const limiteReplay =
+      new Date(
+        agora.getTime() -
+          REPLAY_COMPRA_MS
+      );
+
+    const aulas =
+      await prisma
+        .aulaAoVivo
+        .findMany({
+          where: {
+            metodologiaId:
+              null,
+            metodologiaAvulsaId:
+              null,
+            acessoPago:
+              true,
+            precoAcesso: {
+              gt:
+                0,
+            },
+            OR: [
+              {
+                status:
+                  "AGENDADA",
+                dataInicio: {
+                  gte:
+                    agora,
+                },
+              },
+              {
+                status:
+                  "AO_VIVO",
+              },
+              {
+                status:
+                  "FINALIZADA",
+                replayDisponivel:
+                  true,
+                videoGravadoUrl: {
+                  not:
+                    null,
+                },
+                OR: [
+                  {
+                    finalizouEm: {
+                      gte:
+                        limiteReplay,
+                      lte:
+                        agora,
+                    },
+                  },
+                  {
+                    finalizouEm:
+                      null,
+
+                    dataFim: {
+                      gte:
+                        limiteReplay,
+
+                      lte:
+                        agora,
+                    },
+                  },
+                ],
+              },
+            ],
+          },
           select: {
-            id: true,
-            nome: true,
-            nomeDeUsuario: true,
-            email: true,
-            tipo: true,
-          },
-        },
+            id:
+              true,
 
-        convidadoUsuarioId: true,
-        convidadoNome: true,
-        convidadoDescricao: true,
-        convidadoUsuario: {
-          select: {
-            id: true,
-            nome: true,
-            nomeDeUsuario: true,
-            email: true,
-            tipo: true,
-          },
-        },
+            titulo:
+              true,
 
-        convidados: {
-          orderBy: {
-            ordem: "asc",
-          },
-          include: {
-            usuario: {
+            descricao:
+              true,
+
+            dataInicio:
+              true,
+
+            dataFim:
+              true,
+
+            finalizouEm:
+              true,
+
+            inscricaoInicio:
+              true,
+
+            inscricaoFim:
+              true,
+
+            precoAcesso:
+              true,
+
+            acessoPago:
+              true,
+
+            status:
+              true,
+
+            replayDisponivel:
+              true,
+
+            totalParticipantes:
+              true,
+
+            criadorUsuarioId:
+              true,
+
+            criadorUsuario: {
               select: {
-                id: true,
-                nome: true,
-                nomeDeUsuario: true,
-                email: true,
-                tipo: true,
+                id:
+                  true,
+
+                nome:
+                  true,
+
+                nomeDeUsuario:
+                  true,
+
+                email:
+                  true,
+
+                tipo:
+                  true,
+              },
+            },
+
+            convidadoUsuarioId:
+              true,
+
+            convidadoNome:
+              true,
+
+            convidadoDescricao:
+              true,
+
+            convidadoUsuario: {
+              select: {
+                id:
+                  true,
+
+                nome:
+                  true,
+
+                nomeDeUsuario:
+                  true,
+
+                email:
+                  true,
+
+                tipo:
+                  true,
+              },
+            },
+
+            convidados: {
+              orderBy: {
+                ordem:
+                  "asc",
+              },
+
+              include: {
+                usuario: {
+                  select: {
+                    id:
+                      true,
+
+                    nome:
+                      true,
+
+                    nomeDeUsuario:
+                      true,
+
+                    email:
+                      true,
+
+                    tipo:
+                      true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    });
+        });
+
+    const items =
+      aulas
+        .map((aula) => {
+          const ehReplay =
+            aula.status ===
+            "FINALIZADA";
+
+          const validade =
+            ehReplay
+              ? calcularValidadeReplayCompra(
+                  aula
+                )
+              : null;
+          if (
+            ehReplay &&
+            (
+              !validade ||
+              validade
+                .replayExpirado
+            )
+          ) {
+            return null;
+          }
+
+          return {
+            ...aula,
+
+            precoAcesso:
+              Number(
+                aula.precoAcesso ??
+                0
+              ),
+
+            planoId:
+              `AULA_AO_VIVO:${aula.id}`,
+
+            ehReplay,
+
+            replayExpiraEm:
+              validade
+                ?.replayExpiraEm
+                ?.toISOString() ??
+              null,
+
+            segundosRestantes:
+              validade
+                ?.segundosRestantes ??
+              null,
+          };
+        })
+        .filter(
+          (
+            item
+          ): item is NonNullable<
+            typeof item
+          > =>
+            item !== null
+        );
+    items.sort(
+      (a, b) => {
+        const rank = (
+          status: string
+        ) => {
+          if (
+            status ===
+            "AO_VIVO"
+          ) {
+            return 0;
+          }
+
+          if (
+            status ===
+            "AGENDADA"
+          ) {
+            return 1;
+          }
+
+          return 2;
+        };
+
+        const diferencaRank =
+          rank(a.status) -
+          rank(b.status);
+
+        if (
+          diferencaRank !== 0
+        ) {
+          return diferencaRank;
+        }
+
+        if (
+          a.status ===
+          "FINALIZADA"
+        ) {
+          return (
+            new Date(
+              a.replayExpiraEm ||
+                0
+            ).getTime() -
+            new Date(
+              b.replayExpiraEm ||
+                0
+            ).getTime()
+          );
+        }
+
+        return (
+          a.dataInicio.getTime() -
+          b.dataInicio.getTime()
+        );
+      }
+    );
 
     return res.json({
-      items: items.map((aula: any) => ({
-        ...aula,
-        precoAcesso: Number(aula.precoAcesso || 0),
-        planoId: `AULA_AO_VIVO:${aula.id}`,
-      })),
+      items,
+      validadeReplayDias:
+        REPLAY_COMPRA_DIAS,
     });
-  } catch (e: any) {
-    return sendError(res, e, "Erro ao listar eventos ao vivo pagos.");
+  } catch (error: any) {
+    return sendError(
+      res,
+      error,
+      "Erro ao listar eventos ao vivo pagos."
+    );
   }
 }

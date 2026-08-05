@@ -48,8 +48,6 @@ export async function listarMinhasOrganizacoesGerenciaveis(
       return res.json({ items: [] });
     }
 
-    await sincronizarVinculosProfessorOrganizacao(prof.id);
-
     const [gestores, professorClubes, professorEscolinhas] = await Promise.all([
       prisma.organizacaoGestor.findMany({
         where: { professorId: prof.id, ativo: true },
@@ -414,6 +412,69 @@ async function getMyOwnerId(req: AuthenticatedRequest) {
 
 type OrgTipo = "CLUBE" | "ESCOLINHA";
 
+async function buscarProfessorIdsVinculados(
+  tipo: OrgTipo,
+  ownerId: string
+): Promise<Set<string>> {
+  const [relacoesAtivas, vinculosDiretos] =
+    await Promise.all([
+      prisma.relacaoTreinamento.findMany({
+        where: {
+          professorId: {
+            not: null,
+          },
+          atletaId: null,
+          ativo: true,
+          encerradoEm: null,
+
+          ...(tipo === "CLUBE"
+            ? {
+                clubeId: ownerId,
+              }
+            : {
+                escolinhaId: ownerId,
+              }),
+        },
+        select: {
+          professorId: true,
+        },
+      }),
+
+      tipo === "CLUBE"
+        ? prisma.professorClube.findMany({
+            where: {
+              clubeId: ownerId,
+            },
+            select: {
+              professorId: true,
+            },
+          })
+        : prisma.professorEscolinha.findMany({
+            where: {
+              escolinhaId: ownerId,
+            },
+            select: {
+              professorId: true,
+            },
+          }),
+    ]);
+
+  return new Set(
+    [
+      ...vinculosDiretos.map(
+        (vinculo) => vinculo.professorId
+      ),
+
+      ...relacoesAtivas
+        .map((relacao) => relacao.professorId)
+        .filter(
+          (id): id is string =>
+            typeof id === "string" && id.length > 0
+        ),
+    ]
+  );
+}
+
 async function garantirOrganizacaoGestor(params: {
   professorId: string;
   tipo: OrgTipo;
@@ -591,116 +652,195 @@ async function sincronizarVinculosProfessorOrganizacao(professorId: string) {
   }
 }
 
-export async function listarGestores(req: AuthenticatedRequest, res: Response) {
+export async function listarGestores(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const tipo = String(req.query?.tipo || "").toUpperCase(); 
-    const ownerId = String(req.query?.ownerId || "").trim();
+    const tipo = String(
+      req.query?.tipo || ""
+    ).toUpperCase() as OrgTipo;
+
+    const ownerId = String(
+      req.query?.ownerId || ""
+    ).trim();
 
     if (!["CLUBE", "ESCOLINHA"].includes(tipo)) {
-      return res.status(400).json({ message: "tipo deve ser CLUBE ou ESCOLINHA." });
+      return res.status(400).json({
+        message:
+          "tipo deve ser CLUBE ou ESCOLINHA.",
+      });
     }
+
     if (!ownerId) {
-      return res.status(400).json({ message: "ownerId obrigatório." });
+      return res.status(400).json({
+        message: "ownerId obrigatório.",
+      });
     }
 
-    const { tipoUsuario, myOwnerId } = await getMyOwnerId(req);
+    const { tipoUsuario, myOwnerId } =
+      await getMyOwnerId(req);
 
-    if (!canManageOwnerOrAdmin(tipoUsuario, myOwnerId, tipo, ownerId)) {
-      return res.status(403).json({ message: "Sem permissão." });
+    if (
+      !canManageOwnerOrAdmin(
+        tipoUsuario,
+        myOwnerId,
+        tipo,
+        ownerId
+      )
+    ) {
+      return res.status(403).json({
+        message: "Sem permissão.",
+      });
     }
 
-    const professorIdsSet = new Set<string>();
+    const professorIdsVinculados =
+      await buscarProfessorIdsVinculados(
+        tipo,
+        ownerId
+      );
 
-    const gestores = await prisma.organizacaoGestor.findMany({
+    const professorIds = Array.from(
+      professorIdsVinculados
+    );
+
+    if (professorIds.length === 0) {
+      await prisma.organizacaoGestor.updateMany({
+        where: {
+          tipo: tipo as any,
+          ownerId,
+          ativo: true,
+        },
+        data: {
+          ativo: false,
+        },
+      });
+
+      return res.json({
+        items: [],
+      });
+    }
+
+    const gestoresExistentes =
+      await prisma.organizacaoGestor.findMany({
+        where: {
+          tipo: tipo as any,
+          ownerId,
+          professorId: {
+            in: professorIds,
+          },
+        },
+        select: {
+          professorId: true,
+        },
+      });
+
+    const professorIdsComGestor = new Set(
+      gestoresExistentes.map(
+        (gestor) => gestor.professorId
+      )
+    );
+
+    const professorIdsSemGestor =
+      professorIds.filter(
+        (professorId) =>
+          !professorIdsComGestor.has(professorId)
+      );
+
+    if (professorIdsSemGestor.length > 0) {
+      await prisma.organizacaoGestor.createMany({
+        data: professorIdsSemGestor.map(
+          (professorId) => ({
+            tipo: tipo as any,
+            ownerId,
+            professorId,
+            papel: "Professor",
+            ativo: true,
+          })
+        ),
+        skipDuplicates: true,
+      });
+    }
+
+    await prisma.organizacaoGestor.updateMany({
       where: {
         tipo: tipo as any,
         ownerId,
+        professorId: {
+          notIn: professorIds,
+        },
         ativo: true,
       },
-      include: {
-        professor: {
-          select: { id: true, nome: true, cref: true, fotoUrl: true, usuarioId: true },
-        },
+      data: {
+        ativo: false,
       },
-      orderBy: { createdAt: "desc" },
     });
 
-    for (const g of gestores) {
-      if (g.professorId) professorIdsSet.add(g.professorId);
-    }
-
-    if (tipo === "CLUBE") {
-      const pivot = await prisma.professorClube.findMany({
-        where: { clubeId: ownerId },
-        select: { professorId: true },
-      });
-      for (const p of pivot) professorIdsSet.add(p.professorId);
-
-      const diretos = await prisma.professor.findMany({
-        where: { clubeId: ownerId },
-        select: { id: true },
-      });
-      for (const p of diretos) professorIdsSet.add(p.id);
-    } else {
-      const pivot = await prisma.professorEscolinha.findMany({
-        where: { escolinhaId: ownerId },
-        select: { professorId: true },
-      });
-      for (const p of pivot) professorIdsSet.add(p.professorId);
-
-      const diretos = await prisma.professor.findMany({
-        where: { escolinhaId: ownerId },
-        select: { id: true },
-      });
-      for (const p of diretos) professorIdsSet.add(p.id);
-    }
-
-    const professorIds = Array.from(professorIdsSet);
-
-    if (!professorIds.length) {
-      return res.json({ items: [] });
-    }
-
-    const professores = await prisma.professor.findMany({
-      where: { id: { in: professorIds } },
-      select: {
-        id: true,
-        nome: true,
-        cref: true,
-        fotoUrl: true,
-      },
-      orderBy: { nome: "asc" },
-    });
-
-    const gestorMap = new Map(
-      gestores.map((g) => [
-        g.professorId,
-        {
-          id: g.id,
-          ativo: g.ativo,
-          papel: g.papel ?? null,
-          permissoes: g.permissoes ?? null,
+    const gestoresValidos =
+      await prisma.organizacaoGestor.findMany({
+        where: {
+          tipo: tipo as any,
+          ownerId,
+          professorId: {
+            in: professorIds,
+          },
         },
-      ])
-    );
+        include: {
+          professor: {
+            select: {
+              id: true,
+              nome: true,
+              cref: true,
+              fotoUrl: true,
+              usuarioId: true,
+              usuario: {
+                select: {
+                  nome: true,
+                  foto: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
     return res.json({
-      items: professores.map((p) => {
-        const g = gestorMap.get(p.id);
-        return {
-          id: g?.id ?? `${tipo.toLowerCase()}-${ownerId}-${p.id}`,
-          professorId: p.id,
-          ativo: g?.ativo ?? true,
-          papel: g?.papel ?? "Professor",
-          permissoes: g?.permissoes ?? null,
-          professorNome: p.nome ?? null,
-          professorCref: p.cref ?? null,
-          professorFoto: p.fotoUrl ?? null,
-        };
-      }),
+      items: gestoresValidos.map(
+        (gestor) => ({
+          id: gestor.id,
+          professorId:
+            gestor.professorId,
+          ativo: gestor.ativo,
+          papel:
+            gestor.papel ?? "Professor",
+          permissoes:
+            gestor.permissoes ?? null,
+
+          professorNome:
+            gestor.professor?.nome ||
+            gestor.professor?.usuario?.nome ||
+            null,
+
+          professorCref:
+            gestor.professor?.cref ??
+            null,
+
+          professorFoto:
+            gestor.professor?.fotoUrl ||
+            gestor.professor?.usuario?.foto ||
+            null,
+        })
+      ),
     });
-  } catch (e: any) {
-    return sendError(res, e, "Falha ao carregar responsáveis.");
+  } catch (error) {
+    return sendError(
+      res,
+      error,
+      "Falha ao carregar responsáveis."
+    );
   }
 }
 
@@ -734,6 +874,21 @@ export async function criarGestor(req: AuthenticatedRequest, res: Response) {
     const prof = await prisma.professor.findUnique({ where: { id: professorId }, select: { id: true } });
     if (!prof) return res.status(404).json({ error: "Professor não encontrado." });
 
+    const professorIdsVinculados =
+      await buscarProfessorIdsVinculados(
+        tipo as OrgTipo,
+        ownerId
+      );
+
+    if (
+      !professorIdsVinculados.has(professorId)
+    ) {
+      return res.status(409).json({
+        error:
+          "Este professor não está vinculado ao clube/escolinha.",
+      });
+    }
+
     const existente = await prisma.organizacaoGestor.findFirst({
       where: { tipo: tipo as any, ownerId, professorId },
       select: { id: true },
@@ -748,49 +903,6 @@ export async function criarGestor(req: AuthenticatedRequest, res: Response) {
           data: { tipo: tipo as any, ownerId, professorId, papel, permissoes, ativo: true },
         });
 
-    if (tipo === "CLUBE") {
-      await prisma.professorClube.upsert({
-        where: {
-          professorId_clubeId: {
-            professorId,
-            clubeId: ownerId,
-          },
-        },
-        update: {
-          papel: papel ?? "Professor",
-        },
-        create: {
-          professorId,
-          clubeId: ownerId,
-          papel: papel ?? "Professor",
-        },
-      });
-    } else {
-      await prisma.professorEscolinha.upsert({
-        where: {
-          professorId_escolinhaId: {
-            professorId,
-            escolinhaId: ownerId,
-          },
-        },
-        update: {
-          papel: papel ?? "Professor",
-        },
-        create: {
-          professorId,
-          escolinhaId: ownerId,
-          papel: papel ?? "Professor",
-        },
-      });
-    }
-
-    await prisma.professor.update({
-      where: { id: professorId },
-      data:
-        tipo === "CLUBE"
-          ? { clubeId: ownerId }
-          : { escolinhaId: ownerId },
-    });
     return res.status(201).json({ item });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Erro ao adicionar responsável." });

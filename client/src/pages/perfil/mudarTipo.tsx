@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import { useLocation } from "wouter";
 import {
@@ -118,6 +118,47 @@ function getUsuarioNome() {
   );
 }
 
+function getUsuarioNomeDeUsuario() {
+  return (
+    localStorage.getItem(
+      "nomeDeUsuario"
+    ) ||
+    sessionStorage.getItem(
+      "nomeDeUsuario"
+    ) ||
+    ""
+  );
+}
+
+function normalizarNomeDeUsuario(
+  valor: string
+) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    )
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(
+      /[^a-z0-9._]/g,
+      ""
+    )
+    .replace(/_{2,}/g, "_")
+    .replace(/\.{2,}/g, ".")
+    .replace(
+      /^[._]+|[._]+$/g,
+      ""
+    )
+    .slice(0, 30);
+}
+
+type EscolhaNomePerfil =
+  | "ANTIGO"
+  | "NOVO";
+
 const hojeInput = new Date().toISOString().slice(0, 10);
 
 function calcularIdade(dataNascimento: string) {
@@ -158,9 +199,48 @@ function LabelOpcional() {
 export default function MudarTipoPerfilPage() {
   const [, setLocation] = useLocation();
 
+  const nomeAtual = useMemo(
+    () =>
+      getUsuarioNome().trim() ||
+      "Usuário",
+    []
+  );
+
+  const nomeDeUsuarioAtual =
+    useMemo(
+      () =>
+        getUsuarioNomeDeUsuario()
+          .trim(),
+      []
+    );
+
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoDestino | "">("");
   const [nome, setNome] = useState(getUsuarioNome());
   const [nomeOrganizacao, setNomeOrganizacao] = useState("");
+  const [
+    escolhaNomePerfil,
+    setEscolhaNomePerfil,
+  ] =
+    useState<EscolhaNomePerfil>(
+      "ANTIGO"
+    );
+
+  const [
+    nomeDeUsuario,
+    setNomeDeUsuario,
+  ] = useState(() => {
+    return (
+      getUsuarioNomeDeUsuario() ||
+      normalizarNomeDeUsuario(
+        getUsuarioNome()
+      )
+    );
+  });
+
+  const [
+    usernameEditadoManualmente,
+    setUsernameEditadoManualmente,
+  ] = useState(false);
   const [dataNascimento, setDataNascimento] = useState("");
   const [categoria, setCategoria] = useState("");
   const [posicao, setPosicao] = useState("");
@@ -189,6 +269,40 @@ export default function MudarTipoPerfilPage() {
   const isProfessor = tipoSelecionado === "PROFESSOR";
   const isOlheiro = tipoSelecionado === "OLHEIRO";
 
+  const nomeNovoPerfil =
+    isOrganizacao
+      ? nomeOrganizacao.trim()
+      : nome.trim();
+
+  const nomeFinalPerfil =
+    escolhaNomePerfil === "NOVO"
+      ? nomeNovoPerfil
+      : nomeAtual;
+
+  useEffect(() => {
+    if (
+      usernameEditadoManualmente
+    ) {
+      return;
+    }
+
+    const base =
+      escolhaNomePerfil === "NOVO"
+        ? nomeNovoPerfil
+        : nomeDeUsuarioAtual ||
+          nomeAtual;
+
+    setNomeDeUsuario(
+      normalizarNomeDeUsuario(base)
+    );
+  }, [
+    escolhaNomePerfil,
+    nomeNovoPerfil,
+    nomeDeUsuarioAtual,
+    nomeAtual,
+    usernameEditadoManualmente,
+  ]);
+
   function validar() {
     setErro("");
 
@@ -214,6 +328,44 @@ export default function MudarTipoPerfilPage() {
         return false;
     }
 
+    if (
+      escolhaNomePerfil === "NOVO" &&
+      !nomeNovoPerfil
+    ) {
+      setErro(
+        isOrganizacao
+          ? "Informe o nome da organização."
+          : "Informe o novo nome do perfil."
+      );
+
+      return false;
+    }
+
+    if (!nomeFinalPerfil.trim()) {
+      setErro(
+        "Não foi possível definir o nome do perfil."
+      );
+
+      return false;
+    }
+
+    const usernameNormalizado =
+      normalizarNomeDeUsuario(
+        nomeDeUsuario
+      );
+
+    if (
+      !/^[a-z0-9._]{3,30}$/.test(
+        usernameNormalizado
+      )
+    ) {
+      setErro(
+        "O nome de usuário deve ter entre 3 e 30 caracteres e usar apenas letras, números, ponto ou underline."
+      );
+
+      return false;
+    }
+
     return true;
  }
 
@@ -231,9 +383,16 @@ export default function MudarTipoPerfilPage() {
       setLoading(true);
       setErro("");
 
+      const usernameFinal =
+        normalizarNomeDeUsuario(
+          nomeDeUsuario
+        );
+
       const payload: any = {
         tipo: tipoSelecionado,
-        nome: nome.trim() || undefined,
+        nome: nomeFinalPerfil.trim(),
+        nomeDeUsuario: usernameFinal,
+        escolhaNomePerfil,
       };
 
       if (isAtleta) {
@@ -259,10 +418,17 @@ export default function MudarTipoPerfilPage() {
       }
 
       if (isOrganizacao) {
-        payload.nomeOrganizacao = nomeOrganizacao || nome || undefined;
-        payload.cnpj = cnpj || undefined;
-        payload.cidade = cidade || undefined;
-        payload.estado = estado || undefined;
+        payload.nomeOrganizacao =
+          nomeOrganizacao.trim();
+
+        payload.cnpj =
+          cnpj || undefined;
+
+        payload.cidade =
+          cidade || undefined;
+
+        payload.estado =
+          estado || undefined;
       }
 
       const res = await fetch(`${API.BASE_URL}/api/perfil/learning/upgrade`, {
@@ -280,19 +446,77 @@ export default function MudarTipoPerfilPage() {
         throw new Error(data?.message || "Erro ao mudar tipo de perfil.");
       }
 
-      const tipoLower = String(tipoSelecionado).toLowerCase();
+      const tipoLower =
+        String(
+          data?.usuario?.tipo ??
+            data?.tipo ??
+            tipoSelecionado
+        )
+          .trim()
+          .toLowerCase();
+
+      const nomeSalvo =
+        String(
+          data?.usuario?.nome ??
+            nomeFinalPerfil
+        ).trim();
+
+      const usernameSalvo =
+        String(
+          data?.usuario
+            ?.nomeDeUsuario ??
+            usernameFinal
+        ).trim();
+
+      const tipoUsuarioId =
+        String(
+          data?.tipoUsuarioId ??
+            data?.perfilId ??
+            ""
+        ).trim();
 
       localStorage.setItem("tipoUsuario", tipoLower);
       sessionStorage.setItem("tipoUsuario", tipoLower);
       localStorage.setItem("usuarioTipoRaw", tipoLower);
       sessionStorage.setItem("usuarioTipoRaw", tipoLower);
 
-      toast.success("Tipo de perfil atualizado com sucesso!");
+      if (nomeSalvo) {
+        localStorage.setItem(
+          "nomeUsuario",
+          nomeSalvo
+        );
 
-      if (tipoLower === "federacao" || tipoLower === "marca") {
-        window.location.href = "/creator/dashboard";
-        return;
+        sessionStorage.setItem(
+          "nomeUsuario",
+          nomeSalvo
+        );
       }
+
+      if (usernameSalvo) {
+        localStorage.setItem(
+          "nomeDeUsuario",
+          usernameSalvo
+        );
+
+        sessionStorage.setItem(
+          "nomeDeUsuario",
+          usernameSalvo
+        );
+      }
+
+      if (tipoUsuarioId) {
+        localStorage.setItem(
+          "tipoUsuarioId",
+          tipoUsuarioId
+        );
+
+        sessionStorage.setItem(
+          "tipoUsuarioId",
+          tipoUsuarioId
+        );
+      }
+
+      toast.success("Tipo de perfil atualizado com sucesso!");
 
       window.location.href = "/perfil";
     } catch (e: any) {
@@ -636,6 +860,152 @@ export default function MudarTipoPerfilPage() {
                 </div>
               </div>
             )}
+
+            <div className="rounded-2xl border border-green-200 bg-green-50/40 p-4">
+              <h3 className="font-bold text-green-950">
+                Nome do novo perfil
+              </h3>
+
+              <p className="mt-1 text-sm text-green-900/70">
+                Escolha se deseja manter o nome
+                atual ou usar o nome informado
+                para o novo perfil.
+              </p>
+
+              <div className="mt-4 grid gap-3">
+                <label
+                  className={`
+                    flex cursor-pointer
+                    items-start gap-3
+                    rounded-xl border p-4
+                    ${
+                      escolhaNomePerfil ===
+                      "ANTIGO"
+                        ? "border-green-700 bg-white ring-2 ring-green-700/10"
+                        : "border-green-100 bg-white"
+                    }
+                  `}
+                >
+                  <input
+                    type="radio"
+                    name="escolhaNomePerfil"
+                    value="ANTIGO"
+                    checked={
+                      escolhaNomePerfil ===
+                      "ANTIGO"
+                    }
+                    onChange={() => {
+                      setEscolhaNomePerfil(
+                        "ANTIGO"
+                      );
+
+                      setUsernameEditadoManualmente(
+                        false
+                      );
+                    }}
+                    className="mt-1"
+                  />
+
+                  <div>
+                    <div className="font-semibold text-green-950">
+                      Manter o nome atual
+                    </div>
+
+                    <div className="text-sm text-green-900/70">
+                      {nomeAtual}
+                      {nomeDeUsuarioAtual
+                        ? ` (@${nomeDeUsuarioAtual})`
+                        : ""}
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`
+                    flex cursor-pointer
+                    items-start gap-3
+                    rounded-xl border p-4
+                    ${
+                      escolhaNomePerfil ===
+                      "NOVO"
+                        ? "border-green-700 bg-white ring-2 ring-green-700/10"
+                        : "border-green-100 bg-white"
+                    }
+                  `}
+                >
+                  <input
+                    type="radio"
+                    name="escolhaNomePerfil"
+                    value="NOVO"
+                    checked={
+                      escolhaNomePerfil ===
+                      "NOVO"
+                    }
+                    onChange={() => {
+                      setEscolhaNomePerfil(
+                        "NOVO"
+                      );
+
+                      setUsernameEditadoManualmente(
+                        false
+                      );
+                    }}
+                    className="mt-1"
+                  />
+
+                  <div>
+                    <div className="font-semibold text-green-950">
+                      Usar o novo nome
+                    </div>
+
+                    <div className="text-sm text-green-900/70">
+                      {nomeNovoPerfil ||
+                        "Preencha o novo nome acima."}
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-semibold text-green-950">
+                  Nome de usuário (@)
+                </label>
+
+                <input
+                  value={nomeDeUsuario}
+                  onChange={(event) => {
+                    setUsernameEditadoManualmente(
+                      true
+                    );
+
+                    setNomeDeUsuario(
+                      normalizarNomeDeUsuario(
+                        event.target.value
+                      )
+                    );
+                  }}
+                  className="w-full rounded-xl border px-3 py-3"
+                  placeholder="nome_de_usuario"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+
+                <p className="mt-1 text-xs text-green-800/70">
+                  Use de 3 a 30 caracteres:
+                  letras, números, ponto e
+                  underline.
+                </p>
+
+                {nomeDeUsuario && (
+                  <p className="mt-2 text-sm font-semibold text-green-900">
+                    Seu perfil ficará como:
+                    {" "}
+                    @{nomeDeUsuario}
+                  </p>
+                )}
+              </div>
+            </div>
 
             {erro && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
