@@ -1,4 +1,6 @@
-import React, { createContext, useState, useEffect } from "react";
+// client/src/context/UserContext
+import React, { createContext, useState, useCallback, } from "react";
+import Storage from "../utils/storage.js";
 
 export interface User {
   id: number;
@@ -61,10 +63,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
+    Storage.clearAuth();
     setUser(null);
     setScore(null);
-  };
+  }, []);
 
   return (
     <UserContext.Provider

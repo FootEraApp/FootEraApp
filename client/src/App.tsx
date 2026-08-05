@@ -1,3 +1,4 @@
+// client/src/App
 import { useEffect } from "react";
 import { AppRoutes } from "./routes.js";
 import { UserProvider } from "./context/UserContext.js";
@@ -5,6 +6,7 @@ import { usePresencePing } from "@/hooks/usePresencePing";
 import { sincronizarPushSePermitido } from "./services/pushNotifications.js";
 import { inicializarPushAndroidNativo } from "./services/nativePushNotifications.js";
 import ToastContainer from "./components/ui/ToastContainer.js";
+import MaintenanceGate from "./components/system/MaintenanceGate.js"
 
 function PresenceBoot() {
   usePresencePing();
@@ -64,10 +66,12 @@ function PushBoot() {
 export default function App() {
   return (
     <UserProvider>
-      <PresenceBoot />
-      <PushBoot />
-      <AppRoutes />
-      <ToastContainer />
+      <MaintenanceGate>
+        <PresenceBoot />
+        <PushBoot />
+        <AppRoutes />
+        <ToastContainer />
+      </MaintenanceGate>
     </UserProvider>
   );
 }

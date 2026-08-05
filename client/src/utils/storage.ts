@@ -13,6 +13,15 @@ const setToStorage = (key: string, value: string | null) => {
   sessionStorage.setItem(key, value);
 };
 
+const AUTH_STORAGE_KEYS = [
+  "token",
+  "usuarioId",
+  "tipoUsuario",
+  "tipoUsuarioId",
+  "nomeUsuario",
+  "nomeDeUsuario",
+];
+
 const Storage = {
   get tipoSalvo() {
     return getFromStorage("tipoUsuario");
@@ -38,8 +47,16 @@ const Storage = {
       getFromStorage("nomeUsuario") 
     );
   },
+
   set nomeDeUsuario(v: string | null) {
     setToStorage("nomeDeUsuario", v);
+  },
+
+  clearAuth() {
+    for (const key of AUTH_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
   },
 };
 

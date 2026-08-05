@@ -47,6 +47,8 @@ import { PrismaClient } from "@prisma/client";
 import { purgeDeletedAccounts } from "./jobs/purgeDeletedAccounts.js";
 import { startNotificationScheduler } from "./services/notificationScheduler.js";
 
+import { startMaintenanceScheduler } from "./services/maintenanceScheduler.js";
+
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
@@ -153,6 +155,8 @@ const server = http.createServer(app);
 ensureUploadDirs();
 startExpiredTrainingsJob();
 startNotificationScheduler();
+
+startMaintenanceScheduler();
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 const PORT = Number(process.env.PORT) || 3001;
@@ -310,7 +314,7 @@ app.use("/api/amigos", authenticateToken, amigosRoutes);
 app.use("/api/categorias", authenticateToken, categoriasRoutes);
 app.use("/api/clubes", authenticateToken, clubeRoutes);
 app.use("/api/configuracoes-perfil", configuracoesPerfilRoutes);
-app.use("/api/configuracoes", authenticateToken, configuracoesRoutes);
+app.use("/api/configuracoes", /*authenticateToken,*/ configuracoesRoutes); //A leitura precisa ser pública porque a página de login e a tela de manutenção também precisam consultar o status. As operações sensíveis serão protegidas dentro da própria rota.
 app.use("/api/conquistas", authenticateToken, conquistasRoutes);
 app.use("/api/desafios", authenticateToken, desafiosRoutes);
 app.use("/api/desafios/em-grupo", authenticateToken, desafiosEmGrupoRoutes);
