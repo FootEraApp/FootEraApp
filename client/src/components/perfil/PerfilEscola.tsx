@@ -131,7 +131,7 @@ type EventoItem = {
   descricao?: string | null;
   status?: string | null;
 
-  origem?: "EVENTO_ESCOLINHA" | "AULA_AO_VIVO_CREATOR";
+  origem?: "EVENTO_ESCOLINHA" | "EVENTO_CREATOR" | "AULA_AO_VIVO_CREATOR";
   thumbUrl?: string | null;
   totalParticipantes?: number | null;
 
@@ -243,6 +243,8 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
   const [eventos, setEventos] = useState<EventoItem[] | null>(null);
   const [eventosLoading, setEventosLoading] = useState(false);
+  const [mostrarTodosEventos, setMostrarTodosEventos] = useState(false);
+  const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
   const [conquistasReal, setConquistasReal] = useState<number>(0);
   const [privacidade, setPrivacidade] = useState<{
     perfilVisivel: boolean;
@@ -392,6 +394,16 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       window.clearInterval(intervalId);
     };
   }, [aba, token, escolinhaId, canEdit]);
+
+  useEffect(() => {
+    setEventos(null);
+    setMostrarTodosEventos(false);
+  }, [
+    targetId,
+    hasCreator,
+    creatorUsuarioId,
+    entidadeUsuarioId,
+  ]);
 
   useEffect(() => {
     if (!token || !escolinhaId || !canEdit) return;
@@ -919,77 +931,94 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   }
 
   async function loadEventosEscolinha() {
-    if (!token) return;
-    if (eventosLoading) return;
-
     const escolaId =
       (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
-    const usuarioCreatorId =
+    const usuarioCreatorId = String(
       creatorUsuarioId ||
-      data?.escolinha?.usuarioId ||
-      entidadeUsuarioId ||
-      Storage.usuarioId ||
-      "";
+        data?.escolinha?.usuarioId ||
+        entidadeUsuarioId ||
+        (isOwn ? Storage.usuarioId : "") ||
+        ""
+    ).trim();
 
     if (!escolaId && !usuarioCreatorId) {
       setEventos([]);
+      setCreatorAtivoLocal(false);
       return;
     }
 
     setEventosLoading(true);
 
     try {
-      const requests: Promise<any>[] = [];
-
-      if (escolaId) {
-        requests.push(
-          axios.get(`${API.BASE_URL}/api/eventos/escolas/${escolaId}`, {
+      const eventosEscolaPromise = escolaId
+        ? axios.get(`${API.BASE_URL}/api/eventos/escolas/${escolaId}`, {
             headers,
             params: {
               ownerTipo: "Escolinha",
               ownerId: escolaId,
             },
           })
-        );
-      }
+        : Promise.resolve({ data: [] });
 
-      if (hasCreator && usuarioCreatorId) {
-        requests.push(
-          axios.get(
+      const eventosCreatorPromise = usuarioCreatorId
+        ? axios.get(`${API.BASE_URL}/api/eventos`, {
+            headers,
+            params: { creatorUsuarioId: usuarioCreatorId },
+          })
+        : Promise.resolve({ data: [] });
+
+      const perfilCreatorPromise = usuarioCreatorId
+        ? axios.get(
             `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
               usuarioCreatorId
-            )}`
+            )}`,
+            { headers }
           )
-        );
-      }
+        : Promise.resolve({ data: null });
 
-      const results = await Promise.allSettled(requests);
+      const [escolaResult, creatorEventosResult, creatorPerfilResult] =
+        await Promise.allSettled([
+          eventosEscolaPromise,
+          eventosCreatorPromise,
+          perfilCreatorPromise,
+        ]);
 
-      const eventosResp =
-        results[0]?.status === "fulfilled" ? results[0].value.data : [];
+      const eventosEscolaResp =
+        escolaResult.status === "fulfilled" ? escolaResult.value.data : [];
 
-      const creatorResp =
-        hasCreator && results.length > 1 && results[1]?.status === "fulfilled"
-          ? results[1].value.data
-          : null;
-
-      const arr =
-        Array.isArray(eventosResp)
-          ? eventosResp
-          : Array.isArray(eventosResp?.items)
-          ? eventosResp.items
-          : Array.isArray(eventosResp?.eventos)
-          ? eventosResp.eventos
+      const eventosCreatorResp =
+        creatorEventosResult.status === "fulfilled"
+          ? creatorEventosResult.value.data
           : [];
 
-      const eventosNormais: EventoItem[] = (arr ?? []).map((e: any) => {
+      const creatorResp =
+        creatorPerfilResult.status === "fulfilled"
+          ? creatorPerfilResult.value.data
+          : null;
+
+      setCreatorAtivoLocal(Boolean(creatorResp));
+
+      const extrairEventos = (payload: any): any[] =>
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+          ? payload.items
+          : Array.isArray(payload?.eventos)
+          ? payload.eventos
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+
+      const eventosDaEscola: EventoItem[] = extrairEventos(
+        eventosEscolaResp
+      ).map((e: any) => {
         const dt = e.dataEvento ?? e.data ?? e.inicio ?? null;
 
         return {
           id: String(e.id),
           titulo: String(e.titulo ?? e.nome ?? "Evento"),
-          tipo: e.tipo ?? null,
+          tipo: e.tipoLabel ?? e.tipo ?? null,
           dataEvento: dt,
           inicio: e.inicio ?? null,
           cidade: e.cidade ?? null,
@@ -1004,40 +1033,91 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       });
 
       const criadorCreatorLabel =
-      getCriadorLabelFromCreator(creatorResp) ||
-      data?.escolinha?.nome ||
-      data?.usuario?.nome ||
-      "";
+        getCriadorLabelFromCreator(creatorResp) ||
+        data?.escolinha?.nome ||
+        data?.usuario?.nome ||
+        "";
 
-    const aulasAoVivoCreator: EventoItem[] = Array.isArray(
-      creatorResp?.eventosAoVivo
-    )
-      ? creatorResp.eventosAoVivo.map((aula: any) => ({
-          id: String(aula.id),
-          titulo: String(aula.titulo ?? "Aula ao vivo"),
-          tipo: "Aula ao vivo",
-          dataEvento: String(aula.dataInicio ?? ""),
-          inicio: String(aula.dataInicio ?? ""),
-          cidade: null,
-          estado: null,
-          endereco: null,
-          descricao: aula.descricao ?? null,
-          status: aula.status ?? null,
-          origem: "AULA_AO_VIVO_CREATOR",
-          thumbUrl: aula.thumbUrl ?? null,
-          totalParticipantes: aula.totalParticipantes ?? null,
-          criadorLabel: criadorCreatorLabel,
-          convidadosLabel: getConvidadosLabelFromAula(aula),
-        }))
-      : [];
+      const eventosGeraisDoCreator: EventoItem[] = extrairEventos(
+        eventosCreatorResp
+      ).map((e: any) => ({
+        id: String(e.id),
+        titulo: String(e.titulo ?? e.nome ?? "Evento"),
+        tipo: e.tipoLabel ?? e.tipo ?? "Evento",
+        dataEvento: String(e.dataEvento ?? e.data ?? e.inicio ?? ""),
+        inicio: String(e.inicio ?? e.dataEvento ?? e.data ?? ""),
+        cidade: e.cidade ?? null,
+        estado: e.estado ?? null,
+        endereco: e.endereco ?? null,
+        descricao: e.descricao ?? null,
+        status: e.status ?? null,
+        origem: "EVENTO_CREATOR",
+        criadorLabel: criadorCreatorLabel || null,
+        convidadosLabel: null,
+      }));
+
+      const aulasAoVivoCreator: EventoItem[] = Array.isArray(
+        creatorResp?.eventosAoVivo
+      )
+        ? creatorResp.eventosAoVivo.map((aula: any) => ({
+            id: String(aula.id),
+            titulo: String(aula.titulo ?? "Aula ao vivo"),
+            tipo: "Aula ao vivo",
+            dataEvento: String(aula.dataInicio ?? ""),
+            inicio: String(aula.dataInicio ?? ""),
+            cidade: null,
+            estado: null,
+            endereco: null,
+            descricao: aula.descricao ?? null,
+            status: aula.status ?? null,
+            origem: "AULA_AO_VIVO_CREATOR",
+            thumbUrl: aula.thumbUrl ?? null,
+            totalParticipantes: aula.totalParticipantes ?? null,
+            criadorLabel: criadorCreatorLabel,
+            convidadosLabel: getConvidadosLabelFromAula(aula),
+          }))
+        : [];
+
+      const porChave = new Map<string, EventoItem>();
+
+      for (const evento of [
+        ...eventosDaEscola,
+        ...eventosGeraisDoCreator,
+        ...aulasAoVivoCreator,
+      ]) {
+        const chave =
+          evento.origem === "AULA_AO_VIVO_CREATOR"
+            ? `AULA:${evento.id}`
+            : `EVENTO:${evento.id}`;
+
+        if (!porChave.has(chave)) {
+          porChave.set(chave, evento);
+        }
+      }
 
       const hojeBR = getDiaBR(new Date().toISOString());
 
-      const filtradosOrdenados = [...eventosNormais, ...aulasAoVivoCreator]
-        .filter((e) => {
-          const raw = e.dataEvento || e.inicio;
-          const diaEventoBR = getDiaBR(raw);
-          return !!diaEventoBR && diaEventoBR >= hojeBR;
+      const filtradosOrdenados = Array.from(porChave.values())
+        .filter((evento) => {
+          const status = String(evento.status || "").toUpperCase();
+
+          if (status === "AO_VIVO") return true;
+
+          if (
+            [
+              "FINALIZADA",
+              "FINALIZADO",
+              "ENCERRADA",
+              "ENCERRADO",
+              "CANCELADA",
+              "CANCELADO",
+            ].includes(status)
+          ) {
+            return false;
+          }
+
+          const diaEventoBR = getDiaBR(evento.dataEvento || evento.inicio);
+          return Boolean(diaEventoBR && diaEventoBR >= hojeBR);
         })
         .sort((a, b) => {
           const da = new Date(a.dataEvento || a.inicio || 0).getTime();
@@ -1049,6 +1129,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     } catch (err) {
       console.error("Erro ao carregar eventos da escolinha:", err);
       setEventos([]);
+      setCreatorAtivoLocal(false);
     } finally {
       setEventosLoading(false);
     }
@@ -1173,6 +1254,20 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     : undefined;
 
   const escolinhaIdStr = data.escolinha.id;
+
+  const usuarioCreatorDoPerfil = String(
+    creatorUsuarioId ||
+      data.escolinha.usuarioId ||
+      data.usuario?.id ||
+      (isOwn ? Storage.usuarioId : "") ||
+      ""
+  ).trim();
+
+  const mostrarCreator = Boolean(hasCreator || creatorAtivoLocal);
+  const eventosVisiveis = mostrarTodosEventos
+    ? eventos ?? []
+    : (eventos ?? []).slice(0, 5);
+
   const ownerIdDashboard = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? data.escolinha.id;
 
   return (
@@ -1193,8 +1288,8 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         perfilTipoIdProp={data.escolinha.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
-        hasCreator={hasCreator}
-        creatorUsuarioId={creatorUsuarioId}
+        hasCreator={mostrarCreator}
+        creatorUsuarioId={usuarioCreatorDoPerfil || null}
       />
 
       <div className="mt-4 px-3 sm:px-4">
@@ -1518,25 +1613,44 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           <SectionCard
             title="Eventos"
             right={
-              <Link
-                href={hasCreator ? "/creator/eventos" : `/eventos/escolas/${escolinhaIdStr}`}
-                className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
-              >
-                Ver todos
-              </Link>
+              isOwn ? (
+                <Link
+                  href={
+                    mostrarCreator
+                      ? "/creator/eventos"
+                      : `/eventos/escolas/${escolinhaIdStr}`
+                  }
+                  className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+                >
+                  Ver todos os eventos
+                </Link>
+              ) : (eventos?.length ?? 0) > 5 ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarTodosEventos((valor) => !valor)}
+                  className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+                >
+                  {mostrarTodosEventos ? "Mostrar menos" : `Ver todos (${eventos?.length ?? 0})`}
+                </button>
+              ) : null
             }
           >
             <p className="text-sm text-green-900/80 mt-1">
-              Crie e gerencie seus eventos, peneiras, amistosos e avaliações.
+              Confira os próximos eventos, peneiras, amistosos, avaliações e aulas ao vivo.
             </p>
 
             {isOwn && (
               <div className="mt-4">
                 <Link
-                  href={hasCreator ? "/creator/eventos/novo" : `/eventos/escolas/${escolinhaIdStr}/novo`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-3 sm:px-4 py-2"
+                  href={
+                    mostrarCreator
+                      ? "/creator/eventos/novo"
+                      : `/eventos/escolas/${escolinhaIdStr}/novo`
+                  }
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white font-semibold px-3 sm:px-4 py-2 hover:bg-green-700"
                 >
-                  <span>+</span> Criar novo evento
+                  <PlusCircle className="w-4 h-4" />
+                  Criar novo evento
                 </Link>
               </div>
             )}
@@ -1544,94 +1658,101 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
             <div className="mt-5">
               {eventosLoading ? (
                 <div className="text-sm text-green-900/70">Carregando eventos…</div>
-              ) : eventos && eventos.length > 0 ? (
+              ) : eventosVisiveis.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
-                  {eventos
-                    .slice()
-                    .sort((a, b) => {
-                      const da = new Date(a.dataEvento || a.inicio || 0).getTime();
-                      const db = new Date(b.dataEvento || b.inicio || 0).getTime();
-                      return da - db;
-                    })
-                    .slice(0, 8)
-                    .map((e) => {
-                      const dt = e.dataEvento || e.inicio || "";
-                      const when = dt ? new Date(dt).toLocaleString() : "Data não informada";
-                      const where = [e.endereco, e.cidade, e.estado].filter(Boolean).join(" • ");
-                      const tipoLabel =
-                        e.origem === "AULA_AO_VIVO_CREATOR"
-                          ? "Aula ao vivo Creator"
-                          : e.tipo;
+                  {eventosVisiveis.map((e) => {
+                    const dt = e.dataEvento || e.inicio || "";
+                    const when = dt
+                      ? new Date(dt).toLocaleString("pt-BR")
+                      : "Data não informada";
+                    const where = [e.endereco, e.cidade, e.estado]
+                      .filter(Boolean)
+                      .join(" • ");
+                    const tipoLabel =
+                      e.origem === "AULA_AO_VIVO_CREATOR"
+                        ? "Aula ao vivo"
+                        : e.tipo || "Evento";
 
-                      const participantes =
-                        e.origem === "AULA_AO_VIVO_CREATOR" &&
-                        typeof e.totalParticipantes === "number"
-                          ? `${e.totalParticipantes} participantes`
-                          : "";
+                    const participantes =
+                      e.origem === "AULA_AO_VIVO_CREATOR" &&
+                      typeof e.totalParticipantes === "number"
+                        ? `${e.totalParticipantes} participantes`
+                        : "";
 
-                      return (
-                        <li
-                          key={e.id}
-                          className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50"
-                        >
-                          <CalendarClock className="w-5 h-5 text-green-700" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-green-900 truncate">
-                              {e.titulo}
-                            </div>
-                            <div className="text-xs text-green-900/70">
-                              {[tipoLabel, when, where, participantes].filter(Boolean).join(" • ")}
-                            </div>
-                            {e.criadorLabel ? (
-                              <div className="mt-1 text-xs text-green-900/80">
-                                <b>Criador:</b> {e.criadorLabel}
-                              </div>
-                            ) : null}
+                    const href =
+                      e.origem === "AULA_AO_VIVO_CREATOR"
+                        ? `/learning/evento/${e.id}`
+                        : `/eventos/${e.id}`;
 
-                            {e.convidadosLabel ? (
-                              <div className="mt-1 text-xs text-green-900/80">
-                                <b>Convidados:</b> {e.convidadosLabel}
-                              </div>
-                            ) : null}
+                    return (
+                      <li
+                        key={`${e.origem || "EVENTO"}:${e.id}`}
+                        className="flex flex-col gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50 sm:flex-row sm:items-center"
+                      >
+                        <CalendarClock className="w-5 h-5 shrink-0 text-green-700" />
+
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-green-900 truncate">
+                            {e.titulo}
                           </div>
 
+                          <div className="text-xs text-green-900/70">
+                            {[tipoLabel, when, where, participantes]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </div>
+
+                          {e.criadorLabel ? (
+                            <div className="mt-1 text-xs text-green-900/80">
+                              <b>Criador:</b> {e.criadorLabel}
+                            </div>
+                          ) : null}
+
+                          {e.convidadosLabel ? (
+                            <div className="mt-1 text-xs text-green-900/80">
+                              <b>Convidados:</b> {e.convidadosLabel}
+                            </div>
+                          ) : null}
+
+                          {e.descricao?.trim() ? (
+                            <div className="mt-2 line-clamp-2 text-xs text-green-900/80">
+                              {e.descricao}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
                           <Link
-                            href={
-                              e.origem === "AULA_AO_VIVO_CREATOR"
-                                ? `/learning/evento/${e.id}`
-                                : `/eventos/${e.id}`
-                            }
+                            href={href}
                             className="text-sm text-green-800 inline-flex items-center gap-1"
                           >
                             Abrir <ChevronRight className="w-4 h-4" />
                           </Link>
 
-                          {isOwn && (
+                          {isOwn && e.origem === "EVENTO_ESCOLINHA" ? (
                             <Link
                               href={`/eventos/convocar?eventoId=${e.id}&returnTo=/perfil/escola`}
-                              className="ml-2 text-xs px-2 py-1 rounded-md border border-green-200 text-green-900"
+                              className="text-xs px-2 py-1 rounded-md border border-green-200 text-green-900"
                             >
                               Convocar
                             </Link>
-                          )}
-                        </li>
-                      );
-                    })}
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
-                <EmptyState text="Nenhum evento cadastrado ainda." />
+                <EmptyState text="Nenhum evento futuro cadastrado." />
               )}
             </div>
           </SectionCard>
-            {hasCreator && (
-                <ProfileReplaysSection
-                  creatorUsuarioId={
-                    creatorUsuarioId ||
-                    data.escolinha.usuarioId ||
-                    data.usuario?.id
-                  }
-                />
-              )}
+
+          {mostrarCreator && usuarioCreatorDoPerfil ? (
+            <ProfileReplaysSection
+              creatorUsuarioId={usuarioCreatorDoPerfil}
+            />
+          ) : null}
         </div>
       )}
 
