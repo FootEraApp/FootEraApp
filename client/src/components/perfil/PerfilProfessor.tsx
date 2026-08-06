@@ -155,6 +155,19 @@ type TreinoCriado = {
   papel?: "Criador" | "Colaborador";
 };
 
+type EventoPerfilItem = {
+  id: string;
+  origem: "EVENTO" | "AULA_AO_VIVO";
+  titulo: string;
+  descricao?: string | null;
+  data: string;
+  tipoLabel: string;
+  status: string;
+  cidade?: string | null;
+  estado?: string | null;
+  totalParticipantes?: number | null;
+};
+
 function pickPontuacao(raw: any): number | null {
   const candidates = [
     raw?.pontuacaoTotal,
@@ -255,6 +268,10 @@ export default function PerfilProfessor({
   const [notaPorAtleta, setNotaPorAtleta] = useState<Record<string, string>>({});
   const [notificarPorAtleta, setNotificarPorAtleta] = useState<Record<string, boolean>>({});
   const [salvandoNota, setSalvandoNota] = useState<Record<string, boolean>>({});
+  const [eventos, setEventos] = useState<EventoPerfilItem[]>([]);
+  const [eventosLoading, setEventosLoading] = useState(false);
+  const [eventosErro, setEventosErro] = useState("");
+  const [mostrarTodosEventos, setMostrarTodosEventos] = useState(false);
 
   const qtdVinculados = vinculados?.length ?? 0;
   const qtdObservados = observados?.length ?? 0;
@@ -310,17 +327,10 @@ export default function PerfilProfessor({
       label: "Atletas",
     },
 
-    ...(hasCreator
-      ? [
-          {
-            id:
-              "eventos" as Aba,
-
-            label:
-              "Eventos",
-          },
-        ]
-      : []),
+    {
+      id: "eventos",
+      label: "Eventos",
+    },
 
     {
       id: "conquistas",
@@ -352,6 +362,187 @@ export default function PerfilProfessor({
 
   const isOwn = !idDaUrl || idDaUrl === usuarioIdStorage;
   const targetId = isOwn ? (tipoUsuarioIdStorage || "me") : (idDaUrl as string);
+
+  const usuarioCreatorDoPerfil = String(
+    creatorUsuarioId ||
+      data?.usuario?.id ||
+      data?.professor?.usuarioId ||
+      (isOwn ? usuarioIdStorage : "") ||
+      ""
+  ).trim();
+
+  const mostrarCreator = Boolean(hasCreator && usuarioCreatorDoPerfil);
+
+  useEffect(() => {
+    if (aba !== "eventos") return;
+
+    if (!usuarioCreatorDoPerfil) {
+      setEventos([]);
+      setEventosErro("");
+      setEventosLoading(false);
+      return;
+    }
+
+    let cancelado = false;
+
+    async function carregarEventosDoPerfil() {
+      setEventosLoading(true);
+      setEventosErro("");
+
+      try {
+        const requestHeaders = rawToken
+          ? { Authorization: `Bearer ${rawToken}` }
+          : undefined;
+
+        const [eventosResultado, livesResultado] =
+          await Promise.allSettled([
+            axios.get(`${API.BASE_URL}/api/eventos`, {
+              params: {
+                creatorUsuarioId: usuarioCreatorDoPerfil,
+              },
+              headers: requestHeaders,
+            }),
+            axios.get(
+              `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
+                usuarioCreatorDoPerfil
+              )}`,
+              { headers: requestHeaders }
+            ),
+          ]);
+
+        if (cancelado) return;
+
+        const eventosPayload =
+          eventosResultado.status === "fulfilled"
+            ? eventosResultado.value.data
+            : [];
+
+        const eventosArray = Array.isArray(eventosPayload)
+          ? eventosPayload
+          : Array.isArray(eventosPayload?.items)
+          ? eventosPayload.items
+          : Array.isArray(eventosPayload?.eventos)
+          ? eventosPayload.eventos
+          : Array.isArray(eventosPayload?.data)
+          ? eventosPayload.data
+          : [];
+
+        const creatorPayload =
+          livesResultado.status === "fulfilled"
+            ? livesResultado.value.data
+            : null;
+
+        const eventosNormais: EventoPerfilItem[] = eventosArray.map(
+          (evento: any) => ({
+            id: String(evento.id),
+            origem: "EVENTO",
+            titulo: String(evento.titulo ?? evento.nome ?? "Evento"),
+            descricao: evento.descricao ?? null,
+            data: String(
+              evento.dataEvento ?? evento.data ?? evento.inicio ?? ""
+            ),
+            tipoLabel: String(
+              evento.tipoLabel ?? evento.tipo ?? "Evento"
+            ),
+            status: String(evento.status ?? "ABERTO"),
+            cidade: evento.cidade ?? null,
+            estado: evento.estado ?? null,
+            totalParticipantes: null,
+          })
+        );
+
+        const aulasAoVivo: EventoPerfilItem[] = Array.isArray(
+          creatorPayload?.eventosAoVivo
+        )
+          ? creatorPayload.eventosAoVivo.map((aula: any) => ({
+              id: String(aula.id),
+              origem: "AULA_AO_VIVO",
+              titulo: String(aula.titulo ?? "Aula ao vivo"),
+              descricao: aula.descricao ?? null,
+              data: String(aula.dataInicio ?? aula.inicio ?? ""),
+              tipoLabel: "Aula ao vivo",
+              status: String(aula.status ?? "AGENDADA"),
+              cidade: null,
+              estado: null,
+              totalParticipantes:
+                typeof aula.totalParticipantes === "number"
+                  ? aula.totalParticipantes
+                  : null,
+            }))
+          : [];
+
+        const agora = Date.now();
+
+        const proximos = [...eventosNormais, ...aulasAoVivo]
+          .filter((evento) => {
+            const status = String(evento.status || "").toUpperCase();
+
+            if (status === "AO_VIVO") return true;
+
+            if (
+              [
+                "FINALIZADA",
+                "FINALIZADO",
+                "ENCERRADO",
+                "CANCELADA",
+                "CANCELADO",
+              ].includes(status)
+            ) {
+              return false;
+            }
+
+            const timestamp = new Date(evento.data).getTime();
+            return Number.isFinite(timestamp) && timestamp >= agora;
+          })
+          .sort(
+            (a, b) =>
+              new Date(a.data).getTime() - new Date(b.data).getTime()
+          );
+
+        const unicos = Array.from(
+          new Map(
+            proximos.map((evento) => [
+              `${evento.origem}:${evento.id}`,
+              evento,
+            ])
+          ).values()
+        );
+
+        setEventos(unicos);
+
+        if (
+          eventosResultado.status === "rejected" &&
+          livesResultado.status === "rejected"
+        ) {
+          setEventosErro("Não foi possível carregar os eventos agora.");
+        }
+      } catch (error) {
+        console.error("Erro ao carregar eventos do professor:", error);
+
+        if (!cancelado) {
+          setEventos([]);
+          setEventosErro("Não foi possível carregar os eventos agora.");
+        }
+      } finally {
+        if (!cancelado) setEventosLoading(false);
+      }
+    }
+
+    void carregarEventosDoPerfil();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [aba, usuarioCreatorDoPerfil, rawToken]);
+
+  useEffect(() => {
+    setMostrarTodosEventos(false);
+  }, [usuarioCreatorDoPerfil]);
+
+  const eventosVisiveis = mostrarTodosEventos
+    ? eventos
+    : eventos.slice(0, 5);
+
 
   useEffect(() => {
     setVinculados(null);
@@ -1028,12 +1219,17 @@ export default function PerfilProfessor({
 
   const time = data.professor.escola || "Professor";
 
+
   const unlockedIds = data.metrics.conquistasUnlocked ?? [];
   const extraFromGrupos = (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
   const unlockedFinal = Array.from(new Set([...unlockedIds, ...extraFromGrupos]));
   const conquistasCount = unlockedFinal.length;
   const alunosCount = vinculados?.length ?? data.metrics.alunosRelacionados ?? 0;
-  const usuarioPerfilId = data.usuario?.id || data.professor.usuarioId || usuarioIdStorage || "";
+  const usuarioPerfilId =
+    data.usuario?.id ||
+    data.professor.usuarioId ||
+    (isOwn ? usuarioIdStorage : "") ||
+    "";
   const professorTipoId = data.professor.id;
   const getOrgPerfilId = (org: Organizacao) => {
     return String(org.usuarioId || org.id);
@@ -1987,13 +2183,133 @@ export default function PerfilProfessor({
       )}
 
       {aba === "eventos" && (
-        <div className="mt-4 px-4">
-          <ProfileReplaysSection
-            creatorUsuarioId={
-              creatorUsuarioId ||
-              usuarioPerfilId
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
+          <SectionCard
+            title="Eventos"
+            right={
+              <div className="flex flex-wrap gap-2">
+                {isOwn ? (
+                  <Link
+                    href="/creator/eventos"
+                    className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
+                  >
+                    Ver todos os eventos
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMostrarTodosEventos((anterior) => !anterior)
+                    }
+                    className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
+                  >
+                    {mostrarTodosEventos
+                      ? "Mostrar menos"
+                      : "Ver todos os eventos"}
+                  </button>
+                )}
+
+                {isOwn && mostrarCreator ? (
+                  <Link
+                    href="/creator/eventos/novo"
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    Criar novo evento
+                  </Link>
+                ) : null}
+              </div>
             }
-          />
+          >
+            {eventosLoading ? (
+              <div className="text-sm text-green-900/70">
+                Carregando eventos…
+              </div>
+            ) : eventosErro ? (
+              <div className="text-sm text-red-600">{eventosErro}</div>
+            ) : eventosVisiveis.length > 0 ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {eventosVisiveis.map((evento) => {
+                  const dataEvento = evento.data
+                    ? new Date(evento.data).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Data não informada";
+
+                  const local = [evento.cidade, evento.estado]
+                    .filter(Boolean)
+                    .join(" - ");
+
+                  const participantes =
+                    evento.origem === "AULA_AO_VIVO" &&
+                    typeof evento.totalParticipantes === "number"
+                      ? `${evento.totalParticipantes} participantes`
+                      : "";
+
+                  const href =
+                    evento.origem === "AULA_AO_VIVO"
+                      ? `/learning/evento/${evento.id}`
+                      : `/eventos/${evento.id}`;
+
+                  return (
+                    <li key={`${evento.origem}:${evento.id}`}>
+                      <Link
+                        href={href}
+                        className="flex items-center gap-3 rounded-xl border border-green-100 bg-white/70 p-3 hover:bg-green-50"
+                      >
+                        <CalendarClock className="h-5 w-5 shrink-0 text-green-700" />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold text-green-900">
+                            {evento.titulo}
+                          </div>
+
+                          <div className="text-xs text-green-900/70">
+                            {[
+                              evento.tipoLabel,
+                              dataEvento,
+                              local,
+                              participantes,
+                            ]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </div>
+
+                          {evento.descricao ? (
+                            <div className="mt-1 line-clamp-2 text-xs text-green-900/70">
+                              {evento.descricao}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="rounded-full border border-green-200 bg-green-50 px-2 py-1 text-[11px] text-green-900">
+                            {String(evento.status || "Evento").replaceAll(
+                              "_",
+                              " "
+                            )}
+                          </span>
+                          <ChevronRight className="h-4 w-4 text-green-700" />
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <EmptyState text="Nenhum evento futuro cadastrado." />
+            )}
+          </SectionCard>
+
+          {usuarioCreatorDoPerfil ? (
+            <ProfileReplaysSection
+              creatorUsuarioId={usuarioCreatorDoPerfil}
+            />
+          ) : null}
         </div>
       )}
 

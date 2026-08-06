@@ -124,7 +124,7 @@ type EventoPreview = {
   estado?: string | null;
   descricao?: string | null;
 
-  origem?: "EVENTO_CLUBE" | "AULA_AO_VIVO_CREATOR";
+  origem?: "EVENTO_CLUBE" | "EVENTO_CREATOR" | "AULA_AO_VIVO_CREATOR";
   thumbUrl?: string | null;
   totalParticipantes?: number | null;
 
@@ -275,6 +275,8 @@ export default function PerfilClube({
   const [eventosPreview, setEventosPreview] = useState<EventoPreview[]>([]);
   const [eventosLoading, setEventosLoading] = useState(false);
   const [eventosErro, setEventosErro] = useState<string>("");
+  const [mostrarTodosEventos, setMostrarTodosEventos] = useState(false);
+  const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
   const [conquistasCount, setConquistasCount] = useState<number | null>(null);
   const [eventosCount, setEventosCount] = useState<number | null>(null);
@@ -290,6 +292,10 @@ export default function PerfilClube({
   const entidadeUsuarioId = isOwn
     ? Storage.usuarioId
     : data?.clube?.usuarioId ?? null;
+
+  useEffect(() => {
+    setMostrarTodosEventos(false);
+  }, [targetId, subAba]);
 
   function extrairListaResposta(
     payload: any,
@@ -894,103 +900,176 @@ export default function PerfilClube({
   async function loadEventosPreview() {
     const id = clubeId;
 
-    if (!token) return;
-
-    const usuarioCreatorId =
+    const usuarioCreatorId = String(
       creatorUsuarioId ||
-      data?.clube?.usuarioId ||
-      entidadeUsuarioId ||
-      Storage.usuarioId ||
-      "";
+        data?.clube?.usuarioId ||
+        entidadeUsuarioId ||
+        (isOwn ? Storage.usuarioId : "") ||
+        ""
+    ).trim();
 
-    if (!id && !usuarioCreatorId) return;
+    if (!id && !usuarioCreatorId) {
+      setEventosPreview([]);
+      setEventosCount(0);
+      setCreatorAtivoLocal(false);
+      return;
+    }
 
     setEventosErro("");
     setEventosLoading(true);
 
     try {
-      const requests: Promise<any>[] = [];
+      const eventosClubePromise = id
+        ? axios.get(`${API.BASE_URL}/api/eventos/clubes/${id}`, { headers })
+        : Promise.resolve({ data: [] });
 
-      if (id) {
-        requests.push(
-          axios.get(`${API.BASE_URL}/api/eventos/clubes/${id}`, { headers })
-        );
-      }
+      const eventosCreatorPromise = usuarioCreatorId
+        ? axios.get(`${API.BASE_URL}/api/eventos`, {
+            headers,
+            params: { creatorUsuarioId: usuarioCreatorId },
+          })
+        : Promise.resolve({ data: [] });
 
-      if (hasCreator && usuarioCreatorId) {
-        requests.push(
-          axios.get(
+      const perfilCreatorPromise = usuarioCreatorId
+        ? axios.get(
             `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
               usuarioCreatorId
-            )}`
+            )}`,
+            { headers }
           )
-        );
-      }
+        : Promise.resolve({ data: null });
 
-      const results = await Promise.allSettled(requests);
+      const [clubeResult, creatorEventosResult, creatorPerfilResult] =
+        await Promise.allSettled([
+          eventosClubePromise,
+          eventosCreatorPromise,
+          perfilCreatorPromise,
+        ]);
 
-      const eventosNormaisResp =
-        results[0]?.status === "fulfilled" ? results[0].value.data : [];
+      const eventosClubeResp =
+        clubeResult.status === "fulfilled" ? clubeResult.value.data : [];
+
+      const eventosCreatorResp =
+        creatorEventosResult.status === "fulfilled"
+          ? creatorEventosResult.value.data
+          : [];
 
       const creatorResp =
-        hasCreator && results.length > 1 && results[1]?.status === "fulfilled"
-          ? results[1].value.data
+        creatorPerfilResult.status === "fulfilled"
+          ? creatorPerfilResult.value.data
           : null;
 
-      const arrEventosNormais = Array.isArray(eventosNormaisResp)
-        ? eventosNormaisResp
-        : eventosNormaisResp?.items ??
-          eventosNormaisResp?.data ??
-          [];
+      setCreatorAtivoLocal(Boolean(creatorResp));
 
-      const eventosNormais: EventoPreview[] = (arrEventosNormais ?? []).map(
-        (ev: any) => ({
-          id: String(ev.id),
-          titulo: String(ev.titulo ?? "Evento"),
-          tipo: ev.tipo ?? null,
-          status: ev.status ?? null,
-          dataEvento: String(ev.dataEvento ?? ev.data ?? ev.inicio ?? ""),
-          cidade: ev.cidade ?? null,
-          estado: ev.estado ?? null,
-          descricao: ev.descricao ?? null,
-          origem: "EVENTO_CLUBE",
-          criadorLabel: data?.clube?.nome || data?.usuario?.nome || null,
-          convidadosLabel: null,
-        })
-      );
+      const extrairEventos = (payload: any): any[] =>
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+          ? payload.items
+          : Array.isArray(payload?.eventos)
+          ? payload.eventos
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+
+      const eventosDoClube: EventoPreview[] = extrairEventos(
+        eventosClubeResp
+      ).map((ev: any) => ({
+        id: String(ev.id),
+        titulo: String(ev.titulo ?? ev.nome ?? "Evento"),
+        tipo: ev.tipoLabel ?? ev.tipo ?? null,
+        status: ev.status ?? null,
+        dataEvento: String(ev.dataEvento ?? ev.data ?? ev.inicio ?? ""),
+        cidade: ev.cidade ?? null,
+        estado: ev.estado ?? null,
+        descricao: ev.descricao ?? null,
+        origem: "EVENTO_CLUBE",
+        criadorLabel: data?.clube?.nome || data?.usuario?.nome || null,
+        convidadosLabel: null,
+      }));
 
       const criadorCreatorLabel =
-      getCriadorLabelFromCreator(creatorResp) ||
-      data?.clube?.nome ||
-      data?.usuario?.nome ||
-      "";
+        getCriadorLabelFromCreator(creatorResp) ||
+        data?.clube?.nome ||
+        data?.usuario?.nome ||
+        "";
 
-    const aulasAoVivoCreator: EventoPreview[] = Array.isArray(
-      creatorResp?.eventosAoVivo
-    )
-      ? creatorResp.eventosAoVivo.map((aula: any) => ({
-          id: String(aula.id),
-          titulo: String(aula.titulo ?? "Aula ao vivo"),
-          tipo: "Aula ao vivo",
-          status: aula.status ?? null,
-          dataEvento: String(aula.dataInicio ?? ""),
-          cidade: null,
-          estado: null,
-          descricao: aula.descricao ?? null,
-          origem: "AULA_AO_VIVO_CREATOR",
-          thumbUrl: aula.thumbUrl ?? null,
-          totalParticipantes: aula.totalParticipantes ?? null,
-          criadorLabel: criadorCreatorLabel,
-          convidadosLabel: getConvidadosLabelFromAula(aula),
-        }))
-      : [];
+      const eventosGeraisDoCreator: EventoPreview[] = extrairEventos(
+        eventosCreatorResp
+      ).map((ev: any) => ({
+        id: String(ev.id),
+        titulo: String(ev.titulo ?? ev.nome ?? "Evento"),
+        tipo: ev.tipoLabel ?? ev.tipo ?? "Evento",
+        status: ev.status ?? null,
+        dataEvento: String(ev.dataEvento ?? ev.data ?? ev.inicio ?? ""),
+        cidade: ev.cidade ?? null,
+        estado: ev.estado ?? null,
+        descricao: ev.descricao ?? null,
+        origem: "EVENTO_CREATOR",
+        criadorLabel: criadorCreatorLabel || null,
+        convidadosLabel: null,
+      }));
+
+      const aulasAoVivoCreator: EventoPreview[] = Array.isArray(
+        creatorResp?.eventosAoVivo
+      )
+        ? creatorResp.eventosAoVivo.map((aula: any) => ({
+            id: String(aula.id),
+            titulo: String(aula.titulo ?? "Aula ao vivo"),
+            tipo: "Aula ao vivo",
+            status: aula.status ?? null,
+            dataEvento: String(aula.dataInicio ?? ""),
+            cidade: null,
+            estado: null,
+            descricao: aula.descricao ?? null,
+            origem: "AULA_AO_VIVO_CREATOR",
+            thumbUrl: aula.thumbUrl ?? null,
+            totalParticipantes: aula.totalParticipantes ?? null,
+            criadorLabel: criadorCreatorLabel,
+            convidadosLabel: getConvidadosLabelFromAula(aula),
+          }))
+        : [];
+
+      const porChave = new Map<string, EventoPreview>();
+
+      for (const evento of [
+        ...eventosDoClube,
+        ...eventosGeraisDoCreator,
+        ...aulasAoVivoCreator,
+      ]) {
+        const chave =
+          evento.origem === "AULA_AO_VIVO_CREATOR"
+            ? `AULA:${evento.id}`
+            : `EVENTO:${evento.id}`;
+
+        if (!porChave.has(chave)) {
+          porChave.set(chave, evento);
+        }
+      }
 
       const hojeBR = getDiaBR(new Date().toISOString());
 
-      const todos = [...eventosNormais, ...aulasAoVivoCreator]
-        .filter((ev) => {
-          const diaEventoBR = getDiaBR(ev.dataEvento);
-          return !!diaEventoBR && diaEventoBR >= hojeBR;
+      const todos = Array.from(porChave.values())
+        .filter((evento) => {
+          const status = String(evento.status || "").toUpperCase();
+
+          if (status === "AO_VIVO") return true;
+
+          if (
+            [
+              "FINALIZADA",
+              "FINALIZADO",
+              "ENCERRADA",
+              "ENCERRADO",
+              "CANCELADA",
+              "CANCELADO",
+            ].includes(status)
+          ) {
+            return false;
+          }
+
+          const diaEventoBR = getDiaBR(evento.dataEvento);
+          return Boolean(diaEventoBR && diaEventoBR >= hojeBR);
         })
         .sort(
           (a, b) =>
@@ -998,10 +1077,12 @@ export default function PerfilClube({
             new Date(b.dataEvento || 0).getTime()
         );
 
-      setEventosPreview(todos.slice(0, 5));
+      setEventosPreview(todos);
       setEventosCount(todos.length);
     } catch (e: any) {
       setEventosPreview([]);
+      setEventosCount(0);
+      setCreatorAtivoLocal(false);
       setEventosErro(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
@@ -1200,6 +1281,19 @@ export default function PerfilClube({
   ];
   const clubeIdStr = data.clube.id;
 
+  const usuarioCreatorDoPerfil = String(
+    creatorUsuarioId ||
+      data.clube.usuarioId ||
+      data.usuario?.id ||
+      (isOwn ? Storage.usuarioId : "") ||
+      ""
+  ).trim();
+
+  const mostrarCreator = Boolean(hasCreator || creatorAtivoLocal);
+  const eventosVisiveis = mostrarTodosEventos
+    ? eventosPreview
+    : eventosPreview.slice(0, 5);
+
   return (
      <div className="w-full max-w-2xl mx-auto">
       <ProfileHeader
@@ -1213,8 +1307,8 @@ export default function PerfilClube({
         perfilTipoIdProp={data.clube.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
-        hasCreator={hasCreator}
-        creatorUsuarioId={creatorUsuarioId}
+        hasCreator={mostrarCreator}
+        creatorUsuarioId={usuarioCreatorDoPerfil || null}
       />
 
       <div className="mt-4 px-3 sm:px-4">
@@ -1510,41 +1604,46 @@ export default function PerfilClube({
       )}
 
       {aba === "eventos" && (
-        <section className="mt-4 px-3 sm:px-4">
+        <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-semibold text-green-900">Eventos</h3>
 
-              <Link
-                href={hasCreator ? "/creator/eventos" : `/eventos/clubes/${clubeIdStr}`}
-                className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
-              >
-                Ver eventos
-              </Link>
+              {isOwn ? (
+                <Link
+                  href={
+                    mostrarCreator
+                      ? "/creator/eventos"
+                      : `/eventos/clubes/${clubeIdStr}`
+                  }
+                  className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+                >
+                  Ver todos os eventos
+                </Link>
+              ) : eventosPreview.length > 5 ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarTodosEventos((valor) => !valor)}
+                  className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+                >
+                  {mostrarTodosEventos ? "Mostrar menos" : `Ver todos (${eventosPreview.length})`}
+                </button>
+              ) : null}
             </div>
 
             <p className="text-sm text-green-900/80 mt-1">
-              Toque em um evento para ver todos os detalhes e gerenciar inscrições.
+              Confira os próximos eventos e aulas ao vivo deste perfil.
             </p>
 
-            {hasCreator && (
-              <ProfileReplaysSection
-                creatorUsuarioId={
-                  creatorUsuarioId ||
-                  data.clube.usuarioId ||
-                  data.usuario?.id
-                }
-              />
-            )}
 
             <div className="mt-3">
               {eventosLoading ? (
                 <div className="text-sm text-green-900/70">Carregando eventos…</div>
               ) : eventosErro ? (
                 <div className="text-sm text-red-600">{eventosErro}</div>
-              ) : eventosPreview.length ? (
+              ) : eventosVisiveis.length > 0 ? (
                 <div className="grid gap-2">
-                  {eventosPreview.map((ev) => {
+                  {eventosVisiveis.map((ev) => {
                     const when = ev.dataEvento
                       ? new Date(ev.dataEvento).toLocaleString("pt-BR", {
                           day: "2-digit",
@@ -1553,14 +1652,16 @@ export default function PerfilClube({
                           hour: "2-digit",
                           minute: "2-digit",
                         })
-                      : "";
+                      : "Data não informada";
 
-                    const where = [ev.cidade, ev.estado].filter(Boolean).join(" - ");
+                    const where = [ev.cidade, ev.estado]
+                      .filter(Boolean)
+                      .join(" - ");
 
                     const tipoLabel =
                       ev.origem === "AULA_AO_VIVO_CREATOR"
-                        ? "Aula ao vivo Creator"
-                        : ev.tipo;
+                        ? "Aula ao vivo"
+                        : ev.tipo || "Evento";
 
                     const participantes =
                       ev.origem === "AULA_AO_VIVO_CREATOR" &&
@@ -1568,14 +1669,17 @@ export default function PerfilClube({
                         ? `${ev.totalParticipantes} participantes`
                         : "";
 
+                    const href =
+                      ev.origem === "AULA_AO_VIVO_CREATOR"
+                        ? `/learning/evento/${ev.id}`
+                        : ev.origem === "EVENTO_CREATOR"
+                        ? `/eventos/${ev.id}`
+                        : `/eventos/clubes/${clubeIdStr}`;
+
                     return (
                       <Link
-                        key={ev.id}
-                        href={
-                          ev.origem === "AULA_AO_VIVO_CREATOR"
-                            ? `/learning/evento/${ev.id}`
-                            : `/eventos/clubes/${clubeIdStr}`
-                        }
+                        key={`${ev.origem || "EVENTO"}:${ev.id}`}
+                        href={href}
                         className="block rounded-xl border border-green-100 bg-white/70 p-3 hover:bg-white"
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -1583,8 +1687,11 @@ export default function PerfilClube({
                             <div className="text-sm font-semibold text-green-900 truncate">
                               {ev.titulo}
                             </div>
+
                             <div className="text-xs text-green-900/70">
-                              {[tipoLabel, when, where, participantes].filter(Boolean).join(" • ")}
+                              {[tipoLabel, when, where, participantes]
+                                .filter(Boolean)
+                                .join(" • ")}
                             </div>
 
                             {ev.criadorLabel ? (
@@ -1612,6 +1719,7 @@ export default function PerfilClube({
                                 {String(ev.status).toUpperCase()}
                               </span>
                             ) : null}
+
                             <ChevronRight className="w-4 h-4 text-green-800" />
                           </div>
                         </div>
@@ -1621,7 +1729,7 @@ export default function PerfilClube({
                 </div>
               ) : (
                 <div className="text-sm text-green-900/70">
-                  Nenhum evento criado ainda.
+                  Nenhum evento futuro cadastrado.
                 </div>
               )}
             </div>
@@ -1629,23 +1737,25 @@ export default function PerfilClube({
             {isOwn && (
               <div className="mt-4">
                 <Link
-                  href={hasCreator ? "/creator/eventos/novo" : `/eventos/clubes/${clubeIdStr}/novo`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
+                  href={
+                    mostrarCreator
+                      ? "/creator/eventos/novo"
+                      : `/eventos/clubes/${clubeIdStr}/novo`
+                  }
+                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white font-semibold px-4 py-2 hover:bg-green-700"
                 >
-                  <span>+</span> Criar novo evento
+                  <PlusCircle className="w-4 h-4" />
+                  Criar novo evento
                 </Link>
               </div>
             )}
           </div>
-          {hasCreator && (
-              <ProfileReplaysSection
-                creatorUsuarioId={
-                  creatorUsuarioId ||
-                  data.clube.usuarioId ||
-                  data.usuario?.id
-                }
-              />
-            )}
+
+          {mostrarCreator && usuarioCreatorDoPerfil ? (
+            <ProfileReplaysSection
+              creatorUsuarioId={usuarioCreatorDoPerfil}
+            />
+          ) : null}
         </section>
       )}
 
