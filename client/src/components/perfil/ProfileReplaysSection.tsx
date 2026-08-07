@@ -272,133 +272,163 @@ export default function ProfileReplaysSection({
   }, []);
 
   useEffect(() => {
-    const usuarioId =
-      String(
-        creatorUsuarioId ||
-          ""
-      ).trim();
+    const usuarioId = String(
+      creatorUsuarioId || ""
+    ).trim();
 
     if (!usuarioId) {
       setReplays([]);
+      setLoading(false);
+      setError("");
       return;
     }
 
-    let cancelado =
-      false;
+    let cancelado = false;
+    let requisicaoEmAndamento = false;
+    let primeiraCarga = true;
+    let teveSucesso = false;
 
     async function carregar() {
+      if (requisicaoEmAndamento) {
+        return;
+      }
+
+      requisicaoEmAndamento = true;
+
       try {
-        setLoading(true);
+        if (primeiraCarga) {
+          setLoading(true);
+        }
+
+        const resposta = await axios.get(
+          `${API.BASE_URL}/api/aulas-ao-vivo/replays/criador/${encodeURIComponent(
+            usuarioId
+          )}`
+        );
+
+        const items = Array.isArray(resposta.data?.items)
+          ? resposta.data.items
+          : [];
+
+        const token = getToken();
+
+        const detalhados = await Promise.all(
+          items.map(
+            async (replay: ReplayPerfil) => {
+              try {
+                const acessoResposta = await axios.get(
+                  `${API.BASE_URL}/api/learning/eventos/aulas/${encodeURIComponent(
+                    replay.id
+                  )}`,
+                  {
+                    headers: token
+                      ? {
+                          Authorization: `Bearer ${token}`,
+                        }
+                      : undefined,
+                  }
+                );
+
+                const item =
+                  acessoResposta.data?.item ??
+                  acessoResposta.data?.evento ??
+                  null;
+
+                return {
+                  ...replay,
+
+                  temAcesso:
+                    item?.acesso?.temAcesso === true,
+
+                  isOwner:
+                    item?.acesso?.isOwner === true ||
+                    item?.isOwner === true,
+
+                  isConvidadoFootEra:
+                    item?.acesso?.isConvidadoFootEra === true,
+                };
+              } catch {
+                return replay;
+              }
+            }
+          )
+        );
+
+        if (cancelado) {
+          return;
+        }
+
+        setReplays(detalhados);
         setError("");
 
-        const resposta =
-          await axios.get(
-            `${API.BASE_URL}/api/aulas-ao-vivo/replays/criador/${encodeURIComponent(
-              usuarioId
-            )}`
-          );
-
-        const items =
-          Array.isArray(
-            resposta.data?.items
-          )
-            ? resposta.data.items
-            : [];
-
-        const token =
-          getToken();
-
-        const detalhados =
-          await Promise.all(
-            items.map(
-              async (
-                replay: ReplayPerfil
-              ) => {
-                try {
-                  const acessoResposta =
-                    await axios.get(
-                      `${API.BASE_URL}/api/learning/eventos/aulas/${encodeURIComponent(
-                        replay.id
-                      )}`,
-                      {
-                        headers:
-                          token
-                            ? {
-                                Authorization:
-                                  `Bearer ${token}`,
-                              }
-                            : undefined,
-                      }
-                    );
-
-                  const item =
-                    acessoResposta
-                      .data?.item ??
-                    acessoResposta
-                      .data?.evento ??
-                    null;
-
-                  return {
-                    ...replay,
-
-                    temAcesso:
-                      item?.acesso
-                        ?.temAcesso ===
-                      true,
-
-                    isOwner:
-                      item?.acesso
-                        ?.isOwner ===
-                        true ||
-                      item?.isOwner ===
-                        true,
-
-                    isConvidadoFootEra:
-                      item?.acesso
-                        ?.isConvidadoFootEra ===
-                      true,
-                  };
-                } catch {
-                  return replay;
-                }
-              }
-            )
-          );
-
-        if (!cancelado) {
-          setReplays(
-            detalhados
-          );
-        }
+        teveSucesso = true;
       } catch (error) {
         console.error(
           "Erro ao carregar replays:",
           error
         );
 
-        if (!cancelado) {
+        if (!cancelado && !teveSucesso) {
           setReplays([]);
-
           setError(
             "Não foi possível carregar os replays."
           );
         }
       } finally {
-        if (!cancelado) {
+        requisicaoEmAndamento = false;
+
+        if (!cancelado && primeiraCarga) {
           setLoading(false);
         }
+
+        primeiraCarga = false;
       }
     }
 
     void carregar();
 
-    return () => {
-      cancelado =
-        true;
+    const intervalId = window.setInterval(() => {
+      void carregar();
+    }, 10_000);
+    
+    const handleFocus = () => {
+      void carregar();
     };
-  }, [
-    creatorUsuarioId,
-  ]);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void carregar();
+      }
+    };
+
+    window.addEventListener(
+      "focus",
+      handleFocus
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      cancelado = true;
+
+      window.clearInterval(
+        intervalId
+      );
+
+      window.removeEventListener(
+        "focus",
+        handleFocus
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+  }, [creatorUsuarioId]);
 
   const replaysValidos =
     useMemo(

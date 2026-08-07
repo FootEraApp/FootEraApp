@@ -2458,6 +2458,14 @@ if (!iniciarRes.ok) {
               "Replay ainda está processando no S3. Aguarde alguns minutos."
           );
 
+          if (tentativa < tentativas) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 30_000)
+            );
+
+            continue;
+          }
+
           return false;
         }
 

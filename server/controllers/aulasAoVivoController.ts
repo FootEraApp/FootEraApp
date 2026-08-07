@@ -848,7 +848,6 @@ export async function atualizarAulaAoVivoAvulsa(req: AuthRequest, res: Response)
       inscricaoFim,
       chatAtivo,
       gravacaoAtiva,
-      replayDisponivel,
       convidados,
       precoAcesso,
       acessoPago,
@@ -950,7 +949,6 @@ export async function atualizarAulaAoVivoAvulsa(req: AuthRequest, res: Response)
           inscricaoFim: fimInscricao,
           chatAtivo: chatAtivo !== false,
           gravacaoAtiva: gravacaoAtiva !== false,
-          replayDisponivel: replayDisponivel === true,
           convidadoUsuarioId: convidados?.[0]?.usuarioId || null,
           convidadoNome: convidados?.[0]?.nome || null,
           convidadoDescricao: convidados?.[0]?.descricao || null,
@@ -2351,12 +2349,399 @@ function extrairRecordingIdDoMasterKey(masterKey: string) {
   return partes[mediaIndex - 1] || null;
 }
 
-export async function sincronizarReplayAulaAoVivo(req: AuthRequest, res: Response) {
-  try {
-    const { id } = req.params;
+type SincronizarReplayInternoResultado = {
+  httpStatus: number;
+  processing: boolean;
+  replayDisponivel: boolean;
+  code?: string;
+  message: string;
+  item?: any;
+  replay?: {
+    prefix?: string;
+    masterKey?: string;
+    replayKeyPreferido?: string;
+    videoGravadoUrl?: string | null;
+    recordingId?: string | null;
+    thumbUrl?: string | null;
+  };
+};
 
+export async function sincronizarReplayInterno(
+  aulaId: string
+): Promise<SincronizarReplayInternoResultado> {
+  const id = String(
+    aulaId || ""
+  ).trim();
+
+  if (!id) {
+    return {
+      httpStatus: 400,
+      processing: false,
+      replayDisponivel: false,
+      code: "AULA_ID_NAO_INFORMADO",
+      message:
+        "Aula ao vivo não informada.",
+    };
+  }
+
+  const aula =
+    await prisma.aulaAoVivo.findUnique({
+      where: {
+        id,
+      },
+    });
+
+  if (!aula) {
+    return {
+      httpStatus: 404,
+      processing: false,
+      replayDisponivel: false,
+      code: "AULA_NAO_ENCONTRADA",
+      message:
+        "Aula ao vivo não encontrada.",
+    };
+  }
+
+  if (
+    aula.status !== "FINALIZADA"
+  ) {
+    return {
+      httpStatus: 409,
+      processing: false,
+      replayDisponivel: false,
+      code: "LIVE_NAO_FINALIZADA",
+      message:
+        "O replay só pode ser sincronizado depois que a live for finalizada.",
+      item: aula,
+    };
+  }
+
+  if (!aula.ivsChannelArn) {
+    return {
+      httpStatus: 400,
+      processing: false,
+      replayDisponivel: false,
+      code: "CANAL_IVS_NAO_CONFIGURADO",
+      message:
+        "Aula ainda não possui canal IVS.",
+      item: aula,
+    };
+  }
+
+  if (
+    !aula.gravacaoAtiva ||
+    !aula.ivsRecordingConfigurationArn
+  ) {
+    const updated =
+      await prisma.aulaAoVivo.update({
+        where: {
+          id: aula.id,
+        },
+
+        data: {
+          replayDisponivel: false,
+
+          ivsRecordingStatus:
+            "NAO_CONFIGURADA",
+        },
+      });
+
+    return {
+      httpStatus: 409,
+      processing: false,
+      replayDisponivel: false,
+      code: "GRAVACAO_NAO_CONFIGURADA",
+      message:
+        "Esta transmissão foi criada sem uma configuração de gravação da AWS IVS e não possui replay automático.",
+      item: updated,
+    };
+  }
+
+  if (
+    aula.replayDisponivel &&
+    aula.videoGravadoUrl
+  ) {
+    return {
+      httpStatus: 200,
+      processing: false,
+      replayDisponivel: true,
+      message:
+        "Replay já estava disponível.",
+
+      item: aula,
+
+      replay: {
+        videoGravadoUrl:
+          aula.videoGravadoUrl,
+
+        thumbUrl:
+          aula.thumbUrl,
+      },
+    };
+  }
+
+  const bucket =
+    process.env.AWS_S3_BUCKET ||
+    process.env.IVS_RECORDING_S3_BUCKET;
+
+  if (!bucket) {
+    return {
+      httpStatus: 500,
+      processing: false,
+      replayDisponivel: false,
+      code: "BUCKET_S3_NAO_CONFIGURADO",
+      message:
+        "Bucket S3 não configurado. Configure AWS_S3_BUCKET ou IVS_RECORDING_S3_BUCKET.",
+    };
+  }
+
+  const channelId =
+    extrairChannelIdDoArn(
+      aula.ivsChannelArn
+    );
+
+  if (!channelId) {
+    return {
+      httpStatus: 400,
+      processing: false,
+      replayDisponivel: false,
+      code: "CHANNEL_ID_NAO_IDENTIFICADO",
+      message:
+        "Não foi possível identificar o channelId da aula.",
+    };
+  }
+
+  const prefixBase =
+    String(
+      aula.ivsRecordingS3Prefix ||
+        ""
+    )
+      .trim()
+      .replace(/\/+$/, "");
+
+  const accountIdArn =
+    String(
+      aula.ivsChannelArn || ""
+    ).split(":")[4] || "";
+
+  const accountId =
+    String(
+      process.env.AWS_ACCOUNT_ID ||
+        accountIdArn ||
+        ""
+    ).trim();
+
+  if (
+    !prefixBase &&
+    !accountId
+  ) {
+    return {
+      httpStatus: 500,
+      processing: false,
+      replayDisponivel: false,
+      code:
+        "AWS_ACCOUNT_ID_NAO_IDENTIFICADO",
+      message:
+        "Não foi possível identificar a conta AWS usada pela gravação.",
+    };
+  }
+
+  const prefix =
+    prefixBase
+      ? `${prefixBase}/${channelId}/`
+      : `ivs/v1/${accountId}/${channelId}/`;
+
+  console.log(
+    "[REPLAY] Procurando gravação:",
+    {
+      aulaId: aula.id,
+      bucket,
+      prefix,
+    }
+  );
+
+  const objetos =
+    await listarTodosObjetosS3(
+      bucket,
+      prefix
+    );
+
+  const masters =
+    objetos
+      .filter(
+        (objeto) =>
+          objeto.Key?.endsWith(
+            "/media/hls/master.m3u8"
+          )
+      )
+      .sort(
+        (a, b) => {
+          const timeA =
+            a.LastModified
+              ?.getTime?.() || 0;
+
+          const timeB =
+            b.LastModified
+              ?.getTime?.() || 0;
+
+          return timeB - timeA;
+        }
+      );
+
+  const master = masters[0];
+
+  if (!master?.Key) {
+    const updated =
+      await prisma.aulaAoVivo.update({
+        where: {
+          id: aula.id,
+        },
+
+        data: {
+          replayDisponivel:
+            false,
+
+          ivsRecordingStatus:
+            "PROCESSANDO",
+        },
+      });
+
+    return {
+      httpStatus: 202,
+      processing: true,
+      replayDisponivel: false,
+      code: "REPLAY_PROCESSANDO",
+      message:
+        "A gravação ainda está sendo processada pela AWS.",
+      item: updated,
+
+      replay: {
+        prefix,
+      },
+    };
+  }
+
+  const masterKey =
+    master.Key;
+
+  const recordingId =
+    extrairRecordingIdDoMasterKey(
+      masterKey
+    );
+
+  const prefixoDaGravacao =
+    masterKey.replace(
+      /\/media\/hls\/master\.m3u8$/,
+      ""
+    );
+
+  const objetosDaGravacao =
+    objetos.filter(
+      (objeto) =>
+        objeto.Key?.startsWith(
+          `${prefixoDaGravacao}/`
+        )
+    );
+
+  const replayKeyPreferido =
+    masterKey;
+
+  const videoGravadoUrl =
+    montarUrlS3Publica(
+      bucket,
+      replayKeyPreferido
+    );
+
+  const thumbnail =
+    objetosDaGravacao
+      .filter(
+        (objeto) =>
+          objeto.Key?.includes(
+            "/media/thumbnails/"
+          ) &&
+          /\.(jpg|jpeg|png)$/i.test(
+            objeto.Key
+          )
+      )
+      .sort(
+        (a, b) => {
+          const timeA =
+            a.LastModified
+              ?.getTime?.() || 0;
+
+          const timeB =
+            b.LastModified
+              ?.getTime?.() || 0;
+
+          return timeB - timeA;
+        }
+      )[0];
+
+  const thumbUrl =
+    thumbnail?.Key
+      ? montarUrlS3Publica(
+          bucket,
+          thumbnail.Key
+        )
+      : aula.thumbUrl;
+
+  const updated =
+    await prisma.aulaAoVivo.update({
+      where: {
+        id: aula.id,
+      },
+
+      data: {
+        ivsRecordingId:
+          recordingId ||
+          aula.ivsRecordingId,
+
+        videoGravadoUrl,
+
+        thumbUrl,
+
+        replayDisponivel:
+          true,
+
+        ivsRecordingStatus:
+          "DISPONIVEL",
+      },
+    });
+
+  console.log(
+    `[REPLAY] Replay sincronizado automaticamente: ${aula.id}`
+  );
+
+  return {
+    httpStatus: 200,
+    processing: false,
+    replayDisponivel: true,
+    message:
+      "Replay sincronizado com sucesso.",
+
+    item: updated,
+
+    replay: {
+      prefix,
+      masterKey,
+      replayKeyPreferido,
+      videoGravadoUrl,
+      recordingId,
+      thumbUrl,
+    },
+  };
+}
+
+export async function sincronizarReplayAulaAoVivo(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
     const userId =
       getAuthUserId(req);
+
+    const { id } =
+      req.params;
 
     if (!userId) {
       return res.status(401).json({
@@ -2365,197 +2750,53 @@ export async function sincronizarReplayAulaAoVivo(req: AuthRequest, res: Respons
       });
     }
 
-    const aula = await prisma.aulaAoVivo.findUnique({
-      where: { id },
-    });
+    const aula =
+      await getAulaComOwner(id);
 
     if (!aula) {
       return res.status(404).json({
-        message: "Aula ao vivo não encontrada.",
-      });
-    }
-
-    if (!aula.ivsChannelArn) {
-      return res.status(400).json({
-        message: "Aula ainda não possui canal IVS.",
+        message:
+          "Aula ao vivo não encontrada.",
       });
     }
 
     if (
-      !aula.gravacaoAtiva ||
-      !aula.ivsRecordingConfigurationArn
+      !isDonoDaAula(
+        aula,
+        userId
+      )
     ) {
-      await prisma.aulaAoVivo.update({
-        where: {
-          id: aula.id,
-        },
-        data: {
-          replayDisponivel: false,
-          ivsRecordingStatus:
-            "NAO_CONFIGURADA",
-        },
-      });
-
-      return res.status(409).json({
-        processing: false,
-        replayDisponivel: false,
-        code:
-          "GRAVACAO_NAO_CONFIGURADA",
+      return res.status(403).json({
         message:
-          "Esta live não foi criada com uma configuração de gravação da AWS IVS. Não existe replay automático para sincronizar.",
+          "Apenas o responsável pela transmissão pode sincronizar o replay.",
       });
     }
 
-    if (aula.replayDisponivel && aula.videoGravadoUrl) {
-      return res.json({
-        message: "Replay já estava disponível.",
-        item: aula,
-        replay: {
-          videoGravadoUrl: aula.videoGravadoUrl,
-          thumbUrl: aula.thumbUrl,
-        },
-      });
-    }
-
-    const bucket = process.env.AWS_S3_BUCKET || process.env.IVS_RECORDING_S3_BUCKET;
-
-    if (!bucket) {
-      return res.status(500).json({
-        message: "Bucket S3 não configurado. Configure AWS_S3_BUCKET ou IVS_RECORDING_S3_BUCKET.",
-      });
-    }
-
-    const channelId = extrairChannelIdDoArn(aula.ivsChannelArn);
-
-    if (!channelId) {
-      return res.status(400).json({
-        message: "Não foi possível identificar o channelId da aula.",
-      });
-    }
-
-    const accountId = process.env.AWS_ACCOUNT_ID || "886789338729";
-    const prefix = `ivs/v1/${accountId}/${channelId}/`;
-
-    const objetos =
-      await listarTodosObjetosS3(
-        bucket,
-        prefix
+    const resultado =
+      await sincronizarReplayInterno(
+        id
       );
 
-    const masters = objetos
-      .filter((obj) => obj.Key?.endsWith("/media/hls/master.m3u8"))
-      .sort((a, b) => {
-        const timeA = a.LastModified?.getTime?.() || 0;
-        const timeB = b.LastModified?.getTime?.() || 0;
-        return timeB - timeA;
-      });
+    const {
+      httpStatus,
+      ...payload
+    } = resultado;
 
-    const master = masters[0];
-
-    if (!master?.Key) {
-      await prisma.aulaAoVivo.update({
-        where: {
-          id: aula.id,
-        },
-        data: {
-          replayDisponivel: false,
-          ivsRecordingStatus:
-            "PROCESSANDO",
-        },
-      });
-
-      return res.status(202).json({
-        processing: true,
-        replayDisponivel: false,
-        recordingStatus:
-          "PROCESSANDO",
-
-        message:
-          "A gravação está sendo processada pela AWS. Esta página verificará novamente automaticamente.",
-
-        prefix,
-      });
-    }
-
-    const masterKey = master.Key;
-
-    const recordingId =
-      extrairRecordingIdDoMasterKey(
-        masterKey
-      );
-
-    const prefixoDaGravacao =
-      masterKey.replace(
-        /\/media\/hls\/master\.m3u8$/,
-        ""
-      );
-
-    const objetosDaGravacao =
-      objetos.filter((objeto) =>
-        objeto.Key?.startsWith(
-          `${prefixoDaGravacao}/`
-        )
-      );
-
-    const replayKeyPreferido = masterKey;
-
-    const videoGravadoUrl = montarUrlS3Publica(bucket, replayKeyPreferido);
-
-    const thumbnail =
-      objetosDaGravacao
-        .filter(
-          (objeto) =>
-            objeto.Key?.includes(
-              "/media/thumbnails/"
-            ) &&
-            /\.(jpg|jpeg|png)$/i.test(
-              objeto.Key
-            )
-        )
-        .sort((a, b) => {
-          const timeA =
-            a.LastModified?.getTime?.() ||
-            0;
-
-          const timeB =
-            b.LastModified?.getTime?.() ||
-            0;
-
-          return timeB - timeA;
-        })[0];
-
-    const thumbUrl = thumbnail?.Key
-      ? montarUrlS3Publica(bucket, thumbnail.Key)
-      : aula.thumbUrl;
-
-    const updated = await prisma.aulaAoVivo.update({
-      where: { id: aula.id },
-      data: {
-        ivsRecordingId: recordingId || aula.ivsRecordingId,
-        videoGravadoUrl,
-        thumbUrl,
-        replayDisponivel: true,
-        ivsRecordingStatus: "DISPONIVEL",
-      },
-    });
-
-    return res.json({
-      message: "Replay sincronizado com sucesso.",
-      item: updated,
-      replay: {
-        prefix,
-        masterKey,
-        replayKeyPreferido,
-        videoGravadoUrl,
-        recordingId,
-        thumbUrl,
-      },
-    });
+    return res
+      .status(httpStatus)
+      .json(payload);
   } catch (error: any) {
-    console.error("[AULA AO VIVO] Erro ao sincronizar replay:", error);
+    console.error(
+      "[AULA AO VIVO] Erro ao sincronizar replay:",
+      error
+    );
 
-    return res.status(500).json({
-      message: error?.message || "Erro ao sincronizar replay.",
-    });
+    return res
+      .status(500)
+      .json({
+        message:
+          error?.message ||
+          "Erro ao sincronizar replay.",
+      });
   }
 }
