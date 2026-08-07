@@ -2216,7 +2216,7 @@ export default function PerfilProfessor({
                   </button>
                 )}
 
-                {isOwn && mostrarCreator ? (
+                {isOwn && (
                   <Link
                     href="/creator/eventos/novo"
                     className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
@@ -2224,7 +2224,7 @@ export default function PerfilProfessor({
                     <PlusCircle className="h-4 w-4" />
                     Criar novo evento
                   </Link>
-                ) : null}
+                )}
               </div>
             }
           >

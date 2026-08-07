@@ -174,6 +174,16 @@ export default function ProfileHeader({
     "";
 
   const viewerTipoNorm = normalizeTipo(viewerTipo);
+  const tiposComCreator = new Set([
+    "marca",
+    "federacao",
+    "olheiro",
+    "professor",
+    "clube",
+    "escolinha",
+  ]);
+
+  const viewerTemAcessoCreator = tiposComCreator.has(viewerTipoNorm);
   const alvoTipoNormGlobal = normalizeTipo(perfilTipo || perfilTipoProp);
   const tiposComVinculo = new Set(["atleta", "professor", "clube", "escolinha"]);
   const viewerPodeVinculo = tiposComVinculo.has(viewerTipoNorm);
@@ -1682,10 +1692,11 @@ useEffect(() => {
 
       {isOwnProfile && (
         <div className="mt-4 w-full flex justify-center">
-          <div className="w-full max-w-md flex items-center justify-center gap-3">
+          <div className="w-full max-w-2xl flex flex-wrap items-center justify-center gap-3">
+
             <Link href="/minha-rede">
               <Button
-                className="flex-1 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30"
+                className="h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4"
               >
                 <Users size={18} className="mr-2" />
                 Minha rede
@@ -1694,12 +1705,25 @@ useEffect(() => {
 
             <Link href="/configuracoes">
               <Button
-                className="flex-1 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30"
+                className="h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4"
               >
                 <Settings size={18} className="mr-2" />
                 Configurações
               </Button>
             </Link>
+
+            {viewerTemAcessoCreator && (
+              <Link href="/creator/dashboard">
+                <Button
+                  className="h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4"
+                  title="Acessar Creator"
+                >
+                  <Crown size={18} className="mr-2" />
+                  Creator
+                </Button>
+              </Link>
+            )}
+
           </div>
         </div>
       )}

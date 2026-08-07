@@ -265,46 +265,65 @@ export default function SalaCopaEventoPage() {
       ? `${formatarData(evento.dataFim)} às ${formatarHora(evento.dataFim)}`
       : "Fim em breve";
 
-  const labelPessoa =
-  evento?.pessoaDestaqueLabel ||
-  (evento?.temConvidado || evento?.convidadoNome ? "Convidado" : "Creator");
+  const criadorNome =
+    String(
+      evento?.criadorUsuario?.nome ||
+      "Creator do evento"
+    ).trim();
 
-  const pessoaDestaqueNome =
-    evento?.pessoaDestaqueNome ||
-    evento?.convidadoNome ||
-    evento?.criadorUsuario?.nome ||
-    "Creator FootEra";
+  const convidadosLista =
+    Array.isArray(evento?.convidados)
+      ? evento.convidados.filter(
+          (c) =>
+            c?.nome ||
+            c?.usuario?.nome
+        )
+      : [];
 
-  const pessoaDestaqueDescricao =
-    evento?.pessoaDestaqueDescricao ||
-    evento?.convidadoDescricao ||
-    (labelPessoa === "Convidado"
-      ? "Convidado FootEra"
-      : evento?.metodologiaTitulo || "Creator do evento");
+  const nomesConvidados =
+    convidadosLista
+      .map((c) =>
+        String(
+          c?.usuario?.nome ||
+          c?.nome ||
+          ""
+        ).trim()
+      )
+      .filter(Boolean)
+      .filter(
+        (nome) =>
+          nome.toLowerCase() !==
+          criadorNome.toLowerCase()
+      );
 
-  const convidadosLista = Array.isArray(evento?.convidados)
-    ? evento.convidados.filter((c) => c?.nome || c?.usuario?.nome)
-    : [];
-
-  const temMaisDeUmConvidado = convidadosLista.length > 1;
+  const nomesParticipantes =
+    Array.from(
+      new Set([
+        criadorNome,
+        ...nomesConvidados,
+      ])
+    ).filter(Boolean);
 
   const tituloPessoa =
-    convidadosLista.length > 0
-      ? convidadosLista.length === 1
-        ? convidadosLista[0]?.nome || "Convidado"
-        : `${convidadosLista.length} convidados`
-      : pessoaDestaqueNome;
+    nomesParticipantes.join(" • ");
 
   const descricaoPessoa =
-    convidadosLista.length > 0
-      ? convidadosLista
-          .map((c) => {
-            const nome = c.nome || c.usuario?.nome || "Convidado";
-            const descricao = c.descricao || (c.usuario ? "Convidado FootEra" : "");
-            return descricao ? `${nome} — ${descricao}` : nome;
-          })
-          .join(" • ")
-      : pessoaDestaqueDescricao;
+    nomesConvidados.length > 0
+      ? `Creator do evento + ${
+          nomesConvidados.length
+        } convidado${
+          nomesConvidados.length > 1
+            ? "s"
+            : ""
+        }`
+      : "Creator do evento";
+
+  const labelPessoaHero =
+    nomesConvidados.length > 0
+      ? nomesConvidados.length === 1
+        ? "Creator e convidado"
+        : "Creator e convidados"
+      : "Creator";
 
   const capaUrl = evento?.thumbUrl || "";
   const isOwner = !!evento?.isOwner || !!evento?.acesso?.isOwner;
@@ -544,7 +563,7 @@ export default function SalaCopaEventoPage() {
 
                 <InfoHero
                   icon={<User className="h-6 w-6" />}
-                  label={convidadosLista.length > 0 ? "Convidados" : labelPessoa}
+                  label={labelPessoaHero}
                   value={tituloPessoa}
                   sub={descricaoPessoa}
                 />

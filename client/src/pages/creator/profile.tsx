@@ -14,8 +14,9 @@ import {
   Users,
 } from "lucide-react";
 import CreatorCard from "../../components/CreatorCard";
-import ProfilePostsSection from "@/components/perfil/ProfilePostsSection";
+import ProfilePostsSection from "../../components/perfil/ProfilePostsSection";
 import CoverImage from "../../components/shared/CoverImage";
+import ProfileReplaysSection from "../../components/perfil/ProfileReplaysSection";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
 const FRONTEND_BASE_URL =
@@ -1043,6 +1044,7 @@ export default function CreatorProfile() {
         )}
 
         {aba === "eventos" && (
+          <>
           <section className="bg-white rounded-2xl border p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
@@ -1055,14 +1057,42 @@ export default function CreatorProfile() {
               </div>
 
               {isOwnCreator && (
-                <button
-                  onClick={() => {
-                    window.location.href = "/creator/eventos/novo";
-                  }}
-                  className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-bold"
-                >
-                  + Criar evento
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = "/creator/eventos";
+                    }}
+                    className="
+                      rounded-xl
+                      border border-emerald-200
+                      bg-white
+                      px-4 py-2
+                      text-sm font-bold
+                      text-emerald-800
+                      hover:bg-emerald-50
+                    "
+                  >
+                    Ver todos os eventos
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = "/creator/eventos/novo";
+                    }}
+                    className="
+                      rounded-xl
+                      bg-emerald-600
+                      px-4 py-2
+                      text-sm font-bold
+                      text-white
+                      hover:bg-emerald-700
+                    "
+                  >
+                    + Criar evento
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1190,6 +1220,11 @@ export default function CreatorProfile() {
               </div>
             )}
           </section>
+
+          <ProfileReplaysSection
+            creatorUsuarioId={creator.usuarioId}
+          />
+        </>
         )}
 
         {aba === "postagens" && (
