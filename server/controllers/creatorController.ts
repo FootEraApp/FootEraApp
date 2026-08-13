@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { PrismaClient, CreatorTipo, CreatorVendaStatus } from "@prisma/client";
+import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
 
 const prisma = new PrismaClient();
 
@@ -236,6 +237,29 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         });
     }
 
+    const viewerId =
+      getAuthUserId(req);
+
+    if (!viewerId) {
+      return res.status(401).json({
+        message: "Não autenticado.",
+      });
+    }
+
+    const acesso =
+      await avaliarPrivacidadePerfil(
+        viewerId,
+        creator.usuarioId
+      );
+
+    if (!acesso.podeVerPerfil) {
+      return res.status(403).json({
+        code: "PROFILE_PRIVATE",
+        message:
+          "Este perfil está privado.",
+      });
+    }
+
     const [
       metodologias,
       avulsas,
@@ -415,6 +439,86 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         creator.tipo = tipoCorrigido;
     }
 
+    const ocultarEmailEntidade = (
+      entidade: any
+    ) => {
+      if (!entidade) return entidade;
+
+      return {
+        ...entidade,
+
+        ...(Object.prototype.hasOwnProperty.call(
+          entidade,
+          "email"
+        )
+          ? {
+              email:
+                acesso.podeMostrarEmail
+                  ? entidade.email
+                  : null,
+            }
+          : {}),
+
+        ...(Object.prototype.hasOwnProperty.call(
+          entidade,
+          "emailPublico"
+        )
+          ? {
+              emailPublico:
+                acesso.podeMostrarEmail
+                  ? entidade.emailPublico
+                  : null,
+            }
+          : {}),
+      };
+    };
+
+    const {
+      cpf: _cpf,
+      cep: _cep,
+      logradouro: _logradouro,
+      ...usuarioBase
+    } = creator.usuario as any;
+
+    const usuarioPublico = {
+      ...usuarioBase,
+
+      email:
+        acesso.podeMostrarEmail
+          ? creator.usuario.email
+          : null,
+
+      clube:
+        ocultarEmailEntidade(
+          creator.usuario.clube
+        ),
+
+      professor:
+        ocultarEmailEntidade(
+          creator.usuario.professor
+        ),
+
+      escolinha:
+        ocultarEmailEntidade(
+          creator.usuario.escolinha
+        ),
+
+      marca:
+        ocultarEmailEntidade(
+          creator.usuario.marca
+        ),
+
+      federacao:
+        ocultarEmailEntidade(
+          creator.usuario.federacao
+        ),
+
+      olheiro:
+        ocultarEmailEntidade(
+          creator.usuario.olheiro
+        ),
+    };
+
     return res.json({
       ok: true,
       creator: {
@@ -430,16 +534,21 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         verificado: creator.verificado || creator.usuario.verified,
         instituicaoOficial: creator.instituicaoOficial,
         initials: initials(creator.nomePublico ?? creator.usuario.nome),
-        usuario: creator.usuario,
+        usuario: usuarioPublico,
         perfilOriginal: {
-          ...creator.usuario,
+          ...usuarioPublico,
           tipo: creator.usuario.tipo,
-          marca: creator.usuario.marca ?? null,
-          federacao: creator.usuario.federacao ?? null,
-          clube: creator.usuario.clube ?? null,
-          escolinha: creator.usuario.escolinha ?? null,
-          professor: creator.usuario.professor ?? null,
-          atleta: creator.usuario.atleta ?? null,
+          marca: usuarioPublico.marca ?? null,
+          federacao:
+            usuarioPublico.federacao ?? null,
+          clube:
+            usuarioPublico.clube ?? null,
+          escolinha:
+            usuarioPublico.escolinha ?? null,
+          professor:
+            usuarioPublico.professor ?? null,
+          atleta:
+            usuarioPublico.atleta ?? null,
         },
     },
       metricas: {

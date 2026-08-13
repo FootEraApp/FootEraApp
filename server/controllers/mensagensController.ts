@@ -26,10 +26,6 @@ function readNotificacoes(raw: any) {
   };
 }
 
-function isAdminTipo(tipo: any) {
-  return String(tipo || "").toLowerCase() === "admin";
-}
-
 async function isProUser(userId: string) {
   const assinatura = await prisma.assinatura.findFirst({
     where: { usuarioId: userId },
@@ -172,29 +168,24 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       select: { id: true, tipo: true, configuracoesPrivacidade: true, configuracoesNotificacoes: true },
     });
 
-    const priv: any =
-      destinatario?.configuracoesPrivacidade &&
-      typeof destinatario.configuracoesPrivacidade === "object"
-        ? destinatario.configuracoesPrivacidade
-        : {};
-
-    if (priv.permitirMensagens === false) {
-      return res.status(403).json({
-        error: "Este usuário desativou mensagens diretas.",
+    if (!destinatario) {
+      return res.status(404).json({
+        error: "Destinatário não encontrado.",
       });
     }
 
-    if (!destinatario) {
-      return res.status(404).json({ error: "Destinatário não encontrado." });
-    }
+    const destPriv = readPrivacidade(
+      destinatario.configuracoesPrivacidade
+    );
 
-    const destPriv = readPrivacidade((destinatario as any).configuracoesPrivacidade);
-    const viewerIsAdmin = isAdminTipo((remetente as any)?.tipo);
-
-    if (!destPriv.permitirMensagens && !viewerIsAdmin && destinatario.id !== deId) {
+    if (
+      !destPriv.permitirMensagens &&
+      destinatario.id !== deId
+    ) {
       return res.status(403).json({
         code: "DM_DISABLED",
-        error: "Este usuário desativou mensagens diretas.",
+        error:
+          "Este usuário desativou mensagens diretas.",
       });
     }
 
@@ -271,42 +262,126 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-export const buscarMensagens = async (req: any, res: Response) => {
-  try {
-    const me = req.userId as string | undefined;
-    const otherId = String(
-      req.query.otherId ?? req.query.paraId ?? req.query.deId ?? ""
-    );
-    if (!me || !otherId) return res.status(400).json({ error: "otherId é obrigatório" });
+export const buscarMensagens =
+  async (req: any, res: Response) => {
+    try {
+      const me =
+        req.userId as
+          | string
+          | undefined;
 
-    const { cursor, limit = 20 } = req.query;
+      const otherId = String(
+        req.query.otherId ??
+          req.query.paraId ??
+          req.query.deId ??
+          ""
+      ).trim();
 
-    const mensagens = await prisma.mensagem.findMany({
-      where: {
-        OR: [
-          { deId: me,      paraId: otherId },
-          { deId: otherId, paraId: me      },
-        ],
-      },
-      orderBy: { criadaEm: "desc" },
-      take: Number(limit),
-      ...(cursor ? { skip: 1, cursor: { id: String(cursor) } } : {}),
-    });
+      if (!me || !otherId) {
+        return res.status(400).json({
+          error:
+            "otherId é obrigatório",
+        });
+      }
 
-    const ads = await getAdsConfigForUser(me);
+      const destinatario =
+        await prisma.usuario.findUnique({
+          where: {
+            id: otherId,
+          },
+          select: {
+            configuracoesPrivacidade:
+              true,
+          },
+        });
 
-    return res.json({
-      items: mensagens,
-      meta: {
-        adsEnabled: ads.adsEnabled,
-        adEveryN: ads.adsEnabled ? ads.adEveryN : null,
-        adsRemainingToday: ads.adsRemainingToday,
-      },
-    });
-  } catch {
-    res.status(500).json({ error: "Erro ao buscar mensagens" });
-  }
-};
+      if (!destinatario) {
+        return res.status(404).json({
+          error:
+            "Usuário não encontrado.",
+        });
+      }
+
+      const privDestinatario =
+        readPrivacidade(
+          destinatario
+            .configuracoesPrivacidade
+        );
+
+      const {
+        cursor,
+        limit = 20,
+      } = req.query;
+
+      const mensagens =
+        await prisma.mensagem.findMany({
+          where: {
+            OR: [
+              {
+                deId: me,
+                paraId: otherId,
+              },
+              {
+                deId: otherId,
+                paraId: me,
+              },
+            ],
+          },
+          orderBy: {
+            criadaEm: "desc",
+          },
+          take: Number(limit),
+
+          ...(cursor
+            ? {
+                skip: 1,
+                cursor: {
+                  id: String(cursor),
+                },
+              }
+            : {}),
+        });
+
+      const ads =
+        await getAdsConfigForUser(
+          me
+        );
+
+      return res.json({
+        items: mensagens,
+
+        meta: {
+          adsEnabled:
+            ads.adsEnabled,
+
+          adEveryN:
+            ads.adsEnabled
+              ? ads.adEveryN
+              : null,
+
+          adsRemainingToday:
+            ads.adsRemainingToday,
+
+          permitirMensagens:
+            privDestinatario
+              .permitirMensagens ||
+            me === otherId,
+        },
+      });
+    } catch (e) {
+      console.error(
+        "buscarMensagens error:",
+        e
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Erro ao buscar mensagens",
+        });
+    }
+  };
 
 export async function listarConversas(req: any, res: Response) {
   const me: string | undefined = req.user?.id || req.userId;
@@ -598,8 +673,19 @@ export async function deletarMensagem(req: Request, res: Response) {
       await prisma.mensagem.delete({ where: { id } });
 
       if (io) {
-        io.to(msgPriv.deId).emit("mensagemDeletada", { id });
-        io.to(msgPriv.paraId).emit("mensagemDeletada", { id });
+        io.to(
+          `u:${msgPriv.deId}`
+        ).emit(
+          "mensagemDeletada",
+          { id }
+        );
+
+        io.to(
+          `u:${msgPriv.paraId}`
+        ).emit(
+          "mensagemDeletada",
+          { id }
+        );
       }
 
       return res.status(204).send();
@@ -614,7 +700,12 @@ export async function deletarMensagem(req: Request, res: Response) {
       await prisma.mensagemGrupo.delete({ where: { id } });
 
       if (io) {
-         io.to(msgGrupo.grupoId).emit("mensagemDeletada", { id });
+        io.to(
+          `g:${msgGrupo.grupoId}`
+        ).emit(
+          "mensagemDeletada",
+          { id }
+        );
       }
 
       return res.status(204).send();

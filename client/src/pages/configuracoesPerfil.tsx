@@ -185,15 +185,38 @@ export default function ConfiguracoesPerfil() {
     setMostrarOnline(data?.mostrarOnline ?? true);
   }
 
-  async function salvarPrivacidade(patch: any) {
-    await fetch(`${API.REST}/configuracoes-perfil/privacidade`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify(patch),
-    });
+  async function salvarPrivacidade(
+    patch: any
+  ) {
+    const resp = await fetch(
+      `${API.REST}/configuracoes-perfil/privacidade`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          Authorization:
+            `Bearer ${getToken()}`,
+        },
+
+        body: JSON.stringify(patch),
+      }
+    );
+
+    const data =
+      await resp
+        .json()
+        .catch(() => ({}));
+
+    if (!resp.ok) {
+      throw new Error(
+        data?.message ||
+        "Não foi possível salvar a configuração."
+      );
+    }
+
+    return data;
   }
 
   async function carregarNotificacoes() {

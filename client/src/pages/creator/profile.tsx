@@ -399,9 +399,27 @@ export default function CreatorProfile() {
       return;
     }
 
-    fetch(`${API}/api/creator/profile/${usuarioId}`)
+    const token =
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    fetch(
+      `${API}/api/creator/profile/${usuarioId}`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+      }
+    )
       .then(async (res) => {
-        if (!res.ok) throw new Error("Creator não encontrado.");
+        if (!res.ok) {
+          throw new Error(
+            "Creator não encontrado."
+          );
+        }
+
         return res.json();
       })
       .then((json) => setData(json))
@@ -409,7 +427,9 @@ export default function CreatorProfile() {
         console.error(err);
         setData(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() =>
+        setLoading(false)
+      );
   }, [usuarioId, meuId]);
 
   useEffect(() => {
@@ -961,7 +981,7 @@ export default function CreatorProfile() {
             <section className="bg-white rounded-2xl border p-5 shadow-sm">
               <h2 className="font-bold text-emerald-950 mb-4">Conteúdo no Learning</h2>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid md:grid-cols-2 gap-4 md:auto-rows-fr">
                 {conteudos.slice(0, 4).map((item) => (
                   <CreatorCard
                     key={`${item.origem}-${item.id}`}
@@ -1012,7 +1032,7 @@ export default function CreatorProfile() {
                     Nenhum conteúdo publicado ainda.
                     </p>
                 ) : (
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:auto-rows-fr">
                     {conteudos.map((item) => (
                       <CreatorCard
                         key={`${item.origem}-${item.id}`}
