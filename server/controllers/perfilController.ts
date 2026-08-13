@@ -8,6 +8,7 @@ import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import { sendError } from "../utils/httpError.js";
+import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
 
 type AtividadeUI = {
   id: string;
@@ -50,15 +51,6 @@ function normalizarCategorias(input: any): Categoria[] {
     .filter(Boolean) as Categoria[];
 }
 
-function readPrivacidadeFlags(config: any) {
-  const c = (config && typeof config === "object") ? config : {};
-  return {
-    perfilVisivel: c.perfilVisivel !== false,         
-    mostrarEmail: c.mostrarEmail === true,            
-    permitirMensagens: c.permitirMensagens !== false, 
-  };
-}
-
 function isAdminFromReq(req: any) {
   const t = String(req?.user?.tipo ?? req?.authUser?.tipo ?? "").toLowerCase();
   return t === "admin";
@@ -69,12 +61,47 @@ function withDefaultImg(v: any) {
   return s ? s : DEFAULT_AVATAR;
 }
 
-function normalizarTipoUsuario(tipo?: string | null) {
-  return String(tipo || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+async function obterAcessoPerfil(
+  req: any,
+  res: Response,
+  targetUsuarioId: string
+) {
+  const viewerId =
+    req?.userId ||
+    req?.user?.id ||
+    null;
+
+  const acesso =
+    await avaliarPrivacidadePerfil(
+      viewerId,
+      targetUsuarioId
+    );
+
+  if (!acesso.podeVerPerfil) {
+    res.status(403).json({
+      code: "PROFILE_PRIVATE",
+      message:
+        "Este perfil está privado.",
+    });
+
+    return null;
+  }
+
+  return acesso;
+}
+
+function sanitizarUsuarioPerfil(
+  usuario: any,
+  podeMostrarEmail: boolean
+) {
+  if (!usuario) return null;
+
+  return {
+    ...usuario,
+    email: podeMostrarEmail
+      ? usuario.email
+      : null,
+  };
 }
 
 function inicioDoDia(d: Date) {
@@ -1030,12 +1057,17 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     const viewerId = (req as any)?.userId ? String((req as any).userId) : null;
     const isOwnProfile = !!viewerId && viewerId === usuario.id;
     const isAdmin = isAdminFromReq(req);
-    const priv = readPrivacidadeFlags((usuario as any).configuracoesPrivacidade);
+    const acesso =
+      await avaliarPrivacidadePerfil(
+        viewerId,
+        usuario.id
+      );
 
-    if (!priv.perfilVisivel && !isOwnProfile && !isAdmin) {
+    if (!acesso.podeVerPerfil) {
       return res.status(403).json({
         code: "PROFILE_PRIVATE",
-        message: "Este perfil está privado.",
+        message:
+          "Este perfil está privado e disponível apenas para pessoas vinculadas.",
       });
     }
 
@@ -1353,11 +1385,36 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       }
     }
 
+  if (
+    dadosEspecificos &&
+    !acesso.podeMostrarEmail
+  ) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        dadosEspecificos,
+        "email"
+      )
+    ) {
+      dadosEspecificos.email = null;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        dadosEspecificos,
+        "emailPublico"
+      )
+    ) {
+      dadosEspecificos.emailPublico = null;
+    }
+  }
+
   const usuarioPayload: any = {
     id: usuario.id,
     nome: usuario.nome,
     nomeDeUsuario: usuario.nomeDeUsuario,
-    email: usuario.email,
+    email: acesso.podeMostrarEmail
+      ? usuario.email
+      : null,
     foto: usuario.foto,
     verified: (usuario as any).verified ?? false, 
   };
@@ -2182,6 +2239,22 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
 
     if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
+    if (!prof.usuarioId) {
+      return res.status(404).json({
+        error:
+          "Professor sem usuário associado."
+      });
+    }
+
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        prof.usuarioId
+      );
+
+    if (!acesso) return;
+
     const rels = await prisma.relacaoTreinamento.findMany({
       where: { professorId: prof.id, atletaId: { not: null } },
       select: { atletaId: true },
@@ -2223,7 +2296,11 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
     let conquistas = unlocked.length;
     if (gruposCriados > 0) conquistas += 1;
 
-    const usuarioMin = (prof as any).usuario ?? null;
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        (prof as any).usuario,
+        acesso.podeMostrarEmail
+      );
     const fotoPerfil = withDefaultImg((prof as any).fotoUrl ?? usuarioMin?.foto);
 
     return res.json({
@@ -2295,6 +2372,18 @@ export async function getPerfilClube(req: Request, res: Response) {
     });
 
     if (!clube) return res.status(404).json({ error: "Clube não encontrado" });
+  
+    const acesso = await avaliarPrivacidadePerfil(
+      (req as any).userId,
+      clube.usuarioId
+    );
+
+    if (!acesso.podeVerPerfil) {
+      return res.status(403).json({
+        code: "PROFILE_PRIVATE",
+        message: "Este perfil está privado.",
+      });
+    }
 
     const [diretos, relacoes, elencos, aceitos] = await Promise.all([
       prisma.atleta.findMany({ where: { clubeId: clube.id }, select: { id: true } }),
@@ -2313,7 +2402,14 @@ export async function getPerfilClube(req: Request, res: Response) {
       ...aceitos.map(s => s.atletaId),
     ]);
 
-    const usuarioMin = (clube as any).usuario ?? null;
+    const usuarioMin = (clube as any).usuario
+      ? {
+          ...(clube as any).usuario,
+          email: acesso.podeMostrarEmail
+            ? (clube as any).usuario.email
+            : null,
+        }
+      : null;
     const logoOuFoto = withDefaultImg((clube as any).logo ?? usuarioMin?.foto);
 
     return res.json({
@@ -2326,7 +2422,9 @@ export async function getPerfilClube(req: Request, res: Response) {
         cnpj: clube.cnpj,
         telefone1: clube.telefone1,
         telefone2: clube.telefone2,
-        email: clube.email,
+        email: acesso.podeMostrarEmail
+          ? clube.email
+          : null,
         siteOficial: clube.siteOficial,
         sede: clube.sede,
         estadio: clube.estadio,
@@ -2391,10 +2489,23 @@ export async function getPerfilEscola(req: Request, res: Response) {
 
     if (!escola) return res.status(404).json({ error: "Escolinha não encontrada" });
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        escola.usuarioId
+      );
+
+    if (!acesso) return;
+
     const atletasCount = await countAtletasPorEntidade({ escolinhaId: escola.id });
     const treinosCount = await prisma.treinoProgramado.count({ where: { escolinhaId: escola.id } });
 
-    const usuarioMin = (escola as any).usuario ?? null;
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        (escola as any).usuario,
+        acesso.podeMostrarEmail
+      );
     const logoOuFoto = withDefaultImg((escola as any).logo ?? usuarioMin?.foto);
 
     return res.json({
@@ -2407,7 +2518,9 @@ export async function getPerfilEscola(req: Request, res: Response) {
         cnpj: escola.cnpj,
         telefone1: escola.telefone1,
         telefone2: escola.telefone2,
-        email: escola.email,
+        email: acesso.podeMostrarEmail
+          ? escola.email
+          : null,
         siteOficial: escola.siteOficial,
         sede: escola.sede,
         logradouro: escola.logradouro,
@@ -2477,6 +2590,15 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ error: "Olheiro não encontrado" });
     }
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        olheiro.usuarioId
+      );
+
+    if (!acesso) return;
+
     const viewerIsOlheiro = req.user?.tipo === "Olheiro";
     const isOwnProfile = !!req.userId && req.userId === olheiro.usuarioId;
 
@@ -2540,7 +2662,11 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       });
     }
 
-    const usuarioMin = olheiro.usuario ?? null;
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        olheiro.usuario,
+        acesso.podeMostrarEmail
+      );
 
     return res.json({
       tipo: "Olheiro" as const,
@@ -2553,7 +2679,10 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         descricao: olheiro.descricao ?? null,
         areaAtuacao: olheiro.areaAtuacao ?? null,
         anosExperiencia: olheiro.anosExperiencia ?? 0,
-        emailPublico: olheiro.emailPublico ?? null,
+        emailPublico:
+          acesso.podeMostrarEmail
+            ? olheiro.emailPublico ?? null
+            : null,
         telefonePublico: olheiro.telefonePublico ?? null,
         reputacaoScore: reputacaoCalculada,
         totalIndicacoes: indicacoesTotais,
@@ -2693,6 +2822,15 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Federação não encontrada." });
     }
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        federacao.usuarioId
+      );
+
+    if (!acesso) return;
+
     const [conquistasCount, certificadosCount] = await Promise.all([
       prisma.conquistaVinculo.count({
         where: {
@@ -2708,10 +2846,26 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
       }),
     ]);
 
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        federacao.usuario,
+        acesso.podeMostrarEmail
+      );
+
+    const federacaoPayload = {
+      ...federacao,
+
+      email: acesso.podeMostrarEmail
+        ? federacao.email
+        : null,
+
+      usuario: usuarioMin,
+    };
+
     return res.json({
       tipo: "Federacao",
-      usuario: federacao.usuario,
-      federacao,
+      usuario: usuarioMin,
+      federacao: federacaoPayload,
       metricas: {
         eventos: federacao._count?.eventos ?? 0,
         conteudos:
@@ -2780,6 +2934,15 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Marca não encontrada." });
     }
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        marca.usuarioId
+      );
+
+    if (!acesso) return;
+
     const [conquistasCount, certificadosCount] = await Promise.all([
       prisma.conquistaVinculo.count({
         where: {
@@ -2795,10 +2958,26 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
       }),
     ]);
 
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        marca.usuario,
+        acesso.podeMostrarEmail
+      );
+
+    const marcaPayload = {
+      ...marca,
+
+      email: acesso.podeMostrarEmail
+        ? marca.email
+        : null,
+
+      usuario: usuarioMin,
+    };
+
     return res.json({
       tipo: "Marca",
-      usuario: marca.usuario,
-      marca,
+      usuario: usuarioMin,
+      marca: marcaPayload,
       metricas: {
         eventos: marca._count?.eventos ?? 0,
         conteudos:
@@ -2851,6 +3030,15 @@ export const getPerfilLearning = async (req: AuthenticatedRequest, res: Response
     if (!learning) {
       return res.status(404).json({ message: "Perfil Learning não encontrado." });
     }
+
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        learning.usuarioId
+      );
+
+    if (!acesso) return;
 
     const solicitanteId =
       String(
@@ -2950,9 +3138,15 @@ export const getPerfilLearning = async (req: AuthenticatedRequest, res: Response
       return status !== "CONCLUIDA" && status !== "CONCLUÍDA" && progresso < 100;
     });
 
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        learning.usuario,
+        acesso.podeMostrarEmail
+      );
+
     return res.json({
       tipo: "Learning",
-      usuario: learning.usuario,
+      usuario: usuarioMin,
       learning: {
         id: learning.id,
         usuarioId: learning.usuarioId,

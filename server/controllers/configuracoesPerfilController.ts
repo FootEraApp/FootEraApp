@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import bcrypt from "bcryptjs";
 import { AuthProvider } from "@prisma/client";
+import { getIO } from "../socket.js";
 
 function getUserId(req: Request): string | null {
   const r: any = req;
@@ -67,6 +68,23 @@ export async function patchPrivacidade(req: Request, res: Response) {
       where: { id: userId },
       data: { configuracoesPrivacidade: merged as any },
     });
+
+    if (
+      typeof mostrarOnline === "boolean" &&
+      mostrarOnline === false
+    ) {
+      try {
+        const io = getIO();
+
+        io?.emit("presence:update", {
+          userId,
+          online: false,
+          lastSeenAt: null,
+          lastLogoutAt: null,
+          hidden: true,
+        });
+      } catch {}
+    }
 
     return res.json({
       perfilVisivel: merged.perfilVisivel ?? true,

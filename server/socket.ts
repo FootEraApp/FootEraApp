@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import http from "http";
 import jwt from "jsonwebtoken";
 import { prisma } from "./prisma.js";
+import { podeVerPresenca } from "./utils/privacy.js";
 
 let io: Server;
 
@@ -59,7 +60,6 @@ export function setupSocket(server: http.Server) {
     if (userId) {
       socket.join(`u:${userId}`);
       void touchSeen(userId);
-      io.emit("presence:update", { userId, online: true, at: new Date().toISOString() });
     }
 
     socket.on("presence:ping", async () => {
@@ -67,38 +67,128 @@ export function setupSocket(server: http.Server) {
       if (!uid) return;
 
       await touchSeen(uid);
-
-      io.emit("presence:update", { userId: uid, online: true, at: new Date().toISOString() });
     });
 
-    socket.on("presence:status", async (ids: string[], cb?: (resp: any) => void) => {
-      try {
-        const uniq = Array.from(new Set((ids || []).map(String))).slice(0, 200);
+    socket.on(
+      "presence:status",
+      async (
+        ids: string[],
+        cb?: (resp: any) => void
+      ) => {
+        try {
+          const viewerId = String(
+            (socket.data as any)
+              ?.userId || ""
+          );
 
-        if (!uniq.length) return cb?.({ items: [] });
+          if (!viewerId) {
+            return cb?.({
+              items: [],
+            });
+          }
 
-        const rows = await prisma.usuario.findMany({
-          where: { id: { in: uniq } },
-          select: { id: true, lastSeenAt: true, lastLogoutAt: true },
-        });
+          const uniq =
+            Array.from(
+              new Set(
+                (ids || [])
+                  .map(String)
+                  .filter(Boolean)
+              )
+            ).slice(0, 200);
 
-        const now = Date.now();
-        const items = rows.map((u) => {
-          const lastSeenMs = u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : 0;
-          const online = lastSeenMs && now - lastSeenMs <= ONLINE_TTL_MS;
-          return {
-            userId: u.id,
-            online,
-            lastSeenAt: u.lastSeenAt,
-            lastLogoutAt: u.lastLogoutAt,
-          };
-        });
+          if (!uniq.length) {
+            return cb?.({
+              items: [],
+            });
+          }
 
-        cb?.({ items });
-      } catch (e) {
-        cb?.({ items: [], error: "STATUS_FAILED" });
+          const rows =
+            await prisma.usuario
+              .findMany({
+                where: {
+                  id: {
+                    in: uniq,
+                  },
+                },
+
+                select: {
+                  id: true,
+                  lastSeenAt: true,
+                  lastLogoutAt: true,
+                },
+              });
+
+          const now =
+            Date.now();
+
+          const items =
+            await Promise.all(
+              rows.map(
+                async (u) => {
+                  const permitido =
+                    await podeVerPresenca(
+                      viewerId,
+                      u.id
+                    );
+
+                  if (!permitido) {
+                    return {
+                      userId: u.id,
+                      online: false,
+                      lastSeenAt:
+                        null,
+                      lastLogoutAt:
+                        null,
+                      hidden: true,
+                    };
+                  }
+
+                  const lastSeenMs =
+                    u.lastSeenAt
+                      ? new Date(
+                          u.lastSeenAt
+                        ).getTime()
+                      : 0;
+
+                  const online =
+                    !!lastSeenMs &&
+                    now -
+                      lastSeenMs <=
+                      ONLINE_TTL_MS;
+
+                  return {
+                    userId: u.id,
+                    online,
+
+                    lastSeenAt:
+                      u.lastSeenAt,
+
+                    lastLogoutAt:
+                      u.lastLogoutAt,
+
+                    hidden: false,
+                  };
+                }
+              )
+            );
+
+          cb?.({
+            items,
+          });
+        } catch (e) {
+          console.error(
+            "[SOCKET] presence:status",
+            e
+          );
+
+          cb?.({
+            items: [],
+            error:
+              "STATUS_FAILED",
+          });
+        }
       }
-    });
+    );
 
     socket.on("join", (usuarioId: string) => {
       if (usuarioId) socket.join(`u:${usuarioId}`);
@@ -112,40 +202,58 @@ export function setupSocket(server: http.Server) {
       if (grupoId) socket.leave(`g:${grupoId}`);
     });
 
-    socket.on("sendMessage", (mensagem) => {
-      io.to(`u:${mensagem.paraId}`).emit("novaMensagem", mensagem);
-      io.to(`u:${mensagem.deId}`).emit("novaMensagem", mensagem);
-    });
-
     socket.on("sendGroupMessage", (mensagem) => {
       io.to(`g:${mensagem.grupoId}`).emit("novaMensagemGrupo", mensagem);
     });
 
-    socket.on("disconnect", async () => {
-      const uid = String((socket.data as any)?.userId || "");
-      if (!uid) return;
+    socket.on(
+      "disconnect",
+      () => {
+        const uid = String(
+          (socket.data as any)
+            ?.userId || ""
+        );
 
-      await touchSeen(uid);
+        if (!uid) return;
 
-      setTimeout(async () => {
-        try {
-          const room = io.sockets.adapter.rooms.get(`u:${uid}`);
-          const stillConnected = room && room.size > 0;
-          if (stillConnected) return;
+        setTimeout(
+          async () => {
+            try {
+              const room =
+                io.sockets
+                  .adapter
+                  .rooms
+                  .get(
+                    `u:${uid}`
+                  );
 
-          const u = await prisma.usuario.findUnique({
-            where: { id: uid },
-            select: { lastSeenAt: true },
-          });
+              const aindaConectado =
+                !!room &&
+                room.size > 0;
 
-          const lastSeenMs = u?.lastSeenAt ? new Date(u.lastSeenAt).getTime() : 0;
-          const online = lastSeenMs && Date.now() - lastSeenMs <= ONLINE_TTL_MS;
-          if (online) return;
+              if (
+                aindaConectado
+              ) {
+                return;
+              }
 
-          io.emit("presence:update", { userId: uid, online: false, at: new Date().toISOString() });
-        } catch {}
-      }, 1500);
-    });
+              await touchSeen(
+                uid,
+                {
+                  logout: true,
+                }
+              );
+            } catch (e) {
+              console.error(
+                "[SOCKET] disconnect presence:",
+                e
+              );
+            }
+          },
+          1500
+        );
+      }
+    );
   });
 
   return io;

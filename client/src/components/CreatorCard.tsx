@@ -38,9 +38,25 @@ export default function CreatorCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-2xl border border-emerald-100 bg-white shadow-sm overflow-hidden hover:shadow-md transition"
+      className="
+        w-full
+        text-left
+        rounded-2xl
+        border border-emerald-100
+        bg-white
+        shadow-sm
+        overflow-hidden
+        hover:shadow-md
+        transition
+
+        md:h-full
+        md:flex
+        md:flex-col
+        md:items-stretch
+        md:justify-start
+      "
     >
-      <div className="h-32 bg-emerald-50">
+      <div className="h-32 bg-emerald-50 shrink-0">
         <CoverImage
           src={capaUrl}
           alt={titulo}
@@ -49,7 +65,7 @@ export default function CreatorCard({
         />
       </div>
 
-      <div className="p-4">
+      <div className="p-4 md:flex-1">
         <div className="flex flex-wrap gap-2 mb-2">
           <span
             className={
