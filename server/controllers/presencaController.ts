@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import { prisma } from "../prisma.js";
-import { podeVerPresenca } from "@/utils/privacy.js";
+import { podeVerPresenca } from "../utils/privacy.js";
 
 export async function getPresenca(req: any, res: Response) {
   const alvoId = String(req.params.id || "").trim();

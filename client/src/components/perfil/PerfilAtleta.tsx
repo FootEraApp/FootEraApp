@@ -53,7 +53,6 @@ export default function PerfilAtleta({
   const [professores, setProfessores] = useState<string[]>([]);
   const [escolaNome, setEscolaNome] = useState<string | null>(null);
   const [clubeNome, setClubeNome] = useState<string | null>(null);
-  const [scoreDelta, setScoreDelta] = useState(0);
   const [privacidade, setPrivacidade] = useState<{ mostrarEmail: boolean } | null>(null);
   const [conquistasCount, setConquistasCount] = useState<number>(0);
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
@@ -197,22 +196,6 @@ export default function PerfilAtleta({
         setEscolaNome(escola);
         setClubeNome(clube);
         setProfessores(Array.from(new Set(profs)));
-
-        if (uid) {
-          const { data: p } = await axios.get(`${API.BASE_URL}/api/perfil/${uid}/pontuacao`, { headers });
-          if (!alive) return;
-          const performance = Number(p?.performance) || 0;
-          const disciplina = Number(p?.disciplina) || 0;
-          const responsabilidade = Number(p?.responsabilidade) || 0;
-          const totalAtual = performance + disciplina + responsabilidade;
-          const viewerId = String(Storage?.usuarioId ?? "");
-          const key = `lastSeenScore:${viewerId}:${uid}`;
-          const last = Number(localStorage.getItem(key) ?? 0);
-          const d = Math.max(0, totalAtual - last);
-          setScoreDelta(d);
-          setTimeout(() => { try { localStorage.setItem(key, String(totalAtual)); } catch {} }, 2000);
-        } else {
-        }
       } catch (err) {
         console.error("Erro ao carregar dados do perfil do atleta:", err);
         setPerfil(null);
@@ -247,7 +230,6 @@ export default function PerfilAtleta({
           idade={perfil.dadosEspecificos.idade}
           posicao={perfil.dadosEspecificos.posicao}
           pontuacao={total}
-          scoreDelta={scoreDelta}
           isOwnProfile={isOwnProfile}
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
           perfilId={perfil.usuario.id}
