@@ -187,6 +187,7 @@ export default function PaginaMensagens() {
     if (!alvo) return;
 
     if (alvo.tipo === "usuario") {
+      setDmPermitida(true);
       const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
       setMensagensPrivadas(safeLoad<Mensagem>(key));
       setTemMaisPriv(true);
@@ -260,6 +261,10 @@ export default function PaginaMensagens() {
   const [temMaisGrupo, setTemMaisGrupo] = useState(true);
   const [carregandoMaisGrupo, setCarregandoMaisGrupo] = useState(false);
   const [novaMensagem, setNovaMensagem] = useState("");
+  const [
+    dmPermitida,
+    setDmPermitida,
+  ] = useState(true);
   const [postsCache, setPostsCache] = useState<Record<string, Postagem>>({});
   const [usuariosCache, setUsuariosCache] = useState<Record<string, Usuario>>({});
   const [desafiosCache, setDesafiosCache] = useState<Record<string, Desafio>>({});
@@ -714,6 +719,13 @@ export default function PaginaMensagens() {
   const compartilharPerfilNoChat = async () => {
     if (!isAtleta) return;
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
+
+    if (!dmPermitida) {
+      toast.error(
+        "Este usuário desativou mensagens diretas."
+      );
+      return;
+    }
 
     try {
       const base = (meuCardDados ?? await getMeuPerfilEBonus());
@@ -1450,11 +1462,14 @@ export default function PaginaMensagens() {
         ...(ultimoId ? { cursor: ultimoId } : {}),
       });
 
-          const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
+      const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       const json = await res.json();
+      const podeEnviar =
+        json?.meta?.permitirMensagens
+          !== false;
       const novas: Mensagem[] = Array.isArray(json)
         ? json
         : Array.isArray(json.items)
@@ -1473,6 +1488,10 @@ export default function PaginaMensagens() {
         alvoRef.current?.tipo === "usuario" &&
         alvoRef.current.usuario.id === otherId;
       if (!stillSame) return;
+
+      setDmPermitida(
+        podeEnviar
+      );
 
       if (novas.length < limite) setTemMaisPriv(false);
 
@@ -1656,6 +1675,16 @@ export default function PaginaMensagens() {
 
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() || !alvo) return;
+    if (
+      alvo.tipo === "usuario" &&
+      !dmPermitida
+    ) {
+      toast.error(
+        "Este usuário desativou mensagens diretas."
+      );
+
+      return;
+    }
     if (!usuarioId) { toast.error("Sessão expirada. Faça login novamente."); return; }
 
     if (alvo.tipo === "usuario") {
@@ -1690,16 +1719,71 @@ export default function PaginaMensagens() {
         });
 
         if (resp.ok) {
-          const saved: Mensagem = await resp.json();
-          reconcilePrivadaByClientId(saved);
-        } else {
-          console.error("POST /api/mensagem falhou:", resp.status, await resp.text());
-          setMensagensPrivadas(prev =>
-            prev.map(m =>
-              m.clientMsgId === clientMsgId ? { ...m, pending: false } : m
-            )
+          const saved: Mensagem =
+            await resp.json();
+
+          reconcilePrivadaByClientId(
+            saved
           );
-          toast.error("Não foi possível enviar a mensagem agora.");
+        } else {
+          const errorData =
+            await resp
+              .json()
+              .catch(() => ({}));
+
+          console.error(
+            "POST /api/mensagem falhou:",
+            resp.status,
+            errorData
+          );
+
+          if (
+            resp.status === 403 &&
+            (
+              errorData?.code ===
+                "DM_DISABLED" ||
+              String(
+                errorData?.error || ""
+              ).includes(
+                "desativou mensagens"
+              )
+            )
+          ) {
+            setDmPermitida(false);
+
+            setMensagensPrivadas(
+              (prev) =>
+                prev.filter(
+                  (m) =>
+                    m.clientMsgId !==
+                    clientMsgId
+                )
+            );
+
+            toast.error(
+              "Este usuário desativou mensagens diretas."
+            );
+
+            return;
+          }
+
+          setMensagensPrivadas(
+            (prev) =>
+              prev.map((m) =>
+                m.clientMsgId ===
+                clientMsgId
+                  ? {
+                      ...m,
+                      pending: false,
+                    }
+                  : m
+              )
+          );
+
+          toast.error(
+            errorData?.error ||
+              "Não foi possível enviar a mensagem agora."
+          );
         }
       } catch (e) {
         console.error("POST /api/mensagem erro:", e);
@@ -2402,11 +2486,40 @@ function stripConvocacaoTag(text: string) {
                     enviarMensagem();
                   }
                 }}
-                placeholder="Digite sua mensagem..."
+                disabled={
+                  alvo?.tipo === "usuario" &&
+                  !dmPermitida
+                }
+
+                placeholder={
+                  alvo?.tipo === "usuario" &&
+                  !dmPermitida
+                    ? "Este usuário desativou mensagens diretas."
+                    : "Digite sua mensagem..."
+                }
               />
               <button
                 onClick={enviarMensagem}
-                className="shrink-0 bg-green-900 text-white p-3 rounded-xl hover:opacity-95 active:opacity-90"
+                disabled={
+                  alvo?.tipo === "usuario" &&
+                  !dmPermitida
+                }
+                className={`
+                  shrink-0
+                  bg-green-900
+                  text-white
+                  p-3
+                  rounded-xl
+                  hover:opacity-95
+                  active:opacity-90
+
+                  ${
+                    alvo?.tipo === "usuario" &&
+                    !dmPermitida
+                      ? "opacity-40 cursor-not-allowed"
+                      : ""
+                  }
+                `}
                 title="Enviar"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">

@@ -1,6 +1,56 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
+import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
+
+const usuarioExplorarSelect = {
+  id: true,
+  nome: true,
+  nomeDeUsuario: true,
+  email: true, // pode manter internamente para calcular verificação
+  verified: true,
+  destaque: true,
+  foto: true,
+  cidade: true,
+  estado: true,
+  dataCriacao: true,
+
+  assinatura: {
+    select: {
+      plano: true,
+      status: true,
+      trialEndsAt: true,
+      renovaEm: true,
+      startsAt: true,
+    },
+  },
+} as const;
+
+function sanitizarItemExplorar(item: any) {
+  if (!item) return item;
+
+  const {
+    email,
+    emailPublico,
+    ...rest
+  } = item;
+
+  const usuario = item.usuario
+    ? (() => {
+        const {
+          email: _email,
+          ...usuarioSemEmail
+        } = item.usuario;
+
+        return usuarioSemEmail;
+      })()
+    : item.usuario;
+
+  return {
+    ...rest,
+    usuario,
+  };
+}
 
 function getAssinaturaAtual<
   T extends {
@@ -132,6 +182,33 @@ function ordenarDestaquesProNome<T>(
   );
 }
 
+async function filtrarPerfisVisiveis<T>(
+  viewerId: string | null | undefined,
+  items: T[],
+  getUsuarioId: (item: T) => string | null | undefined
+): Promise<T[]> {
+  if (!viewerId) return [];
+
+  const result = await Promise.all(
+    items.map(async (item) => {
+      const targetId = getUsuarioId(item);
+
+      if (!targetId) return null;
+
+      const acesso = await avaliarPrivacidadePerfil(
+        viewerId,
+        targetId
+      );
+
+      return acesso.podeVerPerfil
+        ? item
+        : null;
+    })
+  );
+
+  return result.filter(Boolean) as T[];
+}
+
 export async function listarAtletasExplorar(req: Request, res: Response) {
   try {
     const authUserId = (req as any).userId as string | undefined;
@@ -238,8 +315,26 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
       };
     });
 
+    const payloadVisivel =
+      await filtrarPerfisVisiveis(
+        authUserId,
+        payload,
+        (a: any) =>
+          a.usuarioId ??
+          a.usuario?.id
+      );
+
+    const payloadSeguro =
+      payloadVisivel.map(
+        sanitizarItemExplorar
+      );
+
     res.json(
-      ordenarDestaquesProNome(payload, (a: any) => a?.usuario?.nome ?? "")
+      ordenarDestaquesProNome(
+        payloadSeguro,
+        (a: any) =>
+          a?.usuario?.nome ?? ""
+      )
     );
   } catch (e) {
     console.error(e);
@@ -457,7 +552,6 @@ export async function explorar(req: Request, res: Response) {
                 { nome: { contains: termo, mode: "insensitive" } },
                 { usuario: { nome: { contains: termo, mode: "insensitive" } } },
                 { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
-                { usuario: { email: { contains: termo, mode: "insensitive" } } },
               ],
             }
           : {}),
@@ -533,7 +627,6 @@ export async function explorar(req: Request, res: Response) {
                 { nome: { contains: termo, mode: "insensitive" } },
                 { usuario: { nome: { contains: termo, mode: "insensitive" } } },
                 { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
-                { usuario: { email: { contains: termo, mode: "insensitive" } } },
               ],
             }
           : {}),
@@ -875,16 +968,127 @@ export async function explorar(req: Request, res: Response) {
       ),
     }));
 
+    const [
+      atletasVisiveis,
+      clubesVisiveis,
+      escolasVisiveis,
+      professoresVisiveis,
+      olheirosVisiveis,
+      federacoesVisiveis,
+      marcasVisiveis,
+      learningVisiveis,
+    ] = await Promise.all([
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        atletas,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        clubes,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        escolas,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        professores,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        olheiros,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        federacoes,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        marcas,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        learning,
+        (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+    ]);
+
     return res.json({
-      atletas: ordenarDestaquesProNome(atletas, (a: any) => a?.usuario?.nome ?? ""),
-      clubes: ordenarDestaquesProNome(clubes, (c: any) => c?.nome ?? c?.usuario?.nome ?? ""),
-      escolas: ordenarDestaquesProNome(escolas, (e: any) => e?.nome ?? e?.usuario?.nome ?? ""),
-      professores: ordenarDestaquesProNome(professores, (p: any) => p?.usuario?.nome ?? p?.nome ?? ""),
-      olheiros: ordenarDestaquesProNome(olheiros, (o: any) => o?.usuario?.nome ?? ""),
+      atletas: ordenarDestaquesProNome(
+        atletasVisiveis,
+        (a: any) =>
+          a?.usuario?.nome ?? ""
+      ).map(sanitizarItemExplorar),
+
+      clubes: ordenarDestaquesProNome(
+        clubesVisiveis,
+        (c: any) =>
+          c?.nome ??
+          c?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      escolas: ordenarDestaquesProNome(
+        escolasVisiveis,
+        (e: any) =>
+          e?.nome ??
+          e?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      professores: ordenarDestaquesProNome(
+        professoresVisiveis,
+        (p: any) =>
+          p?.usuario?.nome ??
+          p?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      olheiros: ordenarDestaquesProNome(
+        olheirosVisiveis,
+        (o: any) =>
+          o?.usuario?.nome ?? ""
+      ).map(sanitizarItemExplorar),
+
       eventos,
-      federacoes: ordenarDestaquesProNome(federacoes, (f: any) => f?.nome ?? f?.usuario?.nome ?? ""),
-      marcas: ordenarDestaquesProNome(marcas, (m: any) => m?.nome ?? m?.usuario?.nome ?? ""),
-      learning: ordenarDestaquesProNome(learning, (l: any) => l?.nome ?? l?.usuario?.nome ?? ""),
+
+      federacoes: ordenarDestaquesProNome(
+        federacoesVisiveis,
+        (f: any) =>
+          f?.nome ??
+          f?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      marcas: ordenarDestaquesProNome(
+        marcasVisiveis,
+        (m: any) =>
+          m?.nome ??
+          m?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      learning: ordenarDestaquesProNome(
+        learningVisiveis,
+        (l: any) =>
+          l?.nome ??
+          l?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
     });
   } catch (error) {
     console.error("Erro em /api/explorar:", error);
@@ -897,6 +1101,8 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
   try {
     const termo = q ? String(q).trim() : "";
+
+    const userIdLogado = (req as any).userId || null;
 
     const [atletas, clubes, escolas, professores, olheiros, federacoes, marcas, learning] = await Promise.all([
       prisma.atleta.findMany({
@@ -943,13 +1149,13 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       prisma.clube.findMany({
         where: termo ? { nome: { contains: termo, mode: "insensitive" } } : {},
-        include: { usuario: true },
+        include: { usuario: { select: usuarioExplorarSelect,} },
         take: 50,
       }),
 
       prisma.escolinha.findMany({
         where: termo ? { nome: { contains: termo, mode: "insensitive" } } : {},
-        include: { usuario: true },
+        include: { usuario: { select: usuarioExplorarSelect,} },
         take: 50,
       }),
 
@@ -1023,7 +1229,6 @@ export const buscarExplorar = async (req: Request, res: Response) => {
                 { nome: { contains: termo, mode: "insensitive" } },
                 { usuario: { nome: { contains: termo, mode: "insensitive" } } },
                 { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
-                { usuario: { email: { contains: termo, mode: "insensitive" } } },
               ],
             }
           : {},
@@ -1062,7 +1267,6 @@ export const buscarExplorar = async (req: Request, res: Response) => {
                 { nome: { contains: termo, mode: "insensitive" } },
                 { usuario: { nome: { contains: termo, mode: "insensitive" } } },
                 { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
-                { usuario: { email: { contains: termo, mode: "insensitive" } } },
               ],
             }
           : {},
@@ -1138,6 +1342,81 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         orderBy: { criadoEm: "desc" },
         take: 50,
       }),
+    ]);
+
+    const [
+      atletasVisiveis,
+      clubesVisiveis,
+      escolasVisiveis,
+      professoresVisiveis,
+      olheirosVisiveis,
+      federacoesVisiveis,
+      marcasVisiveis,
+      learningVisiveis,
+    ] = await Promise.all([
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        atletas,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        clubes,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        escolas,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        professores,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        olheiros,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        federacoes,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        marcas,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        learning,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
     ]);
 
     res.json({

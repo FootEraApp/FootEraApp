@@ -3217,6 +3217,72 @@ return (
                 const elapsed = elapsedByTreino[fullscreenId] ?? 0;
                 const params = new URLSearchParams();
                 params.set("treinoAgendadoId", t.id);
+                /*
+                * Informações que serão exibidas
+                * na tela de submissão.
+                */
+                params.set(
+                  "treinoNome",
+                  String(
+                    t.titulo ||
+                      "Treino"
+                  )
+                );
+
+                const pontosDoTreino =
+                  Number(
+                    t.treinoProgramado
+                      ?.pontuacao ?? 0
+                  );
+
+                params.set(
+                  "pontos",
+                  String(
+                    Number.isFinite(
+                      pontosDoTreino
+                    )
+                      ? pontosDoTreino
+                      : 0
+                  )
+                );
+
+                const duracaoProgramadaMinutos =
+                  Number(
+                    t.treinoProgramado
+                      ?.duracao ?? 0
+                  );
+
+                if (
+                  Number.isFinite(
+                    duracaoProgramadaMinutos
+                  ) &&
+                  duracaoProgramadaMinutos > 0
+                ) {
+                  params.set(
+                    "duracaoProgramadaMinutos",
+                    String(
+                      duracaoProgramadaMinutos
+                    )
+                  );
+                }
+
+                const atletaNome =
+                  String(
+                    (Storage as any)
+                      .nomeUsuario ||
+                      localStorage.getItem(
+                        "nomeUsuario"
+                      ) ||
+                      sessionStorage.getItem(
+                        "nomeUsuario"
+                      ) ||
+                      "Atleta"
+                  );
+
+                params.set(
+                  "atletaNome",
+                  atletaNome
+                );
                 if (elapsed > 0) params.set("tempoSeg", String(elapsed));
 
                 try {
@@ -3235,7 +3301,24 @@ return (
             };
 
             return (
-              <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-t px-4 py-3">
+              <div
+                className="
+                  fixed
+                  bottom-0
+                  left-0
+                  right-0
+                  z-30
+                  bg-white/95
+                  backdrop-blur
+                  border-t
+                  px-4
+                  pt-3
+                "
+                style={{
+                  paddingBottom:
+                    "calc(12px + env(safe-area-inset-bottom))",
+                }}
+              >
                 <div className="max-w-3xl mx-auto">
                   <button
                     onClick={handleCentralClick}
@@ -3344,7 +3427,9 @@ return (
         </div>
       )}
 
-      <BottomNav active="treinos" />
+      {!fullscreenId && (
+        <BottomNav active="treinos" />
+      )}
 
     </div>
   );

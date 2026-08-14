@@ -73,7 +73,6 @@ export const seguirUsuario: RequestHandler = async (req: any, res) => {
       usuarioId: seguidoUsuarioId,
       actorId: seguidorUsuarioId,
       tipo: NotificacaoTipo.FOLLOW,
-      lida: false,
     },
   });
 
@@ -204,7 +203,6 @@ export async function statusSeguidor(req: Request, res: Response) {
       usuarioId: seguidoUsuarioId,
       actorId: seguidorUsuarioId,
       tipo: NotificacaoTipo.FOLLOW,
-      lida: false,
     },
     select: { id: true },
   });
@@ -238,7 +236,6 @@ export async function minhaRede(req: any, res: Response) {
       where: {
         actorId: usuarioId,
         tipo: NotificacaoTipo.FOLLOW,
-        lida: false,
       },
       include: {
         usuario: {
@@ -247,6 +244,13 @@ export async function minhaRede(req: any, res: Response) {
       },
     });
 
+    const pendentesSet =
+      new Set(
+        pendentes.map(
+          (p) => p.usuario.id
+        )
+      );
+      
     const seguindoComPendentes = [
       ...seguindo.map((u) => ({ ...u, isPendente: false })),
       ...pendentes
@@ -255,10 +259,24 @@ export async function minhaRede(req: any, res: Response) {
         .map((u) => ({ ...u, isPendente: true })),
     ];
 
-    const seguidoresFmt = seguidores.map((s) => ({
-      ...s.seguidorUsuario,
-      isSeguindo: seguindoSet.has(s.seguidorUsuario.id),
-    }));
+    const seguidoresFmt =
+      seguidores.map((s) => {
+        const id =
+          s.seguidorUsuario.id;
+
+        const isSeguindo =
+          seguindoSet.has(id);
+
+        const isPendente =
+          !isSeguindo &&
+          pendentesSet.has(id);
+
+        return {
+          ...s.seguidorUsuario,
+          isSeguindo,
+          isPendente,
+        };
+      });
 
     return res.json({ seguindo: seguindoComPendentes, seguidores: seguidoresFmt });
   } catch (e) {
@@ -291,11 +309,13 @@ export const aceitarSeguidor: RequestHandler = async (req: any, res) => {
     },
   });
 
-  if (notificacaoId) {
-    await prisma.notificacao.deleteMany({
-      where: { id: String(notificacaoId), usuarioId: seguidoUsuarioId },
-    });
-  }
+  await prisma.notificacao.deleteMany({
+    where: {
+      usuarioId: seguidoUsuarioId,
+      actorId,
+      tipo: NotificacaoTipo.FOLLOW,
+    },
+  });
 
   await criarNotifEAtualizarBadge({
     usuarioId: actorId,
@@ -311,28 +331,53 @@ export const aceitarSeguidor: RequestHandler = async (req: any, res) => {
   return res.json({ ok: true });
 };
 
-export const recusarSeguidor: RequestHandler = async (req: any, res) => {
-  const seguidoUsuarioId = req.userId!;
-  const { notificacaoId, seguidorUsuarioId } = req.body;
+export const recusarSeguidor: RequestHandler =
+  async (req: any, res) => {
+    const seguidoUsuarioId =
+      req.userId!;
 
-  if (notificacaoId) {
+    const {
+      seguidorUsuarioId,
+    } = req.body;
+
+    const actorId = String(
+      seguidorUsuarioId || ""
+    ).trim();
+
+    if (!actorId) {
+      return res.status(400).json({
+        message:
+          "seguidorUsuarioId é obrigatório.",
+      });
+    }
+
     await prisma.notificacao.deleteMany({
-      where: { id: String(notificacaoId), usuarioId: seguidoUsuarioId },
+      where: {
+        usuarioId:
+          seguidoUsuarioId,
+        actorId,
+        tipo:
+          NotificacaoTipo.FOLLOW,
+      },
     });
-  }
 
-  if (seguidorUsuarioId) {
     await criarNotifEAtualizarBadge({
-      usuarioId: String(seguidorUsuarioId),
+      usuarioId: actorId,
       actorId: seguidoUsuarioId,
-      tipo: NotificacaoTipo.GENERICA,
-      titulo: "Solicitação recusada",
-      mensagem: "Sua solicitação para seguir foi recusada.",
+      tipo:
+        NotificacaoTipo.GENERICA,
+      titulo:
+        "Solicitação recusada",
+      mensagem:
+        "Sua solicitação para seguir foi recusada.",
       link: `/perfil/${seguidoUsuarioId}`,
     });
-  }
 
-  await recomputeAndEmitBadge(seguidoUsuarioId);
+    await recomputeAndEmitBadge(
+      seguidoUsuarioId
+    );
 
-  return res.json({ ok: true });
-};
+    return res.json({
+      ok: true,
+    });
+  };

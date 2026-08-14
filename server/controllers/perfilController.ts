@@ -8,6 +8,7 @@ import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import { sendError } from "../utils/httpError.js";
+import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
 
 type AtividadeUI = {
   id: string;
@@ -50,15 +51,6 @@ function normalizarCategorias(input: any): Categoria[] {
     .filter(Boolean) as Categoria[];
 }
 
-function readPrivacidadeFlags(config: any) {
-  const c = (config && typeof config === "object") ? config : {};
-  return {
-    perfilVisivel: c.perfilVisivel !== false,         
-    mostrarEmail: c.mostrarEmail === true,            
-    permitirMensagens: c.permitirMensagens !== false, 
-  };
-}
-
 function isAdminFromReq(req: any) {
   const t = String(req?.user?.tipo ?? req?.authUser?.tipo ?? "").toLowerCase();
   return t === "admin";
@@ -69,12 +61,47 @@ function withDefaultImg(v: any) {
   return s ? s : DEFAULT_AVATAR;
 }
 
-function normalizarTipoUsuario(tipo?: string | null) {
-  return String(tipo || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+async function obterAcessoPerfil(
+  req: any,
+  res: Response,
+  targetUsuarioId: string
+) {
+  const viewerId =
+    req?.userId ||
+    req?.user?.id ||
+    null;
+
+  const acesso =
+    await avaliarPrivacidadePerfil(
+      viewerId,
+      targetUsuarioId
+    );
+
+  if (!acesso.podeVerPerfil) {
+    res.status(403).json({
+      code: "PROFILE_PRIVATE",
+      message:
+        "Este perfil está privado.",
+    });
+
+    return null;
+  }
+
+  return acesso;
+}
+
+function sanitizarUsuarioPerfil(
+  usuario: any,
+  podeMostrarEmail: boolean
+) {
+  if (!usuario) return null;
+
+  return {
+    ...usuario,
+    email: podeMostrarEmail
+      ? usuario.email
+      : null,
+  };
 }
 
 function inicioDoDia(d: Date) {
@@ -868,10 +895,261 @@ export const getBadges = async (_req: Request, res: Response) => {
   }
 };
 
-function parseDateSafe(it: any) {
-  const raw = it?.criadoEm ?? it?.createdAt ?? it?.data ?? it?.criado_em ?? null;
-  const d = raw ? new Date(raw) : null;
-  return d && !isNaN(+d) ? d : null;
+async function calcularTotalAtualDoPerfil(
+  usuarioId: string
+): Promise<number | null> {
+  const atleta =
+    await prisma.atleta.findUnique({
+      where: {
+        usuarioId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  if (!atleta) {
+    return null;
+  }
+
+  const subsTreino =
+    await prisma.submissaoTreino.findMany({
+      where: {
+        atletaId: atleta.id,
+        aprovado: true as any,
+      },
+      include: {
+        treinoAgendado: {
+          include: {
+            treinoProgramado: {
+              include: {
+                exercicios: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        criadoEm: "desc",
+      },
+    });
+
+  const agIds = Array.from(
+    new Set(
+      subsTreino
+        .map(
+          (s) =>
+            s.treinoAgendadoId
+        )
+        .filter(
+          (id): id is string =>
+            Boolean(id)
+        )
+    )
+  );
+
+  const agRows =
+    agIds.length > 0
+      ? await prisma.treinoAgendado.findMany({
+          where: {
+            id: {
+              in: agIds,
+            },
+          },
+          select: {
+            id: true,
+            treinoProgramado: {
+              select: {
+                pontuacao: true,
+                exercicios: true,
+              },
+            },
+          },
+        })
+      : [];
+
+  const progPontuacaoMap =
+    new Map<
+      string,
+      {
+        pontuacao: number;
+        exerciciosCount: number;
+      }
+    >(
+      agRows.map((r) => [
+        r.id,
+        {
+          pontuacao:
+            r.treinoProgramado
+              ?.pontuacao ?? 0,
+
+          exerciciosCount:
+            r.treinoProgramado
+              ?.exercicios
+              ?.length ?? 0,
+        },
+      ])
+    );
+
+  const historicoTreinos =
+    subsTreino.map((s: any) => {
+      const fromCredit =
+        Number(
+          s.pontosCreditados ?? 0
+        );
+
+      const fromSnap =
+        Number(
+          s.pontuacaoSnapshot ?? 0
+        );
+
+      const fromIncludeProg =
+        Number(
+          s.treinoAgendado
+            ?.treinoProgramado
+            ?.pontuacao ?? 0
+        );
+
+      const fromIncludeExLen =
+        Number(
+          s.treinoAgendado
+            ?.treinoProgramado
+            ?.exercicios
+            ?.length ?? 0
+        );
+
+      const fromMap =
+        s.treinoAgendadoId &&
+        progPontuacaoMap.has(
+          s.treinoAgendadoId
+        )
+          ? progPontuacaoMap.get(
+              s.treinoAgendadoId
+            )!.pontuacao
+          : 0;
+
+      const fromMapEx =
+        s.treinoAgendadoId &&
+        progPontuacaoMap.has(
+          s.treinoAgendadoId
+        )
+          ? progPontuacaoMap.get(
+              s.treinoAgendadoId
+            )!.exerciciosCount
+          : 0;
+
+      const pontos =
+        fromCredit > 0
+          ? fromCredit
+          : fromSnap > 0
+          ? fromSnap
+          : fromIncludeProg > 0
+          ? fromIncludeProg
+          : fromMap > 0
+          ? fromMap
+          : fromIncludeExLen > 0
+          ? fromIncludeExLen
+          : fromMapEx > 0
+          ? fromMapEx
+          : 0;
+
+      return {
+        tipo: "Treino",
+        ts: +new Date(
+          s.criadoEm ??
+            Date.now()
+        ),
+        pontuacao:
+          Number(pontos) || 0,
+      };
+    });
+
+  const subsDesafio =
+    await prisma.submissaoDesafio.findMany({
+      where: {
+        atletaId: atleta.id,
+        aprovado: true as any,
+      },
+      include: {
+        desafio: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+  const historicoDesafios =
+    subsDesafio.map((s: any) => ({
+      tipo: "Desafio",
+      ts: +new Date(
+        s.createdAt ??
+          Date.now()
+      ),
+      pontuacao:
+        Number(
+          s.desafio?.pontuacao ??
+            0
+        ),
+    }));
+
+  const parts =
+    await getParticipacoesGrupo(
+      usuarioId,
+      atleta.id
+    );
+
+  const historicoGrupo =
+    parts.map(
+      mapGrupoToHistorico
+    );
+
+  /*
+   * Mantemos a mesma regra usada
+   * atualmente pelo getPontuacaoPerfil:
+   * performance considera os 20
+   * registros mais recentes.
+   */
+  const historicoPontuavel = [
+    ...historicoTreinos,
+    ...historicoDesafios,
+    ...historicoGrupo,
+  ]
+    .sort(
+      (a: any, b: any) =>
+        Number(b.ts) -
+        Number(a.ts)
+    )
+    .slice(0, 20);
+
+  const performance =
+    historicoPontuavel.reduce(
+      (
+        acc: number,
+        item: any
+      ) =>
+        acc +
+        (
+          Number(
+            item?.pontuacao
+          ) || 0
+        ),
+      0
+    );
+
+  const disciplina =
+    historicoTreinos.length * 2;
+
+  const responsabilidade =
+    (
+      historicoDesafios.length +
+      historicoGrupo.length
+    ) * 2;
+
+  return (
+    performance +
+    disciplina +
+    responsabilidade
+  );
 }
 
 export async function getPontuacaoPerfil(req: Request, res: Response) {
@@ -1000,6 +1278,296 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
   }
 }
 
+export async function getDeltaPontuacaoPerfil(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const viewerUsuarioId =
+      String(
+        (req as any).userId ??
+        (req as any).user?.id ??
+        ""
+      ).trim();
+
+    const perfilUsuarioId =
+      String(
+        req.params.usuarioId ??
+        ""
+      ).trim();
+
+    if (!viewerUsuarioId) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Usuário não autenticado.",
+        });
+    }
+
+    if (!perfilUsuarioId) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Perfil não informado.",
+        });
+    }
+
+    /*
+     * Não mostramos aumento
+     * comparado à própria visita
+     * no próprio perfil.
+     */
+    if (
+      viewerUsuarioId ===
+      perfilUsuarioId
+    ) {
+      return res.json({
+        delta: 0,
+        primeiraVisualizacao: false,
+        proprioPerfil: true,
+        registrarVisualizacao: false,
+      });
+    }
+
+    /*
+     * Mantém as mesmas regras
+     * de privacidade do perfil.
+     */
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        perfilUsuarioId
+      );
+
+    if (!acesso) {
+      return;
+    }
+
+    const totalAtual =
+      await calcularTotalAtualDoPerfil(
+        perfilUsuarioId
+      );
+
+    /*
+     * Se não for um atleta,
+     * não existe delta de
+     * pontuação para registrar.
+     */
+    if (totalAtual === null) {
+      return res.json({
+        delta: 0,
+        primeiraVisualizacao: true,
+        proprioPerfil: false,
+        registrarVisualizacao: false,
+      });
+    }
+
+    const anterior =
+      await prisma
+        .perfilPontuacaoVisualizacao
+        .findUnique({
+          where: {
+            viewerUsuarioId_perfilUsuarioId:
+              {
+                viewerUsuarioId,
+                perfilUsuarioId,
+              },
+          },
+        });
+
+    /*
+     * PRIMEIRA VISITA:
+     *
+     * Não podemos fazer:
+     *
+     * totalAtual - 0
+     *
+     * porque isso geraria:
+     *
+     * 277 pts ↑ +277
+     *
+     * Portanto a primeira visita
+     * sempre mostra delta 0.
+     */
+    if (!anterior) {
+      return res.json({
+        delta: 0,
+        totalAtual,
+        primeiraVisualizacao: true,
+        proprioPerfil: false,
+        registrarVisualizacao: true,
+      });
+    }
+
+    const delta =
+      Math.max(
+        0,
+        totalAtual -
+          anterior
+            .ultimaPontuacaoVista
+      );
+
+    return res.json({
+      delta,
+      totalAtual,
+
+      ultimaPontuacaoVista:
+        anterior
+          .ultimaPontuacaoVista,
+
+      visualizadoEm:
+        anterior.visualizadoEm,
+
+      primeiraVisualizacao:
+        false,
+
+      proprioPerfil: false,
+
+      registrarVisualizacao:
+        true,
+    });
+  } catch (error) {
+    console.error(
+      "[getDeltaPontuacaoPerfil]",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        error:
+          "Erro ao calcular evolução da pontuação.",
+      });
+  }
+}
+
+export async function confirmarVisualizacaoPontuacaoPerfil(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const viewerUsuarioId =
+      String(
+        (req as any).userId ??
+        (req as any).user?.id ??
+        ""
+      ).trim();
+
+    const perfilUsuarioId =
+      String(
+        req.params.usuarioId ??
+        ""
+      ).trim();
+
+    if (!viewerUsuarioId) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Usuário não autenticado.",
+        });
+    }
+
+    if (!perfilUsuarioId) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Perfil não informado.",
+        });
+    }
+
+    if (
+      viewerUsuarioId ===
+      perfilUsuarioId
+    ) {
+      return res.json({
+        ok: true,
+        proprioPerfil: true,
+      });
+    }
+
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        perfilUsuarioId
+      );
+
+    if (!acesso) {
+      return;
+    }
+
+    const totalAtual =
+      await calcularTotalAtualDoPerfil(
+        perfilUsuarioId
+      );
+
+    if (totalAtual === null) {
+      return res.json({
+        ok: true,
+        registrado: false,
+      });
+    }
+
+    const agora =
+      new Date();
+
+    await prisma
+      .perfilPontuacaoVisualizacao
+      .upsert({
+        where: {
+          viewerUsuarioId_perfilUsuarioId:
+            {
+              viewerUsuarioId,
+              perfilUsuarioId,
+            },
+        },
+
+        create: {
+          viewerUsuarioId,
+          perfilUsuarioId,
+
+          ultimaPontuacaoVista:
+            totalAtual,
+
+          visualizadoEm:
+            agora,
+        },
+
+        update: {
+          ultimaPontuacaoVista:
+            totalAtual,
+
+          visualizadoEm:
+            agora,
+        },
+      });
+
+    return res.json({
+      ok: true,
+      registrado: true,
+      totalRegistrado:
+        totalAtual,
+    });
+  } catch (error) {
+    console.error(
+      "[confirmarVisualizacaoPontuacaoPerfil]",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        error:
+          "Erro ao registrar visualização da pontuação.",
+      });
+  }
+}
+
 export const getPerfilUsuario = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -1030,12 +1598,17 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     const viewerId = (req as any)?.userId ? String((req as any).userId) : null;
     const isOwnProfile = !!viewerId && viewerId === usuario.id;
     const isAdmin = isAdminFromReq(req);
-    const priv = readPrivacidadeFlags((usuario as any).configuracoesPrivacidade);
+    const acesso =
+      await avaliarPrivacidadePerfil(
+        viewerId,
+        usuario.id
+      );
 
-    if (!priv.perfilVisivel && !isOwnProfile && !isAdmin) {
+    if (!acesso.podeVerPerfil) {
       return res.status(403).json({
         code: "PROFILE_PRIVATE",
-        message: "Este perfil está privado.",
+        message:
+          "Este perfil está privado e disponível apenas para pessoas vinculadas.",
       });
     }
 
@@ -1353,11 +1926,36 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       }
     }
 
+  if (
+    dadosEspecificos &&
+    !acesso.podeMostrarEmail
+  ) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        dadosEspecificos,
+        "email"
+      )
+    ) {
+      dadosEspecificos.email = null;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        dadosEspecificos,
+        "emailPublico"
+      )
+    ) {
+      dadosEspecificos.emailPublico = null;
+    }
+  }
+
   const usuarioPayload: any = {
     id: usuario.id,
     nome: usuario.nome,
     nomeDeUsuario: usuario.nomeDeUsuario,
-    email: usuario.email,
+    email: acesso.podeMostrarEmail
+      ? usuario.email
+      : null,
     foto: usuario.foto,
     verified: (usuario as any).verified ?? false, 
   };
@@ -2182,6 +2780,22 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
 
     if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
+    if (!prof.usuarioId) {
+      return res.status(404).json({
+        error:
+          "Professor sem usuário associado."
+      });
+    }
+
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        prof.usuarioId
+      );
+
+    if (!acesso) return;
+
     const rels = await prisma.relacaoTreinamento.findMany({
       where: { professorId: prof.id, atletaId: { not: null } },
       select: { atletaId: true },
@@ -2223,7 +2837,11 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
     let conquistas = unlocked.length;
     if (gruposCriados > 0) conquistas += 1;
 
-    const usuarioMin = (prof as any).usuario ?? null;
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        (prof as any).usuario,
+        acesso.podeMostrarEmail
+      );
     const fotoPerfil = withDefaultImg((prof as any).fotoUrl ?? usuarioMin?.foto);
 
     return res.json({
@@ -2313,7 +2931,26 @@ export async function getPerfilClube(req: Request, res: Response) {
       ...aceitos.map(s => s.atletaId),
     ]);
 
-    const usuarioMin = (clube as any).usuario ?? null;
+    const acesso = await avaliarPrivacidadePerfil(
+      (req as any).userId,
+      clube.usuarioId
+    );
+
+    if (!acesso.podeVerPerfil) {
+      return res.status(403).json({
+        code: "PROFILE_PRIVATE",
+        message: "Este perfil está privado.",
+      });
+    }
+
+    const usuarioMin = (clube as any).usuario
+      ? {
+          ...(clube as any).usuario,
+          email: acesso.podeMostrarEmail
+            ? (clube as any).usuario.email
+            : null,
+        }
+      : null;
     const logoOuFoto = withDefaultImg((clube as any).logo ?? usuarioMin?.foto);
 
     return res.json({
@@ -2326,7 +2963,9 @@ export async function getPerfilClube(req: Request, res: Response) {
         cnpj: clube.cnpj,
         telefone1: clube.telefone1,
         telefone2: clube.telefone2,
-        email: clube.email,
+        email: acesso.podeMostrarEmail
+          ? clube.email
+          : null,
         siteOficial: clube.siteOficial,
         sede: clube.sede,
         estadio: clube.estadio,
@@ -2391,10 +3030,22 @@ export async function getPerfilEscola(req: Request, res: Response) {
 
     if (!escola) return res.status(404).json({ error: "Escolinha não encontrada" });
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        escola.usuarioId
+      );
+
+    if (!acesso) return;
     const atletasCount = await countAtletasPorEntidade({ escolinhaId: escola.id });
     const treinosCount = await prisma.treinoProgramado.count({ where: { escolinhaId: escola.id } });
 
-    const usuarioMin = (escola as any).usuario ?? null;
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        (escola as any).usuario,
+        acesso.podeMostrarEmail
+      );
     const logoOuFoto = withDefaultImg((escola as any).logo ?? usuarioMin?.foto);
 
     return res.json({
@@ -2407,7 +3058,9 @@ export async function getPerfilEscola(req: Request, res: Response) {
         cnpj: escola.cnpj,
         telefone1: escola.telefone1,
         telefone2: escola.telefone2,
-        email: escola.email,
+        email: acesso.podeMostrarEmail
+          ? escola.email
+          : null,
         siteOficial: escola.siteOficial,
         sede: escola.sede,
         logradouro: escola.logradouro,
@@ -2477,6 +3130,14 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ error: "Olheiro não encontrado" });
     }
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        olheiro.usuarioId
+      );
+
+    if (!acesso) return;
     const viewerIsOlheiro = req.user?.tipo === "Olheiro";
     const isOwnProfile = !!req.userId && req.userId === olheiro.usuarioId;
 
@@ -2540,7 +3201,11 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       });
     }
 
-    const usuarioMin = olheiro.usuario ?? null;
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        olheiro.usuario,
+        acesso.podeMostrarEmail
+      );
 
     return res.json({
       tipo: "Olheiro" as const,
@@ -2553,7 +3218,10 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         descricao: olheiro.descricao ?? null,
         areaAtuacao: olheiro.areaAtuacao ?? null,
         anosExperiencia: olheiro.anosExperiencia ?? 0,
-        emailPublico: olheiro.emailPublico ?? null,
+        emailPublico:
+          acesso.podeMostrarEmail
+            ? olheiro.emailPublico ?? null
+            : null,
         telefonePublico: olheiro.telefonePublico ?? null,
         reputacaoScore: reputacaoCalculada,
         totalIndicacoes: indicacoesTotais,
@@ -2693,6 +3361,15 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Federação não encontrada." });
     }
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        federacao.usuarioId
+      );
+
+    if (!acesso) return;
+
     const [conquistasCount, certificadosCount] = await Promise.all([
       prisma.conquistaVinculo.count({
         where: {
@@ -2708,10 +3385,26 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
       }),
     ]);
 
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        federacao.usuario,
+        acesso.podeMostrarEmail
+      );
+
+    const federacaoPayload = {
+      ...federacao,
+
+      email: acesso.podeMostrarEmail
+        ? federacao.email
+        : null,
+
+      usuario: usuarioMin,
+    };
+
     return res.json({
       tipo: "Federacao",
-      usuario: federacao.usuario,
-      federacao,
+      usuario: usuarioMin,
+      federacao: federacaoPayload,
       metricas: {
         eventos: federacao._count?.eventos ?? 0,
         conteudos:
@@ -2780,6 +3473,15 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Marca não encontrada." });
     }
 
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        marca.usuarioId
+      );
+
+    if (!acesso) return;
+
     const [conquistasCount, certificadosCount] = await Promise.all([
       prisma.conquistaVinculo.count({
         where: {
@@ -2795,10 +3497,26 @@ export const getPerfilMarca = async (req: Request, res: Response) => {
       }),
     ]);
 
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        marca.usuario,
+        acesso.podeMostrarEmail
+      );
+
+    const marcaPayload = {
+      ...marca,
+
+      email: acesso.podeMostrarEmail
+        ? marca.email
+        : null,
+
+      usuario: usuarioMin,
+    };
+
     return res.json({
       tipo: "Marca",
-      usuario: marca.usuario,
-      marca,
+      usuario: usuarioMin,
+      marca: marcaPayload,
       metricas: {
         eventos: marca._count?.eventos ?? 0,
         conteudos:
@@ -2851,6 +3569,15 @@ export const getPerfilLearning = async (req: AuthenticatedRequest, res: Response
     if (!learning) {
       return res.status(404).json({ message: "Perfil Learning não encontrado." });
     }
+
+    const acesso =
+      await obterAcessoPerfil(
+        req,
+        res,
+        learning.usuarioId
+      );
+
+    if (!acesso) return;
 
     const solicitanteId =
       String(
@@ -2950,9 +3677,15 @@ export const getPerfilLearning = async (req: AuthenticatedRequest, res: Response
       return status !== "CONCLUIDA" && status !== "CONCLUÍDA" && progresso < 100;
     });
 
+    const usuarioMin =
+      sanitizarUsuarioPerfil(
+        learning.usuario,
+        acesso.podeMostrarEmail
+      );
+      
     return res.json({
       tipo: "Learning",
-      usuario: learning.usuario,
+      usuario: usuarioMin,
       learning: {
         id: learning.id,
         usuarioId: learning.usuarioId,

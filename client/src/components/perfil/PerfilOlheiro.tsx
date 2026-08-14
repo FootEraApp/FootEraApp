@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import axios from "axios";
 import {
-  Activity, CalendarClock, PlusCircle, ChevronRight, Save, Loader2, X
+  Activity, CalendarClock, PlusCircle, ChevronRight, Save, Loader2, X, Pencil
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
@@ -14,7 +14,13 @@ import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null; nomeDeUsuario?: string };
+type UsuarioMin = {
+  id: string;
+  nome: string;
+  email?: string | null;
+  foto?: string | null;
+  nomeDeUsuario?: string;
+};
 type Note = { texto: string; saving: boolean; dirty: boolean };
 type PayloadOlheiro = {
   tipo: "Olheiro";
@@ -31,6 +37,12 @@ type PayloadOlheiro = {
     telefonePublico?: string | null;
     siteOuLinkedin?: string | null;
     colaboracaoClube?: { id: string; usuarioId?: string | null; nome: string; logo?: string | null } | null;
+    colaboracaoEscolinha?: {
+      id: string;
+      usuarioId?: string | null;
+      nome: string;
+      logo?: string | null;
+    } | null;
     reputacaoScore?: number;
     totalIndicacoes?: number;
   };
@@ -171,11 +183,6 @@ export default function PerfilOlheiro({
 
   const [data, setData] = useState<PayloadOlheiro | null>(null);
   const [loading, setLoading] = useState(true);
-  const [privacidade, setPrivacidade] = useState<{
-    perfilVisivel: boolean;
-    permitirMensagens: boolean;
-    mostrarEmail: boolean;
-  } | null>(null);
 
   type Aba = "visao" | "atletas" | "eventos" | "indicacoes" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
@@ -244,33 +251,6 @@ export default function PerfilOlheiro({
   useEffect(() => {
     if (aba === "atletas") setObservados(null);
   }, [aba]);
-
-  useEffect(() => {
-    if (!token) return;
-    let cancel = false;
-
-    (async () => {
-      try {
-        const { data } = await axios.get(
-          `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
-          { headers }
-        );
-        if (!cancel) setPrivacidade({
-          perfilVisivel: data?.perfilVisivel ?? true,
-          permitirMensagens: data?.permitirMensagens ?? true,
-          mostrarEmail: data?.mostrarEmail ?? false,
-        });
-      } catch {
-        if (!cancel) setPrivacidade({
-          perfilVisivel: true,
-          permitirMensagens: true,
-          mostrarEmail: false,
-        });
-      }
-    })();
-
-    return () => { cancel = true; };
-  }, [token]);
   
   useEffect(() => {
     if (!token) return;
@@ -708,7 +688,6 @@ async function salvarNota(atletaId: string) {
   if (!data || !data.olheiro) return <div className="text-center p-10 text-red-600">Olheiro não encontrado.</div>;
 
   const nome = data.usuario?.nome || "Olheiro";
-  const handle = data.usuario?.nomeDeUsuario ? `@${data.usuario.nomeDeUsuario}` : "";
   const emailDoPerfil =
   (data?.usuario?.email && String(data.usuario.email)) ||
   (data?.olheiro?.emailPublico && String(data.olheiro.emailPublico)) ||
@@ -719,6 +698,25 @@ async function salvarNota(atletaId: string) {
     undefined;
 
   const clubeColab = data.olheiro.colaboracaoClube || null;
+
+  const escolinhaColab =
+    data.olheiro
+      .colaboracaoEscolinha ||
+    null;
+
+  const colaboracaoAtual =
+    clubeColab
+      ? {
+          ...clubeColab,
+          tipo: "CLUBE" as const,
+        }
+      : escolinhaColab
+      ? {
+          ...escolinhaColab,
+          tipo:
+            "ESCOLINHA" as const,
+        }
+      : null;
 
   const reputacaoScore =
     data.metrics?.reputacaoScore ??
@@ -733,11 +731,10 @@ async function salvarNota(atletaId: string) {
     0;
 
   const atletasCount = (observados?.length ?? data.metrics?.observados ?? data.metrics?.atletasAcompanhados ?? 0);
-  const time = clubeColab?.nome || "Olheiro";
+  const time = colaboracaoAtual?.nome || "Olheiro";
   const indicacoesAprovadas = data.metrics?.indicacoesAprovadas ?? undefined;
   const taxaAprovacao = data.metrics?.taxaAprovacao ?? undefined;
-  const atletasAssinados = data.metrics?.atletasAssinados ?? undefined;
-  
+
   return (
     <div className="w-full max-w-2xl mx-auto pb-28">
       <ProfileHeader
@@ -758,20 +755,47 @@ async function salvarNota(atletaId: string) {
         hasCreator={mostrarCreator}
         creatorUsuarioId={creatorLinkUsuarioId}
       />
-      {clubeColab && (
+      {colaboracaoAtual && (
         <div className="px-4 mt-2">
           <Link
-            href={`/perfil/${clubeColab.usuarioId ?? clubeColab.id}`}
-            className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-100 border border-green-200 text-green-900 hover:bg-green-200 transition"
+            href={`/perfil/${
+              colaboracaoAtual.usuarioId ??
+              colaboracaoAtual.id
+            }`}
+            className="
+              inline-flex
+              items-center
+              gap-2
+              text-xs
+              px-3
+              py-1.5
+              rounded-full
+              bg-green-100
+              border
+              border-green-200
+              text-green-900
+              hover:bg-green-200
+              transition
+            "
           >
-            {clubeColab.logo ? (
+            {colaboracaoAtual.logo ? (
               <Avatar
-                foto={clubeColab.logo}
-                alt={clubeColab.nome}
+                foto={
+                  colaboracaoAtual.logo
+                }
+                alt={
+                  colaboracaoAtual.nome
+                }
                 className="w-4 h-4 rounded border"
               />
             ) : null}
-            Colabora com <b className="ml-1">{clubeColab.nome}</b>
+
+            Colabora com{" "}
+            <b className="ml-1">
+              {
+                colaboracaoAtual.nome
+              }
+            </b>
           </Link>
         </div>
       )}
@@ -806,12 +830,32 @@ async function salvarNota(atletaId: string) {
          <div className="mt-5 px-3 sm:px-4 grid gap-5 sm:gap-6">
           <SectionCard
             title="Informações do Olheiro"
-            right={handle ? <span className="text-xs text-green-900/60">{handle}</span> : null}
+            right={
+              isOwn ? (
+                <Link
+                  href="/perfil/editar"
+                  aria-label="Editar perfil"
+                  title="Editar perfil"
+                  className="
+                    inline-flex
+                    h-8 w-8
+                    items-center
+                    justify-center
+                    rounded-full
+                    text-green-800
+                    transition
+                    hover:bg-green-100
+                  "
+                >
+                  <Pencil className="h-4 w-4" />
+                </Link>
+              ) : null
+            }
           >
             <ul className="text-sm text-green-900/90 space-y-2">
               <li><b>Nome:</b> {nome}</li>
 
-              {privacidade?.mostrarEmail && emailDoPerfil ? (
+              {emailDoPerfil ? (
                 <li>
                   <b>Email:</b> {emailDoPerfil}
                 </li>
@@ -824,21 +868,30 @@ async function salvarNota(atletaId: string) {
                 {(data.olheiro.anosExperiencia ?? 0) === 1 ? "" : "s"}
               </li>
 
-              {clubeColab && (
+              {colaboracaoAtual && (
                 <li className="flex items-center gap-2">
                   <b>Colaboração:</b>
-                  {clubeColab.logo ? (
+
+                  {colaboracaoAtual.logo ? (
                     <Avatar
-                      foto={clubeColab.logo}
-                      alt={clubeColab.nome}
+                      foto={
+                        colaboracaoAtual.logo
+                      }
+                      alt={
+                        colaboracaoAtual.nome
+                      }
                       className="w-5 h-5 rounded border"
                     />
                   ) : null}
+
                   <Link
-                    href={`/perfil/${clubeColab.usuarioId ?? clubeColab.id}`}
+                    href={`/perfil/${
+                      colaboracaoAtual.usuarioId ??
+                      colaboracaoAtual.id
+                    }`}
                     className="underline text-green-800"
                   >
-                    {clubeColab.nome}
+                    {colaboracaoAtual.nome}
                   </Link>
                 </li>
               )}
@@ -1233,7 +1286,7 @@ async function salvarNota(atletaId: string) {
                   </button>
                 )}
 
-                {isOwn && mostrarCreator ? (
+                {isOwn && (
                   <Link
                     href="/creator/eventos/novo"
                     className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
@@ -1241,7 +1294,7 @@ async function salvarNota(atletaId: string) {
                     <PlusCircle className="h-4 w-4" />
                     Criar novo evento
                   </Link>
-                ) : null}
+                )}
               </div>
             }
           >

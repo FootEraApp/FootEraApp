@@ -1,13 +1,30 @@
 // server/routes/perfil
 import { Router } from "express";
 import {
-  getPerfilUsuario, getAtividadesRecentes, getBadges,
-  getTreinosResumo, getProgressoTreinos, getPerfilUsuarioMe, getPontuacaoMe,
-  getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta,
-  getPerfilProfessor, getPerfilClube, getPerfilEscola, getPerfilOlheiro, 
-  getUltimasSubmissoesDesafioVideosMe, getUltimasSubmissoesDesafioVideos,
-  getPontuacaoPerfil, getPerfilFederacao, getPerfilMarca, getPerfilLearning,
-  upgradeLearningProfile
+  getPerfilUsuario,
+  getAtividadesRecentes,
+  getBadges,
+  getTreinosResumo,
+  getProgressoTreinos,
+  getPerfilUsuarioMe,
+  getPontuacaoMe,
+  getAtividadesRecentesMe,
+  getBadgesMe,
+  atualizarPerfil,
+  getPosicaoAtualAtleta,
+  getPerfilProfessor,
+  getPerfilClube,
+  getPerfilEscola,
+  getPerfilOlheiro,
+  getUltimasSubmissoesDesafioVideosMe,
+  getUltimasSubmissoesDesafioVideos,
+  getPontuacaoPerfil,
+  getPerfilFederacao,
+  getPerfilMarca,
+  getPerfilLearning,
+  upgradeLearningProfile,
+  getDeltaPontuacaoPerfil,
+  confirmarVisualizacaoPontuacaoPerfil,
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import multer from "multer";
@@ -68,6 +85,17 @@ router.get("/me/badges", authenticateToken, getBadgesMe);
 router.get("/me/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
 router.get("/me/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideosMe);
 router.get("/me", authenticateToken, getPerfilUsuarioMe);
+router.get(
+  "/:usuarioId/pontuacao-delta",
+  authenticateToken,
+  getDeltaPontuacaoPerfil
+);
+
+router.post(
+  "/:usuarioId/pontuacao-delta/confirmar",
+  authenticateToken,
+  confirmarVisualizacaoPontuacaoPerfil
+);
 router.get("/:usuarioId/pontuacao", authenticateToken, getPontuacaoPerfil);
 router.get("/:id/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideos);
 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);

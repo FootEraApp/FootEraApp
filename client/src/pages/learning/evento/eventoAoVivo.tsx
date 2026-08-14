@@ -40,6 +40,13 @@ type EventoLanding = {
   gravacaoAtiva?: boolean;
   precoAcesso?: number | string | null;
   acessoPago?: boolean;
+  criadorUsuario?: {
+    id?: string;
+    nome?: string | null;
+    foto?: string | null;
+    tipo?: string | null;
+    nomeDeUsuario?: string | null;
+  } | null;
   convidadoUsuario?: {
     id?: string;
     nome?: string | null;
@@ -221,9 +228,10 @@ export default function LearningEventoAoVivoPage() {
     "";
 
   const criadorNome =
+    evento?.criadorUsuario?.nome ||
     evento?.metodologiaAvulsa?.criadorUsuario?.nome ||
     evento?.metodologia?.criadorUsuario?.nome ||
-    "Creator FootEra";
+    "Creator do evento";
   
   const labelPessoa =
     evento?.pessoaDestaqueLabel ||
@@ -246,23 +254,48 @@ export default function LearningEventoAoVivoPage() {
     ? evento.convidados.filter((c) => c?.nome || c?.usuario?.nome)
     : [];
 
+  const nomesConvidados = convidadosLista
+    .map((c) =>
+      String(
+        c?.usuario?.nome ||
+        c?.nome ||
+        ""
+      ).trim()
+    )
+    .filter(Boolean)
+    .filter(
+      (nome) =>
+        nome.toLowerCase() !==
+        criadorNome.toLowerCase()
+    );
+
+  const nomesParticipantes = Array.from(
+    new Set([
+      criadorNome,
+      ...nomesConvidados,
+    ])
+  ).filter(Boolean);
+
   const tituloPessoa =
-    convidadosLista.length > 0
-        ? convidadosLista.length === 1
-        ? convidadosLista[0]?.nome || "Convidado"
-        : `${convidadosLista.length} convidados`
-        : convidadoOuCreatorNome;
+    nomesParticipantes.join(" • ");
 
   const descricaoPessoa =
-    convidadosLista.length > 0
-        ? convidadosLista
-            .map((c) => {
-            const nome = c.nome || c.usuario?.nome || "Convidado";
-            const descricao = c.descricao || (c.usuario ? "Convidado FootEra" : "");
-            return descricao ? `${nome} — ${descricao}` : nome;
-            })
-            .join(" • ")
-        : convidadoOuCreatorDescricao;
+    nomesConvidados.length > 0
+      ? `Creator do evento + ${
+          nomesConvidados.length
+        } convidado${
+          nomesConvidados.length > 1
+            ? "s"
+            : ""
+        }`
+      : "Creator do evento";
+
+  const labelPessoaHero =
+    nomesConvidados.length > 0
+      ? nomesConvidados.length === 1
+        ? "Creator e convidado"
+        : "Creator e convidados"
+      : "Creator";
         
   const subtituloFixo =
     "Encontros ao vivo para quem quer aprender, debater e evoluir no esporte.";
@@ -582,10 +615,10 @@ export default function LearningEventoAoVivoPage() {
                 />
 
                 <InfoHero
-                    icon={<User className="h-6 w-6" />}
-                    label={convidadosLista.length > 0 ? "Convidados" : labelPessoa}
-                    value={tituloPessoa}
-                    sub={descricaoPessoa}
+                  icon={<User className="h-6 w-6" />}
+                  label={labelPessoaHero}
+                  value={tituloPessoa}
+                  sub={descricaoPessoa}
                 />
               </div>
 

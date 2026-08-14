@@ -1,83 +1,6 @@
 import type { Response } from "express";
 import { prisma } from "../prisma.js";
-
-async function viewerPodeVerPresenca(viewerId: string, alvoId: string) {
-  if (!viewerId || !alvoId) return false;
-  if (viewerId === alvoId) return true;
-
-  const segue = await prisma.seguidor.findFirst({
-    where: { seguidorUsuarioId: viewerId, seguidoUsuarioId: alvoId },
-    select: { id: true },
-  });
-
-  if (segue) {
-  const seguidoPor = await prisma.seguidor.findFirst({
-    where: { seguidorUsuarioId: alvoId, seguidoUsuarioId: viewerId },
-    select: { id: true },
-  });
-
-  if (segue && seguidoPor) return true;
-  }
-  
-  const [viewer, alvo] = await Promise.all([
-    prisma.usuario.findUnique({
-      where: { id: viewerId },
-      select: {
-        atleta: { select: { id: true } },
-        professor: { select: { id: true } },
-        clube: { select: { id: true } },
-        escolinha: { select: { id: true } },
-      },
-    }),
-    prisma.usuario.findUnique({
-      where: { id: alvoId },
-      select: {
-        atleta: { select: { id: true } },
-        professor: { select: { id: true } },
-        clube: { select: { id: true } },
-        escolinha: { select: { id: true } },
-      },
-    }),
-  ]);
-
-  const viewerAtletaId = viewer?.atleta?.id ?? null;
-  const viewerProfessorId = viewer?.professor?.id ?? null;
-  const viewerClubeId = viewer?.clube?.id ?? null;
-  const viewerEscolinhaId = viewer?.escolinha?.id ?? null;
-
-  const alvoAtletaId = alvo?.atleta?.id ?? null;
-  const alvoProfessorId = alvo?.professor?.id ?? null;
-  const alvoClubeId = alvo?.clube?.id ?? null;
-  const alvoEscolinhaId = alvo?.escolinha?.id ?? null;
-
-  const OR: any[] = [];
-
-  if (viewerProfessorId && alvoAtletaId)
-    OR.push({ professorId: viewerProfessorId, atletaId: alvoAtletaId, encerradoEm: null });
-  if (alvoProfessorId && viewerAtletaId)
-    OR.push({ professorId: alvoProfessorId, atletaId: viewerAtletaId, encerradoEm: null });
-
-  if (viewerClubeId && alvoAtletaId)
-    OR.push({ clubeId: viewerClubeId, atletaId: alvoAtletaId, encerradoEm: null });
-
-  if (alvoClubeId && viewerAtletaId)
-    OR.push({ clubeId: alvoClubeId, atletaId: viewerAtletaId, encerradoEm: null });
-
-  if (viewerEscolinhaId && alvoAtletaId)
-    OR.push({ escolinhaId: viewerEscolinhaId, atletaId: alvoAtletaId, encerradoEm: null });
-
-  if (alvoEscolinhaId && viewerAtletaId)
-    OR.push({ escolinhaId: alvoEscolinhaId, atletaId: viewerAtletaId, encerradoEm: null });
-
-  if (OR.length === 0) return false;
-
-  const vinculo = await prisma.relacaoTreinamento.findFirst({
-    where: { OR },
-    select: { id: true },
-  });
-
-  return !!vinculo;
-}
+import { podeVerPresenca } from "../utils/privacy.js";
 
 export async function getPresenca(req: any, res: Response) {
   const alvoId = String(req.params.id || "").trim();
@@ -86,7 +9,7 @@ export async function getPresenca(req: any, res: Response) {
   if (!viewerId) return res.status(401).json({ message: "Não autenticado." });
   if (!alvoId) return res.status(400).json({ message: "ID inválido." });
 
-  const allowed = await viewerPodeVerPresenca(viewerId, alvoId);
+  const allowed = await podeVerPresenca(viewerId, alvoId);
   if (!allowed) {
     return res.json({
       usuarioId: alvoId,

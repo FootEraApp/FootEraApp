@@ -131,12 +131,10 @@ export default function ProfileHeader({
   avatar,
   foto,
   isOwnProfile = false,
-  scoreDelta,
   perfilTipoProp = null,
   perfilTipoIdProp = null,
   conquistasCount = 0,
   isVerified = false,
-  isPro = false,
   hasCreator = false,
   creatorUsuarioId = null,
 }: ProfileHeaderProps) {
@@ -174,6 +172,16 @@ export default function ProfileHeader({
     "";
 
   const viewerTipoNorm = normalizeTipo(viewerTipo);
+  const tiposComCreator = new Set([
+    "marca",
+    "federacao",
+    "olheiro",
+    "professor",
+    "clube",
+    "escolinha",
+  ]);
+
+  const viewerTemAcessoCreator = tiposComCreator.has(viewerTipoNorm);
   const alvoTipoNormGlobal = normalizeTipo(perfilTipo || perfilTipoProp);
   const tiposComVinculo = new Set(["atleta", "professor", "clube", "escolinha"]);
   const viewerPodeVinculo = tiposComVinculo.has(viewerTipoNorm);
@@ -1532,15 +1540,10 @@ useEffect(() => {
               <span className="footera-text-cream text-3xl font-bold">
                 {pontosTotal} pts
               </span>
-              {typeof scoreDelta === "number" && scoreDelta > 0 && (
-                <span
-                  title={`+${scoreDelta} desde a última visita`}
-                  className="ml-2 text-xs font-bold text-green-200 bg-green-900/30 border border-green-200/30 rounded px-2 py-0.5"
-                >
-                  ↑ +{scoreDelta}
-                </span>
-              )}
-              <ScoreDeltaBadge usuarioId={perfilId} />
+
+              <ScoreDeltaBadge
+                usuarioId={perfilId}
+              />
             </div>
           </>
         )}
@@ -1682,10 +1685,11 @@ useEffect(() => {
 
       {isOwnProfile && (
         <div className="mt-4 w-full flex justify-center">
-          <div className="w-full max-w-md flex items-center justify-center gap-3">
+          <div className="w-full max-w-2xl flex flex-wrap items-center justify-center gap-3">
+
             <Link href="/minha-rede">
               <Button
-                className="flex-1 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30"
+                className="h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4"
               >
                 <Users size={18} className="mr-2" />
                 Minha rede
@@ -1694,12 +1698,25 @@ useEffect(() => {
 
             <Link href="/configuracoes">
               <Button
-                className="flex-1 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30"
+                className="h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4"
               >
                 <Settings size={18} className="mr-2" />
                 Configurações
               </Button>
             </Link>
+
+            {viewerTemAcessoCreator && (
+              <Link href="/creator/dashboard">
+                <Button
+                  className="h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4"
+                  title="Acessar Creator"
+                >
+                  <Crown size={18} className="mr-2" />
+                  Creator
+                </Button>
+              </Link>
+            )}
+
           </div>
         </div>
       )}

@@ -288,7 +288,18 @@ async function criarOuBuscarUsuarioLearning(params: {
 async function buscarAulaCompleta(aulaId: string) {
   return prisma.aulaAoVivo.findUnique({
     where: { id: aulaId },
+
     include: {
+      criadorUsuario: {
+        select: {
+          id: true,
+          nome: true,
+          foto: true,
+          tipo: true,
+          nomeDeUsuario: true,
+        },
+      },
+
       convidadoUsuario: {
         select: {
           id: true,
@@ -300,17 +311,20 @@ async function buscarAulaCompleta(aulaId: string) {
       },
 
       convidados: {
-        orderBy: { ordem: "asc" },
+        orderBy: {
+          ordem: "asc",
+        },
+
         include: {
-            usuario: {
+          usuario: {
             select: {
-                id: true,
-                nome: true,
-                foto: true,
-                tipo: true,
-                nomeDeUsuario: true,
+              id: true,
+              nome: true,
+              foto: true,
+              tipo: true,
+              nomeDeUsuario: true,
             },
-            },
+          },
         },
       },
 
@@ -322,8 +336,13 @@ async function buscarAulaCompleta(aulaId: string) {
           capaUrl: true,
           ativo: true,
           criadorUsuarioId: true,
+
           criadorUsuario: {
-            select: { id: true, nome: true, foto: true },
+            select: {
+              id: true,
+              nome: true,
+              foto: true,
+            },
           },
         },
       },
@@ -337,8 +356,13 @@ async function buscarAulaCompleta(aulaId: string) {
           ativo: true,
           precoAssinaturaMensal: true,
           criadorUsuarioId: true,
+
           criadorUsuario: {
-            select: { id: true, nome: true, foto: true },
+            select: {
+              id: true,
+              nome: true,
+              foto: true,
+            },
           },
         },
       },
@@ -689,30 +713,33 @@ async function montarEventoResponse(params: {
   const temConvidado =
     convidadosLista.length > 0 ||
     !!aula.convidadoUsuario ||
-    !!String(aula.convidadoNome || "").trim();
+    !!String(
+      aula.convidadoNome || ""
+    ).trim();
 
-  const pessoaDestaqueLabel = temConvidado ? "Convidado" : "Creator";
+  const primeiroConvidado =
+    convidadosLista[0] ||
+    null;
 
-  const primeiroConvidado = convidadosLista[0] || null;
+  const criadorUsuario =
+    aula.criadorUsuario ||
+    aula.metodologiaAvulsa
+      ?.criadorUsuario ||
+    aula.metodologia
+      ?.criadorUsuario ||
+    null;
+
+  const pessoaDestaqueLabel =
+    "Creator";
 
   const pessoaDestaqueNome =
-    primeiroConvidado?.nome ||
-    aula.convidadoNome ||
-    aula.convidadoUsuario?.nome ||
-    aula.metodologiaAvulsa?.criadorUsuario?.nome ||
-    aula.metodologia?.criadorUsuario?.nome ||
-    "Creator FootEra";
+    criadorUsuario?.nome ||
+    "Creator do evento";
 
   const pessoaDestaqueDescricao =
-    primeiroConvidado?.descricao ||
-    aula.convidadoDescricao ||
-    (temConvidado
-      ? convidadosLista.length > 1
-        ? `${convidadosLista.length} convidados`
-        : "Convidado FootEra"
-      : aula.metodologiaAvulsa?.titulo ||
-        aula.metodologia?.titulo ||
-        "Creator do evento");
+    temConvidado
+      ? "Creator do evento com convidados"
+      : "Creator do evento";
 
   const planoId = aula.metodologiaId
     ? `METODOLOGIA:${aula.metodologiaId}`
@@ -775,6 +802,7 @@ async function montarEventoResponse(params: {
       validadeReplay
         .segundosRestantes,
     isOwner,
+    criadorUsuario: criadorUsuario,
     temConvidado,
     pessoaDestaqueLabel,
     pessoaDestaqueNome,
@@ -1710,10 +1738,6 @@ export async function getSalaCopaPublica(req: Request, res: Response) {
     const evento = await montarEventoResponse({ aula, userId });
     const metodologia = aula.metodologiaAvulsa || aula.metodologia || null;
 
-    const temConvidado =
-    !!aula.convidadoUsuario ||
-    !!String(aula.convidadoNome || "").trim();
-
     return res.json({
         ok: true,
         evento: {
@@ -1751,7 +1775,9 @@ export async function getSalaCopaPublica(req: Request, res: Response) {
             metodologiaDescricao: metodologia?.descricao || null,
             metodologiaCapaUrl: metodologia?.capaUrl || null,
             preco: Number(evento?.acesso?.preco ?? 0),
-            criadorUsuario: metodologia?.criadorUsuario || null,
+            criadorUsuario:
+              evento.criadorUsuario ||
+              null,
             temConvidado: evento.temConvidado,
             pessoaDestaqueLabel: evento.pessoaDestaqueLabel,
             pessoaDestaqueNome: evento.pessoaDestaqueNome,

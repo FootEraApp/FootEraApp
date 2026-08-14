@@ -79,6 +79,70 @@ const EditarPerfil = () => {
   const [clubeQuery, setClubeQuery] = useState("");
   const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
   const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
+  type ColaboracaoAtualOlheiro = {
+    tipo:
+      | "CLUBE"
+      | "ESCOLINHA";
+    id: string;
+    usuarioId?: string | null;
+    nome: string;
+    logo?: string | null;
+  };
+
+  type SolicitacaoColaboracaoPendente = {
+    id: string;
+    tipo:
+      | "CLUBE"
+      | "ESCOLINHA";
+    destinoId: string;
+    nome: string;
+    logo?: string | null;
+    criadaEm?: string | null;
+  };
+
+  type ResultadoBuscaEscolinhaColab = {
+    id: string;
+    nome: string;
+    username?: string;
+    fotoUrl?: string | null;
+  };
+
+  const [
+    colaboracaoAtual,
+    setColaboracaoAtual,
+  ] =
+    useState<ColaboracaoAtualOlheiro | null>(
+      null
+    );
+
+  const [
+    solicitacaoColabPendente,
+    setSolicitacaoColabPendente,
+  ] =
+    useState<SolicitacaoColaboracaoPendente | null>(
+      null
+    );
+
+  const [
+    escolinhaColabQuery,
+    setEscolinhaColabQuery,
+  ] = useState("");
+
+  const [
+    escolinhasColab,
+    setEscolinhasColab,
+  ] =
+    useState<
+      ResultadoBuscaEscolinhaColab[]
+    >([]);
+
+  const [
+    escolinhaColabSel,
+    setEscolinhaColabSel,
+  ] =
+    useState<ResultadoBuscaEscolinhaColab | null>(
+      null
+    );
   const [listaClubes, setListaClubes] = useState<OptionMin[]>([]);
   const [listaEscolinhas, setListaEscolinhas] = useState<OptionMin[]>([]);
   const [listaProfessores, setListaProfessores] = useState<OptionMin[]>([]);
@@ -240,6 +304,41 @@ const EditarPerfil = () => {
 
         const t = String(tipoSrv).toLowerCase();
         setTipoRender((t === "escolinha" ? "escola" : (t as TipoRender)));
+        if (
+          tipoNorm === "olheiro"
+        ) {
+          const olheiroId =
+            String(
+              dadosEsp.id ||
+                Storage.tipoUsuarioId ||
+                ""
+            ).trim();
+
+          if (olheiroId) {
+            const colabResp =
+              await axios.get(
+                `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+                  olheiroId
+                )}/colaboracao`,
+                {
+                  headers: {
+                    Authorization:
+                      `Bearer ${token}`,
+                  },
+                }
+              );
+
+            setColaboracaoAtual(
+              colabResp.data?.atual ??
+                null
+            );
+
+            setSolicitacaoColabPendente(
+              colabResp.data?.pendente ??
+                null
+            );
+          }
+        }
       } catch (err: any) {
         console.error("[EditarPerfil] Erro ao buscar dados", {
           status: err?.response?.status,
@@ -330,6 +429,85 @@ const EditarPerfil = () => {
       cancelado = true;
     };
   }, [clubeQuery, API?.BASE_URL, token]);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    (async () => {
+      const q =
+        escolinhaColabQuery.trim();
+
+      if (q.length < 2) {
+        setEscolinhasColab([]);
+        return;
+      }
+
+      try {
+        const r =
+          await axios.get<any[]>(
+            `${API.BASE_URL}/api/cadastro/buscar`,
+            {
+              params: {
+                query: q,
+                tipo:
+                  "Escolinha",
+              },
+              headers,
+            }
+          );
+
+        if (cancelado) return;
+
+        const arr =
+          (
+            Array.isArray(r.data)
+              ? r.data
+              : []
+          )
+            .filter(
+              (x) =>
+                x?.id &&
+                x?.nome &&
+                x?.tipo ===
+                  "Escolinha"
+            )
+            .map((x) => ({
+              id:
+                String(x.id),
+
+              nome:
+                String(x.nome),
+
+              username:
+                String(
+                  x.username ||
+                    ""
+                ),
+
+              fotoUrl:
+                x.fotoUrl ??
+                null,
+            }));
+
+        setEscolinhasColab(
+          arr
+        );
+      } catch {
+        if (!cancelado) {
+          setEscolinhasColab(
+            []
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    escolinhaColabQuery,
+    token,
+  ]);
 
   useEffect(() => {
     let cancel = false;
@@ -427,6 +605,98 @@ const EditarPerfil = () => {
     }
   };
 
+  const olheiroIdAtual =
+    String(
+      dadosTipoSeguro?.id ||
+        Storage.tipoUsuarioId ||
+        ""
+    ).trim();
+
+  const removerColaboracaoAtual =
+    async () => {
+      if (!olheiroIdAtual) {
+        return;
+      }
+
+      const confirmar =
+        window.confirm(
+          "Deseja realmente encerrar esta colaboração?"
+        );
+
+      if (!confirmar) {
+        return;
+      }
+
+      try {
+        await axios.delete(
+          `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+            olheiroIdAtual
+          )}/colaboracao`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+        setColaboracaoAtual(
+          null
+        );
+
+        toast.success(
+          "Colaboração encerrada."
+        );
+      } catch (e: any) {
+        toast.error(
+          e?.response?.data
+            ?.error ||
+            "Não foi possível remover a colaboração."
+        );
+      }
+    };
+
+
+  const cancelarSolicitacaoColab =
+    async () => {
+      if (
+        !olheiroIdAtual ||
+        !solicitacaoColabPendente
+      ) {
+        return;
+      }
+
+      try {
+        await axios.delete(
+          `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+            olheiroIdAtual
+          )}/colaboracao/solicitacoes/${encodeURIComponent(
+            solicitacaoColabPendente.id
+          )}`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+        setSolicitacaoColabPendente(
+          null
+        );
+
+        toast.success(
+          "Solicitação cancelada."
+        );
+      } catch (e: any) {
+        toast.error(
+          e?.response?.data
+            ?.error ||
+            "Não foi possível cancelar a solicitação."
+        );
+      }
+    };
+    
   const renderCamposEspecificos = () => {
     if (!dadosTipo) return null;
 
@@ -889,55 +1159,337 @@ const EditarPerfil = () => {
               />
             </div>
 
+              {(colaboracaoAtual || solicitacaoColabPendente) && (
+                <h2 className="text-lg font-semibold mt-4 mb-2">
+                  Colaboração
+                </h2>
+              )}
+
+              {colaboracaoAtual && (
+                <div className="
+                  mb-5
+                  rounded-xl
+                  border
+                  border-green-200
+                  bg-green-50
+                  px-4
+                  py-3
+                  flex
+                  items-center
+                  justify-between
+                  gap-3
+                ">
+                  <div>
+                    <div className="text-xs text-green-700">
+                      Colaboração atual
+                    </div>
+
+                    <div className="font-semibold text-green-950">
+                      {colaboracaoAtual.tipo ===
+                      "CLUBE"
+                        ? "Clube"
+                        : "Escola"}
+                      :{" "}
+                      {colaboracaoAtual.nome}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    removerColaboracaoAtual
+                  }
+                  className="
+                    h-8
+                    w-8
+                    rounded-full
+                    border
+                    border-green-300
+                    bg-white
+                    text-green-900
+                    hover:bg-red-50
+                    hover:text-red-600
+                  "
+                  title="Encerrar colaboração"
+                  aria-label="Encerrar colaboração"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+
+            {/* ==============================
+                SOLICITAÇÃO PENDENTE
+            ================================ */}
+
+            {solicitacaoColabPendente && (
+              <div className="
+                mb-5
+                rounded-xl
+                border
+                border-yellow-200
+                bg-yellow-50
+                px-4
+                py-3
+                flex
+                items-center
+                justify-between
+                gap-3
+              ">
+                <div>
+                  <div className="text-xs text-yellow-700">
+                    Aguardando aprovação
+                  </div>
+
+                  <div className="font-semibold text-yellow-950">
+                    {solicitacaoColabPendente.tipo ===
+                    "CLUBE"
+                      ? "Clube"
+                      : "Escola"}
+                    :{" "}
+                    {
+                      solicitacaoColabPendente.nome
+                    }
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    cancelarSolicitacaoColab
+                  }
+                  className="
+                    h-8
+                    w-8
+                    rounded-full
+                    border
+                    bg-white
+                    text-yellow-900
+                    hover:text-red-600
+                  "
+                  title="Cancelar solicitação"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+
+            {/* ==============================
+                CLUBE
+            ================================ */}
+
             <h2 className="text-lg font-semibold mt-4 mb-2">
               Clube colaborador
             </h2>
+
             {clubeSel ? (
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm">Selecionado:</span>
-                <span className="font-medium text-sm">{clubeSel.nome}</span>
+              <div className="flex items-center justify-between gap-3 rounded-xl border bg-white px-3 py-3 mb-3">
+                <div>
+                  <div className="text-xs text-gray-500">
+                    Será enviada uma solicitação
+                  </div>
+
+                  <div className="font-medium">
+                    {clubeSel.nome}
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  className="text-green-700 underline text-sm"
                   onClick={() => {
                     setClubeSel(null);
                     setClubeQuery("");
                   }}
+                  className="h-8 w-8 rounded-full border"
                 >
-                  trocar/remover
+                  ×
                 </button>
               </div>
             ) : (
               <>
                 <input
-                  className="w-full border rounded px-3 py-2 mb-2"
-                  placeholder="Buscar clube (mín. 2 letras)…"
+                  disabled={
+                    !!solicitacaoColabPendente
+                  }
+                  className="
+                    w-full
+                    border
+                    rounded
+                    px-3
+                    py-2
+                    mb-2
+                    disabled:bg-gray-100
+                  "
+                  placeholder={
+                    solicitacaoColabPendente
+                      ? "Cancele a solicitação pendente para escolher outro clube"
+                      : "Buscar clube (mín. 2 letras)…"
+                  }
                   value={clubeQuery}
-                  onChange={(e) => setClubeQuery(e.target.value)}
+                  onChange={(e) =>
+                    setClubeQuery(
+                      e.target.value
+                    )
+                  }
                 />
-                {clubes.length > 0 && (
-                  <div className="max-h-48 overflow-auto border rounded">
-                    {clubes.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
-                        onClick={() => {
-                          setClubeSel(c);
-                          setClubeQuery("");
-                          setClubes([]);
-                        }}
-                      >
-                        <div className="text-sm font-medium">{c.nome}</div>
-                        {c.username && (
-                          <div className="text-xs text-gray-500">
-                            @{c.username}
-                          </div>
-                        )}
-                      </button>
-                    ))}
+
+                {!solicitacaoColabPendente &&
+                  clubes.length > 0 && (
+                    <div className="max-h-48 overflow-auto border rounded mb-3">
+                      {clubes.map(
+                        (c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+                            onClick={() => {
+                              setClubeSel(
+                                c
+                              );
+
+                              setEscolinhaColabSel(
+                                null
+                              );
+
+                              setClubeQuery(
+                                ""
+                              );
+
+                              setClubes(
+                                []
+                              );
+                            }}
+                          >
+                            <div className="text-sm font-medium">
+                              {c.nome}
+                            </div>
+
+                            {c.username && (
+                              <div className="text-xs text-gray-500">
+                                @{c.username}
+                              </div>
+                            )}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
+              </>
+            )}
+
+
+            {/* ==============================
+                ESCOLA
+            ================================ */}
+
+            <h2 className="text-lg font-semibold mt-6 mb-2">
+              Escola colaboradora
+            </h2>
+
+            {escolinhaColabSel ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl border bg-white px-3 py-3 mb-3">
+                <div>
+                  <div className="text-xs text-gray-500">
+                    Será enviada uma solicitação
                   </div>
-                )}
+
+                  <div className="font-medium">
+                    {
+                      escolinhaColabSel.nome
+                    }
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEscolinhaColabSel(
+                      null
+                    );
+
+                    setEscolinhaColabQuery(
+                      ""
+                    );
+                  }}
+                  className="h-8 w-8 rounded-full border"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  disabled={
+                    !!solicitacaoColabPendente
+                  }
+                  className="
+                    w-full
+                    border
+                    rounded
+                    px-3
+                    py-2
+                    mb-2
+                    disabled:bg-gray-100
+                  "
+                  placeholder={
+                    solicitacaoColabPendente
+                      ? "Cancele a solicitação pendente para escolher outra escola"
+                      : "Buscar escola (mín. 2 letras)…"
+                  }
+                  value={
+                    escolinhaColabQuery
+                  }
+                  onChange={(e) =>
+                    setEscolinhaColabQuery(
+                      e.target.value
+                    )
+                  }
+                />
+
+                {!solicitacaoColabPendente &&
+                  escolinhasColab.length >
+                    0 && (
+                    <div className="max-h-48 overflow-auto border rounded">
+                      {escolinhasColab.map(
+                        (e) => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+                            onClick={() => {
+                              setEscolinhaColabSel(
+                                e
+                              );
+
+                              setClubeSel(
+                                null
+                              );
+
+                              setEscolinhaColabQuery(
+                                ""
+                              );
+
+                              setEscolinhasColab(
+                                []
+                              );
+                            }}
+                          >
+                            <div className="text-sm font-medium">
+                              {e.nome}
+                            </div>
+
+                            {e.username && (
+                              <div className="text-xs text-gray-500">
+                                @{e.username}
+                              </div>
+                            )}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
               </>
             )}
             <h2 className="text-lg font-semibold mt-6 mb-2">Contatos</h2>
@@ -1191,8 +1743,12 @@ return (
             }
             if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
 
-            tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
-            if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
+            delete tipo.colaboracaoClubeId;
+            delete tipo.colaboracaoEscolinhaId;
+            delete tipo.colaboracaoProfessorId;
+            delete tipo.colaboracaoClube;
+            delete tipo.colaboracaoEscolinha;
+            delete tipo.colaboracaoProfessor;
             delete tipo.escola;
             delete tipo.clube;
 
@@ -1264,18 +1820,83 @@ return (
               }
             );
 
-            if (tipoRender === "olheiro") {
-              const olheiroId = dadosTipo?.id ?? Storage.tipoUsuarioId;
-              if (olheiroId) {
-                await axios.patch(
-                  `${API.BASE_URL}/api/olheiros/${olheiroId}`,
-                  { colaboracaoClubeId: clubeSel?.id ?? null },
-                  { headers: { Authorization: `Bearer ${token}` } }
+            let solicitacaoColaboracaoEnviada =
+              false;
+
+            if (
+              tipoRender === "olheiro"
+            ) {
+              const olheiroId =
+                String(
+                  dadosTipo?.id ||
+                    Storage.tipoUsuarioId ||
+                    ""
+                ).trim();
+
+              if (
+                olheiroId &&
+                clubeSel
+              ) {
+                await axios.post(
+                  `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+                    olheiroId
+                  )}/colaboracao/solicitar`,
+                  {
+                    tipo:
+                      "CLUBE",
+
+                    destinoId:
+                      clubeSel.id,
+                  },
+                  {
+                    headers: {
+                      Authorization:
+                        `Bearer ${token}`,
+                      "Content-Type":
+                        "application/json",
+                    },
+                  }
                 );
+
+                solicitacaoColaboracaoEnviada =
+                  true;
+              }
+
+              if (
+                olheiroId &&
+                escolinhaColabSel
+              ) {
+                await axios.post(
+                  `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+                    olheiroId
+                  )}/colaboracao/solicitar`,
+                  {
+                    tipo:
+                      "ESCOLINHA",
+
+                    destinoId:
+                      escolinhaColabSel.id,
+                  },
+                  {
+                    headers: {
+                      Authorization:
+                        `Bearer ${token}`,
+                      "Content-Type":
+                        "application/json",
+                    },
+                  }
+                );
+
+                solicitacaoColaboracaoEnviada =
+                  true;
               }
             }
 
-            toast.success("Perfil atualizado com sucesso!");
+            toast.success(
+              solicitacaoColaboracaoEnviada
+                ? "Perfil atualizado e solicitação de colaboração enviada!"
+                : "Perfil atualizado com sucesso!"
+            );
             Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
             const returnTo = new URLSearchParams(window.location.search).get("returnTo");
             window.location.href = returnTo || "/perfil";

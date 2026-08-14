@@ -59,38 +59,38 @@ model Usuario {
   federacao                 Federacao?
   marca                     Marca?
 
-  amigosDe                        Amigo[]                      @relation("AmigoUsuario")
-  amigos                          Amigo[]                      @relation("UsuarioAmigo")
+  amigosDe                        Amigo[]                       @relation("AmigoUsuario")
+  amigos                          Amigo[]                       @relation("UsuarioAmigo")
   atividadesRecentes              AtividadeRecente[]
   atleta                          Atleta?
   certificadosMetodologia         CertificadoMetodologia[]
   clube                           Clube?
   comentarios                     Comentario[]
   curtidas                        Curtida[]
-  desafiosCriados                 DesafioEmGrupo[]             @relation("CriadorDesafioEmGrupo")
+  desafiosCriados                 DesafioEmGrupo[]              @relation("CriadorDesafioEmGrupo")
   escolinha                       Escolinha?
-  favoritadoPor                   FavoritoUsuario[]            @relation("UsuarioFavorito")
-  favoritos                       FavoritoUsuario[]            @relation("UsuarioFavoritador")
-  gruposDono                      Grupo[]                      @relation("GruposQuePossuo")
+  favoritadoPor                   FavoritoUsuario[]             @relation("UsuarioFavorito")
+  favoritos                       FavoritoUsuario[]             @relation("UsuarioFavoritador")
+  gruposDono                      Grupo[]                       @relation("GruposQuePossuo")
   logsErro                        LogErro[]
   MembroGrupo                     MembroGrupo[]
-  mensagensEnviadas               Mensagem[]                   @relation("MensagensEnviadas")
-  mensagensRecebidas              Mensagem[]                   @relation("MensagensRecebidas")
-  mensagensReferenciando          Mensagem[]                   @relation("UsuarioMensagemReferencia")
+  mensagensEnviadas               Mensagem[]                    @relation("MensagensEnviadas")
+  mensagensRecebidas              Mensagem[]                    @relation("MensagensRecebidas")
+  mensagensReferenciando          Mensagem[]                    @relation("UsuarioMensagemReferencia")
   MensagemGrupo                   MensagemGrupo[]
   olheiro                         Olheiro?
   PasswordReset                   PasswordReset[]
   postagens                       Postagem[]
   professor                       Professor?
-  seguidores                      Seguidor[]                   @relation("Seguido")
-  seguindo                        Seguidor[]                   @relation("Seguidor")
-  solicitacoesRecebidas           SolicitacaoTreino[]          @relation("SolicitacoesRecebidas")
-  solicitacoesEnviadas            SolicitacaoTreino[]          @relation("SolicitacoesEnviadas")
+  seguidores                      Seguidor[]                    @relation("Seguido")
+  seguindo                        Seguidor[]                    @relation("Seguidor")
+  solicitacoesRecebidas           SolicitacaoTreino[]           @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas            SolicitacaoTreino[]           @relation("SolicitacoesEnviadas")
   submissaoDesafios               SubmissaoDesafio[]
   submissaoEmGrupo                SubmissaoDesafioEmGrupo[]
   submissaoTreinos                SubmissaoTreino[]
   treinoRealizado                 TreinoRealizado[]
-  desafiosEmGrupo                 DesafioEmGrupo[]             @relation("MembrosDesafioEmGrupo")
+  desafiosEmGrupo                 DesafioEmGrupo[]              @relation("MembrosDesafioEmGrupo")
   Consentimento                   Consentimento[]
   Turmas                          TurmaUsuario[]
   TreinoUsuario                   TreinoUsuario[]
@@ -102,37 +102,57 @@ model Usuario {
   CupomResgate                    CupomResgate[]
   LogAuditoria                    LogAuditoria[]
   inscricoesEvento                InscricaoEvento[]
-  convitesEvento                  InscricaoEvento[]            @relation("ConvitesEvento")
+  convitesEvento                  InscricaoEvento[]             @relation("ConvitesEvento")
   feedbacks                       Feedback[]
   SessaoTreinoTurma               SessaoTreinoTurma[]
-  notificacoes                    Notificacao[]                @relation("NotificacaoUsuario")
-  notificacoesGeradas             Notificacao[]                @relation("NotificacaoActor")
+  notificacoes                    Notificacao[]                 @relation("NotificacaoUsuario")
+  notificacoesGeradas             Notificacao[]                 @relation("NotificacaoActor")
   AvaliacaoTreino                 AvaliacaoTreino[]
   AvaliacaoMetodologia            AvaliacaoMetodologia[]
-  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]        @relation("AulaAoVivoConvidadoUsuario")
-  treinosCriadosComoAdmin         TreinoProgramado[]           @relation("TreinoProgramadoCriadorUsuario")
-  aulasAoVivoComoConvidado        AulaAoVivo[]                 @relation("AulaAoVivoConvidado")
+  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]         @relation("AulaAoVivoConvidadoUsuario")
+  treinosCriadosComoAdmin         TreinoProgramado[]            @relation("TreinoProgramadoCriadorUsuario")
+  aulasAoVivoComoConvidado        AulaAoVivo[]                  @relation("AulaAoVivoConvidado")
   creator                         Creator?
-  comprasCreator                  CreatorVenda[]               @relation("CreatorVendaComprador")
-  metodologiasCriadas             Metodologia[]                @relation("MetodologiaCriador")
+  comprasCreator                  CreatorVenda[]                @relation("CreatorVendaComprador")
+  metodologiasCriadas             Metodologia[]                 @relation("MetodologiaCriador")
   metodologiasAssinadas           MetodologiaAssinante[]
-  metodologiasAvulsasCriadas      MetodologiaAvulsa[]          @relation("MetodologiaAvulsaCriador")
+  metodologiasAvulsasCriadas      MetodologiaAvulsa[]           @relation("MetodologiaAvulsaCriador")
   aulasAoVivoAcessos              AulaAoVivoAcesso[]
   LoginEvent                      LoginEvent[]
   ExercicioPersonalizado          ExercicioPersonalizado[]
   MetodologiaItemSubmissao        MetodologiaItemSubmissao[]
-  aulasAoVivoCriadas              AulaAoVivo[]                 @relation("AulaAoVivoCriador")
-  aulasAoVivoMensagens            AulaAoVivoMensagem[]         @relation("AulaAoVivoMensagemUsuario")
-  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]         @relation("AulaAoVivoMensagemDeletadaPor")
-  aulasAoVivoPresencas            AulaAoVivoPresenca[]         @relation("AulaAoVivoPresencaUsuario")
+  aulasAoVivoCriadas              AulaAoVivo[]                  @relation("AulaAoVivoCriador")
+  aulasAoVivoMensagens            AulaAoVivoMensagem[]          @relation("AulaAoVivoMensagemUsuario")
+  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]          @relation("AulaAoVivoMensagemDeletadaPor")
+  aulasAoVivoPresencas            AulaAoVivoPresenca[]          @relation("AulaAoVivoPresencaUsuario")
   learningFavoritos               LearningFavorito[]
   treinosFavoritos                TreinoFavorito[]
   pushSubscriptions               PushSubscription[]
   lembretesNotificacaoEnviados    LembreteNotificacaoEnviado[]
   pushDeviceTokens                PushDeviceToken[]
+  visualizacoesPontuacaoFeitas    PerfilPontuacaoVisualizacao[] @relation("PerfilPontuacaoViewer")
+  visualizacoesPontuacaoRecebidas PerfilPontuacaoVisualizacao[] @relation("PerfilPontuacaoAlvo")
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
+}
+
+model PerfilPontuacaoVisualizacao {
+  id                   String   @id @default(uuid())
+  viewerUsuarioId      String
+  perfilUsuarioId      String
+  ultimaPontuacaoVista Int      @default(0)
+  visualizadoEm        DateTime @default(now())
+  criadoEm             DateTime @default(now())
+  atualizadoEm         DateTime @updatedAt
+
+  viewer Usuario @relation("PerfilPontuacaoViewer", fields: [viewerUsuarioId], references: [id], onDelete: Cascade)
+
+  perfil Usuario @relation("PerfilPontuacaoAlvo", fields: [perfilUsuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerUsuarioId, perfilUsuarioId])
+  @@index([viewerUsuarioId])
+  @@index([perfilUsuarioId])
 }
 
 model GooglePreCadastro {
@@ -1474,6 +1494,23 @@ model SolicitacaoTreino {
   criadoEm       DateTime @default(now())
   destinatario   Usuario  @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
   remetente      Usuario  @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+}
+
+model SolicitacaoColaboracaoOlheiro {
+  id               String    @id @default(uuid())
+  olheiroId        String
+  olheiroUsuarioId String
+  destinoTipo      String
+  destinoId        String
+  destinoUsuarioId String
+  status           String    @default("PENDENTE")
+  notificacaoId    String?
+  criadaEm         DateTime  @default(now())
+  respondidaEm     DateTime?
+
+  @@index([olheiroId, status])
+  @@index([destinoUsuarioId, status])
+  @@index([notificacaoId])
 }
 
 model SubmissaoDesafio {
@@ -3321,6 +3358,8 @@ enum NotificacaoTipo {
   BILLING_BLOCKED
   INDICACAO_OLHEIRO
   INDICACAO_RESPONDIDA
+  COLABORACAO_OLHEIRO
+  COLABORACAO_RESPONDIDA
 }
 
 enum TipoMembro {
