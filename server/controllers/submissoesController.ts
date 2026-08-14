@@ -552,14 +552,12 @@ export async function criarSubmissaoTreinoSessaoUpload(
   try {
     const {
       sessaoId,
-      observacao,
-      pontos,     
+      observacao, 
       tempoSeg,  
       repeticoes,   
     } = req.body as {
       sessaoId?: string;
       observacao?: string;
-      pontos?: number | string;
       tempoSeg?: number | string;
       repeticoes?: number | string;
     };
@@ -628,7 +626,10 @@ export async function criarSubmissaoTreinoSessaoUpload(
     }
 
     const pontosBase =
-      Number(pontos ?? (sessao as any)?.treino?.pontuacao ?? 0) || 0;
+      Number(
+        (sessao as any)?.treino
+          ?.pontuacao ?? 0
+      ) || 0;
 
     function parseTempoSeg(v: any): number | undefined {
       if (v == null) return undefined;

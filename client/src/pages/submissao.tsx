@@ -48,8 +48,29 @@ export default function PaginaSubmissao() {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [sessaoId, setSessaoId] = useState<string | null>(null);
-  const [awardPontos, setAwardPontos] = useState<number>(0);
-  const [awardAtletas, setAwardAtletas] = useState<{ atletaId: string; nome: string }[]>([]);
+  const [awardPontos, setAwardPontos] =
+    useState<number>(0);
+
+  const [treinoNome, setTreinoNome] =
+    useState<string>("");
+
+  const [atletaNome, setAtletaNome] =
+    useState<string>("");
+
+  const [
+    duracaoProgramadaMinutos,
+    setDuracaoProgramadaMinutos,
+  ] = useState<number | null>(
+    null
+  );
+
+  const [awardAtletas, setAwardAtletas] =
+    useState<
+      {
+        atletaId: string;
+        nome: string;
+      }[]
+    >([]);
   const isSessaoTreino = Boolean(sessaoId);
   const [isRecording, setIsRecording] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number>(0);
@@ -338,6 +359,21 @@ export default function PaginaSubmissao() {
     const tempoSegParam = Number(params.get("tempoSeg") || 0);
     const sId = params.get("sessaoId");
     const pontosParam = Number(params.get("pontos") || 0);
+    const treinoNomeParam =
+      params.get(
+        "treinoNome"
+      );
+
+    const atletaNomeParam =
+      params.get(
+        "atletaNome"
+      );
+    const duracaoProgramadaParam =
+      Number(
+        params.get(
+          "duracaoProgramadaMinutos"
+        ) || 0
+      );
     const atletasParam = params.get("atletas");
     const mId = params.get("metodologiaId");
     const eId = params.get("estruturaId");
@@ -351,6 +387,31 @@ export default function PaginaSubmissao() {
 
     if (sId) setSessaoId(sId);
     if (Number.isFinite(pontosParam)) setAwardPontos(pontosParam);
+    if (
+      Number.isFinite(
+        duracaoProgramadaParam
+      ) &&
+      duracaoProgramadaParam > 0
+    ) {
+      setDuracaoProgramadaMinutos(
+        duracaoProgramadaParam
+      );
+    }
+    if (
+      treinoNomeParam
+    ) {
+      setTreinoNome(
+        treinoNomeParam
+      );
+    }
+
+    if (
+      atletaNomeParam
+    ) {
+      setAtletaNome(
+        atletaNomeParam
+      );
+    }
     if (sId) {
       try {
         const token =
@@ -823,11 +884,10 @@ export default function PaginaSubmissao() {
         url = `${API.BASE_URL}/api/submissoes/desafio`;
       } else if (isTreino) {
         if (arquivo) {
-          formData.append("arquivo", arquivo);
-        } else {
-          if (arquivo) {
-            formData.append("arquivo", arquivo);
-          }
+          formData.append(
+            "arquivo",
+            arquivo
+          );
         }
 
         const seg =
@@ -836,9 +896,17 @@ export default function PaginaSubmissao() {
         if (reps) formData.append("repeticoes", reps);
 
         if (isSessaoTreino) {
-          formData.append("sessaoId", sessaoId!);
-          formData.append("pontos", String(awardPontos));
-          formData.append("atletas", JSON.stringify(awardAtletas));
+          formData.append(
+            "sessaoId",
+            sessaoId!
+          );
+
+          formData.append(
+            "atletas",
+            JSON.stringify(
+              awardAtletas
+            )
+          );
           url = `${API.BASE_URL}/api/submissoes/treino/sessao`;
         } else {
           if (!treinoAgendadoId) {
@@ -954,6 +1022,51 @@ export default function PaginaSubmissao() {
         );
       }
 
+      if (
+        isTreino &&
+        Number.isFinite(
+          Number(
+            (js as any)
+              ?.pontosCreditados
+          )
+        )
+      ) {
+        const creditados =
+          Number(
+            (js as any)
+              .pontosCreditados
+          );
+
+        const base =
+          Number(
+            (js as any)
+              ?.pontosBase ?? 0
+          );
+
+        const tevePenalidade =
+          (js as any)
+            ?.penalidadeAtraso ===
+          true;
+
+        if (tevePenalidade) {
+          toast.success(
+            `Treino concluído! Você recebeu ${creditados} ${
+              creditados === 1
+                ? "ponto"
+                : "pontos"
+            } de ${base} possíveis por causa do tempo de conclusão.`
+          );
+        } else {
+          toast.success(
+            `Treino concluído! Você recebeu ${creditados} ${
+              creditados === 1
+                ? "ponto"
+                : "pontos"
+            }.`
+          );
+        }
+      }
+
       let metodologiaCompleta = false;
       if (metodologiaId && estruturaId && metodologiaItemId) {
         metodologiaCompleta = await concluirItemDaMetodologia();
@@ -1032,6 +1145,48 @@ export default function PaginaSubmissao() {
   };
 
   const tempoBloqueado = isTreino && tempoSegFixado != null;
+  const tempoAtualSeg =
+    tempoSegFixado != null
+      ? tempoSegFixado
+      : parseTempoToSeconds(
+          tempoTexto
+        );
+
+  /*
+  * Mesma conversão usada
+  * atualmente pelo backend.
+  */
+  const minutosReaisPreview =
+    tempoAtualSeg != null
+      ? Math.max(
+          1,
+          Math.floor(
+            tempoAtualSeg / 60
+          )
+        )
+      : null;
+
+  /*
+  * A regra atual do backend
+  * só aplica penalidade quando
+  * ultrapassa:
+  *
+  * duração programada + 5 minutos
+  */
+  const penalidadePrevista =
+    duracaoProgramadaMinutos !=
+      null &&
+    minutosReaisPreview != null &&
+    minutosReaisPreview >
+      duracaoProgramadaMinutos +
+        5;
+
+  const pontosPrevistos =
+    penalidadePrevista
+      ? Math.floor(
+          awardPontos / 2
+        )
+      : awardPontos;
 
   return (
     <div className="min-h-screen bg-transparent pb-24 px-4 pt-6">
@@ -1050,6 +1205,175 @@ export default function PaginaSubmissao() {
             </div>
           </div>
         )}
+
+        {isTreino &&
+          !isSessaoTreino && (
+            <div
+              className="
+                mb-5
+                rounded-xl
+                border
+                border-green-200
+                bg-green-50
+                p-4
+              "
+            >
+              <div className="text-sm font-semibold text-green-900 mb-3">
+                Resumo do treino
+              </div>
+
+              <div className="space-y-1.5 text-sm text-green-950">
+                <p>
+                  <span className="font-semibold">
+                    Atleta:
+                  </span>{" "}
+                  {atletaNome ||
+                    "Atleta"}
+                </p>
+
+                <p>
+                  <span className="font-semibold">
+                    Treino:
+                  </span>{" "}
+                  {treinoNome ||
+                    "Treino"}
+                </p>
+
+                <p>
+                  <span className="font-semibold">
+                    Pontuação base:
+                  </span>{" "}
+                  <span className="font-bold text-green-700">
+                    {awardPontos}{" "}
+                    {awardPontos === 1
+                      ? "ponto"
+                      : "pontos"}
+                  </span>
+                </p>
+
+                {duracaoProgramadaMinutos !=
+                  null && (
+                  <p>
+                    <span className="font-semibold">
+                      Tempo previsto:
+                    </span>{" "}
+                    {duracaoProgramadaMinutos}{" "}
+                    {duracaoProgramadaMinutos ===
+                    1
+                      ? "minuto"
+                      : "minutos"}
+                  </p>
+                )}
+
+                {tempoAtualSeg != null && (
+                  <p>
+                    <span className="font-semibold">
+                      Tempo realizado:
+                    </span>{" "}
+                    {secondsToMMSS(
+                      tempoAtualSeg
+                    )}
+                  </p>
+                )}
+
+                <p>
+                  <span className="font-semibold">
+                    Pontuação prevista:
+                  </span>{" "}
+                  <span
+                    className={`font-bold ${
+                      penalidadePrevista
+                        ? "text-red-600"
+                        : "text-green-700"
+                    }`}
+                  >
+                    {pontosPrevistos}{" "}
+                    {pontosPrevistos === 1
+                      ? "ponto"
+                      : "pontos"}
+                  </span>
+                </p>
+              </div>
+
+              {awardPontos > 0 && (
+                <>
+                  {penalidadePrevista ? (
+                    <div
+                      className="
+                        mt-3
+                        rounded-lg
+                        bg-red-50
+                        border
+                        border-red-200
+                        px-3
+                        py-3
+                        text-sm
+                        text-red-900
+                      "
+                    >
+                      <p className="font-semibold">
+                        Pontuação ajustada pelo tempo
+                      </p>
+
+                      <p className="mt-1">
+                        O tempo de conclusão ultrapassou
+                        o limite permitido para a
+                        pontuação integral.
+                      </p>
+
+                      <p className="mt-2">
+                        Você receberá aproximadamente{" "}
+                        <strong>
+                          {pontosPrevistos}{" "}
+                          {pontosPrevistos === 1
+                            ? "ponto"
+                            : "pontos"}
+                        </strong>
+                        , em vez de{" "}
+                        <strong>
+                          {awardPontos}
+                        </strong>
+                        .
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className="
+                        mt-3
+                        rounded-lg
+                        bg-white
+                        border
+                        border-green-200
+                        px-3
+                        py-2
+                        text-sm
+                        text-green-900
+                      "
+                    >
+                      <p>
+                        Este treino vale até{" "}
+                        <strong>
+                          {awardPontos}{" "}
+                          {awardPontos === 1
+                            ? "ponto"
+                            : "pontos"}
+                        </strong>
+                        .
+                      </p>
+
+                      {duracaoProgramadaMinutos != null && (
+                        <p className="mt-1 text-xs text-green-800/70">
+                          A pontuação integral é mantida
+                          até 5 minutos além do tempo
+                          programado.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
         {isTreino && (
           <>

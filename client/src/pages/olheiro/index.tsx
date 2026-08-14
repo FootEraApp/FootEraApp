@@ -8,7 +8,8 @@ import BottomNav from "@/components/layout/BottomNav.js";
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Atleta = {
-  id: string;     
+  id: string;    
+  usuarioId: string; 
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -83,22 +84,90 @@ export default function PainelOlheiro() {
       try {
         const r = await axios.get(`${API.BASE_URL}/api/olheiros/${tipoId}/observados`, { headers });
 
-        const arr: Atleta[] = (Array.isArray(r.data) ? r.data : []).map((x: any) => {
-          const id = x.atletaId || x.id;
-          const nome = x.nome || x.atleta?.nome || x.usuario?.nome || "";
-          const fotoRaw = x.foto ?? x.atleta?.foto ?? x.usuario?.foto ?? null;
+        const arr: Atleta[] = (
+          Array.isArray(r.data)
+            ? r.data
+            : []
+        ).map((x: any) => {
+          /*
+          * atletaId:
+          * usado em desempenho/indicação.
+          */
+          const atletaId =
+            x.atletaId ||
+            x.atleta?.id ||
+            x.id;
+
+          /*
+          * usuarioId:
+          * usado para abrir /perfil/:id.
+          *
+          * Na resposta atual do backend,
+          * quando existe atletaId, x.id
+          * corresponde ao usuário.
+          */
+          const usuarioId =
+            x.usuarioId ||
+            x.usuario?.id ||
+            x.atleta?.usuarioId ||
+            (x.atletaId ? x.id : "");
+
+          const nome =
+            x.nome ||
+            x.atleta?.nome ||
+            x.usuario?.nome ||
+            "";
+
+          const fotoRaw =
+            x.foto ??
+            x.atleta?.foto ??
+            x.usuario?.foto ??
+            null;
 
           return {
-            id: String(id),
+            id: String(atletaId),
+            usuarioId: String(usuarioId),
+
             nome: String(nome),
-            foto: resolveUploadUrl(fotoRaw),
-            posicao: x.posicao ?? x.atleta?.posicao ?? null,
-            idade: x.idade ?? x.atleta?.idade ?? null,
-            altura: x.altura ?? x.atleta?.altura ?? null,
-            peso: x.peso ?? x.atleta?.peso ?? null,
-            observadoEm: x.observadoEm ?? null,
-            categoria: x.categoria ?? null,
-            pontuacao: typeof x.pontuacao === "number" ? x.pontuacao : null,
+
+            foto:
+              resolveUploadUrl(
+                fotoRaw
+              ),
+
+            posicao:
+              x.posicao ??
+              x.atleta?.posicao ??
+              null,
+
+            idade:
+              x.idade ??
+              x.atleta?.idade ??
+              null,
+
+            altura:
+              x.altura ??
+              x.atleta?.altura ??
+              null,
+
+            peso:
+              x.peso ??
+              x.atleta?.peso ??
+              null,
+
+            observadoEm:
+              x.observadoEm ??
+              null,
+
+            categoria:
+              x.categoria ??
+              null,
+
+            pontuacao:
+              typeof x.pontuacao ===
+              "number"
+                ? x.pontuacao
+                : null,
           };
         });
 
@@ -147,8 +216,37 @@ export default function PainelOlheiro() {
                 key={a.id}
                 className="rounded-xl border bg-white/90 p-3 shadow-sm hover:shadow transition flex items-start gap-3"
               >
-                <AvatarCircle src={a.foto || undefined} nome={a.nome} size={44} />
-
+                {a.usuarioId ? (
+                  <Link
+                    href={`/perfil/${encodeURIComponent(
+                      a.usuarioId
+                    )}`}
+                    aria-label={`Ver perfil de ${a.nome}`}
+                    title={`Ver perfil de ${a.nome}`}
+                    className="
+                      shrink-0
+                      rounded-full
+                      transition
+                      hover:opacity-80
+                      focus:outline-none
+                      focus:ring-2
+                      focus:ring-green-500
+                      focus:ring-offset-2
+                    "
+                  >
+                    <AvatarCircle
+                      src={a.foto || undefined}
+                      nome={a.nome}
+                      size={44}
+                    />
+                  </Link>
+                ) : (
+                  <AvatarCircle
+                    src={a.foto || undefined}
+                    nome={a.nome}
+                    size={44}
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-green-900 truncate">{a.nome}</div>

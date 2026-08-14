@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import { ArrowLeft } from "lucide-react";
@@ -50,18 +50,52 @@ export default function MinhaRede() {
         seguidorUsuarioId: Storage.usuarioId,
       }),
     });
-    if (r.ok) {
-      setSeguidores(prev =>
-        prev.map(s => (s.id === userId ? { ...s, isSeguindo: true } : s))
+
+    const data = await r
+      .json()
+      .catch(() => ({}));
+
+    if (!r.ok) {
+      console.error(
+        "Erro ao seguir:",
+        data
+      );
+      return;
+    }
+
+    const ficouPendente =
+      data?.pendente === true;
+
+    setSeguidores((prev) =>
+      prev.map((s) =>
+        s.id === userId
+          ? {
+              ...s,
+              isSeguindo:
+                !ficouPendente,
+              isPendente:
+                ficouPendente,
+            }
+          : s
+      )
+    );
+
+    const seguidor =
+      seguidores.find(
+        (s) => s.id === userId
       );
 
-      const seg = seguidores.find(s => s.id === userId);
-      if (seg) {
-        setSeguindo(prev => [
-          ...prev.filter(u => u.id !== userId),
-          { ...seg, isPendente: true },
-        ]);
-      }
+    if (seguidor) {
+      setSeguindo((prev) => [
+        ...prev.filter(
+          (u) => u.id !== userId
+        ),
+        {
+          ...seguidor,
+          isPendente:
+            ficouPendente,
+        },
+      ]);
     }
   }
 
@@ -76,13 +110,19 @@ export default function MinhaRede() {
     });
     if (r.ok) {
       setSeguindo(prev => prev.filter(u => u.id !== userId));
-      setSeguidores(prev =>
-        prev.map(s => (s.id === userId ? { ...s, isSeguindo: false } : s))
+      setSeguidores((prev) =>
+        prev.map((s) =>
+          s.id === userId
+            ? {
+                ...s,
+                isSeguindo: false,
+                isPendente: false,
+              }
+            : s
+        )
       );
     }
   }
-
-  const seguindoSet = useMemo(() => new Set(seguindo.map(u => u.id)), [seguindo]);
 
   return (
     <div className="max-w-md mx-auto p-4">
@@ -160,8 +200,13 @@ export default function MinhaRede() {
 
       {aba === "seguidores" && (
         <div className="space-y-3">
-          {seguidores.map(u => {
-            const jaSigo = u.isSeguindo ?? seguindoSet.has(u.id);
+          {seguidores.map((u) => {
+            const jaSigo =
+              u.isSeguindo === true;
+
+            const solicitacaoPendente =
+              u.isPendente === true;
+
             return (
               <div
                 key={u.id}
@@ -183,10 +228,16 @@ export default function MinhaRede() {
                   <span className="bg-gray-200 text-gray-700 rounded px-3 py-1 text-sm cursor-default">
                     Seguindo
                   </span>
+                ) : solicitacaoPendente ? (
+                  <span className="bg-gray-200 text-gray-700 rounded px-3 py-1 text-sm cursor-default">
+                    Solicitação enviada
+                  </span>
                 ) : (
                   <button
                     className="bg-green-700 text-white rounded px-3 py-1 text-sm"
-                    onClick={() => followBack(u.id)}
+                    onClick={() =>
+                      followBack(u.id)
+                    }
                   >
                     Seguir de volta
                   </button>

@@ -131,12 +131,10 @@ export default function ProfileHeader({
   avatar,
   foto,
   isOwnProfile = false,
-  scoreDelta,
   perfilTipoProp = null,
   perfilTipoIdProp = null,
   conquistasCount = 0,
   isVerified = false,
-  isPro = false,
   hasCreator = false,
   creatorUsuarioId = null,
 }: ProfileHeaderProps) {
@@ -1542,15 +1540,10 @@ useEffect(() => {
               <span className="footera-text-cream text-3xl font-bold">
                 {pontosTotal} pts
               </span>
-              {typeof scoreDelta === "number" && scoreDelta > 0 && (
-                <span
-                  title={`+${scoreDelta} desde a última visita`}
-                  className="ml-2 text-xs font-bold text-green-200 bg-green-900/30 border border-green-200/30 rounded px-2 py-0.5"
-                >
-                  ↑ +{scoreDelta}
-                </span>
-              )}
-              <ScoreDeltaBadge usuarioId={perfilId} />
+
+              <ScoreDeltaBadge
+                usuarioId={perfilId}
+              />
             </div>
           </>
         )}

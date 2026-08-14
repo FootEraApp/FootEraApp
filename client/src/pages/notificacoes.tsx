@@ -63,6 +63,30 @@ function getIndicacaoIdFromLink(link?: string | null) {
   }
 }
 
+function getColaboracaoIdFromLink(
+  link?: string | null
+) {
+  if (!link) {
+    return null;
+  }
+
+  try {
+    const full =
+      link.startsWith("http")
+        ? new URL(link)
+        : new URL(
+            link,
+            window.location.origin
+          );
+
+    return full.searchParams.get(
+      "colaboracaoId"
+    );
+  } catch {
+    return null;
+  }
+}
+
 function limparMensagem(mensagem: string) {
   return (mensagem || "")
     .replace(/\s*Acesse:\s*\/eventos\/[a-f0-9-]+\.?/gi, "")
@@ -180,31 +204,69 @@ export default function PaginaNotificacoes() {
     }
   };
 
-  const seguirDeVolta = async (userToFollowId: string) => {
-    const token = Storage.token;
-    if (!token) return;
+  const seguirDeVolta =
+    async (
+      userToFollowId: string
+    ) => {
+      const token =
+        Storage.token;
 
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/seguidores`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ seguidoUsuarioId: userToFollowId }),
-      });
+      if (!token) return;
 
-      if (!r.ok) {
-        toast.error("Não foi possível seguir de volta.");
-        return;
+      try {
+        const r = await fetch(
+          `${API.BASE_URL}/api/seguidores`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            body: JSON.stringify({
+              seguidoUsuarioId:
+                userToFollowId,
+            }),
+          }
+        );
+
+        const data =
+          await r
+            .json()
+            .catch(() => ({}));
+
+        if (!r.ok) {
+          toast.error(
+            data?.error ||
+              "Não foi possível seguir de volta."
+          );
+
+          return;
+        }
+
+        if (
+          data?.pendente === true
+        ) {
+          toast.success(
+            "Solicitação enviada!"
+          );
+        } else {
+          toast.success(
+            "Agora você também está seguindo essa pessoa!"
+          );
+        }
+      } catch (e) {
+        console.error(e);
+
+        toast.error(
+          "Erro ao seguir de volta."
+        );
       }
-
-      toast.success("Agora você também está seguindo essa pessoa!");
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro ao seguir de volta.");
-    }
-  };
+    };
 
   const NOTIFS_BASE = `${API.BASE_URL}/api/notificacoes/me`;
 
@@ -283,9 +345,105 @@ export default function PaginaNotificacoes() {
     }
   };
 
+  const responderColaboracaoOlheiro =
+    async (
+      solicitacaoId: string,
+      aceitar: boolean,
+      notificacaoId: string
+    ) => {
+      const token =
+        Storage.token;
+
+      if (!token) {
+        toast.error(
+          "Você precisa estar logado."
+        );
+        return;
+      }
+
+      try {
+        const acao =
+          aceitar
+            ? "aceitar"
+            : "recusar";
+
+        const resp =
+          await fetch(
+            `${API.BASE_URL}/api/olheiros/colaboracao/solicitacoes/${encodeURIComponent(
+              solicitacaoId
+            )}/${acao}`,
+            {
+              method: "POST",
+
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        const data =
+          await resp
+            .json()
+            .catch(
+              () => ({})
+            );
+
+        if (!resp.ok) {
+          toast.error(
+            data?.error ||
+              "Não foi possível responder à solicitação."
+          );
+
+          return;
+        }
+
+        setNotificacoes(
+          (prev) =>
+            prev.filter(
+              (n) =>
+                n.id !==
+                notificacaoId
+            )
+        );
+
+        toast.success(
+          aceitar
+            ? "Colaboração aceita!"
+            : "Colaboração recusada."
+        );
+      } catch (e) {
+        console.error(
+          "Erro ao responder colaboração:",
+          e
+        );
+
+        toast.error(
+          "Não foi possível responder à solicitação."
+        );
+      }
+    };
+
   const irParaPerfil = (id: string) => setLocation(`/perfil/${id}`);
-  const totalSelecionadas = selecionadas.size;
-  const todasSelecionadas = notificacoes.length > 0 && selecionadas.size === notificacoes.length;
+  const notificacoesSelecionaveis =
+    notificacoes.filter(
+      (n) =>
+        String(
+          n.tipo || ""
+        ).toUpperCase() !==
+        "COLABORACAO_OLHEIRO"
+    );
+
+  const totalSelecionadas =
+    selecionadas.size;
+
+  const todasSelecionadas =
+    notificacoesSelecionaveis.length >
+      0 &&
+    notificacoesSelecionaveis.every(
+      (n) =>
+        selecionadas.has(n.id)
+    );
 
   const alternarSelecao = (notifId: string) => {
     setSelecionadas((prev) => {
@@ -302,7 +460,13 @@ export default function PaginaNotificacoes() {
   };
 
   const selecionarTodas = () => {
-    setSelecionadas(new Set(notificacoes.map((n) => n.id)));
+    setSelecionadas(
+      new Set(
+        notificacoesSelecionaveis.map(
+          (n) => n.id
+        )
+      )
+    );
   };
 
   const limparSelecao = () => {
@@ -342,7 +506,22 @@ export default function PaginaNotificacoes() {
     const token = Storage.token;
     if (!token) return;
 
-    const ids = Array.from(selecionadas);
+    const ids =
+      Array.from(
+        selecionadas
+      ).filter((id) => {
+        const notificacao =
+          notificacoes.find(
+            (n) => n.id === id
+          );
+
+        return (
+          String(
+            notificacao?.tipo || ""
+          ).toUpperCase() !==
+          "COLABORACAO_OLHEIRO"
+        );
+      });
 
     const prevNotificacoes = notificacoes;
     const prevSelecionadas = selecionadas;
@@ -399,7 +578,7 @@ export default function PaginaNotificacoes() {
           e.stopPropagation();
           alternarSelecao(id);
         }}
-        className={`absolute top-3 left-3 z-20 h-7 w-7 rounded-full border-2 flex items-center justify-center ${
+        className={`absolute top-3 left-3 h-7 w-7 rounded-full border-2 flex items-center justify-center ${
           marcada
             ? "bg-green-800 border-green-800 text-white"
             : "bg-white border-green-800 text-transparent"
@@ -412,20 +591,30 @@ export default function PaginaNotificacoes() {
     );
   };
 
-  const BotaoApagarNotificacao = ({ id }: { id: string }) => {
+  const BotaoApagarNotificacao = ({
+  id,
+  }: {
+    id: string;
+  }) => {
     if (pendingDelete === id) {
       return (
-        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+        <div className="absolute top-2 right-2 flex items-center gap-1">
           <button
             type="button"
-            onClick={() => { apagarNotificacao(id); setPendingDelete(null); }}
+            onClick={() => {
+              apagarNotificacao(id);
+              setPendingDelete(null);
+            }}
             className="h-7 px-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
           >
             Apagar
           </button>
+
           <button
             type="button"
-            onClick={() => setPendingDelete(null)}
+            onClick={() =>
+              setPendingDelete(null)
+            }
             className="h-7 px-2 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-300"
           >
             Não
@@ -437,8 +626,10 @@ export default function PaginaNotificacoes() {
     return (
       <button
         type="button"
-        onClick={() => setPendingDelete(id)}
-        className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
+        onClick={() =>
+          setPendingDelete(id)
+        }
+        className="absolute top-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
         aria-label="Apagar notificação"
         title="Apagar"
       >
@@ -450,7 +641,7 @@ export default function PaginaNotificacoes() {
   const BotaoApagarSolicitacao = ({ id }: { id: string }) => {
     if (pendingDeleteSolicitacao === id) {
       return (
-        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+        <div className="absolute top-2 right-2 flex items-center gap-1">
           <button
             type="button"
             onClick={() => { responderSolicitacao(id, false); setPendingDeleteSolicitacao(null); }}
@@ -473,7 +664,7 @@ export default function PaginaNotificacoes() {
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setPendingDeleteSolicitacao(id); }}
-        className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
+        className="absolute top-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white hover:bg-gray-100 text-green-900 shadow"
         aria-label="Remover solicitação"
         title="Remover"
       >
@@ -483,7 +674,13 @@ export default function PaginaNotificacoes() {
   };
 
   return (
-    <div className="max-w-xl mx-auto p-4 pb-24">
+    <div
+      className="max-w-xl mx-auto p-4"
+      style={{
+        paddingBottom:
+          "calc(110px + env(safe-area-inset-bottom))",
+      }}
+    >
 
       {pendingSeguirDeVolta && (
         <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-green-50 border border-green-200 px-4 py-3">
@@ -526,7 +723,7 @@ export default function PaginaNotificacoes() {
           Notificações
         </h1>
 
-        {notificacoes.length > 0 ? (
+        {notificacoesSelecionaveis.length > 0 ? (
           <button
             type="button"
             onClick={() => {
@@ -558,7 +755,7 @@ export default function PaginaNotificacoes() {
         </div>
       )}
 
-      {modoSelecao && notificacoes.length > 0 && (
+      {modoSelecao && notificacoesSelecionaveis.length > 0 && (
         <div className="mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
@@ -623,7 +820,7 @@ export default function PaginaNotificacoes() {
               return (
                 <div
                   key={n.id}
-                  className={`relative bg-white shadow-md rounded-2xl p-4 ${
+                  className={`relative z-0 bg-white shadow-md rounded-2xl p-4 ${
                     modoSelecao ? "pl-12" : ""
                   } border border-green-200`}
                 >
@@ -776,6 +973,149 @@ export default function PaginaNotificacoes() {
               ? "Abrir aula"
               : "Abrir evento";
 
+            const isColaboracaoOlheiro =
+              String(
+                n.tipo || ""
+              ).toUpperCase() ===
+              "COLABORACAO_OLHEIRO";
+
+            const colaboracaoId =
+              getColaboracaoIdFromLink(
+                n.link
+              );
+
+            if (
+              isColaboracaoOlheiro &&
+              colaboracaoId
+            ) {
+              return (
+                <div
+                  key={n.id}
+                  className="
+                    relative
+                    bg-white
+                    shadow-md
+                    rounded-2xl
+                    p-4
+                    border
+                    border-green-200
+                  "
+                >
+                  <div className="flex items-start gap-3">
+                    <Avatar
+                      foto={
+                        n.actor?.foto
+                      }
+                      alt={
+                        n.actor
+                          ?.nome ||
+                        n.actor
+                          ?.nomeDeUsuario ||
+                        "Olheiro"
+                      }
+                      className="w-12 h-12 bg-white"
+                    />
+
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-900 flex items-center gap-2">
+                        {n.titulo ||
+                          "Pedido de colaboração"}
+
+                        {n.lida ===
+                          false && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                            Novo
+                          </span>
+                        )}
+                      </p>
+
+                      {!!data && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {data}
+                        </p>
+                      )}
+
+                      <p className="text-sm text-gray-700 mt-2">
+                        {limparMensagem(
+                          n.mensagem ||
+                            ""
+                        )}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {actorId && (
+                          <button
+                            type="button"
+                            className="
+                              rounded-lg
+                              border
+                              border-green-200
+                              bg-white
+                              text-green-900
+                              text-sm
+                              px-4
+                              py-2
+                              hover:bg-green-50
+                            "
+                            onClick={() =>
+                              setLocation(
+                                `/perfil/${actorId}`
+                              )
+                            }
+                          >
+                            Ver perfil
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          className="
+                            rounded-lg
+                            bg-green-600
+                            text-white
+                            text-sm
+                            px-4
+                            py-2
+                            hover:bg-green-700
+                          "
+                          onClick={() =>
+                            responderColaboracaoOlheiro(
+                              colaboracaoId,
+                              true,
+                              n.id
+                            )
+                          }
+                        >
+                          Aceitar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="
+                            rounded-lg
+                            bg-red-600
+                            text-white
+                            text-sm
+                            px-4
+                            py-2
+                            hover:bg-red-700
+                          "
+                          onClick={() =>
+                            responderColaboracaoOlheiro(
+                              colaboracaoId,
+                              false,
+                              n.id
+                            )
+                          }
+                        >
+                          Recusar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             const isIndicacaoOlheiro = String(n.tipo || "").toUpperCase() === "INDICACAO_OLHEIRO";
             const indicacaoId = getIndicacaoIdFromLink(n.link);
 
@@ -783,7 +1123,7 @@ export default function PaginaNotificacoes() {
               return (
                 <div
                   key={n.id}
-                  className={`relative bg-white shadow-md rounded-2xl p-4 ${
+                  className={`relative z-0 bg-white shadow-md rounded-2xl p-4 ${
                     modoSelecao ? "pl-12" : ""
                   } border border-green-200`}
                 >
@@ -875,7 +1215,7 @@ export default function PaginaNotificacoes() {
             return (
               <div
                 key={n.id}
-                className={`relative bg-white shadow-md rounded-2xl p-4 ${
+                className={`relative z-0 bg-white shadow-md rounded-2xl p-4 ${
                   modoSelecao ? "pl-12" : ""
                 } border ${
                   isBillingBlocked
@@ -966,7 +1306,7 @@ export default function PaginaNotificacoes() {
             return (
               <div
                 key={solicitacao.id}
-                className="relative bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
+                className="relative z-0 bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
                 onClick={() => irParaPerfil(solicitacao.remetenteId)}
               >
                 <BotaoApagarSolicitacao id={solicitacao.id} />
