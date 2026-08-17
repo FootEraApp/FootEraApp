@@ -833,8 +833,15 @@ async function calcularTotalAtualDoPerfil(
     where: {
       usuarioId,
     },
+
     select: {
       pontosTotal: true,
+
+      pontuacao: {
+        select: {
+          pontuacaoTotal: true,
+        },
+      },
     },
   });
 
@@ -842,7 +849,11 @@ async function calcularTotalAtualDoPerfil(
     return null;
   }
 
-  return Number(atleta.pontosTotal ?? 0);
+  return Number(
+    atleta.pontuacao?.pontuacaoTotal ??
+    atleta.pontosTotal ??
+    0
+  );
 }
 
 export async function getPontuacaoPerfil(req: Request, res: Response) {
@@ -857,6 +868,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
 
         pontuacao: {
           select: {
+            pontuacaoTotal: true,
             pontuacaoPerformance: true,
             pontuacaoDisciplina: true,
             pontuacaoResponsabilidade: true,
@@ -990,14 +1002,17 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
         0
       );
 
+    const totalCalculado =
+      performanceAtual +
+      disciplinaAtual +
+      responsabilidadeAtual;
+
     const totalAtual =
       Number(
+        atleta.pontuacao?.pontuacaoTotal ??
+        totalCalculado ??
         atleta.pontosTotal ??
-        (
-          performanceAtual +
-          disciplinaAtual +
-          responsabilidadeAtual
-        )
+        0
       );
 
     return res.json({
@@ -1330,6 +1345,11 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         sobrenome: true,
         idade: true,
         pontosTotal: true,
+        pontuacao: {
+          select: {
+            pontuacaoTotal: true,
+          },
+        },
         email: true,
         telefone1: true,
         telefone2: true,
@@ -1769,7 +1789,11 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     perfilVerificado,
     pontuacaoTotal:
       tipoPerfil === "Atleta"
-        ? Number(atleta?.pontosTotal ?? 0)
+        ? Number(
+            atleta?.pontuacao?.pontuacaoTotal ??
+            atleta?.pontosTotal ??
+            0
+          )
         : 0,
   });
     } catch (error) {
