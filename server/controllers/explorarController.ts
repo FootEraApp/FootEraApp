@@ -7,7 +7,7 @@ const usuarioExplorarSelect = {
   id: true,
   nome: true,
   nomeDeUsuario: true,
-  email: true, // pode manter internamente para calcular verificação
+  email: true,
   verified: true,
   destaque: true,
   foto: true,
@@ -268,7 +268,10 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
     });
 
     const payload = atletas.map((a) => {
-      const pontuacaoTotal = a.pontuacao?.pontuacaoTotal ?? a.pontosTotal ?? 0;
+      const pontuacaoTotal =
+        a.pontosTotal ??
+        a.pontuacao?.pontuacaoTotal ??
+        0;
       const independente = !a.clubeId && !a.escolinhaId;
       const assinaturaAtual = getAssinaturaAtual(a.usuario?.assinatura);
       const isPro = calcIsPro(assinaturaAtual);
@@ -406,7 +409,10 @@ export async function explorar(req: Request, res: Response) {
     });
 
     const atletas = atletasRaw.map((a) => {
-      const pontuacaoTotal = a.pontuacao?.pontuacaoTotal ?? a.pontosTotal ?? 0;
+      const pontuacaoTotal =
+        a.pontosTotal ??
+        a.pontuacao?.pontuacaoTotal ??
+        0;
       const independente = !a.clubeId && !a.escolinhaId;
       const assinaturaAtual = getAssinaturaAtual(a.usuario?.assinatura);
       const isPro = calcIsPro(assinaturaAtual);
@@ -1260,7 +1266,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         },
         take: 50,
       }),
-            prisma.marca.findMany({
+      prisma.marca.findMany({
         where: termo
           ? {
               OR: [
@@ -1344,6 +1350,15 @@ export const buscarExplorar = async (req: Request, res: Response) => {
       }),
     ]);
 
+    const atletasNormalizados = atletas.map((a: any) => ({
+      ...a,
+
+      pontuacao:
+        a.pontosTotal ??
+        a.pontuacao?.pontuacaoTotal ??
+        0,
+    }));
+
     const [
       atletasVisiveis,
       clubesVisiveis,
@@ -1356,7 +1371,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
     ] = await Promise.all([
       filtrarPerfisVisiveis(
         userIdLogado,
-        atletas,
+        atletasNormalizados,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1420,14 +1435,65 @@ export const buscarExplorar = async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      atletas: ordenarDestaquesProNome(atletas, (a: any) => a?.usuario?.nome ?? ""),
-      clubes: ordenarDestaquesProNome(clubes, (c: any) => c?.nome ?? c?.usuario?.nome ?? ""),
-      escolas: ordenarDestaquesProNome(escolas, (e: any) => e?.nome ?? e?.usuario?.nome ?? ""),
-      professores: ordenarDestaquesProNome(professores, (p: any) => p?.usuario?.nome ?? p?.nome ?? ""),
-      olheiros: ordenarDestaquesProNome(olheiros, (o: any) => o?.usuario?.nome ?? ""),
-      federacoes: ordenarDestaquesProNome(federacoes, (f: any) => f?.nome ?? f?.usuario?.nome ?? ""),
-      marcas: ordenarDestaquesProNome(marcas, (m: any) => m?.nome ?? m?.usuario?.nome ?? ""),
-      learning: ordenarDestaquesProNome(learning, (l: any) => l?.nome ?? l?.usuario?.nome ?? ""),
+      atletas: ordenarDestaquesProNome(
+        atletasVisiveis,
+        (a: any) =>
+          a?.usuario?.nome ?? ""
+      ).map(sanitizarItemExplorar),
+
+      clubes: ordenarDestaquesProNome(
+        clubesVisiveis,
+        (c: any) =>
+          c?.nome ??
+          c?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      escolas: ordenarDestaquesProNome(
+        escolasVisiveis,
+        (e: any) =>
+          e?.nome ??
+          e?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      professores: ordenarDestaquesProNome(
+        professoresVisiveis,
+        (p: any) =>
+          p?.usuario?.nome ??
+          p?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      olheiros: ordenarDestaquesProNome(
+        olheirosVisiveis,
+        (o: any) =>
+          o?.usuario?.nome ?? ""
+      ).map(sanitizarItemExplorar),
+
+      federacoes: ordenarDestaquesProNome(
+        federacoesVisiveis,
+        (f: any) =>
+          f?.nome ??
+          f?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      marcas: ordenarDestaquesProNome(
+        marcasVisiveis,
+        (m: any) =>
+          m?.nome ??
+          m?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
+
+      learning: ordenarDestaquesProNome(
+        learningVisiveis,
+        (l: any) =>
+          l?.nome ??
+          l?.usuario?.nome ??
+          ""
+      ).map(sanitizarItemExplorar),
     });
   } catch (error) {
     console.error("Erro em /api/explorar/buscar:", error);

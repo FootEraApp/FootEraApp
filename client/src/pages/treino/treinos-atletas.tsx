@@ -1,4 +1,3 @@
-// client/src/pages/treino/treinos-atletas.tsx
 import { toast } from "@/lib/toast";
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
@@ -1280,14 +1279,12 @@ const semanasMesAgenda = React.useMemo(() => {
   const primeiroDiaMes = new Date(ano, mes, 1);
   const ultimoDiaMes = new Date(ano, mes + 1, 0);
 
-  // Começa na segunda-feira da primeira semana do mês
   const inicioGrade = new Date(primeiroDiaMes);
   const diasAntes = (inicioGrade.getDay() + 6) % 7;
 
   inicioGrade.setDate(inicioGrade.getDate() - diasAntes);
   inicioGrade.setHours(0, 0, 0, 0);
 
-  // Termina no domingo da última semana do mês
   const fimGrade = new Date(ultimoDiaMes);
   const diasDepois = (7 - fimGrade.getDay()) % 7;
 
@@ -1948,7 +1945,6 @@ function fecharPlayerExercicio() {
     );
   }
 
-  // Espera a animação terminar antes de retirar o vídeo
   fecharMidiaTimerRef.current =
     window.setTimeout(() => {
       setMidiaExercicioAberta(null);
@@ -1958,8 +1954,7 @@ function fecharPlayerExercicio() {
 }
 
 return (
-  <div>
-    {/* Player único, sempre acima da lista */}
+  <div>=
     <div
       aria-hidden={!playerMidiaAberto}
       className={`grid overflow-hidden transition-all duration-500 ease-in-out ${
@@ -2082,7 +2077,6 @@ function alternarMidia() {
 
   setMidiaExercicioAberta(midiaKey);
 
-  // Permite ao React montar o conteúdo antes da animação
   window.requestAnimationFrame(() => {
     setPlayerMidiaAberto(true);
   });
@@ -3248,8 +3242,9 @@ return (
 
                 const duracaoProgramadaMinutos =
                   Number(
-                    t.treinoProgramado
-                      ?.duracao ?? 0
+                    t.duracaoMinutos ??
+                    t.treinoProgramado?.duracao ??
+                    0
                   );
 
                 if (

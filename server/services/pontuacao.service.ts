@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { recomputePontuacaoAtleta } from "./recomputePontuacao.js";
+
 const prisma = new PrismaClient();
 
 export type PontuacaoPerfil = {
@@ -111,25 +113,12 @@ export async function calcularPontuacaoPorUsuarioId(usuarioId: string): Promise<
 }
 
 export async function atualizarCachePontuacao(usuarioId: string) {
-  const atleta = await prisma.atleta.findFirst({ where: { usuarioId }, select: { id: true } });
+  const atleta = await prisma.atleta.findFirst({
+    where: { usuarioId },
+    select: { id: true },
+  });
+
   if (!atleta) return;
 
-  const data = await calcularPontuacaoPorUsuarioId(usuarioId);
-  await prisma.pontuacaoAtleta.upsert({
-    where: { atletaId: atleta.id },
-    update: {
-      pontuacaoTotal: data.performance,
-      pontuacaoPerformance: data.performance,
-      pontuacaoDisciplina: data.disciplina,
-      pontuacaoResponsabilidade: data.responsabilidade,
-      ultimaAtualizacao: new Date(),
-    },
-    create: {
-      atletaId: atleta.id,
-      pontuacaoTotal: data.performance,
-      pontuacaoPerformance: data.performance,
-      pontuacaoDisciplina: data.disciplina,
-      pontuacaoResponsabilidade: data.responsabilidade,
-    },
-  });
+  await recomputePontuacaoAtleta(atleta.id);
 }

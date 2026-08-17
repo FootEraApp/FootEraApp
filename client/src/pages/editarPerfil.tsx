@@ -1218,11 +1218,6 @@ const EditarPerfil = () => {
               </div>
             )}
 
-
-            {/* ==============================
-                SOLICITAÇÃO PENDENTE
-            ================================ */}
-
             {solicitacaoColabPendente && (
               <div className="
                 mb-5
@@ -1274,11 +1269,6 @@ const EditarPerfil = () => {
                 </button>
               </div>
             )}
-
-
-            {/* ==============================
-                CLUBE
-            ================================ */}
 
             <h2 className="text-lg font-semibold mt-4 mb-2">
               Clube colaborador
@@ -1378,11 +1368,6 @@ const EditarPerfil = () => {
                   )}
               </>
             )}
-
-
-            {/* ==============================
-                ESCOLA
-            ================================ */}
 
             <h2 className="text-lg font-semibold mt-6 mb-2">
               Escola colaboradora

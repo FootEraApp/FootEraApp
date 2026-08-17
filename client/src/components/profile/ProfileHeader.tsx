@@ -711,17 +711,28 @@ useEffect(() => {
       .then((data) => {
         if (!data) return;
 
-        const resolvedUserId = String(
-          data?.usuario?.id ??
-          data?.usuarioId ??
-          data?.usuario?.usuarioId ??
-          ""
-        ).trim();
+        const totalAtual =
+          Number(data?.totalAtual);
 
-        const performance = Number(data.performance) || 0;
-        const disciplina = Number(data.disciplina) || 0;
-        const responsab = Number(data.responsabilidade) || 0;
-        setPontosTotal(performance + disciplina + responsab);
+        if (Number.isFinite(totalAtual)) {
+          setPontosTotal(totalAtual);
+          return;
+        }
+
+        const performance =
+          Number(data?.performance) || 0;
+
+        const disciplina =
+          Number(data?.disciplina) || 0;
+
+        const responsabilidade =
+          Number(data?.responsabilidade) || 0;
+
+        setPontosTotal(
+          performance +
+          disciplina +
+          responsabilidade
+        );
       })
       .catch(() => {});
   }, [perfilId, kpis]);

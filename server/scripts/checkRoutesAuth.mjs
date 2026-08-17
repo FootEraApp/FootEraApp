@@ -1,14 +1,3 @@
-// Falha o build se uma rota nova ficar sem nenhum guard de autenticação.
-//
-// Por que existe: o app não tem um middleware global obrigatório em todas as
-// rotas — cada arquivo (ou o mount em server/index.ts) precisa aplicar
-// authenticateToken/adminAuth/requireAdmin explicitamente. Isso já causou
-// confusão em revisão manual (nomes diferentes pro mesmo middleware). Esse
-// script garante que toda rota nova continue protegida ou seja adicionada
-// de propósito à lista PUBLIC_ROUTES abaixo, com justificativa.
-//
-// Rodar: node server/scripts/checkRoutesAuth.mjs
-
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -18,7 +7,6 @@ const SERVER_DIR = path.resolve(__dirname, "..");
 const ROUTES_DIR = path.join(SERVER_DIR, "routes");
 const INDEX_FILE = path.join(SERVER_DIR, "index.ts");
 
-// Rotas intencionalmente públicas (sem login) — cada entrada precisa do motivo.
 const PUBLIC_ROUTES = {
   "status.ts": "health-check / modo manutenção, consultado antes do login",
   "googleAuth.ts": "fluxo de login com Google",
@@ -42,7 +30,6 @@ const AUTH_MARKERS = [
 function extractRouteMountAuth() {
   const indexSrc = fs.readFileSync(INDEX_FILE, "utf8");
 
-  // mapa: nome da variável importada -> caminho relativo do arquivo (ex.: "./routes/billing.js")
   const importMap = new Map();
   const importRe = /import\s+(\w+)\s+from\s+["']\.\/routes\/([^"']+)["']/g;
   let m;
@@ -50,7 +37,6 @@ function extractRouteMountAuth() {
     importMap.set(m[1], m[2].replace(/\.js$/, ""));
   }
 
-  // mapa: nome do arquivo de rota -> mounted com authenticateToken/adminAuth?
   const mountedWithAuth = new Map();
   const useRe = /app\.use\(\s*["'][^"']+["']\s*,([^)]*)\)/g;
   while ((m = useRe.exec(indexSrc))) {

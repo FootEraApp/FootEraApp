@@ -1,19 +1,8 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import axios from "axios";
-
-import {
-  ArrowUp,
-} from "lucide-react";
-
+import { ArrowUp, ArrowDown } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
-
-import {
-  API,
-} from "../../config.js";
+import { API } from "../../config.js";
 
 type Props = {
   usuarioId: string;
@@ -63,13 +52,6 @@ export default function ScoreDeltaBadge({
 
     (async () => {
       try {
-        /*
-         * Apenas CONSULTA
-         * a última pontuação vista.
-         *
-         * Esse GET não altera
-         * o snapshot.
-         */
         const {
           data,
         } =
@@ -87,20 +69,10 @@ export default function ScoreDeltaBadge({
         }
 
         const valor =
-          Math.max(
-            0,
-            Number(
-              data?.delta
-            ) || 0
-          );
+          Number(data?.delta) || 0;
 
         setDelta(valor);
 
-        /*
-         * Esperamos um pouco antes
-         * de considerar que a pessoa
-         * realmente viu a pontuação.
-         */
         if (
           data
             ?.registrarVisualizacao ===
@@ -161,33 +133,44 @@ export default function ScoreDeltaBadge({
     token,
   ]);
 
-  if (delta <= 0) {
+  if (delta === 0) {
     return null;
   }
 
+  const subiu = delta > 0;
+  const valorAbsoluto = Math.abs(delta);
+
   return (
     <div
-      title={`+${delta} pontos desde sua última visita`}
-      className="
+      title={
+        subiu
+          ? `+${valorAbsoluto} pontos desde sua última visita`
+          : `-${valorAbsoluto} pontos desde sua última visita`
+      }
+      className={`
         flex
         items-center
         gap-1
-        text-green-200
         text-xs
-        bg-green-900/30
-        border
-        border-green-200/30
         rounded
         px-2
         py-0.5
-      "
+        ${
+          subiu
+            ? "text-green-200 bg-green-900/30 border border-green-200/30"
+            : "text-red-200 bg-red-900/30 border border-red-200/30"
+        }
+      `}
     >
-      <ArrowUp
-        size={16}
-      />
+      {subiu ? (
+        <ArrowUp size={16} />
+      ) : (
+        <ArrowDown size={16} />
+      )}
 
       <span>
-        +{delta}
+        {subiu ? "+" : "-"}
+        {valorAbsoluto}
       </span>
     </div>
   );

@@ -1,4 +1,3 @@
-// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -317,7 +316,7 @@ app.use("/api/amigos", authenticateToken, amigosRoutes);
 app.use("/api/categorias", authenticateToken, categoriasRoutes);
 app.use("/api/clubes", authenticateToken, clubeRoutes);
 app.use("/api/configuracoes-perfil", configuracoesPerfilRoutes);
-app.use("/api/configuracoes", /*authenticateToken,*/ configuracoesRoutes); 
+app.use("/api/configuracoes", configuracoesRoutes); 
 app.use("/api/conquistas", authenticateToken, conquistasRoutes);
 app.use("/api/desafios", authenticateToken, desafiosRoutes);
 app.use("/api/desafios/em-grupo", authenticateToken, desafiosEmGrupoRoutes);

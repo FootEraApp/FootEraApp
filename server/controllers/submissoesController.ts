@@ -7,7 +7,6 @@ import {
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";
 import { inferirTipoTreino } from "../utils/inferirTipoTreino.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
-import { atualizarCachePontuacao } from "server/services/pontuacao.service.js";
 import { requireUsage } from "server/lib/usage.js";
 import { sendLimitInfo } from "server/lib/limitInfo.js";
 import { UPGRADE_HINT_BY_CAP } from "server/lib/upgradeHints.js";
@@ -287,15 +286,6 @@ export async function criarSubmissaoTreinoUpload(
         treinoAgendadoId,
         minutosConsiderados
       ).catch(() => {});
-    }
-
-    const atleta = await prisma.atleta.findUnique({
-      where: { id: atletaId },
-      select: { usuarioId: true },
-    });
-
-    if (atleta?.usuarioId) {
-      atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
     }
 
     const tipoStr = inferirTipoTreino({
@@ -770,15 +760,6 @@ export async function criarSubmissaoTreinoSessaoUpload(
         ).catch(() => {});
 
         await recomputePontuacaoAtleta(c.atletaId).catch(() => {});
-
-        const atleta = await prisma.atleta.findUnique({
-          where: { id: c.atletaId },
-          select: { usuarioId: true },
-        });
-
-        if (atleta?.usuarioId) {
-          await atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
-        }
       })
     );
 

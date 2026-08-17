@@ -1,4 +1,3 @@
-// server/controllers/configuracoesController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { activateScheduledMaintenanceIfDue } from "../services/maintenanceScheduler.js";
@@ -95,7 +94,6 @@ export const atualizarConfiguracoes = async (
     if (typeof maintenanceMode === "boolean") {
       data.maintenanceMode = maintenanceMode;
 
-      // Ativação manual cancela qualquer agendamento pendente
       if (maintenanceMode) {
         data.maintenanceScheduledAt = null;
       }

@@ -1,4 +1,3 @@
-// client/src/pages/GerenciarProfessores.tsx
 import { toast } from "@/lib/toast";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -73,7 +72,6 @@ function fotoPerfilOuFallback(foto?: string | null) {
   if (valor.startsWith("/uploads/")) return `${API.BASE_URL}${valor}`;
   if (valor.startsWith("uploads/")) return `${API.BASE_URL}/${valor}`;
 
-  // Quando o banco salva só "prof-clube-footera.png"
   if (!valor.includes("/") && /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(valor)) {
     return `/assets/usuarios/${valor}`;
   }
