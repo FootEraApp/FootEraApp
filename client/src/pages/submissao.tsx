@@ -1152,10 +1152,6 @@ export default function PaginaSubmissao() {
           tempoTexto
         );
 
-  /*
-  * Mesma conversão usada
-  * atualmente pelo backend.
-  */
   const minutosReaisPreview =
     tempoAtualSeg != null
       ? Math.max(
@@ -1166,13 +1162,6 @@ export default function PaginaSubmissao() {
         )
       : null;
 
-  /*
-  * A regra atual do backend
-  * só aplica penalidade quando
-  * ultrapassa:
-  *
-  * duração programada + 5 minutos
-  */
   const penalidadePrevista =
     duracaoProgramadaMinutos !=
       null &&

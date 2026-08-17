@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/treino/treinos-atletas.tsx
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -15,6 +14,11 @@ import {
   ChevronUp,
   MoreVertical,
   Star as StarIcon,
+  Menu,
+  CalendarPlus,
+  Dumbbell,
+  History,
+  GraduationCap,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
@@ -623,13 +627,36 @@ export default function TreinosAtletas() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [videoModal, setVideoModal] = useState<{
-    exercicioId: string;
-    nome: string;
-    url: string;
-  } | null>(null);
-  const [videoCarregando, setVideoCarregando] = useState(false);
-  const [videoErro, setVideoErro] = useState<string | null>(null);
+
+const [midiaExercicioAberta, setMidiaExercicioAberta] =
+  useState<string | null>(null);
+
+const [playerMidiaAberto, setPlayerMidiaAberto] =
+  useState(false);
+
+const [erroMidiaExercicio, setErroMidiaExercicio] =
+  useState<string | null>(null);
+
+const fecharMidiaTimerRef = useRef<number | null>(null);
+
+useEffect(() => {
+  if (fecharMidiaTimerRef.current !== null) {
+    window.clearTimeout(fecharMidiaTimerRef.current);
+    fecharMidiaTimerRef.current = null;
+  }
+
+  setPlayerMidiaAberto(false);
+  setMidiaExercicioAberta(null);
+  setErroMidiaExercicio(null);
+}, [fullscreenId]);
+
+useEffect(() => {
+  return () => {
+    if (fecharMidiaTimerRef.current !== null) {
+      window.clearTimeout(fecharMidiaTimerRef.current);
+    }
+  };
+}, []);
 
   async function carregarMetodologias() {
     try {
@@ -819,32 +846,6 @@ useEffect(() => {
   navigate,
 ]);
 
-function abrirMidiaExercicioDireto(
-  exercicioId: string,
-  nome: string,
-  midiaRaw?: string | null
-) {
-  setVideoErro(null);
-  setVideoCarregando(true);
-
-  if (!midiaRaw) {
-    setVideoErro("Este exercício ainda não tem vídeo ou imagem cadastrados.");
-    setVideoCarregando(false);
-    return;
-  }
-
-  const finalUrl = resolveUploadUrl(midiaRaw);
-
-  setVideoModal({
-    exercicioId,
-    nome,
-    url: finalUrl,
-  });
-
-  if (isYouTubeUrl(finalUrl)) {
-    setVideoCarregando(false);
-  }
-}
 
 
 
@@ -858,8 +859,26 @@ function abrirMidiaExercicioDireto(
   const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
   const [agendaAberta, setAgendaAberta] = useState(false);
 
-  type MainTab = "hoje" | "treinos" | "learning";
+const [dataAgendaSelecionada, setDataAgendaSelecionada] = useState(() => {
+  const agora = new Date();
+
+  return new Date(
+    agora.getFullYear(),
+    agora.getMonth(),
+    agora.getDate()
+  );
+});
+
+  type MainTab = "treinos" | "learning";
   const [mainTab, setMainTab] = useState<MainTab>("treinos");
+
+const [menuTreinosAberto, setMenuTreinosAberto] = useState(false);
+
+function navegarPeloMenu(rota: string) {
+  setMenuTreinosAberto(false);
+  navigate(rota);
+}
+
   const [buscaMetodologia, setBuscaMetodologia] = useState("");
 
   const [addFiltroOpen, setAddFiltroOpen] = useState(false);
@@ -1253,6 +1272,76 @@ function abrirMidiaExercicioDireto(
     return arr.sort((a, b) => a.inicio.localeCompare(b.inicio));
   }, [treinosAgendados, desafios, eventosAtleta]);
 
+const semanasMesAgenda = React.useMemo(() => {
+  const ano = dataAgendaSelecionada.getFullYear();
+  const mes = dataAgendaSelecionada.getMonth();
+
+  const primeiroDiaMes = new Date(ano, mes, 1);
+  const ultimoDiaMes = new Date(ano, mes + 1, 0);
+
+  const inicioGrade = new Date(primeiroDiaMes);
+  const diasAntes = (inicioGrade.getDay() + 6) % 7;
+
+  inicioGrade.setDate(inicioGrade.getDate() - diasAntes);
+  inicioGrade.setHours(0, 0, 0, 0);
+
+  const fimGrade = new Date(ultimoDiaMes);
+  const diasDepois = (7 - fimGrade.getDay()) % 7;
+
+  fimGrade.setDate(fimGrade.getDate() + diasDepois);
+  fimGrade.setHours(0, 0, 0, 0);
+
+  const todosOsDias: Date[] = [];
+  const cursor = new Date(inicioGrade);
+
+  while (cursor <= fimGrade) {
+    todosOsDias.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const semanas: Date[][] = [];
+
+  for (let index = 0; index < todosOsDias.length; index += 7) {
+    semanas.push(todosOsDias.slice(index, index + 7));
+  }
+
+  return semanas;
+}, [dataAgendaSelecionada]);
+
+const indiceSemanaSelecionada = React.useMemo(() => {
+  return semanasMesAgenda.findIndex((semana) =>
+    semana.some((dia) => sameDay(dia, dataAgendaSelecionada))
+  );
+}, [semanasMesAgenda, dataAgendaSelecionada]);
+
+const agendaItemsDoDia = React.useMemo(() => {
+  return agendaItems.filter((item) => {
+    const dataItem = parseDateSafe(item.inicio);
+
+    return dataItem
+      ? sameDay(dataItem, dataAgendaSelecionada)
+      : false;
+  });
+}, [agendaItems, dataAgendaSelecionada]);
+
+function quantidadeItensAgenda(data: Date) {
+  return agendaItems.filter((item) => {
+    const dataItem = parseDateSafe(item.inicio);
+    return dataItem ? sameDay(dataItem, data) : false;
+  }).length;
+}
+
+const tituloMesAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
+  month: "long",
+  year: "numeric",
+});
+
+const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
+  weekday: "long",
+  day: "2-digit",
+  month: "long",
+});
+
   useEffect(() => {
     carregarTreinosAgendados();
     carregarEventosAtleta();
@@ -1550,6 +1639,26 @@ function abrirMidiaExercicioDireto(
     return () => window.removeEventListener("mousedown", onDown);
   }, [addFiltroOpen]);
 
+useEffect(() => {
+  if (!menuTreinosAberto) return;
+
+  const overflowAnterior = document.body.style.overflow;
+
+  function fecharComEscape(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      setMenuTreinosAberto(false);
+    }
+  }
+
+  document.body.style.overflow = "hidden";
+  window.addEventListener("keydown", fecharComEscape);
+
+  return () => {
+    document.body.style.overflow = overflowAnterior;
+    window.removeEventListener("keydown", fecharComEscape);
+  };
+}, [menuTreinosAberto]);
+
   async function iniciar(id: string) {
     try {
       const nowMs = Date.now();
@@ -1776,108 +1885,333 @@ function abrirMidiaExercicioDireto(
       });
     };
 
-    return (
-      <div className="space-y-4">
-        {exs.map((ex) => {
-          const itemKey = (ex as any)._key ?? ex.exercicio.id;
-          const checked = ck[itemKey] === true;
-          const midiaDireta =
-            ex.exercicio.videoDemonstrativoUrl ||
-            (ex.exercicio as any).imgDemonstrativaUrl ||
-            null;
+type ExercicioDaLista = (typeof exs)[number];
 
-          const midiaFallback = (() => {
-            const m = midiaDoCatalogo(ex.exercicio.nome);
-            return m?.video || m?.img || null;
-          })();
+function obterItemKey(ex: ExercicioDaLista) {
+  return String(
+    (ex as any)._key ??
+    ex.exercicio.id
+  );
+}
 
-          const midia = midiaDireta || midiaFallback;
-          const temVideo = !!midia && !isMissedTreino;
+function obterMidiaUrl(ex: ExercicioDaLista) {
+  const midiaDireta =
+    ex.exercicio.videoDemonstrativoUrl ||
+    (ex.exercicio as any).imgDemonstrativaUrl ||
+    null;
 
-          return (
-            <div 
-              key={(ex as any)._key ?? ex.exercicio.id}
-              className="p-3 border rounded-lg bg-neutral-50 flex justify-between items-center gap-3"
-            >
-              <div className="flex items-start gap-3">
-                <button
-                  type="button"
-                  onClick={() => toggleExercicio(itemKey)}
-                  disabled={isMissedTreino}
-                  className={`mt-1 inline-flex items-center justify-center rounded-full border w-6 h-6 transition
-                    ${
-                      isMissedTreino
-                        ? "bg-gray-100 border-gray-300 text-gray-300 cursor-not-allowed"
-                        : checked
-                        ? "bg-emerald-600 border-emerald-600 text-white"
-                        : "bg-white border-gray-300 text-gray-400"
-                    }`}
-                  aria-pressed={checked}
-                  aria-label={checked ? "Marcar como não feito" : "Marcar como feito"}
-                >
-                  {checked ? (
-                    <CircleCheck className="w-4 h-4" />
-                  ) : (
-                    <CircleX className="w-4 h-4" />
-                  )}
-                </button>
-                <div>
-                  <div
-                    className={`font-medium ${
-                      checked ? "line-through text-gray-500" : ""
-                    }`}
-                  >
-                    {ex.exercicio.nome}
-                  </div>
-                  <div className="text-sm text-gray-500 space-y-1">
-                    {ex.series != null && ex.series !== 0 ? (
-                      <p>
-                        <span className="font-medium">Séries:</span> {ex.series}
-                      </p>
-                    ) : null}
+  const midiaFallback = (() => {
+    const midia = midiaDoCatalogo(
+      ex.exercicio.nome
+    );
 
-                    {ex.repeticoes ? (
-                      <p>
-                        <span className="font-medium">Repetições:</span> {ex.repeticoes}
-                      </p>
-                    ) : null}
+    return midia?.video || midia?.img || null;
+  })();
 
-                    {ex.duracao ? (
-                      <p>
-                        <span className="font-medium">Duração:</span> {ex.duracao}
-                      </p>
-                    ) : null}
+  const midiaRaw =
+    midiaDireta || midiaFallback;
 
-                    {ex.descanso ? (
-                      <p>
-                        <span className="font-medium">Descanso:</span> {ex.descanso}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
+  return midiaRaw
+    ? resolveUploadUrl(midiaRaw)
+    : null;
+}
+
+const exercicioMidiaSelecionado =
+  exs.find((ex) => {
+    const itemKey = obterItemKey(ex);
+    const midiaKey = `${t.id}:${itemKey}`;
+
+    return midiaKey === midiaExercicioAberta;
+  }) ?? null;
+
+const midiaSelecionada =
+  exercicioMidiaSelecionado
+    ? {
+        key: midiaExercicioAberta!,
+        nome:
+          exercicioMidiaSelecionado.exercicio.nome,
+        url: obterMidiaUrl(
+          exercicioMidiaSelecionado
+        ),
+      }
+    : null;
+
+function fecharPlayerExercicio() {
+  setPlayerMidiaAberto(false);
+
+  if (fecharMidiaTimerRef.current !== null) {
+    window.clearTimeout(
+      fecharMidiaTimerRef.current
+    );
+  }
+
+  fecharMidiaTimerRef.current =
+    window.setTimeout(() => {
+      setMidiaExercicioAberta(null);
+      setErroMidiaExercicio(null);
+      fecharMidiaTimerRef.current = null;
+    }, 500);
+}
+
+return (
+  <div>=
+    <div
+      aria-hidden={!playerMidiaAberto}
+      className={`grid overflow-hidden transition-all duration-500 ease-in-out ${
+        playerMidiaAberto &&
+        midiaSelecionada?.url
+          ? "mb-4 grid-rows-[1fr] opacity-100"
+          : "mb-0 grid-rows-[0fr] opacity-0"
+      }`}
+    >
+      <div className="min-h-0 overflow-hidden">
+        {midiaSelecionada?.url && (
+          <div
+            className={`overflow-hidden rounded-xl border border-green-200 bg-white shadow-sm transition-all duration-500 ease-in-out ${
+              playerMidiaAberto
+                ? "translate-y-0 scale-100"
+                : "-translate-y-3 scale-[0.96]"
+            }`}
+          >
+            <div className="flex items-center justify-between border-b bg-green-50 px-3 py-2">
+              <span className="min-w-0 truncate text-sm font-semibold text-green-900">
+                Demonstração:{" "}
+                {midiaSelecionada.nome}
+              </span>
 
               <button
                 type="button"
-                disabled={!temVideo}
-                className={`text-sm shrink-0 ${
-                  temVideo
-                    ? "text-green-700 underline hover:text-green-900"
-                    : "text-gray-400 no-underline cursor-not-allowed"
-                }`}
-                onClick={() => {
-                  if (!temVideo || !midia) return;
-                  abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
-                }}
+                onClick={fecharPlayerExercicio}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white"
+                aria-label="Recolher vídeo"
               >
-                Ver vídeo
+                <X className="h-4 w-4" />
               </button>
             </div>
-          );
-        })}
+
+            {erroMidiaExercicio ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-500">
+                {erroMidiaExercicio}
+              </p>
+            ) : isYouTubeUrl(
+                midiaSelecionada.url
+              ) ? (
+              <iframe
+                key={midiaSelecionada.key}
+                src={toYouTubeEmbed(
+                  midiaSelecionada.url
+                )}
+                className="aspect-video w-full bg-black"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title={midiaSelecionada.nome}
+              />
+            ) : isVideoUrl(
+                midiaSelecionada.url
+              ) ? (
+              <video
+                key={midiaSelecionada.key}
+                src={midiaSelecionada.url}
+                className="aspect-video w-full bg-black object-contain"
+                controls
+                autoPlay
+                playsInline
+                onError={() =>
+                  setErroMidiaExercicio(
+                    "Este exercício não possui vídeo demonstrativo disponível."
+                  )
+                }
+              />
+            ) : (
+              <img
+                key={midiaSelecionada.key}
+                src={midiaSelecionada.url}
+                alt={midiaSelecionada.nome}
+                className="max-h-[420px] w-full object-contain"
+                onError={() =>
+                  setErroMidiaExercicio(
+                    "Não foi possível carregar a imagem."
+                  )
+                }
+              />
+            )}
+          </div>
+        )}
       </div>
-    );
+    </div>
+
+    {/* A expansão do player empurra esta lista para baixo */}
+    <div className="space-y-2">
+      {exs.map((ex) => {
+const itemKey = obterItemKey(ex);
+const midiaKey = `${t.id}:${itemKey}`;
+const checked = ck[itemKey] === true;
+
+const midiaUrl = obterMidiaUrl(ex);
+const temMidia = Boolean(midiaUrl);
+
+const estaAberta =
+  playerMidiaAberto &&
+  midiaExercicioAberta === midiaKey;
+
+function alternarMidia() {
+  if (!temMidia || !midiaUrl) return;
+
+  setErroMidiaExercicio(null);
+
+  if (
+    midiaExercicioAberta === midiaKey &&
+    playerMidiaAberto
+  ) {
+    fecharPlayerExercicio();
+    return;
   }
+
+  if (fecharMidiaTimerRef.current !== null) {
+    window.clearTimeout(
+      fecharMidiaTimerRef.current
+    );
+
+    fecharMidiaTimerRef.current = null;
+  }
+
+  setMidiaExercicioAberta(midiaKey);
+
+  window.requestAnimationFrame(() => {
+    setPlayerMidiaAberto(true);
+  });
+}
+
+  function executarPeloTeclado(
+    event: React.KeyboardEvent<HTMLDivElement>
+  ) {
+    if (!temMidia) return;
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      alternarMidia();
+    }
+  }
+
+return (
+  <div key={midiaKey}>
+    {/* Card selecionável */}
+    <div
+      role={temMidia ? "button" : undefined}
+      tabIndex={temMidia ? 0 : -1}
+      aria-expanded={
+        temMidia ? estaAberta : undefined
+      }
+      aria-disabled={!temMidia}
+      onClick={alternarMidia}
+      onKeyDown={executarPeloTeclado}
+      className={`flex items-center justify-between gap-3 rounded-lg border bg-neutral-50 p-3 transition-all duration-300 ${
+        temMidia
+          ? "cursor-pointer hover:border-green-400 hover:bg-green-50"
+          : "cursor-default"
+      } ${
+        estaAberta
+          ? "border-green-500 bg-green-50 ring-1 ring-green-200"
+          : ""
+      }`}
+    >
+        <div className="flex min-w-0 items-start gap-3">
+          {/* Impede que o clique na conclusão abra o vídeo */}
+          <div onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => toggleExercicio(itemKey)}
+              disabled={isMissedTreino}
+              className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                isMissedTreino
+                  ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-300"
+                  : checked
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-gray-300 bg-white text-gray-400"
+              }`}
+              aria-pressed={checked}
+              aria-label={
+                checked
+                  ? "Marcar como não feito"
+                  : "Marcar como feito"
+              }
+            >
+              {checked ? (
+                <CircleCheck className="h-4 w-4" />
+              ) : (
+                <CircleX className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+
+          <div className="min-w-0">
+            <div
+              className={`font-medium ${
+                checked
+                  ? "text-gray-500 line-through"
+                  : ""
+              }`}
+            >
+              {ex.exercicio.nome}
+            </div>
+
+            <div className="space-y-1 text-sm text-gray-500">
+              {ex.series != null && ex.series !== 0 && (
+                <p>
+                  <span className="font-medium">Séries:</span>{" "}
+                  {ex.series}
+                </p>
+              )}
+
+              {ex.repeticoes && (
+                <p>
+                  <span className="font-medium">
+                    Repetições:
+                  </span>{" "}
+                  {ex.repeticoes}
+                </p>
+              )}
+
+              {ex.duracao && (
+                <p>
+                  <span className="font-medium">Duração:</span>{" "}
+                  {ex.duracao}
+                </p>
+              )}
+
+              {ex.descanso && (
+                <p>
+                  <span className="font-medium">Descanso:</span>{" "}
+                  {ex.descanso}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {temMidia && (
+          <div className="shrink-0 text-green-800">
+            {estaAberta ? (
+              <ChevronUp
+                className="h-5 w-5"
+                aria-hidden="true"
+              />
+            ) : (
+              <ChevronDown
+                className="h-5 w-5"
+                aria-hidden="true"
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+})}
+    </div>
+  </div>
+);
+}
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24 overflow-x-hidden">
@@ -1889,18 +2223,7 @@ function abrirMidiaExercicioDireto(
 
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 bg-white border rounded-xl p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setMainTab("hoje")}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                  mainTab === "hoje"
-                    ? "bg-green-800 text-white"
-                    : "text-green-900 hover:bg-green-50"
-                }`}
-              >
-                Hoje
-              </button>
+            <div className="flex w-full items-center gap-2 bg-white border rounded-xl p-1 shadow-sm">
 
               <button
                 type="button"
@@ -1927,6 +2250,23 @@ function abrirMidiaExercicioDireto(
                   Learning
                 </button>
               )}
+
+  {/* O ml-auto empurra este bloco para a direita */}
+  <div className="ml-auto flex items-center gap-2">
+    <div className="h-6 w-px bg-gray-200" />
+
+    <button
+      type="button"
+      onClick={() => setMenuTreinosAberto(true)}
+      aria-label="Abrir menu de treinos"
+      aria-expanded={menuTreinosAberto}
+      className="inline-flex h-8 w-9 items-center justify-center rounded-lg text-green-900 transition hover:bg-green-50"
+    >
+      <Menu className="h-5 w-5" />
+    </button>
+  </div>
+
+
             </div>
         
             {canVerElenco && (
@@ -1944,39 +2284,161 @@ function abrirMidiaExercicioDireto(
         </div>
 
 
+{mainTab === "treinos" && (
+  <div className="space-y-8">
+    {/* PRIMEIRA SEÇÃO: HOJE */}
+    <section>
+      <div className="mb-3">
+        <h2 className="text-xl font-bold text-gray-900">Hoje</h2>
+        <p className="text-sm text-gray-500">
+          Seus treinos programados para hoje
+        </p>
+      </div>
 
 
-        {mainTab === "hoje" && (
-          <>
             <div className="mt-4 mb-2 flex justify-center">
               <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                <button
-                  onClick={() => setAgendaAberta((v) => !v)}
-                  className="w-full flex items-center justify-between px-2 py-2 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <CalendarClock className="w-5 h-5 text-green-800" />
-                    <h3 className="text-lg font-semibold text-green-900">
-                      Minha Agenda
-                    </h3>
-                  </div>
 
-                  {agendaAberta ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  )}
-                </button>
+<div className="flex items-center justify-between px-2 py-2">
+  <div className="flex items-center gap-2">
+    <CalendarClock className="h-5 w-5 text-green-800" />
 
-                {agendaAberta && (
-                  <div className="mt-3 border-t pt-3 max-h-[260px] overflow-y-auto">
-                    {agendaItems.length === 0 ? (
-                      <p className="text-gray-500 text-sm">
-                        Nenhum item na agenda.
+    <div>
+      <h3 className="text-lg font-semibold text-green-900">
+        Minha Agenda
+      </h3>
+
+      <p className="text-xs capitalize text-gray-500">
+        {tituloMesAgenda}
+      </p>
+    </div>
+  </div>
+</div>
+
+{/* Calendário único: semana recolhida ou mês expandido */}
+<div className="mt-3 overflow-hidden rounded-xl border bg-neutral-50 p-2 sm:p-3">
+  {/* Cabeçalho dos dias da semana */}
+  <div className="grid grid-cols-7 gap-1 text-center">
+    {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(
+      (nomeDia) => (
+        <span
+          key={nomeDia}
+          className="py-1 text-[10px] font-semibold uppercase text-gray-500 sm:text-xs"
+        >
+          {nomeDia}
+        </span>
+      )
+    )}
+  </div>
+
+  {/* Todas as semanas pertencem à mesma grade */}
+  <div className="mt-1">
+    {semanasMesAgenda.map((semana, semanaIndex) => {
+      const linhaVisivel =
+        agendaAberta || semanaIndex === indiceSemanaSelecionada;
+
+      return (
+        <div
+          key={semana[0].toISOString()}
+          aria-hidden={!linhaVisivel}
+          className={`grid grid-cols-7 gap-1 overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-in-out ${
+            linhaVisivel
+              ? "max-h-[72px] py-0.5 opacity-100"
+              : "pointer-events-none max-h-0 py-0 opacity-0"
+          }`}
+        >
+          {semana.map((dia) => {
+            const selecionado = sameDay(
+              dia,
+              dataAgendaSelecionada
+            );
+
+            const diaAtual = sameDay(dia, hoje);
+
+            const foraDoMes =
+              dia.getMonth() !== dataAgendaSelecionada.getMonth();
+
+            const quantidade = quantidadeItensAgenda(dia);
+
+            return (
+              <button
+                key={dia.toISOString()}
+                type="button"
+                tabIndex={linhaVisivel ? 0 : -1}
+                onClick={() => setDataAgendaSelecionada(dia)}
+                aria-label={dia.toLocaleDateString("pt-BR", {
+                  weekday: "long",
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
+                className={`relative flex aspect-square min-h-10 items-center justify-center rounded-lg text-xs font-semibold transition sm:text-sm ${
+                  selecionado
+                    ? "bg-green-800 text-white shadow-sm"
+                    : diaAtual
+                      ? "border border-green-500 bg-green-50 text-green-900"
+                      : foraDoMes
+                        ? "text-gray-300 hover:bg-gray-100"
+                        : "text-gray-700 hover:bg-green-100"
+                }`}
+              >
+                {dia.getDate()}
+
+                {quantidade > 0 && (
+                  <span
+                    className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${
+                      selecionado
+                        ? "bg-white"
+                        : foraDoMes
+                          ? "bg-gray-300"
+                          : "bg-green-700"
+                    }`}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+{/* Botão no canto inferior direito */}
+<div className="mt-3 flex justify-end">
+  <button
+    type="button"
+    onClick={() => setAgendaAberta((aberta) => !aberta)}
+    aria-expanded={agendaAberta}
+    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50"
+  >
+    {agendaAberta ? (
+      <>
+        Ver somente a semana
+        <ChevronUp className="h-4 w-4" />
+      </>
+    ) : (
+      <>
+        Ver mês inteiro
+        <ChevronDown className="h-4 w-4" />
+      </>
+    )}
+  </button>
+</div>
+
+<div className="mt-4 border-t pt-3">
+  <p className="mb-3 text-sm font-semibold capitalize text-gray-700">
+    {tituloDiaAgenda}
+  </p>
+
+  <div className="max-h-[260px] overflow-y-auto">
+                    {agendaItemsDoDia.length === 0 ? (
+                      <p className="rounded-lg bg-neutral-50 px-3 py-4 text-center text-sm text-gray-500">
+                        Nenhum treino ou evento agendado para este dia.
                       </p>
                     ) : (
                       <ul className="space-y-2">
-                        {agendaItems.map((item) => {
+                        {agendaItemsDoDia.map((item) => {
                           if (item.origem === "treino") {
                             const treino = treinosAgendados.find(
                               (t) => t.id === item.id
@@ -2130,41 +2592,28 @@ function abrirMidiaExercicioDireto(
                       </ul>
                     )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
-          </>
-        )}
 
-        {mainTab === "treinos" && (
+    </section>
+
+    {/* Separação entre Hoje e Meus Treinos */}
+    <div className="border-t border-gray-200" />
+
+    {/* SEGUNDA SEÇÃO: MEUS TREINOS */}
+    <section>
+      <div className="mb-3">
+        <h2 className="text-xl font-bold text-gray-900">Meus Treinos</h2>
+        <p className="text-sm text-gray-500">
+          Todos os seus treinos disponíveis
+        </p>
+      </div>
+
+
           <>
                 <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
-                    <h3 className="text-lg font-semibold">Meus Treinos</h3>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
-                        onClick={() => navigate("/treinos/novo")}
-                      >
-                        Agendar novo treino
-                      </button>
-
-                      <button
-                        className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
-                        onClick={() => navigate("/treinos/livre/novo")}
-                      >
-                        Registrar treino livre
-                      </button>
-
-                      <button
-                        className="bg-white border border-emerald-300 text-emerald-800 px-4 py-2 rounded-lg text-sm"
-                        onClick={() => navigate("/treinos/livre/historico")}
-                      >
-                        Histórico de treinos livres
-                      </button>
-                    </div>
-                  </div>
 
                   {tiles.length > 0 && (
                     <div
@@ -2331,8 +2780,141 @@ function abrirMidiaExercicioDireto(
                   </div>
                 )}
           </>
-        )}
+        
+    </section>
+  </div>
+)}
+
+
+
+
+
+
+
       </div>
+
+{menuTreinosAberto && (
+  <div
+    className="fixed inset-0 z-[70]"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Menu de treinos"
+  >
+    <button
+      type="button"
+      className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+      onClick={() => setMenuTreinosAberto(false)}
+      aria-label="Fechar menu"
+    />
+
+    <aside className="absolute right-0 top-0 flex h-full w-[88%] max-w-sm flex-col bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div>
+          <h2 className="text-lg font-bold text-green-950">
+            Menu de treinos
+          </h2>
+
+          <p className="text-sm text-gray-500">
+            Escolha o que deseja fazer
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setMenuTreinosAberto(false)}
+          aria-label="Fechar menu"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-gray-600 transition hover:bg-gray-100"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+        <button
+          type="button"
+          onClick={() => navegarPeloMenu("/treinos/novo")}
+          className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-800">
+            <CalendarPlus className="h-5 w-5" />
+          </span>
+
+          <span>
+            <span className="block font-semibold text-green-950">
+              Agendar novo treino
+            </span>
+
+            <span className="block text-sm text-gray-500">
+              Programe um treino para uma data e horário
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navegarPeloMenu("/treinos/livre/novo")}
+          className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+            <Dumbbell className="h-5 w-5" />
+          </span>
+
+          <span>
+            <span className="block font-semibold text-green-950">
+              Registrar treino livre
+            </span>
+
+            <span className="block text-sm text-gray-500">
+              Registre uma atividade realizada por conta própria
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navegarPeloMenu("/treinos/livre/historico")}
+          className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+            <History className="h-5 w-5" />
+          </span>
+
+          <span>
+            <span className="block font-semibold text-green-950">
+              Histórico de treinos livres
+            </span>
+
+            <span className="block text-sm text-gray-500">
+              Consulte seus treinos registrados
+            </span>
+          </span>
+        </button>
+
+        {FLAGS.LEARNING_ENABLED && (
+          <button
+            type="button"
+            onClick={() => navegarPeloMenu("/learning")}
+            className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <GraduationCap className="h-5 w-5" />
+            </span>
+
+            <span>
+              <span className="block font-semibold text-green-950">
+                Learning
+              </span>
+
+              <span className="block text-sm text-gray-500">
+                Acesse conteúdos e metodologias
+              </span>
+            </span>
+          </button>
+        )}
+      </nav>
+    </aside>
+  </div>
+)}
 
       {fullscreenId && (
         <div className="fixed inset-0 z-40 bg-white flex flex-col">
@@ -2629,6 +3211,10 @@ function abrirMidiaExercicioDireto(
                 const elapsed = elapsedByTreino[fullscreenId] ?? 0;
                 const params = new URLSearchParams();
                 params.set("treinoAgendadoId", t.id);
+                /*
+                * Informações que serão exibidas
+                * na tela de submissão.
+                */
                 params.set(
                   "treinoNome",
                   String(
@@ -2657,8 +3243,7 @@ function abrirMidiaExercicioDireto(
                 const duracaoProgramadaMinutos =
                   Number(
                     t.duracaoMinutos ??
-                    t.treinoProgramado
-                      ?.duracao ??
+                    t.treinoProgramado?.duracao ??
                     0
                   );
 
@@ -2755,88 +3340,7 @@ function abrirMidiaExercicioDireto(
         </div>
       )}
 
-      {videoModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-          onClick={() => {
-            setVideoModal(null);
-            setVideoCarregando(false);
-            setVideoErro(null);
-          }}
-        >
-          <div
-            className="relative bg-white rounded-2xl w-full max-w-[720px] max-h-[85vh] overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => {
-                setVideoModal(null);
-                setVideoCarregando(false);
-                setVideoErro(null);
-              }}
-              className="absolute top-3 right-3 z-10 h-10 w-10 rounded-full bg-white/95 border shadow flex items-center justify-center"
-              aria-label="Fechar vídeo"
-              type="button"
-            >
-              <X className="w-5 h-5" />
-            </button>
 
-            <div className="px-4 pt-4 pb-2 border-b">
-              <div className="font-semibold text-green-900 pr-12">{videoModal.nome}</div>
-            </div>
-
-            {videoCarregando && (
-              <div className="text-center py-10 text-gray-600">
-                Carregando vídeo.
-              </div>
-            )}
-
-            {videoErro && (
-              <div className="text-center py-6 text-red-600 px-4">
-                {videoErro}
-              </div>
-            )}
-
-            {!videoErro && (
-              <div className="p-4 overflow-auto max-h-[calc(85vh-64px)]">
-                {isYouTubeUrl(videoModal.url) ? (
-                  <iframe
-                    src={toYouTubeEmbed(videoModal.url)}
-                    className="w-full aspect-video rounded-xl border bg-black"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    title={videoModal.nome}
-                    onLoad={() => setVideoCarregando(false)}
-                  />
-                ) : isVideoUrl(videoModal.url) ? (
-                  <video
-                    src={videoModal.url}
-                    className="w-full max-h-[70vh] rounded-xl border bg-black object-contain"
-                    controls
-                    autoPlay
-                    onError={() => {
-                      setVideoCarregando(false);
-                      setVideoErro("Não foi possível carregar o vídeo.");
-                    }}
-                    onLoadedData={() => setVideoCarregando(false)}
-                  />
-                ) : (
-                  <img
-                    src={videoModal.url}
-                    alt={videoModal.nome}
-                    className="w-full max-h-[70vh] rounded-xl border object-contain"
-                    onLoad={() => setVideoCarregando(false)}
-                    onError={() => {
-                      setVideoCarregando(false);
-                      setVideoErro("Não foi possível carregar a imagem.");
-                    }}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-end sm:items-center justify-center p-4">

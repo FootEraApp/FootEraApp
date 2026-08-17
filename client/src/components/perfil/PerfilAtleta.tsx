@@ -216,11 +216,16 @@ export default function PerfilAtleta({
   
   const temVinculo = Boolean((professores?.length ?? 0) > 0 || escolaNome || clubeNome);
   const isIndependente = perfil.tipo === "Atleta" && !temVinculo;
-  const total =
-    Number((perfil as any)?.pontuacaoTotal) ||
-    Number((perfil as any)?.pontos) ||
-    Number((perfil as any)?.usuario?.pontuacao) ||
+  const totalRaw =
+    (perfil as any)?.pontuacaoTotal ??
+    (perfil as any)?.pontos ??
+    (perfil as any)?.usuario?.pontuacao ??
     0;
+
+  const total =
+    Number.isFinite(Number(totalRaw))
+      ? Number(totalRaw)
+      : 0;
 
   return (
     <div className="min-h-screen bg-transparent">

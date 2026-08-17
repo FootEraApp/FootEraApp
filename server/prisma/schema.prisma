@@ -350,9 +350,9 @@ model Olheiro {
   Indicacao              Indicacao[]
   ListaOlheiro           ListaOlheiro[]
   Clube                  Clube?            @relation(fields: [clubeId], references: [id])
-  colaboracaoClube       Clube?            @relation("OlheiroColabClube", fields: [colaboracaoClubeId], references: [id])
-  colaboracaoEscolinha   Escolinha?        @relation("OlheiroColabEscolinha", fields: [colaboracaoEscolinhaId], references: [id])
-  colaboracaoProfessor   Professor?        @relation("OlheiroColabProfessor", fields: [colaboracaoProfessorId], references: [id])
+  colaboracaoClube       Clube?            @relation("OlheiroColabClube", fields: [colaboracaoClubeId], references: [id], onDelete: SetNull)
+  colaboracaoEscolinha   Escolinha?        @relation("OlheiroColabEscolinha", fields: [colaboracaoEscolinhaId], references: [id], onDelete: SetNull)
+  colaboracaoProfessor   Professor?        @relation("OlheiroColabProfessor", fields: [colaboracaoProfessorId], references: [id], onDelete: SetNull)
   usuario                Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([areaAtuacao])
@@ -373,7 +373,7 @@ model Mensagem {
   postId    String?
   tipo      TipoMensagem    @default(NORMAL)
   usuarioId String?
-  atleta    Atleta?         @relation("AtletaMensagens", fields: [atletaId], references: [id])
+  atleta    Atleta?         @relation("AtletaMensagens", fields: [atletaId], references: [id], onDelete: SetNull)
   de        Usuario         @relation("MensagensEnviadas", fields: [deId], references: [id], onDelete: Cascade)
   desafio   DesafioOficial? @relation("DesafioMensagemReferencia", fields: [desafioId], references: [id])
   para      Usuario         @relation("MensagensRecebidas", fields: [paraId], references: [id], onDelete: Cascade)
@@ -413,8 +413,8 @@ model Atleta {
   contatoOlheiroPermitido       Boolean                    @default(false)
   contatoOlheiroConsentidoEm    DateTime?
   contatoOlheiroConsentidoPorId String?
-  clube                         Clube?                     @relation(fields: [clubeId], references: [id])
-  escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id])
+  clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   AtletaElenco                  AtletaElenco[]
   AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
@@ -480,12 +480,12 @@ model TreinoProgramado {
   treinoAgendado           TreinoAgendado[]
   favoritadoPor            TreinoFavorito[]
   TreinoProfessorUso       TreinoProfessorUso[]
-  clube                    Clube?                           @relation(fields: [clubeId], references: [id])
-  criadorProfessor         Professor?                       @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id])
-  criadorUsuario           Usuario?                         @relation("TreinoProgramadoCriadorUsuario", fields: [criadorUsuarioId], references: [id])
-  escolinha                Escolinha?                       @relation(fields: [escolinhaId], references: [id])
+  clube                    Clube?                           @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  criadorProfessor         Professor?                       @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id], onDelete: SetNull)
+  criadorUsuario           Usuario?                         @relation("TreinoProgramadoCriadorUsuario", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
+  escolinha                Escolinha?                       @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   Professor                Professor?                       @relation(fields: [professorId], references: [id])
-  sessaoTreino             TreinoSessao?                    @relation(fields: [sessaoTreinoId], references: [id])
+  sessaoTreino             TreinoSessao?                    @relation(fields: [sessaoTreinoId], references: [id], onDelete: SetNull)
   exercicios               TreinoProgramadoExercicio[]
   professores              TreinoProgramadoProfessor[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
@@ -672,12 +672,12 @@ model Metodologia {
   avaliacoes               AvaliacaoMetodologia[]
   certificados             CertificadoMetodologia[]
   vendasCreator            CreatorVenda[]
-  clube                    Clube?                     @relation(fields: [clubeId], references: [id])
+  clube                    Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   criadorUsuario           Usuario                    @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
-  escolinha                Escolinha?                 @relation(fields: [escolinhaId], references: [id])
+  escolinha                Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   Federacao                Federacao?                 @relation(fields: [federacaoId], references: [id])
   Marca                    Marca?                     @relation(fields: [marcaId], references: [id])
-  professor                Professor?                 @relation(fields: [professorId], references: [id])
+  professor                Professor?                 @relation(fields: [professorId], references: [id], onDelete: SetNull)
   assinantes               MetodologiaAssinante[]
   estruturas               MetodologiaEstrutura[]
   itens                    MetodologiaItem[]
@@ -756,7 +756,7 @@ model MetodologiaEstruturaItem {
   atualizadoEm             DateTime                   @updatedAt
   aulaAoVivo               AulaAoVivo?
   estrutura                MetodologiaEstrutura       @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
-  treinoProgramado         TreinoProgramado?          @relation(fields: [treinoProgramadoId], references: [id])
+  treinoProgramado         TreinoProgramado?          @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([estruturaId, ordem])
@@ -801,7 +801,7 @@ model MetodologiaItem {
   criadoEm           DateTime                @default(now())
   atualizadoEm       DateTime                @updatedAt
   metodologia        Metodologia             @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  treinoProgramado   TreinoProgramado?       @relation(fields: [treinoProgramadoId], references: [id])
+  treinoProgramado   TreinoProgramado?       @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
 
   @@unique([metodologiaId, semana, ordem])
   @@index([metodologiaId])
@@ -893,12 +893,12 @@ model MetodologiaAvulsa {
   certificados             CertificadoMetodologia[]
   vendasCreator            CreatorVenda[]
   assinantes               MetodologiaAssinante[]
-  clube                    Clube?                       @relation(fields: [clubeId], references: [id])
+  clube                    Clube?                       @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   criadorUsuario           Usuario                      @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
-  escolinha                Escolinha?                   @relation(fields: [escolinhaId], references: [id])
+  escolinha                Escolinha?                   @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   Federacao                Federacao?                   @relation(fields: [federacaoId], references: [id])
   Marca                    Marca?                       @relation(fields: [marcaId], references: [id])
-  professor                Professor?                   @relation(fields: [professorId], references: [id])
+  professor                Professor?                   @relation(fields: [professorId], references: [id], onDelete: SetNull)
   estruturas               MetodologiaAvulsaEstrutura[]
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
@@ -957,7 +957,7 @@ model MetodologiaAvulsaEstruturaItem {
   atualizadoEm             DateTime                   @updatedAt
   aulaAoVivo               AulaAoVivo?
   estrutura                MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
-  treinoProgramado         TreinoProgramado?          @relation("TreinoProgramadoMetodologiaAvulsaItens", fields: [treinoProgramadoId], references: [id])
+  treinoProgramado         TreinoProgramado?          @relation("TreinoProgramadoMetodologiaAvulsaItens", fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
   MetodologiaItemSubmissao MetodologiaItemSubmissao[]
 
   @@unique([estruturaId, ordem])
@@ -1009,8 +1009,8 @@ model AulaAoVivo {
   inscricaoInicio              DateTime?
   acessoPago                   Boolean                         @default(false)
   precoAcesso                  Decimal?                        @db.Decimal(10, 2)
-  convidadoUsuario             Usuario?                        @relation("AulaAoVivoConvidado", fields: [convidadoUsuarioId], references: [id])
-  criadorUsuario               Usuario?                        @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id])
+  convidadoUsuario             Usuario?                        @relation("AulaAoVivoConvidado", fields: [convidadoUsuarioId], references: [id], onDelete: SetNull)
+  criadorUsuario               Usuario?                        @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
   estruturaAvulsa              MetodologiaAvulsaEstrutura?     @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
   estrutura                    MetodologiaEstrutura?           @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
   itemAvulsa                   MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
@@ -1060,7 +1060,7 @@ model AulaAoVivoConvidado {
   criadoEm     DateTime   @default(now())
   atualizadoEm DateTime   @updatedAt
   aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
-  usuario      Usuario?   @relation("AulaAoVivoConvidadoUsuario", fields: [usuarioId], references: [id])
+  usuario      Usuario?   @relation("AulaAoVivoConvidadoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@index([aulaAoVivoId])
   @@index([usuarioId])
@@ -1077,7 +1077,7 @@ model AulaAoVivoMensagem {
   deletadaPorId String?
   criadoEm      DateTime         @default(now())
   aulaAoVivo    AulaAoVivo       @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
-  deletadaPor   Usuario?         @relation("AulaAoVivoMensagemDeletadaPor", fields: [deletadaPorId], references: [id])
+  deletadaPor   Usuario?         @relation("AulaAoVivoMensagemDeletadaPor", fields: [deletadaPorId], references: [id], onDelete: SetNull)
   usuario       Usuario          @relation("AulaAoVivoMensagemUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([aulaAoVivoId])
@@ -1143,10 +1143,10 @@ model RelacaoTreinamento {
   ativo         Boolean    @default(true)
   criadoEm      DateTime   @default(now())
   encerradoEm   DateTime?
-  atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id])
-  clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id])
-  escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id])
-  professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id])
+  atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
 
   @@index([atletaId])
   @@index([professorId])
@@ -1168,9 +1168,9 @@ model AtletaObservado {
   alertarMudancas        Boolean                  @default(false)
   notaInterna            String?
   atleta                 Atleta                   @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
-  clube                  Clube?                   @relation("ObservacaoClube", fields: [clubeId], references: [id])
-  escolinha              Escolinha?               @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id])
-  olheiro                Olheiro?                 @relation(fields: [olheiroId], references: [id])
+  clube                  Clube?                   @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha              Escolinha?               @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  olheiro                Olheiro?                 @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
   professor              Professor?               @relation("ObservacaoProfessor", fields: [professorId], references: [id], onDelete: Cascade)
   TreinoRotinaAtribuicao TreinoRotinaAtribuicao[]
 
@@ -1201,9 +1201,9 @@ model Postagem {
   curtidas          Curtida[]
   logsErro          LogErro[]
   mensagens         Mensagem[]   @relation("PostMensagemReferencia")
-  atleta            Atleta?      @relation(fields: [atletaId], references: [id])
-  clube             Clube?       @relation(fields: [clubeId], references: [id])
-  escolinha         Escolinha?   @relation(fields: [escolinhaId], references: [id])
+  atleta            Atleta?      @relation(fields: [atletaId], references: [id], onDelete: SetNull)
+  clube             Clube?       @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha         Escolinha?   @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   repostOf          Postagem?    @relation("Reposts", fields: [repostOfId], references: [id])
   repostedBy        Postagem[]   @relation("Reposts")
   usuario           Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -1237,8 +1237,8 @@ model Midia {
   storageClass       StorageClass
   atualizadoEm       DateTime          @updatedAt
   atleta             Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  clube              Clube?            @relation(fields: [clubeId], references: [id])
-  escolinha          Escolinha?        @relation(fields: [escolinhaId], references: [id])
+  clube              Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha          Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   submissaoDesafio   SubmissaoDesafio? @relation("Midias_SubmissaoDesafio", fields: [submissaoDesafioId], references: [id], onDelete: Cascade)
   submissaoTreino    SubmissaoTreino?  @relation("Midias_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
 }
@@ -1406,7 +1406,7 @@ model SubmissaoDesafio {
   midias             Midia[]                   @relation("Midias_SubmissaoDesafio")
   atleta             Atleta                    @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   desafio            DesafioOficial            @relation(fields: [desafioId], references: [id])
-  Usuario            Usuario?                  @relation(fields: [usuarioId], references: [id])
+  Usuario            Usuario?                  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   submissaoEmGrupo   SubmissaoDesafioEmGrupo[]
 }
 
@@ -1433,7 +1433,7 @@ model SubmissaoTreino {
   midias               Midia[]           @relation("Midias_SubmissaoTreino")
   atleta               Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoAgendado       TreinoAgendado    @relation(fields: [treinoAgendadoId], references: [id])
-  Usuario              Usuario?          @relation(fields: [usuarioId], references: [id])
+  Usuario              Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@unique([atletaId, treinoAgendadoId])
 }
@@ -1455,7 +1455,7 @@ model AvaliacaoTreino {
   updatedAt         DateTime                    @updatedAt
   sentimento        SentimentoAvaliacao?
   atleta            Atleta                      @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  autorUsuario      Usuario?                    @relation(fields: [autorUsuarioId], references: [id])
+  autorUsuario      Usuario?                    @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
   submissaoTreino   SubmissaoTreino             @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
   treinoAgendado    TreinoAgendado              @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
   comentarios       AvaliacaoTreinoComentario[]
@@ -1651,12 +1651,12 @@ model TreinoAgendado {
   avaliacaoTreino          AvaliacaoTreino[]
   submissaoTreinos         SubmissaoTreino[]
   atleta                   Atleta?                 @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  criadoPorProfessor       Professor?              @relation(fields: [criadoPorProfessorId], references: [id])
-  reagendadoDe             TreinoAgendado?         @relation("Reagendamento", fields: [reagendadoDeId], references: [id])
+  criadoPorProfessor       Professor?              @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+  reagendadoDe             TreinoAgendado?         @relation("Reagendamento", fields: [reagendadoDeId], references: [id], onDelete: SetNull)
   reagendamentosGerados    TreinoAgendado[]        @relation("Reagendamento")
   treinoProgramado         TreinoProgramado?       @relation(fields: [treinoProgramadoId], references: [id])
-  treinoRotinaAtribuicao   TreinoRotinaAtribuicao? @relation(fields: [treinoRotinaAtribuicaoId], references: [id])
-  turma                    Turma?                  @relation(fields: [turmaId], references: [id])
+  treinoRotinaAtribuicao   TreinoRotinaAtribuicao? @relation(fields: [treinoRotinaAtribuicaoId], references: [id], onDelete: SetNull)
+  turma                    Turma?                  @relation(fields: [turmaId], references: [id], onDelete: SetNull)
 
   @@unique([atletaId, treinoProgramadoId, dataTreino])
   @@index([criadoPorProfessorId])
@@ -2098,7 +2098,7 @@ model SubmissionChecklist {
   finalizedAt        DateTime?
   createdAt          DateTime          @default(now())
   answers            ChecklistAnswer[]
-  finalizedByUser    Usuario?          @relation(fields: [finalizedByUserId], references: [id])
+  finalizedByUser    Usuario?          @relation(fields: [finalizedByUserId], references: [id], onDelete: SetNull)
 }
 
 model ChecklistAnswer {
@@ -2161,8 +2161,8 @@ model Turma {
   EventoConvocado   EventoConvocado[]
   SessaoTreinoTurma SessaoTreinoTurma[]
   TreinoAgendado    TreinoAgendado[]
-  clube             Clube?              @relation(fields: [clubeId], references: [id])
-  escolinha         Escolinha?          @relation(fields: [escolinhaId], references: [id])
+  clube             Clube?              @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha         Escolinha?          @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   professores       TurmaProfessor[]
   membros           TurmaUsuario[]
 }
@@ -2218,7 +2218,7 @@ model TreinoSalvo {
   criadoEm                 DateTime           @default(now())
   atualizadoEm             DateTime           @updatedAt
   clube                    Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
-  criadoPorUsuario         Usuario?           @relation(fields: [criadoPorUsuarioId], references: [id])
+  criadoPorUsuario         Usuario?           @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
   escolinha                Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   professor                Professor?         @relation(fields: [professorId], references: [id], onDelete: Cascade)
   reutilizadoPor           TreinoSalvoReuso[]
@@ -2272,8 +2272,8 @@ model EstatisticaExercicio {
   recomendadoPorProfessorId String?
   ultimoProfessorId         String?
   exercicio                 Exercicio  @relation(fields: [exercicioId], references: [id], onDelete: Cascade)
-  recomendadoPorProfessor   Professor? @relation("ExEstRec_Rec", fields: [recomendadoPorProfessorId], references: [id])
-  ultimoProfessor           Professor? @relation("ExEstRec_Ult", fields: [ultimoProfessorId], references: [id])
+  recomendadoPorProfessor   Professor? @relation("ExEstRec_Rec", fields: [recomendadoPorProfessorId], references: [id], onDelete: SetNull)
+  ultimoProfessor           Professor? @relation("ExEstRec_Ult", fields: [ultimoProfessorId], references: [id], onDelete: SetNull)
 
   @@index([recomendadoPorProfessorId])
   @@index([ultimoProfessorId])
@@ -2292,10 +2292,10 @@ model TreinoRotina {
   clubeId            String?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
-  clube              Clube?                   @relation(fields: [clubeId], references: [id])
-  criadoPorUsuario   Usuario?                 @relation(fields: [criadoPorUsuarioId], references: [id])
-  escolinha          Escolinha?               @relation(fields: [escolinhaId], references: [id])
-  professor          Professor?               @relation(fields: [professorId], references: [id])
+  clube              Clube?                   @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  criadoPorUsuario   Usuario?                 @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
+  escolinha          Escolinha?               @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor          Professor?               @relation(fields: [professorId], references: [id], onDelete: SetNull)
   atribuicoes        TreinoRotinaAtribuicao[]
   itens              TreinoRotinaItem[]
 
@@ -2326,7 +2326,7 @@ model TreinoRotinaAtribuicao {
   criadoEm          DateTime         @default(now())
   ocorrencias       TreinoAgendado[]
   atleta            Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  observado         AtletaObservado? @relation(fields: [atletaObservadoId], references: [id])
+  observado         AtletaObservado? @relation(fields: [atletaObservadoId], references: [id], onDelete: SetNull)
   rotina            TreinoRotina     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
 
   @@unique([rotinaId, atletaId])
@@ -2363,7 +2363,7 @@ model Pagamento {
   boletoLinhaDigitavel String?
   meta                 Json?
   CupomResgate         CupomResgate[]
-  cupom                Cupom?          @relation(fields: [cupomId], references: [id])
+  cupom                Cupom?          @relation(fields: [cupomId], references: [id], onDelete: SetNull)
   usuario              Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerRef])
@@ -2388,7 +2388,7 @@ model Cupom {
   transferivel           Boolean        @default(false)
   criadoEm               DateTime       @default(now())
   criadoPorUsuarioId     String?
-  criadoPor              Usuario?       @relation(fields: [criadoPorUsuarioId], references: [id])
+  criadoPor              Usuario?       @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
   resgates               CupomResgate[]
   Pagamento              Pagamento[]
 
@@ -2403,7 +2403,7 @@ model CupomResgate {
   resgatadoEm DateTime   @default(now())
   pagamentoId String?
   cupom       Cupom      @relation(fields: [cupomId], references: [id], onDelete: Cascade)
-  pagamento   Pagamento? @relation(fields: [pagamentoId], references: [id])
+  pagamento   Pagamento? @relation(fields: [pagamentoId], references: [id], onDelete: SetNull)
   usuario     Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([cupomId, usuarioId])
@@ -2507,10 +2507,10 @@ model AtletaHistoricoVinculo {
   fimVinculo    DateTime?
   criadoEm      DateTime      @default(now())
   expiraEm      DateTime
-  atleta        Atleta?       @relation(fields: [atletaId], references: [id])
-  clube         Clube?        @relation(fields: [clubeId], references: [id])
-  escolinha     Escolinha?    @relation(fields: [escolinhaId], references: [id])
-  professor     Professor?    @relation(fields: [professorId], references: [id])
+  atleta        Atleta?       @relation(fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?        @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha?    @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor?    @relation(fields: [professorId], references: [id], onDelete: SetNull)
 
   @@index([atletaId])
   @@index([professorId])
@@ -2611,7 +2611,7 @@ model Notificacao {
   createdAt DateTime        @default(now())
   actorId   String?
   tipo      NotificacaoTipo @default(GENERICA)
-  actor     Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id])
+  actor     Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id], onDelete: SetNull)
   usuario   Usuario         @relation("NotificacaoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId, createdAt])
@@ -2661,9 +2661,9 @@ model ConquistaVinculo {
   clube             Clube?             @relation("ConquistaClube", fields: [clubeId], references: [id], onDelete: Cascade)
   conquista         Conquista          @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
   escolinha         Escolinha?         @relation("ConquistaEscolinha", fields: [escolinhaId], references: [id], onDelete: Cascade)
-  federacao         Federacao?         @relation(fields: [federacaoId], references: [id])
-  learningProfile   LearningProfile?   @relation(fields: [learningProfileId], references: [id])
-  marca             Marca?             @relation(fields: [marcaId], references: [id])
+  federacao         Federacao?         @relation(fields: [federacaoId], references: [id], onDelete: SetNull)
+  learningProfile   LearningProfile?   @relation(fields: [learningProfileId], references: [id], onDelete: SetNull)
+  marca             Marca?             @relation(fields: [marcaId], references: [id], onDelete: SetNull)
   professor         Professor?         @relation("ConquistaProfessor", fields: [professorId], references: [id], onDelete: Cascade)
 
   @@unique([ownerTipo, ownerId, conquistaId])
@@ -2730,10 +2730,10 @@ model CreatorVenda {
   criadoEm            DateTime           @default(now())
   pagoEm              DateTime?
   updatedAt           DateTime           @updatedAt
-  comprador           Usuario?           @relation("CreatorVendaComprador", fields: [compradorId], references: [id])
+  comprador           Usuario?           @relation("CreatorVendaComprador", fields: [compradorId], references: [id], onDelete: SetNull)
   creator             Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id])
-  metodologia         Metodologia?       @relation(fields: [metodologiaId], references: [id])
+  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: SetNull)
+  metodologia         Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: SetNull)
 
   @@unique([provider, providerRef])
   @@index([creatorId])

@@ -385,13 +385,6 @@ async function resolverDestinoColaboracao(
   };
 }
 
-
-/*
-=====================================================
-COLABORAÇÃO ATUAL + SOLICITAÇÃO PENDENTE
-=====================================================
-*/
-
 export async function getMinhaColaboracao(
   req: Request,
   res: Response
@@ -565,13 +558,6 @@ export async function getMinhaColaboracao(
       });
   }
 }
-
-
-/*
-=====================================================
-SOLICITAR NOVA COLABORAÇÃO
-=====================================================
-*/
 
 export async function solicitarColaboracao(
   req: Request,
@@ -748,13 +734,6 @@ export async function solicitarColaboracao(
       });
     }
 
-    /*
-      Se já existia outra
-      solicitação pendente,
-      cancelamos antes de
-      criar a nova.
-    */
-
     const notificacoesAntigas =
       pendentes
         .map(
@@ -921,13 +900,6 @@ export async function solicitarColaboracao(
   }
 }
 
-
-/*
-=====================================================
-REMOVER COLABORAÇÃO ATUAL
-=====================================================
-*/
-
 export async function removerColaboracao(
   req: Request,
   res: Response
@@ -1003,13 +975,6 @@ export async function removerColaboracao(
       });
   }
 }
-
-
-/*
-=====================================================
-CANCELAR PEDIDO PELO OLHEIRO
-=====================================================
-*/
 
 export async function cancelarSolicitacaoColaboracao(
   req: Request,
@@ -1130,13 +1095,6 @@ export async function cancelarSolicitacaoColaboracao(
   }
 }
 
-
-/*
-=====================================================
-ACEITAR
-=====================================================
-*/
-
 export async function aceitarSolicitacaoColaboracao(
   req: Request,
   res: Response
@@ -1250,12 +1208,6 @@ export async function aceitarSolicitacaoColaboracao(
 
     await prisma.$transaction(
       async (tx) => {
-        /*
-          Este é o ponto que
-          garante que a colaboração
-          anterior saia.
-        */
-
         await tx.olheiro.update({
           where: {
             id:
@@ -1395,13 +1347,6 @@ export async function aceitarSolicitacaoColaboracao(
       });
   }
 }
-
-
-/*
-=====================================================
-RECUSAR
-=====================================================
-*/
 
 export async function recusarSolicitacaoColaboracao(
   req: Request,
@@ -1550,17 +1495,6 @@ export async function recusarSolicitacaoColaboracao(
       });
   }
 }
-
-
-/*
-=====================================================
-PATCH ANTIGO
-=====================================================
-
-Não permitimos mais criar
-colaboração diretamente.
-Ele pode apenas remover.
-*/
 
 export async function patchColaboracao(
   req: Request,

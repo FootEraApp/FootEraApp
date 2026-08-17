@@ -554,11 +554,6 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
       ),
     };
 
-    /*
-    * Configuração interna.
-    * Não precisamos mandar isso para
-    * o frontend.
-    */
     delete usuarioPublico
       .configuracoesPrivacidade;
     

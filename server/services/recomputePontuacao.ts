@@ -34,26 +34,33 @@ export async function recomputePontuacaoAtleta(atletaId: string) {
   const responsabilidade = (Number(qtdDesafiosUnicos) || 0) * 2;
   const total = performance + disciplina + responsabilidade;
 
-  await prisma.pontuacaoAtleta.upsert({
-    where: { atletaId },
-    create: {
-      atletaId,
-      pontuacaoTotal: total,
-      pontuacaoPerformance: performance,
-      pontuacaoDisciplina: disciplina,
-      pontuacaoResponsabilidade: responsabilidade,
-    },
-    update: {
-      pontuacaoTotal: total,
-      pontuacaoPerformance: performance,
-      pontuacaoDisciplina: disciplina,
-      pontuacaoResponsabilidade: responsabilidade,
-      ultimaAtualizacao: new Date(),
-    },
-  });
+  await prisma.$transaction([
+    prisma.pontuacaoAtleta.upsert({
+      where: { atletaId },
 
-  await prisma.atleta.update({
-    where: { id: atletaId },
-    data: { pontosTotal: total },
-  });
+      create: {
+        atletaId,
+        pontuacaoTotal: total,
+        pontuacaoPerformance: performance,
+        pontuacaoDisciplina: disciplina,
+        pontuacaoResponsabilidade: responsabilidade,
+      },
+
+      update: {
+        pontuacaoTotal: total,
+        pontuacaoPerformance: performance,
+        pontuacaoDisciplina: disciplina,
+        pontuacaoResponsabilidade: responsabilidade,
+        ultimaAtualizacao: new Date(),
+      },
+    }),
+
+    prisma.atleta.update({
+      where: { id: atletaId },
+
+      data: {
+        pontosTotal: total,
+      },
+    }),
+  ]);
 }

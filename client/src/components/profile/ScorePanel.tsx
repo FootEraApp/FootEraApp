@@ -142,12 +142,10 @@ export default function ScorePanel({
       const discApi = Number(data?.disciplina) || 0;
       const respApi = Number(data?.responsabilidade) || 0;
 
-      const calc = computeFromHistorico(data);
-
       setVals({
-        performance: Math.max(perfApi, calc.performance),
-        disciplina: Math.max(discApi, calc.disciplina),
-        responsabilidade: Math.max(respApi, calc.responsabilidade),
+        performance: perfApi,
+        disciplina: discApi,
+        responsabilidade: respApi,
       });
     } catch (e) {
       console.error(e);

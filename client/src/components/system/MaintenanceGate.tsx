@@ -79,7 +79,6 @@ export default function MaintenanceGate({ children }: Props) {
 
       setConfiguracao(data);
     } catch (error) {
-      // Em caso de falha na consulta, não bloqueia o aplicativo indevidamente.
       console.error("[manutenção] falha ao consultar status:", error);
     } finally {
       setVerificando(false);
@@ -124,10 +123,6 @@ export default function MaintenanceGate({ children }: Props) {
       ? horarioAgendado - (agora + deslocamentoServidor)
       : null;
 
-  /*
-   * Bloqueia imediatamente no frontend quando a contagem chega a zero.
-   * A consulta seguinte também faz o backend efetivar maintenanceMode.
-   */
   React.useEffect(() => {
     if (
       !configuracao?.maintenanceScheduledAt ||
@@ -163,8 +158,6 @@ React.useEffect(() => {
     return;
   }
 
-  // O administrador continua no painel para conseguir
-  // encerrar o modo de manutenção.
   if (rotaAdministrativa) {
     return;
   }
@@ -195,23 +188,19 @@ React.useEffect(() => {
     );
   }
 
-  /*
-   * O admin continua entrando no painel para conseguir encerrar a
-   * manutenção. Todos os outros usuários veem a tela de manutenção.
-   */
-if (
-  configuracao?.maintenanceMode &&
-  !rotaAdministrativa &&
-  path !== "/login"
-) {
-  return (
-    <div className="min-h-screen bg-[#fdf9e8] flex items-center justify-center">
-      <p className="font-semibold text-green-900">
-        Redirecionando...
-      </p>
-    </div>
-  );
-}
+  if (
+    configuracao?.maintenanceMode &&
+    !rotaAdministrativa &&
+    path !== "/login"
+  ) {
+    return (
+      <div className="min-h-screen bg-[#fdf9e8] flex items-center justify-center">
+        <p className="font-semibold text-green-900">
+          Redirecionando...
+        </p>
+      </div>
+    );
+  }
 
   const mostrarAviso =
     horarioAgendado !== null &&

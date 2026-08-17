@@ -100,11 +100,6 @@ export async function existeVinculoFormal(
 
   if (!viewer || !target) return false;
 
-  /*
-   * 1. Relação de treinamento ativa.
-   *
-   * Seguidor NÃO entra aqui de propósito.
-   */
   const viewerClauses = relacaoClauses(viewer);
   const targetClauses = relacaoClauses(target);
 
@@ -126,10 +121,6 @@ export async function existeVinculoFormal(
 
     if (relacao) return true;
   }
-
-  /*
-   * 2. Atleta diretamente vinculado a clube/escolinha.
-   */
 
   if (
     viewer.atleta?.clubeId &&
@@ -159,10 +150,6 @@ export async function existeVinculoFormal(
     return true;
   }
 
-  /*
-   * 3. Professor diretamente vinculado a clube/escolinha.
-   */
-
   if (
     viewer.professor?.clubeId &&
     target.clube?.id === viewer.professor.clubeId
@@ -190,10 +177,6 @@ export async function existeVinculoFormal(
   ) {
     return true;
   }
-
-  /*
-   * 4. Tabelas ProfessorClube / ProfessorEscolinha.
-   */
 
   if (viewer.professor?.id && target.clube?.id) {
     const row = await prisma.professorClube.findFirst({
@@ -242,10 +225,6 @@ export async function existeVinculoFormal(
 
     if (row) return true;
   }
-
-  /*
-   * 5. Colaboração oficial de olheiro.
-   */
 
   if (viewer.olheiro) {
     if (

@@ -500,90 +500,6 @@ async function countAtletasPorEntidade(opts: { escolinhaId?: string; clubeId?: s
   return idsUnicos.size;
 }
 
-export async function getPontuacaoDetalhada(req: Request, res: Response) {
-  try {
-    const id = req.params.id;
-
-    const atleta = await prisma.atleta.findFirst({
-      where: { OR: [{ usuarioId: id }, { id }] },
-      select: { id: true },
-    });
-    if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
-
-    const subsTreino = await prisma.submissaoTreino.findMany({
-      where: { atletaId: atleta.id, aprovado: true as any },
-      include: { treinoAgendado: { include: { treinoProgramado: { include: { exercicios: true } } } } },
-      orderBy: { criadoEm: "desc" },
-    });
-
-    const historicoTreinos = subsTreino.map((s) => {
-      const dur = s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? null;
-      const pts =
-        s.pontosCreditados ??
-        s.pontuacaoSnapshot ??
-        s.treinoAgendado?.treinoProgramado?.pontuacao ??
-        s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
-        0;
-
-      return {
-        tipo: "Treino" as const,
-        titulo: s.treinoAgendado?.treinoProgramado?.nome ?? s.treinoAgendado?.titulo ?? "Treino",
-        status: "Treino Concluído",
-        data: new Date(s.criadoEm).toLocaleDateString("pt-BR"),
-        ts: +new Date(s.criadoEm),
-        duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
-        pontuacao: Number(pts) || 0,
-      };
-    });
-
-    const subsDesafio = await prisma.submissaoDesafio.findMany({
-      where: { atletaId: atleta.id, aprovado: true as any },
-      include: { desafio: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const historicoDesafios = subsDesafio.map((s) => ({
-      tipo: "Desafio" as const,
-      status: "Desafio Concluído",
-      data: new Date(s.createdAt).toLocaleDateString("pt-BR"),
-      ts: +new Date(s.createdAt),
-      titulo: s.desafio?.titulo ?? "Desafio",
-      pontuacao: pontosDesafioInd(s as any),
-    }));
-
-    let historicoGrupo: any[] = [];
-    try {
-      const parts = await getParticipacoesGrupo(req.params.id, atleta.id);
-      historicoGrupo = parts.map(mapGrupoToHistorico);
-    } catch (e) {
-      console.warn("[pontuacaoDetalhada] erro ao ler grupos", e);
-    }
-
-    const historico = [...historicoTreinos, ...historicoDesafios, ...historicoGrupo]
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20)
-      .map(({ ts, ...rest }) => rest);
-
-    const performanceFromHistorico = historico.reduce(
-      (acc: number, h: any) => acc + (Number((h as any).pontuacao) || 0),
-      0
-    );
-    const disciplinaFromHistorico = historicoTreinos.length * 2;
-    const responsabilidadeFromHistorico = (historicoDesafios.length + historicoGrupo.length) * 2;
-
-    return res.json({
-      performance: performanceFromHistorico,
-      disciplina: disciplinaFromHistorico,
-      responsabilidade: responsabilidadeFromHistorico,
-      historico,
-      videos: [],
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao montar pontuação" });
-  }
-}
-
 export const getPerfilUsuarioMe = async (req: AuthenticatedRequest, res: Response) => {
   const id = req.userId;
   if (!id) return res.status(401).json({ error: "Sem autenticação" });
@@ -591,11 +507,26 @@ export const getPerfilUsuarioMe = async (req: AuthenticatedRequest, res: Respons
   return getPerfilUsuario(req as any, res);
 };
 
-export const getPontuacaoMe = async (req: AuthenticatedRequest, res: Response) => {
-  const id = req.userId;
-  if (!id) return res.status(401).json({ error: "Sem autenticação" });
-  (req as any).params = { id };
-  return getPontuacaoDetalhada(req as any, res);
+export const getPontuacaoMe = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  const usuarioId = req.userId;
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      error: "Sem autenticação",
+    });
+  }
+
+  (req as any).params = {
+    usuarioId,
+  };
+
+  return getPontuacaoPerfil(
+    req as any,
+    res
+  );
 };
 
 export const getAtividadesRecentesMe = async (req: AuthenticatedRequest, res: Response) => {
@@ -898,257 +829,30 @@ export const getBadges = async (_req: Request, res: Response) => {
 async function calcularTotalAtualDoPerfil(
   usuarioId: string
 ): Promise<number | null> {
-  const atleta =
-    await prisma.atleta.findUnique({
-      where: {
-        usuarioId,
+  const atleta = await prisma.atleta.findUnique({
+    where: {
+      usuarioId,
+    },
+
+    select: {
+      pontosTotal: true,
+
+      pontuacao: {
+        select: {
+          pontuacaoTotal: true,
+        },
       },
-      select: {
-        id: true,
-      },
-    });
+    },
+  });
 
   if (!atleta) {
     return null;
   }
 
-  const subsTreino =
-    await prisma.submissaoTreino.findMany({
-      where: {
-        atletaId: atleta.id,
-        aprovado: true as any,
-      },
-      include: {
-        treinoAgendado: {
-          include: {
-            treinoProgramado: {
-              include: {
-                exercicios: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        criadoEm: "desc",
-      },
-    });
-
-  const agIds = Array.from(
-    new Set(
-      subsTreino
-        .map(
-          (s) =>
-            s.treinoAgendadoId
-        )
-        .filter(
-          (id): id is string =>
-            Boolean(id)
-        )
-    )
-  );
-
-  const agRows =
-    agIds.length > 0
-      ? await prisma.treinoAgendado.findMany({
-          where: {
-            id: {
-              in: agIds,
-            },
-          },
-          select: {
-            id: true,
-            treinoProgramado: {
-              select: {
-                pontuacao: true,
-                exercicios: true,
-              },
-            },
-          },
-        })
-      : [];
-
-  const progPontuacaoMap =
-    new Map<
-      string,
-      {
-        pontuacao: number;
-        exerciciosCount: number;
-      }
-    >(
-      agRows.map((r) => [
-        r.id,
-        {
-          pontuacao:
-            r.treinoProgramado
-              ?.pontuacao ?? 0,
-
-          exerciciosCount:
-            r.treinoProgramado
-              ?.exercicios
-              ?.length ?? 0,
-        },
-      ])
-    );
-
-  const historicoTreinos =
-    subsTreino.map((s: any) => {
-      const fromCredit =
-        Number(
-          s.pontosCreditados ?? 0
-        );
-
-      const fromSnap =
-        Number(
-          s.pontuacaoSnapshot ?? 0
-        );
-
-      const fromIncludeProg =
-        Number(
-          s.treinoAgendado
-            ?.treinoProgramado
-            ?.pontuacao ?? 0
-        );
-
-      const fromIncludeExLen =
-        Number(
-          s.treinoAgendado
-            ?.treinoProgramado
-            ?.exercicios
-            ?.length ?? 0
-        );
-
-      const fromMap =
-        s.treinoAgendadoId &&
-        progPontuacaoMap.has(
-          s.treinoAgendadoId
-        )
-          ? progPontuacaoMap.get(
-              s.treinoAgendadoId
-            )!.pontuacao
-          : 0;
-
-      const fromMapEx =
-        s.treinoAgendadoId &&
-        progPontuacaoMap.has(
-          s.treinoAgendadoId
-        )
-          ? progPontuacaoMap.get(
-              s.treinoAgendadoId
-            )!.exerciciosCount
-          : 0;
-
-      const pontos =
-        fromCredit > 0
-          ? fromCredit
-          : fromSnap > 0
-          ? fromSnap
-          : fromIncludeProg > 0
-          ? fromIncludeProg
-          : fromMap > 0
-          ? fromMap
-          : fromIncludeExLen > 0
-          ? fromIncludeExLen
-          : fromMapEx > 0
-          ? fromMapEx
-          : 0;
-
-      return {
-        tipo: "Treino",
-        ts: +new Date(
-          s.criadoEm ??
-            Date.now()
-        ),
-        pontuacao:
-          Number(pontos) || 0,
-      };
-    });
-
-  const subsDesafio =
-    await prisma.submissaoDesafio.findMany({
-      where: {
-        atletaId: atleta.id,
-        aprovado: true as any,
-      },
-      include: {
-        desafio: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-  const historicoDesafios =
-    subsDesafio.map((s: any) => ({
-      tipo: "Desafio",
-      ts: +new Date(
-        s.createdAt ??
-          Date.now()
-      ),
-      pontuacao:
-        Number(
-          s.desafio?.pontuacao ??
-            0
-        ),
-    }));
-
-  const parts =
-    await getParticipacoesGrupo(
-      usuarioId,
-      atleta.id
-    );
-
-  const historicoGrupo =
-    parts.map(
-      mapGrupoToHistorico
-    );
-
-  /*
-   * Mantemos a mesma regra usada
-   * atualmente pelo getPontuacaoPerfil:
-   * performance considera os 20
-   * registros mais recentes.
-   */
-  const historicoPontuavel = [
-    ...historicoTreinos,
-    ...historicoDesafios,
-    ...historicoGrupo,
-  ]
-    .sort(
-      (a: any, b: any) =>
-        Number(b.ts) -
-        Number(a.ts)
-    )
-    .slice(0, 20);
-
-  const performance =
-    historicoPontuavel.reduce(
-      (
-        acc: number,
-        item: any
-      ) =>
-        acc +
-        (
-          Number(
-            item?.pontuacao
-          ) || 0
-        ),
-      0
-    );
-
-  const disciplina =
-    historicoTreinos.length * 2;
-
-  const responsabilidade =
-    (
-      historicoDesafios.length +
-      historicoGrupo.length
-    ) * 2;
-
-  return (
-    performance +
-    disciplina +
-    responsabilidade
+  return Number(
+    atleta.pontuacao?.pontuacaoTotal ??
+    atleta.pontosTotal ??
+    0
   );
 }
 
@@ -1158,7 +862,19 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
   try {
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId },
-      select: { id: true },
+      select: {
+        id: true,
+        pontosTotal: true,
+
+        pontuacao: {
+          select: {
+            pontuacaoTotal: true,
+            pontuacaoPerformance: true,
+            pontuacaoDisciplina: true,
+            pontuacaoResponsabilidade: true,
+          },
+        },
+      },
     });
     if (!atleta) {
       return res.json({
@@ -1265,10 +981,47 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
 
     const videos = postagensVideo.flatMap((p) => (p.videoUrl ? [p.videoUrl] : []));
 
+    const performanceAtual =
+      Number(
+        atleta.pontuacao?.pontuacaoPerformance ??
+        performanceFromHistorico ??
+        0
+      );
+
+    const disciplinaAtual =
+      Number(
+        atleta.pontuacao?.pontuacaoDisciplina ??
+        disciplinaFromHistorico ??
+        0
+      );
+
+    const responsabilidadeAtual =
+      Number(
+        atleta.pontuacao?.pontuacaoResponsabilidade ??
+        responsabilidadeFromHistorico ??
+        0
+      );
+
+    const totalCalculado =
+      performanceAtual +
+      disciplinaAtual +
+      responsabilidadeAtual;
+
+    const totalAtual =
+      Number(
+        atleta.pontuacao?.pontuacaoTotal ??
+        totalCalculado ??
+        atleta.pontosTotal ??
+        0
+      );
+
     return res.json({
-      performance: performanceFromHistorico,
-      disciplina: disciplinaFromHistorico,
-      responsabilidade: responsabilidadeFromHistorico,
+      totalAtual,
+
+      performance: performanceAtual,
+      disciplina: disciplinaAtual,
+      responsabilidade: responsabilidadeAtual,
+
       historico,
       videos,
     });
@@ -1314,11 +1067,6 @@ export async function getDeltaPontuacaoPerfil(
         });
     }
 
-    /*
-     * Não mostramos aumento
-     * comparado à própria visita
-     * no próprio perfil.
-     */
     if (
       viewerUsuarioId ===
       perfilUsuarioId
@@ -1331,10 +1079,6 @@ export async function getDeltaPontuacaoPerfil(
       });
     }
 
-    /*
-     * Mantém as mesmas regras
-     * de privacidade do perfil.
-     */
     const acesso =
       await obterAcessoPerfil(
         req,
@@ -1351,11 +1095,6 @@ export async function getDeltaPontuacaoPerfil(
         perfilUsuarioId
       );
 
-    /*
-     * Se não for um atleta,
-     * não existe delta de
-     * pontuação para registrar.
-     */
     if (totalAtual === null) {
       return res.json({
         delta: 0,
@@ -1378,20 +1117,6 @@ export async function getDeltaPontuacaoPerfil(
           },
         });
 
-    /*
-     * PRIMEIRA VISITA:
-     *
-     * Não podemos fazer:
-     *
-     * totalAtual - 0
-     *
-     * porque isso geraria:
-     *
-     * 277 pts ↑ +277
-     *
-     * Portanto a primeira visita
-     * sempre mostra delta 0.
-     */
     if (!anterior) {
       return res.json({
         delta: 0,
@@ -1403,12 +1128,8 @@ export async function getDeltaPontuacaoPerfil(
     }
 
     const delta =
-      Math.max(
-        0,
-        totalAtual -
-          anterior
-            .ultimaPontuacaoVista
-      );
+      totalAtual -
+      anterior.ultimaPontuacaoVista;
 
     return res.json({
       delta,
@@ -1597,7 +1318,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
 
     const viewerId = (req as any)?.userId ? String((req as any).userId) : null;
     const isOwnProfile = !!viewerId && viewerId === usuario.id;
-    const isAdmin = isAdminFromReq(req);
     const acesso =
       await avaliarPrivacidadePerfil(
         viewerId,
@@ -1623,6 +1343,12 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         nome: true,
         sobrenome: true,
         idade: true,
+        pontosTotal: true,
+        pontuacao: {
+          select: {
+            pontuacaoTotal: true,
+          },
+        },
         email: true,
         telefone1: true,
         telefone2: true,
@@ -2059,8 +1785,16 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     usuario: usuarioPayload,
     dadosEspecificos,
     vinculos,
-    perfilVerificado
-  });
+    perfilVerificado,
+    pontuacaoTotal:
+      tipoPerfil === "Atleta"
+        ? Number(
+            atleta?.pontuacao?.pontuacaoTotal ??
+            atleta?.pontosTotal ??
+            0
+          )
+        : 0,
+    });
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
       return res.status(500).json({ error: "Erro interno do servidor" });

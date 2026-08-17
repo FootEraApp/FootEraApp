@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/GerenciarProfessores.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import axios from "axios";
