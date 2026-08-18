@@ -18,7 +18,12 @@ import ProfilePostsSection from "../../components/perfil/ProfilePostsSection";
 import CoverImage from "../../components/shared/CoverImage";
 import ProfileReplaysSection from "../../components/perfil/ProfileReplaysSection";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API = String(
+  import.meta.env.VITE_API_URL ||
+    "http://localhost:3001"
+)
+  .trim()
+  .replace(/\/+$/, "");
 const FRONTEND_BASE_URL =
   import.meta.env.VITE_FRONTEND_BASE_URL ||
   import.meta.env.VITE_APP_URL ||
@@ -340,6 +345,22 @@ export default function CreatorProfile() {
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
   const [followPendente, setFollowPendente] = useState(false);
   const [eventos, setEventos] = useState<any[]>([]);
+  const [
+    ativandoCreator,
+    setAtivandoCreator,
+  ] = useState(false);
+
+  const [
+    podeAtivarCreator,
+    setPodeAtivarCreator,
+  ] = useState<
+    boolean | null
+  >(null);
+
+  const [
+    erroVerificacaoCreator,
+    setErroVerificacaoCreator,
+  ] = useState("");
 
   const usuarioId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -353,6 +374,149 @@ export default function CreatorProfile() {
         ""
     );
   }, []);
+
+  const isMeuPerfilCreator =
+    Boolean(
+      meuId &&
+      usuarioId &&
+      meuId === usuarioId
+    );
+
+  useEffect(() => {
+    if (
+      !isMeuPerfilCreator
+    ) {
+      setPodeAtivarCreator(
+        false
+      );
+
+      return;
+    }
+
+    const token =
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    if (!token) {
+      setPodeAtivarCreator(
+        null
+      );
+
+      setErroVerificacaoCreator(
+        "Sua sessão não foi encontrada. Faça login novamente."
+      );
+
+      return;
+    }
+
+    let cancelado = false;
+
+    setPodeAtivarCreator(
+      null
+    );
+
+    setErroVerificacaoCreator(
+      ""
+    );
+
+    fetch(
+      `${API}/api/creator/me`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+      }
+    )
+      .then(async (res) => {
+        const contentType =
+          res.headers.get(
+            "content-type"
+          ) || "";
+
+        const texto =
+          await res.text();
+
+        let json: any = null;
+
+        if (
+          texto &&
+          contentType.includes(
+            "application/json"
+          )
+        ) {
+          try {
+            json =
+              JSON.parse(
+                texto
+              );
+          } catch {
+            json = null;
+          }
+        }
+
+        if (!res.ok) {
+          throw new Error(
+            json?.message ||
+              `Erro ${res.status} ao verificar o Creator.`
+          );
+        }
+
+        if (
+          !json ||
+          typeof json !==
+            "object"
+        ) {
+          throw new Error(
+            "A API do Creator retornou uma resposta inválida."
+          );
+        }
+
+        return json;
+      })
+      .then((json) => {
+        if (cancelado) {
+          return;
+        }
+
+        setPodeAtivarCreator(
+          json?.podeAtivar ===
+            true
+        );
+
+        setErroVerificacaoCreator(
+          ""
+        )
+      })
+      .catch((error) => {
+        console.error(
+          "Erro ao verificar Creator:",
+          error
+        );
+
+        if (!cancelado) {
+          setPodeAtivarCreator(
+            null
+          );
+
+          setErroVerificacaoCreator(
+            error?.message ||
+              "Não foi possível verificar o Creator."
+          );
+        }
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    isMeuPerfilCreator,
+  ]);
 
   useEffect(() => {
     const token =
@@ -414,14 +578,51 @@ export default function CreatorProfile() {
       }
     )
       .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(
-            "Creator não encontrado."
-          );
-        }
+      const contentType =
+        res.headers.get(
+          "content-type"
+        ) || "";
 
-        return res.json();
-      })
+      const texto =
+        await res.text();
+
+      let json: any = null;
+
+      if (
+        texto &&
+        contentType.includes(
+          "application/json"
+        )
+      ) {
+        try {
+          json =
+            JSON.parse(
+              texto
+            );
+        } catch {
+          json = null;
+        }
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          json?.message ||
+            "Creator não encontrado."
+        );
+      }
+
+      if (
+        !json ||
+        typeof json !==
+          "object"
+      ) {
+        throw new Error(
+          "A API do Creator retornou uma resposta inválida."
+        );
+      }
+
+      return json;
+    })
       .then((json) => setData(json))
       .catch((err) => {
         console.error(err);
@@ -481,13 +682,205 @@ export default function CreatorProfile() {
   }, [usuarioId, meuId]);
 
   useEffect(() => {
-    if (!usuarioId) return;
+    if (!usuarioId) {
+      return;
+    }
 
-    fetch(`${API}/api/eventos?creatorUsuarioId=${usuarioId}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((j) => setEventos(Array.isArray(j) ? j : []))
-      .catch(() => setEventos([]));
-  }, [usuarioId]);
+    const token =
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    fetch(
+      `${API}/api/eventos?creatorUsuarioId=${encodeURIComponent(
+        usuarioId
+      )}`,
+      {
+        headers:
+          token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : undefined,
+      }
+    )
+      .then(async (res) => {
+        if (!res.ok) {
+          return [];
+        }
+
+        const texto =
+          await res.text();
+
+        if (!texto) {
+          return [];
+        }
+
+        try {
+          const json =
+            JSON.parse(
+              texto
+            );
+
+          if (
+            Array.isArray(
+              json
+            )
+          ) {
+            return json;
+          }
+
+          if (
+            Array.isArray(
+              json?.items
+            )
+          ) {
+            return json.items;
+          }
+
+          return [];
+        } catch {
+          return [];
+        }
+      })
+      .then((items) => {
+        setEventos(
+          items
+        );
+      })
+      .catch(() => {
+        setEventos(
+          []
+        );
+      });
+  }, [
+    usuarioId,
+  ]);
+
+  async function ativarMeuCreator() {
+    if (
+      !isMeuPerfilCreator
+    ) {
+      return;
+    }
+
+    const token =
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    if (!token) {
+      toast.error(
+        "Faça login novamente para ativar o Creator."
+      );
+
+      return;
+    }
+
+    setAtivandoCreator(
+      true
+    );
+
+    try {
+      const resposta =
+        await fetch(
+          `${API}/api/creator/ativar`,
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            /*
+            * NÃO envie tipo:
+            * "PESSOA_FISICA".
+            *
+            * O backend escolhe
+            * automaticamente:
+            *
+            * Marca/Federação/etc.
+            * => INSTITUCIONAL
+            *
+            * Professor/Olheiro
+            * => PESSOA_FISICA
+            */
+            body:
+              JSON.stringify(
+                {}
+              ),
+          }
+        );
+
+      const texto =
+        await resposta.text();
+
+      let json: any = {};
+
+      if (texto) {
+        try {
+          json =
+            JSON.parse(
+              texto
+            );
+        } catch {
+          json = {};
+        }
+      }
+
+      if (
+        !resposta.ok
+      ) {
+        throw new Error(
+          json?.message ||
+            "Não foi possível ativar o Creator."
+        );
+      }
+
+      toast.success(
+        "Perfil Creator ativado com sucesso!"
+      );
+
+      /*
+      * Reabre a própria página.
+      * Agora /profile/:id já
+      * encontrará o Creator.
+      */
+      window.location.replace(
+        `/creator/profile?id=${encodeURIComponent(
+          usuarioId
+        )}`
+      );
+    } catch (error: any) {
+      console.error(
+        "Erro ao ativar Creator:",
+        error
+      );
+
+      toast.error(
+        error?.message ||
+          "Não foi possível ativar o Creator."
+      );
+    } finally {
+      setAtivandoCreator(
+        false
+      );
+    }
+  }
 
   if (loading) {
     return (
@@ -499,12 +892,221 @@ export default function CreatorProfile() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
-        <div className="bg-white border rounded-2xl p-6 max-w-md text-center">
-          <h1 className="font-bold text-xl text-emerald-950">Creator não encontrado</h1>
-          <p className="text-slate-500 mt-2">
-            Esse usuário ainda não ativou o perfil Creator.
+      <div
+        className="
+          min-h-screen
+          bg-[#f5f7f3]
+          flex
+          items-center
+          justify-center
+          p-6
+        "
+      >
+        <div
+          className="
+            bg-white
+            border
+            rounded-2xl
+            p-6
+            w-full
+            max-w-md
+            text-center
+            shadow-sm
+          "
+        >
+          <div
+            className="
+              mx-auto
+              mb-4
+              flex
+              h-14
+              w-14
+              items-center
+              justify-center
+              rounded-full
+              bg-emerald-50
+              text-emerald-700
+            "
+          >
+            <BadgeCheck
+              size={28}
+            />
+          </div>
+
+          <h1
+            className="
+              font-bold
+              text-xl
+              text-emerald-950
+            "
+          >
+            Creator não encontrado
+          </h1>
+
+          <p
+            className="
+              text-slate-500
+              mt-2
+            "
+          >
+            {isMeuPerfilCreator
+              ? "Você ainda não ativou o seu perfil Creator."
+              : "Esse usuário ainda não ativou o perfil Creator."}
           </p>
+
+          {isMeuPerfilCreator &&
+            podeAtivarCreator ===
+              null && 
+              !erroVerificacaoCreator &&(
+              <p
+                className="
+                  mt-4
+                  text-sm
+                  text-slate-400
+                "
+              >
+                Verificando
+                disponibilidade...
+              </p>
+            )}
+
+          {isMeuPerfilCreator &&
+            podeAtivarCreator ===
+              true && (
+              <>
+                <p
+                  className="
+                    mt-4
+                    text-sm
+                    text-slate-600
+                  "
+                >
+                  Ative o Creator
+                  para publicar
+                  conteúdos,
+                  acompanhar
+                  métricas e acessar
+                  sua página pública.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    ativarMeuCreator
+                  }
+                  disabled={
+                    ativandoCreator
+                  }
+                  className="
+                    mt-5
+                    inline-flex
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-emerald-700
+                    px-5
+                    py-3
+                    font-bold
+                    text-white
+                    transition
+                    hover:bg-emerald-800
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
+                >
+                  <BadgeCheck
+                    size={18}
+                  />
+
+                  {ativandoCreator
+                    ? "Ativando Creator..."
+                    : "Ativar Creator"}
+                </button>
+              </>
+            )}
+
+          {isMeuPerfilCreator &&
+            erroVerificacaoCreator && (
+              <div
+                className="
+                  mt-4
+                  rounded-xl
+                  border
+                  border-amber-200
+                  bg-amber-50
+                  p-3
+                  text-sm
+                  text-amber-800
+                "
+              >
+                Não foi possível
+                verificar seu perfil
+                Creator agora.
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.location.reload()
+                  }
+                  className="
+                    mt-3
+                    block
+                    w-full
+                    rounded-lg
+                    border
+                    border-amber-300
+                    bg-white
+                    px-3
+                    py-2
+                    font-semibold
+                    text-amber-900
+                  "
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+            
+          {isMeuPerfilCreator &&
+            podeAtivarCreator ===
+              false && (
+              <p
+                className="
+                  mt-4
+                  text-sm
+                  text-slate-500
+                "
+              >
+                Este tipo de perfil
+                não possui acesso ao
+                Creator.
+              </p>
+            )}
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href =
+                "/perfil";
+            }}
+            className="
+              mt-3
+              w-full
+              rounded-xl
+              border
+              border-slate-200
+              px-5
+              py-3
+              text-sm
+              font-semibold
+              text-slate-700
+              hover:bg-slate-50
+            "
+          >
+            Voltar ao perfil
+          </button>
         </div>
       </div>
     );

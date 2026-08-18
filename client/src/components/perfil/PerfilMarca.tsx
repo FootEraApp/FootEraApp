@@ -36,6 +36,41 @@ type EventoPerfilItem = {
   totalParticipantes?: number | null;
 };
 
+type MetodologiaPerfilItem = {
+  id: string;
+
+  titulo: string;
+
+  descricao?: string | null;
+
+  capaUrl?: string | null;
+
+  origemRegistro:
+    | "LEARNING"
+    | "AVULSA";
+
+  criadorNome?:
+    | string
+    | null;
+
+  totalItens?:
+    number;
+
+  totalConcluidos?:
+    number;
+
+  percentualConclusao?:
+    number;
+
+  status?:
+    string | null;
+
+  progresso?: {
+    concluidos?:
+      string[];
+  };
+};
+
 function formatarDataEvento(
   valor?: string | null
 ) {
@@ -126,6 +161,22 @@ export default function PerfilMarca({
     mostrarTodosEventos,
     setMostrarTodosEventos,
   ] = useState(false);
+  const [
+    metodologiasAssinadas,
+    setMetodologiasAssinadas,
+  ] =
+    useState<
+      MetodologiaPerfilItem[]
+    >([]);
+
+  const [
+    metodologiasLoading,
+    setMetodologiasLoading,
+  ] = useState(false);
+  const [
+    metodologiasErro,
+    setMetodologiasErro,
+  ] = useState("");
   const [aba, setAba] = useState<"perfil" | "eventos" | "conteudos" | "postagens">("perfil");
   const token = Storage.token;
   const usuarioLogadoId =
@@ -168,6 +219,90 @@ export default function PerfilMarca({
       .then((res) => setData(res.data))
       .catch(() => setData(null));
   }, [id, token, tipoPerfil]);
+
+  useEffect(() => {
+    if (
+      aba !== "conteudos" ||
+      !isOwnPelaRota ||
+      !token
+    ) {
+      return;
+    }
+
+    let cancelado =
+      false;
+
+    async function carregarMetodologias() {
+      try {
+        setMetodologiasLoading(
+          true
+        );
+
+        setMetodologiasErro(
+          ""
+        );
+
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/metodologias/assinadas`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        if (cancelado) {
+          return;
+        }
+
+        const items =
+          Array.isArray(
+            resposta.data
+              ?.items
+          )
+            ? resposta.data
+                .items
+            : [];
+
+        setMetodologiasAssinadas(
+          items
+        );
+      } catch (error) {
+        console.error(
+          "Erro ao carregar metodologias assinadas:",
+          error
+        );
+
+        if (!cancelado) {
+          setMetodologiasAssinadas(
+            []
+          );
+
+          setMetodologiasErro(
+            "Não foi possível carregar suas metodologias."
+          );
+        }
+      } finally {
+        if (!cancelado) {
+          setMetodologiasLoading(
+            false
+          );
+        }
+      }
+    }
+
+    void carregarMetodologias();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    aba,
+    isOwnPelaRota,
+    token,
+  ]);
 
   useEffect(() => {
     if (
@@ -964,30 +1099,252 @@ export default function PerfilMarca({
           )}
 
           {aba === "conteudos" && (
-            <section className="bg-transparent border rounded-xl shadow-sm p-4 mt-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-green-900 text-xl font-semibold mb-2">
-                    {isFederacao ? "Conteúdos oficiais" : "Conteúdos"}
-                  </h2>
+            <div className="mt-4 space-y-4">
+              <section className="bg-transparent border rounded-xl shadow-sm p-4">
+                <div
+                  className="
+                    flex flex-col
+                    gap-4
+                    sm:flex-row
+                    sm:items-start
+                    sm:justify-between
+                  "
+                >
+                  <div>
+                    <h2 className="text-green-900 text-xl font-semibold mb-2">
+                      {isFederacao
+                        ? "Conteúdos oficiais"
+                        : "Conteúdos"}
+                    </h2>
 
-                  <p className="text-sm text-green-900/80">
-                    {isFederacao
-                      ? "Publique cursos, metodologias e materiais oficiais da federação no Learning."
-                      : "Publique conteúdos, cursos e metodologias da marca no Learning."}
-                  </p>
+                    <p className="text-sm text-green-900/80">
+                      {isFederacao
+                        ? "Acesse metodologias e publique conteúdos oficiais da federação no Learning."
+                        : "Acesse metodologias e publique conteúdos da marca no Learning."}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href="/learning"
+                      className="
+                        inline-flex
+                        items-center
+                        justify-center
+                        rounded-lg
+                        border
+                        border-green-200
+                        bg-white
+                        px-3
+                        py-2
+                        text-xs
+                        font-semibold
+                        text-green-900
+                        hover:bg-green-50
+                      "
+                    >
+                      Ver todas as metodologias
+                    </Link>
+
+                    {isOwn && (
+                      <Link
+                        href="/learning/create"
+                        className="
+                          inline-flex
+                          items-center
+                          justify-center
+                          gap-1
+                          rounded-lg
+                          bg-green-800
+                          px-3
+                          py-2
+                          text-xs
+                          font-semibold
+                          text-white
+                          hover:bg-green-900
+                        "
+                      >
+                        <Plus className="h-4 w-4" />
+                        Criar conteúdo
+                      </Link>
+                    )}
+                  </div>
                 </div>
+              </section>
 
-                {isOwn && (
-                  <a
-                    href="/learning"
-                    className="shrink-0 rounded-lg bg-green-800 px-3 py-2 text-xs font-semibold text-white hover:bg-green-900"
-                  >
-                    Criar conteúdo
-                  </a>
-                )}
-              </div>
-            </section>
+              {isOwn && (
+                <section className="bg-transparent border rounded-xl shadow-sm p-4">
+                  <h3 className="text-lg font-semibold text-green-900">
+                    Minhas metodologias
+                  </h3>
+
+                  <p className="mt-1 text-sm text-green-900/70">
+                    Metodologias Learning e avulsas que você possui acesso.
+                  </p>
+
+                  {metodologiasLoading ? (
+                    <div className="mt-4 text-sm text-green-900/70">
+                      Carregando metodologias...
+                    </div>
+                  ) : metodologiasErro ? (
+                    <div className="mt-4 text-sm text-red-600">
+                      {metodologiasErro}
+                    </div>
+                  ) : metodologiasAssinadas.length === 0 ? (
+                    <div
+                      className="
+                        mt-4
+                        rounded-xl
+                        border
+                        border-dashed
+                        border-green-200
+                        bg-white/40
+                        p-5
+                        text-sm
+                        text-green-900/70
+                      "
+                    >
+                      Você ainda não possui nenhuma metodologia ativa.
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid gap-3">
+                      {metodologiasAssinadas.map(
+                        (metodologia) => {
+                          const percentual =
+                            Math.max(
+                              0,
+                              Math.min(
+                                100,
+                                Number(
+                                  metodologia
+                                    .percentualConclusao ??
+                                    0
+                                )
+                              )
+                            );
+
+                          const href =
+                            metodologia
+                              .origemRegistro ===
+                            "AVULSA"
+                              ? `/learning/${metodologia.id}?origem=avulsa`
+                              : `/learning/${metodologia.id}`;
+
+                          return (
+                            <Link
+                              key={`${metodologia.origemRegistro}-${metodologia.id}`}
+                              href={href}
+                              className="
+                                block
+                                rounded-xl
+                                border
+                                border-green-100
+                                bg-white/70
+                                p-3
+                                transition
+                                hover:border-green-300
+                                hover:bg-white
+                              "
+                            >
+                              <div className="flex gap-3">
+                                <img
+                                  src={
+                                    metodologia.capaUrl ||
+                                    "/assets/usuarios/footera-logo-fundo-verde.png"
+                                  }
+                                  alt={
+                                    metodologia.titulo
+                                  }
+                                  onError={(e) => {
+                                    e.currentTarget.onerror =
+                                      null;
+
+                                    e.currentTarget.src =
+                                      "/assets/usuarios/footera-logo-fundo-verde.png";
+                                  }}
+                                  className="
+                                    h-20
+                                    w-28
+                                    shrink-0
+                                    rounded-lg
+                                    border
+                                    object-cover
+                                    bg-white
+                                  "
+                                />
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-green-950 break-words">
+                                        {
+                                          metodologia.titulo
+                                        }
+                                      </div>
+
+                                      <div className="mt-1 text-xs text-green-900/60">
+                                        {metodologia.origemRegistro ===
+                                        "AVULSA"
+                                          ? "Metodologia avulsa"
+                                          : "Learning"}
+                                      </div>
+                                    </div>
+
+                                    <ChevronRight className="h-5 w-5 shrink-0 text-green-700" />
+                                  </div>
+
+                                  {metodologia.criadorNome ? (
+                                    <div className="mt-1 text-xs text-green-900/70">
+                                      Criado por:{" "}
+                                      <b>
+                                        {
+                                          metodologia.criadorNome
+                                        }
+                                      </b>
+                                    </div>
+                                  ) : null}
+
+                                  <div className="mt-3">
+                                    <div className="flex items-center justify-between gap-3 text-xs text-green-900/70">
+                                      <span>
+                                        {Number(
+                                          metodologia.totalConcluidos ??
+                                            0
+                                        )}
+                                        /
+                                        {Number(
+                                          metodologia.totalItens ??
+                                            0
+                                        )}{" "}
+                                        concluídos
+                                      </span>
+
+                                      <span>
+                                        {percentual}%
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-1 h-2 overflow-hidden rounded-full bg-green-100">
+                                      <div
+                                        className="h-full bg-green-700 transition-all"
+                                        style={{
+                                          width:
+                                            `${percentual}%`,
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        }
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
           )}
 
           {aba === "postagens" && (
