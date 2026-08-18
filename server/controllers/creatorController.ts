@@ -56,14 +56,20 @@ function normalizarTipoUsuario(tipoUsuario?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function podeSerCreator(tipoUsuario?: string | null) {
-  const tipo = normalizarTipoUsuario(tipoUsuario);
+function podeSerCreator(
+  tipoUsuario?: string | null
+) {
+  const tipo =
+    normalizarTipoUsuario(
+      tipoUsuario
+    );
 
   return [
     "professor",
     "olheiro",
     "clube",
     "escolinha",
+    "escola",
     "federacao",
     "marca",
   ].includes(tipo);
@@ -77,9 +83,19 @@ export const ativarCreator = async (req: Request, res: Response) => {
     const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
     if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
 
-    if (!podeSerCreator(usuario.tipo)) {
-        return res.status(403).json({
-            message: "Atletas não podem ativar perfil Creator.",
+    if (
+      !podeSerCreator(
+        usuario.tipo
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "CREATOR_NOT_ALLOWED",
+
+          message:
+            "Este tipo de perfil não pode ativar o Creator.",
         });
     }
     const body = req.body ?? {};
@@ -106,8 +122,13 @@ export const ativarCreator = async (req: Request, res: Response) => {
       },
       create: {
         usuarioId,
-        nomePublico: body.nomePublico ?? usuario.nome,
-        headline: body.headline ?? "Creator FootEra",
+        ativo: true,
+        nomePublico:
+          body.nomePublico ??
+          usuario.nome,
+        headline:
+          body.headline ??
+          "Creator FootEra",
         bio: body.bio ?? null,
         nicho: body.nicho ?? null,
         avatarUrl: body.avatarUrl ?? usuario.foto ?? null,
@@ -127,21 +148,77 @@ export const ativarCreator = async (req: Request, res: Response) => {
   }
 };
 
-export const getMeuCreator = async (req: Request, res: Response) => {
+export const getMeuCreator = async (
+  req: Request,
+  res: Response
+) => {
   try {
-    const usuarioId = getAuthUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
+    const usuarioId =
+      getAuthUserId(req);
 
-    const creator = await findCreatorByUsuarioId(usuarioId);
+    if (!usuarioId) {
+      return res
+        .status(401)
+        .json({
+          message:
+            "Usuário não autenticado.",
+        });
+    }
+
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          id: usuarioId,
+        },
+
+        select: {
+          id: true,
+          tipo: true,
+        },
+      });
+
+    if (!usuario) {
+      return res
+        .status(404)
+        .json({
+          message:
+            "Usuário não encontrado.",
+        });
+    }
+
+    const creator =
+      await findCreatorByUsuarioId(
+        usuarioId
+      );
 
     return res.json({
       ok: true,
+
       creator,
-      isCreator: !!creator?.ativo,
+
+      isCreator:
+        !!creator?.ativo,
+
+      podeAtivar:
+        podeSerCreator(
+          usuario.tipo
+        ),
+
+      tipoUsuario:
+        usuario.tipo,
     });
   } catch (error) {
-    console.error("[creatorController.getMeuCreator]", error);
-    return res.status(500).json({ message: "Erro ao buscar Creator." });
+    console.error(
+      "[creatorController.getMeuCreator]",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        message:
+          "Erro ao buscar Creator.",
+      });
   }
 };
 
@@ -158,9 +235,19 @@ export const atualizarCreator = async (req: Request, res: Response) => {
     const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
     if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
 
-    if (!podeSerCreator(usuario.tipo)) {
-        return res.status(403).json({
-            message: "Atletas não podem usar perfil Creator.",
+    if (
+      !podeSerCreator(
+        usuario.tipo
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "CREATOR_NOT_ALLOWED",
+
+          message:
+            "Este tipo de perfil não pode usar o Creator.",
         });
     }
     const tipoCreatorFinal =
@@ -238,9 +325,7 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
         });
     }
 
-    const viewerId = (req as any)?.userId
-      ? String((req as any).userId)
-      : null;
+    const viewerId = getAuthUserId(req);
 
     const acesso = await avaliarPrivacidadePerfil(
       viewerId,

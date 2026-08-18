@@ -519,7 +519,9 @@ export default function MudarTipoPerfilPage() {
       }
 
       toast.success("Tipo de perfil atualizado com sucesso!");
-
+      localStorage.removeItem(
+        "footera:pagamentos:selecao:v1"
+      );
       window.location.href = "/perfil";
     } catch (e: any) {
       setErro(e?.message || "Erro ao mudar tipo de perfil.");

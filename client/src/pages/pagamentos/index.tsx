@@ -1,3 +1,4 @@
+// client/src/pages/pagamentos/index.tsx
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
@@ -113,7 +114,7 @@ type AulaAoVivoPaga = {
   descricao?: string | null;
   dataInicio: string;
   dataFim?: string | null;
-  finalizouEm?: 
+  finalizouEm?:
     string | null;
   replayDisponivel?:
     boolean;
@@ -662,28 +663,75 @@ function getConvidadosLabel(aula: AulaAoVivoPaga) {
   return "";
 }
 
-type RoleUI = "Atleta" | "Olheiro" | "Professor" | "Organizações";
+type RoleUI =
+  | "Atleta"
+  | "Olheiro"
+  | "Professor"
+  | "Organizações"
+  | "Learning";
 
-function normalizeTipo(raw?: unknown) {
-  return String(raw ?? "").trim().toLowerCase();
+function normalizeTipo(
+  raw?: unknown
+) {
+  return String(
+    raw ?? ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
-function normalizarTipoPagamento(tipo?: string | null) {
-  return String(tipo || "")
+function normalizarTipoPagamento(
+  tipo?: string | null
+) {
+  return String(
+    tipo || ""
+  )
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    );
 }
 
-function rolePagamentoPorTipo(tipoRaw?: string | null) {
-  const tipo = normalizarTipoPagamento(tipoRaw);
-
-  if (tipo === "learning" || tipo === "atleta") return "Atleta";
+function rolePagamentoPorTipo(
+  tipoRaw?:
+    | string
+    | null
+): RoleUI {
+  const tipo =
+    normalizarTipoPagamento(
+      tipoRaw
+    );
 
   if (
+    tipo === "learning" ||
     tipo === "marca" ||
-    tipo === "federacao" ||
+    tipo === "federacao"
+  ) {
+    return "Learning";
+  }
+
+  if (
+    tipo === "atleta"
+  ) {
+    return "Atleta";
+  }
+
+  if (
+    tipo === "professor"
+  ) {
+    return "Professor";
+  }
+
+  if (
+    tipo === "olheiro"
+  ) {
+    return "Olheiro";
+  }
+
+  if (
     tipo === "clube" ||
     tipo === "escolinha" ||
     tipo === "escola"
@@ -691,36 +739,80 @@ function rolePagamentoPorTipo(tipoRaw?: string | null) {
     return "Organizações";
   }
 
-  if (tipo === "professor") return "Professor";
-  if (tipo === "olheiro") return "Olheiro";
-
   return "Atleta";
 }
 
-type MainTier = "PRO" | "LEARNING_1" | "LEARNING_3"; 
+type MainTier =
+  | "PRO"
+  | "LEARNING_1"
+  | "LEARNING_3";
 
-function planId(role: RoleUI, tier: MainTier) {
+function planId(
+  role: RoleUI,
+  tier: MainTier
+) {
+  if (
+    role === "Learning"
+  ) {
+    return "LEARNING_3";
+  }
+
   const r =
     role === "Atleta"
       ? "ATLETA"
       : role === "Olheiro"
-      ? "OLHEIRO"
-      : role === "Professor"
-      ? "PROFESSOR"
-      : "ORGANIZACOES";
+        ? "OLHEIRO"
+        : role === "Professor"
+          ? "PROFESSOR"
+          : "ORGANIZACOES";
+
   return `${r}_${tier}`;
 }
 
-const storageRoleToUIRole: Record<string, RoleUI> = {
-  atleta: "Atleta",
-  olheiro: "Olheiro",
-  professor: "Professor",
-  escolinha: "Organizações",
-  clube: "Organizações",
-  organizacoes: "Organizações",
-  organizações: "Organizações",
-  admin: "Atleta",
-};
+const storageRoleToUIRole:
+  Record<
+    string,
+    RoleUI
+  > = {
+    atleta:
+      "Atleta",
+
+    olheiro:
+      "Olheiro",
+
+    professor:
+      "Professor",
+
+    escolinha:
+      "Organizações",
+
+    escola:
+      "Organizações",
+
+    clube:
+      "Organizações",
+
+    organizacoes:
+      "Organizações",
+
+    organizações:
+      "Organizações",
+
+    learning:
+      "Learning",
+
+    marca:
+      "Learning",
+
+    federacao:
+      "Learning",
+
+    federação:
+      "Learning",
+
+    admin:
+      "Atleta",
+  };
 
 const FALLBACK_PLANS: Record<string, Plan> = {
   ATLETA_PRO: {
@@ -778,6 +870,13 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     monthly: 149.9,
     annual: null,
     benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Escolher até 3 metodologias por mês", "Você pode criar metodologias e disponibilizar para os membros da organização"],
+  },
+  LEARNING_3: {
+    id: "LEARNING_3",
+    title: "Learning",
+    monthly: 79.9,
+    annual: null,
+    benefits: ["Escolher até 3 metodologias Learning diferentes por mês"],
   },
   OLHEIRO_PRO: {
     id: "OLHEIRO_PRO",
@@ -848,6 +947,19 @@ export default function PagamentosPage() {
   const tipo = Storage.tipoSalvo; 
   const [tipoBackend, setTipoBackend] = useState<string | null>(null);
 
+  const tipoPagamentoAtual = useMemo(
+    () => normalizarTipoPagamento(tipoBackend ?? tipo),
+    [tipoBackend, tipo]
+  );
+
+  const isPerfilLearningEspecial =
+    tipoPagamentoAtual ===
+      "marca" ||
+    tipoPagamentoAtual ===
+      "federacao" ||
+    tipoPagamentoAtual ===
+      "learning";
+
   const roleUI: RoleUI = useMemo(() => {
     const key = normalizeTipo(tipoBackend ?? tipo);
     return storageRoleToUIRole[key] ?? "Atleta";
@@ -877,7 +989,6 @@ export default function PagamentosPage() {
     setRoleSelected(roleUI);
   }, [roleUI]);
 
-
   const token = Storage.token;
 
   const [loading, setLoading] = useState(true);
@@ -892,9 +1003,18 @@ export default function PagamentosPage() {
   const hadPersistRef = useRef(false);
   const appliedUrlPlanRef = useRef(false);
   const isOlheiro = roleSelected === "Olheiro";
-  const allowLearning = FLAGS.PAGAMENTOS_SHOW_LEARNING_PLANS && !isOlheiro;
-  const allowPlus = false;
-  const allowMetodologias = FLAGS.PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS && !isOlheiro;
+  const allowLearning =
+    FLAGS
+      .PAGAMENTOS_SHOW_LEARNING_PLANS &&
+    !isOlheiro;
+
+  const allowMetodologias =
+    isPerfilLearningEspecial ||
+    (
+      FLAGS
+        .PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS &&
+      !isOlheiro
+    );
 
   const [periodPro, setPeriodPro] = useState<Periodicidade>("Mensal");
   const [periodLearning, setPeriodLearning] = useState<Periodicidade>("Mensal");
@@ -921,16 +1041,93 @@ export default function PagamentosPage() {
     [token]
   );
 
-  const redirectAfterPayment = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("redirect") || "";
-  }, []);
+  const redirectAfterPayment =
+    useMemo(() => {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
 
-  const planoIdFromUrl = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get("planoId") || params.get("planId") || "";
-    return decodeURIComponent(raw).trim();
-  }, []);
+      return (
+        params.get("returnTo") ||
+        params.get("redirect") ||
+        ""
+      );
+    }, []);
+
+  const produtoFromUrl =
+    useMemo(() => {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      return String(
+        params.get("produto") ||
+          ""
+      )
+        .trim()
+        .toLowerCase();
+    }, []);
+
+  const planoIdFromUrl =
+    useMemo(() => {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      const raw =
+        params.get("planoId") ||
+        params.get("planId") ||
+        "";
+
+      if (
+        raw.trim()
+      ) {
+        return decodeURIComponent(
+          raw
+        ).trim();
+      }
+
+      if (
+        produtoFromUrl ===
+        "learning"
+      ) {
+        if (
+          roleSelected ===
+          "Learning"
+        ) {
+          return "LEARNING_3";
+        }
+
+        if (
+          roleSelected ===
+          "Professor"
+        ) {
+          return "PROFESSOR_LEARNING_1";
+        }
+
+        if (
+          roleSelected ===
+          "Organizações"
+        ) {
+          return "ORGANIZACOES_LEARNING_3";
+        }
+
+        if (
+          roleSelected ===
+          "Atleta"
+        ) {
+          return "ATLETA_LEARNING_1";
+        }
+      }
+
+      return "";
+    }, [
+      produtoFromUrl,
+      roleSelected,
+    ]);
 
   useEffect(() => {
     if (!billingState?.precisaEscolherPagamento) return;
@@ -940,28 +1137,93 @@ export default function PagamentosPage() {
   useEffect(() => {
     if (!hydrated) return;
 
-    const validIdsForRole = (() => {
-      if (roleSelected === "Olheiro") return ["OLHEIRO_PRO"];
-      if (roleSelected === "Professor") return [
-        planId("Professor", "PRO"),
-        planId("Professor", "LEARNING_1"),
-        planId("Professor", "LEARNING_3"),
-      ];
-      if (roleSelected === "Organizações") return [
-        planId("Organizações", "PRO"),
-        planId("Organizações", "LEARNING_3"),
-      ];
-      return [
-        planId("Atleta", "PRO"),
-        planId("Atleta", "LEARNING_1"),
-        planId("Atleta", "LEARNING_3"),
-      ];
-    })();
+    const validIdsForRole =
+      (() => {
+        if (
+          roleSelected ===
+          "Learning"
+        ) {
+          return [
+            "LEARNING_3",
+          ];
+        }
 
-    if (selectedMain && !validIdsForRole.includes(selectedMain)) {
-      setSelectedMain(null);
+        if (
+          roleSelected ===
+          "Olheiro"
+        ) {
+          return [
+            "OLHEIRO_PRO",
+          ];
+        }
+
+        if (
+          roleSelected ===
+          "Professor"
+        ) {
+          return [
+            planId(
+              "Professor",
+              "PRO"
+            ),
+            planId(
+              "Professor",
+              "LEARNING_1"
+            ),
+            planId(
+              "Professor",
+              "LEARNING_3"
+            ),
+          ];
+        }
+
+        if (
+          roleSelected ===
+          "Organizações"
+        ) {
+          return [
+            planId(
+              "Organizações",
+              "PRO"
+            ),
+            planId(
+              "Organizações",
+              "LEARNING_3"
+            ),
+          ];
+        }
+
+        return [
+          planId(
+            "Atleta",
+            "PRO"
+          ),
+          planId(
+            "Atleta",
+            "LEARNING_1"
+          ),
+          planId(
+            "Atleta",
+            "LEARNING_3"
+          ),
+        ];
+      })();
+
+    if (
+      selectedMain &&
+      !validIdsForRole.includes(
+        selectedMain
+      )
+    ) {
+      setSelectedMain(
+        null
+      );
     }
-  }, [roleSelected, hydrated, selectedMain]);
+  }, [
+    roleSelected,
+    hydrated,
+    selectedMain,
+  ]);
 
   useEffect(() => {
     setCupomPreview(null);
@@ -1023,11 +1285,18 @@ export default function PagamentosPage() {
         periodicidade: "Mensal",
         label: getPlan(selectedMain)?.title ?? selectedMain,
         price,
-        categoria: "PRO",
-      });
+        categoria:
+          selectedMain
+            .toUpperCase()
+            .includes(
+              "LEARNING"
+            )
+            ? "LEARNING"
+            : "PRO",
+              });
     }
 
-    if (FLAGS.PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS) {
+    if (allowMetodologias) {
       Object.entries(pickMetods).forEach(([methId, checked]) => {
         if (!checked) return;
 
@@ -1077,7 +1346,9 @@ export default function PagamentosPage() {
       apiPlans,
       metodologiasAvulsas,  
       aulasAoVivoPagas, 
-      pickAulasAoVivo, 
+      pickAulasAoVivo,
+      isPerfilLearningEspecial,
+      allowMetodologias,
     ]
   );
 
@@ -1210,13 +1481,11 @@ export default function PagamentosPage() {
         setApiPlans(json?.plans || []);
 
         await loadMe();
-        if (FLAGS.PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS) {
-          const rMet = await fetch(`${API.BASE_URL}/api/billing/metodologias-avulsas`, { headers });
-          const jMet = await rMet.json().catch(() => ({}));
-          setMetodologiasAvulsas(jMet.items || []);
-        } else {
-          setMetodologiasAvulsas([]);
-        }
+
+        const rMet = await fetch(`${API.BASE_URL}/api/billing/metodologias-avulsas`, { headers });
+        const jMet = await rMet.json().catch(() => ({}));
+        setMetodologiasAvulsas(rMet.ok ? (jMet.items || []) : []);
+
         const rAulas = await fetch(`${API.BASE_URL}/api/billing/aulas-ao-vivo`, {
           headers,
         });
@@ -1234,33 +1503,44 @@ export default function PagamentosPage() {
   }, [headers]);
 
   useEffect(() => {
-    const intervalo =
-      window.setInterval(
-        () => {
-          setAgoraPagamentos(
-            Date.now()
-          );
-        },
-        60_000
-      );
-
-    return () => {
-      window.clearInterval(
-        intervalo
-      );
-    };
-  }, []);
-
-  useEffect(() => {
     if (!hydrated) return;
     if (loading) return;
     if (appliedUrlPlanRef.current) return;
     if (!planoIdFromUrl) return;
 
     const plano = planoIdFromUrl.trim();
+    const planoUpper = plano.toUpperCase();
 
     appliedUrlPlanRef.current = true;
 
+    if (
+      isPerfilLearningEspecial &&
+      !planoUpper.startsWith(
+        "METODOLOGIA_AVULSA:"
+      ) &&
+      !planoUpper.startsWith(
+        "AULA_AO_VIVO:"
+      ) &&
+      !planoUpper.startsWith(
+        "METODOLOGIA:"
+      ) &&
+      planoUpper !==
+        "LEARNING_3"
+    ) {
+      setSelectedMain(
+        null
+      );
+
+      setOpenPagamentoModal(
+        false
+      );
+
+      toast.error(
+        "Para este perfil, o único plano principal disponível é o Learning."
+      );
+
+      return;
+    }
     setSelectedMain(null);
     setPickPro(false);
     setPickLearning(false);
@@ -1331,11 +1611,16 @@ export default function PagamentosPage() {
 
     if (plano.startsWith("METODOLOGIA:")) {
       const preferredLearningPlan =
-        roleSelected === "Professor"
-          ? "PROFESSOR_LEARNING_1"
-          : roleSelected === "Organizações"
-            ? "ORGANIZACOES_LEARNING_3"
-            : "ATLETA_LEARNING_1";
+        roleSelected ===
+          "Learning"
+          ? "LEARNING_3"
+          : roleSelected ===
+              "Professor"
+            ? "PROFESSOR_LEARNING_1"
+            : roleSelected ===
+                "Organizações"
+              ? "ORGANIZACOES_LEARNING_3"
+              : "ATLETA_LEARNING_1";
 
       setSelectedMain(preferredLearningPlan);
       setPickLearning(true);
@@ -1365,7 +1650,26 @@ export default function PagamentosPage() {
     roleSelected,
     metodologiasAvulsas,
     aulasAoVivoPagas,
+    isPerfilLearningEspecial,
   ]);
+
+  useEffect(() => {
+    const intervalo =
+      window.setInterval(
+        () => {
+          setAgoraPagamentos(
+            Date.now()
+          );
+        },
+        60_000
+      );
+
+    return () => {
+      window.clearInterval(
+        intervalo
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1484,7 +1788,7 @@ export default function PagamentosPage() {
     filtroNivelMetod,
     filtroConteudoMetod,
     filtroPublicoMetod, 
-    ]);
+  ]);
 
   const aulasAoVivoFiltradas =
     useMemo(() => {
@@ -1973,30 +2277,12 @@ export default function PagamentosPage() {
     }
   }
 
-  async function salvarMetodoPreferido() {
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/preferred-method`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ metodoFinal: method }),
-      });
-      const data = await r.json();
-      if (!r.ok) return toast.error(data.message || "Erro ao salvar método");
-      toast.success("Método de pagamento salvo! ✅");
-      await loadMe();
-    } catch {
-      toast.error("Erro ao salvar método preferido");
-    }
-  }
-
   if (loading) return <div className="p-6">Carregando pagamentos...</div>;
 
   const trialEndsAt = billingState?.trialEndsAt ?? assinaturaSingle?.trialEndsAt ?? null;
   const diasTrial = diasRestantesIso(trialEndsAt);
 
   const mostrarMsgTrial = trialAtivoAgora && !isBloqueada;
-  const proId = planId(roleSelected, "PRO");
-  const proPlan = getPlan(proId);
 
   function onlyDigits(v: string) {
     return (v || "").replace(/\D+/g, "");
@@ -2114,7 +2400,33 @@ export default function PagamentosPage() {
 
       <h1 className="text-2xl md:text-3xl font-bold mt-3">Assinaturas & Pagamentos</h1>
       <p className="text-sm text-gray-600 mb-6">
-        Escolha <b>uma ou mais</b> assinaturas/metodologias. Você pode combinar como quiser: Pro, Learning, Plus e metodologias avulsas.
+        {isPerfilLearningEspecial ? (
+          <>
+            Para este tipo de perfil,
+            está disponível o plano{" "}
+            <b>Learning</b>, que permite
+            escolher até{" "}
+            <b>
+              3 metodologias diferentes
+              por mês
+            </b>
+            . Metodologias avulsas e
+            eventos ao vivo/replays pagos
+            continuam disponíveis
+            separadamente.
+          </>
+        ) : (
+          <>
+            Escolha{" "}
+            <b>
+              uma ou mais
+            </b>{" "}
+            assinaturas/metodologias.
+            Você pode combinar como
+            quiser: Pro, Learning, Plus e
+            metodologias avulsas.
+          </>
+        )}
       </p>
 
       <div className="mb-6 rounded-lg border bg-emerald-50 text-emerald-900 p-3 text-sm">
@@ -2200,7 +2512,12 @@ export default function PagamentosPage() {
                   className="rounded-lg border p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
                 >
                   <div>
-                    <div className="font-semibold">{a.plano}</div>
+                    <div className="font-semibold">
+                      {getPlan(
+                        a.plano
+                      )?.title ??
+                        a.plano}
+                    </div>
                     <div className="text-sm text-gray-600">
                       Status:{" "}
                       <span
@@ -2288,7 +2605,22 @@ export default function PagamentosPage() {
         </p>
 
         <div className="flex flex-wrap gap-2">
-          {(["Atleta", "Olheiro", "Professor", "Organizações"] as RoleUI[]).map((r) => {
+          {(
+            isPerfilLearningEspecial
+              ? (
+                  [
+                    "Learning",
+                  ] as RoleUI[]
+                )
+              : (
+                  [
+                    "Atleta",
+                    "Olheiro",
+                    "Professor",
+                    "Organizações",
+                  ] as RoleUI[]
+                )
+          ).map((r) => {
             const disabled = r !== roleUI;
 
             return (
@@ -2321,7 +2653,24 @@ export default function PagamentosPage() {
         {(() => {
           const opts: { id: string; show: boolean }[] = [];
 
-          if (roleSelected === "Olheiro") {
+          if (
+            roleSelected ===
+            "Learning"
+          ) {
+            if (
+              allowLearning
+            ) {
+              opts.push({
+                id:
+                  "LEARNING_3",
+                show:
+                  true,
+              });
+            }
+          } else if (
+            roleSelected ===
+            "Olheiro"
+          ) {
             opts.push({ id: "OLHEIRO_PRO", show: true });
           } else if (roleSelected === "Professor") {
             opts.push({ id: planId("Professor", "PRO"), show: true });
@@ -2526,7 +2875,7 @@ export default function PagamentosPage() {
         />
 
         <div className="grid gap-3">
-          {aulasAoVivoFiltradas            
+          {aulasAoVivoFiltradas
             .map((aula) => {
               const checked = !!pickAulasAoVivo[aula.id];
               const dataLabel = formatDateTimeBR(aula.dataInicio);

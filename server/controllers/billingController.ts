@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { timingSafeEqual } from "crypto";
 import { z } from "zod";
+import { sendError } from "../utils/httpError.js";
 import {
   PrismaClient,
   Prisma,
@@ -16,7 +17,6 @@ import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { getIO } from "../socket.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
-import { sendError } from "../utils/httpError.js";
 
 function isLegacyPlano(planoId: string | null | undefined) {
   return String(planoId || "").toUpperCase() === "ATLETA_METODO_1";
@@ -30,30 +30,57 @@ function normalizeTipoBilling(tipoRaw: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function isTipoLearningEspecial(
+  tipoRaw: string | null | undefined
+) {
+  const tipo = normalizeTipoBilling(tipoRaw);
+
+  return (
+    tipo === "marca" ||
+    tipo === "federacao" ||
+    tipo === "learning"
+  );
+}
+
 function allowedPlanIdsByTipo(tipoRaw: string) {
   const tipo = normalizeTipoBilling(tipoRaw);
 
-  if (tipo === "atleta" || tipo === "learning") {
+  if (isTipoLearningEspecial(tipo)) {
     return BILLING_SHOW_LEARNING_PLANS
-      ? ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3"]
+      ? ["LEARNING_3"]
+      : [];
+  }
+
+  if (tipo === "atleta") {
+    return BILLING_SHOW_LEARNING_PLANS
+      ? [
+          "ATLETA_PRO",
+          "ATLETA_LEARNING_1",
+          "ATLETA_LEARNING_3",
+        ]
       : ["ATLETA_PRO"];
   }
 
   if (tipo === "professor") {
     return BILLING_SHOW_LEARNING_PLANS
-      ? ["PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3"]
+      ? [
+          "PROFESSOR_PRO",
+          "PROFESSOR_LEARNING_1",
+          "PROFESSOR_LEARNING_3",
+        ]
       : ["PROFESSOR_PRO"];
   }
 
   if (
     tipo === "clube" ||
     tipo === "escolinha" ||
-    tipo === "escola" ||
-    tipo === "federacao" ||
-    tipo === "marca"
+    tipo === "escola"
   ) {
     return BILLING_SHOW_LEARNING_PLANS
-      ? ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"]
+      ? [
+          "ORGANIZACOES_PRO",
+          "ORGANIZACOES_LEARNING_3",
+        ]
       : ["ORGANIZACOES_PRO"];
   }
 
@@ -67,51 +94,173 @@ function allowedPlanIdsByTipo(tipoRaw: string) {
           "ATLETA_PRO",
           "ATLETA_LEARNING_1",
           "ATLETA_LEARNING_3",
+
           "PROFESSOR_PRO",
           "PROFESSOR_LEARNING_1",
           "PROFESSOR_LEARNING_3",
+
           "ORGANIZACOES_PRO",
           "ORGANIZACOES_LEARNING_3",
+
           "OLHEIRO_PRO",
+
+          "LEARNING_3",
         ]
-      : ["ATLETA_PRO", "PROFESSOR_PRO", "ORGANIZACOES_PRO", "OLHEIRO_PRO"];
+      : [
+          "ATLETA_PRO",
+          "PROFESSOR_PRO",
+          "ORGANIZACOES_PRO",
+          "OLHEIRO_PRO",
+        ];
   }
 
   return [];
 }
 
-function assertPlanoPermitido(tipoUsuario: string, planoId: string) {
-  const planoNorm = normalizePlanoId(planoId);
+function assertPlanoPermitido(
+  tipoUsuario: string,
+  planoId: string
+) {
+  const planoNorm =
+    normalizePlanoId(planoId);
 
-  if (isMetodologiaAvulsa(planoNorm)) {
-    if (!BILLING_SHOW_METODOLOGIAS_AVULSAS) {
-      const err: any = new Error("Assinatura de metodologia avulsa indisponível no momento.");
+  if (
+    isMetodologiaAvulsa(
+      planoNorm
+    )
+  ) {
+    if (
+      isTipoLearningEspecial(
+        tipoUsuario
+      )
+    ) {
+      return;
+    }
+
+    if (
+      !BILLING_SHOW_METODOLOGIAS_AVULSAS
+    ) {
+      const err: any =
+        new Error(
+          "Assinatura de metodologia avulsa indisponível no momento."
+        );
+
       err.statusCode = 403;
-      err.code = "METODOLOGIA_AVULSA_DISABLED";
+      err.code =
+        "METODOLOGIA_AVULSA_DISABLED";
+
       throw err;
     }
+
     return;
   }
 
-  if (isMetodologiaLearning(planoNorm)) {
-    if (!BILLING_SHOW_METODOLOGIAS_LEARNING) {
-      const err: any = new Error("Assinatura de metodologia learning indisponível no momento.");
+  if (
+    isAulaAoVivo(
+      planoNorm
+    )
+  ) {
+    return;
+  }
+
+  if (
+    isTipoLearningEspecial(
+      tipoUsuario
+    )
+  ) {
+    if (
+      planoNorm ===
+      "LEARNING_3"
+    ) {
+      if (
+        !BILLING_SHOW_LEARNING_PLANS
+      ) {
+        const err: any =
+          new Error(
+            "Plano Learning indisponível no momento."
+          );
+
+        err.statusCode = 403;
+        err.code =
+          "LEARNING_PLAN_DISABLED";
+
+        throw err;
+      }
+
+      return;
+    }
+
+    if (
+      isMetodologiaLearning(
+        planoNorm
+      )
+    ) {
+      const err: any =
+        new Error(
+          "Assine o plano Learning para escolher metodologias dentro do limite mensal."
+        );
+
       err.statusCode = 403;
-      err.code = "METODOLOGIA_LEARNING_DISABLED";
+      err.code =
+        "USE_LEARNING_PLAN";
+
       throw err;
     }
-    return;
-  }
 
-  if (isAulaAoVivo(planoNorm)) {
-    return;
-  }
+    const err: any =
+      new Error(
+        "Este tipo de usuário pode assinar somente o plano Learning, além de comprar metodologias avulsas e eventos ao vivo/replays."
+      );
 
-  const allowed = allowedPlanIdsByTipo(tipoUsuario);
-  if (!allowed.includes(planoNorm)) {
-    const err: any = new Error("Plano não permitido para este tipo de usuário.");
     err.statusCode = 403;
-    err.code = "PLAN_NOT_ALLOWED";
+    err.code =
+      "PLAN_NOT_ALLOWED_FOR_USER_TYPE";
+
+    throw err;
+  }
+
+  if (
+    isMetodologiaLearning(
+      planoNorm
+    )
+  ) {
+    if (
+      !BILLING_SHOW_METODOLOGIAS_LEARNING
+    ) {
+      const err: any =
+        new Error(
+          "Assinatura de metodologia learning indisponível no momento."
+        );
+
+      err.statusCode = 403;
+      err.code =
+        "METODOLOGIA_LEARNING_DISABLED";
+
+      throw err;
+    }
+
+    return;
+  }
+
+  const allowed =
+    allowedPlanIdsByTipo(
+      tipoUsuario
+    );
+
+  if (
+    !allowed.includes(
+      planoNorm as any
+    )
+  ) {
+    const err: any =
+      new Error(
+        "Plano não permitido para este tipo de usuário."
+      );
+
+    err.statusCode = 403;
+    err.code =
+      "PLAN_NOT_ALLOWED";
+
     throw err;
   }
 }
@@ -453,6 +602,15 @@ const PLANS = [
   { id: "PROFESSOR_LEARNING_3", title: "Professor Learning 3", monthly: 79.9, annual: null, benefits: ["Tudo do Professor Pro", "Escolher até 3 metodologias por mês"] },
   { id: "ORGANIZACOES_PRO", title: "Organizações Pro", monthly: 79.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"] },
   { id: "ORGANIZACOES_LEARNING_3", title: "Organizações Learning", monthly: 149.9, annual: null, benefits: ["Tudo do Pro", "Escolher até 3 metodologias por mês"] },
+  {
+    id: "LEARNING_3",
+    title: "Learning",
+    monthly: 79.9,
+    annual: null,
+    benefits: [
+      "Escolher até 3 metodologias Learning diferentes por mês",
+    ],
+  },
   { id: "OLHEIRO_PRO", title: "Olheiro Pro", monthly: 24.9, annual: null, benefits: ["Sem anúncios", "Ferramentas Pro do olheiro", "Mais limites operacionais"] },
 ] as const;
 
@@ -917,21 +1075,58 @@ async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<
   return Number(p.annual || 0);
 }
 
-function metodologiaLimitFromPlano(planoId: string | null | undefined): number {
-  const p = String(planoId || "").toUpperCase();
+function metodologiaLimitFromPlano(
+  planoId: string | null | undefined
+): number {
+  const p =
+    String(
+      planoId || ""
+    ).toUpperCase();
 
   if (!p) return 0;
-  if (p === "ATLETA_PRO") return 0;
-  if (p === "PROFESSOR_PRO") return 0;
-  if (p === "ORGANIZACOES_PRO") return 0;
-  if (p === "OLHEIRO_PRO") return 0;
 
-  if (p === "ATLETA_LEARNING_1") return 1;
-  if (p === "PROFESSOR_LEARNING_1") return 1;
+  if (p === "ATLETA_PRO")
+    return 0;
 
-  if (p === "ATLETA_LEARNING_3") return 3;
-  if (p === "PROFESSOR_LEARNING_3") return 3;
-  if (p === "ORGANIZACOES_LEARNING_3") return 3;
+  if (p === "PROFESSOR_PRO")
+    return 0;
+
+  if (p === "ORGANIZACOES_PRO")
+    return 0;
+
+  if (p === "OLHEIRO_PRO")
+    return 0;
+
+  if (
+    p === "ATLETA_LEARNING_1"
+  )
+    return 1;
+
+  if (
+    p === "PROFESSOR_LEARNING_1"
+  )
+    return 1;
+
+  if (
+    p === "ATLETA_LEARNING_3"
+  )
+    return 3;
+
+  if (
+    p === "PROFESSOR_LEARNING_3"
+  )
+    return 3;
+
+  if (
+    p ===
+    "ORGANIZACOES_LEARNING_3"
+  )
+    return 3;
+
+  if (
+    p === "LEARNING_3"
+  )
+    return 3;
 
   return 0;
 }
@@ -1157,28 +1352,75 @@ async function getAssinaturasReadOnly(usuarioId: string) {
   return assinaturas;
 }
 
-function isAssinaturaAtiva(a: any) {
-  return a && (a.status === "ATIVA" || a.status === "TRIAL") && a.ativo === true;
+function isAssinaturaAtiva(
+  a: any
+) {
+  if (
+    !a ||
+    a.ativo !== true
+  ) {
+    return false;
+  }
+
+  const status =
+    String(
+      a.status || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    status !== "ATIVA" &&
+    status !== "TRIAL" &&
+    status !== "CANCELADA"
+  ) {
+    return false;
+  }
+
+  const fimRaw =
+    status === "TRIAL"
+      ? (
+          a.trialEndsAt ??
+          a.renovaEm
+        )
+      : a.renovaEm;
+
+  if (fimRaw) {
+    const fim =
+      new Date(fimRaw);
+
+    if (
+      !Number.isNaN(
+        fim.getTime()
+      ) &&
+      fim <= new Date()
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-function pickPrincipalAssinatura(assinaturas: any[]) {
-  const principalAtiva = assinaturas.find(
-    (a) =>
-      !isMetodologiaAvulsa(a.plano) &&
-      !isMetodologiaLearning(a.plano) &&
-      !isLegacyPlano(a.plano) &&
-      isAssinaturaAtiva(a)
-  );
-
+function pickPrincipalAssinatura(
+  assinaturas: any[]
+) {
   return (
-    principalAtiva ??
     assinaturas.find(
       (a) =>
-        !isMetodologiaAvulsa(a.plano) &&
-        !isMetodologiaLearning(a.plano) &&
-        !isLegacyPlano(a.plano)
-    ) ??
-    null
+        !isMetodologiaAvulsa(
+          a.plano
+        ) &&
+        !isMetodologiaLearning(
+          a.plano
+        ) &&
+        !isLegacyPlano(
+          a.plano
+        ) &&
+        isAssinaturaAtiva(
+          a
+        )
+    ) ?? null
   );
 }
 
@@ -1220,14 +1462,23 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasFiltradas);
     const limiteMetodologiasMes = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
     const inicioMes = startOfMonth(new Date());
-    const metodologiasAtivasNoMes = await prisma.metodologiaAssinante.count({
-      where: {
-        usuarioId,
-        status: "ATIVA",
-        origem: "LEARNING",
-        iniciouEm: { gte: inicioMes },
-      },
-    });
+    const metodologiasUsadasNoMes =
+      limiteMetodologiasMes > 0
+        ? await prisma
+            .metodologiaAssinante
+            .count({
+              where: {
+                usuarioId,
+
+                origem:
+                  "LEARNING",
+
+                iniciouEm: {
+                  gte: inicioMes,
+                },
+              },
+            })
+        : 0;
 
     const trialJaUsado = (assinaturas as any[]).some((a) =>
       Boolean(a.trialStartsAt || a.trialEndsAt)
@@ -1348,9 +1599,18 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       cupons,
       metodologiasAtivas,
       metodologias: {
-        limiteMes: limiteMetodologiasMes,
-        usadasNoMes: metodologiasAtivasNoMes,
-        restantesNoMes: Math.max(0, limiteMetodologiasMes - metodologiasAtivasNoMes),
+        limiteMes:
+          limiteMetodologiasMes,
+
+        usadasNoMes:
+          metodologiasUsadasNoMes,
+
+        restantesNoMes:
+          Math.max(
+            0,
+            limiteMetodologiasMes -
+              metodologiasUsadasNoMes
+          ),
       },
       billingState,
     });
@@ -1501,7 +1761,7 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const isAula = isAulaAoVivo(planoNorm);
     const isPlanoPrincipal = !isAvulsa && !isLearningMetodologia && !isAula;
 
-    if (isAulaAoVivo(planoNorm)) {
+    if (isAula) {
       await assertAulaAoVivoDisponivelParaCompra(planoNorm);
     }
 
@@ -1861,6 +2121,24 @@ async function approvePaymentAndProvision(
 ) {
   const now = new Date();
 
+  const pagamentoAtual = await prisma.pagamento.findUnique({
+    where: { id: pagamentoId },
+    select: { usuarioId: true },
+  });
+
+  if (!pagamentoAtual) {
+    const err: any = new Error("Pagamento não encontrado.");
+    err.statusCode = 404;
+    err.code = "PAGAMENTO_NOT_FOUND";
+    throw err;
+  }
+
+  const tipoAtual = await getUserTipo(pagamentoAtual.usuarioId);
+
+  for (const it of items) {
+    assertPlanoPermitido(tipoAtual, normalizePlanoId(it.planoId));
+  }
+
   return prisma.$transaction(async (tx) => {
     const pg = await tx.pagamento.update({
       where: { id: pagamentoId },
@@ -1872,6 +2150,14 @@ async function approvePaymentAndProvision(
 
       if (isMetodologiaAvulsa(pid)) {
         const metodologiaAvulsaId = extractMetodologiaId(pid);
+
+        const expiraEm =
+          addMonths(
+            now,
+            monthsForPeriodicidade(
+              it.periodicidade
+            )
+          );
 
         await (tx as any).metodologiaAssinante.upsert({
           where: {
@@ -1887,6 +2173,7 @@ async function approvePaymentAndProvision(
             metodologiaId: null,
             metodologiaAvulsaId,
             iniciouEm: now,
+            expiraEm,
           },
           create: {
             usuarioId: pg.usuarioId,
@@ -1895,6 +2182,7 @@ async function approvePaymentAndProvision(
             origem: "AVULSA",
             status: "ATIVA",
             iniciouEm: now,
+            expiraEm,
           },
         });
 
@@ -2570,7 +2858,7 @@ export async function switchPlan(req: Request, res: Response) {
 
 function isProviderWebhookAuthorized(req: Request): boolean {
   const expected = process.env.BILLING_WEBHOOK_SECRET || "";
-  if (!expected) return false; 
+  if (!expected) return false;
 
   const received = String(req.headers["x-webhook-secret"] || "");
   const expectedBuf = Buffer.from(expected);
@@ -2736,7 +3024,17 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
 
 export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Response) {
   try {
-    if (!BILLING_SHOW_METODOLOGIAS_AVULSAS) {
+    const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
+    const tipo = await getUserTipo(usuarioId);
+
+    if (
+      !BILLING_SHOW_METODOLOGIAS_AVULSAS &&
+      !isTipoLearningEspecial(tipo)
+    ) {
       return res.json({ items: [] });
     }
 
@@ -3008,57 +3306,45 @@ export async function getAulasAoVivoPagas(
           where: {
             metodologiaId:
               null,
-
             metodologiaAvulsaId:
               null,
-
             acessoPago:
               true,
-
             precoAcesso: {
               gt:
                 0,
             },
-
             OR: [
               {
                 status:
                   "AGENDADA",
-
                 dataInicio: {
                   gte:
                     agora,
                 },
               },
-
               {
                 status:
                   "AO_VIVO",
               },
-
               {
                 status:
                   "FINALIZADA",
-
                 replayDisponivel:
                   true,
-
                 videoGravadoUrl: {
                   not:
                     null,
                 },
-
                 OR: [
                   {
                     finalizouEm: {
                       gte:
                         limiteReplay,
-
                       lte:
                         agora,
                     },
                   },
-
                   {
                     finalizouEm:
                       null,
@@ -3075,7 +3361,6 @@ export async function getAulasAoVivoPagas(
               },
             ],
           },
-
           select: {
             id:
               true,
@@ -3209,7 +3494,6 @@ export async function getAulasAoVivoPagas(
                   aula
                 )
               : null;
-
           if (
             ehReplay &&
             (
@@ -3255,7 +3539,6 @@ export async function getAulasAoVivoPagas(
           > =>
             item !== null
         );
-
     items.sort(
       (a, b) => {
         const rank = (

@@ -638,6 +638,21 @@ export default function MetodologiaUnicaPage() {
       return;
     }
 
+    if (
+      isAvulsa &&
+      !data.viewer.temAcesso
+    ) {
+      navigate(
+        `/pagamentos?planoId=${encodeURIComponent(
+          `METODOLOGIA_AVULSA:${id}`
+        )}&redirect=${encodeURIComponent(
+          `/learning/${id}?origem=avulsa`
+        )}`
+      );
+
+      return;
+    }
+
     if (!data.viewer.podeAssinarAgora) {
         const motivo = String(data.viewer?.motivoBloqueio || "");
         const label =
@@ -649,13 +664,29 @@ export default function MetodologiaUnicaPage() {
                 ? "Ativar Learning"
                 : "Assinar metodologia";
 
-        if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") {
-        navigate(`/pagamentos?produto=learning&returnTo=/learning/${id}`);
-        return;
+        if (
+          motivo ===
+            "PRECISA_LEARNING" ||
+          motivo ===
+            "PRECISA_PAGAR"
+        ) {
+          navigate(
+            `/pagamentos?produto=learning&redirect=${encodeURIComponent(
+              `/learning/${id}`
+            )}`
+          );
+
+          return;
         }
         
         if (motivo === "PRECISA_PAGAR_AVULSA") {
-          navigate(`/pagamentos?produto=metodologia&id=${id}&origem=avulsa&returnTo=/learning/${id}?origem=avulsa`);
+          navigate(
+            `/pagamentos?planoId=${encodeURIComponent(
+              `METODOLOGIA_AVULSA:${id}`
+            )}&redirect=${encodeURIComponent(
+              `/learning/${id}?origem=avulsa`
+            )}`
+          );
           return;
         }
 
@@ -683,12 +714,27 @@ export default function MetodologiaUnicaPage() {
         const j = await r.json().catch(() => ({}));
 
         if (!r.ok) {
-        if (j?.code === "PRECISA_PAGAR" || j?.code === "PRECISA_LEARNING") {
-            navigate(`/pagamentos?produto=learning&returnTo=/learning/${id}`);
-            return;
+        if (
+          j?.code ===
+            "PRECISA_PAGAR" ||
+          j?.code ===
+            "PRECISA_LEARNING"
+        ) {
+          navigate(
+            `/pagamentos?produto=learning&redirect=${encodeURIComponent(
+              `/learning/${id}`
+            )}`
+          );
+
+          return;
         }
 
-        if (j?.code === "LIMITE_METODOLOGIAS") {
+        if (
+          j?.code ===
+            "LIMITE_METODOLOGIAS" ||
+          j?.code ===
+            "LIMITE_LEARNING_ATINGIDO"
+        ) {
             toast.error(j?.message || "Você já atingiu o limite do seu plano.");
             navigate(adminPreview ? "/admin" : "/learning")
             return;
@@ -776,7 +822,7 @@ export default function MetodologiaUnicaPage() {
   const podeEditarMetodologia = !!data?.viewer?.isOwner;
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8">
+    <div className="max-w-6xl mx-auto p-3 sm:p-4 xl:p-8">
       <button
         type="button"
         onClick={handleVoltar}
@@ -785,26 +831,45 @@ export default function MetodologiaUnicaPage() {
         <ArrowLeft className="w-5 h-5" />
       </button>
 
-      <div className="mt-4 rounded-2xl border bg-white p-4 md:p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-start gap-4">
-          <div className="w-full md:w-80 shrink-0">
+      <div className="mt-4 rounded-2xl border bg-white p-4 sm:p-5 xl:p-6 shadow-sm overflow-hidden">
+        <div className="flex flex-col xl:flex-row xl:items-start gap-5">
+          <div className="w-full xl:w-[360px] shrink-0">
             <CoverImage
               src={capaHeader}
               alt={data.titulo}
               pasta="metodologias"
-              className="w-full aspect-[16/9] rounded-2xl border"
+              className="
+                w-full
+                aspect-[16/9]
+                max-h-[280px]
+                rounded-2xl
+                border
+                object-cover
+                bg-white
+              "
             />
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-start gap-2">
                   <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white shrink-0">
                     {String(data.publicoAlvo ?? "AMBOS")}
                   </span>
 
-                  <h1 className="text-xl md:text-2xl font-bold leading-tight break-words min-w-0 flex-1">
+                  <h1
+                    className="
+                      min-w-0
+                      flex-1
+                      text-xl
+                      sm:text-2xl
+                      font-bold
+                      leading-snug
+                      break-words
+                      [overflow-wrap:anywhere]
+                    "
+                  >
                     {data.titulo}
                   </h1>
                 </div>
@@ -818,7 +883,7 @@ export default function MetodologiaUnicaPage() {
                     ({reviews})
                   </span>
                   <span className="hidden sm:inline text-gray-400">•</span>
-                  <span className="w-full sm:w-auto text-gray-700">
+                  <span className="w-full xl:w-auto text-gray-700">
                     <b>{assinaturas}</b> assinaturas
                   </span>
                 </div>
@@ -846,7 +911,7 @@ export default function MetodologiaUnicaPage() {
               </div>
 
               {podeEditarMetodologia ? (
-                <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto sm:max-w-[240px]">
+                <div className="flex flex-col items-stretch xl:items-end gap-2 w-full xl:w-auto xl:max-w-[280px]">
                   <button
                     type="button"
                     onClick={() => {
@@ -855,7 +920,7 @@ export default function MetodologiaUnicaPage() {
                           `${isAvulsa ? "&origem=avulsa" : ""}`
                       );
                     }}
-                    className="w-full sm:w-auto px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                    className="w-full xl:w-auto px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
                   >
                     Editar metodologia
                   </button>
@@ -865,11 +930,11 @@ export default function MetodologiaUnicaPage() {
                   </div>
                 </div>
               ) : !adminPreview ? (
-                <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto sm:max-w-[260px]">
+                <div className="flex flex-col items-stretch xl:items-end gap-2 w-full xl:w-auto xl:max-w-[280px]">
                   <button
                     disabled={busy || !!data?.viewer?.temAcesso}
                     onClick={assinarMetodologia}
-                    className="w-full sm:w-auto px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
+                    className="w-full xl:w-auto px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
                   >
                     {(() => {
                       const motivo = String(data.viewer?.motivoBloqueio || "");
@@ -1002,7 +1067,7 @@ export default function MetodologiaUnicaPage() {
       <div className="mt-6 space-y-4">
         {estruturasOrdenadas.map((estrutura, estruturaIndex) => (
           <div key={estrutura.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-           <div className="flex items-center justify-between gap-3">
+           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="font-semibold text-gray-900">
@@ -1056,7 +1121,7 @@ export default function MetodologiaUnicaPage() {
                 </div>
               </div>
 
-              <div className="text-xs text-gray-600 whitespace-nowrap pt-1">
+              <div className="text-xs text-gray-600 sm:whitespace-nowrap pt-1">
                 {estrutura.itens.filter((i) => concluIds.has(i.id)).length}/{estrutura.itens.length} concluídos
               </div>
             </div>
