@@ -746,24 +746,81 @@ function metodologiaLimitFromPlano(plano: string | null | undefined): number {
   if (p === "ATLETA_LEARNING_3") return 3;
   if (p === "PROFESSOR_LEARNING_3") return 3;
   if (p === "ORGANIZACOES_LEARNING_3") return 3;
+  if (p === "LEARNING_3") return 3;
 
   return 0;
 }
 
-function pickPrincipalAssinatura(
-  assinaturas: Array<{ plano?: string | null; status?: string | null; ativo?: boolean | null }>
+function assinaturaPrincipalTemAcesso(
+  assinatura: any
 ) {
-  const isAtiva = (a: any) =>
-    (a?.status === "ATIVA" || a?.status === "TRIAL") && a?.ativo === true;
+  if (
+    !assinatura ||
+    assinatura.ativo !== true
+  ) {
+    return false;
+  }
 
-  const isMetodo = (a: any) =>
-    isPlanoMetodologiaLearning(a?.plano) || isPlanoMetodologiaAvulsa(a?.plano);
+  const status = String(
+    assinatura.status || ""
+  )
+    .trim()
+    .toUpperCase();
 
-  const ativa = assinaturas.find((a) => !isMetodo(a) && isAtiva(a));
-  if (ativa) return ativa as any;
+  if (
+    status !== "ATIVA" &&
+    status !== "TRIAL" &&
+    status !== "CANCELADA"
+  ) {
+    return false;
+  }
 
-  const primeiraNaoMetodo = assinaturas.find((a) => !isMetodo(a));
-  return (primeiraNaoMetodo ?? null) as any;
+  const fimRaw =
+    status === "TRIAL"
+      ? (
+          assinatura.trialEndsAt ??
+          assinatura.renovaEm
+        )
+      : assinatura.renovaEm;
+
+  if (fimRaw) {
+    const fim =
+      new Date(fimRaw);
+
+    if (
+      !Number.isNaN(
+        fim.getTime()
+      ) &&
+      fim <= new Date()
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function pickPrincipalAssinatura(
+  assinaturas: any[]
+) {
+  const isMetodo =
+    (a: any) =>
+      isPlanoMetodologiaLearning(
+        a?.plano
+      ) ||
+      isPlanoMetodologiaAvulsa(
+        a?.plano
+      );
+
+  return (
+    assinaturas.find(
+      (a) =>
+        !isMetodo(a) &&
+        assinaturaPrincipalTemAcesso(
+          a
+        )
+    ) ?? null
+  );
 }
 
 async function getPermissaoCriacaoMetodologia(userId: string) {
@@ -1571,7 +1628,6 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
         ? await prisma.metodologiaAssinante.count({
             where: {
               usuarioId: userId,
-              status: MetodologiaAssinaturaStatus.ATIVA,
               origem: MetodologiaAssinaturaOrigem.LEARNING,
               iniciouEm: { gte: inicioMes },
             },
@@ -1593,9 +1649,40 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
         metodologia: {
           include: {
             criadorUsuario: {
-              select: { id: true, nome: true, foto: true, parceiro: true },
+              select: {
+                id: true,
+                nome: true,
+                foto: true,
+                parceiro: true,
+              },
             },
-            _count: { select: { assinantes: true, estruturas: true } },
+
+            _count: {
+              select: {
+                assinantes: true,
+                estruturas: true,
+              },
+            },
+
+            estruturas: {
+              where: {
+                ativo: true,
+              },
+
+              select: {
+                id: true,
+
+                itens: {
+                  where: {
+                    publicado: true,
+                  },
+
+                  select: {
+                    id: true,
+                  },
+                },
+              },
+            },
           },
         },
         metodologiaAvulsa: {
@@ -1605,8 +1692,16 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             },
             _count: { select: { assinantes: true, estruturas: true } },
             estruturas: {
+              where: {
+                ativo: true,
+              },
+
               include: {
-                itens: true,
+                itens: {
+                  where: {
+                    publicado: true,
+                  },
+                },
               },
             },
           },
@@ -1614,18 +1709,77 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
       },
     });
 
-    const metodologiasLearning = rows
+    const rowsComAcesso =
+      rows.filter(
+        (row) =>
+          assinaturaDaAcesso(
+            row
+          )
+      );
+
+    const metodologiasLearning = rowsComAcesso
       .map((r) => r.metodologia)
       .filter(Boolean) as any[];
 
     const learningIds = metodologiasLearning.map((m) => m.id);
     const countsById = await anexarCountsEstruturaPorMetodologia(learningIds);
 
-    const items = rows
+    const items = rowsComAcesso
       .map((r) => {
         if (r.metodologiaAvulsaId && r.metodologiaAvulsa) {
           const m = r.metodologiaAvulsa;
           const itens = (m.estruturas || []).flatMap((e: any) => e.itens || []);
+
+          const idsItens =
+            itens.map(
+              (item: any) =>
+                String(item.id)
+            );
+
+          const idsItensSet =
+            new Set(idsItens);
+
+          const progressoRaw: any =
+            (r as any).progresso &&
+            typeof (r as any)
+              .progresso === "object"
+              ? (r as any)
+                  .progresso
+              : {};
+
+          const concluidosRaw:
+            string[] =
+            Array.isArray(
+              progressoRaw.concluidos
+            )
+              ? progressoRaw
+                  .concluidos
+                  .map(String)
+              : [];
+
+          const concluidos =
+            concluidosRaw.filter(
+              (itemId) =>
+                idsItensSet.has(
+                  itemId
+                )
+            );
+
+          const totalItens =
+            idsItens.length;
+
+          const totalConcluidos =
+            concluidos.length;
+
+          const percentualConclusao =
+            totalItens > 0
+              ? Math.round(
+                  (
+                    totalConcluidos /
+                    totalItens
+                  ) * 100
+                )
+              : 0;
 
           return {
             id: m.id,
@@ -1648,6 +1802,12 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             iniciouEm: r.iniciouEm,
             status: r.status,
             concluiuEm: r.concluiuEm,
+            progresso: {
+              concluidos,
+            },
+            totalItens,
+            totalConcluidos,
+            percentualConclusao,
             mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
             totalReviews: Number(m.totalReviews ?? 0),
             videoCount: itens.filter((it: any) => it.tipo === "VIDEO").length,
@@ -1669,6 +1829,65 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
 
         if (r.metodologia) {
           const m = r.metodologia;
+
+          const idsItens =
+            (
+              m.estruturas || []
+            )
+              .flatMap(
+                (estrutura: any) =>
+                  estrutura.itens ||
+                  []
+              )
+              .map(
+                (item: any) =>
+                  String(item.id)
+              );
+
+          const idsItensSet =
+            new Set(idsItens);
+
+          const progressoRaw: any =
+            (r as any).progresso &&
+            typeof (r as any)
+              .progresso === "object"
+              ? (r as any)
+                  .progresso
+              : {};
+
+          const concluidosRaw:
+            string[] =
+            Array.isArray(
+              progressoRaw.concluidos
+            )
+              ? progressoRaw
+                  .concluidos
+                  .map(String)
+              : [];
+
+          const concluidos =
+            concluidosRaw.filter(
+              (itemId) =>
+                idsItensSet.has(
+                  itemId
+                )
+            );
+
+          const totalItens =
+            idsItens.length;
+
+          const totalConcluidos =
+            concluidos.length;
+
+          const percentualConclusao =
+            totalItens > 0
+              ? Math.round(
+                  (
+                    totalConcluidos /
+                    totalItens
+                  ) * 100
+                )
+              : 0;
 
           const aulaAoVivoCount = countsById[m.id]?.aulaAoVivoCount ?? 0;
 
@@ -1705,6 +1924,12 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
             iniciouEm: r.iniciouEm,
             status: r.status,
             concluiuEm: r.concluiuEm,
+            progresso: {
+              concluidos,
+            },
+            totalItens,
+            totalConcluidos,
+            percentualConclusao,
           };
         }
 
@@ -2497,22 +2722,65 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
     const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
 
-    const inicioMes = startOfMonth(new Date());
+    const inicioMes =
+      startOfMonth(
+        new Date()
+      );
 
     const usadasNoMes =
       userId && limite > 0
-        ? await prisma.metodologiaAssinante.count({
-            where: {
-              usuarioId: userId,
-              status: MetodologiaAssinaturaStatus.ATIVA,
-              origem: MetodologiaAssinaturaOrigem.LEARNING,
-              iniciouEm: { gte: inicioMes },
-            },
-          })
+        ? await prisma
+            .metodologiaAssinante
+            .count({
+              where: {
+                usuarioId:
+                  userId,
+
+                origem:
+                  MetodologiaAssinaturaOrigem.LEARNING,
+
+                iniciouEm: {
+                  gte:
+                    inicioMes,
+                },
+              },
+            })
         : 0;
 
-    const acessoFinal = hasAccess || isAdmin || isOwner;
-    const podeAssinarAgora = !!userId && !acessoFinal && limite > 0 && usadasNoMes < limite;
+    const iniciouEstaEscolha =
+      assinatura?.iniciouEm
+        ? new Date(
+            assinatura.iniciouEm
+          )
+        : null;
+
+    const jaEscolhidaNoMes =
+      Boolean(
+        assinatura &&
+          assinatura.origem ===
+            MetodologiaAssinaturaOrigem.LEARNING &&
+          iniciouEstaEscolha &&
+          !Number.isNaN(
+            iniciouEstaEscolha.getTime()
+          ) &&
+          iniciouEstaEscolha >=
+            inicioMes
+      );
+
+    const acessoFinal =
+      hasAccess ||
+      isAdmin ||
+      isOwner;
+
+    const podeAssinarAgora =
+      !!userId &&
+      !acessoFinal &&
+      limite > 0 &&
+      (
+        jaEscolhidaNoMes ||
+        usadasNoMes < limite
+      );
+  
     let motivoBloqueio: string | null = null;
 
     if (hasAccess) {
@@ -2717,14 +2985,28 @@ export async function assinarMetodologia(req: Request, res: Response) {
       });
     }
 
-    const existing = await prisma.metodologiaAssinante.findFirst({
-      where: {
-        usuarioId: userId,
-        ...(origem === MetodologiaAssinaturaOrigem.AVULSA
-          ? { metodologiaAvulsaId: id }
-          : { metodologiaId: id }),
-      },
-    });
+    if (
+      origem ===
+      MetodologiaAssinaturaOrigem.AVULSA
+    ) {
+      return res
+        .status(402)
+        .json({
+          code:
+            "PRECISA_PAGAR_AVULSA",
+
+          message:
+            "Esta metodologia é avulsa. Finalize o pagamento para liberar o acesso.",
+        });
+    }
+
+    const existing =
+      await prisma.metodologiaAssinante.findFirst({
+        where: {
+          usuarioId: userId,
+          metodologiaId: id,
+        },
+      });
 
     if (existing && assinaturaDaAcesso(existing)) {
       return res.json({ ok: true, already: true });
@@ -2749,21 +3031,62 @@ export async function assinarMetodologia(req: Request, res: Response) {
         });
       }
 
-      const inicioMes = startOfMonth(new Date());
-      const usadasNoMes = await prisma.metodologiaAssinante.count({
-        where: {
-          usuarioId: userId,
-          status: MetodologiaAssinaturaStatus.ATIVA,
-          origem: MetodologiaAssinaturaOrigem.LEARNING,
-          iniciouEm: { gte: inicioMes },
-        },
-      });
+      const inicioMes =
+        startOfMonth(
+          new Date()
+        );
 
-      if (usadasNoMes >= limite) {
-        return res.status(403).json({
-          code: "LIMITE_LEARNING_ATINGIDO",
-          message: `Seu plano permite ${limite} metodologia(s) Learning por mês.`,
-        });
+      const usadasNoMes =
+        await prisma
+          .metodologiaAssinante
+          .count({
+            where: {
+              usuarioId:
+                userId,
+
+              origem:
+                MetodologiaAssinaturaOrigem.LEARNING,
+
+              iniciouEm: {
+                gte:
+                  inicioMes,
+              },
+            },
+          });
+
+      const iniciouEscolhaExistente =
+        existing?.iniciouEm
+          ? new Date(
+              existing.iniciouEm
+            )
+          : null;
+
+      const jaEscolhidaNoMes =
+        Boolean(
+          existing &&
+            existing.origem ===
+              MetodologiaAssinaturaOrigem.LEARNING &&
+            iniciouEscolhaExistente &&
+            !Number.isNaN(
+              iniciouEscolhaExistente.getTime()
+            ) &&
+            iniciouEscolhaExistente >=
+              inicioMes
+        );
+
+      if (
+        usadasNoMes >= limite &&
+        !jaEscolhidaNoMes
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "LIMITE_METODOLOGIAS",
+
+            message:
+              `Seu plano permite escolher até ${limite} metodologia(s) Learning diferentes por mês.`,
+          });
       }
     }
 
@@ -2771,39 +3094,25 @@ export async function assinarMetodologia(req: Request, res: Response) {
       ? await prisma.metodologiaAssinante.update({
           where: { id: existing.id },
           data: {
-            origem,
+            origem: MetodologiaAssinaturaOrigem.LEARNING,
             status: MetodologiaAssinaturaStatus.ATIVA,
             iniciouEm: agora,
             expiraEm,
             cancelouEm: null,
             concluiuEm: null,
-            ...(origem === MetodologiaAssinaturaOrigem.AVULSA
-              ? {
-                  metodologiaId: null,
-                  metodologiaAvulsaId: id,
-                }
-              : {
-                  metodologiaId: id,
-                  metodologiaAvulsaId: null,
-                }),
+            metodologiaId: id,
+            metodologiaAvulsaId: null,
           },
         })
       : await prisma.metodologiaAssinante.create({
           data: {
             usuarioId: userId,
-            origem,
+            origem: MetodologiaAssinaturaOrigem.LEARNING,
             status: MetodologiaAssinaturaStatus.ATIVA,
             iniciouEm: agora,
             expiraEm,
-            ...(origem === MetodologiaAssinaturaOrigem.AVULSA
-              ? {
-                  metodologiaId: null,
-                  metodologiaAvulsaId: id,
-                }
-              : {
-                  metodologiaId: id,
-                  metodologiaAvulsaId: null,
-                }),
+            metodologiaId: id,
+            metodologiaAvulsaId: null,
           },
         });
 
@@ -5411,12 +5720,15 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
         expiraEm: assinatura?.expiraEm
           ? new Date(assinatura.expiraEm).toISOString()
           : null,
-        podeAssinarAgora: !isAdmin && !isOwner && !hasAccess,
-        motivoBloqueio: isAdmin || isOwner
-          ? null
-          : hasAccess
+        podeAssinarAgora:
+          false,
+
+        motivoBloqueio:
+          isAdmin || isOwner
             ? null
-            : "PRECISA_PAGAR_AVULSA",
+            : hasAccess
+              ? null
+              : "PRECISA_PAGAR_AVULSA",
         podeAvaliar:
           !!userId &&
           acessoFinal &&

@@ -1,6 +1,6 @@
 // server/controllers/perfilController
 import { Request, Response } from "express";
-import { Categoria, PosicaoCampo, MetodologiaAssinaturaStatus} from "@prisma/client";
+import { Categoria, PosicaoCampo, MetodologiaAssinaturaStatus, PagamentoStatus} from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
 import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
@@ -21,6 +21,107 @@ type AtividadeUI = {
 
 const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 const PONTOS_POR_INDICACAO_APROVADA = 10;
+
+const PLANOS_PRINCIPAIS_BILLING = [
+  "ATLETA_PRO",
+  "ATLETA_LEARNING_1",
+  "ATLETA_LEARNING_3",
+
+  "PROFESSOR_PRO",
+  "PROFESSOR_LEARNING_1",
+  "PROFESSOR_LEARNING_3",
+
+  "OLHEIRO_PRO",
+
+  "ORGANIZACOES_PRO",
+  "ORGANIZACOES_LEARNING_3",
+
+  "LEARNING_3",
+
+  "ATLETA_METODO_1",
+] as const;
+
+function normalizarTipoPlanoPrincipal(
+  tipo:
+    | string
+    | null
+    | undefined
+) {
+  return String(
+    tipo || ""
+  )
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    );
+}
+
+function planosPrincipaisPermitidosPorTipo(
+  tipoRaw:
+    | string
+    | null
+    | undefined
+): string[] {
+  const tipo =
+    normalizarTipoPlanoPrincipal(
+      tipoRaw
+    );
+
+  if (
+    tipo === "learning" ||
+    tipo === "marca" ||
+    tipo === "federacao"
+  ) {
+    return [
+      "LEARNING_3",
+    ];
+  }
+
+  if (
+    tipo === "atleta"
+  ) {
+    return [
+      "ATLETA_PRO",
+      "ATLETA_LEARNING_1",
+      "ATLETA_LEARNING_3",
+    ];
+  }
+
+  if (
+    tipo === "professor"
+  ) {
+    return [
+      "PROFESSOR_PRO",
+      "PROFESSOR_LEARNING_1",
+      "PROFESSOR_LEARNING_3",
+    ];
+  }
+
+  if (
+    tipo === "olheiro"
+  ) {
+    return [
+      "OLHEIRO_PRO",
+    ];
+  }
+
+  if (
+    tipo === "clube" ||
+    tipo === "escolinha" ||
+    tipo === "escola"
+  ) {
+    return [
+      "ORGANIZACOES_PRO",
+      "ORGANIZACOES_LEARNING_3",
+    ];
+  }
+
+  return [];
+}
+
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3001";
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
 
@@ -833,8 +934,15 @@ async function calcularTotalAtualDoPerfil(
     where: {
       usuarioId,
     },
+
     select: {
       pontosTotal: true,
+
+      pontuacao: {
+        select: {
+          pontuacaoTotal: true,
+        },
+      },
     },
   });
 
@@ -842,7 +950,11 @@ async function calcularTotalAtualDoPerfil(
     return null;
   }
 
-  return Number(atleta.pontosTotal ?? 0);
+  return Number(
+    atleta.pontuacao?.pontuacaoTotal ??
+    atleta.pontosTotal ??
+    0
+  );
 }
 
 export async function getPontuacaoPerfil(req: Request, res: Response) {
@@ -857,6 +969,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
 
         pontuacao: {
           select: {
+            pontuacaoTotal: true,
             pontuacaoPerformance: true,
             pontuacaoDisciplina: true,
             pontuacaoResponsabilidade: true,
@@ -990,14 +1103,17 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
         0
       );
 
+    const totalCalculado =
+      performanceAtual +
+      disciplinaAtual +
+      responsabilidadeAtual;
+
     const totalAtual =
       Number(
+        atleta.pontuacao?.pontuacaoTotal ??
+        totalCalculado ??
         atleta.pontosTotal ??
-        (
-          performanceAtual +
-          disciplinaAtual +
-          responsabilidadeAtual
-        )
+        0
       );
 
     return res.json({
@@ -1330,6 +1446,11 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         sobrenome: true,
         idade: true,
         pontosTotal: true,
+        pontuacao: {
+          select: {
+            pontuacaoTotal: true,
+          },
+        },
         email: true,
         telefone1: true,
         telefone2: true,
@@ -1769,7 +1890,11 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     perfilVerificado,
     pontuacaoTotal:
       tipoPerfil === "Atleta"
-        ? Number(atleta?.pontosTotal ?? 0)
+        ? Number(
+            atleta?.pontuacao?.pontuacaoTotal ??
+            atleta?.pontosTotal ??
+            0
+          )
         : 0,
   });
     } catch (error) {
@@ -3683,6 +3808,71 @@ export const upgradeLearningProfile =
                   nomeDeUsuarioFinal,
               },
             });
+
+            const planosPermitidosNoNovoTipo =
+              new Set(
+                planosPrincipaisPermitidosPorTipo(
+                  tipoUsuarioFinal
+                )
+              );
+
+            const planosIncompativeis =
+              PLANOS_PRINCIPAIS_BILLING.filter(
+                (plano) =>
+                  !planosPermitidosNoNovoTipo.has(
+                    plano
+                  )
+              );
+
+            if (
+              planosIncompativeis.length >
+              0
+            ) {
+              const agora =
+                new Date();
+
+              await tx.assinatura.updateMany({
+                where: {
+                  usuarioId,
+
+                  plano: {
+                    in:
+                      planosIncompativeis,
+                  },
+
+                  ativo: true,
+                },
+
+                data: {
+                  ativo: false,
+                  status: "BLOQUEADA",
+                  canceledAt: agora,
+                  bloqueadoEm: agora,
+                } as any,
+              });
+
+              await tx.pagamento.updateMany({
+                where: {
+                  usuarioId,
+
+                  plano: {
+                    in:
+                      planosIncompativeis,
+                  },
+
+                  status:
+                    PagamentoStatus.PENDENTE,
+                },
+
+                data: {
+                  status:
+                    PagamentoStatus.CANCELADO,
+
+                  canceladoEm:
+                    agora,
+                },
+              });
+            }
 
             switch (
               tipoValidado

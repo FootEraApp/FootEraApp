@@ -269,8 +269,8 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
 
     const payload = atletas.map((a) => {
       const pontuacaoTotal =
-        a.pontosTotal ??
         a.pontuacao?.pontuacaoTotal ??
+        a.pontosTotal ??
         0;
       const independente = !a.clubeId && !a.escolinhaId;
       const assinaturaAtual = getAssinaturaAtual(a.usuario?.assinatura);
@@ -410,8 +410,8 @@ export async function explorar(req: Request, res: Response) {
 
     const atletas = atletasRaw.map((a) => {
       const pontuacaoTotal =
-        a.pontosTotal ??
         a.pontuacao?.pontuacaoTotal ??
+        a.pontosTotal ??
         0;
       const independente = !a.clubeId && !a.escolinhaId;
       const assinaturaAtual = getAssinaturaAtual(a.usuario?.assinatura);
