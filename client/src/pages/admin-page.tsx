@@ -147,6 +147,24 @@ interface UsuarioAdmin {
 
 type PlanoAssinatura = "FREE" | "PRO" | "LEARNING" | string;
 
+function normalizarTipoAssinatura(tipo?: string | null) {
+  return String(tipo || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function usuarioSomenteLearning(tipo?: string | null) {
+  const t = normalizarTipoAssinatura(tipo);
+
+  return (
+    t === "learning" ||
+    t === "marca" ||
+    t === "federacao"
+  );
+}
+
 interface AssinaturaDTO {
   id?: string;
   plano: PlanoAssinatura;
@@ -1933,49 +1951,48 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
     }
   }
 
-function abrirModalExcluirProfessor(p: any) {
-  setProfDeleteErr("");
-  setProfToDelete({ id: p.id, nome: p.nome });
-  setProfDeleteModalOpen(true);
-}
-
-function fecharModalExcluirProfessor() {
-  if (profDeleteBusy) return;
-  setProfDeleteModalOpen(false);
-  setProfToDelete(null);
-  setProfDeleteErr("");
-}
-
-async function confirmarExcluirProfessor() {
-  if (!profToDelete?.id) return;
-
-  setProfDeleteBusy(true);
-  setProfDeleteErr("");
-
-  try {
-    const response = await fetch(`${API.BASE_URL}/api/professores/${profToDelete.id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-
-    if (!response.ok) {
-      const txt = await response.text().catch(() => "");
-      setProfDeleteErr(txt || `Erro ao excluir (HTTP ${response.status}).`);
-      return;
-    }
-
-    fecharModalExcluirProfessor();
-    notify.success("Professor e conta vinculada foram excluídos!");
-    const nextPage = professores.length <= 1 && profPage > 1 ? profPage - 1 : profPage;
-    await carregarProfessores(nextPage);
-
-  } catch (e: any) {
-    setProfDeleteErr(e?.message || "Falha de rede ao excluir.");
-  } finally {
-    setProfDeleteBusy(false);
+  function abrirModalExcluirProfessor(p: any) {
+    setProfDeleteErr("");
+    setProfToDelete({ id: p.id, nome: p.nome });
+    setProfDeleteModalOpen(true);
   }
-}
 
+  function fecharModalExcluirProfessor() {
+    if (profDeleteBusy) return;
+    setProfDeleteModalOpen(false);
+    setProfToDelete(null);
+    setProfDeleteErr("");
+  }
+
+  async function confirmarExcluirProfessor() {
+    if (!profToDelete?.id) return;
+
+    setProfDeleteBusy(true);
+    setProfDeleteErr("");
+
+    try {
+      const response = await fetch(`${API.BASE_URL}/api/professores/${profToDelete.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+
+      if (!response.ok) {
+        const txt = await response.text().catch(() => "");
+        setProfDeleteErr(txt || `Erro ao excluir (HTTP ${response.status}).`);
+        return;
+      }
+
+      fecharModalExcluirProfessor();
+      notify.success("Professor e conta vinculada foram excluídos!");
+      const nextPage = professores.length <= 1 && profPage > 1 ? profPage - 1 : profPage;
+      await carregarProfessores(nextPage);
+
+    } catch (e: any) {
+      setProfDeleteErr(e?.message || "Falha de rede ao excluir.");
+    } finally {
+      setProfDeleteBusy(false);
+    }
+  }
 
   async function abrirDetalhes(id: string) {
     setLoadingDetalhe(true);
@@ -1985,10 +2002,24 @@ async function confirmarExcluirProfessor() {
       const data = (await res.json()) as UsuarioDetalhe;
       try {
         if (!data.assinatura) {
-          const r2 = await fetch(`${API.BASE_URL}/api/assinaturas/${id}`, { headers: authHeaders() });
+          const r2 = await fetch(
+            `${API.BASE_URL}/api/assinaturas/${id}`,
+            {
+              headers: authHeaders(),
+            }
+          );
+
           if (r2.ok) {
-            const a = await r2.json();
-            data.assinatura = a ?? null;
+            const resposta = await r2.json();
+
+            const lista = Array.isArray(resposta?.items)
+              ? resposta.items
+              : [];
+
+            data.assinatura =
+              lista.find((a: any) => a.ativo) ??
+              lista[0] ??
+              null;
           }
         }
       } catch {}
@@ -2070,6 +2101,62 @@ async function confirmarExcluirProfessor() {
     } finally {
       setAcaoBusyId(null);
     }
+  }
+
+  async function escolherEAlterarPlanoAssinatura(
+    usuarioId: string,
+    tipoUsuario: string | null | undefined,
+    planoAtual?: string | null
+  ) {
+    const somenteLearning =
+      usuarioSomenteLearning(tipoUsuario);
+
+    const novoInformado = prompt(
+      somenteLearning
+        ? "Este tipo de perfil aceita somente o plano LEARNING:"
+        : "Novo plano (FREE | PRO | LEARNING):",
+      somenteLearning
+        ? "LEARNING"
+        : String(planoAtual ?? "FREE")
+    )
+      ?.toUpperCase()
+      .trim();
+
+    if (!novoInformado) return;
+
+    if (
+      somenteLearning &&
+      !["LEARNING", "LEARNING_3"].includes(
+        novoInformado
+      )
+    ) {
+      notify.error(
+        "Perfis Learning, Marca e Federação podem receber somente o plano LEARNING."
+      );
+      return;
+    }
+
+    if (
+      !somenteLearning &&
+      !["FREE", "PRO", "LEARNING"].includes(
+        novoInformado
+      )
+    ) {
+      notify.error(
+        "Plano inválido. Use FREE, PRO ou LEARNING."
+      );
+      return;
+    }
+
+    const novoPlano =
+      somenteLearning
+        ? "LEARNING"
+        : novoInformado;
+
+    await alterarPlanoAssinatura(
+      usuarioId,
+      novoPlano
+    );
   }
 
   async function alterarPlanoAssinatura(usuarioId: string, novoPlano: PlanoAssinatura) {
@@ -4614,15 +4701,11 @@ async function agendarManutencaoPersonalizada() {
                       <button
                         className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"
                         onClick={async () => {
-                          const atual = a.plano ?? "FREE";
-                          const novo = prompt(
-                            "Novo plano (FREE | PRO | LEARNING):",
-                            String(atual)
-                          )?.toUpperCase().trim();
-
-                          if (!novo) return;
-
-                          await alterarPlanoAssinatura(u.id, novo);
+                          await escolherEAlterarPlanoAssinatura(
+                            u.id,
+                            u.tipo,
+                            a.plano
+                          );
                           await carregarAssinantes(assPage);
                           await carregarAssOverview();
                         }}
@@ -4738,10 +4821,12 @@ async function agendarManutencaoPersonalizada() {
                             <button
                               className="text-blue-600"
                               onClick={async () => {
-                                const atual = a.plano ?? "FREE";
-                                const novo = prompt('Novo plano (FREE | PRO | LEARNING):', String(atual))?.toUpperCase().trim();
-                                if (!novo) return;
-                                await alterarPlanoAssinatura(u.id, novo);
+                                await escolherEAlterarPlanoAssinatura(
+                                  u.id,
+                                  u.tipo,
+                                  a.plano
+                                );
+
                                 await carregarAssinantes(assPage);
                                 await carregarAssOverview();
                               }}
@@ -5751,10 +5836,11 @@ async function agendarManutencaoPersonalizada() {
                           <button
                             className="px-3 py-2 bg-blue-600 text-white rounded"
                             onClick={async () => {
-                              const atual = u.assinatura?.plano ?? "FREE";
-                              const novo = prompt('Novo plano (FREE | PRO | LEARNING):', String(atual))?.toUpperCase().trim();
-                              if (!novo) return;
-                              await alterarPlanoAssinatura(u.id, novo);
+                              await escolherEAlterarPlanoAssinatura(
+                                u.id,
+                                u.tipo as string,
+                                u.assinatura?.plano
+                              );
                             }}
                           >
                             Trocar plano
