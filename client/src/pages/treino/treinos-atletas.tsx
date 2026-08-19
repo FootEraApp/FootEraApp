@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-atletas.tsx
 import { toast } from "@/lib/toast";
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
@@ -2018,7 +2019,7 @@ return (
                 playsInline
                 onError={() =>
                   setErroMidiaExercicio(
-                    "Não foi possível carregar o vídeo."
+                    "O vídeo está cadastrado, mas não foi possível carregá-lo."
                   )
                 }
               />
@@ -2030,7 +2031,7 @@ return (
                 className="max-h-[420px] w-full object-contain"
                 onError={() =>
                   setErroMidiaExercicio(
-                    "Não foi possível carregar a imagem."
+                    "A imagem está cadastrada, mas não foi possível carregá-la."
                   )
                 }
               />
@@ -2186,6 +2187,13 @@ return (
                 </p>
               )}
             </div>
+
+{!temMidia && (
+  <p className="mt-2 text-xs font-medium text-gray-400">
+    Este exercício não possui vídeo nem imagem demonstrativa cadastrados.
+  </p>
+)}
+
           </div>
         </div>
 
