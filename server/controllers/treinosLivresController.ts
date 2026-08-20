@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { recomputePontuacaoAtleta } from "../services/recomputePontuacao.js";
 
 export const treinosLivresController = {
   async index(req: Request, res: Response) {
@@ -100,21 +101,12 @@ export const treinosLivresController = {
       });
 
       try {
-        const atleta = await prisma.atleta.findUnique({
-          where: { id: String(atletaId) },
-          select: { usuarioId: true },
-        });
-
-        if (atleta?.usuarioId) {
-          await prisma.atividadeRecente.create({
-            data: {
-              usuarioId: atleta.usuarioId,
-              tipo: "treino",
-              imagemUrl: urlEvidencia,
-            },
-          });
-        }
-      } catch {
+        await recomputePontuacaoAtleta(String(atletaId));
+      } catch (e) {
+        console.warn(
+          "[treinoLivre] falha ao recalcular pontuação:",
+          e
+        );
       }
 
       return res.status(201).json(novo);
@@ -130,12 +122,32 @@ export const treinosLivresController = {
     try {
       const id = String(req.params.id);
 
-      const treino = await prisma.treinoLivre.findUnique({ where: { id } });
-      if (!treino) return res.status(404).json({ message: "Treino não encontrado" });
+      const treino = await prisma.treinoLivre.findUnique({
+        where: { id },
+      });
 
-      await prisma.treinoLivre.delete({ where: { id } });
+      if (!treino) {
+        return res
+          .status(404)
+          .json({ message: "Treino não encontrado" });
+      }
 
-      res.status(204).send();
+      const atletaId = treino.atletaId;
+
+      await prisma.treinoLivre.delete({
+        where: { id },
+      });
+
+      try {
+        await recomputePontuacaoAtleta(atletaId);
+      } catch (e) {
+        console.warn(
+          "[treinoLivre] falha ao recalcular pontuação após exclusão:",
+          e
+        );
+      }
+
+      return res.status(204).send();
     } catch (err) {
       res.status(500).json({ message: "Erro ao deletar treino", error: err });
     }

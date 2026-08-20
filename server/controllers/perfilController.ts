@@ -1,4 +1,3 @@
-// server/controllers/perfilController
 import { Request, Response } from "express";
 import { Categoria, PosicaoCampo, MetodologiaAssinaturaStatus, PagamentoStatus } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -379,30 +378,64 @@ export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: R
 
     validarJanelaAtleta(plano, from, to);
 
-    const [subsTreino, subsDesafio] = await Promise.all([
+    const [
+      subsTreino,
+      subsDesafio,
+      treinosLivres,
+    ] = await Promise.all([
       prisma.submissaoTreino.findMany({
         where: {
           atletaId: atleta.id,
           aprovado: true as any,
-          criadoEm: { gte: from, lte: to },
+          criadoEm: {
+            gte: from,
+            lte: to,
+          },
         },
         include: {
           treinoAgendado: {
             include: {
-              treinoProgramado: { include: { exercicios: true } },
+              treinoProgramado: {
+                include: {
+                  exercicios: true,
+                },
+              },
             },
           },
         },
-        orderBy: { criadoEm: "asc" },
+        orderBy: {
+          criadoEm: "asc",
+        },
       }),
+
       prisma.submissaoDesafio.findMany({
         where: {
           atletaId: atleta.id,
           aprovado: true as any,
-          createdAt: { gte: from, lte: to },
+          createdAt: {
+            gte: from,
+            lte: to,
+          },
         },
-        include: { desafio: true },
-        orderBy: { createdAt: "asc" },
+        include: {
+          desafio: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      }),
+
+      prisma.treinoLivre.findMany({
+        where: {
+          atletaId: atleta.id,
+          data: {
+            gte: from,
+            lte: to,
+          },
+        },
+        orderBy: {
+          data: "asc",
+        },
       }),
     ]);
 
@@ -435,6 +468,29 @@ export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: R
       };
     });
 
+    const historicoTreinosLivres =
+      treinosLivres.map((t: any) => {
+        const ts = +new Date(
+          t.data ?? t.createdAt
+        );
+
+        return {
+          tipo: "Treino Livre" as const,
+          status: "Treino Livre Concluído",
+          data: new Date(ts).toLocaleDateString(
+            "pt-BR"
+          ),
+          ts,
+          duracao:
+            Number(t.duracaoMin) > 0
+              ? `${Number(t.duracaoMin)} min`
+              : undefined,
+          titulo:
+            t.descricao || "Treino Livre",
+          pontuacao: 5,
+        };
+      });
+
     const historicoDesafios = subsDesafio.map((s: any) => {
       const ts = +new Date(s.createdAt);
       return {
@@ -447,7 +503,7 @@ export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: R
       };
     });
 
-    const items = [...historicoTreinos, ...historicoDesafios]
+    const items = [...historicoTreinos, ...historicoTreinosLivres, ...historicoDesafios]
       .sort((a, b) => a.ts - b.ts)
       .map(({ ts, ...rest }) => rest);
 
@@ -780,6 +836,25 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
 
     if (!atleta) return res.json([]);
 
+    const atividadesDbSemTreinosOrfaos =
+      atividadesDb.filter((a) => {
+        const tipo = String(a.tipo ?? "")
+          .trim()
+          .toLowerCase();
+
+        const semTitulo =
+          !String(a.titulo ?? "").trim();
+
+        const semLink =
+          !String(a.link ?? "").trim();
+
+        return !(
+          tipo === "treino" &&
+          semTitulo &&
+          semLink
+        );
+      });
+
     const treinosLivres = await prisma.treinoLivre.findMany({
       where: { atletaId: atleta.id },
       orderBy: { data: "desc" },
@@ -832,7 +907,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     type AtividadeComTs = AtividadeUI & { ts: number };
 
     const itensRaw: AtividadeComTs[] = [
-      ...atividadesDb.map((a): AtividadeComTs => ({
+      ...atividadesDbSemTreinosOrfaos.map((a): AtividadeComTs => ({
         id: `ar-${a.id}`,
         tipo: a.tipo ?? "Atividade",
         titulo: a.titulo ?? "Atividade",
@@ -1042,6 +1117,35 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
       };
     });
 
+    const treinosLivresPontuacao =
+      await prisma.treinoLivre.findMany({
+        where: {
+          atletaId: atleta.id,
+        },
+        orderBy: {
+          data: "desc",
+        },
+      });
+
+    const historicoTreinosLivres =
+      treinosLivresPontuacao.map((t: any) => ({
+        tipo: "Treino Livre" as const,
+        status: "Concluído",
+        data: new Date(
+          t.data ?? t.createdAt ?? Date.now()
+        ).toLocaleDateString("pt-BR"),
+        ts: +new Date(
+          t.data ?? t.createdAt ?? Date.now()
+        ),
+        duracao:
+          Number(t.duracaoMin) > 0
+            ? `${Number(t.duracaoMin)} min`
+            : undefined,
+        titulo:
+          t.descricao || "Treino Livre",
+        pontuacao: 5,
+      }));
+
     const subsDesafio = await prisma.submissaoDesafio.findMany({
       where: { atletaId: atleta.id, aprovado: true as any },
       include: { desafio: true },
@@ -1062,7 +1166,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
     const parts = await getParticipacoesGrupo(usuarioId, atleta.id);
     const historicoGrupo = parts.map(mapGrupoToHistorico);
 
-    const historico = [...historicoTreinos, ...historicoDesafios, ...historicoGrupo]
+    const historico = [...historicoTreinos, ...historicoTreinosLivres, ...historicoDesafios, ...historicoGrupo]
       .sort((a, b) => (b as any).ts - (a as any).ts)
       .slice(0, 20)
       .map(({ ts, ...rest }) => rest);

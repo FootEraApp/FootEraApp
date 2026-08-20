@@ -7,7 +7,7 @@ import ToggleSwitch from "../components/ToggleSwitch";
 import axios from "axios";
 import Storage from "../utils/storage.js"
 import LearningCard from "../components/learning/LearningCard.js";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ChevronDown, ChevronUp, Play } from "lucide-react";
 import Avatar from "../components/shared/Avatar.js";
 import CoverImage from "../components/shared/CoverImage.js";
 import { ativarPushNotifications, desativarPushNotifications } from "../services/pushNotifications.js";
@@ -223,25 +223,51 @@ function authHeaders(extra: Record<string, string> = {}) {
 const ASSETS_CDN_BASE =
   import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
 
-function isNativeApp() {
-  if (typeof window === "undefined") return false;
-
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-
-  return (
-    protocol === "capacitor:" ||
-    protocol === "ionic:" ||
-    hostname === "localhost" ||
-    hostname === "10.0.2.2"
-  );
-}
-
 function toAbsoluteUrl(raw?: string | null) {
   if (!raw) return null;
 
-  const v = String(raw).trim().replace(/\\/g, "/");
-  if (!v || v === "null" || v === "undefined") return null;
+  const v = String(raw)
+    .trim()
+    .replace(/\\/g, "/");
+
+  if (
+    !v ||
+    v === "null" ||
+    v === "undefined"
+  ) {
+    return null;
+  }
+
+  const apiBase = String(
+    API.BASE_URL || ""
+  ).replace(/\/+$/, "");
+
+  const assetsBase = String(
+    ASSETS_CDN_BASE ||
+      "https://footera.app.br"
+  ).replace(/\/+$/, "");
+
+  const localStatic = v.match(
+    /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2)(?::\d+)?(\/(?:assets|videos)\/.*)$/i
+  );
+
+  if (localStatic) {
+    return `${assetsBase}${localStatic[1]}`;
+  }
+
+  const localBackend = v.match(
+    /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2):3001(\/.*)?$/i
+  );
+
+  if (localBackend) {
+    const path = localBackend[1] || "";
+
+    return `${apiBase}${
+      path.startsWith("/")
+        ? path
+        : `/${path}`
+    }`;
+  }
 
   if (
     v.startsWith("blob:") ||
@@ -252,40 +278,40 @@ function toAbsoluteUrl(raw?: string | null) {
     return v;
   }
 
-  if (v.startsWith("/assets/")) {
-    return v;
+  if (
+    v.startsWith("/assets/") ||
+    v.startsWith("/videos/")
+  ) {
+    return `${assetsBase}${v}`;
   }
 
-  if (v.startsWith("assets/")) {
-    return `/${v}`;
-  }
-
-  if (v.startsWith("/videos/")) {
-    return isNativeApp()
-      ? `${ASSETS_CDN_BASE}${v}`
-      : v;
-  }
-
-  if (v.startsWith("videos/")) {
-    return isNativeApp()
-      ? `${ASSETS_CDN_BASE}/${v}`
-      : `/${v}`;
+  if (
+    v.startsWith("assets/") ||
+    v.startsWith("videos/")
+  ) {
+    return `${assetsBase}/${v}`;
   }
 
   if (v.startsWith("/exercicios/")) {
-    return `${API.BASE_URL}${v}`;
+    return `${apiBase}${v}`;
   }
 
   if (v.startsWith("exercicios/")) {
-    return `${API.BASE_URL}/${v}`;
+    return `${apiBase}/${v}`;
   }
 
-  if (v.startsWith("/uploads/") || v.startsWith("/upload/")) {
-    return `${API.BASE_URL}${v}`;
+  if (
+    v.startsWith("/uploads/") ||
+    v.startsWith("/upload/")
+  ) {
+    return `${apiBase}${v}`;
   }
 
-  if (v.startsWith("uploads/") || v.startsWith("upload/")) {
-    return `${API.BASE_URL}/${v}`;
+  if (
+    v.startsWith("uploads/") ||
+    v.startsWith("upload/")
+  ) {
+    return `${apiBase}/${v}`;
   }
 
   if (/^[\w-]{11}$/.test(v)) {
@@ -293,10 +319,10 @@ function toAbsoluteUrl(raw?: string | null) {
   }
 
   if (v.startsWith("/")) {
-    return `${API.BASE_URL}${v}`;
+    return `${apiBase}${v}`;
   }
 
-  return `${API.BASE_URL}/${v}`;
+  return `${apiBase}/${v}`;
 }
 
 function irParaPerfilUsuario(usuarioId?: string | null) {
@@ -526,11 +552,22 @@ export default function AdminDashboard() {
   const [exQ, setExQ] = useState("");
   const [exDebQ, setExDebQ] = useState("");
   const [exCat, setExCat] = useState<string>("");
+  const [exFiltroVideo, setExFiltroVideo] = useState<
+    "todos" | "com_video" | "sem_video"
+  >("todos");
+  const [exFiltroOrigem, setExFiltroOrigem] = useState<
+    "todos" | "catalogo" | "personalizado"
+  >("todos");
   const [trQ, setTrQ] = useState("");
   const [trDebQ, setTrDebQ] = useState("");
   const [trCat, setTrCat] = useState<string>("");
-  const [ordenacaoExercicios, setOrdenacaoExercicios] = useState<OrdenacaoConteudoAdmin>("uso_desc");
+  const [ordenacaoExercicios, setOrdenacaoExercicios] =
+    useState<OrdenacaoConteudoAdmin>("uso_desc");
   const [ordenacaoTreinos, setOrdenacaoTreinos] = useState<OrdenacaoConteudoAdmin>("uso_desc");
+  const [treinoAdminAbertoId, setTreinoAdminAbertoId] = useState<string | null>(null);
+  const [treinoAdminDetalhes, setTreinoAdminDetalhes] = useState<Record<string, any>>({});
+  const [treinoAdminLoadingId, setTreinoAdminLoadingId] = useState<string | null>(null);
+  const [treinoAdminErros, setTreinoAdminErros] = useState<Record<string, string>>({});
   const [detalheAberto, setDetalheAberto] = useState(false);
   const [userSelecionado, setUserSelecionado] = useState<UsuarioDetalhe | null>(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -701,6 +738,122 @@ export default function AdminDashboard() {
     setToast({ type, msg });
     window.clearTimeout((showToast as any)._t);
     (showToast as any)._t = window.setTimeout(() => setToast(null), 3500);
+  }
+
+  function nomeCriadorTreinoAdmin(t: any) {
+    return String(
+      t?.criador?.nome ??
+        t?.criadorNome ??
+        t?.criadoPorNome ??
+        t?.ownerNome ??
+        t?.donoNome ??
+        t?.criadorProfessor?.usuario?.nome ??
+        t?.criadorProfessor?.nome ??
+        t?.Professor?.usuario?.nome ??
+        t?.Professor?.nome ??
+        t?.criadorUsuario?.nome ??
+        t?.criadorUsuario?.nomeDeUsuario ??
+        t?.criadoPor?.nome ??
+        t?.usuarioCriador?.nome ??
+        t?.professor?.usuario?.nome ??
+        t?.professor?.nome ??
+        t?.clube?.nome ??
+        t?.clube?.usuario?.nome ??
+        t?.escolinha?.nome ??
+        t?.escolinha?.usuario?.nome ??
+        "Não identificado"
+    );
+  }
+
+  function tipoCriadorTreinoAdmin(t: any) {
+    return String(
+      t?.criador?.tipo ??
+        t?.criadorTipo ??
+        t?.criadorUsuario?.tipo ??
+        t?.criadoPor?.tipo ??
+        t?.usuarioCriador?.tipo ??
+        t?.tipoUsuario ??
+        t?.ownerTipo ??
+        t?.donoTipo ??
+        (t?.criadorProfessor || t?.Professor || t?.professorId || t?.criadorProfessorId
+          ? "Professor"
+          : t?.clubeId
+          ? "Clube"
+          : t?.escolinhaId
+          ? "Escolinha"
+          : "")
+    );
+  }
+
+  function nomeExercicioTreinoAdmin(ex: any) {
+    return String(
+      ex?.nome ??
+        ex?.titulo ??
+        ex?.exercicio?.nome ??
+        ex?.exercicioTemporario?.nome ??
+        ex?.exercicioPersonalizado?.nome ??
+        "Exercício"
+    );
+  }
+
+  async function toggleDetalhesTreinoAdmin(t: any) {
+    const id = String(t?.id || "").trim();
+    if (!id) return;
+
+    if (treinoAdminAbertoId === id) {
+      setTreinoAdminAbertoId(null);
+      return;
+    }
+
+    setTreinoAdminAbertoId(id);
+
+    if (treinoAdminDetalhes[id]) return;
+
+    setTreinoAdminLoadingId(id);
+    setTreinoAdminErros((prev) => ({ ...prev, [id]: "" }));
+
+    const urls = [
+      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(id)}`,
+      `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(id)}`,
+      `${API.BASE_URL}/api/treinos/${encodeURIComponent(id)}`,
+    ];
+
+    let detalhe: any = null;
+    let ultimoErro = "";
+
+    try {
+      for (const url of urls) {
+        const r = await fetch(url, { headers: authHeaders() });
+        if (!r.ok) {
+          ultimoErro = `HTTP ${r.status}`;
+          continue;
+        }
+
+        const j = await r.json().catch(() => null);
+        detalhe = j?.data ?? j?.item ?? j;
+        if (detalhe) break;
+      }
+
+      if (!detalhe) {
+        setTreinoAdminErros((prev) => ({
+          ...prev,
+          [id]: `Não foi possível carregar os detalhes do treino${ultimoErro ? ` (${ultimoErro})` : ""}.`,
+        }));
+        return;
+      }
+
+      setTreinoAdminDetalhes((prev) => ({
+        ...prev,
+        [id]: { ...t, ...detalhe },
+      }));
+    } catch (e: any) {
+      setTreinoAdminErros((prev) => ({
+        ...prev,
+        [id]: e?.message || "Falha de rede ao carregar detalhes do treino.",
+      }));
+    } finally {
+      setTreinoAdminLoadingId((atual) => (atual === id ? null : atual));
+    }
   }
 
 type AssinanteListItem = {
@@ -1543,15 +1696,41 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
 
   async function carregarExercicios() {
     try {
-      const r = await fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() });
+      const r = await fetch(
+        `${API.BASE_URL}/api/exercicios/admin/todos`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      if (!r.ok) {
+        throw new Error(
+          `Erro ao carregar exercícios: HTTP ${r.status}`
+        );
+      }
+
       const j = await r.json();
 
       const arr = Array.isArray(j)
         ? j
-        : j.items ?? j.data ?? j.exercicios ?? j.rows ?? j.result ?? [];
+        : j.items ??
+          j.data ??
+          j.exercicios ??
+          j.rows ??
+          j.result ??
+          [];
 
-      setExercicios(Array.isArray(arr) ? arr : []);
-    } catch {
+      setExercicios(
+        Array.isArray(arr)
+          ? arr
+          : []
+      );
+    } catch (error) {
+      console.error(
+        "[admin-page] erro ao carregar exercícios:",
+        error
+      );
+
       setExercicios([]);
     }
   }
@@ -1773,6 +1952,23 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
             createdAt: tr.createdAt ?? null,
             realizadoCount,
             agendadoCount,
+            duracao: tr.duracao ?? tr.duracaoMinutos ?? null,
+            pontuacao: tr.pontuacao ?? tr.pontos ?? null,
+            exercicios: Array.isArray(tr.exercicios) ? tr.exercicios : [],
+            criador: tr.criador ?? null,
+            criadorNome: tr.criadorNome ?? tr.criadoPorNome ?? tr.ownerNome ?? tr.donoNome ?? null,
+            criadorTipo: tr.criadorTipo ?? tr.tipoUsuario ?? tr.ownerTipo ?? tr.donoTipo ?? tr.criadorUsuario?.tipo ?? null,
+            criadorProfessorId: tr.criadorProfessorId ?? null,
+            criadorUsuarioId: tr.criadorUsuarioId ?? null,
+            professorId: tr.professorId ?? null,
+            clubeId: tr.clubeId ?? null,
+            escolinhaId: tr.escolinhaId ?? null,
+            criadorProfessor: tr.criadorProfessor ?? null,
+            Professor: tr.Professor ?? null,
+            criadorUsuario: tr.criadorUsuario ?? null,
+            professor: tr.professor ?? tr.Professor ?? null,
+            clube: tr.clube ?? null,
+            escolinha: tr.escolinha ?? null,
           };
         });
 
@@ -2767,12 +2963,63 @@ async function agendarManutencaoPersonalizada() {
   }, [treinos, trDebQ, trCat]);
 
   const exerciciosFiltrados = useMemo(() => {
-    return (Array.isArray(exercicios) ? exercicios : []).filter((ex: any) => {
-      if (!matchesText(ex, exDebQ)) return false;
-      if (!itemHasCategoria(ex, exCat)) return false;
-      return true;
-    });
-  }, [exercicios, exDebQ, exCat]);
+    return (Array.isArray(exercicios) ? exercicios : []).filter(
+      (ex: any) => {
+        if (!matchesText(ex, exDebQ)) {
+          return false;
+        }
+
+        if (!itemHasCategoria(ex, exCat)) {
+          return false;
+        }
+
+        const videoUrl = resolveVideoUrl(ex);
+        const possuiVideo = Boolean(videoUrl);
+
+        if (
+          exFiltroVideo === "com_video" &&
+          !possuiVideo
+        ) {
+          return false;
+        }
+
+        if (
+          exFiltroVideo === "sem_video" &&
+          possuiVideo
+        ) {
+          return false;
+        }
+
+        const origem = String(
+          ex?.origem || "catalogo"
+        )
+          .trim()
+          .toLowerCase();
+
+        if (
+          exFiltroOrigem === "catalogo" &&
+          origem !== "catalogo"
+        ) {
+          return false;
+        }
+
+        if (
+          exFiltroOrigem === "personalizado" &&
+          origem !== "personalizado"
+        ) {
+          return false;
+        }
+
+        return true;
+      }
+    );
+  }, [
+    exercicios,
+    exDebQ,
+    exCat,
+    exFiltroVideo,
+    exFiltroOrigem,
+  ]);
 
   const treinosOrdenados = useMemo(() => {
     return [...treinosFiltrados].sort((a: any, b: any) => {
@@ -3657,6 +3904,57 @@ async function agendarManutencaoPersonalizada() {
                 placeholder="Pesquisar por nome, código, nível (Base/Avançado), descrição…"
                 className="border rounded px-3 py-2 w-full sm:w-[min(520px,100%)]"
               />
+              <select
+                value={exFiltroVideo}
+                onChange={(e) =>
+                  setExFiltroVideo(
+                    e.target.value as
+                      | "todos"
+                      | "com_video"
+                      | "sem_video"
+                  )
+                }
+                className="border rounded px-3 py-2 bg-white w-full sm:w-auto"
+                title="Filtrar por vídeo"
+              >
+                <option value="todos">
+                  Todos os vídeos
+                </option>
+
+                <option value="com_video">
+                  Com vídeo
+                </option>
+
+                <option value="sem_video">
+                  Sem vídeo
+                </option>
+              </select>
+
+              <select
+                value={exFiltroOrigem}
+                onChange={(e) =>
+                  setExFiltroOrigem(
+                    e.target.value as
+                      | "todos"
+                      | "catalogo"
+                      | "personalizado"
+                  )
+                }
+                className="border rounded px-3 py-2 bg-white w-full sm:w-auto"
+                title="Filtrar por origem"
+              >
+                <option value="todos">
+                  Todos os tipos
+                </option>
+
+                <option value="catalogo">
+                  Tabela Exercicio
+                </option>
+
+                <option value="personalizado">
+                  Personalizados
+                </option>
+              </select>
 
               <select
                 value={ordenacaoExercicios}
@@ -3681,13 +3979,39 @@ async function agendarManutencaoPersonalizada() {
 
             <ul className="space-y-2">
               {exerciciosOrdenados.map((ex: any) => {
+                const isPersonalizado =
+                  String(ex?.origem || "").toLowerCase() ===
+                  "personalizado";
+
                 const videoUrl = resolveVideoUrl(ex);
 
                 return (
-                  <li key={ex.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                  <li
+                    key={`${ex.origem ?? "catalogo"}:${ex.id}`} className="bg-white p-4 rounded shadow flex justify-between items-center">
                     <div>
-                      <strong>{ex.nome}</strong> — {ex.codigo} [{ex.nivel}]
-                      <p className="text-sm text-gray-500">{ex.descricao}</p>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <strong>{ex.nome}</strong>
+
+                        {ex.codigo ? (
+                          <span>— {ex.codigo}</span>
+                        ) : null}
+
+                        <span>
+                          [{ex.nivel || "—"}]
+                        </span>
+
+                        {isPersonalizado ? (
+                          <span className="ml-1 rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                            Personalizado
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className="text-sm text-gray-500">
+                        {ex.descricao ??
+                          ex.objetivo ??
+                          ""}
+                      </p>
                       <p className="text-xs text-gray-500 mt-1">
                         Esse exercício foi utilizado{" "}
                         <strong>{Number(ex.usadoEmTreinos || 0)}</strong> treinos diferentes
@@ -3704,15 +4028,33 @@ async function agendarManutencaoPersonalizada() {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => {
-                          if (!videoUrl) return notify.error("Este exercício não possui vídeo cadastrado.");
+                          if (!videoUrl) {
+                            notify.error(
+                              "Este exercício não possui vídeo demonstrativo."
+                            );
+                            return;
+                          }
+
                           openVideo(videoUrl);
                         }}
-                        className={videoUrl ? "text-green-600" : "text-gray-400 cursor-not-allowed"}
-                        title={videoUrl ? "Ver vídeo demonstrativo" : "Sem vídeo"}
-                        disabled={!videoUrl}
+                        className={
+                          videoUrl
+                            ? "inline-flex h-8 w-8 items-center justify-center text-blue-600 hover:text-blue-700"
+                            : "inline-flex h-8 w-8 items-center justify-center text-gray-400 cursor-default"
+                        }
+                        title={
+                          videoUrl
+                            ? "Ver vídeo demonstrativo"
+                            : "Este exercício não possui vídeo"
+                        }
+                        aria-disabled={!videoUrl}
                       >
-                        ▶️
+                        <Play
+                          className="h-4 w-4"
+                          fill="currentColor"
+                        />
                       </button>
 
                       <button
@@ -3789,52 +4131,188 @@ async function agendarManutencaoPersonalizada() {
             ) : (
               <ul className="space-y-2">
                 {treinosOrdenados.map((t: any) => {
+                  const id = String(t.id);
                   const nome = t.nome ?? t.titulo ?? "(sem nome)";
                   const codigo = t.codigo ?? "-";
                   const realizado = Number(t.realizadoCount ?? 0);
-                  const agendado = Number(t.agendadoCount ?? 0);
                   const nivel = t.nivel ?? t.dificuldade ?? "-";
                   const descricao = t.descricao ?? t.resumo ?? "";
-                  return (
-                    <li key={t.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
-                      <div>
-                        <strong>{nome}</strong> — {codigo} [{nivel}]
-                        <p className="text-sm text-gray-500">{descricao}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Esse treino foi realizado{" "}
-                          <strong>{realizado}</strong> vezes
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => (window.location.href = `/admin/treinos/create?id=${t.id}`)} className="text-blue-600">
-                          ✏️
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (!confirm("Deseja mesmo excluir este treino?")) return;
+                  const isOpen = treinoAdminAbertoId === id;
+                  const detalhe = treinoAdminDetalhes[id] ?? t;
+                  const loadingDetalheTreino = treinoAdminLoadingId === id;
+                  const erroDetalheTreino = treinoAdminErros[id] || "";
+                  const exerciciosTreino = Array.isArray(detalhe?.exercicios)
+                    ? detalhe.exercicios
+                    : Array.isArray(detalhe?.exs)
+                    ? detalhe.exs
+                    : Array.isArray(detalhe?.conteudo?.exercicios)
+                    ? detalhe.conteudo.exercicios
+                    : [];
+                  const duracaoTreino = detalhe?.duracao ?? detalhe?.duracaoMinutos ?? null;
+                  const pontuacaoTreino = detalhe?.pontuacao ?? detalhe?.pontos ?? null;
+                  const criadorNome = nomeCriadorTreinoAdmin(detalhe);
+                  const criadorTipo = tipoCriadorTreinoAdmin(detalhe);
 
-                            let resp = await fetch(`${API.BASE_URL}/api/treinos/${t.id}`, {
-                              method: "DELETE",
-                              headers: authHeaders(),
-                            });
-                            if (!resp.ok) {
-                              resp = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
+                  return (
+                    <li key={t.id} className="bg-white rounded shadow overflow-hidden">
+                      <div className="p-4 flex justify-between items-center gap-3">
+                        <div className="min-w-0">
+                          <strong>{nome}</strong> — {codigo} [{nivel}]
+                          <p className="text-sm text-gray-500">{descricao}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Esse treino foi realizado{" "}
+                            <strong>{realizado}</strong> vezes
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2 items-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => void toggleDetalhesTreinoAdmin(t)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50"
+                            title={isOpen ? "Recolher detalhes" : "Ver detalhes do treino"}
+                            aria-expanded={isOpen}
+                          >
+                            {isOpen ? (
+                              <ChevronUp className="w-5 h-5" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5" />
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => (window.location.href = `/admin/treinos/create?id=${t.id}`)}
+                            className="text-blue-600"
+                            title="Editar treino"
+                          >
+                            ✏️
+                          </button>
+
+                          <button
+                            title="Excluir treino"
+                            onClick={async () => {
+                              if (!confirm("Deseja mesmo excluir este treino?")) return;
+
+                              let resp = await fetch(`${API.BASE_URL}/api/treinos/${t.id}`, {
                                 method: "DELETE",
                                 headers: authHeaders(),
                               });
-                            }
-                            if (resp.ok) {
-                              notify.success("Treino excluído com sucesso!");
-                              setTreinos((prev) => prev.filter((x) => x.id !== t.id));
-                              void carregarExercicios();
-                            } else {
-                              notify.error("Erro ao excluir treino.");
-                            }
-                          }}
-                        >
-                          🗑
-                        </button>
+                              if (!resp.ok) {
+                                resp = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
+                                  method: "DELETE",
+                                  headers: authHeaders(),
+                                });
+                              }
+                              if (resp.ok) {
+                                notify.success("Treino excluído com sucesso!");
+                                setTreinos((prev) => prev.filter((x) => x.id !== t.id));
+                                setTreinoAdminAbertoId((atual) => (atual === id ? null : atual));
+                                setTreinoAdminDetalhes((prev) => {
+                                  const next = { ...prev };
+                                  delete next[id];
+                                  return next;
+                                });
+                                void carregarExercicios();
+                              } else {
+                                notify.error("Erro ao excluir treino.");
+                              }
+                            }}
+                          >
+                            🗑
+                          </button>
+                        </div>
                       </div>
+
+                      {isOpen && (
+                        <div className="border-t bg-gray-50 px-4 py-4">
+                          {loadingDetalheTreino ? (
+                            <p className="text-sm text-gray-500">Carregando detalhes do treino...</p>
+                          ) : erroDetalheTreino ? (
+                            <p className="text-sm text-red-600">{erroDetalheTreino}</p>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="rounded-lg border bg-white p-3">
+                                  <div className="text-xs text-gray-500">Tempo programado</div>
+                                  <div className="font-semibold text-gray-900">
+                                    {duracaoTreino != null && String(duracaoTreino).trim() !== ""
+                                      ? `${duracaoTreino} min`
+                                      : "Não informado"}
+                                  </div>
+                                </div>
+
+                                <div className="rounded-lg border bg-white p-3">
+                                  <div className="text-xs text-gray-500">Criado por</div>
+                                  <div className="font-semibold text-gray-900">{criadorNome}</div>
+                                  {criadorTipo ? (
+                                    <div className="text-xs text-gray-500 mt-0.5">{criadorTipo}</div>
+                                  ) : null}
+                                </div>
+
+                                <div className="rounded-lg border bg-white p-3">
+                                  <div className="text-xs text-gray-500">Pontuação do treino</div>
+                                  <div className="font-semibold text-gray-900">
+                                    {pontuacaoTreino != null && String(pontuacaoTreino).trim() !== ""
+                                      ? `${pontuacaoTreino} pontos`
+                                      : "Não informada"}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-0.5">
+                                    Pontos previstos ao atleta ao concluir.
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="font-semibold text-sm text-gray-900 mb-2">
+                                  Exercícios ({exerciciosTreino.length})
+                                </div>
+
+                                {exerciciosTreino.length === 0 ? (
+                                  <p className="text-sm text-gray-500">Esse treino não possui exercícios cadastrados.</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {exerciciosTreino
+                                      .slice()
+                                      .sort((a: any, b: any) => Number(a?.ordem ?? 0) - Number(b?.ordem ?? 0))
+                                      .map((ex: any, idx: number) => {
+                                        const exNome = nomeExercicioTreinoAdmin(ex);
+                                        const series = ex?.series ?? null;
+                                        const repeticoes = ex?.repeticoes ?? ex?.reps ?? null;
+                                        const duracaoEx = ex?.duracao ?? null;
+                                        const descanso = ex?.descanso ?? null;
+
+                                        return (
+                                          <div
+                                            key={ex?.id ?? ex?.exercicioId ?? ex?.exercicioTemporarioId ?? ex?.exercicioPersonalizadoId ?? idx}
+                                            className="rounded-lg border bg-white px-3 py-2"
+                                          >
+                                            <div className="font-medium text-sm text-gray-900">
+                                              {Number(ex?.ordem ?? idx + 1)}. {exNome}
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                                              {series != null && String(series).trim() !== "" ? (
+                                                <span>Séries: <strong>{series}</strong></span>
+                                              ) : null}
+                                              {repeticoes != null && String(repeticoes).trim() !== "" ? (
+                                                <span>Repetições: <strong>{repeticoes}</strong></span>
+                                              ) : null}
+                                              {duracaoEx != null && String(duracaoEx).trim() !== "" ? (
+                                                <span>Duração: <strong>{duracaoEx}</strong></span>
+                                              ) : null}
+                                              {descanso != null && String(descanso).trim() !== "" ? (
+                                                <span>Descanso: <strong>{descanso}</strong></span>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -5085,7 +5563,6 @@ async function agendarManutencaoPersonalizada() {
               <h4 className="font-semibold text-green-800 mb-2">🔍 hhbuiui Funcionalidades</h4>
               {[
                 { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
-                //{ key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
                 { key: "allowAthleteChallenges", label: "allow_athete_challenges", desc: "Permite que atletas participem de desafios" },
                 { key: "allowProfileEditing", label: "allow_profile_editing", desc: "Permite edição de perfis pelos usuários" },
               ].map((item) => (
