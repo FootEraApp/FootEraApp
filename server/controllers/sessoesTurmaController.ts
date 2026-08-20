@@ -172,21 +172,13 @@ function parseDateInput(raw?: any): Date | null {
   const mLocal = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (mLocal) {
     const [, Y, M, D, h, mi, sec] = mLocal;
-    return new Date(
-      Number(Y),
-      Number(M) - 1,
-      Number(D),
-      Number(h),
-      Number(mi),
-      Number(sec || 0),
-      0
-    );
+    return new Date(`${Y}-${M}-${D}T${h}:${mi}:${sec || "00"}-03:00`);
   }
 
   const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (mDate) {
     const [, Y, M, D] = mDate;
-    return new Date(Number(Y), Number(M) - 1, Number(D), 0, 0, 0, 0);
+    return new Date(`${Y}-${M}-${D}T00:00:00-03:00`);
   }
 
   const dt = new Date(s);
@@ -409,7 +401,12 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 descanso: true,
                 series: true,
                 exercicio: {
-                  select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
+                  select: {
+                    id: true,
+                    nome: true,
+                    objetivo: true,
+                    videoDemonstrativoUrl: true,
+                  },
                 },
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -438,7 +435,12 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             concluido: true,
             concluidoEm: true,
             exercicio: {
-              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
+              select: {
+                id: true,
+                nome: true,
+                objetivo: true,
+                videoDemonstrativoUrl: true,
+              },
             },
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -562,7 +564,12 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 duracao: true,
                 descanso: true,
                 exercicio: {
-                  select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
+                  select: {
+                    id: true,
+                    nome: true,
+                    objetivo: true,
+                    videoDemonstrativoUrl: true,
+                  },
                 },
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -591,7 +598,12 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             concluido: true,
             concluidoEm: true,
             exercicio: {
-              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true },
+              select: {
+                id: true,
+                nome: true,
+                objetivo: true,
+                videoDemonstrativoUrl: true,
+              },
             },
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
@@ -680,7 +692,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
           null;
 
         const detalhes =
-          se.exercicio?.descricao ??
+          se.exercicio?.objetivo ??
           se.exercicioTemporario?.descricao ??
           se.exercicioPersonalizado?.descricao ??
           null;
@@ -839,7 +851,7 @@ export async function iniciarSessao(
       return res.status(400).json({ error: "Sessão já está em andamento." });
     }
 
-    const u: any = req.authUser || req.user;
+    const u: any = req.authUser || (req as any).user || {};
     const usuarioId = u.id as string;
     const tipoRaw = String(u.tipo || "").toLowerCase();
     const ok = await podeGerenciarSessao({
@@ -906,11 +918,15 @@ export async function remarcarSessao(
     assertInstrutor(req);
 
     const { id } = req.params;
-    const { novaDataISO, novaDataHoraISO } = req.body as { novaDataISO?: string; novaDataHoraISO?: string };
-    if (!novaDataISO) {
-      return res
-        .status(400)
-        .json({ error: "Campo 'novaDataISO' é obrigatório." });
+    const { novaDataISO, novaDataHoraISO } = req.body as {
+      novaDataISO?: string;
+      novaDataHoraISO?: string;
+    };
+
+    if (!novaDataISO && !novaDataHoraISO) {
+      return res.status(400).json({
+        error: "Campo 'novaDataHoraISO' (ou 'novaDataISO') é obrigatório.",
+      });
     }
 
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
@@ -921,7 +937,7 @@ export async function remarcarSessao(
       return res.status(404).json({ error: "Sessão não encontrada." });
     }
 
-    const u: any = req.authUser || req.user;
+    const u: any = req.authUser || (req as any).user || {};
     const usuarioId = u.id as string;
     const tipoRaw = String(u.tipo || "").toLowerCase();
     const ok = await podeGerenciarSessao({
@@ -947,14 +963,27 @@ export async function remarcarSessao(
       return res.status(400).json({ error: "novaDataHoraISO/novaDataISO inválida." });
     }
 
-    const atualizada = await prisma.sessaoTreinoTurma.update({
-      where: { id },
-      data: {
-        data: novaData,       
-        status: StatusSessaoTreinoTurma.AGENDADO,   
-        startedAt: null,
-        finishedAt: null,
-      },
+    const atualizada = await prisma.$transaction(async (tx) => {
+      const sessaoAtualizada = await tx.sessaoTreinoTurma.update({
+        where: { id },
+        data: {
+          data: novaData,
+          status: StatusSessaoTreinoTurma.AGENDADO,
+          startedAt: null,
+          finishedAt: null,
+        },
+      });
+
+      await tx.treinoAgendado.updateMany({
+        where: {
+          treinoProgramadoId: sessao.treinoProgramadoId,
+          turmaId: sessao.turmaId,
+          dataTreino: sessao.data,
+        },
+        data: { dataTreino: novaData },
+      });
+
+      return sessaoAtualizada;
     });
 
     return res.json(atualizada);
@@ -984,7 +1013,7 @@ export async function atualizarProgresso(req: AuthenticatedRequest, res: Respons
 
     if (!sessao) return res.status(404).json({ error: "Sessão não encontrada." });
 
-    const u: any = req.authUser || req.user;
+    const u: any = req.authUser || (req as any).user || {};
     const usuarioId = u.id as string;
     const tipoRaw = String(u.tipo || "").toLowerCase();
     const ok = await podeGerenciarSessao({
@@ -1053,7 +1082,7 @@ export async function finalizarSessao(
     if (!sessao)
       return res.status(404).json({ error: "Sessão não encontrada." });
 
-    const u: any = req.authUser || req.user;
+    const u: any = req.authUser || (req as any).user || {};
     const usuarioId = u.id as string;
 
     const tipoRaw = String(u.tipo || "").toLowerCase();
@@ -1120,9 +1149,20 @@ export async function finalizarSessao(
       .map((p: any) =>
         prisma.atividadeRecente.create({
           data: {
-            usuarioId: p.atleta.usuarioId!,
+            usuarioId:
+              p.atleta.usuarioId!,
+
             tipo: "TREINO_TURMA",
-            imagemUrl: null,
+
+            titulo:
+              sessao.treino?.nome ??
+              "Treino em turma",
+
+            imagemUrl:
+              sessao.treino?.imagemUrl ??
+              null,
+
+            link: "/trainings",
           },
         }),
       );
@@ -1165,7 +1205,7 @@ export async function excluirSessao(
     assertInstrutor(req);
 
     const { id } = req.params;
-    const u: any = req.authUser || req.user;
+    const u: any = req.authUser || (req as any).user || {};
     const usuarioId = u.id as string;
 
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
@@ -1194,16 +1234,26 @@ export async function excluirSessao(
       });
     }
 
-    await prisma.presencaSessaoTreino.deleteMany({
-      where: { sessaoId: id },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.treinoAgendado.deleteMany({
+        where: {
+          treinoProgramadoId: sessao.treinoProgramadoId,
+          turmaId: sessao.turmaId,
+          dataTreino: sessao.data,
+        },
+      });
 
-    await prisma.sessaoTreinoTurmaExercicio.deleteMany({
-      where: { sessaoId: id },
-    });
+      await tx.presencaSessaoTreino.deleteMany({
+        where: { sessaoId: id },
+      });
 
-    await prisma.sessaoTreinoTurma.delete({
-      where: { id },
+      await tx.sessaoTreinoTurmaExercicio.deleteMany({
+        where: { sessaoId: id },
+      });
+
+      await tx.sessaoTreinoTurma.delete({
+        where: { id },
+      });
     });
 
     return res.json({ success: true });
@@ -1287,7 +1337,7 @@ export async function salvarVideosExecucaoSessao(
     assertInstrutor(req);
 
     const { id } = req.params; 
-    const u: any = req.authUser || req.user;
+    const u: any = req.authUser || (req as any).user || {};
     const usuarioId = String(u?.id || "");
     const tipoRaw = String(u?.tipo || "").toLowerCase();
 

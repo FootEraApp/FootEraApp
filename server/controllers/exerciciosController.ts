@@ -1,4 +1,3 @@
-// server/controllers/exerciciosController.ts
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { probeVideo } from "../services/mediaMetadata.js";
@@ -6,6 +5,33 @@ import { deleteFromS3 } from "../middlewares/s3Upload.js";
 
 function getAuthUserId(req: Request): string | null {
   return (req as any)?.user?.id || null;
+}
+
+function isAdminRequest(req: Request): boolean {
+  const anyReq = req as any;
+
+  if (
+    anyReq?.isAdmin === true ||
+    anyReq?.user?.isAdmin === true
+  ) {
+    return true;
+  }
+
+  const tipo = String(
+    anyReq?.tipo ??
+      anyReq?.user?.tipo ??
+      anyReq?.user?.role ??
+      anyReq?.user?.tipoUsuario ??
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return (
+    tipo === "admin" ||
+    tipo === "administrador" ||
+    tipo === "adm"
+  );
 }
 
 function parseArrayField(value: unknown): string[] {
@@ -109,6 +135,50 @@ async function mapUsoEmTreinos(exercicioIds: string[]) {
   }
 
   return map;
+}
+
+async function mapUsoPersonalizadosEmTreinos(
+  exercicioIds: string[]
+): Promise<Record<string, number>> {
+  const resultado: Record<string, number> = {};
+
+  if (!exercicioIds.length) {
+    return resultado;
+  }
+
+  const rows = await prisma.treinoProgramadoExercicio.findMany({
+    where: {
+      exercicioPersonalizadoId: {
+        in: exercicioIds,
+      },
+    },
+    select: {
+      exercicioPersonalizadoId: true,
+      treinoProgramadoId: true,
+    },
+  });
+
+  const porExercicio = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    const exercicioId = row.exercicioPersonalizadoId;
+
+    if (!exercicioId) continue;
+
+    if (!porExercicio.has(exercicioId)) {
+      porExercicio.set(exercicioId, new Set<string>());
+    }
+
+    porExercicio
+      .get(exercicioId)!
+      .add(String(row.treinoProgramadoId));
+  }
+
+  for (const [exercicioId, treinos] of porExercicio.entries()) {
+    resultado[exercicioId] = treinos.size;
+  }
+
+  return resultado;
 }
 
 function toCardResponse(exercicio: any, usadoEmTreinos = 0) {
@@ -386,8 +456,13 @@ export const editarExercicio = async (req: Request, res: Response) => {
     });
 
     if (personalizadoAtual) {
-      if (personalizadoAtual.criadorUsuarioId !== userId) {
-        return res.status(403).json({ message: "Você não pode editar esse exercício." });
+      if (
+        !isAdminRequest(req) &&
+        personalizadoAtual.criadorUsuarioId !== userId
+      ) {
+        return res.status(403).json({
+          message: "Você não pode editar esse exercício.",
+        });
       }
 
       const videoFile = req.file as any;
@@ -422,7 +497,7 @@ export const editarExercicio = async (req: Request, res: Response) => {
       const nomeDuplicado = await prisma.exercicioPersonalizado.findFirst({
         where: {
           nomeNormalizado,
-          criadorUsuarioId: userId,
+          criadorUsuarioId: personalizadoAtual.criadorUsuarioId,
           NOT: { id },
         },
         select: { id: true },
@@ -474,8 +549,14 @@ export const editarExercicio = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Exercício não encontrado." });
     }
 
-    if ((exercicioAtual as any).criadoPorId && (exercicioAtual as any).criadoPorId !== userId) {
-      return res.status(403).json({ message: "Você não pode editar esse exercício." });
+    if (
+      !isAdminRequest(req) &&
+      (exercicioAtual as any).criadoPorId &&
+      (exercicioAtual as any).criadoPorId !== userId
+    ) {
+      return res.status(403).json({
+        message: "Você não pode editar esse exercício.",
+      });
     }
 
     const videoFile = req.file as any;
@@ -606,6 +687,96 @@ export const listarExercicios = async (_req: Request, res: Response) => {
   }
 };
 
+export const listarExerciciosAdmin = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = getAuthUserId(req);
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Usuário não autenticado." });
+    }
+
+    if (!isAdminRequest(req)) {
+      return res
+        .status(403)
+        .json({ message: "Acesso permitido apenas para administradores." });
+    }
+
+    const [exercicios, personalizados] = await Promise.all([
+      prisma.exercicio.findMany({
+        orderBy: {
+          nome: "asc",
+        },
+      }),
+
+      prisma.exercicioPersonalizado.findMany({
+        orderBy: [
+          {
+            atualizadoEm: "desc",
+          },
+          {
+            nome: "asc",
+          },
+        ],
+      }),
+    ]);
+
+    const idsExercicios = exercicios.map((e) => e.id);
+    const idsPersonalizados = personalizados.map((e) => e.id);
+
+    const [usoExercicios, usoPersonalizados] =
+      await Promise.all([
+        mapUsoEmTreinos(idsExercicios),
+        mapUsoPersonalizadosEmTreinos(idsPersonalizados),
+      ]);
+
+    const exerciciosMapeados = exercicios.map((e) => ({
+      ...toCardResponse(
+        e,
+        usoExercicios[e.id] || 0
+      ),
+      descricao: e.objetivo ?? null,
+      origem: "catalogo",
+      exercicioId: e.id,
+    }));
+
+    const personalizadosMapeados = personalizados.map((e) =>
+      mapPersonalizadoToCardResponse(
+        e,
+        usoPersonalizados[e.id] || 0
+      )
+    );
+
+    const todos = [
+      ...exerciciosMapeados,
+      ...personalizadosMapeados,
+    ].sort((a, b) =>
+      String(a.nome || "").localeCompare(
+        String(b.nome || ""),
+        "pt-BR",
+        {
+          sensitivity: "base",
+        }
+      )
+    );
+
+    return res.json(todos);
+  } catch (error) {
+    console.error(
+      "Erro ao listar exercícios para o Admin:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Erro ao listar exercícios.",
+    });
+  }
+};
+
 export const listarMeusExercicios = async (req: Request, res: Response) => {
   try {
     const userId = getAuthUserId(req);
@@ -685,8 +856,15 @@ export const buscarExercicioPorId = async (req: Request, res: Response) => {
     const exercicio = await prisma.exercicio.findUnique({ where: { id } });
 
     if (exercicio) {
-      if (userId && (exercicio as any).criadoPorId && (exercicio as any).criadoPorId !== userId) {
-        return res.status(403).json({ message: "Você não pode acessar esse exercício." });
+      if (
+        !isAdminRequest(req) &&
+        userId &&
+        (exercicio as any).criadoPorId &&
+        (exercicio as any).criadoPorId !== userId
+      ) {
+        return res.status(403).json({
+          message: "Você não pode acessar esse exercício.",
+        });
       }
       const usoMap = await mapUsoEmTreinos([id]);
       return res.json(toCardResponse(exercicio, usoMap[id] || 0));
@@ -694,7 +872,15 @@ export const buscarExercicioPorId = async (req: Request, res: Response) => {
 
     const personalizado = await prisma.exercicioPersonalizado.findUnique({ where: { id } });
     if (!personalizado) return res.status(404).json({ message: "Exercício não encontrado." });
-    if (userId && personalizado.criadorUsuarioId !== userId) return res.status(403).json({ message: "Você não pode acessar esse exercício." });
+    if (
+      !isAdminRequest(req) &&
+      userId &&
+      personalizado.criadorUsuarioId !== userId
+    ) {
+      return res.status(403).json({
+        message: "Você não pode acessar esse exercício.",
+      });
+    }
 
     return res.json(mapPersonalizadoToCardResponse(personalizado, 0));
   } catch (error) {
@@ -844,8 +1030,14 @@ export const excluirExercicio = async (req: Request, res: Response) => {
     const exercicio = await prisma.exercicio.findUnique({ where: { id } });
 
     if (exercicio) {
-      if ((exercicio as any).criadoPorId && (exercicio as any).criadoPorId !== userId) {
-        return res.status(403).json({ message: "Você não pode excluir esse exercício." });
+      if (
+        !isAdminRequest(req) &&
+        (exercicio as any).criadoPorId &&
+        (exercicio as any).criadoPorId !== userId
+      ) {
+        return res.status(403).json({
+          message: "Você não pode excluir esse exercício.",
+        });
       }
       await removePublicFileIfExists((exercicio as any).videoDemonstrativoUrl);
       await prisma.exercicio.delete({ where: { id } });
@@ -854,8 +1046,14 @@ export const excluirExercicio = async (req: Request, res: Response) => {
 
     const personalizado = await prisma.exercicioPersonalizado.findUnique({ where: { id } });
     if (!personalizado) return res.status(404).json({ message: "Exercício não encontrado." });
-    if (personalizado.criadorUsuarioId !== userId) return res.status(403).json({ message: "Você não pode excluir esse exercício." });
-
+    if (
+      !isAdminRequest(req) &&
+      personalizado.criadorUsuarioId !== userId
+    ) {
+      return res.status(403).json({
+        message: "Você não pode excluir esse exercício.",
+      });
+    }
     await removePublicFileIfExists(personalizado.videoDemonstrativoUrl);
     await prisma.exercicioPersonalizado.delete({ where: { id } });
 

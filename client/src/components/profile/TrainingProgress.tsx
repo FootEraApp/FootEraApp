@@ -226,23 +226,69 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const fecharResumo = () => setResumoModal(null);
 
   function abrirTreinoAtividade(a: any) {
-    const treinoAgendadoId = String(
-      a?.treinoAgendadoId ?? a?.treinoAgendado?.id ?? ""
-    ).trim();
-
-    if (treinoAgendadoId) {
-      const encontrado = (treinosAgendados || []).find(
-        (t) => String(t?.id) === String(treinoAgendadoId)
+    const tipoAtividade = String(
+      a?.tipo ??
+        a?.categoria ??
+        a?.kind ??
+        ""
+    )
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
       );
 
+    const atividadeId = String(
+      a?.id ?? ""
+    ).trim();
+
+    const isTreinoLivre =
+      tipoAtividade.includes(
+        "treino livre"
+      ) ||
+      atividadeId.startsWith("tl-");
+
+    if (isTreinoLivre) {
+      setLocation(
+        "/treinos/livre/historico"
+      );
+      return;
+    }
+
+    const treinoAgendadoId =
+      String(
+        a?.treinoAgendadoId ??
+          a?.treinoAgendado?.id ??
+          ""
+      ).trim();
+
+    if (treinoAgendadoId) {
+      const encontrado =
+        (treinosAgendados || []).find(
+          (t) =>
+            String(t?.id) ===
+            String(treinoAgendadoId)
+        );
+
       if (encontrado) {
-        setResumoModal({ treinoAgendadoId, treino: encontrado });
+        setResumoModal({
+          treinoAgendadoId,
+          treino: encontrado,
+        });
         return;
       }
 
-      setLocation(`/submissao?treinoAgendadoId=${encodeURIComponent(treinoAgendadoId)}`);
+      setLocation(
+        `/submissao?treinoAgendadoId=${encodeURIComponent(
+          treinoAgendadoId
+        )}`
+      );
+
       return;
     }
+
     setLocation("/trainings");
   }
 
@@ -834,7 +880,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                 </div>
 
                 {Array.isArray(atividadesRecentes) && atividadesRecentes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-3 auto-rows-fr">
                     {atividadesRecentes.slice(0, 6).map((a: any, idx: number) => {
                       const img = getActivityImage(a);
                       const label =
@@ -859,40 +905,101 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                         <button
                           key={String(a?.id ?? idx)}
                           type="button"
-                          className="rounded-xl overflow-hidden border bg-white hover:shadow transition text-left"
+                          className="
+                            h-[180px]
+                            rounded-xl
+                            overflow-hidden
+                            border
+                            bg-white
+                            hover:shadow
+                            transition
+                            text-left
+                            flex
+                            flex-col
+                          "
                           onClick={() => {
                             if (isTreino) {
                               abrirTreinoAtividade(a);
-                            } else if (String(label).toLowerCase() === "metodologia") {
+                            } else if (
+                              String(label).toLowerCase() === "metodologia"
+                            ) {
                               setLocation("/learning");
                             } else {
                               setLocation("/trainings");
                             }
                           }}
                         >
-                          <div className="relative">
+                          <div className="relative h-24 w-full shrink-0 overflow-hidden">
                             <img
                               src={img}
                               alt={titulo}
-                              className="w-full h-20 object-cover"
+                              className="
+                                block
+                                w-full
+                                h-full
+                                object-cover
+                              "
                               onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK;
+                                (
+                                  e.currentTarget as HTMLImageElement
+                                ).src = AVATAR_FALLBACK;
                               }}
                             />
-                            <div className="absolute bottom-2 left-2 text-[10px] bg-black/50 text-white px-2 py-1 rounded-full">
+
+                            <div
+                              className="
+                                absolute
+                                bottom-2
+                                left-2
+                                text-[10px]
+                                bg-black/60
+                                text-white
+                                px-2
+                                py-1
+                                rounded-full
+                                max-w-[calc(100%-16px)]
+                                truncate
+                              "
+                            >
                               {String(label)}
                             </div>
                           </div>
-                          <div className="p-2">
-                            <div className="text-[11px] font-semibold leading-tight line-clamp-2">
+
+                          <div className="flex flex-1 min-h-0 flex-col p-2">
+                            <div
+                              className="
+                                text-[11px]
+                                font-semibold
+                                leading-tight
+                                line-clamp-2
+                                min-h-[28px]
+                              "
+                            >
                               {titulo}
                             </div>
 
-                            <div className="mt-1 text-[10px] text-gray-500 flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {dataAtividade
-                                ? formatDateFns(dataAtividade, "dd/MM/yyyy", { locale: ptBR })
-                                : "Sem data"}
+                            <div
+                              className="
+                                mt-auto
+                                pt-1
+                                text-[10px]
+                                text-gray-500
+                                flex
+                                items-center
+                                gap-1
+                              "
+                            >
+                              <Calendar className="h-3 w-3 shrink-0" />
+
+                              <span>
+                                {dataAtividade
+                                  ? formatDateFns(
+                                      dataAtividade,
+                                      "dd/MM/yyyy",
+                                      { locale: ptBR }
+                                    )
+                                  : "Sem data"}
+                              </span>
                             </div>
                           </div>
                         </button>

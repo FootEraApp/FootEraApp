@@ -1,4 +1,3 @@
-//client/src/pages/novoTreino
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
@@ -1175,12 +1174,12 @@ export default function NovoTreino() {
 
   function irParaEtapa(destino: number) {
     if (destino >= 2 && !etapa1Valida) {
-      toast.error("Preencha título, duração, tipo do treino, nível e sessão do treino.");
+      showToast("Preencha título, duração, tipo do treino, nível e sessão do treino.", "error");
       return;
     }
 
     if (destino >= 3 && !etapa2Valida) {
-      toast.error("Selecione pelo menos um exercício para continuar.");
+      showToast("Selecione pelo menos um exercício para continuar.", "error");
       return;
     }
 
@@ -2609,7 +2608,7 @@ export default function NovoTreino() {
     }
 
     if (!atletasSelecionados || atletasSelecionados.length === 0) {
-      toast.error("Selecione pelo menos 1 atleta para a turma.");
+      showToast("Selecione pelo menos 1 atleta para a turma.", "error");
       return;
     }
 
@@ -2668,7 +2667,7 @@ export default function NovoTreino() {
         );
 
     if (!ownerIdFinal) {
-      toast.error("Não foi possível identificar o dono da turma. Faça login novamente.");
+      showToast("Não foi possível identificar o dono da turma. Faça login novamente.", "error");
       return;
     }
 
@@ -3546,7 +3545,7 @@ export default function NovoTreino() {
       );
 
       if (invalidos.length > 0) {
-        toast.error("Preencha pelo menos séries/repetições OU duração em todos os exercícios.");
+        showToast("Preencha pelo menos séries/repetições OU duração em todos os exercícios.", "error");
         return;
       }
 
@@ -3728,9 +3727,10 @@ export default function NovoTreino() {
       console.error("[NovoTreino] erro criar treino:", data || e);
 
       if (data?.code === "TREINO_NOME_DUPLICADO_DO_MESMO_DONO") {
-        toast.error(
+        showToast(
           data?.message ||
-            "Esse treino não pode ser criado porque você já possui um treino com esse nome. Se quiser criar, mude o nome do treino."
+            "Esse treino não pode ser criado porque você já possui um treino com esse nome. Se quiser criar, mude o nome do treino.",
+          "error",
         );
         return;
       }
@@ -3979,8 +3979,16 @@ export default function NovoTreino() {
             )}
           </div>
         ) : (
-          listaAtiva.map((t) => (
-            <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
+        <>
+          <div className="text-sm text-green-900/70 mb-3">
+            {listaAtiva.length} treino(s) encontrado(s)
+          </div>
+
+          {listaAtiva.map((t) => (
+            <div
+              key={t.id}
+              className="bg-white border p-4 rounded shadow mb-4"
+            >
               {t.imagemUrl ? (
                 <CoverImage
                   src={t.imagemUrl}
@@ -4080,7 +4088,7 @@ export default function NovoTreino() {
                   const bloqueadas = datasAgendadasPorTreino.get(String(t.id));
 
                   if (bloqueadas?.has(dia)) {
-                    toast.error("Você já tem esse treino agendado nessa data. Escolha outro dia.");
+                    showToast("Você já tem esse treino agendado nessa data. Escolha outro dia.", "error");
                     return;
                   }
 
@@ -4098,7 +4106,8 @@ export default function NovoTreino() {
                 </button>
               </div>
             </div>
-          ))
+          ))}
+          </>
         )}
       </div>
     );
@@ -4458,7 +4467,7 @@ export default function NovoTreino() {
                         setCapaPreview("");
                       } catch (err: any) {
                         console.error(err);
-                        toast.error(err?.message || "Erro ao enviar imagem");
+                        showToast(err?.message || "Erro ao enviar imagem", "error");
                       } finally {
                         if (input) input.value = ""; 
                       }

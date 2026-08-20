@@ -29,10 +29,30 @@ export async function recomputePontuacaoAtleta(atletaId: string) {
     WHERE sd."atletaId" = $1 AND COALESCE(sd."aprovado", true) = true
   `, atletaId);
 
-  const performance = (Number(totTreinos) || 0) + (Number(totDesafios) || 0);
-  const disciplina = (Number(qtdTreinosUnicos) || 0) * 2;
-  const responsabilidade = (Number(qtdDesafiosUnicos) || 0) * 2;
-  const total = performance + disciplina + responsabilidade;
+  const [{ qtdTreinosLivres }] = await prisma.$queryRawUnsafe<any[]>(`
+    SELECT COUNT(*) AS "qtdTreinosLivres"
+    FROM "TreinoLivre"
+    WHERE "atletaId" = $1
+  `, atletaId);
+
+  const pontosTreinosLivres =
+    (Number(qtdTreinosLivres) || 0) * 5;
+
+  const performance =
+    (Number(totTreinos) || 0) +
+    (Number(totDesafios) || 0) +
+    pontosTreinosLivres;
+
+  const disciplina =
+    (Number(qtdTreinosUnicos) || 0) * 2;
+
+  const responsabilidade =
+    (Number(qtdDesafiosUnicos) || 0) * 2;
+
+  const total =
+    performance +
+    disciplina +
+    responsabilidade;
 
   await prisma.$transaction([
     prisma.pontuacaoAtleta.upsert({

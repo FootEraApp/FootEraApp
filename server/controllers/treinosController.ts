@@ -894,7 +894,13 @@ async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
   if (!req.userId) return null;
 
   const resolved = await resolveEntidade(req.userId);
-  const or: any[] = [];
+  const or: any[] = [
+    {
+      criadorUsuarioId: {
+        not: null,
+      },
+    },
+  ];
 
   if (resolved?.tipo === "professor") {
     const pid = resolved.id;
@@ -949,23 +955,49 @@ async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
   const tipoStr = String(u.tipo ?? "").toLowerCase();
 
   if (tipoStr === "atleta") {
-    const ctx = await idsInstituicoesAtuais(prisma, req.userId);
+    const ctx =
+      await idsInstituicoesAtuais(
+        prisma,
+        req.userId
+      );
 
-    if (
-      (!ctx.clubes || ctx.clubes.length === 0) &&
-      (!ctx.escolinhas || ctx.escolinhas.length === 0) &&
-      (!ctx.professores || ctx.professores.length === 0)
-    ) {
-      return { OR: [{ id: "__none__" }] }; 
+    if (ctx.clubes.length) {
+      or.push({
+        clubeId: {
+          in: ctx.clubes,
+        },
+      });
     }
 
-    if (ctx.clubes.length) or.push({ clubeId: { in: ctx.clubes } });
-    if (ctx.escolinhas.length) or.push({ escolinhaId: { in: ctx.escolinhas } });
+    if (ctx.escolinhas.length) {
+      or.push({
+        escolinhaId: {
+          in: ctx.escolinhas,
+        },
+      });
+    }
+
     if (ctx.professores.length) {
-      or.push({ professorId: { in: ctx.professores } });
-      or.push({ professores: { some: { professorId: { in: ctx.professores } } } });
+      or.push({
+        professorId: {
+          in: ctx.professores,
+        },
+      });
+
+      or.push({
+        professores: {
+          some: {
+            professorId: {
+              in: ctx.professores,
+            },
+          },
+        },
+      });
     }
-    return { OR: or };
+
+    return {
+      OR: or,
+    };
   }
 
   if (tipoStr === "admin") {

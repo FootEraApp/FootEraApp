@@ -52,7 +52,7 @@ export default function TreinoLivreNovo() {
         return toast.error("Não foi possível salvar o treino.");
       }
 
-      toast.error("Treino livre registrado!");
+      toast.success("Treino livre registrado!");
       navigate("/treinos/livre/historico");
     } catch (e) {
       console.error(e);
