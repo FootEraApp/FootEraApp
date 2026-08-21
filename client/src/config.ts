@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const viteEnv =
   typeof import.meta !== "undefined" && (import.meta as any).env
     ? ((import.meta as any).env as Record<string, string | undefined>)
@@ -9,16 +11,7 @@ const mode = viteEnv?.MODE || "development";
 const isLocalMode = mode === "development" || mode === "local";
 
 function isCapacitorNative(): boolean {
-  if (typeof window === "undefined") return false;
-
-  const w = window as any;
-  const platform = w.Capacitor?.getPlatform?.();
-
-  return (
-    window.location.protocol === "capacitor:" ||
-    platform === "android" ||
-    platform === "ios"
-  );
+  return Capacitor.isNativePlatform();
 }
 
 function inferApiFromHost(): string {
@@ -46,7 +39,7 @@ const envWebApi = strip(viteEnv?.VITE_API_URL);
 const envAndroidApi = strip(viteEnv?.VITE_ANDROID_API_URL);
 
 let API_BASE = isLocalMode && isCapacitorNative()
-  ? envAndroidApi || "http://10.0.2.2:3001"
+  ? envAndroidApi || "http://127.0.0.1:3001"
   : envWebApi || inferApiFromHost();
 
 const isLocalApi =

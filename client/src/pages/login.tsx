@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/login
 import { useState, useEffect, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
@@ -236,7 +235,32 @@ export default function PaginaLogin() {
 
         setNeedVerify(!!data?.needVerification);
         setEmailDestino(data?.emailDestino ?? null);
-        setErro(data?.message || "Nome de usuário ou senha inválidos.");
+
+        if (!err.response) {
+          console.error("[LOGIN] Backend não respondeu:", {
+            message: err.message,
+            code: err.code,
+            url: err.config?.url,
+          });
+
+          setErro(
+            `Não foi possível conectar ao servidor. API: ${API.BASE_URL}`
+          );
+          return;
+        }
+
+        if (err.response.status === 401) {
+          setErro(
+            data?.message ||
+            "Nome de usuário ou senha inválidos."
+          );
+          return;
+        }
+
+        setErro(
+          data?.message ||
+          `Erro ao entrar (${err.response.status}).`
+        );
       }
     };
 
