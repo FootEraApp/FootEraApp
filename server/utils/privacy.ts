@@ -1,16 +1,71 @@
 import { prisma } from "../prisma.js";
 
-export function readPrivacyConfig(raw: any) {
+export type VisibilidadePerfil =
+  | "PUBLICO"
+  | "NAO_LISTADO"
+  | "PRIVADO";
+
+const VISIBILIDADES_PERFIL =
+  new Set<VisibilidadePerfil>([
+    "PUBLICO",
+    "NAO_LISTADO",
+    "PRIVADO",
+  ]);
+
+export function normalizarVisibilidadePerfil(
+  value: unknown
+): VisibilidadePerfil | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized =
+    value
+      .trim()
+      .toUpperCase() as VisibilidadePerfil;
+
+  return VISIBILIDADES_PERFIL.has(
+    normalized
+  )
+    ? normalized
+    : null;
+}
+
+export function readPrivacyConfig(
+  raw: any
+) {
   const c =
     raw && typeof raw === "object"
       ? raw
       : {};
 
   return {
-    perfilVisivel: c.perfilVisivel !== false,
-    permitirMensagens: c.permitirMensagens !== false,
-    mostrarEmail: c.mostrarEmail === true,
-    mostrarOnline: c.mostrarOnline !== false,
+    // Mantém a configuração antiga
+    // durante a migração.
+    perfilVisivel:
+      c.perfilVisivel !== false,
+
+    // NOVO.
+    //
+    // null é proposital.
+    // Significa que o usuário ainda
+    // está no modelo antigo.
+    //
+    // Usuários antigos NÃO ficam
+    // públicos automaticamente.
+    visibilidadePerfil:
+      normalizarVisibilidadePerfil(
+        c.visibilidadePerfil
+      ),
+
+    permitirMensagens:
+      c.permitirMensagens !== false,
+
+    mostrarEmail:
+      c.mostrarEmail === true,
+
+    mostrarOnline:
+      c.mostrarOnline !== false,
   };
 }
 
@@ -387,86 +442,234 @@ export async function podeVerPresenca(
 }
 
 export async function avaliarPrivacidadePerfil(
-  viewerUsuarioId: string | null | undefined,
+  viewerUsuarioId:
+    | string
+    | null
+    | undefined,
   targetUsuarioId: string
 ) {
-  const [target, viewer] = await Promise.all([
-    prisma.usuario.findUnique({
-      where: { id: targetUsuarioId },
-      select: {
-        id: true,
-        configuracoesPrivacidade: true,
-      },
-    }),
+  const [target, viewer] =
+    await Promise.all([
+      prisma.usuario.findUnique({
+        where: {
+          id: targetUsuarioId,
+        },
 
-    viewerUsuarioId
-      ? prisma.usuario.findUnique({
-          where: { id: viewerUsuarioId },
-          select: {
-            id: true,
-            tipo: true,
-          },
-        })
-      : null,
-  ]);
+        select: {
+          id: true,
+          configuracoesPrivacidade:
+            true,
+        },
+      }),
+
+      viewerUsuarioId
+        ? prisma.usuario.findUnique({
+            where: {
+              id: viewerUsuarioId,
+            },
+
+            select: {
+              id: true,
+              tipo: true,
+            },
+          })
+        : null,
+    ]);
 
   if (!target) {
     return {
       existe: false,
+
       podeVerPerfil: false,
+      podeListarPerfil: false,
+
       podeMostrarEmail: false,
       mostrarOnline: false,
       permitirMensagens: false,
+
+      visibilidadePerfil: null,
+
+      temVinculo: false,
+      seguidoresMutuos: false,
+
+      isOwn: false,
+      isAdmin: false,
+      isVisitor: !viewerUsuarioId,
     };
   }
 
-  const priv = readPrivacyConfig(
-    target.configuracoesPrivacidade
-  );
+  const priv =
+    readPrivacyConfig(
+      target
+        .configuracoesPrivacidade
+    );
+
+  const isVisitor =
+    !viewerUsuarioId;
 
   const isOwn =
     !!viewerUsuarioId &&
-    viewerUsuarioId === targetUsuarioId;
+    viewerUsuarioId ===
+      targetUsuarioId;
 
   const isAdmin =
-    String(viewer?.tipo || "").toLowerCase() ===
-    "admin";
+    String(
+      viewer?.tipo || ""
+    ).toLowerCase() === "admin";
+
+  /*
+   * VISITANTE
+   *
+   * Usuário antigo com
+   * visibilidadePerfil === null
+   * continua fechado para internet.
+   */
+  if (isVisitor) {
+    const podeVerPerfil =
+      priv.visibilidadePerfil ===
+        "PUBLICO" ||
+      priv.visibilidadePerfil ===
+        "NAO_LISTADO";
+
+    const podeListarPerfil =
+      priv.visibilidadePerfil ===
+      "PUBLICO";
+
+    return {
+      existe: true,
+
+      podeVerPerfil,
+      podeListarPerfil,
+
+      // Não expor e-mail de contas
+      // antigas automaticamente.
+      podeMostrarEmail: false,
+
+      // Visitante também não recebe
+      // presença/online.
+      mostrarOnline: false,
+
+      // Mensagens exigem login.
+      permitirMensagens: false,
+
+      visibilidadePerfil:
+        priv.visibilidadePerfil,
+
+      temVinculo: false,
+      seguidoresMutuos: false,
+
+      isOwn: false,
+      isAdmin: false,
+      isVisitor: true,
+    };
+  }
 
   let temVinculo = false;
   let seguidoresMutuos = false;
 
-  if (
-    !priv.perfilVisivel &&
+  /*
+   * Só precisamos consultar relações
+   * quando elas podem fazer diferença.
+   */
+  const precisaConsultarRelacoes =
     !isOwn &&
     !isAdmin &&
-    viewerUsuarioId
-    ) {
-    const [vinculo, mutuos] =
-        await Promise.all([
-        existeVinculoFormal(
-            viewerUsuarioId,
-            targetUsuarioId
-        ),
+    (
+      priv.visibilidadePerfil ===
+        "PRIVADO" ||
+      (
+        priv.visibilidadePerfil ===
+          null &&
+        !priv.perfilVisivel
+      )
+    );
 
-        saoSeguidoresMutuos(
-            viewerUsuarioId,
-            targetUsuarioId
-        ),
-        ]);
+  if (precisaConsultarRelacoes) {
+    const [
+      vinculo,
+      mutuos,
+    ] = await Promise.all([
+      existeVinculoFormal(
+        viewerUsuarioId!,
+        targetUsuarioId
+      ),
+
+      saoSeguidoresMutuos(
+        viewerUsuarioId!,
+        targetUsuarioId
+      ),
+    ]);
 
     temVinculo = vinculo;
     seguidoresMutuos = mutuos;
   }
 
+  let podeVerPerfil = false;
+  let podeListarPerfil = false;
+
+  switch (
+    priv.visibilidadePerfil
+  ) {
+    /*
+     * Perfil explicitamente público.
+     */
+    case "PUBLICO":
+      podeVerPerfil = true;
+      podeListarPerfil = true;
+      break;
+
+    /*
+     * Pode ser aberto por link,
+     * mas não aparece no Explorar.
+     */
+    case "NAO_LISTADO":
+      podeVerPerfil = true;
+      podeListarPerfil = false;
+      break;
+
+    /*
+     * Apenas próprio usuário,
+     * admin, vínculo ou
+     * seguimento mútuo.
+     */
+    case "PRIVADO":
+      podeVerPerfil =
+        isOwn ||
+        isAdmin ||
+        temVinculo ||
+        seguidoresMutuos;
+
+      podeListarPerfil =
+        podeVerPerfil;
+
+      break;
+
+    /*
+     * Usuário que ainda está no
+     * sistema legado.
+     *
+     * Mantém exatamente a lógica
+     * atual dentro da FootEra.
+     */
+    default:
+      podeVerPerfil =
+        priv.perfilVisivel ||
+        isOwn ||
+        isAdmin ||
+        temVinculo ||
+        seguidoresMutuos;
+
+      podeListarPerfil =
+        podeVerPerfil;
+
+      break;
+  }
+
   return {
     existe: true,
 
-    podeVerPerfil:
-      priv.perfilVisivel ||
-      isOwn ||
-      isAdmin ||
-      temVinculo ||
-      seguidoresMutuos,
+    podeVerPerfil,
+    podeListarPerfil,
 
     podeMostrarEmail:
       priv.mostrarEmail ||
@@ -481,9 +684,14 @@ export async function avaliarPrivacidadePerfil(
     permitirMensagens:
       priv.permitirMensagens,
 
+    visibilidadePerfil:
+      priv.visibilidadePerfil,
+
     temVinculo,
     seguidoresMutuos,
+
     isOwn,
     isAdmin,
+    isVisitor: false,
   };
 }

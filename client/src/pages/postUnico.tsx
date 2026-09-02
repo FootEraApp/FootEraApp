@@ -18,28 +18,97 @@ function PostUnico(): JSX.Element {
   const [post, setPost] = useState<PostagemComUsuario | null>(null);
   const [comentario, setComentario] = useState("");
   const [carregando, setCarregando] = useState(false);
+  const [
+    carregandoPost,
+    setCarregandoPost,
+  ] = useState(true);
+
+  const [
+    erroPost,
+    setErroPost,
+  ] = useState<{
+    status?: number;
+    code?: string;
+    message: string;
+  } | null>(null);
   const [, setLocation] = useLocation();
   const [modalAberto, setModalAberto] = useState(false);
 
   const token = Storage.token || "";
   const usuarioId = Storage.usuarioId || "";
+  
   useEffect(() => {
-    if (!match || !params?.id) return;
+    if (!match || !params?.id) {
+      return;
+    }
+
+    let cancelado = false;
 
     async function fetchPost() {
+      setCarregandoPost(true);
+      setErroPost(null);
+      setPost(null);
+
       try {
-        const postUnico = await getPostById(params!.id);
+        const postUnico =
+          await getPostById(
+            params!.id
+          );
+
+        if (cancelado) {
+          return;
+        }
+
         setPost(postUnico);
-      } catch (error) {
-        console.error("Erro ao buscar post:", error);
-        setPost(null);
+      } catch (error: any) {
+        console.error(
+          "Erro ao buscar post:",
+          error
+        );
+
+        if (cancelado) {
+          return;
+        }
+
+        setErroPost({
+          status:
+            typeof error?.status ===
+            "number"
+              ? error.status
+              : undefined,
+
+          code:
+            error?.code,
+
+          message:
+            error?.message ||
+            "Não foi possível carregar esta publicação.",
+        });
+      } finally {
+        if (!cancelado) {
+          setCarregandoPost(false);
+        }
       }
     }
-    fetchPost();
+
+    void fetchPost();
+
+    return () => {
+      cancelado = true;
+    };
   }, [match, params?.id]);
 
   async function handleCurtir() {
     if (!post?.id) return;
+
+    if (!usuarioId) {
+      toast.error(
+        "Entre na FootEra para curtir esta publicação."
+      );
+
+      setLocation("/login");
+      return;
+    }
     try {
       await likePost(post.id);
       const atualizado = await getPostById(post.id);
@@ -50,6 +119,14 @@ function PostUnico(): JSX.Element {
   }
 
   async function handleComentarioSubmit(e: React.FormEvent) {
+    if (!usuarioId) {
+      toast.error(
+        "Entre na FootEra para comentar."
+      );
+
+      setLocation("/login");
+      return;
+    }
     e.preventDefault();
     if (!comentario.trim() || !post?.id) return;
     try {
@@ -91,6 +168,14 @@ function PostUnico(): JSX.Element {
   }
 
   async function handleRepost() {
+    if (!usuarioId) {
+      toast.error(
+        "Entre na FootEra para repostar."
+      );
+
+      setLocation("/login");
+      return;
+    }
     if (!post?.id) return;
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
     try {
@@ -102,14 +187,167 @@ function PostUnico(): JSX.Element {
     }
   }
 
-  if (!match) return <p className="text-center mt-10">Post não encontrado na URL.</p>;
-  if (!post) return <p className="text-center mt-10">Carregando postagem...</p>;
+  if (!match) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl border shadow-sm p-6 text-center">
+          <h2 className="text-lg font-bold text-gray-900">
+            Publicação não encontrada
+          </h2>
 
-  const imgSrc   = publicImgUrl(post.imagemUrl ?? null);
-  const videoSrc = publicImgUrl(post.videoUrl ?? null);
+          <p className="mt-2 text-sm text-gray-600">
+            O link desta publicação é inválido.
+          </p>
 
+          <button
+            type="button"
+            onClick={() =>
+              setLocation("/feed")
+            }
+            className="mt-5 rounded-xl bg-green-700 px-4 py-2 text-white font-semibold"
+          >
+            Voltar ao Feed
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (carregandoPost) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-600">
+          Carregando publicação...
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    erroPost?.status === 403 ||
+    erroPost?.code ===
+      "POST_NOT_ACCESSIBLE"
+  ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl border shadow-sm p-6 text-center">
+          <h2 className="text-lg font-bold text-gray-900">
+            Publicação indisponível
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-600">
+            {usuarioId
+              ? "Você não possui acesso a esta publicação."
+              : "Esta publicação não está disponível publicamente. Entre na FootEra para verificar se você possui acesso."}
+          </p>
+
+          <div className="mt-5 flex flex-col gap-2">
+            {!usuarioId && (
+              <button
+                type="button"
+                onClick={() =>
+                  setLocation("/login")
+                }
+                className="rounded-xl bg-green-700 px-4 py-2 text-white font-semibold"
+              >
+                Entrar na FootEra
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                setLocation("/feed")
+              }
+              className="rounded-xl border border-gray-300 px-4 py-2 font-semibold text-gray-700"
+            >
+              Voltar ao Feed
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (erroPost?.status === 404) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl border shadow-sm p-6 text-center">
+          <h2 className="text-lg font-bold text-gray-900">
+            Publicação não encontrada
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-600">
+            Ela pode ter sido removida ou o link está incorreto.
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              setLocation("/feed")
+            }
+            className="mt-5 rounded-xl bg-green-700 px-4 py-2 text-white font-semibold"
+          >
+            Voltar ao Feed
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (erroPost) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl border shadow-sm p-6 text-center">
+          <h2 className="text-lg font-bold text-gray-900">
+            Não foi possível carregar
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-600">
+            {erroPost.message}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              window.location.reload()
+            }
+            className="mt-5 rounded-xl bg-green-700 px-4 py-2 text-white font-semibold"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div className="text-center p-10 text-gray-600">
+        Publicação não encontrada.
+      </div>
+    );
+  }
   const linkCompartilhado = `${APP.FRONTEND_BASE_URL}/post/${post.id}`;
-  const jaCurtiu = post.curtidas.some((c) => c.usuarioId === usuarioId);
+  const curtidas =
+    post.curtidas || [];
+
+  const jaCurtiu =
+    !!usuarioId &&
+    curtidas.some(
+      (c) =>
+        c.usuarioId ===
+        usuarioId
+    );
+
+  const totalCurtidas =
+    typeof (
+      post as any
+    ).totalCurtidas ===
+    "number"
+      ? (post as any)
+          .totalCurtidas
+      : curtidas.length;
 
   return (
     <div className="max-w-xl mx-auto p-4">
@@ -180,7 +418,7 @@ function PostUnico(): JSX.Element {
         <button onClick={handleCurtir} className="text-black-500 hover:text-black-600">
           {jaCurtiu ? <FaHeart /> : <FaRegHeart />}
         </button>
-        <span className="text-sm">{post.curtidas.length}</span>
+        <span className="text-sm">{totalCurtidas}</span>
 
         {post.usuario.id === usuarioId && (
           <button onClick={handleExcluirPost} className="text-black-700 hover:text-black-800 ml-auto">
@@ -206,24 +444,48 @@ function PostUnico(): JSX.Element {
           </div>
         ))}
 
-        <form onSubmit={handleComentarioSubmit} className="mt-4">
-          <textarea
-            value={comentario}
-            onChange={(e) => setComentario(e.target.value)}
-            className="w-full p-2 border rounded mb-2"
-            placeholder="Escreva um comentário..."
-          />
-          <button
-            type="submit"
-            disabled={carregando}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        {usuarioId ? (
+          <form
+            onSubmit={
+              handleComentarioSubmit
+            }
+            className="mt-4"
           >
-            {carregando ? "Enviando..." : "Comentar"}
+            <textarea
+              value={comentario}
+              onChange={(e) =>
+                setComentario(
+                  e.target.value
+                )
+              }
+              className="w-full p-2 border rounded mb-2"
+              placeholder="Escreva um comentário..."
+            />
+
+            <button
+              type="submit"
+              disabled={carregando}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              {carregando
+                ? "Enviando..."
+                : "Comentar"}
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              setLocation("/login")
+            }
+            className="mt-4 w-full rounded-lg border border-green-700 py-2 text-green-700 font-semibold"
+          >
+            Entre para comentar
           </button>
-        </form>
+        )}
       </div>
 
-    <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+            <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
               <Link href="/feed" className="hover:underline">
                 <House /> 
               </Link>

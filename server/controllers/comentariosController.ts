@@ -2,6 +2,7 @@ import { Response } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import { podeVisualizarPostagem } from "../utils/postVisibility.js";
 
 const criarComentarioSchema = z.object({
   postagemId: z.string().trim().min(1, "postagemId é obrigatório"),
@@ -12,13 +13,53 @@ const criarComentarioSchema = z.object({
     .max(2000, "Comentário muito longo (máximo 2000 caracteres)"),
 });
 
-
 export async function criarComentario(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
 
     const { postagemId, conteudo } = criarComentarioSchema.parse(req.body);
+
+    const post =
+      await prisma.postagem.findUnique({
+        where: {
+          id: postagemId,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+          visibilidade: true,
+          oculto: true,
+        },
+      });
+
+    if (!post) {
+      return res
+        .status(404)
+        .json({
+          error:
+            "Postagem não encontrada.",
+        });
+    }
+
+    const permitido =
+      await podeVisualizarPostagem(
+        post,
+        userId
+      );
+
+    if (!permitido) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "POST_NOT_ACCESSIBLE",
+
+          error:
+            "Esta publicação não está disponível.",
+        });
+    }
 
     const comentario = await prisma.comentario.create({
       data: {

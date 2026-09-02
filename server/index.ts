@@ -324,16 +324,25 @@ app.use("/api/escolinhas", authenticateToken, escolinhaRoutes);
 app.use("/api/eventos", authenticateToken, eventosRoutes);
 app.use("/api/exercicios", authenticateToken, exerciciosRoutes);
 app.use("/api/favoritos", authenticateToken, favoritosRoutes);
-app.use("/api/feed", authenticateToken, feedRoutes);
 app.use("/api/grupos", authenticateToken, gruposRoutes);
 app.use("/api/home", authenticateToken, homeRoutes);
 app.use("/api/logerro", authenticateToken, logErroRoutes);
 app.use("/api/mensagem", authenticateToken, mensagemRoutes);
 app.use("/api/midias", authenticateToken, midiaRoutes);
 app.use("/api/notificacoes", authenticateToken, notificacoesRoutes);
-app.use("/api/perfil", authenticateToken, perfilRoutes);
 app.use("/api/pontuacao", authenticateToken, pontuacaoRoutes);
-app.use("/api/post", authenticateToken, postRoutes);
+app.use(
+  "/api/feed",
+  feedRoutes
+);
+app.use(
+  "/api/perfil",
+  perfilRoutes
+);
+app.use(
+  "/api/post",
+  postRoutes
+);
 app.use("/api/presenca", authenticateToken, presencaRoutes);
 app.use("/api/professores", authenticateToken, professorRoutes);
 app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);

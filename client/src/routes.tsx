@@ -226,8 +226,10 @@ export function AppRoutes() {
           </>
         )}
 
-        <Route path="/feed"><Private><PaginaFeed /></Private></Route>
-        
+        <Route path="/feed">
+          <PaginaFeed />
+        </Route>
+
         <Route path="/treinos/exercicios/novo"><Private><ExercicioNovoPage/></Private></Route>
         <Route path="/treinos/exercicios/editar/:id"><Private><ExercicioEditarPage/></Private></Route>
         <Route path="/treinos/avaliar"><Private><AvaliarTreino /></Private></Route> 
@@ -257,9 +259,9 @@ export function AppRoutes() {
           <Private><CreatorEventosPage /></Private>
         </Route>
 
-        <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
+        <Route path="/perfil/:id"><PaginaPerfilUnico /></Route>
         <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
-        <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
+        <Route path="/post/:id"><PaginaPostUnico /></Route>
         <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
         
         {FLAGS.LEARNING_ENABLED ? (

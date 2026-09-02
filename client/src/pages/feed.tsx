@@ -424,6 +424,7 @@ function sortPostsDestaquePrimeiro(
 }
 
 function PaginaFeed(): JSX.Element {
+  const [, setLocation] = useLocation();
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>(
@@ -537,7 +538,12 @@ function PaginaFeed(): JSX.Element {
         const parsed = parseAchievement(p.conteudo || "");
         if (parsed?.conquistaId) ids.add(parsed.conquistaId);
       }
-      ids.forEach((id) => carregarConquista(id));
+      if (userId) {
+        ids.forEach(
+          (id) =>
+            carregarConquista(id)
+        );
+      }
     } catch (e) {
       console.error("Falha ao carregar feed:", e);
       setPosts([]);
@@ -552,19 +558,51 @@ function PaginaFeed(): JSX.Element {
   }, [carregarFeed]);
 
   useEffect(() => {
-    const onNovoPost = (novo: PostagemComUsuario) => {
+    if (!userId) {
+      return;
+    }
+
+    const onNovoPost = (
+      novo: PostagemComUsuario
+    ) => {
       setPosts((prev) => {
-        if (novo.usuario?.id === Storage.usuarioId) return prev;
-        if (prev.some((p) => p.id === novo.id)) return prev;
-        return sortPostsDestaquePrimeiro([novo, ...prev]);
+        if (
+          novo.usuario?.id ===
+          Storage.usuarioId
+        ) {
+          return prev;
+        }
+
+        if (
+          prev.some(
+            (p) =>
+              p.id === novo.id
+          )
+        ) {
+          return prev;
+        }
+
+        return sortPostsDestaquePrimeiro(
+          [
+            novo,
+            ...prev,
+          ]
+        );
       });
     };
 
-    socket.on("feed:novoPost", onNovoPost as any);
+    socket.on(
+      "feed:novoPost",
+      onNovoPost as any
+    );
+
     return () => {
-      socket.off("feed:novoPost", onNovoPost as any);
+      socket.off(
+        "feed:novoPost",
+        onNovoPost as any
+      );
     };
-  }, []);
+  }, [userId]);
 
   const carregarConquista = async (conquistaId: string) => {
     const id = String(conquistaId || "").trim();
@@ -609,7 +647,12 @@ function PaginaFeed(): JSX.Element {
 
   const handleLike = async (postId: string) => {
     if (!userId) {
-      toast.error("Sessão expirada. Faça login novamente.");
+      toast.error(
+        "Entre na FootEra para curtir esta publicação."
+      );
+
+      setLocation("/login");
+
       return;
     }
     try {
@@ -632,6 +675,16 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleComentario = async (postId: string, texto: string) => {
+    if (!userId) {
+      toast.error(
+        "Entre na FootEra para curtir esta publicação."
+      );
+
+      setLocation("/login");
+
+      return;
+    }
+
     const conteudo = String(texto || "").trim();
     if (!conteudo) return;
 
@@ -658,23 +711,61 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
-  const handleCompartilhar = async (postId: string) => {
-    const link = `${APP.FRONTEND_BASE_URL}/post/${postId}`;
-    setLinkCompartilhado(link);
-    setIdCompartilhado(postId);
-    setModalAberto(true);
-    try {
-      setCarregandoMutuos(true);
-      setSelecionados(new Set());
-      const lista = await getUsuariosMutuos();
-      setUsuariosMutuos(lista);
-    } catch (e) {
-      console.error(e);
-      toast.error("Não foi possível carregar seus contatos.");
-    } finally {
-      setCarregandoMutuos(false);
-    }
-  };
+  const handleCompartilhar =
+    async (
+      postId: string
+    ) => {
+      const link =
+        `${APP.FRONTEND_BASE_URL}/post/${postId}`;
+
+      setLinkCompartilhado(
+        link
+      );
+
+      setIdCompartilhado(
+        postId
+      );
+
+      setModalAberto(true);
+
+      // Visitante pode compartilhar
+      // externamente, mas não por DM.
+      if (!userId) {
+        setUsuariosMutuos([]);
+        setSelecionados(
+          new Set()
+        );
+
+        return;
+      }
+
+      try {
+        setCarregandoMutuos(
+          true
+        );
+
+        setSelecionados(
+          new Set()
+        );
+
+        const lista =
+          await getUsuariosMutuos();
+
+        setUsuariosMutuos(
+          lista
+        );
+      } catch (e) {
+        console.error(e);
+
+        toast.error(
+          "Não foi possível carregar seus contatos."
+        );
+      } finally {
+        setCarregandoMutuos(
+          false
+        );
+      }
+    };
 
   const handleApagar = async (postId: string) => {
     if (!window.confirm("Apagar esta postagem? Essa ação não pode ser desfeita.")) return;
@@ -687,7 +778,15 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleRepost = async (postId: string) => {
-    if (!userId) return toast.error("Sessão expirada. Faça login novamente.");
+    if (!userId) {
+      toast.error(
+        "Entre na FootEra para repostar."
+      );
+
+      setLocation("/login");
+
+      return;
+    }
 
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
 
@@ -782,6 +881,8 @@ function PaginaFeed(): JSX.Element {
             Ver tudo
           </button>
 
+          {userId && (
+            <>
           <button
             onClick={() => selecionarFiltro("seguindo")}
             className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
@@ -805,6 +906,8 @@ function PaginaFeed(): JSX.Element {
           >
             Favoritos
           </button>
+            </>
+          )}
         </div>
 
       {carregandoPosts && (
@@ -853,6 +956,14 @@ function PaginaFeed(): JSX.Element {
       {!carregandoPosts && !erroFeed && posts.map((post) => {
         const curtidas = post.curtidas || [];
         const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
+        const totalCurtidas =
+          typeof (
+            post as any
+          ).totalCurtidas ===
+          "number"
+            ? (post as any)
+                .totalCurtidas
+            : curtidas.length;
         const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
         const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
         const parsed = parseAchievement(post.conteudo);
@@ -1026,7 +1137,7 @@ function PaginaFeed(): JSX.Element {
                 ) : (
                   <FaRegHeart />
                 )}{" "}
-                <span>{curtidas.length}</span>
+                <span>{totalCurtidas}</span>
               </button>
 
               <button

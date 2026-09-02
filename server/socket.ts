@@ -190,9 +190,22 @@ export function setupSocket(server: http.Server) {
       }
     );
 
-    socket.on("join", (usuarioId: string) => {
-      if (usuarioId) socket.join(`u:${usuarioId}`);
-    });
+    socket.on(
+      "join",
+      () => {
+        const uid =
+          String(
+            (socket.data as any)
+              ?.userId || ""
+          );
+
+        if (!uid) return;
+
+        socket.join(
+          `u:${uid}`
+        );
+      }
+    );
 
     socket.on("joinGroup", (grupoId: string) => {
       if (grupoId) socket.join(`g:${grupoId}`);

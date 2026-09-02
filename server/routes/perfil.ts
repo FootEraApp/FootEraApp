@@ -26,7 +26,7 @@ import {
   getDeltaPontuacaoPerfil,
   confirmarVisualizacaoPontuacaoPerfil,
 } from "../controllers/perfilController.js";
-import { authenticateToken } from "../middlewares/auth.js";
+import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 import multer from "multer";
 import { uploadToS3 } from "../middlewares/s3Upload.js";
 
@@ -103,8 +103,7 @@ router.get("/:id/badges", authenticateToken, getBadges);
 router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
-router.get("/:id", authenticateToken, getPerfilUsuario);
-
+router.get("/:id", optionalAuthenticateToken, getPerfilUsuario);
 router.put("/:id", authenticateToken, uploadToS3.single("foto"), atualizarPerfil);
 
 export default router;

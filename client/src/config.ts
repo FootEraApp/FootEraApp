@@ -40,6 +40,7 @@ const envAndroidApi = strip(viteEnv?.VITE_ANDROID_API_URL);
 
 let API_BASE = isLocalMode && isCapacitorNative()
   ? envAndroidApi || "http://127.0.0.1:3001"
+  // ? envAndroidApi || "http://10.0.2.2:3001"
   : envWebApi || inferApiFromHost();
 
 const isLocalApi =
@@ -67,14 +68,35 @@ export const API = {
   UPLOADS_URL: API_BASE ? `${API_BASE}/uploads` : "",
 } as const;
 
-const FRONTEND_BASE = strip(
-  viteEnv?.VITE_FRONTEND_URL ??
-    (typeof window !== "undefined"
-      ? window.location.origin
-      : isLocalMode
-      ? "http://localhost:5173"
-      : "https://footera.app.br")
-);
+const envFrontend =
+  strip(
+    viteEnv?.VITE_FRONTEND_URL
+  );
+
+/*
+ * Dentro do Capacitor,
+ * window.location.origin não é
+ * a URL pública compartilhável.
+ */
+const PUBLIC_WEB_BASE =
+  envFrontend ||
+  "https://footera.app.br";
+
+const FRONTEND_BASE =
+  isCapacitorNative()
+    ? PUBLIC_WEB_BASE
+    : strip(
+        envFrontend ||
+          (
+            typeof window !==
+            "undefined"
+              ? window.location
+                  .origin
+              : isLocalMode
+              ? "http://localhost:5173"
+              : PUBLIC_WEB_BASE
+          )
+      );
 
 export const APP = {
   FRONTEND_BASE_URL: FRONTEND_BASE || "http://localhost:5173",

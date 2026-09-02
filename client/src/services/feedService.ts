@@ -1,6 +1,6 @@
-import { API } from "../config.js";
-import { readToken } from "../utils/auth.js";
+import { API, APP } from "../config.js";
 import { toast } from "@/lib/toast";
+import { readToken } from "../utils/auth.js";
 
 export interface Usuario {
   id: string;
@@ -19,6 +19,12 @@ export interface Comentarios {
   usuarioId: string;
   usuario?: { id?: string; nome: string; foto?: string | null };
 }
+
+export type VisibilidadePostagem =
+  | "PUBLICO"
+  | "LOGADO"
+  | "SEGUIDORES"
+  | "PRIVADO";
 
 export type PostagemComUsuario = {
   id: string;
@@ -40,6 +46,8 @@ export type PostagemComUsuario = {
   comentarios: Comentarios[];
   compartilhamentos?: number | null;
   reposts?: number | null;
+  totalCurtidas?: number;
+  visibilidade?: VisibilidadePostagem;
   repostOf?: PostagemComUsuario | null;
 };
 
@@ -50,19 +58,122 @@ export interface CriarPostInput {
   imagemUrl?: string;
   videoUrl?: string;
   arquivo?: File | null;
+  visibilidade?:
+    VisibilidadePostagem;
 }
 
 export type FiltroFeed = "todos" | "seguindo" | "favoritos" | "meus";
 
-function pickToken(): string {
-  const raw = readToken();
-  if (!raw) {
-    throw new Error("Sem token. Faça login novamente.");
+const AUTH_STORAGE_KEYS = [
+  "token",
+  "usuarioId",
+  "nomeUsuario",
+  "tipoUsuario",
+  "usuarioTipoRaw",
+  "tipoUsuarioId",
+  "plano",
+] as const;
+
+function clearStoredAuth() {
+  for (const key of AUTH_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
   }
-  return raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
 }
 
-const auth = () => ({ Authorization: pickToken() });
+async function throwResponseError(
+  response: Response,
+  fallback: string
+): Promise<never> {
+  const body = await response.text().catch(() => "");
+  const error: any = new Error(body || fallback);
+  error.status = response.status;
+  throw error;
+}
+
+function readBearerToken():
+  string | null {
+  const raw =
+    readToken();
+
+  if (!raw) {
+    return null;
+  }
+
+  return raw.startsWith(
+    "Bearer "
+  )
+    ? raw
+    : `Bearer ${raw}`;
+}
+
+function pickToken():
+  string {
+  const token =
+    readBearerToken();
+
+  if (!token) {
+    const error: any = new Error(
+      "Sem token. Faça login novamente."
+    );
+    error.status = 401;
+    error.code = "AUTH_REQUIRED";
+    throw error;
+  }
+
+  return token;
+}
+
+const auth = () => ({
+  Authorization:
+    pickToken(),
+});
+
+const optionalAuth = ():
+  {
+    Authorization?: string;
+  } => {
+  const token =
+    readBearerToken();
+
+  return token
+    ? {
+        Authorization:
+          token,
+      }
+    : {};
+};
+
+async function optionalGet(
+  url: string
+): Promise<Response> {
+  const headers =
+    optionalAuth();
+
+  let response =
+    await fetch(url, {
+      headers,
+    });
+
+  /*
+   * Pode existir um token antigo
+   * ou expirado no navegador.
+   *
+   * Como esta é uma rota pública,
+   * tentamos novamente como visitante.
+   */
+  if (
+    response.status === 401 &&
+    headers.Authorization
+  ) {
+    // A API recusou a sessão armazenada. Como esta é uma rota pública,
+    // limpa apenas as chaves de autenticação e repete como visitante.
+    clearStoredAuth();
+    response = await fetch(url);
+  }
+
+  return response;
+}
 
 interface FeedMeta {
   adsEnabled: boolean;
@@ -88,15 +199,10 @@ export async function getFeedPosts(
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: auth() });
+    res = await optionalGet(url);
   } catch (e) {
     console.error("Erro de rede ao carregar feed:", e);
     throw e;
-  }
-
-  if (res.status === 401) {
-    console.warn("[FEED] 401 em", url, "– provavelmente token inválido/expirado");
-    return [];
   }
 
   if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
@@ -112,10 +218,14 @@ export async function getFeedPosts(
 }
 
 export async function likePost(postId: string) {
-  await fetch(`${API.BASE_URL}/api/feed/${postId}/like`, {
+  const response = await fetch(`${API.BASE_URL}/api/feed/${postId}/like`, {
     method: "POST",
     headers: auth(),
   });
+
+  if (!response.ok) {
+    await throwResponseError(response, "Não foi possível curtir.");
+  }
 }
 
 export async function comentarPost(postId: string, texto: string) {
@@ -126,8 +236,7 @@ export async function comentarPost(postId: string, texto: string) {
   });
 
   if (!res.ok) {
-    const msg = await res.text().catch(() => "");
-    throw new Error(msg || "Erro ao comentar");
+    await throwResponseError(res, "Erro ao comentar");
   }
 
   return res.json(); 
@@ -159,43 +268,106 @@ export async function repostPost(postId: string, comentario = ""): Promise<Repos
   });
 
   if (!r.ok) {
-    const msg = await r.text().catch(() => "");
-    throw new Error(msg || `Erro ao repostar (${r.status})`);
+    await throwResponseError(r, `Erro ao repostar (${r.status})`);
   } 
 
   return r.json();
 }
 
 export async function compartilharPost(postId: string) {
-  const link = `${window.location.origin}/post/${postId}`;
+  const basePublica = String(APP.FRONTEND_BASE_URL || "").replace(/\/+$/, "");
+  const link = `${basePublica}/post/${postId}`;
+  const bearer = readBearerToken();
+
   try {
-    await navigator.clipboard.writeText(link);
-    await fetch(`${API.BASE_URL}/api/feed/post/${postId}/compartilhar`, {
+    if (navigator.share) {
+      await navigator.share({
+        title: "FootEra",
+        url: link,
+      });
+    } else {
+      await navigator.clipboard.writeText(link);
+      toast.success("Link copiado para a área de transferência!");
+    }
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      return;
+    }
+
+    console.error("Erro ao compartilhar link:", error);
+    toast.error("Não foi possível compartilhar o link.");
+    return;
+  }
+
+  // Registrar o compartilhamento é um efeito secundário.
+  // Visitante pode compartilhar normalmente sem autenticação.
+  if (bearer) {
+    void fetch(`${API.BASE_URL}/api/feed/post/${postId}/compartilhar`, {
       method: "POST",
-      headers: auth(),
+      headers: { Authorization: bearer },
+    }).catch((error) => {
+      console.error("Erro ao registrar compartilhamento:", error);
     });
-    toast.success("Link copiado para a área de transferência!");
-  } catch (error) {
-    console.error("Erro ao copiar link:", error);
-    toast.error("Não foi possível copiar o link.");
   }
 }
 
-export async function getPostById(id: string): Promise<PostagemComUsuario> {
-  const response = await fetch(
-    `${API.BASE_URL}/api/feed/post/visualizar/${id}`,
-    {
-      headers: auth(),
-    }
-  );
-  if (!response.ok) throw new Error("Erro ao buscar post");
+export async function getPostById(
+  id: string
+): Promise<PostagemComUsuario> {
+  const response =
+    await optionalGet(
+      `${API.BASE_URL}/api/feed/post/visualizar/${id}`
+    );
 
-  const raw = await response.json();
+  if (!response.ok) {
+    const data =
+      await response
+        .json()
+        .catch(() => ({}));
+
+    const message =
+      data?.message ||
+      data?.error ||
+      (
+        response.status === 403
+          ? "Esta publicação não está disponível."
+          : response.status === 404
+          ? "Publicação não encontrada."
+          : "Não foi possível carregar a publicação."
+      );
+
+    const error: any =
+      new Error(message);
+
+    error.status =
+      response.status;
+
+    error.code =
+      data?.code;
+
+    throw error;
+  }
+
+  const raw =
+    await response.json();
+
   return {
     ...raw,
-    compartilhamentos: Number(raw?.compartilhamentos ?? 0),
-    curtidas: Array.isArray(raw.curtidas) ? raw.curtidas : [],
-    comentarios: Array.isArray(raw.comentarios) ? raw.comentarios : [],
+
+    compartilhamentos:
+      Number(
+        raw?.compartilhamentos ?? 0
+      ),
+
+    curtidas:
+      Array.isArray(raw?.curtidas)
+        ? raw.curtidas
+        : [],
+
+    comentarios:
+      Array.isArray(raw?.comentarios)
+        ? raw.comentarios
+        : [],
   } as PostagemComUsuario;
 }
 
@@ -204,6 +376,7 @@ export async function criarPost({
   imagemUrl,
   videoUrl,
   arquivo,
+  visibilidade = "LOGADO",
 }: CriarPostInput) {
   const POST_URL = `${API.BASE_URL}/api/feed/post`;
   const hasDescricao = !!descricao && descricao.trim().length > 0;
@@ -214,6 +387,7 @@ export async function criarPost({
     const fd = new FormData();
     if (hasDescricao) fd.append("descricao", descricao.trim());
     fd.append("arquivo", arquivo);
+    fd.append("visibilidade", visibilidade);
     const res = await fetch(POST_URL, {
       method: "POST",
       headers: auth(),
@@ -227,7 +401,7 @@ export async function criarPost({
   }
 
   if (hasDescricao || hasImagem || hasVideo) {
-    const payload: any = {};
+    const payload: any = { visibilidade, };
     if (hasDescricao) payload.descricao = descricao.trim();
     if (hasImagem) payload.imagemUrl = imagemUrl;
     if (hasVideo) payload.videoUrl = videoUrl;

@@ -7,7 +7,9 @@ import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import GoogleButton from "../components/auth/GoogleButton";
 import MaintenanceScreen from "../components/MaintenanceScreen";
-import { applyAuthSession } from "../utils/authSession.js";
+import { applyAuthSession, consumirRetornoAuth } from "../utils/authSession.js";
+import { Capacitor } from "@capacitor/core";
+import { inicializarPushAndroidNativo } from "../services/nativePushNotifications.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -441,6 +443,16 @@ function MinimalInput({
 
 export default function Cadastro() {
   const [_, navigate] = useLocation();
+
+  async function inicializarPushDepoisDoAuth() {
+    if (!Capacitor.isNativePlatform()) return;
+
+    try {
+      await inicializarPushAndroidNativo();
+    } catch (e) {
+      console.warn("[push native] não inicializou após autenticação pelo cadastro:", e);
+    }
+  }
 
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceChecked, setMaintenanceChecked] = useState(false);
@@ -968,7 +980,17 @@ export default function Cadastro() {
 
       const { isAdmin } = applyAuthSession(data, { lembrar: false });
 
-      navigate(isAdmin ? "/admin" : "/perfil");
+      await inicializarPushDepoisDoAuth();
+
+      if (isAdmin) {
+        navigate("/admin");
+      } else {
+        navigate(
+          consumirRetornoAuth(
+            "/perfil"
+          )
+        );
+      }
     } catch (err: any) {
       console.error("Erro no cadastro/login com Google:", err.response?.data || err.message);
       setErro(
