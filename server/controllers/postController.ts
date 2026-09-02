@@ -2,51 +2,30 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { sanitizeText, basicModerationFails, normalizeIncomingMediaUrl, MOD, isAllowedMime } from "../utils/moderation.js";
 import { getIO } from "../socket.js"
+import {
+  VisibilidadePostagem,
+} from "@prisma/client";
+import {
+  normalizarVisibilidadePostagem,
+  podeVisualizarPostagem,
+} from "../utils/postVisibility.js";
+import {
+  sanitizePublicPost,
+} from "../utils/publicSanitizers.js";
 
 type AuthedReq = Request & { userId?: string };
-
-function isAllowedUrl(u?: string | null) {
-  if (!u) return false;
-  const s = u.trim();
-  return /^https?:\/\//i.test(s) || s.startsWith("/uploads/") || s.startsWith("/assets/");
-}
-
-function normalizeIncomingUrl(u: string, req: Request): string {
-  let s = (u || "").trim();
-  if (!s) return "";
-
-  s = s.replace(/\/assets\/usuarios\//g, "/uploads/").replace(/^\/assets\//, "/uploads/");
-
-  if (s.startsWith("/uploads/")) return s;
-
-  if (/^https?:\/\//i.test(s)) {
-    try {
-      const url = new URL(s);
-      const sameHost = url.host === (req.headers.host || "");
-      if (url.pathname.startsWith("/uploads/")) return url.pathname;
-      if (url.pathname.startsWith("/assets/usuarios/")) return url.pathname.replace("/assets/usuarios/", "/uploads/");
-      return url.toString();
-    } catch {
-      return s;
-    }
-  }
-
-  if (s.startsWith("uploads/")) return `/${s}`;
-
-  return s; 
-}
-
-function dataUrlToBuffer(dataUrl: string) {
-  const m = /^data:(image|video)\/[a-z0-9+.-]+;base64,(.+)$/i.exec(dataUrl);
-  if (!m) return null;
-  return Buffer.from(m[2], "base64");
-}
 
 export const postarConteudo = async (req: AuthedReq, res: Response) => {
   try {
     if (!req.userId) return res.status(401).json({ message: "Usuário não autenticado." });
 
     const body = req.body as any;
+    const visibilidade =
+      normalizarVisibilidadePostagem(
+        body?.visibilidade,
+        VisibilidadePostagem.LOGADO
+      );
+
     const file = (req as any).file as Express.Multer.File | undefined;
 
     const rawDescricao: string | undefined = body.descricao ?? body.conteudo;
@@ -90,6 +69,7 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
         tipoMidia: tipoDetectado as any,
         imagemUrl: finalImagemUrl,
         videoUrl: finalVideoUrl,
+        visibilidade,
         compartilhamentos: 0,
       },
       include: {
@@ -134,8 +114,40 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   const fail = basicModerationFails(texto);
   if (fail) return res.status(422).json({ message: fail });
 
-  const post = await prisma.postagem.findUnique({ where: { id: postId }, select: { id: true } });
-  if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+  const post =
+    await prisma.postagem.findUnique({
+      where: {
+        id: postId,
+      },
+
+      select: {
+        id: true,
+        usuarioId: true,
+        visibilidade: true,
+        oculto: true,
+      },
+    });
+
+  if (!post) {
+    return res.status(404).json({
+      message:
+        "Postagem não encontrada.",
+    });
+  }
+
+  const permitido =
+    await podeVisualizarPostagem(
+      post,
+      req.userId
+    );
+
+  if (!permitido) {
+    return res.status(403).json({
+      code: "POST_NOT_ACCESSIBLE",
+      message:
+        "Esta publicação não está disponível.",
+    });
+  }
 
   const novoComentario = await prisma.comentario.create({
     data: { conteudo: text, postagemId: postId, usuarioId: req.userId! },
@@ -199,33 +211,149 @@ export const deletarPost = async (req: AuthedReq, res: Response) => {
   }
 };
 
-export const buscarPostagemPorId = async (req: AuthedReq, res: Response) => {
-  const { id } = req.params;
-  try {
-    const post = await prisma.postagem.findUnique({
-      where: { id },
-      include: {
-        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
-        comentarios: {
-          orderBy: { dataCriacao: "asc" },
-          include: { usuario: { select: { id: true, nome: true, foto: true } } },
-        },
-        curtidas: { select: { usuarioId: true } },
-      },
-    });
-    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
-    return res.json(post);
-  } catch (error) {
-    console.error("Erro ao buscar postagem:", error);
-    return res.status(500).json({ message: "Erro ao buscar postagem." });
-  }
-};
+export const buscarPostagemPorId =
+  async (
+    req: AuthedReq,
+    res: Response
+  ) => {
+    const { id } = req.params;
 
+    try {
+      const post =
+        await prisma.postagem.findUnique({
+          where: { id },
+
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                nomeDeUsuario: true,
+                foto: true,
+                tipo: true,
+                verified: true,
+                destaque: true,
+              },
+            },
+
+            comentarios: {
+              orderBy: {
+                dataCriacao:
+                  "asc",
+              },
+
+              include: {
+                usuario: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    nomeDeUsuario:
+                      true,
+                    foto: true,
+                  },
+                },
+              },
+            },
+
+            curtidas: {
+              select: {
+                usuarioId:
+                  true,
+              },
+            },
+          },
+        });
+
+      if (!post) {
+        return res
+          .status(404)
+          .json({
+            message:
+              "Postagem não encontrada.",
+          });
+      }
+
+      const permitido =
+        await podeVisualizarPostagem(
+          post,
+          req.userId
+        );
+
+      if (!permitido) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "POST_NOT_ACCESSIBLE",
+
+            message:
+              "Esta publicação não está disponível.",
+          });
+      }
+
+      if (!req.userId) {
+        return res.json(
+          sanitizePublicPost(
+            post
+          )
+        );
+      }
+
+      return res.json(post);
+    } catch (error) {
+      console.error(
+        "Erro ao buscar postagem:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          message:
+            "Erro ao buscar postagem.",
+        });
+    }
+  };
+  
 export const registrarCompartilhamento = async (req: AuthedReq, res: Response) => {
   const { postId } = req.params;
   try {
-    const post = await prisma.postagem.findUnique({ where: { id: postId } });
-    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+    const post =
+      await prisma.postagem.findUnique({
+        where: {
+          id: postId,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+          visibilidade: true,
+          oculto: true,
+        },
+      });
+
+    if (!post) {
+      return res.status(404).json({
+        message:
+          "Postagem não encontrada.",
+      });
+    }
+
+    const permitido =
+      await podeVisualizarPostagem(
+        post,
+        req.userId
+      );
+
+    if (!permitido) {
+      return res.status(403).json({
+        code:
+          "POST_NOT_ACCESSIBLE",
+
+        message:
+          "Esta publicação não está disponível.",
+      });
+    }
 
     await prisma.postagem.update({
       where: { id: postId },
@@ -249,8 +377,42 @@ export const compartilharPostPorMensagem = async (req: AuthedReq, res: Response)
       return res.status(400).json({ message: "Informe ao menos um destinatário em paraIds." });
     }
 
-    const post = await prisma.postagem.findUnique({ where: { id: postId }, select: { id: true } });
-    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+    const post =
+      await prisma.postagem.findUnique({
+        where: {
+          id: postId,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+          visibilidade: true,
+          oculto: true,
+        },
+      });
+
+    if (!post) {
+      return res.status(404).json({
+        message:
+          "Postagem não encontrada.",
+      });
+    }
+
+    const permitido =
+      await podeVisualizarPostagem(
+        post,
+        req.userId
+      );
+
+    if (!permitido) {
+      return res.status(403).json({
+        code:
+          "POST_NOT_ACCESSIBLE",
+
+        message:
+          "Esta publicação não está disponível.",
+      });
+    }
 
     const ops = paraIds
       .filter((id) => id && id !== req.userId)
@@ -277,36 +439,5 @@ export const compartilharPostPorMensagem = async (req: AuthedReq, res: Response)
   } catch (e) {
     console.error("compartilharPostPorMensagem:", e);
     return res.status(500).json({ message: "Erro ao compartilhar por mensagem." });
-  }
-};
-
-export const repostarPost = async (req: AuthedReq, res: Response) => {
-  try {
-    if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
-    const { postId } = req.params;
-    const { comentario } = req.body as { comentario?: string };
-
-    const original = await prisma.postagem.findUnique({ where: { id: postId } });
-    if (!original) return res.status(404).json({ message: "Postagem original não encontrada." });
-
-    const repost = await prisma.postagem.create({
-      data: {
-        usuarioId: req.userId,
-        conteudo: comentario || "",
-        tipoMidia: "Repost",
-        imagemUrl: null,
-        videoUrl: null,
-      } as any,
-    });
-
-    await prisma.postagem.update({
-      where: { id: original.id },
-      data: { compartilhamentos: { increment: 1 } },
-    });
-
-    return res.status(201).json(repost);
-  } catch (e) {
-    console.error("repostarPost:", e);
-    return res.status(500).json({ message: "Erro ao repostar." });
   }
 };

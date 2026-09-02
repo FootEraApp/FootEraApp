@@ -3,6 +3,10 @@ import { prisma } from "../prisma.js";
 import bcrypt from "bcryptjs";
 import { AuthProvider } from "@prisma/client";
 import { getIO } from "../socket.js";
+import {
+  normalizarVisibilidadePerfil,
+  readPrivacyConfig,
+} from "../utils/privacy.js";
 
 function getUserId(req: Request): string | null {
   const r: any = req;
@@ -24,12 +28,9 @@ export async function getPrivacidade(req: Request, res: Response) {
         ? u.configuracoesPrivacidade
         : {};
 
-    return res.json({
-      perfilVisivel: raw.perfilVisivel ?? true,
-      permitirMensagens: raw.permitirMensagens ?? true,
-      mostrarEmail: raw.mostrarEmail ?? false,
-      mostrarOnline: raw.mostrarOnline ?? true,
-    });
+    return res.json(
+      readPrivacyConfig(raw)
+    );
   } catch (err) {
     console.error("getPrivacidade erro:", err);
     return res.status(500).json({ message: "Erro ao carregar privacidade." });
@@ -41,12 +42,66 @@ export async function patchPrivacidade(req: Request, res: Response) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
-    const { perfilVisivel, permitirMensagens, mostrarEmail, mostrarOnline } = (req.body || {}) as any;
+    const {
+      perfilVisivel,
+      visibilidadePerfil,
+      permitirMensagens,
+      mostrarEmail,
+      mostrarOnline,
+    } = (req.body || {}) as any;
+
+    const visibilidadeNormalizada =
+      visibilidadePerfil === undefined
+        ? undefined
+        : normalizarVisibilidadePerfil(
+            visibilidadePerfil
+          );
+
+    const perfilVisivelCompat =
+      visibilidadeNormalizada !==
+      undefined
+        ? visibilidadeNormalizada !==
+          "PRIVADO"
+        : typeof perfilVisivel ===
+          "boolean"
+        ? perfilVisivel
+        : undefined;
+
+    if (
+      visibilidadePerfil !==
+        undefined &&
+      !visibilidadeNormalizada
+    ) {
+      return res.status(400).json({
+        message:
+          "visibilidadePerfil deve ser PUBLICO, NAO_LISTADO ou PRIVADO.",
+      });
+    }
+
     const next = {
-      perfilVisivel: typeof perfilVisivel === "boolean" ? perfilVisivel : undefined,
-      permitirMensagens: typeof permitirMensagens === "boolean" ? permitirMensagens : undefined,
-      mostrarEmail: typeof mostrarEmail === "boolean" ? mostrarEmail : undefined,
-      mostrarOnline: typeof mostrarOnline === "boolean" ? mostrarOnline : undefined,
+      perfilVisivel:
+        perfilVisivelCompat,
+
+      visibilidadePerfil:
+        visibilidadeNormalizada,
+
+      permitirMensagens:
+        typeof permitirMensagens ===
+        "boolean"
+          ? permitirMensagens
+          : undefined,
+
+      mostrarEmail:
+        typeof mostrarEmail ===
+        "boolean"
+          ? mostrarEmail
+          : undefined,
+
+      mostrarOnline:
+        typeof mostrarOnline ===
+        "boolean"
+          ? mostrarOnline
+          : undefined,
     };
 
     const u = await prisma.usuario.findUnique({
@@ -86,12 +141,9 @@ export async function patchPrivacidade(req: Request, res: Response) {
       } catch {}
     }
 
-    return res.json({
-      perfilVisivel: merged.perfilVisivel ?? true,
-      permitirMensagens: merged.permitirMensagens ?? true,
-      mostrarEmail: merged.mostrarEmail ?? false,
-      mostrarOnline: merged.mostrarOnline ?? true,
-    });
+    return res.json(
+      readPrivacyConfig(merged)
+    );
   } catch (err) {
     console.error("patchPrivacidade erro:", err);
     return res.status(500).json({ message: "Erro ao salvar privacidade." });

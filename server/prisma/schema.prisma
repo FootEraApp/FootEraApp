@@ -1307,33 +1307,35 @@ model AtletaObservado {
 }
 
 model Postagem {
-  id                String       @id @default(uuid())
+  id                String               @id @default(uuid())
   conteudo          String
   imagemUrl         String?
   videoUrl          String?
   tipoMidia         TipoMidia?
-  dataCriacao       DateTime     @default(now())
+  dataCriacao       DateTime             @default(now())
+  visibilidade      VisibilidadePostagem @default(LOGADO)
   usuarioId         String
   atletaId          String?
   clubeId           String?
   escolinhaId       String?
-  compartilhamentos Int?         @default(0)
+  compartilhamentos Int?                 @default(0)
   repostOfId        String?
-  repostOf          Postagem?    @relation("Reposts", fields: [repostOfId], references: [id])
-  repostedBy        Postagem[]   @relation("Reposts")
-  reposts           Int          @default(0)
-  oculto            Boolean      @default(false)
-  reportedCount     Int          @default(0)
+  repostOf          Postagem?            @relation("Reposts", fields: [repostOfId], references: [id])
+  repostedBy        Postagem[]           @relation("Reposts")
+  reposts           Int                  @default(0)
+  oculto            Boolean              @default(false)
+  reportedCount     Int                  @default(0)
   comentarios       Comentario[]
   curtidas          Curtida[]
   logsErro          LogErro[]
-  mensagens         Mensagem[]   @relation("PostMensagemReferencia")
-  atleta            Atleta?      @relation(fields: [atletaId], references: [id], onDelete: SetNull)
-  clube             Clube?       @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha         Escolinha?   @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  usuario           Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mensagens         Mensagem[]           @relation("PostMensagemReferencia")
+  atleta            Atleta?              @relation(fields: [atletaId], references: [id], onDelete: SetNull)
+  clube             Clube?               @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha         Escolinha?           @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  usuario           Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, conteudo, repostOfId])
+  @@index([visibilidade, dataCriacao])
   @@index([repostOfId])
 }
 
@@ -3130,6 +3132,13 @@ model PushDeviceToken {
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId])
+}
+
+enum VisibilidadePostagem {
+  PUBLICO
+  LOGADO
+  SEGUIDORES
+  PRIVADO
 }
 
 enum LearningFavoritoTipo {

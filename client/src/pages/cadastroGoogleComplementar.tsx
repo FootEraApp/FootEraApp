@@ -4,6 +4,10 @@ import { useLocation } from "wouter";
 import { API } from "../config.js";
 import logo from "/assets/usuarios/footera-logo.png";
 import { Eye, EyeOff } from "lucide-react";
+import {
+  applyAuthSession,
+  consumirRetornoAuth,
+} from "../utils/authSession.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -998,53 +1002,14 @@ export default function CadastroGoogleComplementar() {
         throw new Error(data?.error || data?.message || "Erro ao finalizar cadastro com Google.");
       }
 
-      const token = data?.token || "";
-      const usuarioId = data?.usuario?.id || data?.id || "";
-      const nomeUsuario = data?.usuario?.nomeDeUsuario || data?.nomeDeUsuario || "";
-      const rawTipo = String(data?.usuario?.tipo || data?.tipo || "").toLowerCase();
+      const { isAdmin } = applyAuthSession(data, {
+        lembrar: false,
+      });
 
-      const mapTipoStore: Record<string, string> = {
-        admin: "admin",
-        atleta: "atleta",
-        professor: "professor",
-        clube: "clube",
-        escolinha: "escolinha",
-        escola: "escola",
-        olheiro: "olheiro",
-        federacao: "federacao",
-        marca: "marca",
-        learning: "learning",
-      };
-
+      // Só apaga o pré-cadastro depois que a sessão foi realmente aplicada.
+      // Assim, se a resposta vier incompleta e applyAuthSession falhar,
+      // o usuário ainda consegue tentar finalizar novamente.
       sessionStorage.removeItem("google_pre_cadastro");
-
-      localStorage.removeItem("token");
-      localStorage.removeItem("usuarioId");
-      localStorage.removeItem("nomeUsuario");
-      localStorage.removeItem("tipoUsuario");
-      localStorage.removeItem("usuarioTipoRaw");
-      localStorage.removeItem("tipoUsuarioId");
-      localStorage.removeItem("plano");
-
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("usuarioId");
-      sessionStorage.removeItem("nomeUsuario");
-      sessionStorage.removeItem("tipoUsuario");
-      sessionStorage.removeItem("usuarioTipoRaw");
-      sessionStorage.removeItem("tipoUsuarioId");
-      sessionStorage.removeItem("plano");
-
-      sessionStorage.setItem("token", token);
-      sessionStorage.setItem("usuarioId", String(usuarioId));
-      if (nomeUsuario) sessionStorage.setItem("nomeUsuario", nomeUsuario);
-      sessionStorage.setItem("tipoUsuario", mapTipoStore[rawTipo] ?? "atleta");
-      sessionStorage.setItem("usuarioTipoRaw", rawTipo);
-
-      if (data?.tipoUsuarioId) {
-        sessionStorage.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
-      }
-
-      sessionStorage.setItem("plano", String(data?.usuario?.plano ?? data?.plano ?? "FREE"));
 
       if (tipoPerfil === "Learning") {
         setSucesso("Cadastro Learning com o Google realizado com sucesso! Verifique seu e-mail para confirmar a conta.");
@@ -1053,15 +1018,23 @@ export default function CadastroGoogleComplementar() {
       }
 
       setTimeout(() => {
-        navigate(rawTipo === "admin" ? "/admin" : "/perfil");
+        navigate(
+          isAdmin
+            ? "/admin"
+            : consumirRetornoAuth(
+                "/perfil"
+              )
+        );
       }, 1200);
     } catch (err: any) {
       setErro(
-        tipoPerfil === "Learning"
-          ? "Ocorreu um erro ao realizar cadastro Learning."
-          : err?.response?.data?.error || err?.response?.data?.message || "Erro ao realizar cadastro."
+        err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          err?.message ||
+          (tipoPerfil === "Learning"
+            ? "Ocorreu um erro ao realizar cadastro Learning."
+            : "Falha ao finalizar cadastro com Google.")
       );
-      setErro(err?.message || "Falha ao finalizar cadastro com Google.");
     } finally {
       setFinalizandoCadastro(false);
     }

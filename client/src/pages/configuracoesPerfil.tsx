@@ -17,12 +17,26 @@ import {
 } from "../services/pushNotifications.js";
 
 type FeedbackTipo = "sugestao" | "bug";
+type VisibilidadePerfil =
+  | "PUBLICO"
+  | "NAO_LISTADO"
+  | "PRIVADO";
 
 const TUTORIAL_ENABLED = FLAGS.TUTORIAL_ENABLED;
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();
-  const [visivel, setVisivel] = useState(true);
+  const [
+    visibilidadePerfil,
+    setVisibilidadePerfil,
+  ] = useState<VisibilidadePerfil | null>(
+    null
+  );
+
+  const [
+    privacidadeSaving,
+    setPrivacidadeSaving,
+  ] = useState(false);
   const [mensagens, setMensagens] = useState(true);
   const [mostrarEmail, setMostrarEmail] = useState(false);
   const [notifMensagens, setNotifMensagens] = useState(true);
@@ -179,10 +193,25 @@ export default function ConfiguracoesPerfil() {
     });
     const data = await resp.json().catch(() => ({}));
 
-    setVisivel(data?.perfilVisivel ?? true);
-    setMensagens(data?.permitirMensagens ?? true);
-    setMostrarEmail(data?.mostrarEmail ?? false);
-    setMostrarOnline(data?.mostrarOnline ?? true);
+    setVisibilidadePerfil(
+      data?.visibilidadePerfil ??
+        null
+    );
+
+    setMensagens(
+      data?.permitirMensagens ??
+        true
+    );
+
+    setMostrarEmail(
+      data?.mostrarEmail ??
+        false
+    );
+
+    setMostrarOnline(
+      data?.mostrarOnline ??
+        true
+    );
   }
 
   async function salvarPrivacidade(
@@ -217,6 +246,46 @@ export default function ConfiguracoesPerfil() {
     }
 
     return data;
+  }
+
+  async function alterarVisibilidadePerfil(
+    novaVisibilidade: VisibilidadePerfil
+  ) {
+    const anterior =
+      visibilidadePerfil;
+
+    try {
+      setPrivacidadeSaving(true);
+
+      // Atualização otimista.
+      setVisibilidadePerfil(
+        novaVisibilidade
+      );
+
+      const data =
+        await salvarPrivacidade({
+          visibilidadePerfil:
+            novaVisibilidade,
+        });
+
+      setVisibilidadePerfil(
+        data?.visibilidadePerfil ??
+          novaVisibilidade
+      );
+    } catch (e: any) {
+      // Se falhar, volta para
+      // o valor anterior.
+      setVisibilidadePerfil(
+        anterior
+      );
+
+      toast.error(
+        e?.message ||
+          "Não foi possível alterar a visibilidade do perfil."
+      );
+    } finally {
+      setPrivacidadeSaving(false);
+    }
   }
 
   async function carregarNotificacoes() {
@@ -934,17 +1003,168 @@ export default function ConfiguracoesPerfil() {
             </p>
 
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <div className="flex justify-between items-center border-b pb-3">
-                <span className="font-medium">Perfil Visível para Todos</span>
-                <Switch
-                    checked={visivel}
-                    onCheckedChange={(v) => {
-                      setVisivel(v);
-                      salvarPrivacidade({ perfilVisivel: v });
-                    }}
-                  />
-              </div>
+              <div className="border-b pb-4">
+                <div className="font-semibold text-gray-900">
+                  Visibilidade do perfil
+                </div>
 
+                <p className="mt-1 text-xs text-gray-500">
+                  Escolha quem pode encontrar e
+                  visualizar seu perfil.
+                </p>
+
+                {visibilidadePerfil === null && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    Seu perfil ainda usa a
+                    configuração antiga da FootEra.
+                    Até você escolher uma opção,
+                    ele não será exibido
+                    publicamente para visitantes.
+                  </div>
+                )}
+
+                <div className="mt-3 space-y-2">
+
+                  <button
+                    type="button"
+                    disabled={privacidadeSaving}
+                    onClick={() =>
+                      alterarVisibilidadePerfil(
+                        "PUBLICO"
+                      )
+                    }
+                    className={`w-full rounded-lg border p-3 text-left transition ${
+                      visibilidadePerfil ===
+                      "PUBLICO"
+                        ? "border-green-700 bg-green-50"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-1 h-4 w-4 rounded-full border flex items-center justify-center ${
+                          visibilidadePerfil ===
+                          "PUBLICO"
+                            ? "border-green-700"
+                            : "border-gray-400"
+                        }`}
+                      >
+                        {visibilidadePerfil ===
+                          "PUBLICO" && (
+                          <div className="h-2 w-2 rounded-full bg-green-700" />
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="font-semibold text-gray-900">
+                          Público
+                        </div>
+
+                        <div className="mt-1 text-xs text-gray-600">
+                          Qualquer pessoa pode
+                          visualizar seu perfil,
+                          mesmo sem conta. Ele
+                          também pode aparecer no
+                          Explorar.
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={privacidadeSaving}
+                    onClick={() =>
+                      alterarVisibilidadePerfil(
+                        "NAO_LISTADO"
+                      )
+                    }
+                    className={`w-full rounded-lg border p-3 text-left transition ${
+                      visibilidadePerfil ===
+                      "NAO_LISTADO"
+                        ? "border-green-700 bg-green-50"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-1 h-4 w-4 rounded-full border flex items-center justify-center ${
+                          visibilidadePerfil ===
+                          "NAO_LISTADO"
+                            ? "border-green-700"
+                            : "border-gray-400"
+                        }`}
+                      >
+                        {visibilidadePerfil ===
+                          "NAO_LISTADO" && (
+                          <div className="h-2 w-2 rounded-full bg-green-700" />
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="font-semibold text-gray-900">
+                          Não listado
+                        </div>
+
+                        <div className="mt-1 text-xs text-gray-600">
+                          Quem tiver o link pode
+                          visualizar seu perfil,
+                          mas ele não aparece no
+                          Explorar público.
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={privacidadeSaving}
+                    onClick={() =>
+                      alterarVisibilidadePerfil(
+                        "PRIVADO"
+                      )
+                    }
+                    className={`w-full rounded-lg border p-3 text-left transition ${
+                      visibilidadePerfil ===
+                      "PRIVADO"
+                        ? "border-green-700 bg-green-50"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-1 h-4 w-4 rounded-full border flex items-center justify-center ${
+                          visibilidadePerfil ===
+                          "PRIVADO"
+                            ? "border-green-700"
+                            : "border-gray-400"
+                        }`}
+                      >
+                        {visibilidadePerfil ===
+                          "PRIVADO" && (
+                          <div className="h-2 w-2 rounded-full bg-green-700" />
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="font-semibold text-gray-900">
+                          Privado
+                        </div>
+
+                        <div className="mt-1 text-xs text-gray-600">
+                          Visitantes não podem
+                          visualizar seu perfil.
+                          Dentro da FootEra,
+                          continuam valendo suas
+                          regras de vínculo e
+                          conexão.
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                </div>
+              </div>
               <div className="flex justify-between items-center border-b pb-3">
                 <span className="font-medium">Permitir Mensagens Diretas</span>
                 <Switch
@@ -968,7 +1188,17 @@ export default function ConfiguracoesPerfil() {
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="font-medium">Mostrar E-mail no Perfil</span>
+                <div>
+                  <div className="font-medium">
+                    Mostrar e-mail para usuários
+                    da FootEra
+                  </div>
+
+                  <div className="text-xs text-gray-500 mt-1">
+                    Seu e-mail não será exibido para
+                    visitantes sem conta.
+                  </div>
+                </div>
                 <Switch
                   checked={mostrarEmail}
                   onCheckedChange={(v) => {

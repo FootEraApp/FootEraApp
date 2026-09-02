@@ -165,6 +165,15 @@ export default function ProfileHeader({
   const [isMutuoFollow, setIsMutuoFollow] = useState<boolean>(false);
   const [checouMutuoFollow, setChecouMutuoFollow] = useState<boolean>(false);
   
+  const authToken =
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const isLoggedIn =
+    Boolean(authToken);
+
   const viewerTipo =
     (Storage as any).tipoSalvo ??
     localStorage.getItem("tipoUsuario") ??
@@ -397,7 +406,15 @@ export default function ProfileHeader({
     "";
 
   const alvoId = String(perfilId || "").trim();
-  if (!token || !alvoId) return;
+  if (!alvoId) {
+    return;
+  }
+
+  if (!token) {
+    setSeguindo(false);
+    setFollowPendente(false);
+    return;
+  }
 
   let alive = true;
   setChecouMutuoFollow(false);
@@ -664,10 +681,29 @@ useEffect(() => {
       .finally(() => setCarregandoObs(false));
   }, [podeObservar, isOwnProfile, alvoAtletaId, perfilId]);
 
+  function exigirLogin(
+    mensagem: string
+  ) {
+    try {
+      sessionStorage.setItem(
+        "footera:returnTo",
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    } catch {}
+
+    toast.error(mensagem);
+
+    window.location.href =
+      "/login";
+  }
+
   const iniciarChat = () => {
     const me = Storage.usuarioId;
     if (!me) {
-      toast.error("Faça login para enviar mensagens.");
+      exigirLogin(
+        "Entre na FootEra para enviar mensagens."
+      );
+
       return;
     }
     localStorage.setItem(
@@ -914,11 +950,55 @@ useEffect(() => {
     }
   };
 
-  const abrirModalCompartilhar = () => {
-    setModalAberto(true);
-    setSelecionados(new Set());
-    carregarUsuariosMutuos();
-  };
+  async function compartilharPerfilExterno() {
+    const url =
+      `${window.location.origin}/perfil/${encodeURIComponent(
+        perfilId
+      )}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title:
+            `${nome} na FootEra`,
+          url,
+        });
+
+        return;
+      }
+
+      await navigator.clipboard.writeText(
+        url
+      );
+
+      toast.success(
+        "Link do perfil copiado!"
+      );
+    } catch (e) {
+      console.error(
+        "Erro ao compartilhar perfil:",
+        e
+      );
+    }
+  }
+
+  const abrirModalCompartilhar =
+    () => {
+      const token =
+        Storage.token;
+
+      if (!token) {
+        void compartilharPerfilExterno();
+        return;
+      }
+
+      setModalAberto(true);
+      setSelecionados(
+        new Set()
+      );
+
+      void carregarUsuariosMutuos();
+    };
 
   const toggleSelecionado = (idUsuario: string) => {
     setSelecionados((prev) => {
@@ -956,7 +1036,7 @@ useEffect(() => {
           })
         )
       );
-      toast.error("Perfil compartilhado por mensagem!");
+      toast.success("Perfil compartilhado por mensagem!");
       setModalAberto(false);
     } finally {
       setEnviandoDM(false);
@@ -1125,7 +1205,10 @@ useEffect(() => {
     if (!alvoUsuarioIdFavorito) return;
     const token = Storage.token;
     if (!token) {
-      toast.error("Faça login para favoritar.");
+      exigirLogin(
+        "Entre na FootEra para adicionar aos favoritos."
+      );
+
       return;
     }
     await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioIdFavorito}`, {
@@ -1140,7 +1223,10 @@ useEffect(() => {
     const token = Storage.token;
     const seguidorUsuarioId = Storage.usuarioId;
     if (!token || !seguidorUsuarioId) {
-      toast.error("Faça login para seguir.");
+      exigirLogin(
+        "Entre na FootEra para seguir este perfil."
+      );
+
       return false;
     }
 
@@ -1552,9 +1638,11 @@ useEffect(() => {
                 {pontosTotal} pts
               </span>
 
-              <ScoreDeltaBadge
-                usuarioId={perfilId}
-              />
+              {isLoggedIn && (
+                <ScoreDeltaBadge
+                  usuarioId={perfilId}
+                />
+              )}
             </div>
           </>
         )}

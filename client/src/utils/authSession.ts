@@ -1,3 +1,7 @@
+import {
+  syncSocketAuth,
+} from "../services/socket.js";
+
 export type AuthSessionResponse = {
   usuario?: {
     id?: string;
@@ -84,6 +88,52 @@ export function applyAuthSession(
 
   const plano = String(usuario.plano ?? data.plano ?? "FREE");
   store.setItem("plano", plano);
+  syncSocketAuth(token);
 
   return { usuarioId, isAdmin };
+}
+
+export function salvarRetornoAuth(
+  destino?: string
+) {
+  const valor =
+    destino ||
+    (
+      `${window.location.pathname}` +
+      `${window.location.search}` +
+      `${window.location.hash}`
+    );
+
+  if (
+    valor.startsWith("/") &&
+    !valor.startsWith("//")
+  ) {
+    sessionStorage.setItem(
+      "footera:returnTo",
+      valor
+    );
+  }
+}
+
+export function consumirRetornoAuth(
+  fallback = "/perfil"
+) {
+  const valor =
+    sessionStorage.getItem(
+      "footera:returnTo"
+    );
+
+  sessionStorage.removeItem(
+    "footera:returnTo"
+  );
+
+  if (
+    !valor ||
+    !valor.startsWith("/") ||
+    valor.startsWith("//")
+  ) {
+    return fallback;
+  }
+
+  return valor;
 }

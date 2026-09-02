@@ -200,7 +200,7 @@ async function filtrarPerfisVisiveis<T>(
         targetId
       );
 
-      return acesso.podeVerPerfil
+      return acesso.podeListarPerfil
         ? item
         : null;
     })

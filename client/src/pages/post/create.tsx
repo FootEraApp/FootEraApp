@@ -10,10 +10,10 @@ import {
   Check,
   Flag,
 } from "lucide-react";
-import { criarPost } from "@/services/feedService.js";
+import { criarPost, type VisibilidadePostagem } from "../../services/feedService.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-import BottomNav from "@/components/layout/BottomNav.js";
+import BottomNav from "../../components/layout/BottomNav.js";
 
 type EarnedFromApi = {
   vinculoId?: string;        
@@ -117,7 +117,13 @@ export default function PaginaPostagem() {
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [achPickerOpen, setAchPickerOpen] = useState(false);
-
+  const [
+    visibilidade,
+    setVisibilidade,
+  ] =
+    useState<VisibilidadePostagem>(
+      "LOGADO"
+    );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedConquista = useMemo(() => {
     if (!selectedAchId) return null;
@@ -228,6 +234,7 @@ export default function PaginaPostagem() {
         imagemUrl: undefined,
         videoUrl: undefined,
         arquivo: arquivo || undefined,
+        visibilidade,
       });
 
       setMensagem("Postagem enviada com sucesso!");
@@ -359,6 +366,53 @@ export default function PaginaPostagem() {
         )}
 
         {previewMidia}
+
+        <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="font-semibold text-gray-900">
+            Quem pode ver esta publicação?
+          </div>
+
+          <p className="mt-1 text-xs text-gray-500">
+            Escolha a visibilidade antes de publicar.
+          </p>
+
+          <select
+            value={visibilidade}
+            onChange={(e) =>
+              setVisibilidade(
+                e.target
+                  .value as VisibilidadePostagem
+              )
+            }
+            className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+          >
+            <option value="PUBLICO">
+              🌐 Público — qualquer pessoa
+            </option>
+
+            <option value="LOGADO">
+              ⚽ Comunidade FootEra
+            </option>
+
+            <option value="SEGUIDORES">
+              👥 Meus seguidores
+            </option>
+
+            <option value="PRIVADO">
+              🔒 Somente eu
+            </option>
+          </select>
+
+          {visibilidade ===
+            "PUBLICO" && (
+            <p className="mt-2 text-xs text-emerald-700">
+              Esta publicação poderá ser
+              visualizada também por pessoas
+              que ainda não possuem conta na
+              FootEra.
+            </p>
+          )}
+        </div>
 
         {mensagem && (
           <div

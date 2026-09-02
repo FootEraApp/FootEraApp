@@ -8,6 +8,7 @@ import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import { sendError } from "../utils/httpError.js";
 import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
+import { sanitizePublicProfile } from "../utils/publicSanitizers.js";
 
 type AtividadeUI = {
   id: string;
@@ -1494,28 +1495,157 @@ export async function confirmarVisualizacaoPontuacaoPerfil(
   }
 }
 
-export const getPerfilUsuario = async (req: Request, res: Response) => {
-  const { id } = req.params;
+async function resolverUsuarioIdPorPerfilId(
+  idRecebido: string
+): Promise<string | null> {
+  const id =
+    String(
+      idRecebido || ""
+    ).trim();
 
-  try {
-    const usuario = await prisma.usuario.findUnique({
+  if (!id) {
+    return null;
+  }
+
+  const usuario =
+    await prisma.usuario.findUnique({
       where: { id },
+
       select: {
         id: true,
-        nome: true,
-        email: true,
-        foto: true,
-        nomeDeUsuario: true,
-        verified: true,
-        configuracoesPrivacidade: true,
-        cep: true,
-        cidade: true,
-        estado: true,
-        pais: true,
-        logradouro: true,
-        cpf: true,
       },
     });
+
+  if (usuario) {
+    return usuario.id;
+  }
+
+  const [
+    atleta,
+    professor,
+    clube,
+    escolinha,
+    olheiro,
+    federacao,
+    marca,
+    learning,
+  ] =
+    await Promise.all([
+      prisma.atleta.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.professor.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.clube.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.escolinha.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.olheiro.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.federacao.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.marca.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+
+      prisma.learningProfile.findUnique({
+        where: { id },
+        select: {
+          usuarioId: true,
+        },
+      }),
+    ]);
+
+  return (
+    atleta?.usuarioId ||
+    professor?.usuarioId ||
+    clube?.usuarioId ||
+    escolinha?.usuarioId ||
+    olheiro?.usuarioId ||
+    federacao?.usuarioId ||
+    marca?.usuarioId ||
+    learning?.usuarioId ||
+    null
+  );
+}
+
+export const getPerfilUsuario =
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const idRecebido =
+        String(
+          req.params.id || ""
+        ).trim();
+
+      const id =
+        await resolverUsuarioIdPorPerfilId(
+          idRecebido
+        );
+
+      if (!id) {
+        return res.status(404).json({
+          code: "PROFILE_NOT_FOUND",
+          message:
+            "Perfil não encontrado.",
+        });
+      }
+
+      const usuario =
+        await prisma.usuario.findUnique({
+          where: { id },
+
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            foto: true,
+            nomeDeUsuario: true,
+            verified: true,
+            configuracoesPrivacidade:
+              true,
+            cep: true,
+            cidade: true,
+            estado: true,
+            pais: true,
+            logradouro: true,
+            cpf: true,
+          },
+        });
 
     if (!usuario) {
       return res.status(404).json({ error: "Usuário não encontrado" });
@@ -1986,21 +2116,43 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     } : null,
   });
 
-  return res.json({
+  const payloadPerfil = {
     tipo: tipoPerfil,
     usuario: usuarioPayload,
     dadosEspecificos,
     vinculos,
     perfilVerificado,
+
     pontuacaoTotal:
       tipoPerfil === "Atleta"
         ? Number(
-            atleta?.pontuacao?.pontuacaoTotal ??
-            atleta?.pontosTotal ??
-            0
+            atleta?.pontuacao
+              ?.pontuacaoTotal ??
+              atleta?.pontosTotal ??
+              0
           )
         : 0,
-  });
+  };
+
+  /*
+  * Visitante recebe somente
+  * a versão pública/sanitizada.
+  */
+  if (acesso.isVisitor) {
+    return res.json(
+      sanitizePublicProfile(
+        payloadPerfil
+      )
+    );
+  }
+
+  /*
+  * Usuário autenticado mantém
+  * o comportamento completo atual.
+  */
+  return res.json(
+    payloadPerfil
+  );
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
       return res.status(500).json({ error: "Erro interno do servidor" });

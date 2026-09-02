@@ -7,7 +7,7 @@ import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import GoogleButton from "../components/auth/GoogleButton";
-import { applyAuthSession } from "../utils/authSession.js";
+import { applyAuthSession, consumirRetornoAuth } from "../utils/authSession.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -184,7 +184,11 @@ export default function PaginaLogin() {
         if (isAdmin) {
           navigate("/admin");
         } else {
-          navigate("/perfil");
+          navigate(
+            consumirRetornoAuth(
+              "/perfil"
+            )
+          );
         }
       } catch (err: any) {
         console.error("[APP LOGIN ERRO]", {
@@ -263,7 +267,13 @@ export default function PaginaLogin() {
         setRecoverSenha("");
         setDeletedInfo(null);
 
-        navigate(isAdmin ? "/admin" : "/perfil");
+        navigate(
+          isAdmin
+            ? "/admin"
+            : consumirRetornoAuth(
+                "/perfil"
+              )
+        );
       } catch (e: any) {
         toast.error(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
       } finally {
@@ -286,7 +296,13 @@ export default function PaginaLogin() {
       ""
     ).toLowerCase();
 
-    navigate(tipo === "admin" ? "/admin" : "/perfil");
+    navigate(
+      tipo === "admin"
+        ? "/admin"
+        : consumirRetornoAuth(
+            "/perfil"
+          )
+    );
   }, []);
 
   useEffect(() => {
@@ -333,9 +349,22 @@ export default function PaginaLogin() {
         return;
       }
 
-      const { isAdmin } = applyAuthSession(data, { lembrar: lembrarDeMim });
+      const { isAdmin } =
+        applyAuthSession(
+          data,
+          {
+            lembrar:
+              lembrarDeMim
+          }
+        );
 
-      navigate(isAdmin ? "/admin" : "/perfil");
+      navigate(
+        isAdmin
+          ? "/admin"
+          : consumirRetornoAuth(
+              "/perfil"
+            )
+      );
     } catch (err: any) {
       console.error("Erro no login com Google:", err.response?.data || err.message);
       setErro(

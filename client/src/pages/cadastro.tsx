@@ -7,7 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import GoogleButton from "../components/auth/GoogleButton";
 import MaintenanceScreen from "../components/MaintenanceScreen";
-import { applyAuthSession } from "../utils/authSession.js";
+import { applyAuthSession, consumirRetornoAuth } from "../utils/authSession.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -971,7 +971,11 @@ export default function Cadastro() {
       if (isAdmin) {
         navigate("/admin");
       } else {
-        navigate("/perfil");
+        navigate(
+          consumirRetornoAuth(
+            "/perfil"
+          )
+        );
       }
     } catch (err: any) {
       console.error("Erro no cadastro/login com Google:", err.response?.data || err.message);

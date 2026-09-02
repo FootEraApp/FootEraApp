@@ -153,8 +153,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
   const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
-  const [comentandoPostId, setComentandoPostId] = useState<string | null>(null);
-  const [comentarioTexto, setComentarioTexto] = useState("");
   const [repostandoId, setRepostandoId] = useState<string | null>(null);
   const [curtindoId, setCurtindoId] = useState<string | null>(null);
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
@@ -168,9 +166,65 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     sessionStorage.getItem("token") ||
     "";
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const AUTH_KEYS = [
+    "token",
+    "usuarioId",
+    "nomeUsuario",
+    "tipoUsuario",
+    "usuarioTipoRaw",
+    "tipoUsuarioId",
+    "plano",
+  ] as const;
+
+  function limparSessaoAuth() {
+    for (const key of AUTH_KEYS) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
+  }
+
+  function irParaLogin(limparSessao = false) {
+    if (limparSessao) {
+      limparSessaoAuth();
+    }
+
+    try {
+      sessionStorage.setItem(
+        "footera:returnTo",
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    } catch {}
+
+    toast.error("Entre na FootEra para realizar esta ação.");
+    window.location.assign("/login");
+  }
+
+  function exigirLogin() {
+    if (token) return true;
+    irParaLogin(false);
+    return false;
+  }
+
+  function tratarErroAuth(error: any) {
+    const status = Number(error?.status ?? error?.response?.status ?? 0);
+    const code = String(error?.code ?? error?.response?.data?.code ?? "");
+    const message = String(error?.message ?? "").toLowerCase();
+
+    const authError =
+      status === 401 ||
+      code === "AUTH_REQUIRED" ||
+      message.includes("sem token") ||
+      message.includes("faça login");
+
+    if (!authError) return false;
+
+    irParaLogin(true);
+    return true;
+  }
 
   async function handleApagarComentario(comentarioId: string, postId: string) {
+    if (!exigirLogin()) return;
+
     try {
       await deletarComentario(comentarioId);
 
@@ -178,7 +232,12 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         prev.map((p) =>
           p.id !== postId
             ? p
-            : { ...p, comentarios: (p.comentarios || []).filter((c: any) => c.id !== comentarioId) }
+            : {
+                ...p,
+                comentarios: (p.comentarios || []).filter(
+                  (c: any) => c.id !== comentarioId
+                ),
+              }
         )
       );
 
@@ -186,15 +245,20 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         if (!prev || prev.id !== postId) return prev;
         return {
           ...prev,
-          comentarios: (prev.comentarios || []).filter((c: any) => c.id !== comentarioId),
+          comentarios: (prev.comentarios || []).filter(
+            (c: any) => c.id !== comentarioId
+          ),
         };
       });
     } catch (e: any) {
+      if (tratarErroAuth(e)) return;
       toast.error(e?.message || "Não foi possível apagar o comentário.");
     }
   }
 
   async function toggleCurtir(postId: string) {
+    if (!exigirLogin()) return;
+
     try {
       setCurtindoId(postId);
       await likePost(postId);
@@ -203,7 +267,13 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         prev.map((p) => {
           if (p.id !== postId) return p;
 
-          const me = String(Storage.usuarioId || "").trim();
+          const me = String(
+            Storage.usuarioId ||
+              localStorage.getItem("usuarioId") ||
+              sessionStorage.getItem("usuarioId") ||
+              ""
+          ).trim();
+
           const curtidas = Array.isArray(p.curtidas) ? [...p.curtidas] : [];
           const jaCurti = curtidas.some((c) => String(c.usuarioId) === me);
 
@@ -216,6 +286,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         })
       );
     } catch (e: any) {
+      if (tratarErroAuth(e)) return;
       toast.error(e?.message || "Não foi possível curtir.");
     } finally {
       setCurtindoId(null);
@@ -225,6 +296,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   async function enviarComentarioNoModal(postId: string) {
     const txt = String(comentarioTextoPorPost[postId] || "").trim();
     if (!txt) return;
+    if (!exigirLogin()) return;
 
     try {
       const novoComentario = await comentarPost(postId, txt);
@@ -234,22 +306,37 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
-            ? { ...p, comentarios: [...(p.comentarios || []), novoComentario as any] }
+            ? {
+                ...p,
+                comentarios: [...(p.comentarios || []), novoComentario as any],
+              }
             : p
         )
       );
 
       setPostSelecionado((prev) => {
         if (!prev || prev.id !== postId) return prev;
-        return { ...prev, comentarios: [...(prev.comentarios || []), novoComentario as any] };
+        return {
+          ...prev,
+          comentarios: [...(prev.comentarios || []), novoComentario as any],
+        };
       });
     } catch (e: any) {
+      if (tratarErroAuth(e)) return;
       toast.error(e?.message || "Não foi possível comentar.");
     }
   }
 
   async function repostar(post: PostagemComUsuario) {
-    const meId = String(Storage.usuarioId || "").trim();
+    if (!exigirLogin()) return;
+
+    const meId = String(
+      Storage.usuarioId ||
+        localStorage.getItem("usuarioId") ||
+        sessionStorage.getItem("usuarioId") ||
+        ""
+    ).trim();
+
     const root = getRootPost(post);
     const rootId = String(root?.id || post.id).trim();
     const jaRepostei = repostsByMe.has(rootId);
@@ -257,7 +344,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     try {
       setRepostandoId(rootId);
 
-      const resp = await repostPost(rootId, ""); 
+      const resp = await repostPost(rootId, "");
 
       setRepostsByMe((prev) => {
         const next = new Set(prev);
@@ -268,6 +355,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
 
       setPosts((prev) => {
         const next = [...prev];
+
         if (resp?.action === "unrepost") {
           return next
             .filter((p) => {
@@ -308,6 +396,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         return mapped;
       });
     } catch (e: any) {
+      if (tratarErroAuth(e)) return;
       toast.error(e?.message || "Não foi possível repostar.");
     } finally {
       setRepostandoId(null);
@@ -343,11 +432,15 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   }
 
   async function apagarPost(postId: string) {
-    const token = Storage.token;
-    if (!token) {
-      toast.error("Você precisa estar logado para apagar.");
-      return;
-    }
+    if (!exigirLogin()) return;
+
+    const tokenAtual =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    if (!tokenAtual) return;
 
     const ok = confirm("Tem certeza que deseja apagar esta postagem?");
     if (!ok) return;
@@ -356,12 +449,13 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
       setDeletandoId(postId);
 
       await axios.delete(`${API.BASE_URL}/api/feed/posts/${postId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${tokenAtual}` },
       });
 
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (err: any) {
       console.error(err);
+      if (tratarErroAuth(err)) return;
       toast.error(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
@@ -446,7 +540,15 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     <div className="max-w-3xl mx-auto px-4 mt-4 pb-10">
       <div className="pt-3 pb-2">
         <h2 className="text-green-900 font-bold text-lg px-4 mb-2">
-          Minhas postagens
+          {String(usuarioId || "").trim() ===
+          String(
+            Storage.usuarioId ||
+              localStorage.getItem("usuarioId") ||
+              sessionStorage.getItem("usuarioId") ||
+              ""
+          ).trim()
+            ? "Minhas postagens"
+            : "Postagens"}
         </h2>
 
         {loadingPosts && (
@@ -478,7 +580,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                 ""
             ).trim();
 
-            const canDelete = isMyProfile && (dono === me || reposterId === me);
+            const canDelete = Boolean(token) && isMyProfile && (dono === me || reposterId === me);
             const parsed = parseAchievement(post.conteudo || "");
             const isAchievement = !!parsed;
             const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
@@ -741,34 +843,45 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                 </div>
 
                 <div className="border-t bg-gray-50 px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={comentarioTextoPorPost[postSelecionado.id] || ""}
-                      onChange={(e) =>
-                        setComentarioTextoPorPost((prev) => ({
-                          ...prev,
-                          [postSelecionado.id]: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          enviarComentarioNoModal(postSelecionado.id);
+                  {token ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={comentarioTextoPorPost[postSelecionado.id] || ""}
+                        onChange={(e) =>
+                          setComentarioTextoPorPost((prev) => ({
+                            ...prev,
+                            [postSelecionado.id]: e.target.value,
+                          }))
                         }
-                      }}
-                      placeholder="Adicione um comentário..."
-                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
-                    />
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void enviarComentarioNoModal(postSelecionado.id);
+                          }
+                        }}
+                        placeholder="Adicione um comentário..."
+                        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
+                      />
 
+                      <button
+                        type="button"
+                        onClick={() => void enviarComentarioNoModal(postSelecionado.id)}
+                        className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
+                        title="Enviar"
+                      >
+                        ➤
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => enviarComentarioNoModal(postSelecionado.id)}
-                      className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
-                      title="Enviar"
+                      type="button"
+                      onClick={() => irParaLogin(false)}
+                      className="w-full rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white hover:bg-green-800"
                     >
-                      ➤
+                      Entre na FootEra para comentar
                     </button>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
