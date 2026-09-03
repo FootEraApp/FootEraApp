@@ -1,3 +1,4 @@
+// server/controllers/explorarController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";

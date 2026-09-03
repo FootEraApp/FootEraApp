@@ -1,3 +1,4 @@
+// server/routes/explorar
 import { Router } from "express";
 import {
   explorar,
