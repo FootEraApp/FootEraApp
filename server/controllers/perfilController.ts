@@ -1520,6 +1520,40 @@ async function resolverUsuarioIdPorPerfilId(
     return usuario.id;
   }
 
+  /*
+  * Também aceita URL amigável:
+  *
+  * /perfil/pedro
+  * /perfil/@pedro
+  */
+  const username =
+    id
+      .replace(/^@/, "")
+      .trim();
+
+  if (username) {
+    const usuarioPorUsername =
+      await prisma.usuario.findFirst({
+        where: {
+          nomeDeUsuario: {
+            equals:
+              username,
+
+            mode:
+              "insensitive",
+          },
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (usuarioPorUsername) {
+      return usuarioPorUsername.id;
+    }
+  }
+
   const [
     atleta,
     professor,

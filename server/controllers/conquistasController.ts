@@ -963,9 +963,31 @@ export async function compartilharConquista(req: AuthReq, res: Response) {
 
   if (!conquista) return res.status(404).json({ message: "Conquista não encontrada." });
 
-  const iconTxt = conquista.icon ? ` ${conquista.icon}` : "";
+  const iconTxt =
+    conquista.icon || "🏆";
+
+  const cod =
+    conquista.codigo
+      ? ` (${conquista.codigo})`
+      : "";
+
+  const desc =
+    conquista.descricao
+      ? ` — ${conquista.descricao}`
+      : "";
+
+  const partes = [
+    `🏆 Conquista${cod}: ${conquista.titulo}${desc} ${iconTxt} [${conquista.id}]`,
+  ];
+
+  if (mensagem?.trim()) {
+    partes.push(
+      mensagem.trim()
+    );
+  }
+
   const conteudo =
-    (mensagem?.trim() || `Conquista desbloqueada: ${conquista.titulo}!${iconTxt}`) ?? "";
+    partes.join("\n\n");
 
   const imagemUrl = conquista.iconUrl ?? null;
 

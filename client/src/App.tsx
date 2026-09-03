@@ -7,6 +7,7 @@ import { sincronizarPushSePermitido } from "./services/pushNotifications.js";
 import { inicializarPushAndroidNativo } from "./services/nativePushNotifications.js";
 import ToastContainer from "./components/ui/ToastContainer.js";
 import MaintenanceGate from "./components/system/MaintenanceGate.js"
+import { AuthGateProvider } from "./context/AuthGateContext.js";
 
 function PresenceBoot() {
   usePresencePing();
@@ -16,6 +17,15 @@ function PresenceBoot() {
 function PushBoot() {
   useEffect(() => {
     let cancelado = false;
+
+    const onAuthChanged = () => {
+      void inicializarPush();
+    };
+
+    window.addEventListener(
+      "footera:auth-changed",
+      onAuthChanged
+    );
 
     async function inicializarPush() {
       if (cancelado) return;
@@ -54,9 +64,25 @@ function PushBoot() {
 
     return () => {
       cancelado = true;
-      window.clearTimeout(timeout);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+
+      window.clearTimeout(
+        timeout
+      );
+
+      window.removeEventListener(
+        "focus",
+        onFocus
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        onVisibilityChange
+      );
+
+      window.removeEventListener(
+        "footera:auth-changed",
+        onAuthChanged
+      );
     };
   }, []);
 
@@ -67,10 +93,12 @@ export default function App() {
   return (
     <UserProvider>
       <MaintenanceGate>
-        <PresenceBoot />
-        <PushBoot />
-        <AppRoutes />
-        <ToastContainer />
+        <AuthGateProvider>
+          <PresenceBoot />
+          <PushBoot />
+          <AppRoutes />
+          <ToastContainer />
+        </AuthGateProvider>
       </MaintenanceGate>
     </UserProvider>
   );

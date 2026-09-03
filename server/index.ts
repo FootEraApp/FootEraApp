@@ -331,18 +331,9 @@ app.use("/api/mensagem", authenticateToken, mensagemRoutes);
 app.use("/api/midias", authenticateToken, midiaRoutes);
 app.use("/api/notificacoes", authenticateToken, notificacoesRoutes);
 app.use("/api/pontuacao", authenticateToken, pontuacaoRoutes);
-app.use(
-  "/api/feed",
-  feedRoutes
-);
-app.use(
-  "/api/perfil",
-  perfilRoutes
-);
-app.use(
-  "/api/post",
-  postRoutes
-);
+app.use("/api/feed", feedRoutes);
+app.use("/api/perfil", perfilRoutes);
+app.use("/api/post", postRoutes);
 app.use("/api/presenca", authenticateToken, presencaRoutes);
 app.use("/api/professores", authenticateToken, professorRoutes);
 app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);

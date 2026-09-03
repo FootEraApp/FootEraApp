@@ -12,6 +12,7 @@ import PostImage from "../components/PostImage.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 import { FaRetweet } from "react-icons/fa";
 import { repostPost } from "../services/feedService.js";
+import { useAuthGate } from "../context/AuthGateContext.js";
 
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
@@ -22,6 +23,10 @@ function PostUnico(): JSX.Element {
     carregandoPost,
     setCarregandoPost,
   ] = useState(true);
+  const {
+    requireAuth,
+    openAuthGate,
+  } = useAuthGate();
 
   const [
     erroPost,
@@ -101,14 +106,15 @@ function PostUnico(): JSX.Element {
   async function handleCurtir() {
     if (!post?.id) return;
 
-    if (!usuarioId) {
-      toast.error(
-        "Entre na FootEra para curtir esta publicação."
-      );
-
-      setLocation("/login");
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para curtir esta publicação.",
+      })
+    ) {
       return;
     }
+
     try {
       await likePost(post.id);
       const atualizado = await getPostById(post.id);
@@ -119,14 +125,10 @@ function PostUnico(): JSX.Element {
   }
 
   async function handleComentarioSubmit(e: React.FormEvent) {
-    if (!usuarioId) {
-      toast.error(
-        "Entre na FootEra para comentar."
-      );
-
-      setLocation("/login");
-      return;
-    }
+    requireAuth({
+      message:
+        "Entre na FootEra para comentar nesta publicação.",
+    });
     e.preventDefault();
     if (!comentario.trim() || !post?.id) return;
     try {
@@ -168,14 +170,10 @@ function PostUnico(): JSX.Element {
   }
 
   async function handleRepost() {
-    if (!usuarioId) {
-      toast.error(
-        "Entre na FootEra para repostar."
-      );
-
-      setLocation("/login");
-      return;
-    }
+    requireAuth({
+      message:
+        "Entre na FootEra para repostar esta publicação.",
+    });
     if (!post?.id) return;
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
     try {
@@ -246,7 +244,10 @@ function PostUnico(): JSX.Element {
               <button
                 type="button"
                 onClick={() =>
-                  setLocation("/login")
+                  openAuthGate({
+                    message:
+                      "Entre para verificar se sua conta possui acesso a esta publicação.",
+                  })
                 }
                 className="rounded-xl bg-green-700 px-4 py-2 text-white font-semibold"
               >
@@ -476,7 +477,10 @@ function PostUnico(): JSX.Element {
           <button
             type="button"
             onClick={() =>
-              setLocation("/login")
+              openAuthGate({
+                message:
+                  "Entre na FootEra para comentar nesta publicação.",
+              })
             }
             className="mt-4 w-full rounded-lg border border-green-700 py-2 text-green-700 font-semibold"
           >

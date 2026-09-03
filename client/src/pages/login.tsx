@@ -778,6 +778,20 @@ export default function PaginaLogin() {
               Cadastre-se
             </a>
 
+            <div className="mt-5 border-t border-gray-200 pt-4">
+              <p className="mb-2 text-xs text-gray-500">
+                Explore o Feed público e perfis públicos.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate("/feed")}
+                className="w-full rounded-xl border border-green-800 bg-white px-4 py-2.5 font-semibold text-green-800 transition hover:bg-green-50 active:scale-[0.99]"
+              >
+                Continuar sem conta
+              </button>
+            </div>
+
             {showRecover && (
               <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 text-left">
                 <div className="text-sm font-semibold mb-1">Recuperar conta</div>

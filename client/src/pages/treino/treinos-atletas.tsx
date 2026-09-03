@@ -25,6 +25,7 @@ import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "../../components/layout/BottomNav.js";
 import Avatar from "../../components/shared/Avatar.js";
+import { useAuthGate } from "../../context/AuthGateContext.js";
 
 type AgendaTipo =
   | "TREINO"
@@ -309,59 +310,6 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function StarsRating({ value }: { value: number }) {
-  const v = Math.max(0, Math.min(5, Number(value || 0)));
-  const half = Math.round(v * 2) / 2; 
-  const full = Math.floor(half);
-  const hasHalf = half - full === 0.5;
-
-  return (
-    <div className="flex items-center">
-      {Array.from({ length: 5 }).map((_, i) => {
-        const idx = i + 1;
-
-        if (idx <= full) {
-          return (
-            <StarIcon
-              key={i}
-              className="w-4 h-4 text-amber-500"
-              fill="currentColor"
-            />
-          );
-        }
-
-        if (idx === full + 1 && hasHalf) {
-          return (
-            <span key={i} className="relative inline-block w-4 h-4">
-              <StarIcon
-                className="absolute inset-0 w-4 h-4 text-gray-300"
-                fill="currentColor"
-              />
-              <span
-                className="absolute inset-0 overflow-hidden"
-                style={{ width: "50%" }}
-              >
-                <StarIcon
-                  className="w-4 h-4 text-amber-500"
-                  fill="currentColor"
-                />
-              </span>
-            </span>
-          );
-        }
-
-        return (
-          <StarIcon
-            key={i}
-            className="w-4 h-4 text-gray-300"
-            fill="none"
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 const getToken = () =>
   (Storage as any).token ??
   localStorage.getItem("token") ??
@@ -566,6 +514,10 @@ function StarRating({
 
 export default function TreinosAtletas() {
   const [location, navigate] = useLocation();
+
+  const {
+    requireAuth,
+  } = useAuthGate();
 
   const qs = React.useMemo(() => {
     const raw = typeof window !== "undefined" ? window.location.search : "";
@@ -1660,6 +1612,14 @@ useEffect(() => {
 }, [menuTreinosAberto]);
 
   async function iniciar(id: string) {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para iniciar um treino e salvar seu progresso.",
+      })
+    ) {
+      return;
+    }
     try {
       const nowMs = Date.now();
       localStorage.setItem(TIMER_KEY(id), String(nowMs));
@@ -1716,6 +1676,14 @@ useEffect(() => {
   }
 
   async function finalizarEEnviar(treino: TreinoAgendado) {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para salvar o progresso deste treino.",
+      })
+    ) {
+      return;
+    }
     try {
       const token = getToken();
       if (!token) return;
