@@ -80,15 +80,65 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     });
 
     try {
-      const segs = await prisma.seguidor.findMany({
-        where: { seguidoUsuarioId: req.userId! },
-        select: { seguidorUsuarioId: true },
-      });
-      const rooms = [req.userId!, ...segs.map(s => s.seguidorUsuarioId)].map(id => `u:${id}`);
-      const io = getIO();
-      io?.to(rooms).emit("feed:novoPost", post);
+      const io =
+        getIO();
+
+      if (io) {
+        /*
+        * PRIVADO:
+        * somente o próprio autor.
+        */
+        if (
+          visibilidade ===
+          VisibilidadePostagem.PRIVADO
+        ) {
+          io.to(
+            `u:${req.userId!}`
+          ).emit(
+            "feed:novoPost",
+            post
+          );
+        } else {
+          /*
+          * PUBLICO / LOGADO /
+          * SEGUIDORES:
+          *
+          * Mantém o realtime atual
+          * para autor + seguidores.
+          */
+          const segs =
+            await prisma.seguidor.findMany({
+              where: {
+                seguidoUsuarioId:
+                  req.userId!,
+              },
+
+              select: {
+                seguidorUsuarioId:
+                  true,
+              },
+            });
+
+          const rooms = [
+            `u:${req.userId!}`,
+
+            ...segs.map(
+              (s) =>
+                `u:${s.seguidorUsuarioId}`
+            ),
+          ];
+
+          io.to(rooms).emit(
+            "feed:novoPost",
+            post
+          );
+        }
+      }
     } catch (e) {
-      console.warn("emit feed:novoPost falhou (não crítico):", e);
+      console.warn(
+        "emit feed:novoPost falhou (não crítico):",
+        e
+      );
     }
     return res.status(201).json(post);
   } catch (err: any) {

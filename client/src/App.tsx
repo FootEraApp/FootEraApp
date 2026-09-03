@@ -6,6 +6,7 @@ import { usePresencePing } from "@/hooks/usePresencePing";
 import { sincronizarPushSePermitido } from "./services/pushNotifications.js";
 import ToastContainer from "./components/ui/ToastContainer.js";
 import MaintenanceGate from "./components/system/MaintenanceGate.js"
+import { AuthGateProvider } from "./context/AuthGateContext.js";
 
 function PresenceBoot() {
   usePresencePing();
@@ -14,7 +15,28 @@ function PresenceBoot() {
 
 function PushBoot() {
   useEffect(() => {
-    sincronizarPushSePermitido();
+    const sincronizar = () => {
+      void sincronizarPushSePermitido();
+    };
+
+    sincronizar();
+
+    /*
+     * O login com Google pode acontecer
+     * diretamente dentro do Auth Gate,
+     * sem recarregar a aplicação.
+     */
+    window.addEventListener(
+      "footera:auth-changed",
+      sincronizar
+    );
+
+    return () => {
+      window.removeEventListener(
+        "footera:auth-changed",
+        sincronizar
+      );
+    };
   }, []);
 
   return null;
@@ -24,10 +46,12 @@ export default function App() {
   return (
     <UserProvider>
       <MaintenanceGate>
-        <PresenceBoot />
-        <PushBoot />
-        <AppRoutes />
-        <ToastContainer />
+        <AuthGateProvider>
+          <PresenceBoot />
+          <PushBoot />
+          <AppRoutes />
+          <ToastContainer />
+        </AuthGateProvider>
       </MaintenanceGate>
     </UserProvider>
   );

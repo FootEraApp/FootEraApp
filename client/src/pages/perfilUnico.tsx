@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
-import { ArrowLeft } from "lucide-react";
-import { API } from "../config.js";
+import { ArrowLeft, Share2, CheckCircle2 } from "lucide-react";
+import { API, APP } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
@@ -15,6 +15,7 @@ import PerfilMarca from "../components/perfil/PerfilMarca.js";
 import PerfilLearning from "../components/perfil/PerfilLearning.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import ProfilePostsSection from "../components/perfil/ProfilePostsSection.js";
+import { clearAuthSession } from "../utils/authSession.js";
 
 type TipoPerfil =
   | "Atleta"
@@ -47,16 +48,6 @@ type ErroPerfil = {
   message: string;
 };
 
-const AUTH_KEYS = [
-  "token",
-  "usuarioId",
-  "nomeUsuario",
-  "tipoUsuario",
-  "usuarioTipoRaw",
-  "tipoUsuarioId",
-  "plano",
-] as const;
-
 function readStoredToken() {
   return (
     Storage.token ||
@@ -64,13 +55,6 @@ function readStoredToken() {
     sessionStorage.getItem("token") ||
     ""
   );
-}
-
-function clearStoredAuth() {
-  for (const key of AUTH_KEYS) {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  }
 }
 
 function salvarRetornoAtual() {
@@ -105,6 +89,8 @@ export default function PerfilUnico() {
   const [perfilData, setPerfilData] = useState<PerfilMinimo | null>(null);
   const [erroPerfil, setErroPerfil] = useState<ErroPerfil | null>(null);
   const [modoVisitante, setModoVisitante] = useState(!token);
+  const [abaPublica, setAbaPublica] =
+    useState<"perfil" | "postagens">("perfil");
 
   function irParaLogin() {
     salvarRetornoAtual();
@@ -149,7 +135,7 @@ export default function PerfilUnico() {
           // Token antigo/expirado: limpa somente a sessão de autenticação
           // e tenta novamente a rota pública como visitante.
           if (token && erro?.response?.status === 401) {
-            clearStoredAuth();
+            clearAuthSession();
 
             resposta = await axios.get<PerfilMinimo>(url);
 
@@ -352,10 +338,16 @@ export default function PerfilUnico() {
   }
 
   if (modoVisitante && perfilData && usuarioId) {
-    const dados = perfilData.dadosEspecificos ?? {};
+    const dados =
+      perfilData.dadosEspecificos ??
+      {};
 
     const nome =
-      String(dados.nome || perfilData.usuario?.nome || "Perfil FootEra").trim() ||
+      String(
+        dados.nome ||
+          perfilData.usuario?.nome ||
+          "Perfil FootEra"
+      ).trim() ||
       "Perfil FootEra";
 
     const rawFoto =
@@ -364,34 +356,101 @@ export default function PerfilUnico() {
       perfilData.usuario?.foto ||
       null;
 
-    const foto = publicImgUrl(rawFoto) || null;
-    const categoria = textoLista(dados.categoria);
-    const interesses = textoLista(dados.interesses);
-    const qualificacoes = textoLista(dados.qualificacoes);
-    const certificacoes = textoLista(dados.certificacoes);
+    const foto =
+      publicImgUrl(rawFoto) ||
+      null;
 
-    const compartilhar = async () => {
-      const url = `${window.location.origin}/perfil/${encodeURIComponent(usuarioId)}`;
+    const categoria =
+      textoLista(
+        dados.categoria
+      );
 
-      try {
-        if (navigator.share) {
-          await navigator.share({
-            title: `${nome} na FootEra`,
-            url,
-          });
-          return;
+    const interesses =
+      textoLista(
+        dados.interesses
+      );
+
+    const qualificacoes =
+      textoLista(
+        dados.qualificacoes
+      );
+
+    const certificacoes =
+      textoLista(
+        dados.certificacoes
+      );
+
+    const resumoPublico = [
+      tipo,
+      dados.posicao
+        ? String(dados.posicao)
+        : "",
+      categoria,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+
+    const tituloInformacoes =
+      String(tipo).toLowerCase() ===
+      "atleta"
+        ? "Informações do Atleta"
+        : `Informações do ${tipo}`;
+
+    const compartilhar =
+      async () => {
+        const basePublica =
+          String(
+            APP.FRONTEND_BASE_URL ||
+              window.location.origin
+          ).replace(/\/+$/, "");
+
+        const slugPerfil =
+          String(
+            perfilData.usuario
+              ?.nomeDeUsuario ||
+              usuarioId
+          )
+            .replace(/^@/, "")
+            .trim();
+
+        const url =
+          `${basePublica}/perfil/${encodeURIComponent(
+            slugPerfil
+          )}`;
+
+        try {
+          if (
+            navigator.share
+          ) {
+            await navigator.share({
+              title:
+                `${nome} na FootEra`,
+              url,
+            });
+
+            return;
+          }
+
+          await navigator.clipboard
+            .writeText(url);
+        } catch (e: any) {
+          if (
+            e?.name ===
+            "AbortError"
+          ) {
+            return;
+          }
+
+          console.error(
+            "Erro ao compartilhar:",
+            e
+          );
         }
-
-        await navigator.clipboard.writeText(url);
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
-        console.error("Erro ao compartilhar:", e);
-      }
-    };
+      };
 
     return (
-      <div className="min-h-[100dvh] bg-[#f7f4ea] pb-10">
-        <div className="mx-auto max-w-3xl p-4">
+      <div className="min-h-[100dvh] bg-[#f7f4ea] pb-12">
+        <div className="mx-auto max-w-3xl px-4 pt-6 pb-3">
           <button
             type="button"
             onClick={handleBack}
@@ -403,140 +462,316 @@ export default function PerfilUnico() {
           </button>
         </div>
 
-        <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl bg-white shadow-sm">
-          <div className="bg-green-800 px-5 py-8 text-center text-white">
-            <div className="mx-auto mb-3 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white">
-              <img
-                src={foto || "/assets/usuarios/footera-logo-fundo-verde.png"}
-                alt={nome}
-                className="h-full w-full object-cover"
-              />
-            </div>
-
-            <h1 className="text-2xl font-bold">{nome}</h1>
-
-            {perfilData.usuario?.nomeDeUsuario && (
-              <p className="mt-1 text-sm text-white/80">
-                @{perfilData.usuario.nomeDeUsuario}
-              </p>
-            )}
-
-            <div className="mt-3 text-sm font-semibold">{tipo}</div>
-
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <button
-                type="button"
-                onClick={irParaLogin}
-                className="rounded-xl bg-white px-4 py-2 font-semibold text-green-800"
-              >
-                Entrar na FootEra
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void compartilhar()}
-                className="rounded-xl border border-white/50 px-4 py-2 font-semibold text-white"
-              >
-                Compartilhar perfil
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2 p-5 text-gray-800">
-            {dados.posicao && (
-              <p><b>Posição:</b> {String(dados.posicao)}</p>
-            )}
-
-            {categoria && (
-              <p><b>Categoria:</b> {categoria}</p>
-            )}
-
-            {dados.clube && (
-              <p><b>Clube:</b> {String(dados.clube)}</p>
-            )}
-
-            {dados.escola && (
-              <p><b>Escola:</b> {String(dados.escola)}</p>
-            )}
-
-            {dados.professor && (
-              <p><b>Professor:</b> {String(dados.professor)}</p>
-            )}
-
-            {dados.areaFormacao && (
-              <p><b>Área de formação:</b> {String(dados.areaFormacao)}</p>
-            )}
-
-            {qualificacoes && (
-              <p><b>Qualificações:</b> {qualificacoes}</p>
-            )}
-
-            {certificacoes && (
-              <p><b>Certificações:</b> {certificacoes}</p>
-            )}
-
-            {dados.areaAtuacao && (
-              <p><b>Área de atuação:</b> {String(dados.areaAtuacao)}</p>
-            )}
-
-            {dados.anosExperiencia != null && String(dados.anosExperiencia).trim() && (
-              <p><b>Experiência:</b> {String(dados.anosExperiencia)} ano(s)</p>
-            )}
-
-            {dados.headline && (
-              <p className="font-medium">{String(dados.headline)}</p>
-            )}
-
-            {dados.descricao && (
-              <p className="mt-3 text-gray-700">{String(dados.descricao)}</p>
-            )}
-
-            {dados.bio && (
-              <p className="mt-3 text-gray-700">{String(dados.bio)}</p>
-            )}
-
-            {dados.objetivo && (
-              <p><b>Objetivo:</b> {String(dados.objetivo)}</p>
-            )}
-
-            {interesses && (
-              <p><b>Interesses:</b> {interesses}</p>
-            )}
-
-            {dados.colaboracaoClube?.nome && (
-              <p><b>Clube colaborador:</b> {String(dados.colaboracaoClube.nome)}</p>
-            )}
-
-            {(dados.cidade || dados.estado) && (
-              <p className="mt-3 text-gray-600">
-                {[dados.cidade, dados.estado].filter(Boolean).join(" - ")}
-              </p>
-            )}
-
-            {dados.siteOficial && (
-              <a
-                href={String(dados.siteOficial)}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-block text-green-700 underline"
-              >
-                Site oficial
-              </a>
-            )}
-
-            {tipo.toLowerCase() === "atleta" && (
-              <div className="mt-5 rounded-xl bg-green-50 p-4 text-center">
-                <div className="text-sm text-green-900/70">Pontuação FootEra</div>
-                <div className="text-2xl font-bold text-green-900">
-                  {Number(perfilData.pontuacaoTotal ?? 0)} pts
-                </div>
+        <div className="mx-auto max-w-3xl px-4">
+          <section className="overflow-hidden rounded-2xl shadow-sm">
+            <div className="footera-bg-green p-6 flex flex-col items-center relative">
+              <div className="relative w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
+                <img
+                  src={
+                    foto ||
+                    "/assets/usuarios/footera-logo-fundo-verde.png"
+                  }
+                  alt={nome}
+                  className="h-full w-full object-cover"
+                />
               </div>
-            )}
-          </div>
-        </section>
 
-        {/* O componente usa o feed público e mostra somente posts públicos ao visitante. */}
-        <ProfilePostsSection usuarioId={usuarioId} />
+              <h1 className="footera-text-cream text-2xl font-bold text-center">
+                {nome.toUpperCase()}
+              </h1>
+
+              {perfilData.usuario
+                ?.verified && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Verificado
+                </span>
+              )}
+
+              {resumoPublico && (
+                <p className="footera-text-cream text-sm mt-2 text-center">
+                  {resumoPublico}
+                </p>
+              )}
+
+              {String(tipo)
+                .toLowerCase() ===
+                "atleta" && (
+                <div className="w-full mt-4">
+                  <h2 className="footera-text-cream text-center mb-2">
+                    Pontuação FootEra
+                  </h2>
+
+                  <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex items-center justify-center">
+                    <span className="footera-text-cream text-3xl font-bold">
+                      {Number(
+                        perfilData
+                          .pontuacaoTotal ??
+                          0
+                      )}{" "}
+                      pts
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={irParaLogin}
+                  className="inline-flex items-center justify-center rounded-full bg-green-500 px-4 py-2 text-sm font-semibold text-green-950 shadow-sm hover:bg-green-400"
+                >
+                  Entrar na FootEra
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void compartilhar()
+                  }
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-green-900 shadow-sm hover:bg-amber-200"
+                >
+                  <Share2 size={16} />
+                  Compartilhar
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {[
+              {
+                key: "perfil",
+                label: "Perfil",
+              },
+              {
+                key: "postagens",
+                label:
+                  "Postagens",
+              },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() =>
+                  setAbaPublica(
+                    tab.key as
+                      | "perfil"
+                      | "postagens"
+                  )
+                }
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  abaPublica ===
+                  tab.key
+                    ? "bg-green-100 text-green-900"
+                    : "bg-white/70 text-green-900 hover:bg-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {abaPublica ===
+            "perfil" && (
+            <section className="mt-4 rounded-xl border bg-white/70 p-4 shadow-sm">
+              <h2 className="mb-3 text-xl font-semibold text-green-900">
+                {tituloInformacoes}
+              </h2>
+
+              <div className="space-y-2 text-sm text-green-900/90">
+                <p>
+                  <b>Nome:</b>{" "}
+                  {nome}
+                </p>
+
+                {dados.posicao && (
+                  <p>
+                    <b>Posição:</b>{" "}
+                    {String(
+                      dados.posicao
+                    )}
+                  </p>
+                )}
+
+                {categoria && (
+                  <p>
+                    <b>Categoria:</b>{" "}
+                    {categoria}
+                  </p>
+                )}
+
+                {dados.clube && (
+                  <p>
+                    <b>Clube:</b>{" "}
+                    {String(
+                      dados.clube
+                    )}
+                  </p>
+                )}
+
+                {dados.escola && (
+                  <p>
+                    <b>Escola:</b>{" "}
+                    {String(
+                      dados.escola
+                    )}
+                  </p>
+                )}
+
+                {dados.professor && (
+                  <p>
+                    <b>Professor:</b>{" "}
+                    {String(
+                      dados.professor
+                    )}
+                  </p>
+                )}
+
+                {dados.areaFormacao && (
+                  <p>
+                    <b>Área de formação:</b>{" "}
+                    {String(
+                      dados.areaFormacao
+                    )}
+                  </p>
+                )}
+
+                {qualificacoes && (
+                  <p>
+                    <b>Qualificações:</b>{" "}
+                    {qualificacoes}
+                  </p>
+                )}
+
+                {certificacoes && (
+                  <p>
+                    <b>Certificações:</b>{" "}
+                    {certificacoes}
+                  </p>
+                )}
+
+                {dados.areaAtuacao && (
+                  <p>
+                    <b>Área de atuação:</b>{" "}
+                    {String(
+                      dados.areaAtuacao
+                    )}
+                  </p>
+                )}
+
+                {dados.anosExperiencia !=
+                  null &&
+                  String(
+                    dados.anosExperiencia
+                  ).trim() && (
+                    <p>
+                      <b>Experiência:</b>{" "}
+                      {String(
+                        dados.anosExperiencia
+                      )}{" "}
+                      ano(s)
+                    </p>
+                  )}
+
+                {dados.headline && (
+                  <p className="font-medium">
+                    {String(
+                      dados.headline
+                    )}
+                  </p>
+                )}
+
+                {dados.descricao && (
+                  <p>
+                    {String(
+                      dados.descricao
+                    )}
+                  </p>
+                )}
+
+                {dados.bio && (
+                  <p>
+                    {String(
+                      dados.bio
+                    )}
+                  </p>
+                )}
+
+                {dados.objetivo && (
+                  <p>
+                    <b>Objetivo:</b>{" "}
+                    {String(
+                      dados.objetivo
+                    )}
+                  </p>
+                )}
+
+                {interesses && (
+                  <p>
+                    <b>Interesses:</b>{" "}
+                    {interesses}
+                  </p>
+                )}
+
+                {dados
+                  .colaboracaoClube
+                  ?.nome && (
+                  <p>
+                    <b>
+                      Clube
+                      colaborador:
+                    </b>{" "}
+                    {String(
+                      dados
+                        .colaboracaoClube
+                        .nome
+                    )}
+                  </p>
+                )}
+
+                {(dados.cidade ||
+                  dados.estado) && (
+                  <p>
+                    <b>Local:</b>{" "}
+                    {[
+                      dados.cidade,
+                      dados.estado,
+                    ]
+                      .filter(
+                        Boolean
+                      )
+                      .join(
+                        " - "
+                      )}
+                  </p>
+                )}
+
+                {dados.siteOficial && (
+                  <a
+                    href={String(
+                      dados.siteOficial
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-green-700 underline"
+                  >
+                    Site oficial
+                  </a>
+                )}
+              </div>
+            </section>
+          )}
+
+          {abaPublica ===
+            "postagens" && (
+            <ProfilePostsSection
+              usuarioId={
+                usuarioId
+              }
+            />
+          )}
+        </div>
       </div>
     );
   }

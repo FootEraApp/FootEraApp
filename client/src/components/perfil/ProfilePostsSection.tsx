@@ -9,6 +9,7 @@ import axios from "axios";
 import { X } from "lucide-react";
 import { getFeedPosts, deletarComentario, compartilharPost, likePost, comentarPost, repostPost, type PostagemComUsuario } from "../../services/feedService.js";
 import Avatar from "../shared/Avatar.js";
+import { useAuthGate } from "../../context/AuthGateContext.js";
 
 type ConquistaDB = {
   id: string;
@@ -159,6 +160,11 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
   const [repostsByMe, setRepostsByMe] = useState<Set<string>>(new Set());
+  const {
+    requireAuth,
+    handleAuthError,
+    openAuthGate,
+  } = useAuthGate();
 
   const token =
     (Storage as any)?.token ||
@@ -166,64 +172,15 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     sessionStorage.getItem("token") ||
     "";
 
-  const AUTH_KEYS = [
-    "token",
-    "usuarioId",
-    "nomeUsuario",
-    "tipoUsuario",
-    "usuarioTipoRaw",
-    "tipoUsuarioId",
-    "plano",
-  ] as const;
-
-  function limparSessaoAuth() {
-    for (const key of AUTH_KEYS) {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
-    }
-  }
-
-  function irParaLogin(limparSessao = false) {
-    if (limparSessao) {
-      limparSessaoAuth();
-    }
-
-    try {
-      sessionStorage.setItem(
-        "footera:returnTo",
-        `${window.location.pathname}${window.location.search}${window.location.hash}`
-      );
-    } catch {}
-
-    toast.error("Entre na FootEra para realizar esta ação.");
-    window.location.assign("/login");
-  }
-
-  function exigirLogin() {
-    if (token) return true;
-    irParaLogin(false);
-    return false;
-  }
-
-  function tratarErroAuth(error: any) {
-    const status = Number(error?.status ?? error?.response?.status ?? 0);
-    const code = String(error?.code ?? error?.response?.data?.code ?? "");
-    const message = String(error?.message ?? "").toLowerCase();
-
-    const authError =
-      status === 401 ||
-      code === "AUTH_REQUIRED" ||
-      message.includes("sem token") ||
-      message.includes("faça login");
-
-    if (!authError) return false;
-
-    irParaLogin(true);
-    return true;
-  }
-
   async function handleApagarComentario(comentarioId: string, postId: string) {
-    if (!exigirLogin()) return;
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para apagar este comentário.",
+      })
+    ) {
+      return;
+    }
 
     try {
       await deletarComentario(comentarioId);
@@ -251,13 +208,30 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         };
       });
     } catch (e: any) {
-      if (tratarErroAuth(e)) return;
+      if (
+        handleAuthError(
+          e,
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        )
+      ) {
+        return;
+      }
       toast.error(e?.message || "Não foi possível apagar o comentário.");
     }
   }
 
   async function toggleCurtir(postId: string) {
-    if (!exigirLogin()) return;
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para curtir esta publicação.",
+      })
+    ) {
+      return;
+    }
 
     try {
       setCurtindoId(postId);
@@ -286,7 +260,17 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         })
       );
     } catch (e: any) {
-      if (tratarErroAuth(e)) return;
+      if (
+        handleAuthError(
+          e,
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        )
+      ) {
+        return;
+      }
       toast.error(e?.message || "Não foi possível curtir.");
     } finally {
       setCurtindoId(null);
@@ -296,7 +280,14 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   async function enviarComentarioNoModal(postId: string) {
     const txt = String(comentarioTextoPorPost[postId] || "").trim();
     if (!txt) return;
-    if (!exigirLogin()) return;
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para comentar nesta publicação.",
+      })
+    ) {
+      return;
+    }
 
     try {
       const novoComentario = await comentarPost(postId, txt);
@@ -322,13 +313,30 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         };
       });
     } catch (e: any) {
-      if (tratarErroAuth(e)) return;
+        if (
+          handleAuthError(
+            e,
+            {
+              message:
+                "Sua sessão expirou. Entre novamente para continuar.",
+            }
+          )
+        ) {
+          return;
+        }
       toast.error(e?.message || "Não foi possível comentar.");
     }
   }
 
   async function repostar(post: PostagemComUsuario) {
-    if (!exigirLogin()) return;
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para repostar esta publicação.",
+      })
+    ) {
+      return;
+    }
 
     const meId = String(
       Storage.usuarioId ||
@@ -396,7 +404,17 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         return mapped;
       });
     } catch (e: any) {
-      if (tratarErroAuth(e)) return;
+      if (
+        handleAuthError(
+          e,
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        )
+      ) {
+        return;
+      }
       toast.error(e?.message || "Não foi possível repostar.");
     } finally {
       setRepostandoId(null);
@@ -432,7 +450,14 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   }
 
   async function apagarPost(postId: string) {
-    if (!exigirLogin()) return;
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para apagar esta postagem.",
+      })
+    ) {
+      return;
+    }
 
     const tokenAtual =
       Storage.token ||
@@ -455,7 +480,17 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (err: any) {
       console.error(err);
-      if (tratarErroAuth(err)) return;
+      if (
+        handleAuthError(
+          err,
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        )
+      ) {
+        return;
+      }
       toast.error(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
@@ -876,7 +911,12 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                   ) : (
                     <button
                       type="button"
-                      onClick={() => irParaLogin(false)}
+                      onClick={() =>
+                        openAuthGate({
+                          message:
+                            "Entre na FootEra para comentar nesta publicação.",
+                        })
+                      }
                       className="w-full rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white hover:bg-green-800"
                     >
                       Entre na FootEra para comentar

@@ -23,6 +23,7 @@ import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
+import { useAuthGate } from "../context/AuthGateContext.js";
 
 const ENABLE_EVENTOS_TAB = false; 
 
@@ -763,6 +764,9 @@ function Explorar() {
   ] = useState<OrdenacaoPorAba>(
     ORDENACAO_INICIAL
   );
+  const {
+    requireAuth,
+  } = useAuthGate();
 
   const abaOrdenavel:
     AbaOrdenavel | null =
@@ -3119,13 +3123,21 @@ function Explorar() {
                   inscrevendoEvento
                 }
                 onClick={async () => {
-                  if (!selectedEvento) return;
-                  const token = Storage?.token || "";
-
-                  if (!token) {
-                    setErroEvento("Faça login para se inscrever no evento.");
+                  if (!selectedEvento) {
                     return;
                   }
+
+                  if (
+                    !requireAuth({
+                      message:
+                        "Entre na FootEra para se inscrever neste evento.",
+                    })
+                  ) {
+                    return;
+                  }
+
+                  const token =
+                    Storage?.token || "";
 
                   try {
                     setInscrevendoEvento(true);

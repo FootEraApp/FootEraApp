@@ -1,6 +1,5 @@
-// client/src/routes
 import { Route, Switch } from "wouter";
-import { Private, PublicOnly } from "./auth.js";
+import { Private, PublicOnly, HomeRedirect } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";
 import { FLAGS } from "./config.js";
 import { lazy, Suspense } from "react";
@@ -61,7 +60,6 @@ const PaginaVerificarEmail = lazy(() => import("./pages/verificar-email.js"));
 const MetodologiaUnicaPage = lazy(() => import("./pages/metodologias/metodologia-unica.js"));
 const AvaliarMetodologia = lazy(() => import("./pages/metodologias/avaliar.js"));
 const TutorialPage = lazy(() => import("./pages/tutorial.js"));
-const LandingPage = lazy(() => import("./pages/landingPage.js"));
 const CadastroGoogleComplementar = lazy(() => import("./pages/cadastroGoogleComplementar.js"));
 const ExercicioNovoPage = lazy(() => import("./pages/treino/exercicios/novo.js"));
 const ExercicioEditarPage = lazy(() => import("./pages/treino/exercicios/editar/[id].js"));
@@ -230,7 +228,7 @@ export function AppRoutes() {
         <Route path="/feed">
           <PaginaFeed />
         </Route>
-        
+
         <Route path="/treinos/exercicios/novo"><Private><ExercicioNovoPage/></Private></Route>
         <Route path="/treinos/exercicios/editar/:id"><Private><ExercicioEditarPage/></Private></Route>
         <Route path="/treinos/avaliar"><Private><AvaliarTreino /></Private></Route> 
@@ -328,8 +326,9 @@ export function AppRoutes() {
         <Route path="/configuracoes"><Private><PaginaConfiguracoesPerfil /></Private></Route>
         <Route path="/notificacoes"><Private><PaginaNotificacoes /></Private></Route>
         <Route path="/mensagens"><Private><PaginaMensagens /></Private></Route>
-        {/*<Route path="/"><HomeRedirect /></Route>*/}
-        {<Route path="/"><LandingPage /></Route>} 
+        <Route path="/">
+          <HomeRedirect />
+        </Route>
         <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
       </Switch>
     </Suspense>

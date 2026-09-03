@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { toast } from "@/lib/toast";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
   Users,
@@ -21,6 +21,7 @@ import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
 import Avatar from "../shared/Avatar.js";
+import { useAuthGate } from "../../context/AuthGateContext.js";
 
 interface Usuario {
   id: string;
@@ -164,7 +165,11 @@ export default function ProfileHeader({
   const [presencePrivacyBlocked, setPresencePrivacyBlocked] = useState<boolean>(false);
   const [isMutuoFollow, setIsMutuoFollow] = useState<boolean>(false);
   const [checouMutuoFollow, setChecouMutuoFollow] = useState<boolean>(false);
-  
+  const {
+    requireAuth,
+    handleAuthError,
+  } = useAuthGate();
+
   const authToken =
     Storage.token ||
     localStorage.getItem("token") ||
@@ -681,31 +686,21 @@ useEffect(() => {
       .finally(() => setCarregandoObs(false));
   }, [podeObservar, isOwnProfile, alvoAtletaId, perfilId]);
 
-  function exigirLogin(
-    mensagem: string
-  ) {
-    try {
-      sessionStorage.setItem(
-        "footera:returnTo",
-        `${window.location.pathname}${window.location.search}${window.location.hash}`
-      );
-    } catch {}
-
-    toast.error(mensagem);
-
-    window.location.href =
-      "/login";
-  }
-
   const iniciarChat = () => {
-    const me = Storage.usuarioId;
-    if (!me) {
-      exigirLogin(
-        "Entre na FootEra para enviar mensagens."
-      );
-
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para enviar uma mensagem.",
+      })
+    ) {
       return;
     }
+
+    const me =
+      Storage.usuarioId;
+
+    if (!me) return;
+
     localStorage.setItem(
       "mensagens_open_target",
       JSON.stringify({ tipo: "usuario", id: perfilId })
@@ -870,15 +865,38 @@ useEffect(() => {
   }
 
   async function deixarDeSeguir(alvoId: string) {
-    const token = Storage.token;
-    const r = await fetch(`${API.BASE_URL}/api/seguidores/`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ seguidoUsuarioId: alvoId }),
-    });
+    const token =
+      Storage.token;
+
+    const r = await fetch(
+      `${API.BASE_URL}/api/seguidores/`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type":
+            "application/json",
+          Authorization:
+            `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          seguidoUsuarioId:
+            alvoId,
+        }),
+      }
+    );
+
+    if (r.status === 401) {
+      handleAuthError(
+        { status: 401 },
+        {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        }
+      );
+
+      return false;
+    }
+
     return r.ok;
   }
 
@@ -894,6 +912,18 @@ useEffect(() => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+      if (r.status === 401) {
+        handleAuthError(
+          { status: 401 },
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        );
+
+        return false;
+      }
+
       if (r.ok) {
         const arr = await r.json();
         const pend = (arr || []).find((x: any) => {
@@ -920,6 +950,18 @@ useEffect(() => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+      if (del.status === 401) {
+        handleAuthError(
+          { status: 401 },
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        );
+
+        return false;
+      }
+
       return del.ok || del.status === 204;
     }
 
@@ -931,7 +973,23 @@ useEffect(() => {
       },
       body: JSON.stringify({ destinatarioId: usuarioAlvoId }),
     });
-    return delBody.ok || delBody.status === 204 || delBody.status === 404;
+    if (delBody.status === 401) {
+      handleAuthError(
+        { status: 401 },
+        {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        }
+      );
+
+      return false;
+    }
+
+    return (
+      delBody.ok ||
+      delBody.status === 204 ||
+      delBody.status === 404
+    );
   }
 
   const carregarUsuariosMutuos = async () => {
@@ -1009,35 +1067,98 @@ useEffect(() => {
   };
 
   const enviarCompartilhamentoPorDM = async () => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para enviar este perfil por mensagem.",
+      })
+    ) {
+      return;
+    }
+
     if (selecionados.size === 0) {
-      toast.error("Selecione ao menos uma pessoa.");
+      toast.error(
+        "Selecione ao menos uma pessoa."
+      );
       return;
     }
+
     const token = Storage.token;
+
     if (!token) {
-      toast.error("Faça login para compartilhar.");
       return;
     }
+
     try {
       setEnviandoDM(true);
+
       await Promise.all(
-        Array.from(selecionados).map((paraId) =>
-          fetch(`${API.BASE_URL}/api/mensagem`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              paraId,
-              conteudo: perfilId,
-              tipo: "USUARIO",
-            }),
-          })
+        Array.from(selecionados).map(
+          async (paraId) => {
+            const resp = await fetch(
+              `${API.BASE_URL}/api/mensagem`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  paraId,
+                  conteudo: perfilId,
+                  tipo: "USUARIO",
+                }),
+              }
+            );
+
+            if (!resp.ok) {
+              const body =
+                await resp
+                  .json()
+                  .catch(
+                    () => ({})
+                  );
+
+              const error: any =
+                new Error(
+                  body?.message ||
+                    body?.error ||
+                    "Não foi possível compartilhar o perfil por mensagem."
+                );
+
+              error.status =
+                resp.status;
+
+              error.code =
+                body?.code;
+
+              throw error;
+            }
+          }
         )
       );
-      toast.success("Perfil compartilhado por mensagem!");
+
+      toast.success(
+        "Perfil compartilhado por mensagem!"
+      );
+
       setModalAberto(false);
+    } catch (e: any) {
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
+      toast.error(
+        e?.message ||
+          "Não foi possível compartilhar o perfil por mensagem."
+      );
     } finally {
       setEnviandoDM(false);
     }
@@ -1054,13 +1175,25 @@ useEffect(() => {
   )}&tipo=${encodeURIComponent(String(perfilTipo || perfilTipoProp || ""))}`;
 
   const irConquistas = () => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para ver as conquistas deste perfil.",
+        returnTo: conquistasHref,
+      })
+    ) {
+      return;
+    }
+
     try {
       localStorage.setItem(
         `conquistas_count_${perfilId}`,
         String(conquistasTotal)
       );
     } catch {}
-    window.location.href = conquistasHref;
+
+    window.location.href =
+      conquistasHref;
   };
 
   useEffect(() => {
@@ -1202,33 +1335,90 @@ useEffect(() => {
 
 
   async function toggleFavorito() {
-    if (!alvoUsuarioIdFavorito) return;
-    const token = Storage.token;
-    if (!token) {
-      exigirLogin(
-        "Entre na FootEra para adicionar aos favoritos."
-      );
-
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para adicionar este perfil aos favoritos.",
+      })
+    ) {
       return;
     }
-    await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioIdFavorito}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setEhFavorito((v) => !v);
-  }
 
+    if (!alvoUsuarioIdFavorito) {
+      return;
+    }
 
-  const seguirUsuario = async (): Promise<boolean> => {
-    const token = Storage.token;
-    const seguidorUsuarioId = Storage.usuarioId;
-    if (!token || !seguidorUsuarioId) {
-      exigirLogin(
-        "Entre na FootEra para seguir este perfil."
+    const token =
+      Storage.token;
+
+    try {
+      const resp = await fetch(
+        `${API.BASE_URL}/api/favoritos/${alvoUsuarioIdFavorito}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
       );
 
-      return false;
+      if (!resp.ok) {
+        const body =
+          await resp
+            .json()
+            .catch(() => ({}));
+
+        const error: any =
+          new Error(
+            body?.message ||
+              body?.error ||
+              "Não foi possível atualizar os favoritos."
+          );
+
+        error.status =
+          resp.status;
+
+        error.code =
+          body?.code;
+
+        throw error;
+      }
+
+      setEhFavorito(
+        (v) => !v
+      );
+    } catch (e: any) {
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
+      toast.error(
+        e?.message ||
+          "Não foi possível atualizar os favoritos."
+      );
     }
+  }
+
+  const seguirUsuario =
+    async (): Promise<boolean> => {
+      const token =
+        Storage.token;
+
+      const seguidorUsuarioId =
+        Storage.usuarioId;
+
+      if (
+        !token ||
+        !seguidorUsuarioId
+      ) {
+        return false;
+      }
 
     const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
       method: "POST",
@@ -1246,14 +1436,46 @@ useEffect(() => {
       return true;
     }
 
-    const body = await readBodySafe(resp);
-    return isDuplicado(resp, body);
+    const body =
+      await readBodySafe(resp);
+
+    if (resp.status === 401) {
+      handleAuthError(
+        {
+          status: resp.status,
+          code: body?.code,
+          message:
+            body?.message ||
+            body?.error,
+        },
+        {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        }
+      );
+
+      return false;
+    }
+
+    return isDuplicado(
+      resp,
+      body
+    );
   };
 
   const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
   const cacheKey = me ? `follow_${me}_${perfilId}` : null;
 
   const toggleSeguir = async () => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para seguir este perfil.",
+      })
+    ) {
+      return;
+    }
+
     if (followPendente) {
       toast.success("Solicitação já enviada. Aguarde a pessoa aceitar.");
       return;
@@ -1293,28 +1515,83 @@ useEffect(() => {
       body: JSON.stringify({ destinatarioId: perfilId }),
     });
 
-    if (resp.ok) return true;
-    const body = await readBodySafe(resp);
-    return isDuplicado(resp, body);
+    if (resp.ok) {
+      return true;
+    }
+
+    const body =
+      await readBodySafe(resp);
+
+    if (resp.status === 401) {
+      handleAuthError(
+        {
+          status: resp.status,
+          code: body?.code,
+          message:
+            body?.message ||
+            body?.error,
+        },
+        {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        }
+      );
+
+      return false;
+    }
+
+    return isDuplicado(
+      resp,
+      body
+    );
   };
 
   const desvincularTreino = async (): Promise<boolean> => {
     const token = Storage.token;
     if (!token) return false;
 
-    const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/vinculo`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ usuarioAlvoId: perfilId }),
-    });
+    const resp = await fetch(
+      `${API.BASE_URL}/api/solicitacoes-treino/vinculo`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type":
+            "application/json",
+          Authorization:
+            `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          usuarioAlvoId:
+            perfilId,
+        }),
+      }
+    );
+
+    if (resp.status === 401) {
+      handleAuthError(
+        { status: 401 },
+        {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        }
+      );
+
+      return false;
+    }
 
     return resp.ok;
   };
 
-  const toggleTreino = async () => {
+  const toggleTreino =
+    async () => {
+      if (
+        !requireAuth({
+          message:
+            "Entre na FootEra para criar ou gerenciar um vínculo de treino.",
+        })
+      ) {
+        return;
+      }
     if (temVinculoTreino) {
       const confirmar = window.confirm(
         `Tem certeza que deseja desvincular de ${nome}?`
@@ -1406,6 +1683,15 @@ useEffect(() => {
   };
 
   const toggleObservar = async () => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para observar este atleta.",
+      })
+    ) {
+      return;
+    }
+
     setCarregandoObs(true);
     try {
       const id = await resolverAtletaIdSePreciso();
@@ -1436,17 +1722,47 @@ useEffect(() => {
           }
         );
 
-        if (del.ok || del.status === 204 || del.status === 404) {
-          if (obsKey) localStorage.removeItem(obsKey);
+        if (del.status === 401) {
+          setObservando(prev);
+
+          handleAuthError(
+            { status: 401 },
+            {
+              message:
+                "Sua sessão expirou. Entre novamente para continuar.",
+            }
+          );
+
+          return;
+        }
+
+        if (
+          del.ok ||
+          del.status === 204 ||
+          del.status === 404
+        ) {
+          if (obsKey) {
+            localStorage.removeItem(
+              obsKey
+            );
+          }
         } else {
           setObservando(prev);
         }
+
         return;
       }
 
       const r = await observarAtleta(id);
       if (r === "auth") {
-        toast.error("Faça login novamente.");
+        handleAuthError(
+          { status: 401 },
+          {
+            message:
+              "Sua sessão expirou. Entre novamente para continuar.",
+          }
+        );
+
         return;
       }
       if (r === "err") {
@@ -1712,16 +2028,34 @@ useEffect(() => {
             </button>
 
             {hasCreator && creatorUsuarioId && (
-              <Link href={`/creator/profile?id=${creatorUsuarioId}`}>
-                <button
-                  type="button"
-                  className={`${btnBase} bg-white/10 text-white border border-white/40 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-                  title="Ver página Creator"
-                >
-                  <Crown size={16} />
-                  <span className="truncate">Creator</span>
-                </button>
-              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  const destino =
+                    `/creator/profile?id=${encodeURIComponent(
+                      creatorUsuarioId
+                    )}`;
+
+                  if (
+                    requireAuth({
+                      message:
+                        "Entre na FootEra para acessar a página Creator.",
+                      returnTo:
+                        destino,
+                    })
+                  ) {
+                    window.location.href =
+                      destino;
+                  }
+                }}
+                className={`${btnBase} bg-white/10 text-white border border-white/40 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+                title="Ver página Creator"
+              >
+                <Crown size={16} />
+                <span className="truncate">
+                  Creator
+                </span>
+              </button>
             )}
             
             {mostrarTreinarJuntos && (
@@ -1843,6 +2177,7 @@ useEffect(() => {
                 )}
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
+                  const fotoSrc = u.foto ?? null;
                   return (
                     <button
                       key={u.id}
@@ -1854,9 +2189,9 @@ useEffect(() => {
                           : "border-transparent"
                       }`}
                     >
-                      <Avatar
-                        foto={u.foto}
-                        alt={u.nome || "Usuário"}
+                      <img
+                        src={fotoSrc}
+                        alt={u.nome}
                         className="w-14 h-14"
                       />
                       {selecionado && (

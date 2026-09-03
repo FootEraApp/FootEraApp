@@ -90,7 +90,43 @@ export function applyAuthSession(
   store.setItem("plano", plano);
   syncSocketAuth(token);
 
+  /*
+   * Centraliza o aviso de mudança de autenticação.
+   * Assim login normal, Google, restauração de conta
+   * e Auth Gate atualizam o restante da aplicação
+   * sem depender de reload.
+   */
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("footera:auth-changed", {
+        detail: {
+          authenticated: true,
+          usuarioId,
+        },
+      })
+    );
+  }
+
   return { usuarioId, isAdmin };
+}
+
+export function clearAuthSession() {
+  SESSION_KEYS.forEach((k) => {
+    localStorage.removeItem(k);
+    sessionStorage.removeItem(k);
+  });
+
+  syncSocketAuth(null);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("footera:auth-changed", {
+        detail: {
+          authenticated: false,
+        },
+      })
+    );
+  }
 }
 
 export function salvarRetornoAuth(
