@@ -1152,7 +1152,9 @@ function PaginaFeed(): JSX.Element {
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
           <p>
             {{
-              todos: "Nenhuma postagem encontrada.",
+              todos: userId
+                ? "Ainda não há publicações para você ver."
+                : "Ainda não há publicações públicas disponíveis para visitantes.",
               seguindo:
                 "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
               favoritos: "Você não tem nenhum usuário favoritado.",

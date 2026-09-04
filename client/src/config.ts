@@ -38,10 +38,19 @@ function inferApiFromHost(): string {
 const envWebApi = strip(viteEnv?.VITE_API_URL);
 const envAndroidApi = strip(viteEnv?.VITE_ANDROID_API_URL);
 
-let API_BASE = isLocalMode && isCapacitorNative()
-  ? envAndroidApi || "http://127.0.0.1:3001"
-  // ? envAndroidApi || "http://10.0.2.2:3001"
-  : envWebApi || inferApiFromHost();
+let API_BASE: string;
+
+if (isLocalMode) {
+  API_BASE = isCapacitorNative()
+    ? envAndroidApi || "http://10.0.2.2:3001"
+    : envWebApi || "http://localhost:3001";
+} else {
+  API_BASE =
+    envWebApi ||
+    (isCapacitorNative()
+      ? "https://api.footera.app.br"
+      : inferApiFromHost());
+}
 
 const isLocalApi =
   /^http:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/i.test(API_BASE);
