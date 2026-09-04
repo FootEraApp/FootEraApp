@@ -1,4 +1,3 @@
-// server/middlewares/auth
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { Prisma, PrismaClient, TipoUsuario } from "@prisma/client";
@@ -282,13 +281,10 @@ export const optionalAuthenticateToken: RequestHandler = (
     ? auth.slice(7).trim()
     : auth.trim();
 
-  // Sem token = visitante.
   if (!token) {
     return next();
   }
 
-  // Se existe token, usa exatamente a mesma
-  // validação da autenticação normal.
   return authenticateToken(
     req,
     res,

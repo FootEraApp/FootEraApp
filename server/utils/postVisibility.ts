@@ -36,10 +36,6 @@ export function normalizarVisibilidadePostagem(
 export async function getPostVisibilityWhere(
   viewerUsuarioId?: string | null
 ): Promise<Prisma.PostagemWhereInput> {
-  /*
-   * Visitante:
-   * somente posts públicos.
-   */
   if (!viewerUsuarioId) {
     return {
       oculto: false,
@@ -73,17 +69,10 @@ export async function getPostVisibilityWhere(
         visibilidade:
           VisibilidadePostagem.PUBLICO,
       },
-
       {
         visibilidade:
           VisibilidadePostagem.LOGADO,
       },
-
-      /*
-       * O autor vê todos
-       * os próprios posts,
-       * inclusive PRIVADO.
-       */
       {
         usuarioId:
           viewerUsuarioId,

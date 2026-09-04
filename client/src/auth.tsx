@@ -3,11 +3,13 @@ import {
   useEffect,
   useState,
 } from "react";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { readToken } from "./utils/auth.js";
 import { API } from "./config.js";
 import {
   clearAuthSession,
+  consumirRetornoAuth,
+  salvarRetornoAuth,
 } from "./utils/authSession.js";
 
 type SessionStatus =
@@ -46,11 +48,6 @@ function useSessionStatus(): SessionStatus {
           return;
         }
 
-        /*
-         * O token existe no navegador,
-         * mas o backend não aceita mais
-         * a sessão.
-         */
         if (
           response.status === 401 ||
           response.status === 403 ||
@@ -61,11 +58,6 @@ function useSessionStatus(): SessionStatus {
           return;
         }
 
-        /*
-         * Não derruba uma sessão somente
-         * porque houve uma falha temporária
-         * do backend.
-         */
         setStatus("valid");
       })
       .catch(() => {
@@ -90,16 +82,46 @@ function SessionChecking() {
   );
 }
 
+function AuthenticatedReturnRedirect() {
+  const [destino] =
+    useState(() =>
+      consumirRetornoAuth(
+        "/perfil"
+      )
+    );
+
+  return (
+    <Redirect to={destino} />
+  );
+}
+
 export function Private({
   children,
 }: {
   children: ReactNode;
 }) {
-  const token = readToken();
+  const token =
+    readToken();
 
-  return token
-    ? <>{children}</>
-    : <Redirect to="/login" />;
+  const [, navigate] =
+    useLocation();
+
+  useEffect(() => {
+    if (token) {
+      return;
+    }
+    salvarRetornoAuth();
+
+    navigate("/login");
+  }, [token, navigate]);
+
+  if (!token) {
+    return (
+      <SessionChecking />
+    );
+  }
+
+  return <>{children}</>;
 }
 
 export function PublicOnly({
@@ -115,7 +137,7 @@ export function PublicOnly({
   }
 
   return status === "valid"
-    ? <Redirect to="/perfil" />
+    ? <AuthenticatedReturnRedirect />
     : <>{children}</>;
 }
 

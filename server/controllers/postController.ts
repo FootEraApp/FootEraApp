@@ -86,10 +86,6 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
         getIO();
 
       if (io) {
-        /*
-        * PRIVADO:
-        * somente o próprio autor.
-        */
         if (
           visibilidade ===
           VisibilidadePostagem.PRIVADO
@@ -101,13 +97,6 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
             post
           );
         } else {
-          /*
-          * PUBLICO / LOGADO /
-          * SEGUIDORES:
-          *
-          * Mantém o realtime atual
-          * para autor + seguidores.
-          */
           const segs =
             await prisma.seguidor.findMany({
               where: {

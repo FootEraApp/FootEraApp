@@ -22,6 +22,10 @@ import Storage from "../../../../server/utils/storage.js";
 import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
 import Avatar from "../shared/Avatar.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
+import {
+  lerAcaoPendenteAuth,
+  limparAcaoPendenteAuth,
+} from "../../utils/authSession.js";
 
 interface Usuario {
   id: string;
@@ -151,6 +155,12 @@ export default function ProfileHeader({
   const [treinoJunto, setTreinoJunto] = useState<boolean>(false);
   const [souSolicitanteTreino, setSouSolicitanteTreino] = useState<boolean | null>(null);
   const [temVinculoTreino, setTemVinculoTreino] = useState(false);
+  const [
+    solicitacaoTreinoRecebidaId,
+    setSolicitacaoTreinoRecebidaId,
+  ] = useState<string | null>(
+    null
+  );
   const [observando, setObservando] = useState<boolean | null>(null);
   const [unreadDM, setUnreadDM] = useState<number>(0);
   const [badgeCount, setBadgeCount] = useState(0);
@@ -618,21 +628,54 @@ useEffect(() => {
         if (minhaComEsseUsuario) {
           setTreinoJunto(true);
           setSouSolicitanteTreino(true);
-          localStorage.setItem(storageKey, "1");
-        } else if (recebidaDesseUsuario) {
+
+          setSolicitacaoTreinoRecebidaId(
+            null
+          );
+
+          localStorage.setItem(
+            storageKey,
+            "1"
+          );
+        } else if (
+          recebidaDesseUsuario
+        ) {
           setTreinoJunto(true);
-          setSouSolicitanteTreino(false);
-          localStorage.removeItem(storageKey);
+
+          setSouSolicitanteTreino(
+            false
+          );
+
+          setSolicitacaoTreinoRecebidaId(
+            String(
+              recebidaDesseUsuario.id
+            )
+          );
+
+          localStorage.removeItem(
+            storageKey
+          );
         } else {
           setTreinoJunto(false);
-          setSouSolicitanteTreino(null);
-          localStorage.removeItem(storageKey);
+
+          setSouSolicitanteTreino(
+            null
+          );
+
+          setSolicitacaoTreinoRecebidaId(
+            null
+          );
+
+          localStorage.removeItem(
+            storageKey
+          );
         }
 
       } catch {
         setTreinoJunto(false);
         setSouSolicitanteTreino(null);
         localStorage.removeItem(storageKey);
+        setSolicitacaoTreinoRecebidaId(null);
       }
     })();
   }, [perfilId, isOwnProfile, storageKey, perfilTipo, perfilTipoProp]);
@@ -1335,6 +1378,7 @@ useEffect(() => {
       setTreinoJunto(false);
       setSouSolicitanteTreino(null);
       localStorage.removeItem(storageKey);
+      setSolicitacaoTreinoRecebidaId(null);
     }
 
     window.addEventListener("footera:vinculo-treino-alterado", onVinculoAlterado);
@@ -1489,11 +1533,71 @@ useEffect(() => {
   const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
   const cacheKey = me ? `follow_${me}_${perfilId}` : null;
 
+  useEffect(() => {
+    const token =
+      Storage.token ||
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      );
+
+    if (
+      !token ||
+      !perfilId
+    ) {
+      return;
+    }
+
+    const action =
+      lerAcaoPendenteAuth();
+
+    if (
+      !action ||
+      action.type !==
+        "FOLLOW_PROFILE" ||
+      action.perfilId !==
+        String(perfilId)
+    ) {
+      return;
+    }
+
+    limparAcaoPendenteAuth();
+
+    const confirmar =
+      window.confirm(
+        `Você entrou na FootEra. Deseja seguir ${nome} agora?`
+      );
+
+    if (!confirmar) {
+      return;
+    }
+
+    void seguirUsuario();
+  }, [
+    perfilId,
+    nome,
+  ]);
+
   const toggleSeguir = async () => {
     if (
       !requireAuth({
         message:
           "Entre na FootEra para seguir este perfil.",
+
+        returnTo:
+          `/perfil/${encodeURIComponent(
+            perfilId
+          )}`,
+
+        action: {
+          type:
+            "FOLLOW_PROFILE",
+
+          perfilId:
+            String(perfilId),
+        },
       })
     ) {
       return;
@@ -1651,8 +1755,21 @@ useEffect(() => {
       return;
     }
 
-    if (treinoJunto && souSolicitanteTreino === false) {
-      window.location.href = "/notificacoes";
+    if (
+      treinoJunto &&
+      souSolicitanteTreino ===
+        false
+    ) {
+      const destino =
+        solicitacaoTreinoRecebidaId
+          ? `/notificacoes?solicitacaoId=${encodeURIComponent(
+              solicitacaoTreinoRecebidaId
+            )}`
+          : "/notificacoes";
+
+      window.location.href =
+        destino;
+
       return;
     }
 

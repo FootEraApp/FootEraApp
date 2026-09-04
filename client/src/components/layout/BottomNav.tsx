@@ -48,11 +48,6 @@ export default function BottomNav({
     requireAuth,
   } = useAuthGate();
 
-  /*
-   * Faz o BottomNav renderizar novamente quando
-   * o usuário entra/sai sem recarregar a página
-   * (por exemplo, Google pelo Auth Gate).
-   */
   const [
     authVersion,
     setAuthVersion,
@@ -102,12 +97,6 @@ export default function BottomNav({
     const token =
       Storage.token;
 
-    /*
-     * Visitante não possui badge.
-     * Depois de login pelo Auth Gate,
-     * authVersion muda e este effect
-     * roda novamente com o novo token.
-     */
     if (!token) {
       setBadgeCount(0);
       return;
@@ -156,7 +145,6 @@ export default function BottomNav({
             );
           }
         } catch {
-          // Badge não deve quebrar navegação.
         }
       };
 
@@ -257,7 +245,6 @@ export default function BottomNav({
     <nav
       className={`fixed bottom-0 left-0 right-0 z-50 bg-green-900 text-white px-6 py-2 flex justify-around items-center shadow-md ${className}`}
     >
-      {/* Feed é público */}
       <button
         type="button"
         onClick={() =>
@@ -280,7 +267,6 @@ export default function BottomNav({
         />
       </button>
 
-      {/* Explorar ainda é uma rota privada nesta etapa */}
       <button
         type="button"
         onClick={() =>

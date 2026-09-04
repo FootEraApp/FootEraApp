@@ -34,10 +34,6 @@ const socket =
       "websocket",
     ],
 
-    /*
-     * Visitante não precisa
-     * abrir Socket.
-     */
     autoConnect:
       Boolean(initialToken),
   });
@@ -109,10 +105,6 @@ export function syncSocketAuth(
     token: nextToken,
   };
 
-  /*
-   * Força novo handshake
-   * com o token atualizado.
-   */
   if (socket.connected) {
     socket.disconnect();
   }

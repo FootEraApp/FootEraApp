@@ -155,19 +155,10 @@ async function optionalGet(
       headers,
     });
 
-  /*
-   * Pode existir um token antigo
-   * ou expirado no navegador.
-   *
-   * Como esta é uma rota pública,
-   * tentamos novamente como visitante.
-   */
   if (
     response.status === 401 &&
     headers.Authorization
   ) {
-    // A API recusou a sessão armazenada. Como esta é uma rota pública,
-    // limpa apenas as chaves de autenticação e repete como visitante.
     clearStoredAuth();
     response = await fetch(url);
   }
@@ -299,8 +290,6 @@ export async function compartilharPost(postId: string) {
     return;
   }
 
-  // Registrar o compartilhamento é um efeito secundário.
-  // Visitante pode compartilhar normalmente sem autenticação.
   if (bearer) {
     void fetch(`${API.BASE_URL}/api/feed/post/${postId}/compartilhar`, {
       method: "POST",

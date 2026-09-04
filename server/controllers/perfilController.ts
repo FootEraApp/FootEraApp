@@ -1520,12 +1520,6 @@ async function resolverUsuarioIdPorPerfilId(
     return usuario.id;
   }
 
-  /*
-  * Também aceita URL amigável:
-  *
-  * /perfil/pedro
-  * /perfil/@pedro
-  */
   const username =
     id
       .replace(/^@/, "")
@@ -2167,10 +2161,6 @@ export const getPerfilUsuario =
         : 0,
   };
 
-  /*
-  * Visitante recebe somente
-  * a versão pública/sanitizada.
-  */
   if (acesso.isVisitor) {
     return res.json(
       sanitizePublicProfile(
@@ -2179,10 +2169,6 @@ export const getPerfilUsuario =
     );
   }
 
-  /*
-  * Usuário autenticado mantém
-  * o comportamento completo atual.
-  */
   return res.json(
     payloadPerfil
   );

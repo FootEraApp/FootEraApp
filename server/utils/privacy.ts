@@ -40,19 +40,9 @@ export function readPrivacyConfig(
       : {};
 
   return {
-    // Mantém a configuração antiga
-    // durante a migração.
     perfilVisivel:
       c.perfilVisivel !== false,
 
-    // NOVO.
-    //
-    // null é proposital.
-    // Significa que o usuário ainda
-    // está no modelo antigo.
-    //
-    // Usuários antigos NÃO ficam
-    // públicos automaticamente.
     visibilidadePerfil:
       normalizarVisibilidadePerfil(
         c.visibilidadePerfil
@@ -517,13 +507,6 @@ export async function avaliarPrivacidadePerfil(
       viewer?.tipo || ""
     ).toLowerCase() === "admin";
 
-  /*
-   * VISITANTE
-   *
-   * Usuário antigo com
-   * visibilidadePerfil === null
-   * continua fechado para internet.
-   */
   if (isVisitor) {
     const podeVerPerfil =
       priv.visibilidadePerfil ===
@@ -537,27 +520,15 @@ export async function avaliarPrivacidadePerfil(
 
     return {
       existe: true,
-
       podeVerPerfil,
       podeListarPerfil,
-
-      // Não expor e-mail de contas
-      // antigas automaticamente.
       podeMostrarEmail: false,
-
-      // Visitante também não recebe
-      // presença/online.
       mostrarOnline: false,
-
-      // Mensagens exigem login.
       permitirMensagens: false,
-
       visibilidadePerfil:
         priv.visibilidadePerfil,
-
       temVinculo: false,
       seguidoresMutuos: false,
-
       isOwn: false,
       isAdmin: false,
       isVisitor: true,
@@ -567,10 +538,6 @@ export async function avaliarPrivacidadePerfil(
   let temVinculo = false;
   let seguidoresMutuos = false;
 
-  /*
-   * Só precisamos consultar relações
-   * quando elas podem fazer diferença.
-   */
   const precisaConsultarRelacoes =
     !isOwn &&
     !isAdmin &&
@@ -610,28 +577,16 @@ export async function avaliarPrivacidadePerfil(
   switch (
     priv.visibilidadePerfil
   ) {
-    /*
-     * Perfil explicitamente público.
-     */
     case "PUBLICO":
       podeVerPerfil = true;
       podeListarPerfil = true;
       break;
 
-    /*
-     * Pode ser aberto por link,
-     * mas não aparece no Explorar.
-     */
     case "NAO_LISTADO":
       podeVerPerfil = true;
       podeListarPerfil = false;
       break;
 
-    /*
-     * Apenas próprio usuário,
-     * admin, vínculo ou
-     * seguimento mútuo.
-     */
     case "PRIVADO":
       podeVerPerfil =
         isOwn ||
@@ -644,13 +599,6 @@ export async function avaliarPrivacidadePerfil(
 
       break;
 
-    /*
-     * Usuário que ainda está no
-     * sistema legado.
-     *
-     * Mantém exatamente a lógica
-     * atual dentro da FootEra.
-     */
     default:
       podeVerPerfil =
         priv.perfilVisivel ||

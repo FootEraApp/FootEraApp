@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/configuracoesPerfil
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
@@ -374,12 +373,6 @@ export default function ConfiguracoesPerfil() {
         mostrarEmail,
       };
 
-      /*
-       * Contas antigas podem começar com
-       * visibilidadePerfil === null.
-       * Só enviamos esse campo quando o
-       * usuário realmente escolher uma opção.
-       */
       if (visibilidadePerfil) {
         patch.visibilidadePerfil =
           visibilidadePerfil;

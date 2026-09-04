@@ -78,10 +78,6 @@ async function emitirNovoPost(
 
   if (!io) return;
 
-  /*
-   * Privado:
-   * somente o próprio autor.
-   */
   if (
     visibilidade ===
     VisibilidadePostagem.PRIVADO
@@ -96,15 +92,6 @@ async function emitirNovoPost(
     return;
   }
 
-  /*
-   * Por enquanto mantemos
-   * realtime somente dentro
-   * das rooms autenticadas.
-   *
-   * O Feed público continua
-   * funcionando normalmente
-   * por GET/refresh.
-   */
   const seguidores =
     await prisma.seguidor.findMany({
       where: {

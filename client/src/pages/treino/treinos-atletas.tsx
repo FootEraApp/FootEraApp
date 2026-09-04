@@ -985,12 +985,9 @@ function navegarPeloMenu(rota: string) {
       }
 
       const agora = new Date();
-
       const monthAtual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
-
       const proximo = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
       const monthProximo = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, "0")}`;
-
       const [resAtual, resProximo] = await Promise.all([
         fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -1011,15 +1008,12 @@ function navegarPeloMenu(rota: string) {
 
       const jsAtual = await resAtual.json();
       const jsProximo = await resProximo.json();
-
       const listaRaw: any[] = [
         ...(Array.isArray(jsAtual) ? jsAtual : jsAtual.items ?? []),
         ...(Array.isArray(jsProximo) ? jsProximo : jsProximo.items ?? []),
       ];
-
       const listaAdaptada: TreinoAgendado[] = listaRaw.map((item) => {
         const tp = item.treinoProgramado ?? null;
-
         return {
           id: item.id,
           titulo: item.titulo ?? tp?.nome ?? "Treino",
@@ -1355,7 +1349,6 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
     (Storage as any).tipoSalvo ?? localStorage.getItem("tipo") ?? ""
   ).toLowerCase();
   const canVerElenco = ["professor", "clube", "escolinha"].includes(tipo);
-  const isOlheiro = tipo === "olheiro";
 
   const bottomNavRef = useRef<HTMLElement | null>(null);
   const agendadosCardRef = useRef<HTMLDivElement | null>(null);
@@ -1591,25 +1584,25 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
     return () => window.removeEventListener("mousedown", onDown);
   }, [addFiltroOpen]);
 
-useEffect(() => {
-  if (!menuTreinosAberto) return;
+  useEffect(() => {
+    if (!menuTreinosAberto) return;
 
-  const overflowAnterior = document.body.style.overflow;
+    const overflowAnterior = document.body.style.overflow;
 
-  function fecharComEscape(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      setMenuTreinosAberto(false);
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuTreinosAberto(false);
+      }
     }
-  }
 
-  document.body.style.overflow = "hidden";
-  window.addEventListener("keydown", fecharComEscape);
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", fecharComEscape);
 
-  return () => {
-    document.body.style.overflow = overflowAnterior;
-    window.removeEventListener("keydown", fecharComEscape);
-  };
-}, [menuTreinosAberto]);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      window.removeEventListener("keydown", fecharComEscape);
+    };
+  }, [menuTreinosAberto]);
 
   async function iniciar(id: string) {
     if (
@@ -1853,20 +1846,20 @@ useEffect(() => {
       });
     };
 
-type ExercicioDaLista = (typeof exs)[number];
+  type ExercicioDaLista = (typeof exs)[number];
 
-function obterItemKey(ex: ExercicioDaLista) {
-  return String(
-    (ex as any)._key ??
-    ex.exercicio.id
-  );
-}
+  function obterItemKey(ex: ExercicioDaLista) {
+    return String(
+      (ex as any)._key ??
+      ex.exercicio.id
+    );
+  }
 
-function obterMidiaUrl(ex: ExercicioDaLista) {
-  const midiaDireta =
-    ex.exercicio.videoDemonstrativoUrl ||
-    (ex.exercicio as any).imgDemonstrativaUrl ||
-    null;
+  function obterMidiaUrl(ex: ExercicioDaLista) {
+    const midiaDireta =
+      ex.exercicio.videoDemonstrativoUrl ||
+      (ex.exercicio as any).imgDemonstrativaUrl ||
+      null;
 
   const midiaFallback = (() => {
     const midia = midiaDoCatalogo(
@@ -1876,310 +1869,307 @@ function obterMidiaUrl(ex: ExercicioDaLista) {
     return midia?.video || midia?.img || null;
   })();
 
-  const midiaRaw =
-    midiaDireta || midiaFallback;
+    const midiaRaw =
+      midiaDireta || midiaFallback;
 
-  return midiaRaw
-    ? resolveUploadUrl(midiaRaw)
-    : null;
-}
-
-const exercicioMidiaSelecionado =
-  exs.find((ex) => {
-    const itemKey = obterItemKey(ex);
-    const midiaKey = `${t.id}:${itemKey}`;
-
-    return midiaKey === midiaExercicioAberta;
-  }) ?? null;
-
-const midiaSelecionada =
-  exercicioMidiaSelecionado
-    ? {
-        key: midiaExercicioAberta!,
-        nome:
-          exercicioMidiaSelecionado.exercicio.nome,
-        url: obterMidiaUrl(
-          exercicioMidiaSelecionado
-        ),
-      }
-    : null;
-
-function fecharPlayerExercicio() {
-  setPlayerMidiaAberto(false);
-
-  if (fecharMidiaTimerRef.current !== null) {
-    window.clearTimeout(
-      fecharMidiaTimerRef.current
-    );
+    return midiaRaw
+      ? resolveUploadUrl(midiaRaw)
+      : null;
   }
 
-  fecharMidiaTimerRef.current =
-    window.setTimeout(() => {
-      setMidiaExercicioAberta(null);
+  const exercicioMidiaSelecionado =
+    exs.find((ex) => {
+      const itemKey = obterItemKey(ex);
+      const midiaKey = `${t.id}:${itemKey}`;
+
+      return midiaKey === midiaExercicioAberta;
+    }) ?? null;
+
+  const midiaSelecionada =
+    exercicioMidiaSelecionado
+      ? {
+          key: midiaExercicioAberta!,
+          nome:
+            exercicioMidiaSelecionado.exercicio.nome,
+          url: obterMidiaUrl(
+            exercicioMidiaSelecionado
+          ),
+        }
+      : null;
+
+  function fecharPlayerExercicio() {
+    setPlayerMidiaAberto(false);
+
+    if (fecharMidiaTimerRef.current !== null) {
+      window.clearTimeout(
+        fecharMidiaTimerRef.current
+      );
+    }
+
+    fecharMidiaTimerRef.current =
+      window.setTimeout(() => {
+        setMidiaExercicioAberta(null);
+        setErroMidiaExercicio(null);
+        fecharMidiaTimerRef.current = null;
+      }, 500);
+  }
+
+  return (
+    <div>=
+      <div
+        aria-hidden={!playerMidiaAberto}
+        className={`grid overflow-hidden transition-all duration-500 ease-in-out ${
+          playerMidiaAberto &&
+          midiaSelecionada?.url
+            ? "mb-4 grid-rows-[1fr] opacity-100"
+            : "mb-0 grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          {midiaSelecionada?.url && (
+            <div
+              className={`overflow-hidden rounded-xl border border-green-200 bg-white shadow-sm transition-all duration-500 ease-in-out ${
+                playerMidiaAberto
+                  ? "translate-y-0 scale-100"
+                  : "-translate-y-3 scale-[0.96]"
+              }`}
+            >
+              <div className="flex items-center justify-between border-b bg-green-50 px-3 py-2">
+                <span className="min-w-0 truncate text-sm font-semibold text-green-900">
+                  Demonstração:{" "}
+                  {midiaSelecionada.nome}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={fecharPlayerExercicio}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white"
+                  aria-label="Recolher vídeo"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {erroMidiaExercicio ? (
+                <p className="px-4 py-6 text-center text-sm text-gray-500">
+                  {erroMidiaExercicio}
+                </p>
+              ) : isYouTubeUrl(
+                  midiaSelecionada.url
+                ) ? (
+                <iframe
+                  key={midiaSelecionada.key}
+                  src={toYouTubeEmbed(
+                    midiaSelecionada.url
+                  )}
+                  className="aspect-video w-full bg-black"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={midiaSelecionada.nome}
+                />
+              ) : isVideoUrl(
+                  midiaSelecionada.url
+                ) ? (
+                <video
+                  key={midiaSelecionada.key}
+                  src={midiaSelecionada.url}
+                  className="aspect-video w-full bg-black object-contain"
+                  controls
+                  autoPlay
+                  playsInline
+                  onError={() =>
+                    setErroMidiaExercicio(
+                      "Este exercício não possui vídeo demonstrativo disponível."
+                    )
+                  }
+                />
+              ) : (
+                <img
+                  key={midiaSelecionada.key}
+                  src={midiaSelecionada.url}
+                  alt={midiaSelecionada.nome}
+                  className="max-h-[420px] w-full object-contain"
+                  onError={() =>
+                    setErroMidiaExercicio(
+                      "Não foi possível carregar a imagem."
+                    )
+                  }
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {exs.map((ex) => {
+          const itemKey = obterItemKey(ex);
+          const midiaKey = `${t.id}:${itemKey}`;
+          const checked = ck[itemKey] === true;
+
+          const midiaUrl = obterMidiaUrl(ex);
+          const temMidia = Boolean(midiaUrl);
+
+          const estaAberta =
+            playerMidiaAberto &&
+            midiaExercicioAberta === midiaKey;
+
+    function alternarMidia() {
+      if (!temMidia || !midiaUrl) return;
+
       setErroMidiaExercicio(null);
-      fecharMidiaTimerRef.current = null;
-    }, 500);
-}
 
-return (
-  <div>=
-    <div
-      aria-hidden={!playerMidiaAberto}
-      className={`grid overflow-hidden transition-all duration-500 ease-in-out ${
-        playerMidiaAberto &&
-        midiaSelecionada?.url
-          ? "mb-4 grid-rows-[1fr] opacity-100"
-          : "mb-0 grid-rows-[0fr] opacity-0"
-      }`}
-    >
-      <div className="min-h-0 overflow-hidden">
-        {midiaSelecionada?.url && (
-          <div
-            className={`overflow-hidden rounded-xl border border-green-200 bg-white shadow-sm transition-all duration-500 ease-in-out ${
-              playerMidiaAberto
-                ? "translate-y-0 scale-100"
-                : "-translate-y-3 scale-[0.96]"
-            }`}
-          >
-            <div className="flex items-center justify-between border-b bg-green-50 px-3 py-2">
-              <span className="min-w-0 truncate text-sm font-semibold text-green-900">
-                Demonstração:{" "}
-                {midiaSelecionada.nome}
-              </span>
+      if (
+        midiaExercicioAberta === midiaKey &&
+        playerMidiaAberto
+      ) {
+        fecharPlayerExercicio();
+        return;
+      }
 
+      if (fecharMidiaTimerRef.current !== null) {
+        window.clearTimeout(
+          fecharMidiaTimerRef.current
+        );
+
+        fecharMidiaTimerRef.current = null;
+      }
+
+      setMidiaExercicioAberta(midiaKey);
+
+      window.requestAnimationFrame(() => {
+        setPlayerMidiaAberto(true);
+      });
+    }
+
+    function executarPeloTeclado(
+      event: React.KeyboardEvent<HTMLDivElement>
+    ) {
+      if (!temMidia) return;
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        alternarMidia();
+      }
+    }
+
+  return (
+    <div key={midiaKey}>
+      <div
+        role={temMidia ? "button" : undefined}
+        tabIndex={temMidia ? 0 : -1}
+        aria-expanded={
+          temMidia ? estaAberta : undefined
+        }
+        aria-disabled={!temMidia}
+        onClick={alternarMidia}
+        onKeyDown={executarPeloTeclado}
+        className={`flex items-center justify-between gap-3 rounded-lg border bg-neutral-50 p-3 transition-all duration-300 ${
+          temMidia
+            ? "cursor-pointer hover:border-green-400 hover:bg-green-50"
+            : "cursor-default"
+        } ${
+          estaAberta
+            ? "border-green-500 bg-green-50 ring-1 ring-green-200"
+            : ""
+        }`}
+      >
+          <div className="flex min-w-0 items-start gap-3">
+            <div onClick={(event) => event.stopPropagation()}>
               <button
                 type="button"
-                onClick={fecharPlayerExercicio}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white"
-                aria-label="Recolher vídeo"
+                onClick={() => toggleExercicio(itemKey)}
+                disabled={isMissedTreino}
+                className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                  isMissedTreino
+                    ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-300"
+                    : checked
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-gray-300 bg-white text-gray-400"
+                }`}
+                aria-pressed={checked}
+                aria-label={
+                  checked
+                    ? "Marcar como não feito"
+                    : "Marcar como feito"
+                }
               >
-                <X className="h-4 w-4" />
+                {checked ? (
+                  <CircleCheck className="h-4 w-4" />
+                ) : (
+                  <CircleX className="h-4 w-4" />
+                )}
               </button>
             </div>
 
-            {erroMidiaExercicio ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-500">
-                {erroMidiaExercicio}
-              </p>
-            ) : isYouTubeUrl(
-                midiaSelecionada.url
-              ) ? (
-              <iframe
-                key={midiaSelecionada.key}
-                src={toYouTubeEmbed(
-                  midiaSelecionada.url
+            <div className="min-w-0">
+              <div
+                className={`font-medium ${
+                  checked
+                    ? "text-gray-500 line-through"
+                    : ""
+                }`}
+              >
+                {ex.exercicio.nome}
+              </div>
+
+              <div className="space-y-1 text-sm text-gray-500">
+                {ex.series != null && ex.series !== 0 && (
+                  <p>
+                    <span className="font-medium">Séries:</span>{" "}
+                    {ex.series}
+                  </p>
                 )}
-                className="aspect-video w-full bg-black"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title={midiaSelecionada.nome}
-              />
-            ) : isVideoUrl(
-                midiaSelecionada.url
-              ) ? (
-              <video
-                key={midiaSelecionada.key}
-                src={midiaSelecionada.url}
-                className="aspect-video w-full bg-black object-contain"
-                controls
-                autoPlay
-                playsInline
-                onError={() =>
-                  setErroMidiaExercicio(
-                    "Este exercício não possui vídeo demonstrativo disponível."
-                  )
-                }
-              />
-            ) : (
-              <img
-                key={midiaSelecionada.key}
-                src={midiaSelecionada.url}
-                alt={midiaSelecionada.nome}
-                className="max-h-[420px] w-full object-contain"
-                onError={() =>
-                  setErroMidiaExercicio(
-                    "Não foi possível carregar a imagem."
-                  )
-                }
-              />
-            )}
+
+                {ex.repeticoes && (
+                  <p>
+                    <span className="font-medium">
+                      Repetições:
+                    </span>{" "}
+                    {ex.repeticoes}
+                  </p>
+                )}
+
+                {ex.duracao && (
+                  <p>
+                    <span className="font-medium">Duração:</span>{" "}
+                    {ex.duracao}
+                  </p>
+                )}
+
+                {ex.descanso && (
+                  <p>
+                    <span className="font-medium">Descanso:</span>{" "}
+                    {ex.descanso}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
 
-    {/* A expansão do player empurra esta lista para baixo */}
-    <div className="space-y-2">
-      {exs.map((ex) => {
-const itemKey = obterItemKey(ex);
-const midiaKey = `${t.id}:${itemKey}`;
-const checked = ck[itemKey] === true;
-
-const midiaUrl = obterMidiaUrl(ex);
-const temMidia = Boolean(midiaUrl);
-
-const estaAberta =
-  playerMidiaAberto &&
-  midiaExercicioAberta === midiaKey;
-
-function alternarMidia() {
-  if (!temMidia || !midiaUrl) return;
-
-  setErroMidiaExercicio(null);
-
-  if (
-    midiaExercicioAberta === midiaKey &&
-    playerMidiaAberto
-  ) {
-    fecharPlayerExercicio();
-    return;
-  }
-
-  if (fecharMidiaTimerRef.current !== null) {
-    window.clearTimeout(
-      fecharMidiaTimerRef.current
-    );
-
-    fecharMidiaTimerRef.current = null;
-  }
-
-  setMidiaExercicioAberta(midiaKey);
-
-  window.requestAnimationFrame(() => {
-    setPlayerMidiaAberto(true);
-  });
-}
-
-  function executarPeloTeclado(
-    event: React.KeyboardEvent<HTMLDivElement>
-  ) {
-    if (!temMidia) return;
-
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      alternarMidia();
-    }
-  }
-
-return (
-  <div key={midiaKey}>
-    {/* Card selecionável */}
-    <div
-      role={temMidia ? "button" : undefined}
-      tabIndex={temMidia ? 0 : -1}
-      aria-expanded={
-        temMidia ? estaAberta : undefined
-      }
-      aria-disabled={!temMidia}
-      onClick={alternarMidia}
-      onKeyDown={executarPeloTeclado}
-      className={`flex items-center justify-between gap-3 rounded-lg border bg-neutral-50 p-3 transition-all duration-300 ${
-        temMidia
-          ? "cursor-pointer hover:border-green-400 hover:bg-green-50"
-          : "cursor-default"
-      } ${
-        estaAberta
-          ? "border-green-500 bg-green-50 ring-1 ring-green-200"
-          : ""
-      }`}
-    >
-        <div className="flex min-w-0 items-start gap-3">
-          {/* Impede que o clique na conclusão abra o vídeo */}
-          <div onClick={(event) => event.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => toggleExercicio(itemKey)}
-              disabled={isMissedTreino}
-              className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
-                isMissedTreino
-                  ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-300"
-                  : checked
-                    ? "border-emerald-600 bg-emerald-600 text-white"
-                    : "border-gray-300 bg-white text-gray-400"
-              }`}
-              aria-pressed={checked}
-              aria-label={
-                checked
-                  ? "Marcar como não feito"
-                  : "Marcar como feito"
-              }
-            >
-              {checked ? (
-                <CircleCheck className="h-4 w-4" />
+          {temMidia && (
+            <div className="shrink-0 text-green-800">
+              {estaAberta ? (
+                <ChevronUp
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                />
               ) : (
-                <CircleX className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-
-          <div className="min-w-0">
-            <div
-              className={`font-medium ${
-                checked
-                  ? "text-gray-500 line-through"
-                  : ""
-              }`}
-            >
-              {ex.exercicio.nome}
-            </div>
-
-            <div className="space-y-1 text-sm text-gray-500">
-              {ex.series != null && ex.series !== 0 && (
-                <p>
-                  <span className="font-medium">Séries:</span>{" "}
-                  {ex.series}
-                </p>
-              )}
-
-              {ex.repeticoes && (
-                <p>
-                  <span className="font-medium">
-                    Repetições:
-                  </span>{" "}
-                  {ex.repeticoes}
-                </p>
-              )}
-
-              {ex.duracao && (
-                <p>
-                  <span className="font-medium">Duração:</span>{" "}
-                  {ex.duracao}
-                </p>
-              )}
-
-              {ex.descanso && (
-                <p>
-                  <span className="font-medium">Descanso:</span>{" "}
-                  {ex.descanso}
-                </p>
+                <ChevronDown
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                />
               )}
             </div>
-          </div>
+          )}
         </div>
-
-        {temMidia && (
-          <div className="shrink-0 text-green-800">
-            {estaAberta ? (
-              <ChevronUp
-                className="h-5 w-5"
-                aria-hidden="true"
-              />
-            ) : (
-              <ChevronDown
-                className="h-5 w-5"
-                aria-hidden="true"
-              />
-            )}
-          </div>
-        )}
+      </div>
+    );
+  })}
       </div>
     </div>
   );
-})}
-    </div>
-  </div>
-);
-}
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24 overflow-x-hidden">
@@ -2188,11 +2178,9 @@ return (
           <HealthBanner />
         </div>
 
-
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex w-full items-center gap-2 bg-white border rounded-xl p-1 shadow-sm">
-
               <button
                 type="button"
                 onClick={() => setMainTab("treinos")}
@@ -2219,21 +2207,19 @@ return (
                 </button>
               )}
 
-  {/* O ml-auto empurra este bloco para a direita */}
-  <div className="ml-auto flex items-center gap-2">
-    <div className="h-6 w-px bg-gray-200" />
+              <div className="ml-auto flex items-center gap-2">
+                <div className="h-6 w-px bg-gray-200" />
 
-    <button
-      type="button"
-      onClick={() => setMenuTreinosAberto(true)}
-      aria-label="Abrir menu de treinos"
-      aria-expanded={menuTreinosAberto}
-      className="inline-flex h-8 w-9 items-center justify-center rounded-lg text-green-900 transition hover:bg-green-50"
-    >
-      <Menu className="h-5 w-5" />
-    </button>
-  </div>
-
+                <button
+                  type="button"
+                  onClick={() => setMenuTreinosAberto(true)}
+                  aria-label="Abrir menu de treinos"
+                  aria-expanded={menuTreinosAberto}
+                  className="inline-flex h-8 w-9 items-center justify-center rounded-lg text-green-900 transition hover:bg-green-50"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              </div>
 
             </div>
         
@@ -2247,642 +2233,619 @@ return (
               </Link>
             )}
           </div>
-
-
         </div>
 
+        {mainTab === "treinos" && (
+          <div className="space-y-8">
+            <section>
+              <div className="mb-3">
+                <h2 className="text-xl font-bold text-gray-900">Hoje</h2>
+                <p className="text-sm text-gray-500">
+                  Seus treinos programados para hoje
+                </p>
+              </div>
 
-{mainTab === "treinos" && (
-  <div className="space-y-8">
-    {/* PRIMEIRA SEÇÃO: HOJE */}
-    <section>
-      <div className="mb-3">
-        <h2 className="text-xl font-bold text-gray-900">Hoje</h2>
-        <p className="text-sm text-gray-500">
-          Seus treinos programados para hoje
-        </p>
-      </div>
+              <div className="mt-4 mb-2 flex justify-center">
+                <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
 
+                <div className="flex items-center justify-between px-2 py-2">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="h-5 w-5 text-green-800" />
 
-            <div className="mt-4 mb-2 flex justify-center">
-              <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-900">
+                        Minha Agenda
+                      </h3>
 
-<div className="flex items-center justify-between px-2 py-2">
-  <div className="flex items-center gap-2">
-    <CalendarClock className="h-5 w-5 text-green-800" />
-
-    <div>
-      <h3 className="text-lg font-semibold text-green-900">
-        Minha Agenda
-      </h3>
-
-      <p className="text-xs capitalize text-gray-500">
-        {tituloMesAgenda}
-      </p>
-    </div>
-  </div>
-</div>
-
-{/* Calendário único: semana recolhida ou mês expandido */}
-<div className="mt-3 overflow-hidden rounded-xl border bg-neutral-50 p-2 sm:p-3">
-  {/* Cabeçalho dos dias da semana */}
-  <div className="grid grid-cols-7 gap-1 text-center">
-    {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(
-      (nomeDia) => (
-        <span
-          key={nomeDia}
-          className="py-1 text-[10px] font-semibold uppercase text-gray-500 sm:text-xs"
-        >
-          {nomeDia}
-        </span>
-      )
-    )}
-  </div>
-
-  {/* Todas as semanas pertencem à mesma grade */}
-  <div className="mt-1">
-    {semanasMesAgenda.map((semana, semanaIndex) => {
-      const linhaVisivel =
-        agendaAberta || semanaIndex === indiceSemanaSelecionada;
-
-      return (
-        <div
-          key={semana[0].toISOString()}
-          aria-hidden={!linhaVisivel}
-          className={`grid grid-cols-7 gap-1 overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-in-out ${
-            linhaVisivel
-              ? "max-h-[72px] py-0.5 opacity-100"
-              : "pointer-events-none max-h-0 py-0 opacity-0"
-          }`}
-        >
-          {semana.map((dia) => {
-            const selecionado = sameDay(
-              dia,
-              dataAgendaSelecionada
-            );
-
-            const diaAtual = sameDay(dia, hoje);
-
-            const foraDoMes =
-              dia.getMonth() !== dataAgendaSelecionada.getMonth();
-
-            const quantidade = quantidadeItensAgenda(dia);
-
-            return (
-              <button
-                key={dia.toISOString()}
-                type="button"
-                tabIndex={linhaVisivel ? 0 : -1}
-                onClick={() => setDataAgendaSelecionada(dia)}
-                aria-label={dia.toLocaleDateString("pt-BR", {
-                  weekday: "long",
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric",
-                })}
-                className={`relative flex aspect-square min-h-10 items-center justify-center rounded-lg text-xs font-semibold transition sm:text-sm ${
-                  selecionado
-                    ? "bg-green-800 text-white shadow-sm"
-                    : diaAtual
-                      ? "border border-green-500 bg-green-50 text-green-900"
-                      : foraDoMes
-                        ? "text-gray-300 hover:bg-gray-100"
-                        : "text-gray-700 hover:bg-green-100"
-                }`}
-              >
-                {dia.getDate()}
-
-                {quantidade > 0 && (
-                  <span
-                    className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${
-                      selecionado
-                        ? "bg-white"
-                        : foraDoMes
-                          ? "bg-gray-300"
-                          : "bg-green-700"
-                    }`}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      );
-    })}
-  </div>
-</div>
-
-{/* Botão no canto inferior direito */}
-<div className="mt-3 flex justify-end">
-  <button
-    type="button"
-    onClick={() => setAgendaAberta((aberta) => !aberta)}
-    aria-expanded={agendaAberta}
-    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50"
-  >
-    {agendaAberta ? (
-      <>
-        Ver somente a semana
-        <ChevronUp className="h-4 w-4" />
-      </>
-    ) : (
-      <>
-        Ver mês inteiro
-        <ChevronDown className="h-4 w-4" />
-      </>
-    )}
-  </button>
-</div>
-
-<div className="mt-4 border-t pt-3">
-  <p className="mb-3 text-sm font-semibold capitalize text-gray-700">
-    {tituloDiaAgenda}
-  </p>
-
-  <div className="max-h-[260px] overflow-y-auto">
-                    {agendaItemsDoDia.length === 0 ? (
-                      <p className="rounded-lg bg-neutral-50 px-3 py-4 text-center text-sm text-gray-500">
-                        Nenhum treino ou evento agendado para este dia.
+                      <p className="text-xs capitalize text-gray-500">
+                        {tituloMesAgenda}
                       </p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {agendaItemsDoDia.map((item) => {
-                          if (item.origem === "treino") {
-                            const treino = treinosAgendados.find(
-                              (t) => t.id === item.id
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 overflow-hidden rounded-xl border bg-neutral-50 p-2 sm:p-3">
+                  <div className="grid grid-cols-7 gap-1 text-center">
+                    {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(
+                      (nomeDia) => (
+                        <span
+                          key={nomeDia}
+                          className="py-1 text-[10px] font-semibold uppercase text-gray-500 sm:text-xs"
+                        >
+                          {nomeDia}
+                        </span>
+                      )
+                    )}
+                  </div>
+
+                  <div className="mt-1">
+                    {semanasMesAgenda.map((semana, semanaIndex) => {
+                      const linhaVisivel =
+                        agendaAberta || semanaIndex === indiceSemanaSelecionada;
+
+                      return (
+                        <div
+                          key={semana[0].toISOString()}
+                          aria-hidden={!linhaVisivel}
+                          className={`grid grid-cols-7 gap-1 overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-in-out ${
+                            linhaVisivel
+                              ? "max-h-[72px] py-0.5 opacity-100"
+                              : "pointer-events-none max-h-0 py-0 opacity-0"
+                          }`}
+                        >
+                          {semana.map((dia) => {
+                            const selecionado = sameDay(
+                              dia,
+                              dataAgendaSelecionada
                             );
-                            if (!treino) return null;
 
-                            const d = getDataExibicaoTreino(treino);
-                            const isHoje = d ? sameDay(d, hoje) : false;
-                            const diaStr = d
-                              ? String(d.getDate()).padStart(2, "0")
-                              : "—";
-                            const hora = getHoraHHMM(d);
-                            const subtitulo = d
-                              ? `${d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}${
-                                  hora ? ` • ${hora}` : ""
-                                }`
-                              : "Sem data";
+                            const diaAtual = sameDay(dia, hoje);
 
-                            const criadorLabel = getCriadorLabel(treino);
-                            const st = (statusPorTreino[treino.id]?.status ??
-                              treino.meuStatus) as TreinoStatus | undefined;
+                            const foraDoMes =
+                              dia.getMonth() !== dataAgendaSelecionada.getMonth();
 
-                            const submittedAgendado =
-                              (treino.submissao?.aprovados ?? 0) > 0 ||
-                              treino.submissao?.feito === true ||
-                              idsAgendadosSubmetidos.has(treino.id);
-
-                            const diaPassou = d ? endOfDay(d) < now : false;
-                            const expiradoBackend =
-                              (st as string) === "EXPIRED" ||
-                              (treino as any).execucaoStatus === "EXPIRED";
-
-                            const isMissedTreino =
-                              !submittedAgendado &&
-                              (diaPassou || expiradoBackend) &&
-                              st !== "COMPLETED";
-
-                            let circleClass =
-                              "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
-                            let titleClass =
-                              "font-medium truncate text-gray-900";
-
-                            if (submittedAgendado || st === "COMPLETED") {
-                              circleClass =
-                                "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
-                              titleClass =
-                                "font-medium truncate text-emerald-800";
-                            } else if (isMissedTreino) {
-                              circleClass =
-                                "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
-                              titleClass =
-                                "font-medium truncate text-red-700";
-                            } else if (isHoje) {
-                              circleClass += " ring-2 ring-gray-300";
-                            }
+                            const quantidade = quantidadeItensAgenda(dia);
 
                             return (
-                              <li
-                                key={`treino-${treino.id}`}
-                                className="py-1.5"
+                              <button
+                                key={dia.toISOString()}
+                                type="button"
+                                tabIndex={linhaVisivel ? 0 : -1}
+                                onClick={() => setDataAgendaSelecionada(dia)}
+                                aria-label={dia.toLocaleDateString("pt-BR", {
+                                  weekday: "long",
+                                  day: "2-digit",
+                                  month: "long",
+                                  year: "numeric",
+                                })}
+                                className={`relative flex aspect-square min-h-10 items-center justify-center rounded-lg text-xs font-semibold transition sm:text-sm ${
+                                  selecionado
+                                    ? "bg-green-800 text-white shadow-sm"
+                                    : diaAtual
+                                      ? "border border-green-500 bg-green-50 text-green-900"
+                                      : foraDoMes
+                                        ? "text-gray-300 hover:bg-gray-100"
+                                        : "text-gray-700 hover:bg-green-100"
+                                }`}
                               >
-                                <button
-                                  onClick={() => {
-                                    if (isMissedTreino) return;
-                                    setFullscreenId(treino.id);
-                                    setMenuOpen(false);
-                                  }}
-                                  aria-label="Abrir treino"
-                                  aria-disabled={isMissedTreino}
-                                  className={`w-full flex items-center justify-between gap-3 text-left ${
-                                    isMissedTreino
-                                      ? "opacity-60 cursor-not-allowed"
-                                      : ""
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className={circleClass}>{diaStr}</div>
+                                {dia.getDate()}
 
-                                    <div className="min-w-0">
-                                      <div className={titleClass}>
-                                        {treino.titulo}
-                                      </div>
-                                      <div className="text-[11px] text-gray-500">
-                                        TREINO • {subtitulo}
-                                        {criadorLabel
-                                          ? ` • ${criadorLabel}`
-                                          : ""}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
-                                </button>
-                              </li>
+                                {quantidade > 0 && (
+                                  <span
+                                    className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${
+                                      selecionado
+                                        ? "bg-white"
+                                        : foraDoMes
+                                          ? "bg-gray-300"
+                                          : "bg-green-700"
+                                    }`}
+                                  />
+                                )}
+                              </button>
                             );
-                          }
-
-                          const dateStr = item.inicio
-                            ? new Date(item.inicio).toLocaleString("pt-BR", {
-                                dateStyle: "short",
-                                timeStyle: "short",
-                              })
-                            : "Sem data";
-
-                          const icon =
-                            item.tipo === "TREINO" ? (
-                              <Volleyball className="w-4 h-4 text-green-700" />
-                            ) : item.tipo === "DESAFIO" ? (
-                              <StarIcon className="w-4 h-4 text-amber-600" />
-                            ) : (
-                              <CalendarClock className="w-4 h-4 text-blue-700" />
-                            );
-
-                          return (
-                            <li
-                              key={`${item.origem}-${item.id}`}
-                              className="flex items-center justify-between bg-neutral-50 border rounded-lg px-3 py-2 hover:bg-neutral-100"
-                            >
-                              <div className="flex items-center gap-2">
-                                {icon}
-                                <div>
-                                  <div className="text-sm font-medium">
-                                    {item.titulo}
-                                  </div>
-                                  <div className="text-xs text-gray-600">
-                                    {item.tipo} • {dateStr}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {item.origem === "desafio" && (
-                                <Link
-                                  href={`/desafios/${item.id}`}
-                                  className="text-green-700 text-xs sm:text-sm"
-                                >
-                                  Ver
-                                </Link>
-                              )}
-
-                              {item.origem === "evento" && (
-                                <Link
-                                  href={`/eventos/${item.id}`}
-                                  className="text-green-700 text-xs sm:text-sm"
-                                >
-                                  Ver evento
-                                </Link>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                          })}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            </div>
 
-    </section>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setAgendaAberta((aberta) => !aberta)}
+                    aria-expanded={agendaAberta}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50"
+                  >
+                    {agendaAberta ? (
+                      <>
+                        Ver somente a semana
+                        <ChevronUp className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Ver mês inteiro
+                        <ChevronDown className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
 
-    {/* Separação entre Hoje e Meus Treinos */}
-    <div className="border-t border-gray-200" />
+                <div className="mt-4 border-t pt-3">
+          <p className="mb-3 text-sm font-semibold capitalize text-gray-700">
+            {tituloDiaAgenda}
+          </p>
 
-    {/* SEGUNDA SEÇÃO: MEUS TREINOS */}
-    <section>
-      <div className="mb-3">
-        <h2 className="text-xl font-bold text-gray-900">Meus Treinos</h2>
-        <p className="text-sm text-gray-500">
-          Todos os seus treinos disponíveis
-        </p>
-      </div>
+          <div className="max-h-[260px] overflow-y-auto">
+                            {agendaItemsDoDia.length === 0 ? (
+                              <p className="rounded-lg bg-neutral-50 px-3 py-4 text-center text-sm text-gray-500">
+                                Nenhum treino ou evento agendado para este dia.
+                              </p>
+                            ) : (
+                              <ul className="space-y-2">
+                                {agendaItemsDoDia.map((item) => {
+                                  if (item.origem === "treino") {
+                                    const treino = treinosAgendados.find(
+                                      (t) => t.id === item.id
+                                    );
+                                    if (!treino) return null;
 
+                                    const d = getDataExibicaoTreino(treino);
+                                    const isHoje = d ? sameDay(d, hoje) : false;
+                                    const diaStr = d
+                                      ? String(d.getDate()).padStart(2, "0")
+                                      : "—";
+                                    const hora = getHoraHHMM(d);
+                                    const subtitulo = d
+                                      ? `${d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}${
+                                          hora ? ` • ${hora}` : ""
+                                        }`
+                                      : "Sem data";
 
-          <>
-                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-6">
+                                    const criadorLabel = getCriadorLabel(treino);
+                                    const st = (statusPorTreino[treino.id]?.status ??
+                                      treino.meuStatus) as TreinoStatus | undefined;
 
+                                    const submittedAgendado =
+                                      (treino.submissao?.aprovados ?? 0) > 0 ||
+                                      treino.submissao?.feito === true ||
+                                      idsAgendadosSubmetidos.has(treino.id);
 
-                  {tiles.length > 0 && (
-                    <div
-                      ref={stripRef}
-                      className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
-                    >
-                      {tiles.map((tl) => {
-                        const isMissed = tl.isMissed;
+                                    const diaPassou = d ? endOfDay(d) < now : false;
+                                    const expiradoBackend =
+                                      (st as string) === "EXPIRED" ||
+                                      (treino as any).execucaoStatus === "EXPIRED";
 
-                        return (
-                          <button
-                            id={`tile-${tl.id}`}
-                            key={tl.id}
-                            onClick={() => {
-                              setExpandedId((prev) => (prev === tl.id ? null : tl.id));
-                              setFullscreenId(tl.id);
-                              setMenuOpen(false);
-                            }}
-                            className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${
-                              tl.statusClass
-                            } ${tl.borderClass} ${
-                              isMissed ? "opacity-80" : "hover:opacity-95"
-                            }`}
-                            title={tl.titulo}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`}
-                                />
-                               {(() => {
-                                  const hora = getHoraHHMM(tl.date);
+                                    const isMissedTreino =
+                                      !submittedAgendado &&
+                                      (diaPassou || expiradoBackend) &&
+                                      st !== "COMPLETED";
+
+                                    let circleClass =
+                                      "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
+                                    let titleClass =
+                                      "font-medium truncate text-gray-900";
+
+                                    if (submittedAgendado || st === "COMPLETED") {
+                                      circleClass =
+                                        "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
+                                      titleClass =
+                                        "font-medium truncate text-emerald-800";
+                                    } else if (isMissedTreino) {
+                                      circleClass =
+                                        "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
+                                      titleClass =
+                                        "font-medium truncate text-red-700";
+                                    } else if (isHoje) {
+                                      circleClass += " ring-2 ring-gray-300";
+                                    }
+
+                                    return (
+                                      <li
+                                        key={`treino-${treino.id}`}
+                                        className="py-1.5"
+                                      >
+                                        <button
+                                          onClick={() => {
+                                            if (isMissedTreino) return;
+                                            setFullscreenId(treino.id);
+                                            setMenuOpen(false);
+                                          }}
+                                          aria-label="Abrir treino"
+                                          aria-disabled={isMissedTreino}
+                                          className={`w-full flex items-center justify-between gap-3 text-left ${
+                                            isMissedTreino
+                                              ? "opacity-60 cursor-not-allowed"
+                                              : ""
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <div className={circleClass}>{diaStr}</div>
+
+                                            <div className="min-w-0">
+                                              <div className={titleClass}>
+                                                {treino.titulo}
+                                              </div>
+                                              <div className="text-[11px] text-gray-500">
+                                                TREINO • {subtitulo}
+                                                {criadorLabel
+                                                  ? ` • ${criadorLabel}`
+                                                  : ""}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                                        </button>
+                                      </li>
+                                    );
+                                  }
+
+                                  const dateStr = item.inicio
+                                    ? new Date(item.inicio).toLocaleString("pt-BR", {
+                                        dateStyle: "short",
+                                        timeStyle: "short",
+                                      })
+                                    : "Sem data";
+
+                                  const icon =
+                                    item.tipo === "TREINO" ? (
+                                      <Volleyball className="w-4 h-4 text-green-700" />
+                                    ) : item.tipo === "DESAFIO" ? (
+                                      <StarIcon className="w-4 h-4 text-amber-600" />
+                                    ) : (
+                                      <CalendarClock className="w-4 h-4 text-blue-700" />
+                                    );
 
                                   return (
-                                    <span className="font-semibold text-sm">
-                                      {tl.date
-                                        ? tl.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
-                                        : "Sem data"}
-                                      {hora ? (
-                                        <span className="ml-2 text-[12px] font-medium text-gray-700">
-                                          {hora}
-                                        </span>
-                                      ) : null}
-                                    </span>
+                                    <li
+                                      key={`${item.origem}-${item.id}`}
+                                      className="flex items-center justify-between bg-neutral-50 border rounded-lg px-3 py-2 hover:bg-neutral-100"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        {icon}
+                                        <div>
+                                          <div className="text-sm font-medium">
+                                            {item.titulo}
+                                          </div>
+                                          <div className="text-xs text-gray-600">
+                                            {item.tipo} • {dateStr}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {item.origem === "desafio" && (
+                                        <Link
+                                          href={`/desafios/${item.id}`}
+                                          className="text-green-700 text-xs sm:text-sm"
+                                        >
+                                          Ver
+                                        </Link>
+                                      )}
+
+                                      {item.origem === "evento" && (
+                                        <Link
+                                          href={`/eventos/${item.id}`}
+                                          className="text-green-700 text-xs sm:text-sm"
+                                        >
+                                          Ver evento
+                                        </Link>
+                                      )}
+                                    </li>
                                   );
-                                })()}
-
-                                {tl.isToday && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">
-                                    Hoje
-                                  </span>
-                                )}
-                              </div>
-
-                              {expandedId === tl.id ? (
-                                <ChevronUp className="w-4 h-4 opacity-70" />
-                              ) : (
-                                <ChevronDown className="w-4 h-4 opacity-70" />
-                              )}
-                            </div>
-
-                            <div className="mt-1 text-sm line-clamp-2">
-                              {tl.titulo}
-                            </div>
-                            {tl.sessaoTreinoNome ? (
-                              <div className="mt-1 text-[11px] text-gray-600">
-                                Sessão: {tl.sessaoTreinoNome}
-                              </div>
-                            ) : null}
-                            <div className="mt-1 text-[11px] opacity-80">
-                              {tl.label}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {FLAGS.DESAFIOS_ENABLED && (
-                  <div
-                    className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
-                    style={{
-                      maxHeight: DESAFIOS_MAX_PX,
-                      overflowY: "auto",
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold">Desafios</h3>
-
-                      <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
-                        <WeeklyChecker weeks={semanasDesafio} />
-                      </div>
-                    </div>
-
-                    {desafios.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {desafios.map((desafio) => (
-                          <div
-                            key={desafio.id}
-                            className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3"
-                          >
-                            <h4 className="font-bold text-yellow-700 text-lg mb-1">
-                              <Link
-                                href={`/desafios/${desafio.id}`}
-                                className="hover:underline"
-                              >
-                                {desafio.titulo}
-                              </Link>
-                            </h4>
-
-                            <p className="text-sm text-gray-600 mb-2">
-                              {desafio.descricao}
-                            </p>
-
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                              <span>Nível: {desafio.nivel}</span>
-                              <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
-                                {desafio.pontuacao} pts
-                              </span>
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-3 gap-2">
-                              <button
-                                onClick={() =>
-                                  navigate(`/submissao?desafioId=${desafio.id}`)
-                                }
-                                className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
-                                title="Fazer Submissão"
-                              >
-                                <span className="sm:hidden">Submeter</span>
-                                <span className="hidden sm:inline">
-                                  Fazer Submissão
-                                </span>
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  navigate(`/desafios/${desafio.id}`)
-                                }
-                                className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
-                                title="Ver desafio"
-                              >
-                                Ver desafio
-                              </button>
-
-                              <button
-                                onClick={() => abrirModalCompartilhar(desafio.id)}
-                                className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
-                                title="Compartilhar"
-                              >
-                                <Share2 className="w-4 h-4" />
-                                <span className="truncate">Compartilhar</span>
-                              </button>
-                            </div>
+                                })}
+                              </ul>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">
-                        Nenhum desafio disponível no momento.
-                      </p>
-                    )}
-                  </div>
-                )}
-          </>
-        
-    </section>
-  </div>
-)}
+                </div>
+              </div>
+              </div>
+            </section>
 
+            <div className="border-t border-gray-200" />
 
+            <section>
+              <div className="mb-3">
+                <h2 className="text-xl font-bold text-gray-900">Meus Treinos</h2>
+                <p className="text-sm text-gray-500">
+                  Todos os seus treinos disponíveis
+                </p>
+              </div>
+                  <>
+                        <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-6">
 
+                          {tiles.length > 0 && (
+                            <div
+                              ref={stripRef}
+                              className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
+                            >
+                              {tiles.map((tl) => {
+                                const isMissed = tl.isMissed;
 
+                                return (
+                                  <button
+                                    id={`tile-${tl.id}`}
+                                    key={tl.id}
+                                    onClick={() => {
+                                      setExpandedId((prev) => (prev === tl.id ? null : tl.id));
+                                      setFullscreenId(tl.id);
+                                      setMenuOpen(false);
+                                    }}
+                                    className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${
+                                      tl.statusClass
+                                    } ${tl.borderClass} ${
+                                      isMissed ? "opacity-80" : "hover:opacity-95"
+                                    }`}
+                                    title={tl.titulo}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`}
+                                        />
+                                      {(() => {
+                                          const hora = getHoraHHMM(tl.date);
 
+                                          return (
+                                            <span className="font-semibold text-sm">
+                                              {tl.date
+                                                ? tl.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+                                                : "Sem data"}
+                                              {hora ? (
+                                                <span className="ml-2 text-[12px] font-medium text-gray-700">
+                                                  {hora}
+                                                </span>
+                                              ) : null}
+                                            </span>
+                                          );
+                                        })()}
 
+                                        {tl.isToday && (
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">
+                                            Hoje
+                                          </span>
+                                        )}
+                                      </div>
 
+                                      {expandedId === tl.id ? (
+                                        <ChevronUp className="w-4 h-4 opacity-70" />
+                                      ) : (
+                                        <ChevronDown className="w-4 h-4 opacity-70" />
+                                      )}
+                                    </div>
+
+                                    <div className="mt-1 text-sm line-clamp-2">
+                                      {tl.titulo}
+                                    </div>
+                                    {tl.sessaoTreinoNome ? (
+                                      <div className="mt-1 text-[11px] text-gray-600">
+                                        Sessão: {tl.sessaoTreinoNome}
+                                      </div>
+                                    ) : null}
+                                    <div className="mt-1 text-[11px] opacity-80">
+                                      {tl.label}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {FLAGS.DESAFIOS_ENABLED && (
+                          <div
+                            className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
+                            style={{
+                              maxHeight: DESAFIOS_MAX_PX,
+                              overflowY: "auto",
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="text-lg font-semibold">Desafios</h3>
+
+                              <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
+                                <WeeklyChecker weeks={semanasDesafio} />
+                              </div>
+                            </div>
+
+                            {desafios.length > 0 ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {desafios.map((desafio) => (
+                                  <div
+                                    key={desafio.id}
+                                    className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3"
+                                  >
+                                    <h4 className="font-bold text-yellow-700 text-lg mb-1">
+                                      <Link
+                                        href={`/desafios/${desafio.id}`}
+                                        className="hover:underline"
+                                      >
+                                        {desafio.titulo}
+                                      </Link>
+                                    </h4>
+
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      {desafio.descricao}
+                                    </p>
+
+                                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                                      <span>Nível: {desafio.nivel}</span>
+                                      <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
+                                        {desafio.pontuacao} pts
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-3 gap-2">
+                                      <button
+                                        onClick={() =>
+                                          navigate(`/submissao?desafioId=${desafio.id}`)
+                                        }
+                                        className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
+                                        title="Fazer Submissão"
+                                      >
+                                        <span className="sm:hidden">Submeter</span>
+                                        <span className="hidden sm:inline">
+                                          Fazer Submissão
+                                        </span>
+                                      </button>
+
+                                      <button
+                                        onClick={() =>
+                                          navigate(`/desafios/${desafio.id}`)
+                                        }
+                                        className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
+                                        title="Ver desafio"
+                                      >
+                                        Ver desafio
+                                      </button>
+
+                                      <button
+                                        onClick={() => abrirModalCompartilhar(desafio.id)}
+                                        className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
+                                        title="Compartilhar"
+                                      >
+                                        <Share2 className="w-4 h-4" />
+                                        <span className="truncate">Compartilhar</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-gray-500">
+                                Nenhum desafio disponível no momento.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                  </>
+            </section>
+          </div>
+        )}
       </div>
 
-{menuTreinosAberto && (
-  <div
-    className="fixed inset-0 z-[70]"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Menu de treinos"
-  >
-    <button
-      type="button"
-      className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
-      onClick={() => setMenuTreinosAberto(false)}
-      aria-label="Fechar menu"
-    />
-
-    <aside className="absolute right-0 top-0 flex h-full w-[88%] max-w-sm flex-col bg-white shadow-2xl">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div>
-          <h2 className="text-lg font-bold text-green-950">
-            Menu de treinos
-          </h2>
-
-          <p className="text-sm text-gray-500">
-            Escolha o que deseja fazer
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setMenuTreinosAberto(false)}
-          aria-label="Fechar menu"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-gray-600 transition hover:bg-gray-100"
+      {menuTreinosAberto && (
+        <div
+          className="fixed inset-0 z-[70]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu de treinos"
         >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      <nav className="flex-1 space-y-2 overflow-y-auto p-4">
-        <button
-          type="button"
-          onClick={() => navegarPeloMenu("/treinos/novo")}
-          className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-800">
-            <CalendarPlus className="h-5 w-5" />
-          </span>
-
-          <span>
-            <span className="block font-semibold text-green-950">
-              Agendar novo treino
-            </span>
-
-            <span className="block text-sm text-gray-500">
-              Programe um treino para uma data e horário
-            </span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navegarPeloMenu("/treinos/livre/novo")}
-          className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
-            <Dumbbell className="h-5 w-5" />
-          </span>
-
-          <span>
-            <span className="block font-semibold text-green-950">
-              Registrar treino livre
-            </span>
-
-            <span className="block text-sm text-gray-500">
-              Registre uma atividade realizada por conta própria
-            </span>
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navegarPeloMenu("/treinos/livre/historico")}
-          className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-            <History className="h-5 w-5" />
-          </span>
-
-          <span>
-            <span className="block font-semibold text-green-950">
-              Histórico de treinos livres
-            </span>
-
-            <span className="block text-sm text-gray-500">
-              Consulte seus treinos registrados
-            </span>
-          </span>
-        </button>
-
-        {FLAGS.LEARNING_ENABLED && (
           <button
             type="button"
-            onClick={() => navegarPeloMenu("/learning")}
-            className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-              <GraduationCap className="h-5 w-5" />
-            </span>
+            className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+            onClick={() => setMenuTreinosAberto(false)}
+            aria-label="Fechar menu"
+          />
 
-            <span>
-              <span className="block font-semibold text-green-950">
-                Learning
-              </span>
+          <aside className="absolute right-0 top-0 flex h-full w-[88%] max-w-sm flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-green-950">
+                  Menu de treinos
+                </h2>
 
-              <span className="block text-sm text-gray-500">
-                Acesse conteúdos e metodologias
-              </span>
-            </span>
-          </button>
-        )}
-      </nav>
-    </aside>
-  </div>
-)}
+                <p className="text-sm text-gray-500">
+                  Escolha o que deseja fazer
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMenuTreinosAberto(false)}
+                aria-label="Fechar menu"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-gray-600 transition hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+              <button
+                type="button"
+                onClick={() => navegarPeloMenu("/treinos/novo")}
+                className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-800">
+                  <CalendarPlus className="h-5 w-5" />
+                </span>
+
+                <span>
+                  <span className="block font-semibold text-green-950">
+                    Agendar novo treino
+                  </span>
+
+                  <span className="block text-sm text-gray-500">
+                    Programe um treino para uma data e horário
+                  </span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navegarPeloMenu("/treinos/livre/novo")}
+                className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                  <Dumbbell className="h-5 w-5" />
+                </span>
+
+                <span>
+                  <span className="block font-semibold text-green-950">
+                    Registrar treino livre
+                  </span>
+
+                  <span className="block text-sm text-gray-500">
+                    Registre uma atividade realizada por conta própria
+                  </span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navegarPeloMenu("/treinos/livre/historico")}
+                className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                  <History className="h-5 w-5" />
+                </span>
+
+                <span>
+                  <span className="block font-semibold text-green-950">
+                    Histórico de treinos livres
+                  </span>
+
+                  <span className="block text-sm text-gray-500">
+                    Consulte seus treinos registrados
+                  </span>
+                </span>
+              </button>
+
+              {FLAGS.LEARNING_ENABLED && (
+                <button
+                  type="button"
+                  onClick={() => navegarPeloMenu("/learning")}
+                  className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                    <GraduationCap className="h-5 w-5" />
+                  </span>
+
+                  <span>
+                    <span className="block font-semibold text-green-950">
+                      Learning
+                    </span>
+
+                    <span className="block text-sm text-gray-500">
+                      Acesse conteúdos e metodologias
+                    </span>
+                  </span>
+                </button>
+              )}
+            </nav>
+          </aside>
+        </div>
+      )}
 
       {fullscreenId && (
         <div className="fixed inset-0 z-40 bg-white flex flex-col">
@@ -3179,10 +3142,6 @@ return (
                 const elapsed = elapsedByTreino[fullscreenId] ?? 0;
                 const params = new URLSearchParams();
                 params.set("treinoAgendadoId", t.id);
-                /*
-                * Informações que serão exibidas
-                * na tela de submissão.
-                */
                 params.set(
                   "treinoNome",
                   String(
@@ -3307,8 +3266,6 @@ return (
           })()}
         </div>
       )}
-
-
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-end sm:items-center justify-center p-4">

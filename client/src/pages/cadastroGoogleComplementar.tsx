@@ -1023,9 +1023,6 @@ export default function CadastroGoogleComplementar() {
 
       await inicializarPushDepoisDoAuth();
 
-      // Só apaga o pré-cadastro depois que a sessão foi realmente aplicada.
-      // Assim, se a resposta vier incompleta e applyAuthSession falhar,
-      // o usuário ainda consegue tentar finalizar novamente.
       sessionStorage.removeItem("google_pre_cadastro");
 
       if (tipoPerfil === "Learning") {

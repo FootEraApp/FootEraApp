@@ -41,19 +41,6 @@ http.interceptors.response.use(
       err.response?.status ===
       401
     ) {
-      /*
-       * O token pode ter expirado.
-       *
-       * Limpamos a sessão, mas NÃO
-       * redirecionamos globalmente.
-       *
-       * Isso permite que páginas
-       * públicas continuem abertas:
-       *
-       * /feed
-       * /post/:id
-       * /perfil/:id
-       */
       clearAuthSession();
     }
 

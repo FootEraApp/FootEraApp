@@ -13,6 +13,10 @@ import { publicImgUrl } from "@/utils/publicUrl.js";
 import { FaRetweet } from "react-icons/fa";
 import { repostPost } from "../services/feedService.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
+import {
+  lerAcaoPendenteAuth,
+  limparAcaoPendenteAuth,
+} from "../utils/authSession.js";
 
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
@@ -110,6 +114,11 @@ function PostUnico(): JSX.Element {
       !requireAuth({
         message:
           "Entre na FootEra para curtir esta publicação.",
+
+        action: {
+          type: "LIKE_POST",
+          postId: post.id,
+        },
       })
     ) {
       return;
@@ -124,21 +133,64 @@ function PostUnico(): JSX.Element {
     }
   }
 
-  async function handleComentarioSubmit(e: React.FormEvent) {
-    requireAuth({
-      message:
-        "Entre na FootEra para comentar nesta publicação.",
-    });
+  async function handleComentarioSubmit(
+    e: React.FormEvent
+  ) {
     e.preventDefault();
-    if (!comentario.trim() || !post?.id) return;
+
+    if (
+      !post?.id ||
+      !comentario.trim()
+    ) {
+      return;
+    }
+
+    const conteudo =
+      comentario.trim();
+
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para comentar nesta publicação.",
+
+        action: {
+          type:
+            "COMMENT_POST",
+
+          postId:
+            post.id,
+
+          texto:
+            conteudo,
+        },
+      })
+    ) {
+      return;
+    }
+
     try {
       setCarregando(true);
-      await comentarPost(post.id, comentario);
+
+      await comentarPost(
+        post.id,
+        conteudo
+      );
+
       setComentario("");
-      const atualizado = await getPostById(post.id);
-      if (atualizado) setPost(atualizado);
+
+      const atualizado =
+        await getPostById(
+          post.id
+        );
+
+      if (atualizado) {
+        setPost(atualizado);
+      }
     } catch (err) {
-      console.error("Erro ao comentar:", err);
+      console.error(
+        "Erro ao comentar:",
+        err
+      );
     } finally {
       setCarregando(false);
     }
@@ -170,20 +222,131 @@ function PostUnico(): JSX.Element {
   }
 
   async function handleRepost() {
-    requireAuth({
-      message:
-        "Entre na FootEra para repostar esta publicação.",
-    });
-    if (!post?.id) return;
-    const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
+    if (!post?.id) {
+      return;
+    }
+
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para repostar esta publicação.",
+
+        action: {
+          type:
+            "REPOST_POST",
+
+          postId:
+            post.id,
+        },
+      })
+    ) {
+      return;
+    }
+
+    const comentario =
+      prompt(
+        "Adicionar um comentário (opcional):"
+      ) ?? "";
+
     try {
-      await repostPost(post.id, comentario);
-      toast.success("Repost publicado no seu perfil!");
+      await repostPost(
+        post.id,
+        comentario
+      );
+
+      toast.success(
+        "Repost publicado no seu perfil!"
+      );
     } catch (e) {
       console.error(e);
-      toast.error("Não foi possível repostar.");
+
+      toast.error(
+        "Não foi possível repostar."
+      );
     }
   }
+
+  useEffect(() => {
+    if (
+      !usuarioId ||
+      !post?.id
+    ) {
+      return;
+    }
+
+    const action =
+      lerAcaoPendenteAuth();
+
+    if (!action) {
+      return;
+    }
+
+    if (
+      !(
+        "postId" in action
+      ) ||
+      action.postId !==
+        post.id
+    ) {
+      return;
+    }
+
+    limparAcaoPendenteAuth();
+
+    if (
+      action.type ===
+      "LIKE_POST"
+    ) {
+      const confirmar =
+        window.confirm(
+          "Você entrou na FootEra. Deseja curtir esta publicação agora?"
+        );
+
+      if (confirmar) {
+        void handleCurtir();
+      }
+
+      return;
+    }
+
+    if (
+      action.type ===
+      "COMMENT_POST"
+    ) {
+      if (action.texto) {
+        setComentario(
+          action.texto
+        );
+
+        toast.success(
+          "Seu comentário foi preservado. Revise e toque em Comentar para enviar."
+        );
+      } else {
+        toast.success(
+          "Agora você pode escrever seu comentário."
+        );
+      }
+
+      return;
+    }
+
+    if (
+      action.type ===
+      "REPOST_POST"
+    ) {
+      const confirmar =
+        window.confirm(
+          "Você entrou na FootEra. Deseja continuar com o repost?"
+        );
+
+      if (confirmar) {
+        void handleRepost();
+      }
+    }
+  }, [
+    usuarioId,
+    post?.id,
+  ]);
 
   if (!match) {
     return (
@@ -476,12 +639,24 @@ function PostUnico(): JSX.Element {
         ) : (
           <button
             type="button"
-            onClick={() =>
+            onClick={() => {
+              if (!post?.id) {
+                return;
+              }
+
               openAuthGate({
                 message:
                   "Entre na FootEra para comentar nesta publicação.",
-              })
-            }
+
+                action: {
+                  type:
+                    "COMMENT_POST",
+
+                  postId:
+                    post.id,
+                },
+              });
+            }}
             className="mt-4 w-full rounded-lg border border-green-700 py-2 text-green-700 font-semibold"
           >
             Entre para comentar

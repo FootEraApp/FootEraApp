@@ -113,6 +113,16 @@ export default function PaginaNotificacoes() {
   const [confirmandoApagarLote, setConfirmandoApagarLote] = useState(false);
   const [pendingSeguirDeVolta, setPendingSeguirDeVolta] = useState<{ actorId: string; actorLabel: string } | null>(null);
 
+  const solicitacaoFocoId =
+    typeof window !==
+    "undefined"
+      ? new URLSearchParams(
+          window.location.search
+        ).get(
+          "solicitacaoId"
+        )
+      : null;
+      
   useEffect(() => {
     const token = Storage.token;
     if (!token) return;
@@ -138,6 +148,52 @@ export default function PaginaNotificacoes() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (
+      !solicitacaoFocoId ||
+      solicitacoes.length === 0
+    ) {
+      return;
+    }
+
+    const existe =
+      solicitacoes.some(
+        (s) =>
+          String(s.id) ===
+          String(
+            solicitacaoFocoId
+          )
+      );
+
+    if (!existe) {
+      return;
+    }
+
+    const timer =
+      window.setTimeout(
+        () => {
+          const elemento =
+            document.getElementById(
+              `solicitacao-${solicitacaoFocoId}`
+            );
+
+          elemento?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        },
+        150
+      );
+
+    return () =>
+      window.clearTimeout(
+        timer
+      );
+  }, [
+    solicitacaoFocoId,
+    solicitacoes,
+  ]);
 
   const apagarNotificacao = async (notifId: string) => {
     const token = Storage.token;
@@ -1305,9 +1361,24 @@ export default function PaginaNotificacoes() {
 
             return (
               <div
+                id={`solicitacao-${solicitacao.id}`}
                 key={solicitacao.id}
-                className="relative z-0 bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
-                onClick={() => irParaPerfil(solicitacao.remetenteId)}
+                className={`relative z-0 bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer border-2 ${
+                  String(
+                    solicitacao.id
+                  ) ===
+                  String(
+                    solicitacaoFocoId ||
+                      ""
+                  )
+                    ? "border-amber-400 ring-2 ring-amber-200"
+                    : "border-transparent"
+                }`}
+                onClick={() =>
+                  irParaPerfil(
+                    solicitacao.remetenteId
+                  )
+                }
               >
                 <BotaoApagarSolicitacao id={solicitacao.id} />
 

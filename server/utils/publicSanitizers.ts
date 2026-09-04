@@ -123,10 +123,8 @@ export function sanitizePublicPost(
         post.usuario
       ),
 
-    // Não revela quem curtiu.
     curtidas: [],
 
-    // Mas informa a quantidade.
     totalCurtidas:
       Array.isArray(post.curtidas)
         ? post.curtidas.length

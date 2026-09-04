@@ -164,22 +164,10 @@ export default function MaintenanceGate({ children }: Props) {
       return;
     }
 
-    /*
-    * Admin continua podendo entrar
-    * para desligar/configurar a manutenção.
-    */
     if (rotaAdministrativa) {
       return;
     }
 
-    /*
-    * Se havia uma conta autenticada,
-    * encerra a sessão uma única vez.
-    *
-    * Visitante não precisa fazer logout
-    * e principalmente NÃO deve ser
-    * redirecionado para /login.
-    */
     if (
       isLoggedIn &&
       !manutencaoProcessadaRef.current

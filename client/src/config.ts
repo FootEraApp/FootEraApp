@@ -82,11 +82,6 @@ const envFrontend =
     viteEnv?.VITE_FRONTEND_URL
   );
 
-/*
- * Dentro do Capacitor,
- * window.location.origin não é
- * a URL pública compartilhável.
- */
 const PUBLIC_WEB_BASE =
   envFrontend ||
   "https://footera.app.br";
