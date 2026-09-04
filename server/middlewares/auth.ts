@@ -270,3 +270,28 @@ const parceiro = Boolean(dbUser?.parceiro);
   return next();
 };
 
+export const optionalAuthenticateToken: RequestHandler = (
+  req,
+  res,
+  next
+) => {
+  const auth =
+    req.headers.authorization || "";
+
+  const token = auth.startsWith("Bearer ")
+    ? auth.slice(7).trim()
+    : auth.trim();
+
+  // Sem token = visitante.
+  if (!token) {
+    return next();
+  }
+
+  // Se existe token, usa exatamente a mesma
+  // validação da autenticação normal.
+  return authenticateToken(
+    req,
+    res,
+    next
+  );
+};

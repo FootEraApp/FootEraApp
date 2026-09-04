@@ -1,8 +1,11 @@
-import { Router, type RequestHandler, type Response} from "express";
+import { Router, type RequestHandler} from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { authenticateToken } from "../middlewares/auth.js";
+import {
+  authenticateToken,
+  optionalAuthenticateToken,
+} from "../middlewares/auth.js";
 import {
   postarConteudo,
   adicionarComentario,
@@ -12,11 +15,10 @@ import {
   editarPostagemGet,
   editarPostagemPost,
   compartilharPostPorMensagem,
-  repostarPost,
 } from "../controllers/postController.js";
-import { curtirPostagem } from "server/controllers/feedController.js";
+import { curtirPostagem } from "../controllers/feedController.js";
 import { isAllowedMime } from "../utils/moderation.js";
-import { rateLimit, type ValueDeterminingMiddleware, ipKeyGenerator, type AugmentedRequest } from "express-rate-limit";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 
 const router = Router();
 
@@ -66,7 +68,11 @@ const commentLimiterMw = rateLimit({
   keyGenerator: byUserOrIp,
 }) as unknown as RequestHandler;
 
-router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
+router.get(
+  "/visualizar/:id",
+  optionalAuthenticateToken,
+  buscarPostagemPorId
+);
 
 router.post(
   "/:postId/comentario",
@@ -88,15 +94,9 @@ router.post(
   authenticateToken,
   compartilharPostPorMensagem
 );
-
-router.post("/:postId/repost", authenticateToken, repostarPost);
-
 router.delete("/:id", authenticateToken, deletarPost);
-
 router.get("/editar/:id", authenticateToken, editarPostagemGet);
-
 router.post("/editar/:id", authenticateToken, editarPostagemPost);
-
 router.post(
   ["/", "/postar"],
   authenticateToken,

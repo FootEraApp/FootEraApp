@@ -34,7 +34,7 @@ function formatarContagem(ms: number) {
 }
 
 export default function MaintenanceGate({ children }: Props) {
-  const [path, setLocation] = useLocation();
+  const [path] = useLocation();
   const userContext = React.useContext(UserContext);
   const manutencaoProcessadaRef = React.useRef(false);
 
@@ -44,7 +44,10 @@ export default function MaintenanceGate({ children }: Props) {
     );
   }
 
-  const { logout } = userContext;
+  const {
+    logout,
+    isLoggedIn,
+  } = userContext;
 
   const [configuracao, setConfiguracao] =
     React.useState<ConfiguracaoPublica | null>(null);
@@ -152,33 +155,47 @@ export default function MaintenanceGate({ children }: Props) {
   const rotaAdministrativa =
     path === "/admin" || path.startsWith("/admin/");
 
-React.useEffect(() => {
-  if (!configuracao?.maintenanceMode) {
-    manutencaoProcessadaRef.current = false;
-    return;
-  }
+  React.useEffect(() => {
+    if (
+      !configuracao?.maintenanceMode
+    ) {
+      manutencaoProcessadaRef.current =
+        false;
 
-  if (rotaAdministrativa) {
-    return;
-  }
+      return;
+    }
 
-  if (!manutencaoProcessadaRef.current) {
-    manutencaoProcessadaRef.current = true;
-    logout();
-  }
+    /*
+    * Admin continua podendo entrar
+    * para desligar/configurar a manutenção.
+    */
+    if (rotaAdministrativa) {
+      return;
+    }
 
-  if (path !== "/login") {
-    setLocation("/login", {
-      replace: true,
-    });
-  }
-}, [
-  configuracao?.maintenanceMode,
-  rotaAdministrativa,
-  path,
-  logout,
-  setLocation,
-]);
+    /*
+    * Se havia uma conta autenticada,
+    * encerra a sessão uma única vez.
+    *
+    * Visitante não precisa fazer logout
+    * e principalmente NÃO deve ser
+    * redirecionado para /login.
+    */
+    if (
+      isLoggedIn &&
+      !manutencaoProcessadaRef.current
+    ) {
+      manutencaoProcessadaRef.current =
+        true;
+
+      logout();
+    }
+  }, [
+    configuracao?.maintenanceMode,
+    rotaAdministrativa,
+    isLoggedIn,
+    logout,
+  ]);
 
   if (verificando) {
     return (
@@ -190,14 +207,34 @@ React.useEffect(() => {
 
   if (
     configuracao?.maintenanceMode &&
-    !rotaAdministrativa &&
-    path !== "/login"
+    !rotaAdministrativa
   ) {
     return (
-      <div className="min-h-screen bg-[#fdf9e8] flex items-center justify-center">
-        <p className="font-semibold text-green-900">
-          Redirecionando...
-        </p>
+      <div className="min-h-screen bg-[#fdf9e8] flex items-center justify-center px-4">
+        <div className="w-full max-w-lg rounded-2xl border border-green-100 bg-white p-8 text-center shadow-md">
+          <h1 className="mb-3 text-2xl font-bold text-green-900">
+            FootEra em manutenção
+          </h1>
+
+          <p className="text-green-900/80">
+            Estamos realizando alguns ajustes
+            para melhorar sua experiência.
+          </p>
+
+          <p className="mt-2 text-sm text-green-900/60">
+            Tente novamente em alguns minutos.
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              window.location.reload()
+            }
+            className="mt-6 rounded-xl bg-green-800 px-5 py-2.5 font-semibold text-white hover:bg-green-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
       </div>
     );
   }

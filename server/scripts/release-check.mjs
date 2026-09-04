@@ -208,10 +208,26 @@ if (exists(serverIndexPath)) {
   ];
 
   for (const route of requiredApiMounts) {
-    if (index.includes(`app.use("${route}"`) || index.includes(`app.use('${route}'`)) {
-      ok(`backend monta ${route}`);
+    const escapedRoute =
+      route.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+    const mountRegex =
+      new RegExp(
+        `app\\.use\\s*\\(\\s*["']${escapedRoute}["']`
+      );
+
+    if (mountRegex.test(index)) {
+      ok(
+        `backend monta ${route}`
+      );
     } else {
-      fail(`backend monta ${route}`, "Rota crítica não encontrada no index.ts.");
+      fail(
+        `backend monta ${route}`,
+        "Rota crítica não encontrada no index.ts."
+      );
     }
   }
 

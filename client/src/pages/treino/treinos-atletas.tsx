@@ -26,6 +26,7 @@ import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "../../components/layout/BottomNav.js";
 import Avatar from "../../components/shared/Avatar.js";
+import { useAuthGate } from "../../context/AuthGateContext.js";
 
 type AgendaTipo =
   | "TREINO"
@@ -530,43 +531,12 @@ function clamp01(n: number) {
   return Math.max(0, Math.min(5, n));
 }
 
-function StarRating({
-  value,
-  sizeClass = "w-4 h-4",
-}: {
-  value: number;
-  sizeClass?: string;
-}) {
-  const v = clamp01(value);
-
-  return (
-    <div className="flex items-center">
-      {Array.from({ length: 5 }).map((_, i) => {
-        const frac = Math.max(0, Math.min(1, v - i));
-        const pct = `${Math.round(frac * 100)}%`;
-
-        return (
-          <span key={i} className="relative inline-block">
-            <StarIcon className={`${sizeClass} text-gray-300`} fill="none" />
-
-            <span
-              className="absolute inset-0 overflow-hidden"
-              style={{ width: pct }}
-            >
-              <StarIcon
-                className={`${sizeClass} text-amber-500`}
-                fill="currentColor"
-              />
-            </span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function TreinosAtletas() {
   const [location, navigate] = useLocation();
+
+  const {
+    requireAuth,
+  } = useAuthGate();
 
   const qs = React.useMemo(() => {
     const raw = typeof window !== "undefined" ? window.location.search : "";
@@ -1661,6 +1631,14 @@ useEffect(() => {
 }, [menuTreinosAberto]);
 
   async function iniciar(id: string) {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para iniciar um treino e salvar seu progresso.",
+      })
+    ) {
+      return;
+    }
     try {
       const nowMs = Date.now();
       localStorage.setItem(TIMER_KEY(id), String(nowMs));
@@ -1717,6 +1695,14 @@ useEffect(() => {
   }
 
   async function finalizarEEnviar(treino: TreinoAgendado) {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para salvar o progresso deste treino.",
+      })
+    ) {
+      return;
+    }
     try {
       const token = getToken();
       if (!token) return;

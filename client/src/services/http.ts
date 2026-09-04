@@ -1,6 +1,9 @@
 import axios, { type AxiosError } from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
+import {
+  clearAuthSession,
+} from "../utils/authSession.js";
 
 export const http = axios.create({
   baseURL: API.BASE_URL,
@@ -31,13 +34,29 @@ http.interceptors.request.use((config) => {
 });
 
 http.interceptors.response.use(
-  (r) => r,
+  (response) => response,
+
   (err: AxiosError) => {
-    if (err.response?.status === 401) {
-      try { sessionStorage.removeItem("token"); } catch {}
-      try { localStorage.removeItem("token"); } catch {}
-      if (typeof window !== "undefined") window.location.href = "/login";
+    if (
+      err.response?.status ===
+      401
+    ) {
+      /*
+       * O token pode ter expirado.
+       *
+       * Limpamos a sessão, mas NÃO
+       * redirecionamos globalmente.
+       *
+       * Isso permite que páginas
+       * públicas continuem abertas:
+       *
+       * /feed
+       * /post/:id
+       * /perfil/:id
+       */
+      clearAuthSession();
     }
+
     return Promise.reject(err);
   }
 );

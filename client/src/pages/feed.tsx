@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FaHeart,
   FaRegHeart,
@@ -35,6 +35,7 @@ import { http } from "../services/http.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
+import { useAuthGate } from "../context/AuthGateContext.js";
 
 interface Usuario {
   id: string;
@@ -59,6 +60,9 @@ function HeaderSliderLite({
   const [, setLocation] = useLocation();
   const [pos, setPos] = useState(start === "feed" ? 0 : 1);
   const [dragging, setDragging] = useState(false);
+  const {
+    requireAuth,
+  } = useAuthGate();
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const widthRef = useRef(0);
@@ -121,16 +125,25 @@ function HeaderSliderLite({
         </div>
 
         <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20">
-          <Link
-            href="/mensagens"
+          <button
+            type="button"
             aria-label="Abrir mensagens"
-            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center
-              rounded-full border border-green-700/70 bg-green-800/80 text-white
-              shadow-md hover:bg-green-700 hover:border-green-500
-              active:scale-95 transition-colors"
+            onClick={() => {
+              if (
+                requireAuth({
+                  message:
+                    "Entre na FootEra para acessar suas mensagens.",
+                })
+              ) {
+                setLocation(
+                  "/mensagens"
+                );
+              }
+            }}
+            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-green-700/70 bg-green-800/80 text-white shadow-md hover:bg-green-700 hover:border-green-500 active:scale-95 transition-colors"
           >
             <Send className="w-4 h-4" />
-          </Link>
+          </button>
         </div>
 
         <div className="absolute inset-0">
@@ -218,39 +231,115 @@ type ParsedAchievement = {
   grupo?: string;
 };
 
-function parseAchievement(conteudo: string): ParsedAchievement | null {
+function parseAchievement(
+  conteudo: string
+): ParsedAchievement | null {
   if (!conteudo) return null;
 
-  const lines = conteudo.split(/\n+/);
-  const head = (lines[0] || "").trim();
-  const rest = lines.slice(1).join("\n").trim();
-  const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
-  const idMatch = rest.match(/\[([^\]]+)\]/);
-  const conquistaId = idMatch?.[1]?.trim();
+  const lines =
+    conteudo.split(/\n+/);
 
-  if (!isHeadAchievement && !conquistaId) return null;
+  const head =
+    (lines[0] || "").trim();
 
-  let headTitle: string | undefined;
-  let headDesc: string | undefined;
-  const m = head.match(/^🏆\s*Conquista:\s*(.+?)\s+—\s+(.+)$/);
-  if (m) {
-    headTitle = m[1];
-    headDesc = m[2];
+  const rest =
+    lines
+      .slice(1)
+      .join("\n")
+      .trim();
+
+  const all =
+    `${head}\n${rest}`.trim();
+
+  const isHeadAchievement =
+    /^🏆\s*Conquista(?:\s*\([^)]+\))?\s*:/i.test(
+      head
+    );
+
+  const idMatch =
+    all.match(/\[([^\]]+)\]/);
+
+  const conquistaId =
+    idMatch?.[1]?.trim();
+
+  if (
+    !isHeadAchievement &&
+    !conquistaId
+  ) {
+    return null;
   }
 
-  const tierMatch = (head + "\n" + rest).match(/tier:\s*([a-zç]+)/i);
-  const grupoMatch = (head + "\n" + rest).match(/grupo:\s*([a-z0-9 _-]+)/i);
-  const tier = tierMatch?.[1]?.trim().toLowerCase();
-  const grupo = grupoMatch?.[1]?.trim();
-  let userMsg = conquistaId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
+  let headTitle:
+    | string
+    | undefined;
 
-  userMsg = userMsg
-    .replace(/grupo\s*:\s*.*$/gim, "")
-    .replace(/tier\s*:\s*.*$/gim, "")
-    .replace(/[•·]/g, "")
-    .trim();
+  let headDesc:
+    | string
+    | undefined;
 
-  return { conquistaId, headTitle, headDesc, userMsg, tier, grupo };
+  const m =
+    head.match(
+      /^🏆\s*Conquista(?:\s*\([^)]+\))?\s*:\s*(.+?)(?:\s+—\s+(.+))?\s*(?:🏆|$)/
+    );
+
+  if (m) {
+    headTitle =
+      m[1]?.trim();
+
+    headDesc =
+      m[2]?.trim();
+  }
+
+  const tierMatch =
+    all.match(
+      /tier:\s*([a-zç]+)/i
+    );
+
+  const grupoMatch =
+    all.match(
+      /grupo:\s*([a-z0-9 _-]+)/i
+    );
+
+  const tier =
+    tierMatch?.[1]
+      ?.trim()
+      .toLowerCase();
+
+  const grupo =
+    grupoMatch?.[1]?.trim();
+
+  let userMsg =
+    rest
+      .replace(
+        /\[[^\]]+\]/g,
+        ""
+      )
+      .trim();
+
+  userMsg =
+    userMsg
+      .replace(
+        /grupo\s*:\s*.*$/gim,
+        ""
+      )
+      .replace(
+        /tier\s*:\s*.*$/gim,
+        ""
+      )
+      .replace(
+        /[•·]/g,
+        ""
+      )
+      .trim();
+
+  return {
+    conquistaId,
+    headTitle,
+    headDesc,
+    userMsg,
+    tier,
+    grupo,
+  };
 }
 
 function TierPill({ tier }: { tier?: string | null }) {
@@ -281,7 +370,10 @@ function AchievementShareCard({
   const icon = conquista?.icone || "🏆";
   const title = conquista?.titulo || parsed.headTitle || "Conquista";
   const desc = conquista?.descricao || parsed.headDesc || "";
-  const tier = parsed.tier ?? null;
+  const tier =
+    conquista?.tier ??
+    parsed.tier ??
+    null;
 
   return (
     <div className="mt-1 rounded-xl border border-yellow-200 bg-yellow-50/60 p-3">
@@ -424,6 +516,7 @@ function sortPostsDestaquePrimeiro(
 }
 
 function PaginaFeed(): JSX.Element {
+  const [, setLocation] = useLocation();
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>(
@@ -444,6 +537,11 @@ function PaginaFeed(): JSX.Element {
   const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
   const [carregandoPosts, setCarregandoPosts] = useState(true);
   const [erroFeed, setErroFeed] = useState(false);
+  const {
+    requireAuth,
+    openAuthGate,
+    handleAuthError,
+  } = useAuthGate();
 
   const selecionarFiltro = (target: "todos" | "seguindo" | "favoritos") => {
     setFiltro(target);
@@ -537,7 +635,10 @@ function PaginaFeed(): JSX.Element {
         const parsed = parseAchievement(p.conteudo || "");
         if (parsed?.conquistaId) ids.add(parsed.conquistaId);
       }
-      ids.forEach((id) => carregarConquista(id));
+      ids.forEach(
+        (id) =>
+          carregarConquista(id)
+      );
     } catch (e) {
       console.error("Falha ao carregar feed:", e);
       setPosts([]);
@@ -552,19 +653,51 @@ function PaginaFeed(): JSX.Element {
   }, [carregarFeed]);
 
   useEffect(() => {
-    const onNovoPost = (novo: PostagemComUsuario) => {
+    if (!userId) {
+      return;
+    }
+
+    const onNovoPost = (
+      novo: PostagemComUsuario
+    ) => {
       setPosts((prev) => {
-        if (novo.usuario?.id === Storage.usuarioId) return prev;
-        if (prev.some((p) => p.id === novo.id)) return prev;
-        return sortPostsDestaquePrimeiro([novo, ...prev]);
+        if (
+          novo.usuario?.id ===
+          Storage.usuarioId
+        ) {
+          return prev;
+        }
+
+        if (
+          prev.some(
+            (p) =>
+              p.id === novo.id
+          )
+        ) {
+          return prev;
+        }
+
+        return sortPostsDestaquePrimeiro(
+          [
+            novo,
+            ...prev,
+          ]
+        );
       });
     };
 
-    socket.on("feed:novoPost", onNovoPost as any);
+    socket.on(
+      "feed:novoPost",
+      onNovoPost as any
+    );
+
     return () => {
-      socket.off("feed:novoPost", onNovoPost as any);
+      socket.off(
+        "feed:novoPost",
+        onNovoPost as any
+      );
     };
-  }, []);
+  }, [userId]);
 
   const carregarConquista = async (conquistaId: string) => {
     const id = String(conquistaId || "").trim();
@@ -585,13 +718,26 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleApagarComentario = async (comentarioId: string, postId: string) => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para apagar este comentário.",
+      })
+    ) {
+      return;
+    }
+
     try {
       await deletarComentario(comentarioId);
+
       setPostSelecionado((prev) => {
         if (!prev || prev.id !== postId) return prev;
+
         return {
           ...prev,
-          comentarios: (prev.comentarios || []).filter((c) => c.id !== comentarioId),
+          comentarios: (prev.comentarios || []).filter(
+            (c) => c.id !== comentarioId
+          ),
         };
       });
 
@@ -599,17 +745,38 @@ function PaginaFeed(): JSX.Element {
         prev.map((p) =>
           p.id !== postId
             ? p
-            : { ...p, comentarios: (p.comentarios || []).filter((c) => c.id !== comentarioId) }
+            : {
+                ...p,
+                comentarios: (p.comentarios || []).filter(
+                  (c) => c.id !== comentarioId
+                ),
+              }
         )
       );
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível apagar o comentário.");
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
+      toast.error(
+        e?.message ||
+          "Não foi possível apagar o comentário."
+      );
     }
   };
 
   const handleLike = async (postId: string) => {
-    if (!userId) {
-      toast.error("Sessão expirada. Faça login novamente.");
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para curtir esta publicação.",
+      })
+    ) {
       return;
     }
     try {
@@ -626,12 +793,31 @@ function PaginaFeed(): JSX.Element {
             : p
         )
       );
-    } catch (error) {
+    } catch (error: any) {
+      if (
+        handleAuthError(error, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
       console.error("Erro ao curtir post:", error);
+      toast.error("Não foi possível curtir esta publicação.");
     }
   };
 
   const handleComentario = async (postId: string, texto: string) => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para comentar nesta publicação.",
+      })
+    ) {
+      return;
+    }
+
     const conteudo = String(texto || "").trim();
     if (!conteudo) return;
 
@@ -652,42 +838,126 @@ function PaginaFeed(): JSX.Element {
         if (!prev || prev.id !== postId) return prev;
         return { ...prev, comentarios: [...(prev.comentarios || []), novoComentario] };
       });
-    } catch (e) {
+    } catch (e: any) {
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
       console.error("Erro ao comentar:", e);
       toast.error("Não foi possível comentar.");
     }
   };
 
-  const handleCompartilhar = async (postId: string) => {
-    const link = `${APP.FRONTEND_BASE_URL}/post/${postId}`;
-    setLinkCompartilhado(link);
-    setIdCompartilhado(postId);
-    setModalAberto(true);
-    try {
-      setCarregandoMutuos(true);
-      setSelecionados(new Set());
-      const lista = await getUsuariosMutuos();
-      setUsuariosMutuos(lista);
-    } catch (e) {
-      console.error(e);
-      toast.error("Não foi possível carregar seus contatos.");
-    } finally {
-      setCarregandoMutuos(false);
-    }
-  };
+  const handleCompartilhar =
+    async (
+      postId: string
+    ) => {
+      const link =
+        `${APP.FRONTEND_BASE_URL}/post/${postId}`;
+
+      setLinkCompartilhado(
+        link
+      );
+
+      setIdCompartilhado(
+        postId
+      );
+
+      setModalAberto(true);
+
+      // Visitante pode compartilhar
+      // externamente, mas não por DM.
+      if (!userId) {
+        setUsuariosMutuos([]);
+        setSelecionados(
+          new Set()
+        );
+
+        return;
+      }
+
+      try {
+        setCarregandoMutuos(
+          true
+        );
+
+        setSelecionados(
+          new Set()
+        );
+
+        const lista =
+          await getUsuariosMutuos();
+
+        setUsuariosMutuos(
+          lista
+        );
+      } catch (e) {
+        console.error(e);
+
+        toast.error(
+          "Não foi possível carregar seus contatos."
+        );
+      } finally {
+        setCarregandoMutuos(
+          false
+        );
+      }
+    };
 
   const handleApagar = async (postId: string) => {
-    if (!window.confirm("Apagar esta postagem? Essa ação não pode ser desfeita.")) return;
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para apagar esta postagem.",
+      })
+    ) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Apagar esta postagem? Essa ação não pode ser desfeita."
+      )
+    ) {
+      return;
+    }
+
     try {
       await deletarPost(postId);
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setPosts((prev) =>
+        prev.filter((p) => p.id !== postId)
+      );
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível apagar a postagem.");
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
+      toast.error(
+        e?.message ||
+          "Não foi possível apagar a postagem."
+      );
     }
   };
 
   const handleRepost = async (postId: string) => {
-    if (!userId) return toast.error("Sessão expirada. Faça login novamente.");
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para repostar esta publicação.",
+      })
+    ) {
+      return;
+    }
 
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
 
@@ -713,7 +983,16 @@ function PaginaFeed(): JSX.Element {
       }
 
       console.warn("Resposta inesperada no repost:", resp);
-    } catch (e) {
+    } catch (e: any) {
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
       console.error(e);
       toast.error("Não foi possível repostar.");
     }
@@ -734,14 +1013,24 @@ function PaginaFeed(): JSX.Element {
   };
 
   const enviarCompartilhamentoPorDM = async () => {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para enviar esta publicação por mensagem.",
+      })
+    ) {
+      return;
+    }
+
     if (selecionados.size === 0) return;
+
     const token = Storage.token;
 
     try {
       setEnviandoDM(true);
       await Promise.all(
-        Array.from(selecionados).map((paraId) =>
-          fetch(`${API.BASE_URL}/api/mensagem`, {
+        Array.from(selecionados).map(async (paraId) => {
+          const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -752,15 +1041,42 @@ function PaginaFeed(): JSX.Element {
               conteudo: idCompartilhado,
               tipo: "POST",
             }),
-          })
-        )
+          });
+
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+
+            const error: any = new Error(
+              body?.message ||
+                body?.error ||
+                "Falha ao enviar a publicação por mensagem."
+            );
+
+            error.status = resp.status;
+            error.code = body?.code;
+
+            throw error;
+          }
+        })
       );
 
-      toast.error("Post compartilhado por mensagem!");
+      toast.success("Post compartilhado por mensagem!");
       setModalAberto(false);
-    } catch (e) {
+    } catch (e: any) {
+      if (
+        handleAuthError(e, {
+          message:
+            "Sua sessão expirou. Entre novamente para continuar.",
+        })
+      ) {
+        return;
+      }
+
       console.error(e);
-      toast.error("Falha ao enviar mensagens.");
+      toast.error(
+        e?.message ||
+          "Falha ao enviar mensagens."
+      );
     } finally {
       setEnviandoDM(false);
     }
@@ -782,6 +1098,8 @@ function PaginaFeed(): JSX.Element {
             Ver tudo
           </button>
 
+          {userId && (
+            <>
           <button
             onClick={() => selecionarFiltro("seguindo")}
             className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
@@ -805,6 +1123,8 @@ function PaginaFeed(): JSX.Element {
           >
             Favoritos
           </button>
+            </>
+          )}
         </div>
 
       {carregandoPosts && (
@@ -832,7 +1152,9 @@ function PaginaFeed(): JSX.Element {
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
           <p>
             {{
-              todos: "Nenhuma postagem encontrada.",
+              todos: userId
+                ? "Ainda não há publicações para você ver."
+                : "Ainda não há publicações públicas disponíveis para visitantes.",
               seguindo:
                 "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
               favoritos: "Você não tem nenhum usuário favoritado.",
@@ -853,6 +1175,14 @@ function PaginaFeed(): JSX.Element {
       {!carregandoPosts && !erroFeed && posts.map((post) => {
         const curtidas = post.curtidas || [];
         const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
+        const totalCurtidas =
+          typeof (
+            post as any
+          ).totalCurtidas ===
+          "number"
+            ? (post as any)
+                .totalCurtidas
+            : curtidas.length;
         const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
         const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
         const parsed = parseAchievement(post.conteudo);
@@ -1026,7 +1356,7 @@ function PaginaFeed(): JSX.Element {
                 ) : (
                   <FaRegHeart />
                 )}{" "}
-                <span>{curtidas.length}</span>
+                <span>{totalCurtidas}</span>
               </button>
 
               <button
@@ -1137,60 +1467,84 @@ function PaginaFeed(): JSX.Element {
         </h2>
 
         <div className="mb-3">
-          <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
+          {!userId ? (
+            <button
+              type="button"
+              onClick={() =>
+                openAuthGate({
+                  message:
+                    "Entre na FootEra para compartilhar esta publicação com seus contatos.",
+                })
+              }
+              className="w-full rounded-lg border border-green-700 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50"
+            >
+              Entre para enviar por mensagem
+            </button>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700 mb-2">
+                Enviar por mensagem:
+              </p>
 
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {carregandoMutuos && (
-              <span className="text-sm text-gray-500">
-                Carregando contatos...
-              </span>
-            )}
-            {!carregandoMutuos && usuariosMutuos.length === 0 && (
-              <span className="text-sm text-gray-500">
-                Você ainda não tem contatos mútuos.
-              </span>
-            )}
-            {usuariosMutuos.map((u) => {
-              const selecionado = selecionados.has(u.id);
-              return (
-                <button
-                  key={u.id}
-                  onClick={() => toggleSelecionado(u.id)}
-                  title={u.nome}
-                  className={`relative shrink-0 rounded-full border-2 ${
-                    selecionado ? "border-green-600" : "border-transparent"
-                  }`}
-                >
-                  <Avatar
-                    foto={u.foto}
-                    alt={u.nome}
-                    className="w-14 h-14"
-                  />
-                  {selecionado && (
-                    <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
-                      <CircleCheck className="w-5 h-5 text-green-600" />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {carregandoMutuos && (
+                  <span className="text-sm text-gray-500">
+                    Carregando contatos...
+                  </span>
+                )}
 
-          <button
-            disabled={selecionados.size === 0 || enviandoDM}
-            onClick={enviarCompartilhamentoPorDM}
-            className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
-              ${
-                selecionados.size === 0 || enviandoDM
-                  ? "bg-gray-300 text-gray-600"
-                  : "bg-green-700 text-white hover:bg-green-800"
-              }`}
-          >
-            <Send className="w-4 h-4" />
-            {enviandoDM
-              ? "Enviando..."
-              : `Enviar para ${selecionados.size} contato(s)`}
-          </button>
+                {!carregandoMutuos && usuariosMutuos.length === 0 && (
+                  <span className="text-sm text-gray-500">
+                    Você ainda não tem contatos mútuos.
+                  </span>
+                )}
+
+                {usuariosMutuos.map((u) => {
+                  const selecionado = selecionados.has(u.id);
+
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => toggleSelecionado(u.id)}
+                      title={u.nome}
+                      className={`relative shrink-0 rounded-full border-2 ${
+                        selecionado
+                          ? "border-green-600"
+                          : "border-transparent"
+                      }`}
+                    >
+                      <Avatar
+                        foto={u.foto}
+                        alt={u.nome}
+                        className="w-14 h-14"
+                      />
+
+                      {selecionado && (
+                        <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                          <CircleCheck className="w-5 h-5 text-green-600" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                disabled={selecionados.size === 0 || enviandoDM}
+                onClick={enviarCompartilhamentoPorDM}
+                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded ${
+                  selecionados.size === 0 || enviandoDM
+                    ? "bg-gray-300 text-gray-600"
+                    : "bg-green-700 text-white hover:bg-green-800"
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                {enviandoDM
+                  ? "Enviando..."
+                  : `Enviar para ${selecionados.size} contato(s)`}
+              </button>
+            </>
+          )}
         </div>
 
         <div className="border-t my-3" />

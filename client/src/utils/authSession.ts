@@ -1,3 +1,7 @@
+import {
+  syncSocketAuth,
+} from "../services/socket.js";
+
 export type AuthSessionResponse = {
   usuario?: {
     id?: string;
@@ -84,6 +88,88 @@ export function applyAuthSession(
 
   const plano = String(usuario.plano ?? data.plano ?? "FREE");
   store.setItem("plano", plano);
+  syncSocketAuth(token);
+
+  /*
+   * Centraliza o aviso de mudança de autenticação.
+   * Assim login normal, Google, restauração de conta
+   * e Auth Gate atualizam o restante da aplicação
+   * sem depender de reload.
+   */
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("footera:auth-changed", {
+        detail: {
+          authenticated: true,
+          usuarioId,
+        },
+      })
+    );
+  }
 
   return { usuarioId, isAdmin };
+}
+
+export function clearAuthSession() {
+  SESSION_KEYS.forEach((k) => {
+    localStorage.removeItem(k);
+    sessionStorage.removeItem(k);
+  });
+
+  syncSocketAuth(null);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("footera:auth-changed", {
+        detail: {
+          authenticated: false,
+        },
+      })
+    );
+  }
+}
+
+export function salvarRetornoAuth(
+  destino?: string
+) {
+  const valor =
+    destino ||
+    (
+      `${window.location.pathname}` +
+      `${window.location.search}` +
+      `${window.location.hash}`
+    );
+
+  if (
+    valor.startsWith("/") &&
+    !valor.startsWith("//")
+  ) {
+    sessionStorage.setItem(
+      "footera:returnTo",
+      valor
+    );
+  }
+}
+
+export function consumirRetornoAuth(
+  fallback = "/perfil"
+) {
+  const valor =
+    sessionStorage.getItem(
+      "footera:returnTo"
+    );
+
+  sessionStorage.removeItem(
+    "footera:returnTo"
+  );
+
+  if (
+    !valor ||
+    !valor.startsWith("/") ||
+    valor.startsWith("//")
+  ) {
+    return fallback;
+  }
+
+  return valor;
 }
