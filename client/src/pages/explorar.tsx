@@ -1,3 +1,4 @@
+// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -1779,11 +1780,7 @@ function Explorar() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
-      <div className="h-16 sm:h-20 bg-green-900 text-white flex items-center">
-        <div className="max-w-5xl mx-auto w-full px-4 sm:px-5">
-          <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-center">Explorar</h1>
-        </div>
-      </div>
+
 
       <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         <div className="flex gap-2 items-center">

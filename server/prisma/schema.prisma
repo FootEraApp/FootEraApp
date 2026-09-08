@@ -9,13 +9,15 @@ datasource db {
 }
 
 model Usuario {
-  id                              String                        @id @default(uuid())
-  nomeDeUsuario                   String                        @unique
-  senhaHash                       String
-  nome                            String
-  email                           String                        @unique
-  foto                            String?
-  tipo                            TipoUsuario
+  id            String      @id @default(uuid())
+  nomeDeUsuario String      @unique
+  senhaHash     String
+  nome          String
+  email         String      @unique
+  foto          String?
+  tipo          TipoUsuario
+
+  papeis                          UsuarioPapel[]
   cidade                          String?
   estado                          String?
   pais                            String?
@@ -132,6 +134,26 @@ model Usuario {
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
+}
+
+model UsuarioPapel {
+  id        String      @id @default(uuid())
+  usuarioId String
+  papel     TipoUsuario
+
+  status StatusUsuarioPapel @default(PENDENTE)
+
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+  ativadoEm        DateTime?
+  desativadoEm     DateTime?
+  perfilCompletoEm DateTime?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, papel])
+  @@index([usuarioId, status])
+  @@index([papel, status])
 }
 
 model PerfilPontuacaoVisualizacao {
@@ -2888,6 +2910,12 @@ model PushDeviceToken {
   @@index([usuarioId])
 }
 
+enum StatusUsuarioPapel {
+  PENDENTE
+  ATIVO
+  INATIVO
+}
+
 enum VisibilidadePostagem {
   PUBLICO
   LOGADO
@@ -3068,6 +3096,7 @@ enum TipoUsuario {
   Escola
   Federacao
   Marca
+  Creator
 }
 
 enum TipoMidia {
