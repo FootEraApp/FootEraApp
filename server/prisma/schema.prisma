@@ -21,8 +21,15 @@ model Usuario {
   authProvider   AuthProvider @default(LOCAL)
   googleLinkedAt DateTime?
 
-  foto                      String?
-  tipo                      TipoUsuario
+  foto String?
+
+  // Tipo atualmente selecionado.
+  // Mantido para o frontend e backend atuais continuarem funcionando.
+  tipo TipoUsuario
+
+  // Todos os tipos que essa conta pode utilizar.
+  papeis UsuarioPapel[]
+
   cidade                    String?
   estado                    String?
   pais                      String?
@@ -135,6 +142,26 @@ model Usuario {
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
+}
+
+model UsuarioPapel {
+  id        String      @id @default(uuid())
+  usuarioId String
+  papel     TipoUsuario
+
+  status StatusUsuarioPapel @default(PENDENTE)
+
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+  ativadoEm        DateTime?
+  desativadoEm     DateTime?
+  perfilCompletoEm DateTime?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, papel])
+  @@index([usuarioId, status])
+  @@index([papel, status])
 }
 
 model PerfilPontuacaoVisualizacao {
@@ -3134,6 +3161,12 @@ model PushDeviceToken {
   @@index([usuarioId])
 }
 
+enum StatusUsuarioPapel {
+  PENDENTE
+  ATIVO
+  INATIVO
+}
+
 enum VisibilidadePostagem {
   PUBLICO
   LOGADO
@@ -3314,6 +3347,7 @@ enum TipoUsuario {
   Learning
   Federacao
   Marca
+  Creator
 }
 
 enum TipoMidia {
