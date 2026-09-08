@@ -1,3 +1,4 @@
+// client/src/pages/feed
 import { toast } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -1082,50 +1083,65 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
-  return (
-    <div className="px-4 pt-0 pb-24 space-y-6">
-      <HeaderSliderLite title="Feed de Postagens" start="feed" />
-        <div className="max-w-xl mx-auto flex gap-2 justify-start mb-4 px-1">
-          <button
-            onClick={() => selecionarFiltro("todos")}
-            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
-              ${
-                filtro === "todos"
-                  ? "bg-green-700 text-white border-green-700"
-                  : "bg-white text-green-700 border-green-200"
-              }`}
-          >
-            Ver tudo
-          </button>
+return (
+  <div className="px-4 pt-3 pb-24 space-y-6">
+    <div className="max-w-xl mx-auto flex items-center justify-between gap-2 mb-4 px-1">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={() => selecionarFiltro("todos")}
+          className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
+            filtro === "todos"
+              ? "bg-green-700 text-white border-green-700"
+              : "bg-white text-green-700 border-green-200"
+          }`}
+        >
+          Ver tudo
+        </button>
 
-          {userId && (
-            <>
-          <button
-            onClick={() => selecionarFiltro("seguindo")}
-            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
-              ${
+        {userId && (
+          <>
+            <button
+              onClick={() => selecionarFiltro("seguindo")}
+              className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
                 filtro === "seguindo"
                   ? "bg-green-700 text-white border-green-700"
                   : "bg-white text-green-700 border-green-200"
               }`}
-          >
-            Seguindo
-          </button>
+            >
+              Seguindo
+            </button>
 
-          <button
-            onClick={() => selecionarFiltro("favoritos")}
-            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
-              ${
+            <button
+              onClick={() => selecionarFiltro("favoritos")}
+              className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
                 filtro === "favoritos"
                   ? "bg-green-700 text-white border-green-700"
                   : "bg-white text-green-700 border-green-200"
               }`}
-          >
-            Favoritos
-          </button>
-            </>
-          )}
-        </div>
+            >
+              Favoritos
+            </button>
+          </>
+        )}
+      </div>
+
+      <button
+        type="button"
+        aria-label="Abrir mensagens"
+        onClick={() => {
+          if (
+            requireAuth({
+              message: "Entre na FootEra para acessar suas mensagens.",
+            })
+          ) {
+            setLocation("/mensagens");
+          }
+        }}
+        className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-green-700 bg-green-700 text-white shadow-sm hover:bg-green-800 active:scale-95 transition"
+      >
+        <Send className="h-4 w-4" />
+      </button>
+    </div>
 
       {carregandoPosts && (
         <div className="max-w-xl mx-auto space-y-3">
