@@ -36,6 +36,10 @@ import { TreinosApi } from "../utils/treinosApi.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
+import {
+  lerAcaoPendenteAuth,
+  limparAcaoPendenteAuth,
+} from "../utils/authSession.js";
 
 interface Usuario {
   id: string;
@@ -775,6 +779,13 @@ function PaginaFeed(): JSX.Element {
       !requireAuth({
         message:
           "Entre na FootEra para curtir esta publicação.",
+
+        action: {
+          type:
+            "LIKE_POST",
+
+          postId,
+        },
       })
     ) {
       return;
@@ -809,17 +820,27 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleComentario = async (postId: string, texto: string) => {
+    const conteudo = String(texto || "").trim();
+    if (!conteudo) return;
+
     if (
       !requireAuth({
         message:
           "Entre na FootEra para comentar nesta publicação.",
+
+        action: {
+          type:
+            "COMMENT_POST",
+
+          postId,
+
+          texto:
+            conteudo,
+        },
       })
     ) {
       return;
     }
-
-    const conteudo = String(texto || "").trim();
-    if (!conteudo) return;
 
     try {
       const novoComentario = await comentarPost(postId, conteudo);
@@ -870,8 +891,6 @@ function PaginaFeed(): JSX.Element {
 
       setModalAberto(true);
 
-      // Visitante pode compartilhar
-      // externamente, mas não por DM.
       if (!userId) {
         setUsuariosMutuos([]);
         setSelecionados(
@@ -954,6 +973,13 @@ function PaginaFeed(): JSX.Element {
       !requireAuth({
         message:
           "Entre na FootEra para repostar esta publicação.",
+
+        action: {
+          type:
+            "REPOST_POST",
+
+          postId,
+        },
       })
     ) {
       return;
@@ -997,6 +1023,110 @@ function PaginaFeed(): JSX.Element {
       toast.error("Não foi possível repostar.");
     }
   };
+
+  useEffect(() => {
+    if (
+      !userId ||
+      carregandoPosts
+    ) {
+      return;
+    }
+
+    const action =
+      lerAcaoPendenteAuth();
+
+    if (!action) {
+      return;
+    }
+
+    if (
+      !(
+        "postId" in action
+      )
+    ) {
+      return;
+    }
+
+    const alvo =
+      posts.find(
+        (p) =>
+          p.id ===
+          action.postId
+      );
+
+    if (!alvo) {
+      return;
+    }
+
+    limparAcaoPendenteAuth();
+
+    if (
+      action.type ===
+      "LIKE_POST"
+    ) {
+      const confirmar =
+        window.confirm(
+          "Você entrou na FootEra. Deseja curtir esta publicação agora?"
+        );
+
+      if (confirmar) {
+        void handleLike(
+          action.postId
+        );
+      }
+
+      return;
+    }
+
+    if (
+      action.type ===
+      "COMMENT_POST"
+    ) {
+      setPostSelecionado(
+        alvo
+      );
+
+      setComentariosModalAberto(
+        true
+      );
+
+      if (action.texto) {
+        setComentarioTextoPorPost(
+          (prev) => ({
+            ...prev,
+            [action.postId]:
+              action.texto || "",
+          })
+        );
+      }
+
+      toast.success(
+        "Seu comentário foi preservado. Revise e envie quando quiser."
+      );
+
+      return;
+    }
+
+    if (
+      action.type ===
+      "REPOST_POST"
+    ) {
+      const confirmar =
+        window.confirm(
+          "Você entrou na FootEra. Deseja continuar com o repost?"
+        );
+
+      if (confirmar) {
+        void handleRepost(
+          action.postId
+        );
+      }
+    }
+  }, [
+    userId,
+    carregandoPosts,
+    posts,
+  ]);
 
   const abrirModalComentarios = (post: PostagemComUsuario) => {
     setPostSelecionado(post);

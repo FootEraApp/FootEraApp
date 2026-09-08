@@ -15,7 +15,8 @@ import PerfilMarca from "../components/perfil/PerfilMarca.js";
 import PerfilLearning from "../components/perfil/PerfilLearning.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import ProfilePostsSection from "../components/perfil/ProfilePostsSection.js";
-import { clearAuthSession } from "../utils/authSession.js";
+import { clearAuthSession, salvarRetornoAuth } from "../utils/authSession.js";
+import { useAuthGate } from "../context/AuthGateContext.js";
 
 type TipoPerfil =
   | "Atleta"
@@ -57,15 +58,6 @@ function readStoredToken() {
   );
 }
 
-function salvarRetornoAtual() {
-  try {
-    sessionStorage.setItem(
-      "footera:returnTo",
-      `${window.location.pathname}${window.location.search}${window.location.hash}`
-    );
-  } catch {}
-}
-
 function textoLista(valor: unknown) {
   if (Array.isArray(valor)) {
     return valor.map(String).map((v) => v.trim()).filter(Boolean).join(", ");
@@ -78,6 +70,7 @@ function textoLista(valor: unknown) {
 export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const { requireAuth } = useAuthGate();
 
   const token = readStoredToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -93,7 +86,7 @@ export default function PerfilUnico() {
     useState<"perfil" | "postagens">("perfil");
 
   function irParaLogin() {
-    salvarRetornoAtual();
+    salvarRetornoAuth();
     navigate("/login");
   }
 
@@ -132,8 +125,6 @@ export default function PerfilUnico() {
         try {
           resposta = await axios.get<PerfilMinimo>(url, { headers });
         } catch (erro: any) {
-          // Token antigo/expirado: limpa somente a sessão de autenticação
-          // e tenta novamente a rota pública como visitante.
           if (token && erro?.response?.status === 401) {
             clearAuthSession();
 
@@ -160,8 +151,6 @@ export default function PerfilUnico() {
           setModoVisitante(true);
         }
 
-        // Caso a URL tenha recebido id de atleta/clube/escolinha/etc.,
-        // normaliza para o id do Usuario sem criar uma nova navegação.
         if (resolvedUsuarioId && String(resolvedUsuarioId) !== String(id)) {
           window.history.replaceState(
             null,
@@ -448,6 +437,31 @@ export default function PerfilUnico() {
         }
       };
 
+    const seguirComoVisitante =
+      () => {
+        if (!usuarioId) {
+          return;
+        }
+
+        requireAuth({
+          message:
+            "Entre na FootEra para seguir este perfil.",
+
+          returnTo:
+            `/perfil/${encodeURIComponent(
+              usuarioId
+            )}`,
+
+          action: {
+            type:
+              "FOLLOW_PROFILE",
+
+            perfilId:
+              String(usuarioId),
+          },
+        });
+      };
+
     return (
       <div className="min-h-[100dvh] bg-[#f7f4ea] pb-12">
         <div className="mx-auto max-w-3xl px-4 pt-6 pb-3">
@@ -516,6 +530,15 @@ export default function PerfilUnico() {
               )}
 
               <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={
+                    seguirComoVisitante
+                  }
+                  className="inline-flex items-center justify-center rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
+                >
+                  Seguir
+                </button>
                 <button
                   type="button"
                   onClick={irParaLogin}

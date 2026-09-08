@@ -135,9 +135,80 @@ test.describe("FootEra - rotas públicas e proteção inicial", () => {
         ).toContainText(
           /Entrar|Usuário ou e-mail/i
         );
+
+        const returnTo =
+          await page.evaluate(
+            () =>
+              window.sessionStorage.getItem(
+                "footera:returnTo"
+              )
+          );
+
+        expect(
+          returnTo
+        ).toBe(route);
       }
     );
   }
+
+  test(
+    "returnTo preserva convite com query string",
+    async ({ page }) => {
+      const destino =
+        "/notificacoes?solicitacaoId=convite-e2e-123";
+
+      await page.goto(
+        destino,
+        {
+          waitUntil:
+            "domcontentloaded",
+        }
+      );
+
+      await expect(
+        page
+      ).toHaveURL(
+        /\/login/
+      );
+
+      const returnTo =
+        await page.evaluate(
+          () =>
+            window.sessionStorage.getItem(
+              "footera:returnTo"
+            )
+        );
+
+      expect(
+        returnTo
+      ).toBe(destino);
+    }
+  );
+
+  test(
+    "detalhe de evento permanece público sem token",
+    async ({ page }) => {
+      await page.goto(
+        "/eventos/evento-e2e-inexistente",
+        {
+          waitUntil:
+            "domcontentloaded",
+        }
+      );
+
+      await expect(
+        page
+      ).toHaveURL(
+        /\/eventos\/evento-e2e-inexistente/
+      );
+
+      await expect(
+        page.locator("body")
+      ).toContainText(
+        /Evento não encontrado|Carregando evento/i
+      );
+    }
+  );
 
   test(
     "rota inexistente mostra página não encontrada",

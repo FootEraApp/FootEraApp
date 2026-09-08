@@ -15,6 +15,10 @@ import {
   applyAuthSession,
   consumirRetornoAuth,
   salvarRetornoAuth,
+  salvarAcaoPendenteAuth,
+  limparAcaoPendenteAuth,
+  limparFluxoAuthPendente,
+  type PendingAuthAction,
 } from "../utils/authSession.js";
 import {
   syncSocketAuth,
@@ -24,6 +28,7 @@ type AuthGateOptions = {
   title?: string;
   message?: string;
   returnTo?: string;
+  action?: PendingAuthAction;
 };
 
 type AuthGateContextValue = {
@@ -104,6 +109,14 @@ export function AuthGateProvider({
           currentReturnTo()
       );
 
+      if (options.action) {
+        salvarAcaoPendenteAuth(
+          options.action
+        );
+      } else {
+        limparAcaoPendenteAuth();
+      }
+
       setTitle(
         options.title ||
           "Entre para continuar"
@@ -124,6 +137,7 @@ export function AuthGateProvider({
     useCallback(() => {
       setOpen(false);
       setGoogleError("");
+      limparFluxoAuthPendente();
     }, []);
 
   const requireAuth = useCallback(
@@ -178,12 +192,6 @@ export function AuthGateProvider({
       }
 
       clearStoredAuth();
-
-      /*
-       * A sessão armazenada foi invalidada.
-       * Desconecta o Socket que ainda poderia
-       * estar usando o JWT antigo.
-       */
       syncSocketAuth(null);
 
       if (typeof window !== "undefined") {
@@ -352,11 +360,6 @@ export function AuthGateProvider({
                   {googleError}
                 </p>
               )}
-
-              {/*
-                Apple ainda não foi implementado.
-                Não exponha um botão funcional falso.
-              */}
 
               <button
                 type="button"
