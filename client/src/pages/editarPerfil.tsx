@@ -1,4 +1,3 @@
-// client/src/pages/editarPerfil
 import { toast } from "@/lib/toast";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -168,6 +167,88 @@ const EditarPerfil = () => {
       .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
       .replace(/\.(\d{3})(\d)/, ".$1/$2")
       .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+
+  function formatarDataInput(
+    data: Date
+  ) {
+    const ano =
+      data.getFullYear();
+
+    const mes =
+      String(
+        data.getMonth() + 1
+      ).padStart(2, "0");
+
+    const dia =
+      String(
+        data.getDate()
+      ).padStart(2, "0");
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  function hojeInput() {
+    return formatarDataInput(
+      new Date()
+    );
+  }
+
+  function dataMaximaPara17Anos() {
+    const hoje =
+      new Date();
+
+    const limite =
+      new Date(
+        hoje.getFullYear() - 17,
+        hoje.getMonth(),
+        hoje.getDate()
+      );
+
+    return formatarDataInput(
+      limite
+    );
+  }
+
+  function calcularIdadeInput(
+    iso: string
+  ) {
+    if (!iso) return null;
+
+    const nascimento =
+      new Date(
+        `${iso}T00:00:00`
+      );
+
+    if (
+      Number.isNaN(
+        nascimento.getTime()
+      )
+    ) {
+      return null;
+    }
+
+    const hoje =
+      new Date();
+
+    let idade =
+      hoje.getFullYear() -
+      nascimento.getFullYear();
+
+    if (
+      hoje.getMonth() <
+        nascimento.getMonth() ||
+      (
+        hoje.getMonth() ===
+          nascimento.getMonth() &&
+        hoje.getDate() <
+          nascimento.getDate()
+      )
+    ) {
+      idade--;
+    }
+
+    return idade;
   }
 
   useEffect(() => {
@@ -911,11 +992,70 @@ const EditarPerfil = () => {
       case "atleta":
         return (
           <>
-            {renderInput("Nome de Exibição", "nome")}
-            {renderInput("Sobrenome", "sobrenome")}
-            {renderInput("Idade", "idade", "number")}
-            {renderInput("Telefone 1", "telefone1")}
-            {renderInput("Telefone 2", "telefone2")}
+            {renderInput(
+              "Nome de Exibição",
+              "nome"
+            )}
+
+            {renderInput(
+              "Sobrenome",
+              "sobrenome"
+            )}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium">
+                Idade
+              </label>
+
+              <input
+                value={
+                  dadosTipo?.idade ??
+                  ""
+                }
+                readOnly
+                className="w-full border px-3 py-2 rounded bg-gray-100 text-gray-600 cursor-not-allowed"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium">
+                Categoria
+              </label>
+
+              <input
+                value={
+                  Array.isArray(
+                    dadosTipo?.categoria
+                  )
+                    ? (
+                        dadosTipo
+                          .categoria[0] ??
+                        ""
+                      )
+                    : (
+                        dadosTipo
+                          ?.categoria ??
+                        ""
+                      )
+                }
+                readOnly
+                className="w-full border px-3 py-2 rounded bg-gray-100 text-gray-600 cursor-not-allowed"
+              />
+
+              <p className="text-xs text-gray-500 mt-1">
+                Calculada automaticamente pela data de nascimento.
+              </p>
+            </div>
+
+            {renderInput(
+              "Telefone 1",
+              "telefone1"
+            )}
+
+            {renderInput(
+              "Telefone 2",
+              "telefone2"
+            )}
             {renderInput("Nacionalidade", "nacionalidade")}
             {renderInput("Naturalidade", "naturalidade")}
             {renderSelect("Posição", "posicao", POSICOES)}
@@ -1612,7 +1752,54 @@ return (
         />
       </div>
 
-{(isProfessor || isOlheiro || isAtleta) && (
+      {(
+        isAtleta ||
+        isProfessor ||
+        isOlheiro ||
+        isLearning
+      ) && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium">
+            Data de nascimento
+          </label>
+
+          <input
+            type="date"
+            name="dataNascimento"
+            min="1900-01-01"
+            max={
+              isProfessor ||
+              isOlheiro
+                ? dataMaximaPara17Anos()
+                : hojeInput()
+            }
+            value={
+              dadosUsuario
+                .dataNascimento
+                ? String(
+                    dadosUsuario
+                      .dataNascimento
+                  ).slice(0, 10)
+                : ""
+            }
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+
+          {(
+            isProfessor ||
+            isOlheiro
+          ) && (
+            <p className="mt-1 text-xs text-gray-500">
+              É necessário ter mais de
+              16 anos para manter este
+              tipo de perfil.
+            </p>
+          )}
+        </div>
+      )}
+
+      {(isProfessor || isOlheiro || isAtleta) && (
         <div className="mb-6">
           <label className="block text-sm font-medium">CPF</label>
           <input
@@ -1704,6 +1891,77 @@ return (
           if (usernameFinal) {
             if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
               toast.error("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
+              return;
+            }
+          }
+
+          const nomeFinal =
+            String(
+              dadosUsuario.nome || ""
+            ).trim();
+
+          const usernameDigitado =
+            String(
+              dadosUsuario
+                .nomeDeUsuario || ""
+            )
+              .trim()
+              .toLowerCase();
+
+          if (
+            !nomeFinal &&
+            !usernameDigitado
+          ) {
+            toast.error(
+              "Informe seu nome ou um nome de usuário."
+            );
+            return;
+          }
+
+          if (
+            !String(
+              dadosUsuario.email || ""
+            ).trim()
+          ) {
+            toast.error(
+              "O e-mail não pode ficar vazio."
+            );
+            return;
+          }
+
+          if (
+            tipoRender === "professor" ||
+            tipoRender === "olheiro"
+          ) {
+            const nascimento =
+              String(
+                dadosUsuario
+                  .dataNascimento || ""
+              ).slice(0, 10);
+
+            if (!nascimento) {
+              toast.error(
+                "Informe a data de nascimento."
+              );
+              return;
+            }
+
+            const idade =
+              calcularIdadeInput(
+                nascimento
+              );
+
+            if (
+              idade === null ||
+              idade < 17
+            ) {
+              toast.error(
+                tipoRender ===
+                  "professor"
+                  ? "Para manter um perfil Profissional, é necessário ter mais de 16 anos."
+                  : "Para manter um perfil Scout, é necessário ter mais de 16 anos."
+              );
+
               return;
             }
           }

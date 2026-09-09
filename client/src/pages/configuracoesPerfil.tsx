@@ -1,4 +1,3 @@
-// client/src/pages/configuracoesPerfil
 import { toast } from "@/lib/toast";
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
@@ -8,7 +7,6 @@ import { API, FLAGS, MESSAGES } from "../config.js";
 import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
-import GoogleButton from "../components/auth/GoogleButton";
 import {
   ativarPushNotifications,
   desativarPushNotifications,
@@ -624,37 +622,6 @@ export default function ConfiguracoesPerfil() {
       setGoogleLinkedAt(data?.googleLinkedAt ?? null);
     } catch (e: any) {
       setGoogleError(e?.message || "Erro ao carregar status do Google.");
-    }
-  }
-
-  async function handleGoogleLink(credential: string) {
-    try {
-      setGoogleError(null);
-      setGoogleSuccess(null);
-      setGoogleLoading(true);
-
-      console.log("TOKEN GOOGLE LINK:", getToken());
-      const resp = await fetch(`${API.BASE_URL}/api/auth/google/link`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ credential }),
-      });
-
-      const data = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
-        throw new Error(data?.message || "Não foi possível vincular sua conta Google.");
-      }
-
-      setGoogleSuccess(data?.message || "Conta Google vinculada com sucesso.");
-      await carregarGoogleStatus();
-    } catch (e: any) {
-      setGoogleError(e?.message || "Erro ao vincular conta Google.");
-    } finally {
-      setGoogleLoading(false);
     }
   }
 
@@ -1593,7 +1560,8 @@ export default function ConfiguracoesPerfil() {
               <div className="font-medium flex items-center gap-2">🔗 Conta Google</div>
 
               <div className="mt-2 text-xs text-gray-600">
-                Vincule sua conta Google para poder entrar com Google e com login normal.
+                Ao entrar com Google usando o mesmo e-mail da sua conta FootEra,
+                o acesso é vinculado automaticamente.
               </div>
 
               <div className="mt-3 flex items-center gap-3">
@@ -1631,21 +1599,26 @@ export default function ConfiguracoesPerfil() {
               )}
 
               <div className="mt-3">
-                {!googleLinked ? (
-                  <GoogleButton
-                    text="continue_with"
-                    onCredential={handleGoogleLink}
-                    disabled={googleLoading}
-                  />
-                ) : (
+                {googleLinked ? (
                   <button
                     type="button"
                     onClick={desvincularGoogle}
                     disabled={googleLoading}
                     className="w-full rounded-md border border-red-300 text-red-700 px-3 py-2 text-sm font-semibold hover:bg-red-50 disabled:opacity-60"
                   >
-                    {googleLoading ? "Processando..." : "Desvincular conta Google"}
+                    {googleLoading
+                      ? "Processando..."
+                      : "Desvincular conta Google"}
                   </button>
+                ) : (
+                  <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                    Nenhuma conta Google vinculada.
+                    Para vincular, saia da conta e use
+                    {" "}
+                    <strong>Continuar com Google</strong>
+                    {" "}
+                    na tela de login com o mesmo e-mail da sua conta FootEra.
+                  </div>
                 )}
               </div>
             </div>

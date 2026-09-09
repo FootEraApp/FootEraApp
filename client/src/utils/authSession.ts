@@ -61,7 +61,7 @@ const MAP_TIPO: Record<string, string> = {
   professor: "professor",
   clube: "clube",
   escolinha: "escolinha",
-  escola: "escola",
+  escola: "escolinha",
   olheiro: "olheiro",
   learning: "learning",
   federacao: "federacao",

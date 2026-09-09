@@ -9,6 +9,10 @@ import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import { sendError } from "../utils/httpError.js";
 import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
 import { sanitizePublicProfile } from "../utils/publicSanitizers.js";
+import {
+  categoriaAtletaPorIdade,
+  sincronizarCategoriaAtleta,
+} from "../utils/categoriaAtleta.js";
 
 type AtividadeUI = {
   id: string;
@@ -658,11 +662,38 @@ async function countAtletasPorEntidade(opts: { escolinhaId?: string; clubeId?: s
   return idsUnicos.size;
 }
 
-export const getPerfilUsuarioMe = async (req: AuthenticatedRequest, res: Response) => {
+export const getPerfilUsuarioMe = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   const id = req.userId;
-  if (!id) return res.status(401).json({ error: "Sem autenticação" });
-  (req as any).params = { ...(req as any).params, id };
-  return getPerfilUsuario(req as any, res);
+
+  if (!id) {
+    return res
+      .status(401)
+      .json({
+        error: "Sem autenticação",
+      });
+  }
+
+  await sincronizarCategoriaAtleta(id).catch(
+    (error) => {
+      console.warn(
+        "[perfil/me] falha ao sincronizar idade/categoria:",
+        error
+      );
+    }
+  );
+
+  (req as any).params = {
+    ...(req as any).params,
+    id,
+  };
+
+  return getPerfilUsuario(
+    req as any,
+    res
+  );
 };
 
 export const getPontuacaoMe = async (
@@ -1520,12 +1551,6 @@ async function resolverUsuarioIdPorPerfilId(
     return usuario.id;
   }
 
-  /*
-  * Também aceita URL amigável:
-  *
-  * /perfil/pedro
-  * /perfil/@pedro
-  */
   const username =
     id
       .replace(/^@/, "")
@@ -1635,6 +1660,93 @@ async function resolverUsuarioIdPorPerfilId(
   );
 }
 
+export const atualizarPosicaoAtletaMe =
+  async (
+    req: AuthenticatedRequest,
+    res: Response
+  ) => {
+    const usuarioId =
+      req.userId;
+
+    if (!usuarioId) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Não autenticado.",
+        });
+    }
+
+    const posicao =
+      String(
+        req.body?.posicao ||
+        ""
+      ).trim();
+
+    if (
+      !Object.values(
+        PosicaoCampo
+      ).includes(
+        posicao as PosicaoCampo
+      )
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Posição inválida.",
+        });
+    }
+
+    try {
+      const atleta =
+        await prisma.atleta.update({
+          where: {
+            usuarioId,
+          },
+
+          data: {
+            posicao:
+              posicao as PosicaoCampo,
+          },
+
+          select: {
+            id: true,
+            posicao: true,
+          },
+        });
+
+      return res.json({
+        ok: true,
+        atletaId:
+          atleta.id,
+        posicao:
+          atleta.posicao,
+      });
+    } catch (error: any) {
+      console.error(
+        "[atualizarPosicaoAtletaMe]",
+        error
+      );
+
+      if (error?.code === "P2025") {
+        return res
+          .status(404)
+          .json({
+            error:
+              "Atleta não encontrado para este usuário.",
+          });
+      }
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Não foi possível atualizar a posição.",
+        });
+    }
+  };
+  
 export const getPerfilUsuario =
   async (
     req: Request,
@@ -1678,6 +1790,7 @@ export const getPerfilUsuario =
             pais: true,
             logradouro: true,
             cpf: true,
+            dataNascimento: true,
           },
         });
 
@@ -2063,6 +2176,7 @@ export const getPerfilUsuario =
     usuarioPayload.pais = usuario.pais;
     usuarioPayload.logradouro = (usuario as any).logradouro ?? null;
     usuarioPayload.cpf = (usuario as any).cpf ?? null;
+    usuarioPayload.dataNascimento = usuario.dataNascimento;
   }
 
   const fotoBase =
@@ -2102,7 +2216,11 @@ export const getPerfilUsuario =
       areaFormacao: (professor as any)?.areaFormacao ?? null,
       cref: (professor as any)?.cref ?? null,
       statusCref: (professor as any)?.statusCref ?? null,
-      dataNascimento: (professor as any)?.dataNascimento ?? null,
+      dataNascimento:
+        usuario.dataNascimento ??
+        (professor as any)
+          ?.dataNascimento ??
+        null,
       escola: (professor as any)?.escola ?? null,
       qualificacoes: (professor as any)?.qualificacoes ?? null,
       certificacoes: (professor as any)?.certificacoes ?? null,
@@ -2168,10 +2286,6 @@ export const getPerfilUsuario =
         : 0,
   };
 
-  /*
-  * Visitante recebe somente
-  * a versão pública/sanitizada.
-  */
   if (acesso.isVisitor) {
     return res.json(
       sanitizePublicProfile(
@@ -2180,10 +2294,6 @@ export const getPerfilUsuario =
     );
   }
 
-  /*
-  * Usuário autenticado mantém
-  * o comportamento completo atual.
-  */
   return res.json(
     payloadPerfil
   );
@@ -2227,10 +2337,26 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       tipo = {};
     }
 
-    const usuarioAtual = await prisma.usuario.findUnique({
-      where: { id },
-      select: { foto: true },
-    });
+    const usuarioAtual =
+      await prisma.usuario
+        .findUnique({
+          where: { id },
+          select: {
+            foto: true,
+            nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            dataNascimento: true,
+            tipo: true,
+          },
+        });
+
+    if (!usuarioAtual) {
+      return res.status(404).json({
+        error:
+          "Usuário não encontrado.",
+      });
+    }
 
     const file = req.file as any; 
     let fotoFinal: string | null = usuarioAtual?.foto ?? null;
@@ -2248,7 +2374,11 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
     }
 
     const raw = typeof usuario?.nomeDeUsuario === "string" ? usuario.nomeDeUsuario.trim() : "";
-    const novoUsername = raw ? raw.toLowerCase() : null;
+    const novoUsername =
+      raw
+        ? raw.toLowerCase()
+        : usuarioAtual
+            .nomeDeUsuario;
 
     if (novoUsername && !/^[a-z0-9._]{3,30}$/.test(novoUsername)) {
       return res.status(400).json({ error: "Nome de usuário inválido." });
@@ -2264,6 +2394,73 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
     const cepDigits = usuario?.cep != null ? String(usuario.cep).replace(/\D/g, "") : "";
 
+    let dataNascimentoFinal =
+      usuarioAtual.dataNascimento;
+
+    if (
+      usuario?.dataNascimento !==
+      undefined
+    ) {
+      const valor =
+        String(
+          usuario.dataNascimento ||
+          ""
+        ).trim();
+
+      if (!valor) {
+        return res.status(400).json({
+          error:
+            "A data de nascimento não pode ficar vazia.",
+        });
+      }
+
+      const parsed =
+        parseDataNascimentoObrigatoria(
+          valor
+        );
+
+      dataNascimentoFinal =
+        parsed.dataNascimento;
+    }
+
+    const tipoKey =
+      String(tipoUsuario)
+        .toLowerCase();
+
+    const tipoNorm =
+      tipoKey === "escolinha"
+        ? "escola"
+        : tipoKey;
+
+    const exigeMaisDe16Anos =
+      tipoNorm === "professor" ||
+      tipoNorm === "olheiro";
+
+    if (
+      exigeMaisDe16Anos
+    ) {
+      if (!dataNascimentoFinal) {
+        return res.status(400).json({
+          error:
+            "Data de nascimento é obrigatória para este perfil.",
+        });
+      }
+
+      const idadeCalculada =
+        calcularIdadePorDataNascimento(
+          dataNascimentoFinal
+        );
+
+      if (idadeCalculada < 17) {
+        return res.status(400).json({
+          error:
+            tipoNorm === "professor"
+              ? "Para manter um perfil Profissional, é necessário ter mais de 16 anos."
+              : "Para manter um perfil Scout, é necessário ter mais de 16 anos.",
+        });
+      }
+    }
+
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -2277,14 +2474,28 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         pais: usuario.pais ?? null,
         logradouro: usuario.logradouro ?? null,
         cpf: usuario.cpf ?? null,
+        dataNascimento: dataNascimentoFinal,
       },
     });
 
-    const tipoKey = String(tipoUsuario).toLowerCase();
-    const tipoNorm = tipoKey === "escolinha" ? "escola" : tipoKey;
-
     switch (tipoNorm) {
       case "atleta": {
+        if (!dataNascimentoFinal) {
+          return res.status(400).json({
+            error:
+              "Atleta sem data de nascimento.",
+          });
+        }
+
+        const idadeCalculada =
+          calcularIdadePorDataNascimento(
+            dataNascimentoFinal
+          );
+
+        const categoriaCalculada =
+          categoriaAtletaPorIdade(
+            idadeCalculada
+          );
         const rawEscolinha = tipo.escolinhaId ?? tipo.escolaId ?? tipo.escolinha ?? tipo.escola ?? null;
         const rawClube = tipo.clubeId ?? tipo.clube ?? null;
         const escolinhaId = pickId(rawEscolinha);
@@ -2297,13 +2508,34 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         const data: any = {
           nome: tipo.nome,
           sobrenome: tipo.sobrenome,
-          idade: parseInt(tipo.idade) || undefined,
-          posicao: tipo.posicao,
-          altura: parseFloat(tipo.altura) || undefined,
-          peso: parseFloat(tipo.peso) || undefined,
+          posicao:
+            tipo.posicao ||
+            null,
+
+          altura:
+            tipo.altura === "" ||
+            tipo.altura == null
+              ? null
+              : Number(
+                  tipo.altura
+                ),
+
+          peso:
+            tipo.peso === "" ||
+            tipo.peso == null
+              ? null
+              : Number(
+                  tipo.peso
+                ),
           foto: fotoFinal,
           escolinhaId: limparEscolinha ? null : escolinhaId,
           clubeId: limparClube ? null : clubeId,
+          idade:
+            idadeCalculada,
+
+          categoria: [
+            categoriaCalculada,
+          ],
         };
 
         const atletaRow = await prisma.atleta.findUnique({ where: { usuarioId: id }, select: { id: true } });
@@ -2818,6 +3050,15 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
   }
 
   try {
+    await sincronizarCategoriaAtleta(
+      usuarioId
+    ).catch((error) => {
+      console.warn(
+        "[posicao-atual] falha ao sincronizar idade/categoria:",
+        error
+      );
+    });
+
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId },
       select: { id: true, posicao: true },
@@ -3968,6 +4209,28 @@ export const upgradeLearningProfile =
       const tipoUsuarioFinal =
         mapaTipos[tipoValidado];
 
+      if (
+        tipoValidado === "PROFESSOR" ||
+        tipoValidado === "OLHEIRO"
+      ) {
+        const nascimento =
+          parseDataNascimentoObrigatoria(
+            req.body?.dataNascimento
+          );
+
+        if (
+          nascimento.idade < 17
+        ) {
+          return res.status(400).json({
+            message:
+              tipoValidado ===
+              "PROFESSOR"
+                ? "Para criar um perfil Profissional, é necessário ter mais de 16 anos."
+                : "Para criar um perfil Scout, é necessário ter mais de 16 anos.",
+          });
+        }
+      }
+
       const tiposOrganizacao =
         new Set<NovoTipo>([
           "CLUBE",
@@ -4170,14 +4433,12 @@ export const upgradeLearningProfile =
               case "ATLETA": {
                 const nascimento =
                   parseDataNascimentoObrigatoria(
-                    req.body
-                      .dataNascimento
+                    req.body.dataNascimento
                   );
 
-                const categorias =
-                  normalizarCategorias(
-                    req.body
-                      .categoria
+                const categoriaCalculada =
+                  categoriaAtletaPorIdade(
+                    nascimento.idade
                   );
 
                 const atleta =
@@ -4189,19 +4450,17 @@ export const upgradeLearningProfile =
                         nomeFinal,
 
                       dataNascimento:
-                        nascimento
-                          .dataNascimento,
+                        nascimento.dataNascimento,
 
                       idade:
-                        nascimento
-                          .idade,
+                        nascimento.idade,
 
-                      categoria:
-                        categorias,
+                      categoria: [
+                        categoriaCalculada,
+                      ],
 
                       posicao:
-                        req.body
-                          .posicao ||
+                        req.body.posicao ||
                         null,
                     } as any,
                   });
