@@ -1,4 +1,3 @@
-// server/routes/perfil
 import { Router } from "express";
 import {
   getPerfilUsuario,
@@ -25,6 +24,7 @@ import {
   upgradeLearningProfile,
   getDeltaPontuacaoPerfil,
   confirmarVisualizacaoPontuacaoPerfil,
+  atualizarPosicaoAtletaMe,
 } from "../controllers/perfilController.js";
 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 import multer from "multer";
@@ -82,6 +82,11 @@ router.get("/learning/:id", authenticateToken, getPerfilLearning);
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);
+router.patch(
+  "/me/posicao",
+  authenticateToken,
+  atualizarPosicaoAtletaMe
+);
 router.get("/me/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
 router.get("/me/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideosMe);
 router.get("/me", authenticateToken, getPerfilUsuarioMe);

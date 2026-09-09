@@ -45,11 +45,17 @@ test.describe("FootEra - rotas públicas e proteção inicial", () => {
         waitUntil: "domcontentloaded",
       });
 
-      await expect(page).toHaveURL(/\/feed/);
+      await expect(page).toHaveURL(
+        /\/feed(?:[/?#]|$)/
+      );
 
       await expect(
-        page.locator("body")
-      ).toContainText(/Feed de Postagens/i);
+        page.getByRole("button", {
+          name: "Ver tudo",
+        })
+      ).toBeVisible({
+        timeout: 15000,
+      });
     }
   );
 

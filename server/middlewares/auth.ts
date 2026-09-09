@@ -22,14 +22,30 @@ function toTipoUsuario(s: string): TipoUsuario {
   switch (s.toLowerCase()) {
     case "admin":
       return TipoUsuario.Admin;
+
     case "professor":
       return TipoUsuario.Professor;
+
     case "clube":
       return TipoUsuario.Clube;
+
+    case "escola":
     case "escolinha":
       return TipoUsuario.Escolinha;
+
     case "olheiro":
       return TipoUsuario.Olheiro;
+
+    case "learning":
+      return TipoUsuario.Learning;
+
+    case "federacao":
+      return TipoUsuario.Federacao;
+
+    case "marca":
+      return TipoUsuario.Marca;
+
+    case "atleta":
     default:
       return TipoUsuario.Atleta;
   }
@@ -40,6 +56,7 @@ type DbUser = Prisma.UsuarioGetPayload<{
     id: true;
     tokenVersion: true;
     tipo: true;
+    verified: true;
     deletedAt: true;
     status: true;
     blockedAt: true;
@@ -109,6 +126,7 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
         id: true,
         tokenVersion: true,
         tipo: true,
+        verified: true,
         deletedAt: true,
         status: true,
         blockedAt: true,
@@ -136,6 +154,48 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
           blockedReason: (dbUser as any).blockedReason ?? null,
         });
       }
+
+    const podeUsarSemVerificacao =
+      url ===
+      "/api/legal/consentimentos";
+
+    const purpose =
+      String(
+        payload?.purpose ?? ""
+      );
+
+    if (
+      purpose ===
+        "registration-consent" &&
+      !podeUsarSemVerificacao
+    ) {
+      return res
+        .status(403)
+        .json({
+          message:
+            "Confirme seu e-mail para continuar.",
+          code:
+            "EMAIL_NOT_VERIFIED",
+          needVerification:
+            true,
+        });
+    }
+
+    if (
+      !dbUser.verified &&
+      !podeUsarSemVerificacao
+    ) {
+      return res
+        .status(403)
+        .json({
+          message:
+            "Confirme seu e-mail para ativar sua conta.",
+          code:
+            "EMAIL_NOT_VERIFIED",
+          needVerification:
+            true,
+        });
+    }
 
     const tokenV = Number(payload?.tokenVersion ?? 0);
     const dbV = Number(dbUser.tokenVersion ?? 0);
@@ -181,7 +241,10 @@ const parceiro = Boolean(dbUser?.parceiro);
           tipoUsuarioIdFinal = clube?.id ?? null;
         }
 
-        if (tipoCtx === "escolinha") {
+        if (
+          tipoCtx === "escolinha" ||
+          tipoCtx === "escola"
+        ) {
           const escolinha = await prisma.escolinha.findUnique({
             where: { usuarioId: userId },
             select: { id: true },
@@ -204,6 +267,57 @@ const parceiro = Boolean(dbUser?.parceiro);
           });
           tipoUsuarioIdFinal = atleta?.id ?? null;
         }
+
+        if (
+          tipoCtx === "learning"
+        ) {
+          const learning =
+            await prisma.learningProfile.findUnique({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+          tipoUsuarioIdFinal =
+            learning?.id ?? null;
+        }
+
+        if (
+          tipoCtx === "federacao"
+        ) {
+          const federacao =
+            await prisma.federacao.findUnique({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+          tipoUsuarioIdFinal =
+            federacao?.id ?? null;
+        }
+
+        if (
+          tipoCtx === "marca"
+        ) {
+          const marca =
+            await prisma.marca.findUnique({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+          tipoUsuarioIdFinal =
+            marca?.id ?? null;
+        }
       }
 
       const user: UserPayload = {
@@ -221,14 +335,23 @@ const parceiro = Boolean(dbUser?.parceiro);
     console.error("[AUTH] resolveUserContext failed em", req.originalUrl, "->", e);
 
     const tipoRaw = String(payload.tipo || "").toLowerCase();
+    const tiposConhecidos = new Set([
+      "admin",
+      "professor",
+      "clube",
+      "escola",
+      "escolinha",
+      "olheiro",
+      "learning",
+      "federacao",
+      "marca",
+      "atleta",
+    ]);
+
     const tipo =
-      tipoRaw === "admin" ||
-      tipoRaw === "professor" ||
-      tipoRaw === "clube" ||
-      tipoRaw === "escolinha" ||
-      tipoRaw === "olheiro"
+      tiposConhecidos.has(tipoRaw)
         ? (toTipoUsuario(tipoRaw) as any)
-        : ("Atleta" as any);
+        : (TipoUsuario.Atleta as any);
 
     const user: UserPayload = {
       id: userId,

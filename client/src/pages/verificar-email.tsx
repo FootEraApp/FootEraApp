@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useLocation } from "wouter";
 import { API } from "../config.js";
+import {
+  applyAuthSession,
+} from "../utils/authSession.js";
 
 function getTokenFromUrl() {
   if (typeof window === "undefined") return "";
@@ -19,6 +22,10 @@ export default function PaginaVerificarEmail() {
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState<string>("");
   const [countdown, setCountdown] = useState<number>(3);
+  const [
+    destinoAposVerificacao,
+    setDestinoAposVerificacao,
+  ] = useState("/perfil");
 
   const verificarAgora = async () => {
     if (!token) {
@@ -37,8 +44,60 @@ export default function PaginaVerificarEmail() {
       });
 
       if (data?.ok) {
+        if (
+          data?.token &&
+          (
+            data?.usuario?.id ||
+            data?.id
+          )
+        ) {
+          try {
+            const {
+              isAdmin,
+            } =
+              applyAuthSession(
+                data,
+                {
+                  lembrar:
+                    false,
+                }
+              );
+
+            setDestinoAposVerificacao(
+              isAdmin
+                ? "/admin"
+                : "/perfil"
+            );
+
+            setMessage(
+              data?.message ||
+                "E-mail verificado! Entrando na sua conta..."
+            );
+          } catch (sessionError) {
+            console.error(
+              "E-mail verificado, mas não foi possível iniciar a sessão:",
+              sessionError
+            );
+
+            setDestinoAposVerificacao(
+              "/login"
+            );
+
+            setMessage(
+              "E-mail verificado com sucesso. Entre na sua conta para continuar."
+            );
+          }
+        } else {
+          setDestinoAposVerificacao(
+            "/login"
+          );
+
+          setMessage(
+            data?.message ||
+              "Este e-mail já foi verificado."
+          );
+        }
         setStatus("success");
-        setMessage(data?.message || "E-mail verificado com sucesso!");
         setCountdown(3);
       } else {
         setStatus("error");
@@ -75,10 +134,20 @@ export default function PaginaVerificarEmail() {
   }, [status]);
 
   useEffect(() => {
-    if (status === "success" && countdown <= 0) {
-      setLocation("/login");
+    if (
+      status === "success" &&
+      countdown <= 0
+    ) {
+      setLocation(
+        destinoAposVerificacao
+      );
     }
-  }, [status, countdown, setLocation]);
+  }, [
+    status,
+    countdown,
+    destinoAposVerificacao,
+    setLocation,
+  ]);
 
   const badge = (() => {
     if (status === "success")
@@ -137,7 +206,11 @@ export default function PaginaVerificarEmail() {
             <ul className="list-disc list-inside space-y-1 text-white/95">
               <li>Clique em “Verificar e-mail”.</li>
               <li>Se o token estiver válido, sua conta será ativada.</li>
-              <li>Você será redirecionado para o login em 3 segundos.</li>
+              <li>
+                Após a confirmação,
+                você entrará automaticamente
+                na sua conta.
+              </li>
             </ul>
           </div>
         </div>
@@ -173,12 +246,25 @@ export default function PaginaVerificarEmail() {
 
             <div className={`mt-1 text-sm ${badge.textColor}`}>
               {message ||
-                "Clique no botão abaixo para verificar seu e-mail. Após confirmar, você será redirecionado para o login."}
+                "Clique no botão abaixo para verificar seu e-mail. Após confirmar, você entrará automaticamente na FootEra."}
             </div>
 
             {status === "success" && (
               <div className="mt-3 text-sm text-green-800">
-                Redirecionando para o login em <b>{countdown}s</b>…
+                {destinoAposVerificacao ===
+                "/login"
+                  ? (
+                      <>
+                        Redirecionando para o login em{" "}
+                        <b>{countdown}s</b>…
+                      </>
+                    )
+                  : (
+                      <>
+                        Abrindo seu perfil em{" "}
+                        <b>{countdown}s</b>…
+                      </>
+                    )}
               </div>
             )}
 
@@ -208,8 +294,21 @@ export default function PaginaVerificarEmail() {
           </button>
 
           <div className="flex justify-between mt-4 text-sm">
-            <Link href="/login" className="text-green-700 underline">
-              Ir para o login
+            <Link
+              href={
+                status === "success" &&
+                destinoAposVerificacao !==
+                  "/login"
+                  ? destinoAposVerificacao
+                  : "/login"
+              }
+              className="text-green-700 underline"
+            >
+              {status === "success" &&
+              destinoAposVerificacao !==
+                "/login"
+                ? "Ir para meu perfil"
+                : "Ir para o login"}
             </Link>
 
             <Link href="/esqueci-senha" className="text-gray-600 underline">

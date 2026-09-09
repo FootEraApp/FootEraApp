@@ -1,7 +1,6 @@
-//server/controllers/cadastroController
 import { Request, Response } from "express";
 import { z } from "zod";
-import { TipoUsuario, Nivel, StatusCref, NotificacaoTipo} from "@prisma/client";
+import { TipoUsuario, StatusCref, NotificacaoTipo} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -9,6 +8,10 @@ import { sendEmailVerification } from "../utils/mailer.js";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import {
+  calcularIdadePorNascimento,
+  categoriaAtletaPorIdade,
+} from "../utils/categoriaAtleta.js";
 
 const FRONTEND_URL = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
 
@@ -78,10 +81,13 @@ export const getCadastroIndex = async (_req: Request, res: Response) => {
   res.json({ message: "Tela de cadastro inicial" });
 };
 
-export const getEscolhaTipo = async (_req: Request, res: Response) => {
+export const getEscolhaTipo = async (
+  _req: Request,
+  res: Response
+) => {
   res.json({
     message:
-      "Escolha o tipo de usuário: Atleta, Clube, Escolinha, Professor, Olheiro ou Admin",
+      "Escolha o tipo de usuário: Atleta, Profissional, Scout, Learning, Clube, Escolinha, Federação ou Marca",
   });
 };
 
@@ -487,15 +493,135 @@ async function criarSolicitacaoVinculoCadastro(params: {
   await recomputeAndEmitBadge(destinatarioId);
 }
 
-const cadastrarUsuarioBaseSchema = z
-  .object({
-    nome: z.string().trim().optional(),
-    email: z.string().trim().min(1, "email é obrigatório"),
-    senha: z.string().min(6, "senha deve ter pelo menos 6 caracteres"),
-    tipo: z.string().trim().min(1, "tipo é obrigatório"),
-    nomeDeUsuario: z.string().trim().min(1, "nomeDeUsuario é obrigatório"),
-  })
-  .passthrough();
+const cadastrarUsuarioBaseSchema =
+  z
+    .object({
+      nome: z
+        .string()
+        .trim()
+        .optional(),
+
+      nomeDeUsuario: z
+        .string()
+        .trim()
+        .optional(),
+
+      email: z
+        .string()
+        .trim()
+        .email("E-mail inválido."),
+
+      senha: z
+        .string()
+        .regex(
+          /^(?=.*[A-Za-z])(?=.*\d).{8,}$/,
+          "A senha deve ter pelo menos 8 caracteres, uma letra e um número."
+        ),
+
+      tipo: z
+        .string()
+        .trim()
+        .min(1, "tipo é obrigatório"),
+    })
+    .passthrough()
+    .refine(
+      (data) =>
+        Boolean(
+          data.nome?.trim() ||
+          data.nomeDeUsuario?.trim()
+        ),
+      {
+        message:
+          "Informe seu nome ou nome de usuário.",
+        path: ["nome"],
+      }
+    );
+
+function normalizarBaseUsername(
+  valor: string
+) {
+  const base =
+    String(valor || "")
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      )
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9._]+/g,
+        "."
+      )
+      .replace(
+        /\.{2,}/g,
+        "."
+      )
+      .replace(
+        /^[._]+|[._]+$/g,
+        ""
+      );
+
+  return (
+    base
+      .slice(0, 16) ||
+    "usuario"
+  );
+}
+
+
+async function gerarUsernameDisponivel(
+  origem: string
+) {
+  const base =
+    normalizarBaseUsername(
+      origem
+    );
+
+  const candidatos = [
+    base,
+
+    ...Array.from(
+      { length: 12 },
+      () =>
+        `${base.slice(
+          0,
+          14
+        )}${Math.floor(
+          1000 +
+            Math.random() *
+              9000
+        )}`
+    ),
+  ];
+
+  for (
+    const candidato of
+    candidatos
+  ) {
+    const existe =
+      await prisma.usuario
+        .findUnique({
+          where: {
+            nomeDeUsuario:
+              candidato,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+    if (!existe) {
+      return candidato;
+    }
+  }
+
+  return `${base.slice(
+    0,
+    10
+  )}${Date.now()
+    .toString()
+    .slice(-7)}`;
+}
 
 export const cadastrarUsuario = async (req: Request, res: Response) => {
   let body: any;
@@ -542,9 +668,14 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     if (!tipoEnum) return res.status(400).json({ error: "Tipo de usuário inválido." });
 
     const precisaNascimento =
-      tipoEnum === TipoUsuario.Atleta ||
-      tipoEnum === TipoUsuario.Olheiro ||
-      tipoEnum === TipoUsuario.Professor;
+      tipoEnum ===
+        TipoUsuario.Atleta ||
+      tipoEnum ===
+        TipoUsuario.Professor ||
+      tipoEnum ===
+        TipoUsuario.Olheiro ||
+      tipoEnum ===
+        TipoUsuario.Learning;
 
     if (precisaNascimento && !dataNascimentoPermitida(dataNascimento)) {
       return res.status(400).json({
@@ -556,18 +687,35 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       ? new Date(dataNascimento)
       : null;
 
-    let idadeCalcInicial: number | null = null;
+    const idadeCalcInicial =
+      dataNascFinal
+        ? calcularIdadePorNascimento(
+            dataNascFinal
+          )
+        : null;
 
-    if (dataNascFinal) {
-      const hoje = new Date();
-      idadeCalcInicial =
-        hoje.getFullYear() -
-        dataNascFinal.getFullYear() -
-        (hoje.getMonth() < dataNascFinal.getMonth() ||
-        (hoje.getMonth() === dataNascFinal.getMonth() &&
-          hoje.getDate() < dataNascFinal.getDate())
-          ? 1
-          : 0);
+    const exigeMaisDe16Anos =
+      tipoEnum ===
+        TipoUsuario.Professor ||
+      tipoEnum ===
+        TipoUsuario.Olheiro;
+
+    if (
+      exigeMaisDe16Anos &&
+      (
+        idadeCalcInicial === null ||
+        idadeCalcInicial < 17
+      )
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            tipoEnum ===
+            TipoUsuario.Professor
+              ? "Para criar um perfil Profissional, é necessário ter mais de 16 anos."
+              : "Para criar um perfil Scout, é necessário ter mais de 16 anos.",
+        });
     }
 
     const precisaResponsavel =
@@ -575,15 +723,118 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       idadeCalcInicial !== null &&
       idadeCalcInicial < 12;
 
-    const emailNorm = String(email).trim().toLowerCase();
-    const usernameFinal = String(nomeDeUsuario).trim().toLowerCase();
-    const nomeFinal = String(nome ?? "").trim() || usernameFinal;
-    const [jaEmail, jaUser] = await Promise.all([
-      prisma.usuario.findUnique({ where: { email: emailNorm } }),
-      prisma.usuario.findUnique({ where: { nomeDeUsuario: usernameFinal } }),
-    ]);
-    if (jaEmail) return res.status(400).json({ error: "E-mail já cadastrado." });
-    if (jaUser)  return res.status(400).json({ error: "Nome de usuário indisponível." });
+    const responsavelNomeFinal =
+      String(responsavel?.nome ?? "").trim();
+
+    const responsavelEmailFinal =
+      String(responsavel?.email ?? "")
+        .trim()
+        .toLowerCase();
+
+    const responsavelTelefoneFinal =
+      String(responsavel?.telefone ?? "").trim() || null;
+
+    if (precisaResponsavel) {
+      if (!responsavelNomeFinal) {
+        return res.status(400).json({
+          error: "Informe o nome do responsável legal.",
+        });
+      }
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
+          responsavelEmailFinal
+        )
+      ) {
+        return res.status(400).json({
+          error: "Informe um e-mail válido do responsável legal.",
+        });
+      }
+
+      if (
+        responsavelTelefoneFinal &&
+        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(
+          responsavelTelefoneFinal
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Informe um telefone válido do responsável legal ou deixe em branco.",
+        });
+      }
+    }
+
+    const emailNorm =
+      String(email)
+        .trim()
+        .toLowerCase();
+
+    const nomeInformado =
+      String(nome ?? "")
+        .trim();
+
+    const usernameInformado =
+      String(
+        nomeDeUsuario ?? ""
+      )
+        .trim()
+        .toLowerCase();
+
+    if (
+      usernameInformado &&
+      !/^[a-z0-9._]{3,20}$/.test(
+        usernameInformado
+      )
+    ) {
+      return res.status(400).json({
+        error:
+          "Nome de usuário inválido.",
+      });
+    }
+
+    const usernameFinal =
+      usernameInformado ||
+      (await gerarUsernameDisponivel(
+        nomeInformado ||
+          emailNorm.split("@")[0]
+      ));
+
+    const nomeFinal =
+      nomeInformado ||
+      usernameFinal;
+    const jaEmail =
+      await prisma.usuario
+        .findUnique({
+          where: {
+            email:
+              emailNorm,
+          },
+        });
+
+    if (jaEmail) {
+      return res.status(400).json({
+        error:
+          "E-mail já cadastrado.",
+      });
+    }
+
+    if (usernameInformado) {
+      const jaUser =
+        await prisma.usuario
+          .findUnique({
+            where: {
+              nomeDeUsuario:
+                usernameFinal,
+            },
+          });
+
+      if (jaUser) {
+        return res.status(400).json({
+          error:
+            "Nome de usuário indisponível.",
+        });
+      }
+    }
 
     const senhaHash = await bcrypt.hash(String(senha), 10);
 
@@ -600,41 +851,57 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         logradouro: logradouro ?? null,
         cpf:    cpf ?? null,
         dataNascimento: dataNascFinal,
-        responsavelNome: precisaResponsavel ? responsavel?.nome ?? null : null,
-        responsavelEmail: precisaResponsavel ? responsavel?.email ?? null : null,
-        responsavelTelefone: precisaResponsavel ? responsavel?.telefone ?? null : null,
+        responsavelNome:
+          precisaResponsavel ? responsavelNomeFinal : null,
+        responsavelEmail:
+          precisaResponsavel ? responsavelEmailFinal : null,
+        responsavelTelefone:
+          precisaResponsavel ? responsavelTelefoneFinal : null,
       },
-      select: { id: true, tipo: true, nome: true, email: true },
+      select: { id: true, tipo: true, nome: true, email: true, tokenVersion: true, },
     });
 
     let tipoUsuarioId: string | null = null;
 
     switch (tipoEnum) {
       case TipoUsuario.Atleta: {
-        const categorias = Array.isArray((req.body as any)?.categorias)
-          ? (req.body as any).categorias
-          : Array.isArray((req.body as any)?.categoria)
-          ? (req.body as any).categoria
-          : [];
+        if (!dataNascFinal) {
+          return res.status(400).json({
+            error:
+              "Data de nascimento é obrigatória para atleta.",
+          });
+        }
 
-        const idadeFinal = dataNascFinal
-          ? (new Date().getFullYear() - dataNascFinal.getFullYear()
-              - ((new Date().getMonth() < dataNascFinal.getMonth()
-                  || (new Date().getMonth() === dataNascFinal.getMonth()
-                      && new Date().getDate() < dataNascFinal.getDate()))
-                ? 1
-                : 0))
-          : (typeof idade === "number" ? idade : 0);
+        const idadeFinal =
+          calcularIdadePorNascimento(
+            dataNascFinal
+          );
 
-        const atleta = await prisma.atleta.create({
-          data: {
-            usuarioId: usuario.id,
-            idade: Math.max(0, idadeFinal),
-            categoria: categorias,
-            email: emailNorm,
-          },
-          select: { id: true },
-        });
+        const categoriaFinal =
+          categoriaAtletaPorIdade(
+            idadeFinal
+          );
+        const atleta =
+          await prisma.atleta.create({
+            data: {
+              usuarioId:
+                usuario.id,
+
+              idade:
+                idadeFinal,
+
+              categoria: [
+                categoriaFinal,
+              ],
+
+              email:
+                emailNorm,
+            },
+
+            select: {
+              id: true,
+            },
+          });
 
         if (
           tipo === "ATLETA" &&
@@ -849,14 +1116,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = olheiro.id;
         break;
       }
-      case TipoUsuario.Admin: {
-        const admin = await prisma.administrador.create({
-          data: { usuarioId: usuario.id, cargo: "Administrador Geral", nivel: Nivel.Base },
-          select: { id: true },
-        });
-        tipoUsuarioId = admin.id;
-        break;
-      }
       case TipoUsuario.Learning: {
         const learning = await prisma.learningProfile.create({
           data: {
@@ -984,12 +1243,29 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       console.error("Falha ao setar privacidade default:", e);
     }
 
-    let token: string | null = null;
+    let token:
+      string | null = null;
+
     if (JWT_SECRET) {
       token = jwt.sign(
-        { userId: usuario.id, tipo: usuario.tipo },
+        {
+          userId:
+            usuario.id,
+
+          tipo:
+            usuario.tipo,
+
+          tokenVersion:
+            usuario.tokenVersion ??
+            0,
+
+          purpose:
+            "registration-consent",
+        },
         JWT_SECRET,
-        { expiresIn: "7d" }
+        {
+          expiresIn: "30m",
+        }
       );
     }
 
@@ -1036,39 +1312,291 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-export async function verificarEmail(req: Request, res: Response) {
-  const { token } = req.query as { token?: string };
-  if (!token) return res.status(400).json({ ok: false, message: "Token ausente." });
+async function montarSessaoAposVerificacao(
+  usuarioId: string
+) {
+  const usuario =
+    await prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
+      },
 
-  try {
-    const rec = await prisma.emailVerification.findFirst({
-      where: { token: String(token) },
+      include: {
+        atleta: {
+          select: {
+            id: true,
+          },
+        },
+
+        professor: {
+          select: {
+            id: true,
+          },
+        },
+
+        clube: {
+          select: {
+            id: true,
+          },
+        },
+
+        escolinha: {
+          select: {
+            id: true,
+          },
+        },
+
+        olheiro: {
+          select: {
+            id: true,
+          },
+        },
+
+        learningProfile: {
+          select: {
+            id: true,
+          },
+        },
+
+        federacao: {
+          select: {
+            id: true,
+          },
+        },
+
+        marca: {
+          select: {
+            id: true,
+          },
+        },
+
+        administrador: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
 
-    if (!rec) return res.status(400).json({ ok: false, message: "Token inválido." });
-    if (rec.expiraEm && rec.expiraEm < new Date()) {
-      return res.status(410).json({ ok: false, message: "Token expirado. Solicite novo envio." });
+  if (!usuario) {
+    throw new Error(
+      "Usuário não encontrado após a verificação."
+    );
+  }
+
+  const tipoUsuarioId =
+    usuario.atleta?.id ??
+    usuario.professor?.id ??
+    usuario.clube?.id ??
+    usuario.escolinha?.id ??
+    usuario.olheiro?.id ??
+    usuario.administrador?.id ??
+    usuario.learningProfile?.id ??
+    usuario.federacao?.id ??
+    usuario.marca?.id ??
+    null;
+
+  const authToken =
+    jwt.sign(
+      {
+        userId:
+          usuario.id,
+
+        tipo:
+          usuario.tipo,
+
+        tokenVersion:
+          usuario.tokenVersion ??
+          0,
+      },
+      JWT_SECRET,
+      {
+        expiresIn: "7d",
+      }
+    );
+
+  try {
+    await Promise.all([
+      prisma.loginEvent.create({
+        data: {
+          usuarioId:
+            usuario.id,
+        },
+      }),
+
+      prisma.usuario.update({
+        where: {
+          id:
+            usuario.id,
+        },
+
+        data: {
+          lastLoginAt:
+            new Date(),
+
+          lastSeenAt:
+            new Date(),
+        },
+      }),
+    ]);
+  } catch (error) {
+    console.error(
+      "[verificarEmail] Falha ao registrar login após verificação:",
+      error
+    );
+  }
+
+  return {
+    token:
+      authToken,
+
+    id:
+      usuario.id,
+
+    tipo:
+      usuario.tipo,
+
+    nomeDeUsuario:
+      usuario.nomeDeUsuario,
+
+    tipoUsuarioId,
+
+    usuario: {
+      id:
+        usuario.id,
+
+      nomeDeUsuario:
+        usuario.nomeDeUsuario,
+
+      tipo:
+        usuario.tipo,
+
+      email:
+        usuario.email,
+
+      verified:
+        true,
+    },
+  };
+}
+
+export async function verificarEmail(
+  req: Request,
+  res: Response
+) {
+  const { token } =
+    req.query as {
+      token?: string;
+    };
+
+  if (!token) {
+    return res.status(400).json({
+      ok: false,
+      message:
+        "Token ausente.",
+    });
+  }
+
+  try {
+    const rec =
+      await prisma
+        .emailVerification
+        .findFirst({
+          where: {
+            token:
+              String(token),
+          },
+        });
+
+    if (!rec) {
+      return res
+        .status(400)
+        .json({
+          ok: false,
+          message:
+            "Token inválido.",
+        });
+    }
+
+    if (
+      rec.expiraEm &&
+      rec.expiraEm <
+        new Date()
+    ) {
+      return res
+        .status(410)
+        .json({
+          ok: false,
+          message:
+            "Token expirado. Solicite novo envio.",
+        });
     }
 
     if (rec.usadoEm) {
-      return res.json({ ok: true, message: "E-mail já verificado.", alreadyVerified: true });
+      return res.json({
+        ok: true,
+
+        message:
+          "Este e-mail já foi verificado.",
+
+        alreadyVerified:
+          true,
+      });
     }
 
     await prisma.$transaction([
       prisma.usuario.update({
-        where: { id: rec.usuarioId },
-        data: { verified: true },
+        where: {
+          id:
+            rec.usuarioId,
+        },
+
+        data: {
+          verified:
+            true,
+        },
       }),
+
       prisma.emailVerification.update({
-        where: { usuarioId: rec.usuarioId },
-        data: { usadoEm: new Date() },
+        where: {
+          usuarioId:
+            rec.usuarioId,
+        },
+
+        data: {
+          usadoEm:
+            new Date(),
+        },
       }),
     ]);
 
-    return res.json({ ok: true, message: "E-mail verificado com sucesso!" });
+    const sessao =
+      await montarSessaoAposVerificacao(
+        rec.usuarioId
+      );
+
+    return res.json({
+      ok: true,
+
+      message:
+        "E-mail verificado com sucesso! Sua conta está pronta.",
+
+      ...sessao,
+    });
   } catch (err) {
-    console.error("Erro ao verificar e-mail:", err);
-    return res.status(500).json({ ok: false, message: "Erro ao verificar e-mail." });
+    console.error(
+      "Erro ao verificar e-mail:",
+      err
+    );
+
+    return res
+      .status(500)
+      .json({
+        ok: false,
+
+        message:
+          "Erro ao verificar e-mail.",
+      });
   }
 }
 
@@ -1104,8 +1632,10 @@ export async function resendVerification(req: Request, res: Response) {
       const h = new Date();
       idadeCalc = h.getFullYear() - d.getFullYear() - (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate()) ? 1 : 0);
     }
-    const isMenor = idadeCalc !== null && idadeCalc < 18;
-    const destino = (isMenor && usuario.responsavelEmail) ? usuario.responsavelEmail : usuario.email;
+    const isMenor12 =
+      idadeCalc !== null &&
+      idadeCalc < 12;
+    const destino = (isMenor12 && usuario.responsavelEmail) ? usuario.responsavelEmail : usuario.email;
     if (!destino) return res.status(400).json({ message: "Usuário sem e-mail cadastrado." });
 
     const verifyUrl = `${FRONTEND_URL}/verificar-email?token=${encodeURIComponent(raw)}`;
@@ -1113,7 +1643,7 @@ export async function resendVerification(req: Request, res: Response) {
     await sendEmailVerification({
       to: destino,
       verifyUrl,
-      isResponsavel: Boolean(isMenor),
+      isResponsavel: Boolean(isMenor12),
       nome: usuario.nome,
       username: usuario.nomeDeUsuario,
       tipo: String(usuario.tipo),
@@ -1133,8 +1663,12 @@ function stringParaTipoUsuario(v: any): TipoUsuario | null {
   if (s === "atleta") return TipoUsuario.Atleta;
   if (s === "professor") return TipoUsuario.Professor;
   if (s === "clube") return TipoUsuario.Clube;
-  if (s === "escolinha") return TipoUsuario.Escolinha;
-  if (s === "admin") return TipoUsuario.Admin;
+  if (
+    s === "escolinha" ||
+    s === "escola"
+  ) {
+    return TipoUsuario.Escolinha;
+  }
   if (s === "olheiro") return TipoUsuario.Olheiro;
   switch (s) {
     case "learning":

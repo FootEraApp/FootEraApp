@@ -164,6 +164,100 @@ const MOTIVATIONAL_MESSAGES = [
   "Tá tudo bem. Campeões também erram o horário. 🏆",
 ];
 
+type PosicaoCampoValue =
+  | "GOL"
+  | "LD"
+  | "LE"
+  | "ZD"
+  | "ZC"
+  | "ZE"
+  | "ALA_D"
+  | "ALA_E"
+  | "VOL1"
+  | "VOL2"
+  | "MC1"
+  | "MC2"
+  | "MEI"
+  | "MEI_D"
+  | "MEI_E"
+  | "MD"
+  | "ME"
+  | "PD"
+  | "PE"
+  | "SA"
+  | "CA";
+
+const POSICAO_PROMPT_ADIADO_KEY =
+  "footera:posicaoPromptAdiado";
+
+const POSICOES_PROGRESSIVAS: Array<{
+  grupo: string;
+  opcoes: Array<{
+    value: PosicaoCampoValue;
+    label: string;
+  }>;
+}> = [
+  {
+    grupo: "Goleiro",
+    opcoes: [{ value: "GOL", label: "Goleiro" }],
+  },
+  {
+    grupo: "Lateral",
+    opcoes: [
+      { value: "LD", label: "Lateral direito" },
+      { value: "LE", label: "Lateral esquerdo" },
+    ],
+  },
+  {
+    grupo: "Zagueiro",
+    opcoes: [
+      { value: "ZD", label: "Zagueiro direito" },
+      { value: "ZC", label: "Zagueiro central" },
+      { value: "ZE", label: "Zagueiro esquerdo" },
+    ],
+  },
+  {
+    grupo: "Ala",
+    opcoes: [
+      { value: "ALA_D", label: "Ala direito" },
+      { value: "ALA_E", label: "Ala esquerdo" },
+    ],
+  },
+  {
+    grupo: "Volante",
+    opcoes: [
+      { value: "VOL1", label: "Primeiro volante" },
+      { value: "VOL2", label: "Segundo volante" },
+    ],
+  },
+  {
+    grupo: "Meio-campo",
+    opcoes: [
+      { value: "MC1", label: "Meio-campista central 1" },
+      { value: "MC2", label: "Meio-campista central 2" },
+      { value: "MEI", label: "Meia" },
+      { value: "MEI_D", label: "Meia direita" },
+      { value: "MEI_E", label: "Meia esquerda" },
+      { value: "MD", label: "Meio-campo direito" },
+      { value: "ME", label: "Meio-campo esquerdo" },
+    ],
+  },
+  {
+    grupo: "Ponta",
+    opcoes: [
+      { value: "PD", label: "Ponta direita" },
+      { value: "PE", label: "Ponta esquerda" },
+    ],
+  },
+  {
+    grupo: "Ataque",
+    opcoes: [
+      { value: "SA", label: "Segundo atacante" },
+      { value: "CA", label: "Centroavante" },
+    ],
+  },
+];
+
 function formatHHMMSS(totalSec: number) {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
@@ -826,6 +920,21 @@ const [dataAgendaSelecionada, setDataAgendaSelecionada] = useState(() => {
 
 const [menuTreinosAberto, setMenuTreinosAberto] = useState(false);
 
+  const [
+    posicaoModalAberto,
+    setPosicaoModalAberto,
+  ] = useState(false);
+
+  const [
+    salvandoPosicaoInicial,
+    setSalvandoPosicaoInicial,
+  ] = useState(false);
+
+  const [
+    grupoPosicaoAberto,
+    setGrupoPosicaoAberto,
+  ] = useState<string | null>(null);
+
 function navegarPeloMenu(rota: string) {
   setMenuTreinosAberto(false);
   navigate(rota);
@@ -848,6 +957,155 @@ function navegarPeloMenu(rota: string) {
   useEffect(() => {
     carregarCatalogoExercicios();
   }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    (async () => {
+      const token = getToken();
+
+      if (!token) {
+        return;
+      }
+
+      try {
+        if (
+          sessionStorage.getItem(
+            POSICAO_PROMPT_ADIADO_KEY
+          ) === "1"
+        ) {
+          return;
+        }
+
+        const response = await fetch(
+          `${API.BASE_URL}/api/perfil/me/posicao-atual`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data =
+          await response
+            .json()
+            .catch(() => null);
+
+        if (!response.ok) {
+          return;
+        }
+
+        if (
+          !cancelado &&
+          !data?.posicao
+        ) {
+          setPosicaoModalAberto(
+            true
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[TREINOS] falha ao verificar posição inicial:",
+          error
+        );
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  async function salvarPosicaoInicial(
+    posicao: PosicaoCampoValue
+  ) {
+    const token = getToken();
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      setSalvandoPosicaoInicial(
+        true
+      );
+
+      const response =
+        await fetch(
+          `${API.BASE_URL}/api/perfil/me/posicao`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+            body:
+              JSON.stringify({
+                posicao,
+              }),
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Não foi possível salvar a posição."
+        );
+      }
+
+      try {
+        sessionStorage.removeItem(
+          POSICAO_PROMPT_ADIADO_KEY
+        );
+      } catch {}
+
+      setGrupoPosicaoAberto(
+        null
+      );
+
+      setPosicaoModalAberto(
+        false
+      );
+
+      toast.success(
+        "Posição salva. Agora podemos personalizar melhor seus treinos."
+      );
+    } catch (error: any) {
+      toast.error(
+        error?.message ||
+          "Não foi possível salvar a posição."
+      );
+    } finally {
+      setSalvandoPosicaoInicial(
+        false
+      );
+    }
+  }
+
+  function adiarEscolhaPosicao() {
+    try {
+      sessionStorage.setItem(
+        POSICAO_PROMPT_ADIADO_KEY,
+        "1"
+      );
+    } catch {}
+
+    setGrupoPosicaoAberto(
+      null
+    );
+
+    setPosicaoModalAberto(
+      false
+    );
+  }
 
   useEffect(() => {
     if (!FLAGS.LEARNING_ENABLED) {
@@ -3335,6 +3593,131 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
               <Send className="w-4 h-4" />
               Enviar
             </button>
+          </div>
+        </div>
+      )}
+
+      {posicaoModalAberto && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-[1px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-posicao-inicial"
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b px-5 py-4">
+              <h2
+                id="titulo-posicao-inicial"
+                className="text-lg font-bold text-green-950"
+              >
+                Para recomendar treinos melhores, qual é a sua posição?
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-600">
+                Você pode informar agora ou deixar para depois. Isso não bloqueia o uso da FootEra.
+              </p>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {POSICOES_PROGRESSIVAS.map((grupo) => {
+                  const aberto =
+                    grupoPosicaoAberto ===
+                    grupo.grupo;
+
+                  return (
+                    <button
+                      key={grupo.grupo}
+                      type="button"
+                      disabled={
+                        salvandoPosicaoInicial
+                      }
+                      onClick={() => {
+                        if (
+                          grupo.opcoes.length ===
+                          1
+                        ) {
+                          void salvarPosicaoInicial(
+                            grupo.opcoes[0].value
+                          );
+                          return;
+                        }
+
+                        setGrupoPosicaoAberto(
+                          aberto
+                            ? null
+                            : grupo.grupo
+                        );
+                      }}
+                      className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                        aberto
+                          ? "border-green-700 bg-green-50 text-green-900"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-green-400 hover:bg-green-50"
+                      } ${
+                        salvandoPosicaoInicial
+                          ? "cursor-not-allowed opacity-60"
+                          : ""
+                      }`}
+                    >
+                      {grupo.grupo}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {grupoPosicaoAberto && (
+                <div className="mt-4 rounded-xl border border-green-100 bg-green-50 p-3">
+                  <p className="mb-3 text-sm font-semibold text-green-950">
+                    Escolha a posição exata:
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {POSICOES_PROGRESSIVAS.find(
+                      (grupo) =>
+                        grupo.grupo ===
+                        grupoPosicaoAberto
+                    )?.opcoes.map((opcao) => (
+                      <button
+                        key={opcao.value}
+                        type="button"
+                        disabled={
+                          salvandoPosicaoInicial
+                        }
+                        onClick={() =>
+                          void salvarPosicaoInicial(
+                            opcao.value
+                          )
+                        }
+                        className="rounded-lg border border-green-200 bg-white px-3 py-2.5 text-left text-sm font-medium text-green-900 transition hover:border-green-500 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {opcao.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {salvandoPosicaoInicial && (
+                <p className="mt-4 text-center text-sm text-gray-500">
+                  Salvando posição...
+                </p>
+              )}
+            </div>
+
+            <div className="border-t bg-gray-50 px-5 py-4">
+              <button
+                type="button"
+                disabled={
+                  salvandoPosicaoInicial
+                }
+                onClick={
+                  adiarEscolhaPosicao
+                }
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Agora não
+              </button>
+            </div>
           </div>
         </div>
       )}

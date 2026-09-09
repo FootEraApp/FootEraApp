@@ -1,12 +1,12 @@
-// server/controllers/googleAuthController.ts
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { Nivel, StatusCref, TipoUsuario, AuthProvider, NotificacaoTipo } from "@prisma/client";
+import { StatusCref, TipoUsuario, AuthProvider, NotificacaoTipo } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { validateGoogleCredential } from "../services/googleTokenService.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import { calcularIdadePorNascimento, categoriaAtletaPorIdade } from "../utils/categoriaAtleta.js";
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
@@ -20,12 +20,11 @@ function stringParaTipoUsuario(tipo: string): TipoUsuario | null {
       return TipoUsuario.Professor;
     case "CLUBE":
       return TipoUsuario.Clube;
+    case "ESCOLA":
     case "ESCOLINHA":
       return TipoUsuario.Escolinha;
     case "OLHEIRO":
       return TipoUsuario.Olheiro;
-    case "ADMIN":
-      return TipoUsuario.Admin;
     case "LEARNING":
       return TipoUsuario.Learning;
     case "FEDERACAO":
@@ -204,14 +203,46 @@ export async function googleLogin(req: Request, res: Response) {
     const { credential } = req.body ?? {};
 
     if (!credential) {
-      return res.status(400).json({ message: "credential é obrigatória." });
+      return res.status(400).json({
+        ok: false,
+        message: "credential é obrigatória.",
+      });
     }
 
-    const googleData = await validateGoogleCredential(String(credential));
+    const googleData = await validateGoogleCredential(
+      String(credential)
+    );
 
-    const usuarioComGoogle = await prisma.usuario.findUnique({
-      where: { googleSub: googleData.sub },
-    });
+    const googleEmail = String(
+      googleData.email || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (!googleEmail) {
+      return res.status(400).json({
+        ok: false,
+        code: "GOOGLE_EMAIL_MISSING",
+        message:
+          "Não foi possível obter o e-mail da sua conta Google.",
+      });
+    }
+
+    if (!googleData.emailVerified) {
+      return res.status(403).json({
+        ok: false,
+        code: "GOOGLE_EMAIL_NOT_VERIFIED",
+        message:
+          "Sua conta Google precisa possuir um e-mail verificado para continuar.",
+      });
+    }
+
+    const usuarioComGoogle =
+      await prisma.usuario.findUnique({
+        where: {
+          googleSub: googleData.sub,
+        },
+      });
 
     if (usuarioComGoogle) {
       if (usuarioComGoogle.deletedAt) {
@@ -222,45 +253,170 @@ export async function googleLogin(req: Request, res: Response) {
         });
       }
 
-      const status = String(usuarioComGoogle.status ?? "").toUpperCase();
-      if (status === "BLOQUEADO" || usuarioComGoogle.blockedAt) {
+      const status = String(
+        usuarioComGoogle.status ?? ""
+      ).toUpperCase();
+
+      if (
+        status === "BLOQUEADO" ||
+        usuarioComGoogle.blockedAt
+      ) {
         return res.status(403).json({
           ok: false,
           code: "ACCOUNT_BLOCKED",
           message:
             "Sua conta foi bloqueada pelo admin. Se quiser saber mais informações clique abaixo.",
-          blockedReason: usuarioComGoogle.blockedReason ?? null,
+          blockedReason:
+            usuarioComGoogle.blockedReason ?? null,
         });
       }
 
-      const authResp = await montarRespostaAuth(usuarioComGoogle.id);
+      if (
+        !usuarioComGoogle.verified
+      ) {
+        await prisma.usuario.update({
+          where: {
+            id:
+              usuarioComGoogle.id,
+          },
+
+          data: {
+            verified: true,
+          },
+        });
+      }
+
+      const authResp =
+        await montarRespostaAuth(
+          usuarioComGoogle.id
+        );
+
       return res.json(authResp);
     }
 
-    const usuarioMesmoEmail = await prisma.usuario.findUnique({
-      where: { email: googleData.email },
-    });
+    const usuarioMesmoEmail =
+      await prisma.usuario.findFirst({
+        where: {
+          email: {
+            equals: googleEmail,
+            mode: "insensitive",
+          },
+        },
+      });
 
-    if (usuarioMesmoEmail && !usuarioMesmoEmail.googleSub) {
-      return res.status(409).json({
-        ok: false,
-        code: "EMAIL_ALREADY_EXISTS",
+    if (usuarioMesmoEmail) {
+      if (usuarioMesmoEmail.deletedAt) {
+        return res.status(410).json({
+          ok: false,
+          code: "ACCOUNT_DELETED",
+          message: "Sua conta foi excluída.",
+        });
+      }
+
+      const status = String(
+        usuarioMesmoEmail.status ?? ""
+      ).toUpperCase();
+
+      if (
+        status === "BLOQUEADO" ||
+        usuarioMesmoEmail.blockedAt
+      ) {
+        return res.status(403).json({
+          ok: false,
+          code: "ACCOUNT_BLOCKED",
+          message:
+            "Sua conta foi bloqueada pelo admin. Se quiser saber mais informações clique abaixo.",
+          blockedReason:
+            usuarioMesmoEmail.blockedReason ?? null,
+        });
+      }
+
+      if (!googleData.emailVerified) {
+        return res.status(403).json({
+          ok: false,
+          code: "GOOGLE_EMAIL_NOT_VERIFIED",
+          message:
+            "Sua conta Google ainda não possui um e-mail verificado.",
+        });
+      }
+
+      if (
+        usuarioMesmoEmail.googleSub &&
+        usuarioMesmoEmail.googleSub !==
+          googleData.sub
+      ) {
+        return res.status(409).json({
+          ok: false,
+          code:
+            "GOOGLE_ALREADY_LINKED_DIFFERENT_ACCOUNT",
+          message:
+            "Esta conta da FootEra já está vinculada a outra conta Google.",
+        });
+      }
+
+      const novoProvider =
+        usuarioMesmoEmail.authProvider ===
+        AuthProvider.LOCAL
+          ? AuthProvider.LOCAL_GOOGLE
+          : usuarioMesmoEmail.authProvider;
+
+      await prisma.usuario.update({
+        where: {
+          id: usuarioMesmoEmail.id,
+        },
+        data: {
+          googleSub: googleData.sub,
+          googleEmail,
+          googlePicture:
+            googleData.picture ?? null,
+          googleLinkedAt: new Date(),
+          authProvider: novoProvider,
+
+          ...(usuarioMesmoEmail.verified
+            ? {}
+            : {
+                verified:
+                  googleData.emailVerified,
+              }),
+
+          ...(usuarioMesmoEmail.foto
+            ? {}
+            : {
+                foto:
+                  googleData.picture ?? null,
+              }),
+        },
+      });
+
+      const authResp =
+        await montarRespostaAuth(
+          usuarioMesmoEmail.id
+        );
+
+      return res.json({
+        ...authResp,
+        googleLinkedAutomatically: true,
         message:
-          "Já existe uma conta com esse e-mail. Entre com o login e a senha e conecte com o Google na parte de segurança nas configurações do perfil.",
+          "Conta Google vinculada e login realizado com sucesso.",
       });
     }
 
-    const preToken = crypto.randomBytes(32).toString("hex");
+    const preToken =
+      crypto.randomBytes(32).toString("hex");
 
     await prisma.googlePreCadastro.create({
       data: {
         token: preToken,
         googleSub: googleData.sub,
-        email: googleData.email,
-        emailVerified: googleData.emailVerified,
+        email: googleEmail,
+        emailVerified:
+          googleData.emailVerified,
         nome: googleData.name || null,
         foto: googleData.picture || null,
-        expiresAt: addHours(new Date(), 2),
+        expiresAt: addHours(
+          new Date(),
+          2
+        ),
       },
     });
 
@@ -268,17 +424,24 @@ export async function googleLogin(req: Request, res: Response) {
       ok: true,
       needsCompletion: true,
       preCadastroToken: preToken,
+
       googleProfile: {
-        email: googleData.email,
+        email: googleEmail,
         name: googleData.name,
         picture: googleData.picture,
       },
     });
   } catch (error: any) {
-    console.error("Erro no googleLogin:", error);
+    console.error(
+      "Erro no googleLogin:",
+      error
+    );
+
     return res.status(500).json({
       ok: false,
-      message: error?.message || "Erro ao autenticar com Google.",
+      message:
+        error?.message ||
+        "Erro ao autenticar com Google.",
     });
   }
 }
@@ -346,10 +509,95 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     nomeOrganizacao,
   } = req.body ?? {};
 
-  if (!preCadastroToken || !senha || !tipo || !nomeDeUsuario) {
+  if (
+    !preCadastroToken ||
+    !tipo
+  ) {
     return res.status(400).json({
-      error: "Campos obrigatórios: preCadastroToken, senha, tipo, nomeDeUsuario.",
+      error:
+        "Campos obrigatórios: preCadastroToken e tipo.",
     });
+  }
+
+  function normalizarBaseUsername(
+    valor: string
+  ) {
+    const base =
+      String(valor || "")
+        .normalize("NFD")
+        .replace(
+          /[\u0300-\u036f]/g,
+          ""
+        )
+        .toLowerCase()
+        .replace(
+          /[^a-z0-9._]+/g,
+          "."
+        )
+        .replace(
+          /\.{2,}/g,
+          "."
+        )
+        .replace(
+          /^[._]+|[._]+$/g,
+          ""
+        );
+
+    return (
+      base.slice(0, 16) ||
+      "usuario"
+    );
+  }
+
+  async function gerarUsernameDisponivel(
+    origem: string
+  ) {
+    const base =
+      normalizarBaseUsername(
+        origem
+      );
+
+    const candidatos = [
+      base,
+
+      ...Array.from(
+        { length: 12 },
+        () =>
+          `${base.slice(
+            0,
+            14
+          )}${Math.floor(
+            1000 +
+            Math.random() * 9000
+          )}`
+      ),
+    ];
+
+    for (
+      const candidato of candidatos
+    ) {
+      const existe =
+        await prisma.usuario.findUnique({
+          where: {
+            nomeDeUsuario:
+              candidato,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+      if (!existe) {
+        return candidato;
+      }
+    }
+
+    return `${base.slice(
+      0,
+      10
+    )}${Date.now()
+      .toString()
+      .slice(-7)}`;
   }
 
   function dataNascimentoPermitida(valor?: string | null) {
@@ -381,23 +629,89 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       return res.status(400).json({ error: "Pré-cadastro Google expirado." });
     }
 
+    if (!pre.emailVerified) {
+      await prisma.googlePreCadastro
+        .delete({
+          where: {
+            id: pre.id,
+          },
+        })
+        .catch(() => {});
+
+      return res.status(403).json({
+        ok: false,
+        code:
+          "GOOGLE_EMAIL_NOT_VERIFIED",
+        error:
+          "Sua conta Google precisa possuir um e-mail verificado para continuar.",
+      });
+    }
+
     const tipoEnum = stringParaTipoUsuario(tipo);
     if (!tipoEnum) {
       return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
 
     const emailNorm = String(pre.email).trim().toLowerCase();
-    const usernameFinal = String(nomeDeUsuario).trim().toLowerCase();
-    const nomeFinal = String(nome ?? pre.nome ?? "").trim() || usernameFinal;
+    const nomeFinal =
+      String(
+        nome ??
+        pre.nome ??
+        ""
+      ).trim() ||
+      emailNorm.split("@")[0];
 
-    const [jaEmail, jaUser, jaGoogle] = await Promise.all([
-      prisma.usuario.findUnique({ where: { email: emailNorm } }),
-      prisma.usuario.findUnique({ where: { nomeDeUsuario: usernameFinal } }),
-      prisma.usuario.findUnique({ where: { googleSub: pre.googleSub } }),
+    const usernameFinal =
+      await gerarUsernameDisponivel(
+        nomeFinal ||
+        emailNorm.split("@")[0]
+      );
+    const [
+      jaEmail,
+      jaGoogle,
+    ] = await Promise.all([
+      prisma.usuario.findUnique({
+        where: {
+          email:
+            emailNorm,
+        },
+      }),
+
+      prisma.usuario.findUnique({
+        where: {
+          googleSub:
+            pre.googleSub,
+        },
+      }),
     ]);
 
     if (jaGoogle) {
-      const authResp = await montarRespostaAuth(jaGoogle.id);
+      if (!jaGoogle.verified) {
+        await prisma.usuario.update({
+          where: {
+            id:
+              jaGoogle.id,
+          },
+
+          data: {
+            verified: true,
+          },
+        });
+      }
+
+      await prisma.googlePreCadastro
+        .delete({
+          where: {
+            id: pre.id,
+          },
+        })
+        .catch(() => {});
+
+      const authResp =
+        await montarRespostaAuth(
+          jaGoogle.id
+        );
+
       return res.json(authResp);
     }
 
@@ -408,16 +722,22 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       });
     }
 
-    if (jaUser) {
-      return res.status(400).json({ error: "Nome de usuário indisponível." });
-    }
+    const segredoInternoGoogle =
+      crypto
+        .randomBytes(32)
+        .toString("hex");
 
-    const senhaHash = await bcrypt.hash(String(senha), 10);
+    const senhaHash =
+      await bcrypt.hash(
+        segredoInternoGoogle,
+        10
+      );
 
     const precisaNascimento =
       tipoEnum === TipoUsuario.Atleta ||
+      tipoEnum === TipoUsuario.Professor ||
       tipoEnum === TipoUsuario.Olheiro ||
-      tipoEnum === TipoUsuario.Professor;
+      tipoEnum === TipoUsuario.Learning;
 
     if (precisaNascimento && !dataNascimentoPermitida(dataNascimento)) {
       return res.status(400).json({
@@ -429,10 +749,71 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
     const idadeCalcInicial = dataNascFinal ? calcularIdade(dataNascFinal) : null;
 
+    const exigeMaisDe16Anos =
+      tipoEnum === TipoUsuario.Professor ||
+      tipoEnum === TipoUsuario.Olheiro;
+
+    if (
+      exigeMaisDe16Anos &&
+      (
+        idadeCalcInicial === null ||
+        idadeCalcInicial < 17
+      )
+    ) {
+      return res.status(400).json({
+        error:
+          tipoEnum === TipoUsuario.Professor
+            ? "Para criar um perfil Profissional, é necessário ter mais de 16 anos."
+            : "Para criar um perfil Scout, é necessário ter mais de 16 anos.",
+      });
+    }
+
     const precisaResponsavel =
       tipoEnum === TipoUsuario.Atleta &&
       idadeCalcInicial !== null &&
       idadeCalcInicial < 12;
+
+    const responsavelNomeFinal =
+      String(responsavel?.nome ?? "").trim();
+
+    const responsavelEmailFinal =
+      String(responsavel?.email ?? "")
+        .trim()
+        .toLowerCase();
+
+    const responsavelTelefoneFinal =
+      String(responsavel?.telefone ?? "").trim() || null;
+
+    if (precisaResponsavel) {
+      if (!responsavelNomeFinal) {
+        return res.status(400).json({
+          error:
+            "Informe o nome do responsável legal.",
+        });
+      }
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
+          responsavelEmailFinal
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Informe um e-mail válido do responsável legal.",
+        });
+      }
+      if (
+        responsavelTelefoneFinal &&
+        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(
+          responsavelTelefoneFinal
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Informe um telefone válido do responsável legal ou deixe em branco.",
+        });
+      }
+    }
 
     const usuario = await prisma.usuario.create({
       data: {
@@ -447,16 +828,25 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         cep: cep ?? null,
         cpf: cpf ?? null,
         dataNascimento: dataNascFinal,
-        responsavelNome: precisaResponsavel ? responsavel?.nome ?? null : null,
-        responsavelEmail: precisaResponsavel ? responsavel?.email ?? null : null,
-        responsavelTelefone: precisaResponsavel ? responsavel?.telefone ?? null : null,
+        responsavelNome:
+          precisaResponsavel
+            ? responsavelNomeFinal
+            : null,
+        responsavelEmail:
+          precisaResponsavel
+            ? responsavelEmailFinal
+            : null,
+        responsavelTelefone:
+          precisaResponsavel
+            ? responsavelTelefoneFinal
+            : null,
 
         googleSub: pre.googleSub,
         googleEmail: pre.email,
         googlePicture: pre.foto ?? null,
         authProvider: AuthProvider.GOOGLE,
         googleLinkedAt: new Date(),
-        verified: pre.emailVerified,
+        verified: true,
         foto: pre.foto ?? null,
       },
       select: { id: true, tipo: true },
@@ -466,22 +856,44 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
 
     switch (tipoEnum) {
       case TipoUsuario.Atleta: {
-        const listaCategorias = Array.isArray(categorias) ? categorias : [];
-        const idadeFinal = dataNascFinal
-          ? Math.max(0, calcularIdade(dataNascFinal))
-          : typeof idade === "number"
-          ? idade
-          : 0;
+        if (!dataNascFinal) {
+          return res.status(400).json({
+            error:
+              "Data de nascimento é obrigatória para atleta.",
+          });
+        }
 
-        const atleta = await prisma.atleta.create({
-          data: {
-            usuarioId: usuario.id,
-            idade: idadeFinal,
-            categoria: listaCategorias,
-            email: emailNorm,
-          },
-          select: { id: true },
-        });
+        const idadeFinal =
+          calcularIdadePorNascimento(
+            dataNascFinal
+          );
+
+        const categoriaFinal =
+          categoriaAtletaPorIdade(
+            idadeFinal
+          );
+
+        const atleta =
+          await prisma.atleta.create({
+            data: {
+              usuarioId:
+                usuario.id,
+
+              idade:
+                idadeFinal,
+
+              categoria: [
+                categoriaFinal,
+              ],
+
+              email:
+                emailNorm,
+            },
+
+            select: {
+              id: true,
+            },
+          });
 
         await prisma.pontuacaoAtleta.create({
           data: { atletaId: atleta.id },
@@ -492,14 +904,38 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       }
 
       case TipoUsuario.Professor: {
+        const areaFormacaoFinal =
+          typeof areaFormacao ===
+            "string" &&
+          areaFormacao.trim()
+            ? areaFormacao.trim()
+            : null;
+
+        const crefFinal =
+          typeof cref === "string" &&
+          cref.trim()
+            ? cref.trim()
+            : null;
         const professor = await prisma.professor.create({
           data: {
             nome: nomeFinal,
             codigo: gerarCodigo("PRF"),
-            areaFormacao: areaFormacao ?? "Educação Física",
-            cref: cref ?? null,
-            statusCref: mapStatusCref(statusCref) ?? StatusCref.Pendente,
-            qualificacoes: [],
+            areaFormacao:
+              areaFormacaoFinal,
+
+            cref:
+              crefFinal,
+
+            statusCref:
+              crefFinal
+                ? (
+                    mapStatusCref(
+                      statusCref
+                    ) ??
+                    StatusCref.Pendente
+                  )
+                : null,
+                qualificacoes: [],
             certificacoes: [],
             fotoUrl: pre.foto ?? null,
             usuarioId: usuario.id,
@@ -541,6 +977,7 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         break;
       }
 
+      case TipoUsuario.Escola:
       case TipoUsuario.Escolinha: {
         const escolinha = await prisma.escolinha.create({
           data: {
@@ -592,20 +1029,6 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         });
 
         tipoUsuarioId = olheiro.id;
-        break;
-      }
-
-      case TipoUsuario.Admin: {
-        const admin = await prisma.administrador.create({
-          data: {
-            usuarioId: usuario.id,
-            cargo: "Administrador Geral",
-            nivel: Nivel.Base,
-          },
-          select: { id: true },
-        });
-
-        tipoUsuarioId = admin.id;
         break;
       }
 
@@ -787,6 +1210,16 @@ export async function googleLinkAccount(req: any, res: Response) {
     }
 
     const googleData = await validateGoogleCredential(String(credential));
+
+    if (!googleData.emailVerified) {
+      return res.status(403).json({
+        ok: false,
+        code:
+          "GOOGLE_EMAIL_NOT_VERIFIED",
+        message:
+          "Sua conta Google precisa possuir um e-mail verificado para ser vinculada à FootEra.",
+      });
+    }
 
     const jaVinculado = await prisma.usuario.findUnique({
       where: { googleSub: googleData.sub },
