@@ -19,6 +19,7 @@ model Usuario {
   googleEmail    String?
   googlePicture  String?
   authProvider   AuthProvider @default(LOCAL)
+  localLoginEnabled Boolean @default(true)
   googleLinkedAt DateTime?
 
   foto String?

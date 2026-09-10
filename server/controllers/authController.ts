@@ -137,6 +137,15 @@ export async function login(req: Request, res: Response) {
       });
     }
 
+    if (!usuario.localLoginEnabled) {
+      return res.status(409).json({
+        ok: false,
+        code: "LOCAL_LOGIN_DISABLED",
+        message:
+          "Esta conta não possui uma senha FootEra ativa. Entre com Google ou use 'Esqueci minha senha' para criar uma senha.",
+      });
+    }
+
     const senhaCorreta = await bcrypt.compare(String(senha), usuario.senhaHash);
     if (!senhaCorreta) {
       return res.status(401).json({ message: "Senha incorreta" });

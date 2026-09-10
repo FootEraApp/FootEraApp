@@ -334,6 +334,7 @@ export async function unlinkGoogle(req: Request, res: Response) {
         id: true,
         googleSub: true,
         authProvider: true,
+        localLoginEnabled: true,
       },
     });
 
@@ -343,6 +344,15 @@ export async function unlinkGoogle(req: Request, res: Response) {
 
     if (!usuario.googleSub) {
       return res.status(400).json({ message: "Sua conta não está vinculada ao Google." });
+    }
+
+    if (!usuario.localLoginEnabled) {
+      return res.status(409).json({
+        ok: false,
+        code: "LAST_AUTH_METHOD",
+        message:
+          "Antes de desvincular o Google, crie uma senha FootEra em 'Esqueci minha senha'. Assim você não perde o acesso à conta.",
+      });
     }
 
     const novoProvider =
