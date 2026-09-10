@@ -46,6 +46,7 @@ model Usuario {
   status                          AccountStatus                 @default(ATIVO)
   cep                             String?
   authProvider                    AuthProvider                  @default(LOCAL)
+  localLoginEnabled               Boolean                       @default(true)
   googleEmail                     String?
   googleLinkedAt                  DateTime?
   googlePicture                   String?

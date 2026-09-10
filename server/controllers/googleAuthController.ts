@@ -845,6 +845,7 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         googleEmail: pre.email,
         googlePicture: pre.foto ?? null,
         authProvider: AuthProvider.GOOGLE,
+        localLoginEnabled: false,
         googleLinkedAt: new Date(),
         verified: true,
         foto: pre.foto ?? null,

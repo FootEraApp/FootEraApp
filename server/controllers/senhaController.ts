@@ -4,8 +4,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
 import { APP } from "server/config.js";
-
-const RESET_TTL_MS = 30 * 60 * 1000;
+import { AuthProvider } from "@prisma/client";
 
 export async function forgotPassword(req: Request, res: Response) {
   const { email } = req.body as { email?: string };
@@ -66,10 +65,36 @@ export async function resetPassword(req: Request, res: Response) {
       return res.status(400).json({ message: "Token inválido ou expirado." });
     }
 
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: uid },
+      select: {
+        id: true,
+        authProvider: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({
+        message: "Usuário não encontrado.",
+      });
+    }
+
     const senhaHash = await bcrypt.hash(senha, 10);
 
     await prisma.$transaction([
-      prisma.usuario.update({ where: { id: uid }, data: { senhaHash } }),
+      prisma.usuario.update({
+        where: { id: uid },
+        data: {
+          senhaHash,
+          localLoginEnabled: true,
+
+          authProvider:
+            usuario.authProvider ===
+            AuthProvider.GOOGLE
+              ? AuthProvider.LOCAL_GOOGLE
+              : usuario.authProvider,
+        },
+      }),
       prisma.passwordReset.update({ where: { id: pr.id }, data: { usedAt: new Date() } }),
       prisma.passwordReset.deleteMany({ where: { usuarioId: uid, usedAt: null } }),
     ]);
