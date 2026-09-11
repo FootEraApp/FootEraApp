@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
@@ -287,5 +287,164 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
   } catch (e) {
     console.error("Erro em getTreinoUnico:", e);
     return res.status(500).json({ message: "Erro ao buscar treino." });
+  }
+}
+
+export async function getTreinoProgramadoPublico(
+  req: Request,
+  res: Response
+) {
+  try {
+    const id =
+      String(
+        req.params.id || ""
+      ).trim();
+
+    if (!id) {
+      return res.status(400).json({
+        message:
+          "ID do treino é obrigatório.",
+      });
+    }
+
+    const tp =
+      await prisma
+        .treinoProgramado
+        .findUnique({
+          where: {
+            id,
+          },
+
+          include: {
+            sessaoTreino: {
+              select: {
+                id: true,
+                nome: true,
+              },
+            },
+
+            Professor: {
+              select: {
+                nome: true,
+              },
+            },
+
+            escolinha: {
+              select: {
+                nome: true,
+              },
+            },
+
+            clube: {
+              select: {
+                nome: true,
+              },
+            },
+          },
+        });
+
+    if (!tp) {
+      return res.status(404).json({
+        message:
+          "Treino não encontrado.",
+      });
+    }
+
+    const estatistica =
+      await prisma
+        .estatisticaTreino
+        .findUnique({
+          where: {
+            treinoId: tp.id,
+          },
+
+          select: {
+            realizacoes: true,
+          },
+        });
+
+    return res.json({
+      tipo:
+        "programado",
+
+      publicPreview:
+        true,
+
+      id:
+        tp.id,
+
+      treinoProgramadoId:
+        tp.id,
+
+      titulo:
+        tp.nome,
+
+      descricao:
+        tp.descricao ?? null,
+
+      nivel:
+        tp.nivel ?? null,
+
+      objetivo:
+        tp.objetivo ?? null,
+
+      tipoTreino:
+        tp.tipoTreino ?? null,
+
+      duracao:
+        tp.duracao ?? null,
+
+      imagemUrl:
+        tp.imagemUrl ?? null,
+
+      pontuacao:
+        tp.pontuacao ?? null,
+
+      categoria:
+        tp.categoria ?? [],
+
+      dicas:
+        tp.dicas ?? [],
+
+      sessaoTreinoId:
+        tp.sessaoTreinoId ??
+        null,
+
+      sessaoTreino:
+        tp.sessaoTreino ??
+        null,
+
+      sessaoTreinoNome:
+        tp.sessaoTreino
+          ?.nome ?? null,
+
+      dataExpiracao:
+        tp.expiraEm
+          ? tp.expiraEm
+              .toISOString()
+          : null,
+
+      origem:
+        montarOrigem(tp),
+
+      realizacoes:
+        Number(
+          estatistica
+            ?.realizacoes ?? 0
+        ),
+
+      // Não liberar conteúdo do treino no preview.
+      exercicios: [],
+    });
+  } catch (error) {
+    console.error(
+      "Erro no preview público do treino:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Erro ao buscar treino.",
+    });
   }
 }

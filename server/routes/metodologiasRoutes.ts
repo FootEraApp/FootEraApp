@@ -1,6 +1,6 @@
 // server/routes/metodologiasRoutes.ts
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.js";
+import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 import {
   listMinhasMetodologiasAssinadas,
   listMinhasMetodologiasCriadas,
@@ -87,7 +87,7 @@ router.post(
   requireMetodologiaCreateAccess,
   createMetodologiaAvulsa
 );
-router.get("/metodologias-avulsas/:id", authenticateToken, getMetodologiaAvulsaById);
+router.get("/metodologias-avulsas/:id", optionalAuthenticateToken, getMetodologiaAvulsaById);
 router.put(
   "/metodologias-avulsas/:id",
   authenticateToken,
@@ -154,10 +154,8 @@ router.post(
   migrarMetodologiaAvulsaParaLearning
 );
 
-router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
+router.get("/:id/detalhe", optionalAuthenticateToken, getMetodologiaDetalhe);
 router.post("/:id/assinar", authenticateToken, assinarMetodologia);
-router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
-router.post("/metodologias-avulsas/:id/concluir-item", authenticateToken, concluirItemMetodologia);
 router.get("/:id", authenticateToken, getMetodologiaById);
 router.put("/:id", authenticateToken, requireMetodologiaOwnership, updateMetodologia);
 router.delete("/:id", authenticateToken, requireMetodologiaOwnership, deleteMetodologia);

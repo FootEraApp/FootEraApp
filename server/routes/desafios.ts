@@ -5,6 +5,7 @@ import multer from "multer";
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
 import { Prisma, StatusDesafioGrupo, TipoMensagem } from "@prisma/client";
+import { getDesafioById } from "../controllers/desafiosController.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,30 +27,10 @@ const upload = multer({
   },
 });
 
-router.get("/", authenticateToken, async (req, res) => {
-  const atletaId =
-    typeof req.query.atletaId === "string"
-      ? (req.query.atletaId as string)
-      : typeof req.query.tipoUsuarioId === "string"
-      ? (req.query.tipoUsuarioId as string)
-      : undefined;
-
-  try {
-    const where = atletaId
-      ? { submissoes: { none: { atletaId } } }
-      : undefined;
-
-    const desafios = await prisma.desafioOficial.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-    });
-
-    return res.json(desafios);
-  } catch (err) {
-    console.error("Erro ao buscar desafios:", err);
-    return res.status(500).json({ error: "Erro interno ao buscar desafios" });
-  }
-});
+router.get(
+  "/publico/:id",
+  getDesafioById
+);
 
 router.get("/minhas-submissoes", authenticateToken, async (req, res) => {
   try {
@@ -389,6 +370,31 @@ router.get("/submissoes/:id/comentarios", authenticateToken, async (req, res) =>
   } catch (e) {
     console.error("Erro ao buscar comentários da submissão:", e);
     return res.status(500).json({ error: "Erro interno ao buscar comentários" });
+  }
+});
+
+router.get("/", authenticateToken, async (req, res) => {
+  const atletaId =
+    typeof req.query.atletaId === "string"
+      ? (req.query.atletaId as string)
+      : typeof req.query.tipoUsuarioId === "string"
+      ? (req.query.tipoUsuarioId as string)
+      : undefined;
+
+  try {
+    const where = atletaId
+      ? { submissoes: { none: { atletaId } } }
+      : undefined;
+
+    const desafios = await prisma.desafioOficial.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json(desafios);
+  } catch (err) {
+    console.error("Erro ao buscar desafios:", err);
+    return res.status(500).json({ error: "Erro interno ao buscar desafios" });
   }
 });
 
