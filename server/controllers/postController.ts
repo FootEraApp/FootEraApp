@@ -3,7 +3,7 @@ import { prisma } from "../prisma.js";
 import { sanitizeText, basicModerationFails, normalizeIncomingMediaUrl, MOD, isAllowedMime } from "../utils/moderation.js";
 import { getIO } from "../socket.js"
 import {
-  VisibilidadePostagem,
+  VisibilidadePostagem, NotificacaoTipo
 } from "@prisma/client";
 import {
   normalizarVisibilidadePostagem,
@@ -12,6 +12,9 @@ import {
 import {
   sanitizePublicPost,
 } from "../utils/publicSanitizers.js";
+import {
+  criarNotificacaoEEnviarPush,
+} from "./notificacoesController.js";
 
 type AuthedReq = Request & { userId?: string };
 
@@ -202,6 +205,40 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   const novoComentario = await prisma.comentario.create({
     data: { conteudo: text, postagemId: postId, usuarioId: req.userId! },
   });
+
+  if (
+    post.usuarioId !==
+    req.userId
+  ) {
+    try {
+      await criarNotificacaoEEnviarPush({
+        usuarioId:
+          post.usuarioId,
+
+        actorId:
+          req.userId,
+
+        tipo:
+          NotificacaoTipo.GENERICA,
+
+        titulo:
+          "Novo comentário",
+
+        mensagem:
+          "Sua publicação recebeu um novo comentário.",
+
+        link:
+          `/post/${encodeURIComponent(
+            postId
+          )}`,
+      });
+    } catch (e) {
+      console.warn(
+        "[adicionarComentario] falha ao criar notificação:",
+        e
+      );
+    }
+  }
 
   return res.status(201).json(novoComentario);
 };

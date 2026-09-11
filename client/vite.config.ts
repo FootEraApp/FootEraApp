@@ -18,7 +18,10 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/\.well-known\//,
+        ],
         importScripts: ["/push-handler.js"],
         runtimeCaching: [
           {

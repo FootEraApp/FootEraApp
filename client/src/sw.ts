@@ -13,7 +13,15 @@ declare let self: ServiceWorkerGlobalScope;
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL("/index.html"))
+  new NavigationRoute(
+    createHandlerBoundToURL("/index.html"),
+    {
+      denylist: [
+        /^\/api\//,
+        /^\/\.well-known\//,
+      ],
+    }
+  )
 );
 
 registerRoute(

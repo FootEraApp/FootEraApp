@@ -166,6 +166,13 @@ function Stars({ value }: { value: number }) {
 
 export default function TreinoUnico() {
   const { get } = useQuery();
+
+  const agendadoId =
+    get("agendadoId");
+
+  const programadoId =
+    get("programadoId");
+
   const [
     matchPublico,
     paramsPublico,
@@ -178,8 +185,6 @@ export default function TreinoUnico() {
     matchPublico
       ? paramsPublico?.id
       : null;
-  const agendadoId = get("agendadoId");
-  const programadoId = get("programadoId");
   const token = (Storage as any).token ?? localStorage.getItem("token");
 
   const [loading, setLoading] = useState(true);

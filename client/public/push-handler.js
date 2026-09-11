@@ -1,47 +1,136 @@
-self.addEventListener("push", (event) => {
-  let data = {};
+function normalizarDestino(raw) {
+  const fallback = "/notificacoes";
 
   try {
-    data = event.data ? event.data.json() : {};
+    const value = String(raw || "").trim();
+
+    if (!value) {
+      return fallback;
+    }
+
+    const url = new URL(
+      value,
+      self.location.origin
+    );
+
+    if (
+      url.origin !==
+      self.location.origin
+    ) {
+      return fallback;
+    }
+
+    return (
+      url.pathname +
+      url.search +
+      url.hash
+    );
   } catch {
-    data = {
-      title: "FootEra",
-      body: event.data ? event.data.text() : "Você tem uma nova notificação.",
-    };
+    return fallback;
   }
+}
 
-  const title = data.title || "FootEra";
-  const options = {
-    body: data.body || data.mensagem || "Você tem uma nova notificação.",
-    icon: data.icon || "/icon-192.png",
-    badge: data.badge || "/icon-192.png",
-    tag: data.tag || data.tipo || "footera-notificacao",
-    data: {
-      url: data.url || data.link || "/notificacoes",
-      notificacaoId: data.notificacaoId || null,
-    },
-  };
+self.addEventListener(
+  "push",
+  (event) => {
+    let data = {};
 
-  event.waitUntil(self.registration.showNotification(title, options));
-});
+    try {
+      data = event.data
+        ? event.data.json()
+        : {};
+    } catch {
+      data = {
+        title: "FootEra",
+        body: event.data
+          ? event.data.text()
+          : "Você tem uma nova notificação.",
+      };
+    }
 
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
+    const title =
+      data.title || "FootEra";
 
-  const url = event.notification?.data?.url || "/notificacoes";
+    const destino =
+      normalizarDestino(
+        data.url ||
+        data.link
+      );
 
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ("focus" in client) {
-          client.navigate(url);
-          return client.focus();
-        }
-      }
+    const options = {
+      body:
+        data.body ||
+        data.mensagem ||
+        "Você tem uma nova notificação.",
 
-      if (clients.openWindow) {
-        return clients.openWindow(url);
-      }
-    })
-  );
-});
+      icon:
+        data.icon ||
+        "/icon-192.png",
+
+      badge:
+        data.badge ||
+        "/icon-192.png",
+
+      tag:
+        data.tag ||
+        data.tipo ||
+        "footera-notificacao",
+
+      data: {
+        url: destino,
+
+        notificacaoId:
+          data.notificacaoId ||
+          null,
+      },
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(
+        title,
+        options
+      )
+    );
+  }
+);
+
+self.addEventListener(
+  "notificationclick",
+  (event) => {
+    event.notification.close();
+
+    const destino =
+      normalizarDestino(
+        event.notification?.data?.url
+      );
+
+    event.waitUntil(
+      clients
+        .matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        })
+        .then((clientList) => {
+          for (
+            const client of clientList
+          ) {
+            if ("focus" in client) {
+              client.navigate(
+                destino
+              );
+
+              return client.focus();
+            }
+          }
+
+          if (
+            clients.openWindow
+          ) {
+            return clients.openWindow(
+              destino
+            );
+          }
+        })
+    );
+  }
+);
