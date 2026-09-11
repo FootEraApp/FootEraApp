@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as ctrl from "../controllers/eventosController.js";
-import { authenticateToken } from "../middlewares/auth.js";
+import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 import {
   getConvocacaoEvento,
   upsertConvocacaoEvento,
@@ -37,7 +37,16 @@ r.post(
 r.get("/:eventoId/convocacao", authenticateToken, getConvocacaoEvento);
 r.put("/:eventoId/convocacao", authenticateToken, upsertConvocacaoEvento);
 
-r.get("/:id", ctrl.obter);
-r.get("/", ctrl.listarPublicos);
+r.get(
+  "/:id",
+  optionalAuthenticateToken,
+  ctrl.obter
+);
+
+r.get(
+  "/",
+  optionalAuthenticateToken,
+  ctrl.listarPublicos
+);
 
 export default r;

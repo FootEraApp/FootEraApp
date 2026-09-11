@@ -1522,3 +1522,146 @@ export async function frequencia(req: Request, res: Response) {
     return sendError(res, e, "Falha ao carregar frequência.");
   }
 }
+
+export async function getTurmaPublica(
+  req: Request,
+  res: Response
+) {
+  try {
+    const id =
+      String(
+        req.params.id || ""
+      ).trim();
+
+    if (!id) {
+      return res.status(400).json({
+        error:
+          "ID da turma é obrigatório.",
+      });
+    }
+
+    const turma =
+      await prisma.turma.findFirst({
+        where: {
+          id,
+          ativo: true,
+        },
+
+        select: {
+          id: true,
+          nome: true,
+          descricao: true,
+          categoria: true,
+          createdAt: true,
+
+          clube: {
+            select: {
+              id: true,
+              nome: true,
+              logo: true,
+
+              usuario: {
+                select: {
+                  nomeDeUsuario:
+                    true,
+                },
+              },
+            },
+          },
+
+          escolinha: {
+            select: {
+              id: true,
+              nome: true,
+              logo: true,
+
+              usuario: {
+                select: {
+                  nomeDeUsuario:
+                    true,
+                },
+              },
+            },
+          },
+
+          _count: {
+            select: {
+              membros: true,
+              professores: true,
+            },
+          },
+        },
+      });
+
+    if (!turma) {
+      return res.status(404).json({
+        error:
+          "Turma não encontrada.",
+      });
+    }
+
+    const organizacao =
+      turma.clube
+        ? {
+            tipo: "Clube",
+            id:
+              turma.clube.id,
+            nome:
+              turma.clube.nome,
+            logo:
+              turma.clube.logo,
+            nomeDeUsuario:
+              turma.clube
+                .usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : turma.escolinha
+        ? {
+            tipo:
+              "Escolinha",
+            id:
+              turma.escolinha.id,
+            nome:
+              turma.escolinha.nome,
+            logo:
+              turma.escolinha.logo,
+            nomeDeUsuario:
+              turma.escolinha
+                .usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : null;
+
+    return res.json({
+      id: turma.id,
+      nome: turma.nome,
+      descricao:
+        turma.descricao,
+      categoria:
+        turma.categoria,
+      createdAt:
+        turma.createdAt,
+
+      organizacao,
+
+      membrosCount:
+        turma._count.membros,
+
+      professoresCount:
+        turma._count
+          .professores,
+    });
+  } catch (error) {
+    console.error(
+      "[turma/publica]",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível carregar a turma.",
+    });
+  }
+}

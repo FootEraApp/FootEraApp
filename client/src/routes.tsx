@@ -76,6 +76,13 @@ const CreatorNovoEventoPage = lazy(() => import("./pages/creator/eventos-novo.js
 const MudarTipoPerfilPage = lazy(() => import("./pages/perfil/mudarTipo.js"));
 const SalaCopaEventoPage = lazy(() => import("./pages/learning/evento/sala-copa.js"));
 const LearningEventoAoVivoPage = lazy(() => import("./pages/learning/evento/eventoAoVivo.js"));
+const PaginaTurmaDetalhe =
+  lazy(
+    () =>
+      import(
+        "./pages/TurmaDetalhe.js"
+      )
+  );
 
 function RouteLoading() {
   return (
@@ -106,6 +113,63 @@ export function AppRoutes() {
         </Route>
         <Route path="/resetar-senha">
           <PublicOnly><PaginaResetarSenha /></PublicOnly>
+        </Route>
+        {/* URLs públicas oficiais da FootEra */}
+
+        <Route path="/profile/:id">
+          <PaginaPerfilUnico />
+        </Route>
+
+        <Route path="/organizacao/:id">
+          <PaginaPerfilUnico />
+        </Route>
+
+        <Route path="/turma/:id">
+          <PaginaTurmaDetalhe />
+        </Route>
+
+        <Route path="/treino/:id">
+          <PaginaTreinoUnico />
+        </Route>
+
+        <Route path="/evento/:id">
+          {(
+            params?: {
+              id: string;
+            }
+          ) =>
+            params
+              ? (
+                  <PaginaEventoDetalhe
+                    eventoId={
+                      params.id
+                    }
+                  />
+                )
+              : null
+          }
+        </Route>
+
+        <Route path="/metodologia/:id">
+          <MetodologiaUnicaPage />
+        </Route>
+
+        <Route path="/desafio/:id">
+          <PaginaDesafioUnico />
+        </Route>
+
+        <Route path="/join/:token">
+          <div className="min-h-screen flex items-center justify-center p-6 bg-[#FEFBE9]">
+            <div className="max-w-md w-full bg-white border rounded-2xl p-6 text-center shadow-sm">
+              <h1 className="text-xl font-bold text-green-900">
+                Convite FootEra
+              </h1>
+
+              <p className="mt-2 text-gray-600">
+                O sistema de convites será conectado a este link na próxima etapa.
+              </p>
+            </div>
+          </div>
         </Route>
 
         <Route path="/admin/login"><PaginaLoginAdmin /></Route>

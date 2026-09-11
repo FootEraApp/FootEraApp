@@ -2623,6 +2623,25 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       return res.status(404).json({ message: "Metodologia não encontrada." });
     }
 
+    const ownerPodeVerRascunho =
+      !!userId &&
+      String(
+        metodologia
+          .criadorUsuarioId ||
+          ""
+      ) === String(userId);
+
+    if (
+      !metodologia.ativo &&
+      !isAdmin &&
+      !ownerPodeVerRascunho
+    ) {
+      return res.status(404).json({
+        message:
+          "Metodologia não encontrada.",
+      });
+    }
+
     const assinatura = userId
       ? await prisma.metodologiaAssinante.findUnique({
           where: {
@@ -2829,8 +2848,16 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
           thumbUrl: item.thumbUrl,
           duracaoMin: item.duracaoMin,
           videoUrl: podeVerVideo ? item.videoUrl : null,
-          arquivoUrl: item.arquivoUrl ?? null,
-          materialUrl: item.materialUrl ?? null,
+          arquivoUrl:
+            podeVerVideo
+              ? item.arquivoUrl ??
+                null
+              : null,
+          materialUrl:
+            podeVerVideo
+              ? item.materialUrl ??
+                null
+              : null,
           treinoProgramadoId: item.treinoProgramadoId,
           treinoProgramado: item.treinoProgramado
             ? {
@@ -5547,6 +5574,17 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
     const isOwner =
       !!userId && String(item.criadorUsuarioId || "") === String(userId);
 
+    if (
+      !item.ativo &&
+      !isAdmin &&
+      !isOwner
+    ) {
+      return res.status(404).json({
+        message:
+          "Metodologia avulsa não encontrada.",
+      });
+    }
+    
     const hasAccess = assinaturaDaAcesso(assinatura);
     const acessoFinal = hasAccess || isAdmin || isOwner;
 
@@ -5630,9 +5668,20 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
           pontos: it.pontos,
           thumbUrl: it.thumbUrl,
           duracaoMin: it.duracaoMin,
-          videoUrl: acessoFinal ? it.videoUrl : null,
-          arquivoUrl: it.arquivoUrl ?? null,
-          materialUrl: it.materialUrl ?? null,
+          videoUrl:
+            acessoFinal
+              ? it.videoUrl
+              : null,
+
+          arquivoUrl:
+            acessoFinal
+              ? it.arquivoUrl ?? null
+              : null,
+
+          materialUrl:
+            acessoFinal
+              ? it.materialUrl ?? null
+              : null,
           treinoProgramadoId: it.treinoProgramadoId,
           treinoProgramado: it.treinoProgramado
             ? {

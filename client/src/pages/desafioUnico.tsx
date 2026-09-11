@@ -3,7 +3,6 @@ import { useParams, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
-import { FLAGS } from "../config.js";
 
 interface Desafio {
   id: string;
@@ -24,21 +23,18 @@ export default function DesafioUnico() {
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!FLAGS.DESAFIOS_ENABLED) setLocation("/treinos");
-  }, []);
-
-  if (!FLAGS.DESAFIOS_ENABLED) return null;
-  
-  useEffect(() => {
     if (!id) return;
 
     async function fetchDesafio() {
       setLoading(true);
       setErro(null);
       try {
-        const res = await fetch(`${API.BASE_URL}/api/desafios/${id}`, {
-          headers: { Authorization: `Bearer ${Storage.token}` },
-        });
+        const res =
+          await fetch(
+            `${API.BASE_URL}/api/desafios/publico/${encodeURIComponent(
+              id!
+            )}`
+          );
 
         if (!res.ok) {
           if (res.status === 404) setErro("Desafio não encontrado.");

@@ -291,12 +291,35 @@ export async function listarPublicos(req: Request & { user?: any }, res: Respons
 
     const userId = req.user?.id;
 
-    const mapped = eventos.map((ev) => ({
-      ...ev,
-      tipoLabel: mapEventoTipoLabel(ev.tipo),
-      totalInscritos: ev.inscricoes?.length ?? 0,
-      inscrito: userId ? ev.inscricoes.some((i) => i.usuarioId === userId) : false,
-    }));
+    const mapped =
+      eventos.map((ev) => {
+        const {
+          inscricoes,
+          ...eventoPublico
+        } = ev;
+
+        return {
+          ...eventoPublico,
+
+          tipoLabel:
+            mapEventoTipoLabel(
+              ev.tipo
+            ),
+
+          totalInscritos:
+            inscricoes?.length ??
+            0,
+
+          inscrito:
+            userId
+              ? inscricoes.some(
+                  (i) =>
+                    i.usuarioId ===
+                    userId
+                )
+              : false,
+        };
+      });
 
     return res.json(mapped);
   } catch (e) {
