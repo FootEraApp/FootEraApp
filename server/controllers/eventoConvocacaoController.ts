@@ -161,7 +161,10 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
     });
 
     const inicioStr = evento.dataEvento ? new Date(evento.dataEvento as any).toLocaleString("pt-BR") : "";
-    const linkEvento = `/eventos/${eventoId}`;
+    const linkEvento =
+      `/evento/${encodeURIComponent(
+        eventoId
+      )}`;
 
     const deId = String(req.userId || req.user?.id || "").trim();
     if (!deId) return res.status(401).json({ error: "Não autenticado" });
@@ -187,9 +190,25 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
 
     await prisma.notificacao.deleteMany({
       where: {
-        link: `/eventos/${eventoId}`,
-        usuarioId: { in: atletas.map(a => a.usuarioId) }
-      }
+        usuarioId: {
+          in:
+            atletas.map(
+              (a) =>
+                a.usuarioId
+            ),
+        },
+
+        OR: [
+          {
+            link:
+              `/eventos/${eventoId}`,
+          },
+          {
+            link:
+              linkEvento,
+          },
+        ],
+      },
     });
 
     await Promise.all(

@@ -997,6 +997,24 @@ export default function PaginaNotificacoes() {
               linkStr.startsWith("/mensagens") ||
               tituloStr.includes("mensagem");
 
+            const isPostNotif =
+              linkStr.startsWith(
+                "/post/"
+              );
+
+            const isTurmaNotif =
+              linkStr.startsWith(
+                "/turma/"
+              );
+
+            const isEventoNotif =
+              linkStr.startsWith(
+                "/evento/"
+              ) ||
+              linkStr.startsWith(
+                "/eventos/"
+              );
+
             const isPerfilNotif =
               linkStr.startsWith("/perfil");
 
@@ -1005,29 +1023,45 @@ export default function PaginaNotificacoes() {
               tituloStr.includes("aula ao vivo") ||
               mensagemStr.includes("aula ao vivo");
 
-            const textoAcao = isBillingWarning || isBillingBlocked
-              ? "Abrir pagamentos:"
-              : isTreinoNotif
-              ? "Visualizar treino:"
-              : isMensagemNotif
-              ? "Visualizar mensagem:"
-              : isPerfilNotif
-              ? "Visualizar perfil:"
-              : isLearningNotif
-              ? "Visualizar aula:"
-              : "Visualizar o evento:";
+            const textoAcao =
+              isBillingWarning ||
+              isBillingBlocked
+                ? "Abrir pagamentos:"
+                : isTreinoNotif
+                ? "Visualizar treino:"
+                : isMensagemNotif
+                ? "Visualizar mensagem:"
+                : isPostNotif
+                ? "Visualizar publicação:"
+                : isTurmaNotif
+                ? "Visualizar turma:"
+                : isPerfilNotif
+                ? "Visualizar perfil:"
+                : isLearningNotif
+                ? "Visualizar aula:"
+                : isEventoNotif
+                ? "Visualizar evento:"
+                : "Abrir:";
 
-            const textoBotao = isBillingWarning || isBillingBlocked
-              ? "Abrir pagamentos"
-              : isTreinoNotif
-              ? "Abrir treino"
-              : isMensagemNotif
-              ? "Abrir mensagem"
-              : isPerfilNotif
-              ? "Abrir perfil"
-              : isLearningNotif
-              ? "Abrir aula"
-              : "Abrir evento";
+            const textoBotao =
+              isBillingWarning ||
+              isBillingBlocked
+                ? "Abrir pagamentos"
+                : isTreinoNotif
+                ? "Abrir treino"
+                : isMensagemNotif
+                ? "Abrir mensagem"
+                : isPostNotif
+                ? "Abrir publicação"
+                : isTurmaNotif
+                ? "Abrir turma"
+                : isPerfilNotif
+                ? "Abrir perfil"
+                : isLearningNotif
+                ? "Abrir aula"
+                : isEventoNotif
+                ? "Abrir evento"
+                : "Abrir";
 
             const isColaboracaoOlheiro =
               String(

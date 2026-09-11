@@ -754,7 +754,10 @@ async function notificarNovoTreino(
       tipo: NotificacaoTipo.TREINO,
       titulo: "Novo treino agendado",
       mensagem: `Um novo treino foi agendado para você: ${titulo}`,
-      link: `/treinos`,
+      link:
+        `/treinos/unico?agendadoId=${encodeURIComponent(
+          treinoId
+        )}`,
     });
   } catch (e) {
     console.warn("[notificarNovoTreino] falha ao criar push:", e);
@@ -5810,7 +5813,12 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
           mensagem: aprovado
             ? `Seu treino "${treinoTitulo}" foi aprovado.`
             : `Seu treino "${treinoTitulo}" foi reprovado.`,
-          link: `/treinos`,
+          link:
+            treinoIdForKey
+              ? `/treinos/unico?agendadoId=${encodeURIComponent(
+                  String(treinoIdForKey)
+                )}`
+              : "/treinos",
         });
       }
     } catch (e) {
