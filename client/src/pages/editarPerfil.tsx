@@ -1,12 +1,133 @@
+// client/src/pages/editarPerfil
 import { toast } from "@/lib/toast";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  LockKeyhole,
+  ShieldCheck,
+} from "lucide-react";
 import { Link } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
+
+type TipoRender =
+  | "atleta"
+  | "professor"
+  | "escolinha"
+  | "clube"
+  | "olheiro"
+  | "federacao"
+  | "marca"
+  | "learning"
+  | "creator";
+
+type PapelApi =
+  | "Atleta"
+  | "Professor"
+  | "Escolinha"
+  | "Clube"
+  | "Olheiro"
+  | "Federacao"
+  | "Marca"
+  | "Learning"
+  | "Creator";
+
+type StatusPapel = "PENDENTE" | "ATIVO" | "INATIVO";
+
+type PapelUsuario = {
+  id?: string;
+  papel: PapelApi;
+  status: StatusPapel;
+  perfilCompletoEm?: string | null;
+};
+
+type PerfilDisponivel = {
+  tipo: TipoRender;
+  papel: PapelApi;
+  titulo: string;
+  descricao: string;
+};
+
+const PERFIS_DISPONIVEIS: PerfilDisponivel[] = [
+  {
+    tipo: "atleta",
+    papel: "Atleta",
+    titulo: "Atleta",
+    descricao: "Evolução, treinos, conquistas e oportunidades.",
+  },
+  {
+    tipo: "professor",
+    papel: "Professor",
+    titulo: "Professor",
+    descricao: "Turmas, atletas, treinos e metodologias.",
+  },
+  {
+    tipo: "olheiro",
+    papel: "Olheiro",
+    titulo: "Olheiro",
+    descricao: "Observação, listas e indicações de atletas.",
+  },
+  {
+    tipo: "clube",
+    papel: "Clube",
+    titulo: "Clube",
+    descricao: "Elencos, profissionais, eventos e scouting.",
+  },
+  {
+    tipo: "escolinha",
+    papel: "Escolinha",
+    titulo: "Escolinha",
+    descricao: "Turmas, professores e desenvolvimento de atletas.",
+  },
+  {
+    tipo: "learning",
+    papel: "Learning",
+    titulo: "Learning",
+    descricao: "Conteúdos, eventos e metodologias da FootEra.",
+  },
+  {
+    tipo: "federacao",
+    papel: "Federacao",
+    titulo: "Federação",
+    descricao: "Competições, eventos e presença institucional.",
+  },
+  {
+    tipo: "marca",
+    papel: "Marca",
+    titulo: "Marca",
+    descricao: "Ativações, eventos e conexão com a comunidade.",
+  },
+  {
+    tipo: "creator",
+    papel: "Creator",
+    titulo: "Creator",
+    descricao: "Conteúdos, metodologias e experiências autorais.",
+  },
+];
+
+function normalizarTipoRender(valor: unknown): TipoRender | null {
+  const tipo = String(valor ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (tipo === "escola" || tipo === "escolinha") return "escolinha";
+
+  return PERFIS_DISPONIVEIS.some((perfil) => perfil.tipo === tipo)
+    ? (tipo as TipoRender)
+    : null;
+}
+
+function obterPerfilDisponivel(tipo: TipoRender | null) {
+  return PERFIS_DISPONIVEIS.find((perfil) => perfil.tipo === tipo) ?? null;
+}
 
 type ResultadoBuscaClube = {
   id: string;
@@ -58,20 +179,22 @@ const EditarPerfil = () => {
   const [dadosTipo, setDadosTipo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-
-  type TipoRender =
-    | "atleta"
-    | "professor"
-    | "escola"
-    | "escolinha"
-    | "clube"
-    | "admin"
-    | "olheiro"
-    | "federacao"
-    | "marca"
-    | "learning"
-    ;
   const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
+  const [tipoEmUso, setTipoEmUso] = useState<TipoRender | null>(() =>
+    normalizarTipoRender(tipoUsuarioOriginal),
+  );
+  const [papeisUsuario, setPapeisUsuario] = useState<PapelUsuario[]>([]);
+  const [dadosPorPapel, setDadosPorPapel] = useState<
+    Partial<Record<TipoRender, any>>
+  >({});
+  const [confirmacoesAtivacao, setConfirmacoesAtivacao] = useState<
+    Partial<Record<TipoRender, boolean>>
+  >({});
+  const [ativandoPapel, setAtivandoPapel] = useState<TipoRender | null>(null);
+  const [carregandoPapel, setCarregandoPapel] = useState<TipoRender | null>(
+    null,
+  );
+  const carrosselRef = useRef<HTMLDivElement>(null);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -79,9 +202,7 @@ const EditarPerfil = () => {
   const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
   const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
   type ColaboracaoAtualOlheiro = {
-    tipo:
-      | "CLUBE"
-      | "ESCOLINHA";
+    tipo: "CLUBE" | "ESCOLINHA";
     id: string;
     usuarioId?: string | null;
     nome: string;
@@ -90,9 +211,7 @@ const EditarPerfil = () => {
 
   type SolicitacaoColaboracaoPendente = {
     id: string;
-    tipo:
-      | "CLUBE"
-      | "ESCOLINHA";
+    tipo: "CLUBE" | "ESCOLINHA";
     destinoId: string;
     nome: string;
     logo?: string | null;
@@ -106,42 +225,20 @@ const EditarPerfil = () => {
     fotoUrl?: string | null;
   };
 
-  const [
-    colaboracaoAtual,
-    setColaboracaoAtual,
-  ] =
-    useState<ColaboracaoAtualOlheiro | null>(
-      null
-    );
+  const [colaboracaoAtual, setColaboracaoAtual] =
+    useState<ColaboracaoAtualOlheiro | null>(null);
 
-  const [
-    solicitacaoColabPendente,
-    setSolicitacaoColabPendente,
-  ] =
-    useState<SolicitacaoColaboracaoPendente | null>(
-      null
-    );
+  const [solicitacaoColabPendente, setSolicitacaoColabPendente] =
+    useState<SolicitacaoColaboracaoPendente | null>(null);
 
-  const [
-    escolinhaColabQuery,
-    setEscolinhaColabQuery,
-  ] = useState("");
+  const [escolinhaColabQuery, setEscolinhaColabQuery] = useState("");
 
-  const [
-    escolinhasColab,
-    setEscolinhasColab,
-  ] =
-    useState<
-      ResultadoBuscaEscolinhaColab[]
-    >([]);
+  const [escolinhasColab, setEscolinhasColab] = useState<
+    ResultadoBuscaEscolinhaColab[]
+  >([]);
 
-  const [
-    escolinhaColabSel,
-    setEscolinhaColabSel,
-  ] =
-    useState<ResultadoBuscaEscolinhaColab | null>(
-      null
-    );
+  const [escolinhaColabSel, setEscolinhaColabSel] =
+    useState<ResultadoBuscaEscolinhaColab | null>(null);
   const [listaClubes, setListaClubes] = useState<OptionMin[]>([]);
   const [listaEscolinhas, setListaEscolinhas] = useState<OptionMin[]>([]);
   const [listaProfessores, setListaProfessores] = useState<OptionMin[]>([]);
@@ -151,7 +248,7 @@ const EditarPerfil = () => {
   const [buscaClubeVinculo, setBuscaClubeVinculo] = useState("");
   const [buscaEscolinhaVinculo, setBuscaEscolinhaVinculo] = useState("");
   const [buscaProfessorVinculo, setBuscaProfessorVinculo] = useState("");
-  
+
   function onlyDigits(v: string) {
     return (v || "").replace(/\D/g, "");
   }
@@ -167,88 +264,6 @@ const EditarPerfil = () => {
       .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
       .replace(/\.(\d{3})(\d)/, ".$1/$2")
       .replace(/(\d{4})(\d)/, "$1-$2");
-  }
-
-  function formatarDataInput(
-    data: Date
-  ) {
-    const ano =
-      data.getFullYear();
-
-    const mes =
-      String(
-        data.getMonth() + 1
-      ).padStart(2, "0");
-
-    const dia =
-      String(
-        data.getDate()
-      ).padStart(2, "0");
-
-    return `${ano}-${mes}-${dia}`;
-  }
-
-  function hojeInput() {
-    return formatarDataInput(
-      new Date()
-    );
-  }
-
-  function dataMaximaPara17Anos() {
-    const hoje =
-      new Date();
-
-    const limite =
-      new Date(
-        hoje.getFullYear() - 17,
-        hoje.getMonth(),
-        hoje.getDate()
-      );
-
-    return formatarDataInput(
-      limite
-    );
-  }
-
-  function calcularIdadeInput(
-    iso: string
-  ) {
-    if (!iso) return null;
-
-    const nascimento =
-      new Date(
-        `${iso}T00:00:00`
-      );
-
-    if (
-      Number.isNaN(
-        nascimento.getTime()
-      )
-    ) {
-      return null;
-    }
-
-    const hoje =
-      new Date();
-
-    let idade =
-      hoje.getFullYear() -
-      nascimento.getFullYear();
-
-    if (
-      hoje.getMonth() <
-        nascimento.getMonth() ||
-      (
-        hoje.getMonth() ===
-          nascimento.getMonth() &&
-        hoje.getDate() <
-          nascimento.getDate()
-      )
-    ) {
-      idade--;
-    }
-
-    return idade;
   }
 
   useEffect(() => {
@@ -271,7 +286,8 @@ const EditarPerfil = () => {
         }
 
         const u = res.data.usuario || {};
-        const tipoSrv = res.data?.tipo ?? res.data?.tipoUsuario ?? tipoUsuarioOriginal ?? "";
+        const tipoSrv =
+          res.data?.tipo ?? res.data?.tipoUsuario ?? tipoUsuarioOriginal ?? "";
         const tipoNorm = String(tipoSrv || "").toLowerCase();
 
         const dadosEsp: any = {
@@ -282,7 +298,11 @@ const EditarPerfil = () => {
           dadosEsp.id = res.data.tipoUsuarioId;
         }
 
-        if (tipoNorm === "learning" && !dadosEsp.id && res.data?.learningProfileId) {
+        if (
+          tipoNorm === "learning" &&
+          !dadosEsp.id &&
+          res.data?.learningProfileId
+        ) {
           dadosEsp.id = res.data.learningProfileId;
         }
 
@@ -295,7 +315,9 @@ const EditarPerfil = () => {
         }
 
         if (!Array.isArray(dadosEsp.categorias)) {
-          dadosEsp.categorias = dadosEsp.categorias ? [dadosEsp.categorias] : [];
+          dadosEsp.categorias = dadosEsp.categorias
+            ? [dadosEsp.categorias]
+            : [];
         }
 
         if (dadosEsp.site && !dadosEsp.siteOficial) {
@@ -325,8 +347,12 @@ const EditarPerfil = () => {
         const vinculos = res.data.vinculos || res.data.vinculo || {};
 
         const professoresIdsFromApi: string[] =
-          (Array.isArray(vinculos?.professoresIds) ? vinculos.professoresIds : []) ||
-          (Array.isArray(vinculos?.professorIds) ? vinculos.professorIds : []) ||
+          (Array.isArray(vinculos?.professoresIds)
+            ? vinculos.professoresIds
+            : []) ||
+          (Array.isArray(vinculos?.professorIds)
+            ? vinculos.professorIds
+            : []) ||
           [];
 
         const professoresFromObj: string[] =
@@ -383,41 +409,61 @@ const EditarPerfil = () => {
 
         setDadosTipo(dadosEsp);
 
-        const t = String(tipoSrv).toLowerCase();
-        setTipoRender((t === "escolinha" ? "escola" : (t as TipoRender)));
-        if (
-          tipoNorm === "olheiro"
-        ) {
-          const olheiroId =
-            String(
-              dadosEsp.id ||
-                Storage.tipoUsuarioId ||
-                ""
-            ).trim();
+        const tipoAtualRender = normalizarTipoRender(tipoSrv);
+
+        if (!tipoAtualRender) {
+          setErro("O tipo atual deste perfil não é reconhecido.");
+          return;
+        }
+
+        const perfilAtual = obterPerfilDisponivel(tipoAtualRender);
+
+        setTipoRender(tipoAtualRender);
+        setTipoEmUso(tipoAtualRender);
+        setDadosPorPapel((prev) => ({
+          ...prev,
+          [tipoAtualRender]: dadosEsp,
+        }));
+
+        if (perfilAtual) {
+          setPapeisUsuario((prev) => {
+            const jaExiste = prev.some(
+              (item) => item.papel === perfilAtual.papel,
+            );
+
+            if (jaExiste) return prev;
+
+            return [
+              ...prev,
+              {
+                papel: perfilAtual.papel,
+                status: "ATIVO",
+                perfilCompletoEm: new Date().toISOString(),
+              },
+            ];
+          });
+        }
+
+        if (tipoNorm === "olheiro") {
+          const olheiroId = String(
+            dadosEsp.id || Storage.tipoUsuarioId || "",
+          ).trim();
 
           if (olheiroId) {
-            const colabResp =
-              await axios.get(
-                `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
-                  olheiroId
-                )}/colaboracao`,
-                {
-                  headers: {
-                    Authorization:
-                      `Bearer ${token}`,
-                  },
-                }
-              );
-
-            setColaboracaoAtual(
-              colabResp.data?.atual ??
-                null
+            const colabResp = await axios.get(
+              `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+                olheiroId,
+              )}/colaboracao`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              },
             );
 
-            setSolicitacaoColabPendente(
-              colabResp.data?.pendente ??
-                null
-            );
+            setColaboracaoAtual(colabResp.data?.atual ?? null);
+
+            setSolicitacaoColabPendente(colabResp.data?.pendente ?? null);
           }
         }
       } catch (err: any) {
@@ -440,6 +486,85 @@ const EditarPerfil = () => {
   }, [usuarioId, token]);
 
   useEffect(() => {
+    if (!usuarioId || !token) return;
+
+    let cancelado = false;
+
+    const carregarPapeis = async () => {
+      try {
+        const resposta = await axios.get(
+          `${API.BASE_URL}/api/usuarios/me/papeis`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        if (cancelado) return;
+
+        const listaBruta = Array.isArray(resposta.data)
+          ? resposta.data
+          : Array.isArray(resposta.data?.papeis)
+            ? resposta.data.papeis
+            : [];
+
+        const listaNormalizada = listaBruta
+          .map((item: any): PapelUsuario | null => {
+            const valorPapel = typeof item === "string" ? item : item?.papel;
+            const tipo = normalizarTipoRender(valorPapel);
+            const perfil = obterPerfilDisponivel(tipo);
+
+            if (!perfil) return null;
+
+            const statusBruto = String(item?.status ?? "ATIVO").toUpperCase();
+            const status: StatusPapel = [
+              "PENDENTE",
+              "ATIVO",
+              "INATIVO",
+            ].includes(statusBruto)
+              ? (statusBruto as StatusPapel)
+              : "ATIVO";
+
+            return {
+              id: item?.id,
+              papel: perfil.papel,
+              status,
+              perfilCompletoEm: item?.perfilCompletoEm ?? null,
+            };
+          })
+          .filter((item: PapelUsuario | null): item is PapelUsuario => !!item);
+
+        if (listaNormalizada.length > 0) {
+          setPapeisUsuario(listaNormalizada);
+        }
+      } catch (error: any) {
+        // Enquanto o endpoint de papéis ainda não estiver publicado, a página
+        // continua funcionando com o tipo atual vindo do perfil.
+        if (error?.response?.status !== 404) {
+          console.warn(
+            "[EditarPerfil] Não foi possível carregar os papéis",
+            error,
+          );
+        }
+      }
+    };
+
+    carregarPapeis();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [usuarioId, token]);
+
+  useEffect(() => {
+    if (!tipoRender || !dadosTipo) return;
+
+    setDadosPorPapel((prev) => ({
+      ...prev,
+      [tipoRender]: dadosTipo,
+    }));
+  }, [tipoRender, dadosTipo]);
+
+  useEffect(() => {
     const cepDigits = onlyDigits(String(dadosUsuario?.cep ?? ""));
 
     if (cepDigits.length !== 8) return;
@@ -449,7 +574,7 @@ const EditarPerfil = () => {
     const timer = window.setTimeout(async () => {
       try {
         const { data } = await axios.get(
-          `https://viacep.com.br/ws/${cepDigits}/json/`
+          `https://viacep.com.br/ws/${cepDigits}/json/`,
         );
 
         if (cancel) return;
@@ -490,7 +615,7 @@ const EditarPerfil = () => {
       try {
         const r = await axios.get<any[]>(
           `${API.BASE_URL}/api/cadastro/buscar`,
-          { params: { query: q, tipo: "Clube" }, headers }
+          { params: { query: q, tipo: "Clube" }, headers },
         );
         if (cancelado) return;
         const arr: ResultadoBuscaClube[] = (Array.isArray(r.data) ? r.data : [])
@@ -515,8 +640,7 @@ const EditarPerfil = () => {
     let cancelado = false;
 
     (async () => {
-      const q =
-        escolinhaColabQuery.trim();
+      const q = escolinhaColabQuery.trim();
 
       if (q.length < 2) {
         setEscolinhasColab([]);
@@ -524,60 +648,35 @@ const EditarPerfil = () => {
       }
 
       try {
-        const r =
-          await axios.get<any[]>(
-            `${API.BASE_URL}/api/cadastro/buscar`,
-            {
-              params: {
-                query: q,
-                tipo:
-                  "Escolinha",
-              },
-              headers,
-            }
-          );
+        const r = await axios.get<any[]>(
+          `${API.BASE_URL}/api/cadastro/buscar`,
+          {
+            params: {
+              query: q,
+              tipo: "Escolinha",
+            },
+            headers,
+          },
+        );
 
         if (cancelado) return;
 
-        const arr =
-          (
-            Array.isArray(r.data)
-              ? r.data
-              : []
-          )
-            .filter(
-              (x) =>
-                x?.id &&
-                x?.nome &&
-                x?.tipo ===
-                  "Escolinha"
-            )
-            .map((x) => ({
-              id:
-                String(x.id),
+        const arr = (Array.isArray(r.data) ? r.data : [])
+          .filter((x) => x?.id && x?.nome && x?.tipo === "Escolinha")
+          .map((x) => ({
+            id: String(x.id),
 
-              nome:
-                String(x.nome),
+            nome: String(x.nome),
 
-              username:
-                String(
-                  x.username ||
-                    ""
-                ),
+            username: String(x.username || ""),
 
-              fotoUrl:
-                x.fotoUrl ??
-                null,
-            }));
+            fotoUrl: x.fotoUrl ?? null,
+          }));
 
-        setEscolinhasColab(
-          arr
-        );
+        setEscolinhasColab(arr);
       } catch {
         if (!cancelado) {
-          setEscolinhasColab(
-            []
-          );
+          setEscolinhasColab([]);
         }
       }
     })();
@@ -585,10 +684,7 @@ const EditarPerfil = () => {
     return () => {
       cancelado = true;
     };
-  }, [
-    escolinhaColabQuery,
-    token,
-  ]);
+  }, [escolinhaColabQuery, token]);
 
   useEffect(() => {
     let cancel = false;
@@ -655,28 +751,163 @@ const EditarPerfil = () => {
   const isFederacao = tipoRender === "federacao";
   const isMarca = tipoRender === "marca";
   const isLearning = tipoRender === "learning";
-  const isOrganizacaoInstitucional = isClube || isEscolinha || isFederacao || isMarca;
+  const isCreator = tipoRender === "creator";
+  const isOrganizacaoInstitucional =
+    isClube || isEscolinha || isFederacao || isMarca;
+
+  const perfilSelecionado = obterPerfilDisponivel(tipoRender);
+  const papelSelecionado = perfilSelecionado
+    ? (papeisUsuario.find((item) => item.papel === perfilSelecionado.papel) ??
+      null)
+    : null;
+  const perfilLiberado =
+    papelSelecionado?.status === "ATIVO" ||
+    papelSelecionado?.status === "PENDENTE";
+
+  const selecionarPerfil = async (perfil: PerfilDisponivel) => {
+    setTipoRender(perfil.tipo);
+
+    const registro = papeisUsuario.find((item) => item.papel === perfil.papel);
+
+    if (!registro || registro.status === "INATIVO") {
+      setDadosTipo({});
+      return;
+    }
+
+    const dadosEmCache = dadosPorPapel[perfil.tipo];
+    if (dadosEmCache) {
+      setDadosTipo(dadosEmCache);
+      return;
+    }
+
+    setCarregandoPapel(perfil.tipo);
+
+    try {
+      const resposta = await axios.get(
+        `${API.BASE_URL}/api/perfil/${usuarioId}`,
+        {
+          params: { papel: perfil.papel },
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const tipoResposta = normalizarTipoRender(
+        resposta.data?.tipo ?? resposta.data?.tipoUsuario,
+      );
+
+      if (tipoResposta && tipoResposta !== perfil.tipo) {
+        throw new Error(
+          "O backend ainda não está retornando o perfil solicitado por papel.",
+        );
+      }
+
+      const dadosEspecificos = resposta.data?.dadosEspecificos ?? {};
+
+      setDadosTipo(dadosEspecificos);
+      setDadosPorPapel((prev) => ({
+        ...prev,
+        [perfil.tipo]: dadosEspecificos,
+      }));
+    } catch (error: any) {
+      console.error("[EditarPerfil] Erro ao carregar papel", error);
+      toast.error(
+        error?.response?.data?.error ||
+          error?.message ||
+          "Não foi possível carregar este perfil.",
+      );
+      setDadosTipo({});
+    } finally {
+      setCarregandoPapel(null);
+    }
+  };
+
+  const ativarPerfil = async (perfil: PerfilDisponivel) => {
+    if (!confirmacoesAtivacao[perfil.tipo]) {
+      toast.error("Marque a confirmação para ativar este perfil.");
+      return;
+    }
+
+    setAtivandoPapel(perfil.tipo);
+
+    try {
+      const resposta = await axios.post(
+        `${API.BASE_URL}/api/usuarios/me/papeis`,
+        { papel: perfil.papel },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const statusResposta = String(
+        resposta.data?.papel?.status ?? resposta.data?.status ?? "PENDENTE",
+      ).toUpperCase();
+      const status: StatusPapel =
+        statusResposta === "ATIVO" ? "ATIVO" : "PENDENTE";
+
+      setPapeisUsuario((prev) => {
+        const semPapelAtual = prev.filter(
+          (item) => item.papel !== perfil.papel,
+        );
+        return [
+          ...semPapelAtual,
+          {
+            id: resposta.data?.papel?.id ?? resposta.data?.id,
+            papel: perfil.papel,
+            status,
+            perfilCompletoEm: resposta.data?.papel?.perfilCompletoEm ?? null,
+          },
+        ];
+      });
+
+      setDadosTipo({});
+      setDadosPorPapel((prev) => ({ ...prev, [perfil.tipo]: {} }));
+      toast.success(
+        status === "ATIVO"
+          ? `Perfil de ${perfil.titulo} ativado.`
+          : `Perfil de ${perfil.titulo} liberado para configuração.`,
+      );
+    } catch (error: any) {
+      console.error("[EditarPerfil] Erro ao ativar papel", error);
+      toast.error(
+        error?.response?.data?.error ||
+          (error?.response?.status === 404
+            ? "A ativação de novos perfis ainda precisa ser publicada no backend."
+            : "Não foi possível ativar este perfil agora."),
+      );
+    } finally {
+      setAtivandoPapel(null);
+    }
+  };
+
+  const moverCarrossel = (direcao: "anterior" | "proximo") => {
+    carrosselRef.current?.scrollBy({
+      left: direcao === "anterior" ? -280 : 280,
+      behavior: "smooth",
+    });
+  };
 
   const mostrarCepUsuario = true;
   const clubesFiltrados = listaClubes.filter((op) =>
-    op.nome.toLowerCase().includes(buscaClubeVinculo.toLowerCase())
+    op.nome.toLowerCase().includes(buscaClubeVinculo.toLowerCase()),
   );
 
   const escolinhasFiltradas = listaEscolinhas.filter((op) =>
-    op.nome.toLowerCase().includes(buscaEscolinhaVinculo.toLowerCase())
+    op.nome.toLowerCase().includes(buscaEscolinhaVinculo.toLowerCase()),
   );
 
   const professoresFiltrados = listaProfessores.filter((op) =>
-    op.nome.toLowerCase().includes(buscaProfessorVinculo.toLowerCase())
+    op.nome.toLowerCase().includes(buscaProfessorVinculo.toLowerCase()),
   );
 
-  const clubeSelecionado = listaClubes.find((op) => op.id === clubeSelId) || null;
-  const escolinhaSelecionada = listaEscolinhas.find((op) => op.id === escolinhaSelId) || null;
+  const clubeSelecionado =
+    listaClubes.find((op) => op.id === clubeSelId) || null;
+  const escolinhaSelecionada =
+    listaEscolinhas.find((op) => op.id === escolinhaSelId) || null;
 
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
     if (name.startsWith("tipo_")) {
@@ -686,105 +917,81 @@ const EditarPerfil = () => {
     }
   };
 
-  const olheiroIdAtual =
-    String(
-      dadosTipoSeguro?.id ||
-        Storage.tipoUsuarioId ||
-        ""
-    ).trim();
+  const olheiroIdAtual = String(
+    dadosTipoSeguro?.id || Storage.tipoUsuarioId || "",
+  ).trim();
 
-  const removerColaboracaoAtual =
-    async () => {
-      if (!olheiroIdAtual) {
-        return;
-      }
+  const removerColaboracaoAtual = async () => {
+    if (!olheiroIdAtual) {
+      return;
+    }
 
-      const confirmar =
-        window.confirm(
-          "Deseja realmente encerrar esta colaboração?"
-        );
+    const confirmar = window.confirm(
+      "Deseja realmente encerrar esta colaboração?",
+    );
 
-      if (!confirmar) {
-        return;
-      }
+    if (!confirmar) {
+      return;
+    }
 
-      try {
-        await axios.delete(
-          `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
-            olheiroIdAtual
-          )}/colaboracao`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+    try {
+      await axios.delete(
+        `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+          olheiroIdAtual,
+        )}/colaboracao`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
 
-        setColaboracaoAtual(
-          null
-        );
+      setColaboracaoAtual(null);
 
-        toast.success(
-          "Colaboração encerrada."
-        );
-      } catch (e: any) {
-        toast.error(
-          e?.response?.data
-            ?.error ||
-            "Não foi possível remover a colaboração."
-        );
-      }
-    };
+      toast.success("Colaboração encerrada.");
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.error || "Não foi possível remover a colaboração.",
+      );
+    }
+  };
 
+  const cancelarSolicitacaoColab = async () => {
+    if (!olheiroIdAtual || !solicitacaoColabPendente) {
+      return;
+    }
 
-  const cancelarSolicitacaoColab =
-    async () => {
-      if (
-        !olheiroIdAtual ||
-        !solicitacaoColabPendente
-      ) {
-        return;
-      }
+    try {
+      await axios.delete(
+        `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+          olheiroIdAtual,
+        )}/colaboracao/solicitacoes/${encodeURIComponent(
+          solicitacaoColabPendente.id,
+        )}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
 
-      try {
-        await axios.delete(
-          `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
-            olheiroIdAtual
-          )}/colaboracao/solicitacoes/${encodeURIComponent(
-            solicitacaoColabPendente.id
-          )}`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+      setSolicitacaoColabPendente(null);
 
-        setSolicitacaoColabPendente(
-          null
-        );
+      toast.success("Solicitação cancelada.");
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.error || "Não foi possível cancelar a solicitação.",
+      );
+    }
+  };
 
-        toast.success(
-          "Solicitação cancelada."
-        );
-      } catch (e: any) {
-        toast.error(
-          e?.response?.data
-            ?.error ||
-            "Não foi possível cancelar a solicitação."
-        );
-      }
-    };
-    
   const renderCamposEspecificos = () => {
     if (!dadosTipo) return null;
 
     const renderSelect = (
       label: string,
       name: string,
-      options: Array<{ value: string; label: string }>
+      options: Array<{ value: string; label: string }>,
     ) => {
       const value = dadosTipo[name] ?? "";
       return (
@@ -810,7 +1017,7 @@ const EditarPerfil = () => {
     const renderInput = (
       label: string,
       name: string,
-      type: string = "text"
+      type: string = "text",
     ) => {
       const raw = dadosTipo[name];
 
@@ -819,14 +1026,13 @@ const EditarPerfil = () => {
         name === "qualificacoes" ||
         name === "certificacoes";
 
-      const value =
-        isLista
-          ? Array.isArray(raw)
-            ? raw.join(", ")
-            : raw ?? ""
-          : name === "cnpj"
+      const value = isLista
+        ? Array.isArray(raw)
+          ? raw.join(", ")
+          : (raw ?? "")
+        : name === "cnpj"
           ? formatCnpj(String(raw ?? ""))
-          : raw ?? "";
+          : (raw ?? "");
 
       return (
         <div className="mb-4" key={name}>
@@ -878,6 +1084,31 @@ const EditarPerfil = () => {
       );
     }
 
+    if (isCreator) {
+      return (
+        <>
+          {renderInput("Nome público", "nomePublico")}
+          {renderInput("Título profissional", "headline")}
+          {renderInput("Nicho", "nicho")}
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Bio</label>
+            <textarea
+              name="tipo_bio"
+              value={dadosTipo?.bio || ""}
+              onChange={handleChange}
+              className="min-h-[110px] w-full rounded-lg border border-gray-200 px-3 py-2"
+              placeholder="Conte sobre seu trabalho, conteúdos e experiência."
+            />
+          </div>
+
+          {renderInput("Site", "siteUrl")}
+          {renderInput("Instagram", "instagramUrl")}
+          {renderInput("YouTube", "youtubeUrl")}
+        </>
+      );
+    }
+
     if (isFederacao || isMarca) {
       return (
         <>
@@ -890,7 +1121,9 @@ const EditarPerfil = () => {
               value={dadosTipo?.nome || ""}
               onChange={handleChange}
               className="w-full border px-3 py-2 rounded"
-              placeholder={isFederacao ? "Ex: Federação Capixaba" : "Ex: Marca FootEra"}
+              placeholder={
+                isFederacao ? "Ex: Federação Capixaba" : "Ex: Marca FootEra"
+              }
             />
           </div>
 
@@ -992,70 +1225,11 @@ const EditarPerfil = () => {
       case "atleta":
         return (
           <>
-            {renderInput(
-              "Nome de Exibição",
-              "nome"
-            )}
-
-            {renderInput(
-              "Sobrenome",
-              "sobrenome"
-            )}
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium">
-                Idade
-              </label>
-
-              <input
-                value={
-                  dadosTipo?.idade ??
-                  ""
-                }
-                readOnly
-                className="w-full border px-3 py-2 rounded bg-gray-100 text-gray-600 cursor-not-allowed"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium">
-                Categoria
-              </label>
-
-              <input
-                value={
-                  Array.isArray(
-                    dadosTipo?.categoria
-                  )
-                    ? (
-                        dadosTipo
-                          .categoria[0] ??
-                        ""
-                      )
-                    : (
-                        dadosTipo
-                          ?.categoria ??
-                        ""
-                      )
-                }
-                readOnly
-                className="w-full border px-3 py-2 rounded bg-gray-100 text-gray-600 cursor-not-allowed"
-              />
-
-              <p className="text-xs text-gray-500 mt-1">
-                Calculada automaticamente pela data de nascimento.
-              </p>
-            </div>
-
-            {renderInput(
-              "Telefone 1",
-              "telefone1"
-            )}
-
-            {renderInput(
-              "Telefone 2",
-              "telefone2"
-            )}
+            {renderInput("Nome de Exibição", "nome")}
+            {renderInput("Sobrenome", "sobrenome")}
+            {renderInput("Idade", "idade", "number")}
+            {renderInput("Telefone 1", "telefone1")}
+            {renderInput("Telefone 2", "telefone2")}
             {renderInput("Nacionalidade", "nacionalidade")}
             {renderInput("Naturalidade", "naturalidade")}
             {renderSelect("Posição", "posicao", POSICOES)}
@@ -1074,7 +1248,8 @@ const EditarPerfil = () => {
                     className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
                     title="Remover"
                   >
-                    {escolinhaSelecionada.nome} <span className="ml-1 text-gray-500">×</span>
+                    {escolinhaSelecionada.nome}{" "}
+                    <span className="ml-1 text-gray-500">×</span>
                   </button>
                 </div>
               )}
@@ -1088,7 +1263,9 @@ const EditarPerfil = () => {
 
               <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
                 {escolinhasFiltradas.length === 0 ? (
-                  <div className="text-sm text-gray-500">Nenhuma escolinha encontrada.</div>
+                  <div className="text-sm text-gray-500">
+                    Nenhuma escolinha encontrada.
+                  </div>
                 ) : (
                   escolinhasFiltradas.map((op) => {
                     const checked = escolinhaSelId === op.id;
@@ -1127,7 +1304,8 @@ const EditarPerfil = () => {
                     className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
                     title="Remover"
                   >
-                    {clubeSelecionado.nome} <span className="ml-1 text-gray-500">×</span>
+                    {clubeSelecionado.nome}{" "}
+                    <span className="ml-1 text-gray-500">×</span>
                   </button>
                 </div>
               )}
@@ -1141,7 +1319,9 @@ const EditarPerfil = () => {
 
               <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
                 {clubesFiltrados.length === 0 ? (
-                  <div className="text-sm text-gray-500">Nenhum clube encontrado.</div>
+                  <div className="text-sm text-gray-500">
+                    Nenhum clube encontrado.
+                  </div>
                 ) : (
                   clubesFiltrados.map((op) => {
                     const checked = clubeSelId === op.id;
@@ -1175,13 +1355,16 @@ const EditarPerfil = () => {
               {professorSelIds.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2 mb-2">
                   {professorSelIds.map((id) => {
-                    const nome = listaProfessores.find((p) => p.id === id)?.nome ?? id;
+                    const nome =
+                      listaProfessores.find((p) => p.id === id)?.nome ?? id;
                     return (
                       <button
                         key={id}
                         type="button"
                         onClick={() =>
-                          setProfessorSelIds((prev) => prev.filter((x) => x !== id))
+                          setProfessorSelIds((prev) =>
+                            prev.filter((x) => x !== id),
+                          )
                         }
                         className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
                         title="Remover"
@@ -1202,7 +1385,9 @@ const EditarPerfil = () => {
 
               <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
                 {professoresFiltrados.length === 0 ? (
-                  <div className="text-sm text-gray-500">Nenhum professor disponível.</div>
+                  <div className="text-sm text-gray-500">
+                    Nenhum professor disponível.
+                  </div>
                 ) : (
                   professoresFiltrados.map((op) => {
                     const checked = professorSelIds.includes(op.id);
@@ -1216,7 +1401,8 @@ const EditarPerfil = () => {
                           checked={checked}
                           onChange={() => {
                             setProfessorSelIds((prev) => {
-                              if (prev.includes(op.id)) return prev.filter((x) => x !== op.id);
+                              if (prev.includes(op.id))
+                                return prev.filter((x) => x !== op.id);
                               return [...prev, op.id];
                             });
                           }}
@@ -1244,11 +1430,11 @@ const EditarPerfil = () => {
             {renderInput("Escola", "escola")}
             {renderInput(
               "Qualificações (separadas por vírgula)",
-              "qualificacoes"
+              "qualificacoes",
             )}
             {renderInput(
               "Certificações (separadas por vírgula)",
-              "certificacoes"
+              "certificacoes",
             )}
           </>
         );
@@ -1299,14 +1485,13 @@ const EditarPerfil = () => {
               />
             </div>
 
-              {(colaboracaoAtual || solicitacaoColabPendente) && (
-                <h2 className="text-lg font-semibold mt-4 mb-2">
-                  Colaboração
-                </h2>
-              )}
+            {(colaboracaoAtual || solicitacaoColabPendente) && (
+              <h2 className="text-lg font-semibold mt-4 mb-2">Colaboração</h2>
+            )}
 
-              {colaboracaoAtual && (
-                <div className="
+            {colaboracaoAtual && (
+              <div
+                className="
                   mb-5
                   rounded-xl
                   border
@@ -1318,27 +1503,22 @@ const EditarPerfil = () => {
                   items-center
                   justify-between
                   gap-3
-                ">
-                  <div>
-                    <div className="text-xs text-green-700">
-                      Colaboração atual
-                    </div>
+                "
+              >
+                <div>
+                  <div className="text-xs text-green-700">
+                    Colaboração atual
+                  </div>
 
-                    <div className="font-semibold text-green-950">
-                      {colaboracaoAtual.tipo ===
-                      "CLUBE"
-                        ? "Clube"
-                        : "Escola"}
-                      :{" "}
-                      {colaboracaoAtual.nome}
+                  <div className="font-semibold text-green-950">
+                    {colaboracaoAtual.tipo === "CLUBE" ? "Clube" : "Escola"}:{" "}
+                    {colaboracaoAtual.nome}
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={
-                    removerColaboracaoAtual
-                  }
+                  onClick={removerColaboracaoAtual}
                   className="
                     h-8
                     w-8
@@ -1359,7 +1539,8 @@ const EditarPerfil = () => {
             )}
 
             {solicitacaoColabPendente && (
-              <div className="
+              <div
+                className="
                 mb-5
                 rounded-xl
                 border
@@ -1371,29 +1552,24 @@ const EditarPerfil = () => {
                 items-center
                 justify-between
                 gap-3
-              ">
+              "
+              >
                 <div>
                   <div className="text-xs text-yellow-700">
                     Aguardando aprovação
                   </div>
 
                   <div className="font-semibold text-yellow-950">
-                    {solicitacaoColabPendente.tipo ===
-                    "CLUBE"
+                    {solicitacaoColabPendente.tipo === "CLUBE"
                       ? "Clube"
                       : "Escola"}
-                    :{" "}
-                    {
-                      solicitacaoColabPendente.nome
-                    }
+                    : {solicitacaoColabPendente.nome}
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={
-                    cancelarSolicitacaoColab
-                  }
+                  onClick={cancelarSolicitacaoColab}
                   className="
                     h-8
                     w-8
@@ -1421,9 +1597,7 @@ const EditarPerfil = () => {
                     Será enviada uma solicitação
                   </div>
 
-                  <div className="font-medium">
-                    {clubeSel.nome}
-                  </div>
+                  <div className="font-medium">{clubeSel.nome}</div>
                 </div>
 
                 <button
@@ -1440,9 +1614,7 @@ const EditarPerfil = () => {
             ) : (
               <>
                 <input
-                  disabled={
-                    !!solicitacaoColabPendente
-                  }
+                  disabled={!!solicitacaoColabPendente}
                   className="
                     w-full
                     border
@@ -1458,54 +1630,37 @@ const EditarPerfil = () => {
                       : "Buscar clube (mín. 2 letras)…"
                   }
                   value={clubeQuery}
-                  onChange={(e) =>
-                    setClubeQuery(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setClubeQuery(e.target.value)}
                 />
 
-                {!solicitacaoColabPendente &&
-                  clubes.length > 0 && (
-                    <div className="max-h-48 overflow-auto border rounded mb-3">
-                      {clubes.map(
-                        (c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
-                            onClick={() => {
-                              setClubeSel(
-                                c
-                              );
+                {!solicitacaoColabPendente && clubes.length > 0 && (
+                  <div className="max-h-48 overflow-auto border rounded mb-3">
+                    {clubes.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+                        onClick={() => {
+                          setClubeSel(c);
 
-                              setEscolinhaColabSel(
-                                null
-                              );
+                          setEscolinhaColabSel(null);
 
-                              setClubeQuery(
-                                ""
-                              );
+                          setClubeQuery("");
 
-                              setClubes(
-                                []
-                              );
-                            }}
-                          >
-                            <div className="text-sm font-medium">
-                              {c.nome}
-                            </div>
+                          setClubes([]);
+                        }}
+                      >
+                        <div className="text-sm font-medium">{c.nome}</div>
 
-                            {c.username && (
-                              <div className="text-xs text-gray-500">
-                                @{c.username}
-                              </div>
-                            )}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  )}
+                        {c.username && (
+                          <div className="text-xs text-gray-500">
+                            @{c.username}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -1520,23 +1675,15 @@ const EditarPerfil = () => {
                     Será enviada uma solicitação
                   </div>
 
-                  <div className="font-medium">
-                    {
-                      escolinhaColabSel.nome
-                    }
-                  </div>
+                  <div className="font-medium">{escolinhaColabSel.nome}</div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => {
-                    setEscolinhaColabSel(
-                      null
-                    );
+                    setEscolinhaColabSel(null);
 
-                    setEscolinhaColabQuery(
-                      ""
-                    );
+                    setEscolinhaColabQuery("");
                   }}
                   className="h-8 w-8 rounded-full border"
                 >
@@ -1546,9 +1693,7 @@ const EditarPerfil = () => {
             ) : (
               <>
                 <input
-                  disabled={
-                    !!solicitacaoColabPendente
-                  }
+                  disabled={!!solicitacaoColabPendente}
                   className="
                     w-full
                     border
@@ -1563,58 +1708,38 @@ const EditarPerfil = () => {
                       ? "Cancele a solicitação pendente para escolher outra escola"
                       : "Buscar escola (mín. 2 letras)…"
                   }
-                  value={
-                    escolinhaColabQuery
-                  }
-                  onChange={(e) =>
-                    setEscolinhaColabQuery(
-                      e.target.value
-                    )
-                  }
+                  value={escolinhaColabQuery}
+                  onChange={(e) => setEscolinhaColabQuery(e.target.value)}
                 />
 
-                {!solicitacaoColabPendente &&
-                  escolinhasColab.length >
-                    0 && (
-                    <div className="max-h-48 overflow-auto border rounded">
-                      {escolinhasColab.map(
-                        (e) => (
-                          <button
-                            key={e.id}
-                            type="button"
-                            className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
-                            onClick={() => {
-                              setEscolinhaColabSel(
-                                e
-                              );
+                {!solicitacaoColabPendente && escolinhasColab.length > 0 && (
+                  <div className="max-h-48 overflow-auto border rounded">
+                    {escolinhasColab.map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+                        onClick={() => {
+                          setEscolinhaColabSel(e);
 
-                              setClubeSel(
-                                null
-                              );
+                          setClubeSel(null);
 
-                              setEscolinhaColabQuery(
-                                ""
-                              );
+                          setEscolinhaColabQuery("");
 
-                              setEscolinhasColab(
-                                []
-                              );
-                            }}
-                          >
-                            <div className="text-sm font-medium">
-                              {e.nome}
-                            </div>
+                          setEscolinhasColab([]);
+                        }}
+                      >
+                        <div className="text-sm font-medium">{e.nome}</div>
 
-                            {e.username && (
-                              <div className="text-xs text-gray-500">
-                                @{e.username}
-                              </div>
-                            )}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  )}
+                        {e.username && (
+                          <div className="text-xs text-gray-500">
+                            @{e.username}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
             <h2 className="text-lg font-semibold mt-6 mb-2">Contatos</h2>
@@ -1648,511 +1773,637 @@ const EditarPerfil = () => {
             </div>
           </>
         );
-      }
+    }
   };
 
-const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
-  
-return (
+  const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
+
+  return (
     <div
-      className="p-6 max-w-3xl mx-auto pb-24"
+      className="mx-auto max-w-4xl px-4 pt-3 sm:px-6 sm:pt-6"
       style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
     >
+      <header className="mb-5 flex items-center gap-3 border-b border-gray-200 pb-3">
+        <Link
+          href={
+            new URLSearchParams(window.location.search).get("returnTo") ||
+            "/perfil"
+          }
+          aria-label="Voltar para perfil"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-600/20"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
 
-
-    <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center relative">
-      <Link 
-        href={new URLSearchParams(window.location.search).get("returnTo") || "/perfil"}
-        aria-label="Voltar para perfil"
-        className="inline-flex h-10 w-10 items-center justify-center
-          rounded-full bg-white/10 text-white
-          hover:bg-white/20 focus:outline-none
-          focus:ring-2 focus:ring-white/30 z-10"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </Link>
-
-      <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold pointer-events-none">
-        Editar Perfil
-      </h1>
-    </header>
-
-
-
-        {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium">Foto Atual</label>
-            <img
-              src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
-              onError={(e) => {
-                const img = e.currentTarget as HTMLImageElement;
-                img.onerror = null;
-                img.src = FALLBACK_AVATAR;
-              }}
-              className="w-24 h-24 rounded-full object-cover mt-2"
-              alt="Foto atual"
-            />
-          </div>
-        )}
-
-
-      <div className="mb-6">
-        <label className="block text-sm font-medium">Foto de Perfil</label>
-        {dadosUsuario?.foto instanceof File && (
-          <img
-            src={URL.createObjectURL(dadosUsuario.foto)}
-            className="w-24 h-24 rounded-full object-cover mt-2 mb-2 border"
-            alt="Preview"
-          />
-        )}
-
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file)
-              setDadosUsuario((prev: any) => ({ ...prev, foto: file }));
-          }}
-          className="w-full border px-3 py-2 rounded"
-        />
-      </div>
-
-      <div className="mb-6">
-        <label className="block text-sm font-medium">Nome</label>
-        <input
-          name="nome"
-          value={dadosUsuario.nome || ""}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-        />
-      </div>
-
-      <div className="mb-6">
-        <label className="block text-sm font-medium">Nome de usuário (@)</label>
-        <input
-          name="nomeDeUsuario"
-          value={dadosUsuario.nomeDeUsuario || ""}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="ex: joao.olheiro"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Use apenas letras, números, pontos e underline.
-        </p>
-      </div>
-
-      <div className="mb-6">
-        <label className="block text-sm font-medium">Email</label>
-        <input
-          name="email"
-          value={dadosUsuario.email || ""}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-        />
-      </div>
-
-      {(
-        isAtleta ||
-        isProfessor ||
-        isOlheiro ||
-        isLearning
-      ) && (
-        <div className="mb-6">
-          <label className="block text-sm font-medium">
-            Data de nascimento
-          </label>
-
-          <input
-            type="date"
-            name="dataNascimento"
-            min="1900-01-01"
-            max={
-              isProfessor ||
-              isOlheiro
-                ? dataMaximaPara17Anos()
-                : hojeInput()
-            }
-            value={
-              dadosUsuario
-                .dataNascimento
-                ? String(
-                    dadosUsuario
-                      .dataNascimento
-                  ).slice(0, 10)
-                : ""
-            }
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
-
-          {(
-            isProfessor ||
-            isOlheiro
-          ) && (
-            <p className="mt-1 text-xs text-gray-500">
-              É necessário ter mais de
-              16 anos para manter este
-              tipo de perfil.
-            </p>
-          )}
-        </div>
-      )}
-
-      {(isProfessor || isOlheiro || isAtleta) && (
-        <div className="mb-6">
-          <label className="block text-sm font-medium">CPF</label>
-          <input
-            name="cpf"
-            value={dadosUsuario.cpf || ""}
-            onChange={(e) => {
-              const digits = onlyDigits(e.target.value).slice(0, 11);
-              setDadosUsuario((prev: any) => ({ ...prev, cpf: digits }));
-            }}
-            className="w-full border px-3 py-2 rounded"
-            placeholder="000.000.000-00"
-          />
-        </div>
-      )}
-      
-      {mostrarCepUsuario && (
-        <div className="mb-6">
-          <label className="block text-sm font-medium">CEP</label>
-          <input
-            name="cep"
-            value={String(dadosUsuario.cep || "").replace(/^(\d{5})(\d)/, "$1-$2")}
-            onChange={(e) => {
-              const digits = onlyDigits(e.target.value).slice(0, 8);
-              setDadosUsuario((prev: any) => ({ ...prev, cep: digits }));
-            }}
-            className="w-full border px-3 py-2 rounded"
-            placeholder="Ex: 29102-999"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Você pode deixar em branco.
+        <div>
+          <h1 className="text-xl font-bold text-gray-950">Editar perfis</h1>
+          <p className="text-sm text-gray-500">
+            Atualize seu perfil atual ou ative uma nova forma de usar a FootEra.
           </p>
         </div>
+      </header>
+
+      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-gray-950">Meus perfis</h2>
+            <p className="text-sm text-gray-500">
+              Deslize para escolher o perfil que deseja editar ou ativar.
+            </p>
+          </div>
+
+          <div className="hidden shrink-0 gap-2 sm:flex">
+            <button
+              type="button"
+              onClick={() => moverCarrossel("anterior")}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition hover:border-green-300 hover:text-green-700"
+              aria-label="Ver perfis anteriores"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moverCarrossel("proximo")}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition hover:border-green-300 hover:text-green-700"
+              aria-label="Ver próximos perfis"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={carrosselRef}
+          className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {PERFIS_DISPONIVEIS.map((perfil) => {
+            const registro = papeisUsuario.find(
+              (item) => item.papel === perfil.papel,
+            );
+            const selecionado = tipoRender === perfil.tipo;
+            const emUso = tipoEmUso === perfil.tipo;
+            const liberado =
+              registro?.status === "ATIVO" || registro?.status === "PENDENTE";
+
+            const statusTexto = emUso
+              ? "Em uso"
+              : registro?.status === "ATIVO"
+                ? "Ativo"
+                : registro?.status === "PENDENTE"
+                  ? "Configurar"
+                  : "Disponível";
+
+            return (
+              <button
+                key={perfil.tipo}
+                type="button"
+                onClick={() => selecionarPerfil(perfil)}
+                className={`relative min-h-[150px] min-w-[230px] snap-start rounded-2xl border p-4 text-left transition sm:min-w-[250px] ${
+                  selecionado
+                    ? "border-green-600 bg-green-50 shadow-sm ring-2 ring-green-600/10"
+                    : "border-gray-200 bg-white hover:border-green-300 hover:bg-gray-50"
+                }`}
+              >
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <span
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${
+                      liberado
+                        ? "bg-green-700 text-white"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {liberado ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : (
+                      <LockKeyhole className="h-5 w-5" />
+                    )}
+                  </span>
+
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      emUso
+                        ? "bg-green-700 text-white"
+                        : registro?.status === "PENDENTE"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {statusTexto}
+                  </span>
+                </div>
+
+                <div className="font-semibold text-gray-950">
+                  {perfil.titulo}
+                </div>
+                <p className="mt-1 text-sm leading-5 text-gray-500">
+                  {perfil.descricao}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {perfilLiberado ? (
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-6 border-b border-gray-100 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-950">
+                  Perfil de {perfilSelecionado?.titulo}
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Os campos são opcionais e podem ser completados aos poucos.
+                </p>
+              </div>
+
+              {papelSelecionado?.status === "PENDENTE" && (
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Configuração inicial
+                </span>
+              )}
+            </div>
+          </div>
+
+          {carregandoPapel === tipoRender ? (
+            <div className="py-16 text-center text-sm text-gray-500">
+              Carregando dados deste perfil...
+            </div>
+          ) : (
+            <>
+              {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium">
+                    Foto Atual
+                  </label>
+                  <img
+                    src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      img.onerror = null;
+                      img.src = FALLBACK_AVATAR;
+                    }}
+                    className="w-24 h-24 rounded-full object-cover mt-2"
+                    alt="Foto atual"
+                  />
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium">
+                  Foto de Perfil
+                </label>
+                {dadosUsuario?.foto instanceof File && (
+                  <img
+                    src={URL.createObjectURL(dadosUsuario.foto)}
+                    className="w-24 h-24 rounded-full object-cover mt-2 mb-2 border"
+                    alt="Preview"
+                  />
+                )}
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file)
+                      setDadosUsuario((prev: any) => ({ ...prev, foto: file }));
+                  }}
+                  className="w-full border px-3 py-2 rounded"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium">Nome</label>
+                <input
+                  name="nome"
+                  value={dadosUsuario.nome || ""}
+                  onChange={handleChange}
+                  className="w-full border px-3 py-2 rounded"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium">
+                  Nome de usuário (@)
+                </label>
+                <input
+                  name="nomeDeUsuario"
+                  value={dadosUsuario.nomeDeUsuario || ""}
+                  onChange={handleChange}
+                  className="w-full border px-3 py-2 rounded"
+                  placeholder="ex: joao.olheiro"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Use apenas letras, números, pontos e underline.
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium">Email</label>
+                <input
+                  name="email"
+                  value={dadosUsuario.email || ""}
+                  onChange={handleChange}
+                  className="w-full border px-3 py-2 rounded"
+                />
+              </div>
+
+              {(isProfessor || isOlheiro || isAtleta) && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium">CPF</label>
+                  <input
+                    name="cpf"
+                    value={dadosUsuario.cpf || ""}
+                    onChange={(e) => {
+                      const digits = onlyDigits(e.target.value).slice(0, 11);
+                      setDadosUsuario((prev: any) => ({
+                        ...prev,
+                        cpf: digits,
+                      }));
+                    }}
+                    className="w-full border px-3 py-2 rounded"
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+              )}
+
+              {mostrarCepUsuario && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium">CEP</label>
+                  <input
+                    name="cep"
+                    value={String(dadosUsuario.cep || "").replace(
+                      /^(\d{5})(\d)/,
+                      "$1-$2",
+                    )}
+                    onChange={(e) => {
+                      const digits = onlyDigits(e.target.value).slice(0, 8);
+                      setDadosUsuario((prev: any) => ({
+                        ...prev,
+                        cep: digits,
+                      }));
+                    }}
+                    className="w-full border px-3 py-2 rounded"
+                    placeholder="Ex: 29102-999"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Você pode deixar em branco.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium">País </label>
+                  <input
+                    name="pais"
+                    value={dadosUsuario.pais || ""}
+                    onChange={handleChange}
+                    className="w-full border px-3 py-2 rounded"
+                    placeholder="Brasil"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">
+                    Estado (UF){" "}
+                  </label>
+                  <input
+                    name="estado"
+                    value={dadosUsuario.estado || ""}
+                    onChange={handleChange}
+                    className="w-full border px-3 py-2 rounded"
+                    placeholder="ES"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">Cidade </label>
+                  <input
+                    name="cidade"
+                    value={dadosUsuario.cidade || ""}
+                    onChange={handleChange}
+                    className="w-full border px-3 py-2 rounded"
+                    placeholder="Vila Velha"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium">
+                  Logradouro (Endereço)
+                </label>
+                <input
+                  name="logradouro"
+                  value={dadosUsuario.logradouro || ""}
+                  onChange={handleChange}
+                  className="w-full border px-3 py-2 rounded"
+                  placeholder="Rua, avenida, etc."
+                />
+              </div>
+
+              {renderCamposEspecificos()}
+
+              <button
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-green-700 px-5 py-3 font-semibold text-white transition hover:bg-green-600 sm:w-auto"
+                onClick={async () => {
+                  const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
+                  const usernameFinal = rawUsername
+                    ? rawUsername.toLowerCase()
+                    : "";
+
+                  if (usernameFinal) {
+                    if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
+                      toast.error(
+                        "Nome de usuário inválido. Use letras, números, ponto e underline (3–30).",
+                      );
+                      return;
+                    }
+                  }
+
+                  if (!perfilSelecionado) {
+                    toast.error("Selecione um perfil válido para continuar.");
+                    return;
+                  }
+
+                  try {
+                    const formData = new FormData();
+
+                    if (dadosUsuario.foto instanceof File) {
+                      formData.append("foto", dadosUsuario.foto);
+                    }
+
+                    const tipo: any = { ...dadosTipo };
+
+                    if (typeof tipo.cnpj === "string") {
+                      const cnpjLimpo = onlyCnpj(tipo.cnpj);
+                      tipo.cnpj = cnpjLimpo === "" ? null : cnpjLimpo;
+                    }
+
+                    if (typeof tipo.cref === "string") {
+                      const crefLimpo = tipo.cref.trim();
+                      tipo.cref = crefLimpo === "" ? null : crefLimpo;
+                    }
+                    if (tipo.siteOficial && !tipo.site)
+                      tipo.site = tipo.siteOficial;
+
+                    delete tipo.colaboracaoClubeId;
+                    delete tipo.colaboracaoEscolinhaId;
+                    delete tipo.colaboracaoProfessorId;
+                    delete tipo.colaboracaoClube;
+                    delete tipo.colaboracaoEscolinha;
+                    delete tipo.colaboracaoProfessor;
+                    delete tipo.escola;
+                    delete tipo.clube;
+
+                    if (escolinhaSelId === null) tipo.escolinhaId = null;
+                    else if (typeof escolinhaSelId === "string")
+                      tipo.escolinhaId = escolinhaSelId;
+
+                    if (clubeSelId === null) tipo.clubeId = null;
+                    else if (typeof clubeSelId === "string")
+                      tipo.clubeId = clubeSelId;
+
+                    tipo.professorIds = professorSelIds;
+                    tipo.professorId =
+                      professorSelIds.length > 0 ? professorSelIds[0] : null;
+
+                    if (!Array.isArray(tipo.categorias)) {
+                      tipo.categorias = tipo.categorias
+                        ? [tipo.categorias]
+                        : [];
+                    }
+
+                    if (
+                      typeof tipo.anosExperiencia === "string" &&
+                      tipo.anosExperiencia !== ""
+                    ) {
+                      const n = Number(tipo.anosExperiencia);
+                      tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
+                    }
+
+                    tipo.emailPublico = nullIfEmpty(tipo.emailPublico);
+                    tipo.telefonePublico = nullIfEmpty(tipo.telefonePublico);
+                    tipo.siteOuLinkedin = nullIfEmpty(tipo.siteOuLinkedin);
+
+                    if (tipoRender === "professor") {
+                      if (typeof tipo.qualificacoes === "string") {
+                        tipo.qualificacoes = tipo.qualificacoes
+                          .split(",")
+                          .map((q: string) => q.trim())
+                          .filter(Boolean);
+                      }
+                      if (typeof tipo.certificacoes === "string") {
+                        tipo.certificacoes = tipo.certificacoes
+                          .split(",")
+                          .map((c: string) => c.trim())
+                          .filter(Boolean);
+                      }
+                    }
+
+                    const cepFinal = onlyDigits(
+                      (dadosUsuario.cep ?? "").toString(),
+                    );
+
+                    const usuarioPayload = {
+                      ...dadosUsuario,
+                      foto:
+                        dadosUsuario.foto instanceof File
+                          ? undefined
+                          : dadosUsuario.foto,
+                      nomeDeUsuario: usernameFinal || null,
+                      cep: cepFinal === "" ? null : cepFinal,
+                    };
+
+                    formData.append("usuario", JSON.stringify(usuarioPayload));
+                    formData.append("tipo", JSON.stringify(tipo));
+                    formData.append(
+                      "tipoUsuario",
+                      String(perfilSelecionado.papel)
+                        .toLowerCase()
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, "")
+                        .replace(/^escolinha$/, "escola"),
+                    );
+
+                    await axios.put(
+                      `${API.BASE_URL}/api/perfil/${usuarioId}`,
+                      formData,
+                      {
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          "Content-Type": "multipart/form-data",
+                        },
+                      },
+                    );
+
+                    if (papelSelecionado?.status === "PENDENTE") {
+                      await axios.patch(
+                        `${API.BASE_URL}/api/usuarios/me/papeis/${encodeURIComponent(
+                          perfilSelecionado.papel,
+                        )}/concluir`,
+                        {},
+                        {
+                          headers: {
+                            Authorization: `Bearer ${token}`,
+                          },
+                        },
+                      );
+
+                      setPapeisUsuario((prev) =>
+                        prev.map((item) =>
+                          item.papel === perfilSelecionado.papel
+                            ? {
+                                ...item,
+                                status: "ATIVO",
+                                perfilCompletoEm: new Date().toISOString(),
+                              }
+                            : item,
+                        ),
+                      );
+                    }
+
+                    let solicitacaoColaboracaoEnviada = false;
+
+                    if (tipoRender === "olheiro") {
+                      const olheiroId = String(
+                        dadosTipo?.id || Storage.tipoUsuarioId || "",
+                      ).trim();
+
+                      if (olheiroId && clubeSel) {
+                        await axios.post(
+                          `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+                            olheiroId,
+                          )}/colaboracao/solicitar`,
+                          {
+                            tipo: "CLUBE",
+
+                            destinoId: clubeSel.id,
+                          },
+                          {
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                              "Content-Type": "application/json",
+                            },
+                          },
+                        );
+
+                        solicitacaoColaboracaoEnviada = true;
+                      }
+
+                      if (olheiroId && escolinhaColabSel) {
+                        await axios.post(
+                          `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
+                            olheiroId,
+                          )}/colaboracao/solicitar`,
+                          {
+                            tipo: "ESCOLINHA",
+
+                            destinoId: escolinhaColabSel.id,
+                          },
+                          {
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                              "Content-Type": "application/json",
+                            },
+                          },
+                        );
+
+                        solicitacaoColaboracaoEnviada = true;
+                      }
+                    }
+
+                    toast.success(
+                      solicitacaoColaboracaoEnviada
+                        ? "Perfil atualizado e solicitação de colaboração enviada!"
+                        : "Perfil atualizado com sucesso!",
+                    );
+                    Storage.nomeDeUsuario =
+                      usernameFinal || Storage.nomeDeUsuario;
+                    const returnTo = new URLSearchParams(
+                      window.location.search,
+                    ).get("returnTo");
+                    window.location.href = returnTo || "/perfil";
+                  } catch (err: any) {
+                    console.error("[EditarPerfil] Erro ao salvar:", err);
+                    const msg =
+                      err?.response?.data?.error ||
+                      err?.message ||
+                      "Erro ao salvar os dados.";
+                    toast.error(msg);
+                  }
+                }}
+              >
+                Salvar Alterações
+              </button>
+            </>
+          )}
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+          <div className="mx-auto max-w-xl text-center">
+            <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-600">
+              <LockKeyhole className="h-7 w-7" />
+            </span>
+
+            <h2 className="mt-4 text-xl font-bold text-gray-950">
+              Ativar perfil de {perfilSelecionado?.titulo}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Você continuará com a mesma conta, e-mail e login. Este perfil
+              apenas adiciona novas ferramentas e um formulário específico para
+              você completar quando quiser.
+            </p>
+
+            <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
+              <input
+                type="checkbox"
+                checked={
+                  !!confirmacoesAtivacao[perfilSelecionado?.tipo ?? "atleta"]
+                }
+                onChange={(event) => {
+                  if (!perfilSelecionado) return;
+
+                  setConfirmacoesAtivacao((prev) => ({
+                    ...prev,
+                    [perfilSelecionado.tipo]: event.target.checked,
+                  }));
+                }}
+                className="mt-0.5 h-5 w-5 rounded border-gray-300 text-green-700 focus:ring-green-600"
+              />
+
+              <span>
+                <span className="flex items-center gap-2 font-medium text-gray-900">
+                  <ShieldCheck className="h-4 w-4 text-green-700" />
+                  Confirmo que quero ativar este perfil
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-gray-500">
+                  Nenhuma nova conta será criada e você poderá completar os
+                  dados aos poucos.
+                </span>
+              </span>
+            </label>
+
+            <button
+              type="button"
+              disabled={
+                !perfilSelecionado ||
+                !confirmacoesAtivacao[perfilSelecionado.tipo] ||
+                ativandoPapel === perfilSelecionado.tipo
+              }
+              onClick={() =>
+                perfilSelecionado && ativarPerfil(perfilSelecionado)
+              }
+              className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-green-700 px-5 py-3 font-semibold text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
+            >
+              {ativandoPapel === perfilSelecionado?.tipo
+                ? "Ativando perfil..."
+                : `Ativar perfil de ${perfilSelecionado?.titulo ?? "usuário"}`}
+            </button>
+          </div>
+        </section>
       )}
-
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium">País </label>
-          <input
-            name="pais"
-            value={dadosUsuario.pais || ""}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-            placeholder="Brasil"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">Estado (UF) </label>
-          <input
-            name="estado"
-            value={dadosUsuario.estado || ""}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-            placeholder="ES"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">Cidade </label>
-          <input
-            name="cidade"
-            value={dadosUsuario.cidade || ""}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-            placeholder="Vila Velha"
-          />
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <label className="block text-sm font-medium">Logradouro (Endereço)</label>
-        <input
-          name="logradouro"
-          value={dadosUsuario.logradouro || ""}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="Rua, avenida, etc."
-        />
-      </div>
-
-      {renderCamposEspecificos()}
-
-      <button
-        className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-600"
-        onClick={async () => {
-          const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
-          const usernameFinal = rawUsername ? rawUsername.toLowerCase() : "";
-
-          if (usernameFinal) {
-            if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
-              toast.error("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
-              return;
-            }
-          }
-
-          const nomeFinal =
-            String(
-              dadosUsuario.nome || ""
-            ).trim();
-
-          const usernameDigitado =
-            String(
-              dadosUsuario
-                .nomeDeUsuario || ""
-            )
-              .trim()
-              .toLowerCase();
-
-          if (
-            !nomeFinal &&
-            !usernameDigitado
-          ) {
-            toast.error(
-              "Informe seu nome ou um nome de usuário."
-            );
-            return;
-          }
-
-          if (
-            !String(
-              dadosUsuario.email || ""
-            ).trim()
-          ) {
-            toast.error(
-              "O e-mail não pode ficar vazio."
-            );
-            return;
-          }
-
-          if (
-            tipoRender === "professor" ||
-            tipoRender === "olheiro"
-          ) {
-            const nascimento =
-              String(
-                dadosUsuario
-                  .dataNascimento || ""
-              ).slice(0, 10);
-
-            if (!nascimento) {
-              toast.error(
-                "Informe a data de nascimento."
-              );
-              return;
-            }
-
-            const idade =
-              calcularIdadeInput(
-                nascimento
-              );
-
-            if (
-              idade === null ||
-              idade < 17
-            ) {
-              toast.error(
-                tipoRender ===
-                  "professor"
-                  ? "Para manter um perfil Profissional, é necessário ter mais de 16 anos."
-                  : "Para manter um perfil Scout, é necessário ter mais de 16 anos."
-              );
-
-              return;
-            }
-          }
-
-          try {
-            const formData = new FormData();
-
-            if (dadosUsuario.foto instanceof File) {
-              formData.append("foto", dadosUsuario.foto);
-            }
-
-            const tipo: any = { ...dadosTipo };
-
-            if (typeof tipo.cnpj === "string") {
-              const cnpjLimpo = onlyCnpj(tipo.cnpj);
-              tipo.cnpj = cnpjLimpo === "" ? null : cnpjLimpo;
-            }
-
-            if (typeof tipo.cref === "string") {
-              const crefLimpo = tipo.cref.trim();
-              tipo.cref = crefLimpo === "" ? null : crefLimpo;
-            }
-            if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
-
-            delete tipo.colaboracaoClubeId;
-            delete tipo.colaboracaoEscolinhaId;
-            delete tipo.colaboracaoProfessorId;
-            delete tipo.colaboracaoClube;
-            delete tipo.colaboracaoEscolinha;
-            delete tipo.colaboracaoProfessor;
-            delete tipo.escola;
-            delete tipo.clube;
-
-            if (escolinhaSelId === null) tipo.escolinhaId = null;
-            else if (typeof escolinhaSelId === "string") tipo.escolinhaId = escolinhaSelId;
-
-            if (clubeSelId === null) tipo.clubeId = null;
-            else if (typeof clubeSelId === "string") tipo.clubeId = clubeSelId;
-
-            tipo.professorIds = professorSelIds;
-            tipo.professorId = professorSelIds.length > 0 ? professorSelIds[0] : null;
-
-            if (!Array.isArray(tipo.categorias)) {
-              tipo.categorias = tipo.categorias ? [tipo.categorias] : [];
-            }
-
-            if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
-              const n = Number(tipo.anosExperiencia);
-              tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
-            }
-
-            tipo.emailPublico = nullIfEmpty(tipo.emailPublico);
-            tipo.telefonePublico = nullIfEmpty(tipo.telefonePublico);
-            tipo.siteOuLinkedin = nullIfEmpty(tipo.siteOuLinkedin);
-
-            if (tipoRender === "professor") {
-              if (typeof tipo.qualificacoes === "string") {
-                tipo.qualificacoes = tipo.qualificacoes
-                  .split(",")
-                  .map((q: string) => q.trim())
-                  .filter(Boolean);
-              }
-              if (typeof tipo.certificacoes === "string") {
-                tipo.certificacoes = tipo.certificacoes
-                  .split(",")
-                  .map((c: string) => c.trim())
-                  .filter(Boolean);
-              }
-            }
-
-            const cepFinal = onlyDigits((dadosUsuario.cep ?? "").toString());
-
-            const usuarioPayload = {
-              ...dadosUsuario,
-              foto: dadosUsuario.foto instanceof File ? undefined : dadosUsuario.foto,
-              nomeDeUsuario: usernameFinal || null,
-              cep: cepFinal === "" ? null : cepFinal,
-            };
-
-            formData.append("usuario", JSON.stringify(usuarioPayload));
-            formData.append("tipo", JSON.stringify(tipo));
-            formData.append(
-              "tipoUsuario",
-              String(tipoUsuarioOriginal)
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/^escolinha$/, "escola")
-            );
-
-            await axios.put(
-              `${API.BASE_URL}/api/perfil/${usuarioId}`,
-              formData,
-              { 
-                headers: { 
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "multipart/form-data" 
-                } 
-              }
-            );
-
-            let solicitacaoColaboracaoEnviada =
-              false;
-
-            if (
-              tipoRender === "olheiro"
-            ) {
-              const olheiroId =
-                String(
-                  dadosTipo?.id ||
-                    Storage.tipoUsuarioId ||
-                    ""
-                ).trim();
-
-              if (
-                olheiroId &&
-                clubeSel
-              ) {
-                await axios.post(
-                  `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
-                    olheiroId
-                  )}/colaboracao/solicitar`,
-                  {
-                    tipo:
-                      "CLUBE",
-
-                    destinoId:
-                      clubeSel.id,
-                  },
-                  {
-                    headers: {
-                      Authorization:
-                        `Bearer ${token}`,
-                      "Content-Type":
-                        "application/json",
-                    },
-                  }
-                );
-
-                solicitacaoColaboracaoEnviada =
-                  true;
-              }
-
-              if (
-                olheiroId &&
-                escolinhaColabSel
-              ) {
-                await axios.post(
-                  `${API.BASE_URL}/api/olheiros/${encodeURIComponent(
-                    olheiroId
-                  )}/colaboracao/solicitar`,
-                  {
-                    tipo:
-                      "ESCOLINHA",
-
-                    destinoId:
-                      escolinhaColabSel.id,
-                  },
-                  {
-                    headers: {
-                      Authorization:
-                        `Bearer ${token}`,
-                      "Content-Type":
-                        "application/json",
-                    },
-                  }
-                );
-
-                solicitacaoColaboracaoEnviada =
-                  true;
-              }
-            }
-
-            toast.success(
-              solicitacaoColaboracaoEnviada
-                ? "Perfil atualizado e solicitação de colaboração enviada!"
-                : "Perfil atualizado com sucesso!"
-            );
-            Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
-            const returnTo = new URLSearchParams(window.location.search).get("returnTo");
-            window.location.href = returnTo || "/perfil";
-
-          } catch (err: any) {
-            console.error("[EditarPerfil] Erro ao salvar:", err);
-            const msg = err?.response?.data?.error || err?.message || "Erro ao salvar os dados.";
-            toast.error(msg);
-          }
-        }}
-      >
-        Salvar Alterações
-      </button>
 
       <BottomNav />
     </div>

@@ -1,3 +1,4 @@
+//client/src/pages/cadastro
 import {
   useCallback,
   useEffect,
@@ -14,10 +15,7 @@ import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
 import GoogleButton from "../components/auth/GoogleButton";
 import MaintenanceScreen from "../components/MaintenanceScreen";
-import {
-  applyAuthSession,
-  consumirRetornoAuth,
-} from "../utils/authSession.js";
+import { applyAuthSession, consumirRetornoAuth } from "../utils/authSession.js";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -62,8 +60,7 @@ const PERFIS_ORGANIZACAO: TipoPerfil[] = [
   "Marca",
 ];
 
-const PRECISA_NASCIMENTO = (tipo: TipoPerfil) =>
-  PERFIS_PESSOA.includes(tipo);
+const PRECISA_NASCIMENTO = (tipo: TipoPerfil) => PERFIS_PESSOA.includes(tipo);
 
 function isOrganizacao(tipo: TipoPerfil) {
   return ["Escolinha", "Clube", "Federacao", "Marca"].includes(tipo);
@@ -76,13 +73,8 @@ const PHONE_RE = /^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;
 const DATA_MINIMA_NASCIMENTO = "1900-01-01";
 const IDADE_MINIMA_PROFISSIONAL_SCOUT = 17;
 
-function exigeMaisDe16Anos(
-  tipo: TipoPerfil
-) {
-  return (
-    tipo === "Professor" ||
-    tipo === "Olheiro"
-  );
+function exigeMaisDe16Anos(tipo: TipoPerfil) {
+  return tipo === "Professor" || tipo === "Olheiro";
 }
 
 const perfilVisual: Record<
@@ -170,11 +162,7 @@ function hojeISO() {
 }
 
 function dataNascimentoValida(iso: string) {
-  return Boolean(
-    iso &&
-      iso >= DATA_MINIMA_NASCIMENTO &&
-      iso <= hojeISO()
-  );
+  return Boolean(iso && iso >= DATA_MINIMA_NASCIMENTO && iso <= hojeISO());
 }
 
 function calcIdade(iso: string) {
@@ -194,43 +182,29 @@ function calcIdade(iso: string) {
   return Math.max(0, idade);
 }
 
-function dataMaximaNascimentoPorTipo(
-  tipo: TipoPerfil
-) {
+function dataMaximaNascimentoPorTipo(tipo: TipoPerfil) {
   if (!exigeMaisDe16Anos(tipo)) {
     return hojeISO();
   }
 
   const hoje = new Date();
 
-  const limite =
-    new Date(
-      hoje.getFullYear() -
-        IDADE_MINIMA_PROFISSIONAL_SCOUT,
-      hoje.getMonth(),
-      hoje.getDate()
-    );
+  const limite = new Date(
+    hoje.getFullYear() - IDADE_MINIMA_PROFISSIONAL_SCOUT,
+    hoje.getMonth(),
+    hoje.getDate(),
+  );
 
-  const ano =
-    limite.getFullYear();
+  const ano = limite.getFullYear();
 
-  const mes =
-    String(
-      limite.getMonth() + 1
-    ).padStart(2, "0");
+  const mes = String(limite.getMonth() + 1).padStart(2, "0");
 
-  const dia =
-    String(
-      limite.getDate()
-    ).padStart(2, "0");
+  const dia = String(limite.getDate()).padStart(2, "0");
 
   return `${ano}-${mes}-${dia}`;
 }
 
-function dataNascimentoValidaParaTipo(
-  tipo: TipoPerfil,
-  iso: string
-) {
+function dataNascimentoValidaParaTipo(tipo: TipoPerfil, iso: string) {
   if (!dataNascimentoValida(iso)) {
     return false;
   }
@@ -239,13 +213,10 @@ function dataNascimentoValidaParaTipo(
     return true;
   }
 
-  const idadeCalculada =
-    calcIdade(iso);
+  const idadeCalculada = calcIdade(iso);
 
   return (
-    idadeCalculada !== null &&
-    idadeCalculada >=
-      IDADE_MINIMA_PROFISSIONAL_SCOUT
+    idadeCalculada !== null && idadeCalculada >= IDADE_MINIMA_PROFISSIONAL_SCOUT
   );
 }
 
@@ -465,8 +436,8 @@ export default function Cadastro() {
         try {
           const response = await fetch(
             `${API.BASE_URL}/api/cadastro/check/email?email=${encodeURIComponent(
-              emailNormalizado
-            )}`
+              emailNormalizado,
+            )}`,
           );
           const data = await response.json();
           setEmailDisp(Boolean(data?.disponivel));
@@ -474,7 +445,7 @@ export default function Cadastro() {
           setEmailDisp(null);
         }
       }),
-    []
+    [],
   );
 
   const verificarUsername = useMemo(
@@ -495,8 +466,8 @@ export default function Cadastro() {
         try {
           const response = await fetch(
             `${API.BASE_URL}/api/cadastro/check/username?username=${encodeURIComponent(
-              username
-            )}`
+              username,
+            )}`,
           );
           const data = await response.json();
           setUserDisp(Boolean(data?.disponivel));
@@ -504,7 +475,7 @@ export default function Cadastro() {
           setUserDisp(null);
         }
       }),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -520,7 +491,7 @@ export default function Cadastro() {
       try {
         const response = await axios.get(
           `${API.BASE_URL}/api/status/maintenance`,
-          { timeout: 8000 }
+          { timeout: 8000 },
         );
         setMaintenanceMode(Boolean(response.data?.maintenanceMode));
       } catch {
@@ -535,7 +506,9 @@ export default function Cadastro() {
     const nomeLimpo = nome.trim();
 
     if (!aceitaTermos) {
-      setErro("Você deve aceitar os Termos de Uso e a Política de Privacidade.");
+      setErro(
+        "Você deve aceitar os Termos de Uso e a Política de Privacidade.",
+      );
       return false;
     }
 
@@ -560,7 +533,9 @@ export default function Cadastro() {
     }
 
     if (!usernameValido) {
-      setErro("Nome de usuário inválido. Use 3–20 caracteres com letras, números, ponto ou underline.");
+      setErro(
+        "Nome de usuário inválido. Use 3–20 caracteres com letras, números, ponto ou underline.",
+      );
       return false;
     }
 
@@ -570,7 +545,9 @@ export default function Cadastro() {
     }
 
     if (!senhaForte) {
-      setErro("A senha deve ter pelo menos 8 caracteres, uma letra e um número.");
+      setErro(
+        "A senha deve ter pelo menos 8 caracteres, uma letra e um número.",
+      );
       return false;
     }
 
@@ -585,26 +562,15 @@ export default function Cadastro() {
         return false;
       }
 
-      if (
-        !dataNascimentoValidaParaTipo(
-          tipoPerfil,
-          dataNascimento
-        )
-      ) {
-        if (
-          exigeMaisDe16Anos(
-            tipoPerfil
-          )
-        ) {
+      if (!dataNascimentoValidaParaTipo(tipoPerfil, dataNascimento)) {
+        if (exigeMaisDe16Anos(tipoPerfil)) {
           setErro(
             tipoPerfil === "Professor"
               ? "Para criar um perfil Profissional, é necessário ter mais de 16 anos."
-              : "Para criar um perfil Scout, é necessário ter mais de 16 anos."
+              : "Para criar um perfil Scout, é necessário ter mais de 16 anos.",
           );
         } else {
-          setErro(
-            "A data de nascimento deve estar entre 01/01/1900 e hoje."
-          );
+          setErro("A data de nascimento deve estar entre 01/01/1900 e hoje.");
         }
 
         return false;
@@ -626,7 +592,9 @@ export default function Cadastro() {
         responsavel.telefone?.trim() &&
         !PHONE_RE.test(responsavel.telefone.trim())
       ) {
-        setErro("Informe um telefone válido do responsável ou deixe em branco.");
+        setErro(
+          "Informe um telefone válido do responsável ou deixe em branco.",
+        );
         return false;
       }
     }
@@ -637,7 +605,7 @@ export default function Cadastro() {
 
   const registrarConsentimento = async (
     token: string | undefined,
-    menorComResponsavel: boolean
+    menorComResponsavel: boolean,
   ) => {
     try {
       await fetch(`${API.BASE_URL}/api/legal/consentimentos`, {
@@ -680,9 +648,7 @@ export default function Cadastro() {
         senha,
         ...(nome.trim() ? { nome: nome.trim() } : {}),
         ...(usernameLimpo ? { nomeDeUsuario: usernameLimpo } : {}),
-        ...(PRECISA_NASCIMENTO(tipoPerfil)
-          ? { dataNascimento }
-          : {}),
+        ...(PRECISA_NASCIMENTO(tipoPerfil) ? { dataNascimento } : {}),
         ...(precisaResponsavel
           ? {
               responsavel: {
@@ -704,7 +670,7 @@ export default function Cadastro() {
 
       if (!response.ok) {
         throw new Error(
-          data?.error || data?.message || "Não foi possível criar sua conta."
+          data?.error || data?.message || "Não foi possível criar sua conta.",
         );
       }
 
@@ -712,7 +678,7 @@ export default function Cadastro() {
       await registrarConsentimento(token, precisaResponsavel);
 
       setSucesso(
-        "Conta criada com sucesso! Verifique seu e-mail para confirmar a conta."
+        "Conta criada com sucesso! Verifique seu e-mail para confirmar a conta.",
       );
       window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -742,7 +708,7 @@ export default function Cadastro() {
             JSON.stringify({
               preCadastroToken: data.preCadastroToken,
               googleProfile: data.googleProfile,
-            })
+            }),
           );
 
           navigate("/cadastro/google/complementar");
@@ -751,25 +717,21 @@ export default function Cadastro() {
 
         const { isAdmin } = applyAuthSession(data, { lembrar: false });
 
-        navigate(
-          isAdmin
-            ? "/admin"
-            : consumirRetornoAuth("/perfil")
-        );
+        navigate(isAdmin ? "/admin" : consumirRetornoAuth("/perfil"));
       } catch (error: any) {
         console.error(
           "Erro no cadastro/login com Google:",
-          error?.response?.data || error?.message
+          error?.response?.data || error?.message,
         );
 
         setErro(
           error?.response?.data?.message ||
             error?.response?.data?.error ||
-            "Não foi possível continuar com Google agora."
+            "Não foi possível continuar com Google agora.",
         );
       }
     },
-    [navigate]
+    [navigate],
   );
 
   if (!maintenanceChecked) {
@@ -845,25 +807,29 @@ export default function Cadastro() {
                 <li className="flex items-start gap-3">
                   <span className="text-xl">🏋️</span>
                   <span>
-                    <span className="font-semibold">Treinos e rotina</span> — exercícios, histórico e progresso.
+                    <span className="font-semibold">Treinos e rotina</span> —
+                    exercícios, histórico e progresso.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-xl">🎓</span>
                   <span>
-                    <span className="font-semibold">Learning</span> — metodologias, trilhas e cursos.
+                    <span className="font-semibold">Learning</span> —
+                    metodologias, trilhas e cursos.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-xl">👥</span>
                   <span>
-                    <span className="font-semibold">Rede social</span> — feed, conquistas e comunidade.
+                    <span className="font-semibold">Rede social</span> — feed,
+                    conquistas e comunidade.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-xl">🏆</span>
                   <span>
-                    <span className="font-semibold">Métricas & badges</span> — evolução e reputação no esporte.
+                    <span className="font-semibold">Métricas & badges</span> —
+                    evolução e reputação no esporte.
                   </span>
                 </li>
               </ul>
@@ -901,7 +867,8 @@ export default function Cadastro() {
               Criar conta
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Só pedimos o necessário agora. O restante do perfil pode ser preenchido depois em Editar Perfil.
+              Só pedimos o necessário agora. O restante do perfil pode ser
+              preenchido depois em Editar Perfil.
             </p>
           </div>
 
@@ -936,6 +903,19 @@ export default function Cadastro() {
                   ? "Que tipo de organização você representa?"
                   : "Qual é o seu perfil principal?"}
               </p>
+
+              <div
+                role="note"
+                className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3"
+              >
+                <p className="text-sm font-medium text-green-950">
+                  Escolha como você quer começar na FootEra.
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-green-800">
+                  Depois, você poderá adicionar outros perfis a esta mesma conta
+                  em Editar perfil. Não será necessário criar outra conta.
+                </p>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 {(isOrg ? PERFIS_ORGANIZACAO : PERFIS_PESSOA).map((tipo) => (
@@ -981,7 +961,9 @@ export default function Cadastro() {
                 icon="@"
                 value={nomeDeUsuario}
                 placeholder="Ex.: joaosilva10"
-                error={Boolean(nomeDeUsuario) && !USER_RE.test(nomeDeUsuario.trim())}
+                error={
+                  Boolean(nomeDeUsuario) && !USER_RE.test(nomeDeUsuario.trim())
+                }
                 onChange={setNomeDeUsuario}
               />
 
@@ -996,10 +978,10 @@ export default function Cadastro() {
                   {!USER_RE.test(nomeDeUsuario.trim())
                     ? "Use 3–20 caracteres: letras, números, ponto e underline."
                     : userDisp === null
-                    ? "Verificando disponibilidade..."
-                    : userDisp
-                    ? "Nome de usuário disponível."
-                    : "Nome de usuário indisponível."}
+                      ? "Verificando disponibilidade..."
+                      : userDisp
+                        ? "Nome de usuário disponível."
+                        : "Nome de usuário indisponível."}
                 </p>
               )}
 
@@ -1025,10 +1007,10 @@ export default function Cadastro() {
                   {!emailValido
                     ? "Formato de e-mail inválido."
                     : emailDisp === null
-                    ? "Verificando disponibilidade..."
-                    : emailDisp
-                    ? "E-mail disponível."
-                    : "Este e-mail já está cadastrado."}
+                      ? "Verificando disponibilidade..."
+                      : emailDisp
+                        ? "E-mail disponível."
+                        : "Este e-mail já está cadastrado."}
                 </p>
               )}
 
@@ -1044,7 +1026,9 @@ export default function Cadastro() {
                 right={
                   <button
                     type="button"
-                    aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                    aria-label={
+                      mostrarSenha ? "Ocultar senha" : "Mostrar senha"
+                    }
                     onClick={() => setMostrarSenha((valor) => !valor)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
@@ -1054,7 +1038,9 @@ export default function Cadastro() {
               />
 
               {senha && (
-                <p className={`-mt-2 text-xs ${senhaForte ? "text-green-700" : "text-red-600"}`}>
+                <p
+                  className={`-mt-2 text-xs ${senhaForte ? "text-green-700" : "text-red-600"}`}
+                >
                   Mínimo de 8 caracteres, com pelo menos uma letra e um número.
                 </p>
               )}
@@ -1077,14 +1063,22 @@ export default function Cadastro() {
                     onClick={() => setMostrarConfirmar((valor) => !valor)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
-                    {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {mostrarConfirmar ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
                   </button>
                 }
               />
 
               {confirmarSenha && (
-                <p className={`-mt-2 text-xs ${confirmarOk ? "text-green-700" : "text-red-600"}`}>
-                  {confirmarOk ? "Senhas conferem." : "As senhas não coincidem."}
+                <p
+                  className={`-mt-2 text-xs ${confirmarOk ? "text-green-700" : "text-red-600"}`}
+                >
+                  {confirmarOk
+                    ? "Senhas conferem."
+                    : "As senhas não coincidem."}
                 </p>
               )}
             </div>
@@ -1105,37 +1099,21 @@ export default function Cadastro() {
                 <input
                   type="date"
                   min={DATA_MINIMA_NASCIMENTO}
-                  max={
-                    dataMaximaNascimentoPorTipo(
-                      tipoPerfil
-                    )
-                  }
+                  max={dataMaximaNascimentoPorTipo(tipoPerfil)}
                   value={dataNascimento}
-                  onChange={(e) =>
-                    setDataNascimento(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => setDataNascimento(e.target.value)}
                   className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-green-800 focus:ring-2 focus:ring-green-100 ${
                     dataNascimento &&
-                    !dataNascimentoValidaParaTipo(
-                      tipoPerfil,
-                      dataNascimento
-                    )
+                    !dataNascimentoValidaParaTipo(tipoPerfil, dataNascimento)
                       ? "border-red-400"
                       : "border-gray-300"
                   }`}
                 />
 
-                {exigeMaisDe16Anos(
-                  tipoPerfil
-                ) && (
+                {exigeMaisDe16Anos(tipoPerfil) && (
                   <p className="mt-1 text-xs text-gray-500">
-                    É necessário ter mais de
-                    16 anos para criar um perfil{" "}
-                    {tipoPerfil === "Professor"
-                      ? "Profissional"
-                      : "Scout"}.
+                    É necessário ter mais de 16 anos para criar um perfil{" "}
+                    {tipoPerfil === "Professor" ? "Profissional" : "Scout"}.
                   </p>
                 )}
 
@@ -1147,7 +1125,9 @@ export default function Cadastro() {
 
                 {tipoPerfil === "Atleta" && (
                   <div className="mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-xs text-green-900">
-                    A categoria do atleta será calculada automaticamente pela data de nascimento. A posição poderá ser definida depois em Editar Perfil ou ao entrar nos Treinos.
+                    A categoria do atleta será calculada automaticamente pela
+                    data de nascimento. A posição poderá ser definida depois em
+                    Editar Perfil ou ao entrar nos Treinos.
                   </div>
                 )}
               </div>

@@ -1,6 +1,12 @@
+// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { z } from "zod";
-import { TipoUsuario, StatusCref, NotificacaoTipo} from "@prisma/client";
+import {
+  TipoUsuario,
+  StatusCref,
+  NotificacaoTipo,
+  StatusUsuarioPapel,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -13,7 +19,9 @@ import {
   categoriaAtletaPorIdade,
 } from "../utils/categoriaAtleta.js";
 
-const FRONTEND_URL = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
+const FRONTEND_URL = (
+  process.env.WEB_BASE_URL || "https://footera.app.br"
+).replace(/\/+$/, "");
 
 const API_BASE_URL = (
   process.env.API_BASE_URL ||
@@ -21,7 +29,7 @@ const API_BASE_URL = (
   "http://localhost:3001"
 ).replace(/\/+$/, "");
 
-const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
+const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "defaultsecret";
 
 function addHours(d: Date, h: number) {
   return new Date(d.getTime() + h * 60 * 60 * 1000);
@@ -49,7 +57,11 @@ async function issueEmailVerification(params: {
   await prisma.emailVerification.upsert({
     where: { usuarioId: params.userId },
     update: { token: raw, expiraEm: addHours(new Date(), 24), usadoEm: null },
-    create: { usuarioId: params.userId, token: raw, expiraEm: addHours(new Date(), 24) },
+    create: {
+      usuarioId: params.userId,
+      token: raw,
+      expiraEm: addHours(new Date(), 24),
+    },
   });
 
   const verifyUrl = `${FRONTEND_URL}/verificar-email?token=${encodeURIComponent(raw)}`;
@@ -70,13 +82,12 @@ export const getCadastroIndex = async (_req: Request, res: Response) => {
   res.json({ message: "Tela de cadastro inicial" });
 };
 
-export const getEscolhaTipo = async (
-  _req: Request,
-  res: Response
-) => {
+export const getEscolhaTipo = async (_req: Request, res: Response) => {
   res.json({
     message:
       "Escolha o tipo de usuário: Atleta, Profissional, Scout, Learning, Clube, Escolinha, Federação ou Marca",
+    observacao:
+      "Este será o perfil principal da conta. Outros perfis poderão ser adicionados depois, sem criar outra conta.",
   });
 };
 
@@ -85,15 +96,21 @@ export const getCriar = async (_req: Request, res: Response) => {
 };
 
 export const checarEmail = async (req: Request, res: Response) => {
-  const email = String(req.query.email ?? "").trim().toLowerCase();
-  if (!email) return res.status(400).json({ ok: false, error: "Informe o email" });
+  const email = String(req.query.email ?? "")
+    .trim()
+    .toLowerCase();
+  if (!email)
+    return res.status(400).json({ ok: false, error: "Informe o email" });
   const existe = await prisma.usuario.findUnique({ where: { email } });
   res.json({ ok: true, disponivel: !existe });
 };
 
 export const checarUsername = async (req: Request, res: Response) => {
-  const nomeDeUsuario = String(req.query.username ?? "").trim().toLowerCase();
-  if (!nomeDeUsuario) return res.status(400).json({ ok: false, error: "Informe o username" });
+  const nomeDeUsuario = String(req.query.username ?? "")
+    .trim()
+    .toLowerCase();
+  if (!nomeDeUsuario)
+    return res.status(400).json({ ok: false, error: "Informe o username" });
   const existe = await prisma.usuario.findUnique({ where: { nomeDeUsuario } });
   res.json({ ok: true, disponivel: !existe });
 };
@@ -116,39 +133,39 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
     if (!q) return res.json([]);
 
     const normProfessor = (rows: any[]) =>
-    rows.map((p) => {
-      const usuario = p.usuario || {};
-      const perfilVerificado = calcularPerfilVerificado({
-        usuario: {
-          verified: usuario.verified,
-          nome: p.nome ?? usuario.nome ?? null,
-          nomeDeUsuario: usuario.nomeDeUsuario ?? null,
-          email: usuario.email ?? null,
-          foto: absUrl(p.fotoUrl) ?? absUrl(usuario.foto),
-        },
-        tipo: "professor",
-        professor: {
-          areaFormacao: p.areaFormacao ?? null,
-          cref: p.cref ?? null,
-          statusCref: p.statusCref ?? null,
-          dataNascimento: p.dataNascimento ?? null,
-          escola: p.escola ?? null,
-          qualificacoes: p.qualificacoes ?? null,
-          certificacoes: p.certificacoes ?? null,
-          fotoUrl: absUrl(p.fotoUrl) ?? null,
-        },
-      });
+      rows.map((p) => {
+        const usuario = p.usuario || {};
+        const perfilVerificado = calcularPerfilVerificado({
+          usuario: {
+            verified: usuario.verified,
+            nome: p.nome ?? usuario.nome ?? null,
+            nomeDeUsuario: usuario.nomeDeUsuario ?? null,
+            email: usuario.email ?? null,
+            foto: absUrl(p.fotoUrl) ?? absUrl(usuario.foto),
+          },
+          tipo: "professor",
+          professor: {
+            areaFormacao: p.areaFormacao ?? null,
+            cref: p.cref ?? null,
+            statusCref: p.statusCref ?? null,
+            dataNascimento: p.dataNascimento ?? null,
+            escola: p.escola ?? null,
+            qualificacoes: p.qualificacoes ?? null,
+            certificacoes: p.certificacoes ?? null,
+            fotoUrl: absUrl(p.fotoUrl) ?? null,
+          },
+        });
 
-      return {
-        id: p.id as string,
-        usuarioId: p.usuario?.id as string,
-        tipo: "Professor" as const,
-        nome: p.nome as string,
-        username: usuario?.nomeDeUsuario ?? "",
-        fotoUrl: absUrl(p.fotoUrl) ?? absUrl(usuario?.foto),
-        perfilVerificado,
-      };
-    });
+        return {
+          id: p.id as string,
+          usuarioId: p.usuario?.id as string,
+          tipo: "Professor" as const,
+          nome: p.nome as string,
+          username: usuario?.nomeDeUsuario ?? "",
+          fotoUrl: absUrl(p.fotoUrl) ?? absUrl(usuario?.foto),
+          perfilVerificado,
+        };
+      });
 
     const normClube = (rows: any[]) =>
       rows.map((c) => {
@@ -272,7 +289,9 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         where: {
           OR: [
             { nome: { contains: q, mode: "insensitive" } },
-            { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
+            {
+              usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+            },
           ],
         },
         select: {
@@ -307,10 +326,12 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         where: {
           OR: [
             { nome: { contains: q, mode: "insensitive" } },
-            { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
+            {
+              usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+            },
           ],
         },
-       select: {
+        select: {
           id: true,
           nome: true,
           logo: true,
@@ -325,7 +346,16 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           bairro: true,
           pais: true,
           cep: true,
-          usuario: { select: { id: true, verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
+          usuario: {
+            select: {
+              id: true,
+              verified: true,
+              nome: true,
+              email: true,
+              nomeDeUsuario: true,
+              foto: true,
+            },
+          },
         },
         take: 20,
       });
@@ -337,7 +367,9 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         where: {
           OR: [
             { nome: { contains: q, mode: "insensitive" } },
-            { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
+            {
+              usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+            },
           ],
         },
         select: {
@@ -354,7 +386,16 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           bairro: true,
           pais: true,
           cep: true,
-          usuario: { select: { id: true, verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
+          usuario: {
+            select: {
+              id: true,
+              verified: true,
+              nome: true,
+              email: true,
+              nomeDeUsuario: true,
+              foto: true,
+            },
+          },
         },
         take: 20,
       });
@@ -379,7 +420,16 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           descricao: true,
           emailPublico: true,
           telefonePublico: true,
-          usuario: { select: { id: true, verified: true, nome: true, email: true, nomeDeUsuario: true, foto: true } },
+          usuario: {
+            select: {
+              id: true,
+              verified: true,
+              nome: true,
+              email: true,
+              nomeDeUsuario: true,
+              foto: true,
+            },
+          },
         },
         take: 20,
       });
@@ -420,10 +470,12 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
           nome: a.usuario?.nome ?? "",
           username: a.usuario?.nomeDeUsuario ?? "",
           fotoUrl: absUrl(a.usuario?.foto),
-        }))
+        })),
       );
     }
-    results.sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+    results.sort((a, b) =>
+      String(a.nome).localeCompare(String(b.nome), "pt-BR"),
+    );
     return res.json(results);
   } catch (e) {
     console.error("buscarPerfisPublico error:", e);
@@ -441,8 +493,14 @@ async function criarSolicitacaoVinculoCadastro(params: {
   if (!remetenteId || !destinatarioId || remetenteId === destinatarioId) return;
 
   const [remetente, destinatario] = await Promise.all([
-    prisma.usuario.findUnique({ where: { id: remetenteId }, select: { id: true } }),
-    prisma.usuario.findUnique({ where: { id: destinatarioId }, select: { id: true } }),
+    prisma.usuario.findUnique({
+      where: { id: remetenteId },
+      select: { id: true },
+    }),
+    prisma.usuario.findUnique({
+      where: { id: destinatarioId },
+      select: { id: true },
+    }),
   ]);
 
   if (!remetente || !destinatario) return;
@@ -482,134 +540,69 @@ async function criarSolicitacaoVinculoCadastro(params: {
   await recomputeAndEmitBadge(destinatarioId);
 }
 
-const cadastrarUsuarioBaseSchema =
-  z
-    .object({
-      nome: z
-        .string()
-        .trim()
-        .optional(),
+const cadastrarUsuarioBaseSchema = z
+  .object({
+    nome: z.string().trim().optional(),
 
-      nomeDeUsuario: z
-        .string()
-        .trim()
-        .optional(),
+    nomeDeUsuario: z.string().trim().optional(),
 
-      email: z
-        .string()
-        .trim()
-        .email("E-mail inválido."),
+    email: z.string().trim().email("E-mail inválido."),
 
-      senha: z
-        .string()
-        .regex(
-          /^(?=.*[A-Za-z])(?=.*\d).{8,}$/,
-          "A senha deve ter pelo menos 8 caracteres, uma letra e um número."
-        ),
+    senha: z
+      .string()
+      .regex(
+        /^(?=.*[A-Za-z])(?=.*\d).{8,}$/,
+        "A senha deve ter pelo menos 8 caracteres, uma letra e um número.",
+      ),
 
-      tipo: z
-        .string()
-        .trim()
-        .min(1, "tipo é obrigatório"),
-    })
-    .passthrough()
-    .refine(
-      (data) =>
-        Boolean(
-          data.nome?.trim() ||
-          data.nomeDeUsuario?.trim()
-        ),
-      {
-        message:
-          "Informe seu nome ou nome de usuário.",
-        path: ["nome"],
-      }
-    );
+    tipo: z.string().trim().min(1, "tipo é obrigatório"),
+  })
+  .passthrough()
+  .refine((data) => Boolean(data.nome?.trim() || data.nomeDeUsuario?.trim()), {
+    message: "Informe seu nome ou nome de usuário.",
+    path: ["nome"],
+  });
 
-function normalizarBaseUsername(
-  valor: string
-) {
-  const base =
-    String(valor || "")
-      .normalize("NFD")
-      .replace(
-        /[\u0300-\u036f]/g,
-        ""
-      )
-      .toLowerCase()
-      .replace(
-        /[^a-z0-9._]+/g,
-        "."
-      )
-      .replace(
-        /\.{2,}/g,
-        "."
-      )
-      .replace(
-        /^[._]+|[._]+$/g,
-        ""
-      );
+function normalizarBaseUsername(valor: string) {
+  const base = String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._]+/g, ".")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^[._]+|[._]+$/g, "");
 
-  return (
-    base
-      .slice(0, 16) ||
-    "usuario"
-  );
+  return base.slice(0, 16) || "usuario";
 }
 
-
-async function gerarUsernameDisponivel(
-  origem: string
-) {
-  const base =
-    normalizarBaseUsername(
-      origem
-    );
+async function gerarUsernameDisponivel(origem: string) {
+  const base = normalizarBaseUsername(origem);
 
   const candidatos = [
     base,
 
     ...Array.from(
       { length: 12 },
-      () =>
-        `${base.slice(
-          0,
-          14
-        )}${Math.floor(
-          1000 +
-            Math.random() *
-              9000
-        )}`
+      () => `${base.slice(0, 14)}${Math.floor(1000 + Math.random() * 9000)}`,
     ),
   ];
 
-  for (
-    const candidato of
-    candidatos
-  ) {
-    const existe =
-      await prisma.usuario
-        .findUnique({
-          where: {
-            nomeDeUsuario:
-              candidato,
-          },
-          select: {
-            id: true,
-          },
-        });
+  for (const candidato of candidatos) {
+    const existe = await prisma.usuario.findUnique({
+      where: {
+        nomeDeUsuario: candidato,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (!existe) {
       return candidato;
     }
   }
 
-  return `${base.slice(
-    0,
-    10
-  )}${Date.now()
-    .toString()
-    .slice(-7)}`;
+  return `${base.slice(0, 10)}${Date.now().toString().slice(-7)}`;
 }
 
 export const cadastrarUsuario = async (req: Request, res: Response) => {
@@ -618,23 +611,75 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     body = cadastrarUsuarioBaseSchema.parse(req.body ?? {});
   } catch (e: any) {
     if (e?.name === "ZodError") {
-      return res.status(400).json({ error: "Dados inválidos.", details: e.errors });
+      return res
+        .status(400)
+        .json({ error: "Dados inválidos.", details: e.errors });
     }
     throw e;
   }
 
   const {
-    nome, email, senha, tipo,
-    nomeDeUsuario, cidade, estado, pais, bairro, cpf,
-    idade, categoria, logradouro, vinculo,
-    areaFormacao, cref, statusCref,
-    nomeClube, cnpjClube, telefone1Clube, telefone2Clube, emailClube, siteOficialClube, sedeClube, logradouroClube, numeroClube,
-    complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
-    nomeEscolinha, cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha, siteOficialEscolinha, sedeEscolinha,
-    logradouroEscolinha, numeroEscolinha, complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
-    areaAtuacao, anosExperiencia, nomeOrganizacao,
-    telefonePublico, emailPublico, descricao, colaboracaoClubeId, colaboracaoProfessorId,
-    colaboracaoEscolinhaId, dataNascimento, responsavel, siteOuLinkedin, headline
+    nome,
+    email,
+    senha,
+    tipo,
+    nomeDeUsuario,
+    cidade,
+    estado,
+    pais,
+    bairro,
+    cpf,
+    idade,
+    categoria,
+    logradouro,
+    vinculo,
+    areaFormacao,
+    cref,
+    statusCref,
+    nomeClube,
+    cnpjClube,
+    telefone1Clube,
+    telefone2Clube,
+    emailClube,
+    siteOficialClube,
+    sedeClube,
+    logradouroClube,
+    numeroClube,
+    complementoClube,
+    bairroClube,
+    cidadeClube,
+    estadoClube,
+    paisClube,
+    cepClube,
+    estadio,
+    nomeEscolinha,
+    cnpjEscolinha,
+    telefone1Escolinha,
+    telefone2Escolinha,
+    emailEscolinha,
+    siteOficialEscolinha,
+    sedeEscolinha,
+    logradouroEscolinha,
+    numeroEscolinha,
+    complementoEscolinha,
+    bairroEscolinha,
+    cidadeEscolinha,
+    estadoEscolinha,
+    paisEscolinha,
+    cepEscolinha,
+    areaAtuacao,
+    anosExperiencia,
+    nomeOrganizacao,
+    telefonePublico,
+    emailPublico,
+    descricao,
+    colaboracaoClubeId,
+    colaboracaoProfessorId,
+    colaboracaoEscolinhaId,
+    dataNascimento,
+    responsavel,
+    siteOuLinkedin,
+    headline,
   } = body;
 
   function dataNascimentoPermitida(valor?: string | null) {
@@ -654,17 +699,14 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
   try {
     const tipoEnum = stringParaTipoUsuario(tipo);
-    if (!tipoEnum) return res.status(400).json({ error: "Tipo de usuário inválido." });
+    if (!tipoEnum)
+      return res.status(400).json({ error: "Tipo de usuário inválido." });
 
     const precisaNascimento =
-      tipoEnum ===
-        TipoUsuario.Atleta ||
-      tipoEnum ===
-        TipoUsuario.Professor ||
-      tipoEnum ===
-        TipoUsuario.Olheiro ||
-      tipoEnum ===
-        TipoUsuario.Learning;
+      tipoEnum === TipoUsuario.Atleta ||
+      tipoEnum === TipoUsuario.Professor ||
+      tipoEnum === TipoUsuario.Olheiro ||
+      tipoEnum === TipoUsuario.Learning;
 
     if (precisaNascimento && !dataNascimentoPermitida(dataNascimento)) {
       return res.status(400).json({
@@ -672,39 +714,26 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       });
     }
 
-    const dataNascFinal = precisaNascimento && dataNascimento
-      ? new Date(dataNascimento)
+    const dataNascFinal =
+      precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+
+    const idadeCalcInicial = dataNascFinal
+      ? calcularIdadePorNascimento(dataNascFinal)
       : null;
 
-    const idadeCalcInicial =
-      dataNascFinal
-        ? calcularIdadePorNascimento(
-            dataNascFinal
-          )
-        : null;
-
     const exigeMaisDe16Anos =
-      tipoEnum ===
-        TipoUsuario.Professor ||
-      tipoEnum ===
-        TipoUsuario.Olheiro;
+      tipoEnum === TipoUsuario.Professor || tipoEnum === TipoUsuario.Olheiro;
 
     if (
       exigeMaisDe16Anos &&
-      (
-        idadeCalcInicial === null ||
-        idadeCalcInicial < 17
-      )
+      (idadeCalcInicial === null || idadeCalcInicial < 17)
     ) {
-      return res
-        .status(400)
-        .json({
-          error:
-            tipoEnum ===
-            TipoUsuario.Professor
-              ? "Para criar um perfil Profissional, é necessário ter mais de 16 anos."
-              : "Para criar um perfil Scout, é necessário ter mais de 16 anos.",
-        });
+      return res.status(400).json({
+        error:
+          tipoEnum === TipoUsuario.Professor
+            ? "Para criar um perfil Profissional, é necessário ter mais de 16 anos."
+            : "Para criar um perfil Scout, é necessário ter mais de 16 anos.",
+      });
     }
 
     const precisaResponsavel =
@@ -712,13 +741,11 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       idadeCalcInicial !== null &&
       idadeCalcInicial < 12;
 
-    const responsavelNomeFinal =
-      String(responsavel?.nome ?? "").trim();
+    const responsavelNomeFinal = String(responsavel?.nome ?? "").trim();
 
-    const responsavelEmailFinal =
-      String(responsavel?.email ?? "")
-        .trim()
-        .toLowerCase();
+    const responsavelEmailFinal = String(responsavel?.email ?? "")
+      .trim()
+      .toLowerCase();
 
     const responsavelTelefoneFinal =
       String(responsavel?.telefone ?? "").trim() || null;
@@ -730,11 +757,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         });
       }
 
-      if (
-        !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
-          responsavelEmailFinal
-        )
-      ) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(responsavelEmailFinal)) {
         return res.status(400).json({
           error: "Informe um e-mail válido do responsável legal.",
         });
@@ -742,9 +765,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
       if (
         responsavelTelefoneFinal &&
-        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(
-          responsavelTelefoneFinal
-        )
+        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(responsavelTelefoneFinal)
       ) {
         return res.status(400).json({
           error:
@@ -753,74 +774,47 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
     }
 
-    const emailNorm =
-      String(email)
-        .trim()
-        .toLowerCase();
+    const emailNorm = String(email).trim().toLowerCase();
 
-    const nomeInformado =
-      String(nome ?? "")
-        .trim();
+    const nomeInformado = String(nome ?? "").trim();
 
-    const usernameInformado =
-      String(
-        nomeDeUsuario ?? ""
-      )
-        .trim()
-        .toLowerCase();
+    const usernameInformado = String(nomeDeUsuario ?? "")
+      .trim()
+      .toLowerCase();
 
-    if (
-      usernameInformado &&
-      !/^[a-z0-9._]{3,20}$/.test(
-        usernameInformado
-      )
-    ) {
+    if (usernameInformado && !/^[a-z0-9._]{3,20}$/.test(usernameInformado)) {
       return res.status(400).json({
-        error:
-          "Nome de usuário inválido.",
+        error: "Nome de usuário inválido.",
       });
     }
 
     const usernameFinal =
       usernameInformado ||
-      (await gerarUsernameDisponivel(
-        nomeInformado ||
-          emailNorm.split("@")[0]
-      ));
+      (await gerarUsernameDisponivel(nomeInformado || emailNorm.split("@")[0]));
 
-    const nomeFinal =
-      nomeInformado ||
-      usernameFinal;
-    const jaEmail =
-      await prisma.usuario
-        .findUnique({
-          where: {
-            email:
-              emailNorm,
-          },
-        });
+    const nomeFinal = nomeInformado || usernameFinal;
+    const jaEmail = await prisma.usuario.findUnique({
+      where: {
+        email: emailNorm,
+      },
+    });
 
     if (jaEmail) {
       return res.status(400).json({
-        error:
-          "E-mail já cadastrado.",
+        error: "E-mail já cadastrado.",
       });
     }
 
     if (usernameInformado) {
-      const jaUser =
-        await prisma.usuario
-          .findUnique({
-            where: {
-              nomeDeUsuario:
-                usernameFinal,
-            },
-          });
+      const jaUser = await prisma.usuario.findUnique({
+        where: {
+          nomeDeUsuario: usernameFinal,
+        },
+      });
 
       if (jaUser) {
         return res.status(400).json({
-          error:
-            "Nome de usuário indisponível.",
+          error: "Nome de usuário indisponível.",
         });
       }
     }
@@ -836,18 +830,36 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipo: tipoEnum,
         cidade: cidade ?? null,
         estado: estado ?? null,
-        pais:   pais ?? null,
+        pais: pais ?? null,
         logradouro: logradouro ?? null,
-        cpf:    cpf ?? null,
+        cpf: cpf ?? null,
         dataNascimento: dataNascFinal,
-        responsavelNome:
-          precisaResponsavel ? responsavelNomeFinal : null,
-        responsavelEmail:
-          precisaResponsavel ? responsavelEmailFinal : null,
-        responsavelTelefone:
-          precisaResponsavel ? responsavelTelefoneFinal : null,
+        responsavelNome: precisaResponsavel ? responsavelNomeFinal : null,
+        responsavelEmail: precisaResponsavel ? responsavelEmailFinal : null,
+        responsavelTelefone: precisaResponsavel
+          ? responsavelTelefoneFinal
+          : null,
+        papeis: {
+          create: {
+            papel: tipoEnum,
+            status: StatusUsuarioPapel.ATIVO,
+            ativadoEm: new Date(),
+          },
+        },
       },
-      select: { id: true, tipo: true, nome: true, email: true, tokenVersion: true, },
+      select: {
+        id: true,
+        tipo: true,
+        nome: true,
+        email: true,
+        tokenVersion: true,
+        papeis: {
+          select: {
+            papel: true,
+            status: true,
+          },
+        },
+      },
     });
 
     let tipoUsuarioId: string | null = null;
@@ -856,41 +868,28 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       case TipoUsuario.Atleta: {
         if (!dataNascFinal) {
           return res.status(400).json({
-            error:
-              "Data de nascimento é obrigatória para atleta.",
+            error: "Data de nascimento é obrigatória para atleta.",
           });
         }
 
-        const idadeFinal =
-          calcularIdadePorNascimento(
-            dataNascFinal
-          );
+        const idadeFinal = calcularIdadePorNascimento(dataNascFinal);
 
-        const categoriaFinal =
-          categoriaAtletaPorIdade(
-            idadeFinal
-          );
-        const atleta =
-          await prisma.atleta.create({
-            data: {
-              usuarioId:
-                usuario.id,
+        const categoriaFinal = categoriaAtletaPorIdade(idadeFinal);
+        const atleta = await prisma.atleta.create({
+          data: {
+            usuarioId: usuario.id,
 
-              idade:
-                idadeFinal,
+            idade: idadeFinal,
 
-              categoria: [
-                categoriaFinal,
-              ],
+            categoria: [categoriaFinal],
 
-              email:
-                emailNorm,
-            },
+            email: emailNorm,
+          },
 
-            select: {
-              id: true,
-            },
-          });
+          select: {
+            id: true,
+          },
+        });
 
         if (
           tipo === "ATLETA" &&
@@ -952,9 +951,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             : null;
 
         const crefFinal =
-          typeof cref === "string" && cref.trim()
-            ? cref.trim()
-            : null;
+          typeof cref === "string" && cref.trim() ? cref.trim() : null;
 
         const professor = await prisma.professor.create({
           data: {
@@ -995,7 +992,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             bairro: bairroClube ?? bairro ?? null,
             cidade: cidadeClube ?? cidade ?? null,
             estado: estadoClube ?? estado ?? null,
-            pais:   paisClube ?? pais ?? null,
+            pais: paisClube ?? pais ?? null,
             cep: cepClube ?? null,
             estadio: estadio ?? null,
             logo: null,
@@ -1024,7 +1021,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             bairro: bairroEscolinha ?? bairro ?? null,
             cidade: cidadeEscolinha ?? cidade ?? null,
             estado: estadoEscolinha ?? estado ?? null,
-            pais:   paisEscolinha ?? pais ?? null,
+            pais: paisEscolinha ?? pais ?? null,
             cep: cepEscolinha ?? null,
             logo: null,
           },
@@ -1053,7 +1050,8 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           });
           if (!prof) {
             return res.status(400).json({
-              error: "colaboracaoProfessorId inválido. Envie o id da entidade Professor.",
+              error:
+                "colaboracaoProfessorId inválido. Envie o id da entidade Professor.",
             });
           }
         }
@@ -1065,7 +1063,8 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           });
           if (!clube) {
             return res.status(400).json({
-              error: "colaboracaoClubeId inválido. Envie o id da entidade Clube.",
+              error:
+                "colaboracaoClubeId inválido. Envie o id da entidade Clube.",
             });
           }
         }
@@ -1077,7 +1076,8 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           });
           if (!escola) {
             return res.status(400).json({
-              error: "colaboracaoEscolinhaId inválido. Envie o id da entidade Escolinha.",
+              error:
+                "colaboracaoEscolinhaId inválido. Envie o id da entidade Escolinha.",
             });
           }
         }
@@ -1092,7 +1092,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             anosExperiencia:
               typeof anosExperiencia === "number"
                 ? anosExperiencia
-                : (anosExperiencia ? Number(anosExperiencia) : 0),
+                : anosExperiencia
+                  ? Number(anosExperiencia)
+                  : 0,
             emailPublico: (emailPublico ?? emailNorm) || null,
             telefonePublico: telefonePublico ?? null,
             siteOuLinkedin: siteOuLinkedin ?? null,
@@ -1121,7 +1123,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         const federacao = await prisma.federacao.create({
           data: {
             usuarioId: usuario.id,
-            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal, 
+            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
             cnpj: cnpjClube || cnpjEscolinha || null,
             telefone1: telefone1Clube || telefone1Escolinha || null,
             telefone2: telefone2Clube || telefone2Escolinha || null,
@@ -1204,10 +1206,12 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         const d = new Date(dataNascFinal);
         const hoje = new Date();
         idadeCalc =
-          hoje.getFullYear()
-          - d.getFullYear()
-          - ((hoje.getMonth() < d.getMonth()
-              || (hoje.getMonth() === d.getMonth() && hoje.getDate() < d.getDate())) ? 1 : 0);
+          hoje.getFullYear() -
+          d.getFullYear() -
+          (hoje.getMonth() < d.getMonth() ||
+          (hoje.getMonth() === d.getMonth() && hoje.getDate() < d.getDate())
+            ? 1
+            : 0);
       }
 
       if (vinculo?.desejaVinculo && vinculo?.destinatarioId) {
@@ -1219,10 +1223,25 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
       const privacidadeDefault =
         idadeCalc !== null && idadeCalc < 12
-          ? { perfil: "private",    dms: "closed",         geoloc: false, videosAudience: "private" }
+          ? {
+              perfil: "private",
+              dms: "closed",
+              geoloc: false,
+              videosAudience: "private",
+            }
           : idadeCalc !== null && idadeCalc < 18
-          ? { perfil: "restricted", dms: "verified_only",  geoloc: false, videosAudience: "followers" }
-          : { perfil: "public",     dms: "open",           geoloc: false, videosAudience: "public" };
+            ? {
+                perfil: "restricted",
+                dms: "verified_only",
+                geoloc: false,
+                videosAudience: "followers",
+              }
+            : {
+                perfil: "public",
+                dms: "open",
+                geoloc: false,
+                videosAudience: "public",
+              };
 
       await prisma.usuario.update({
         where: { id: usuario.id },
@@ -1232,42 +1251,45 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       console.error("Falha ao setar privacidade default:", e);
     }
 
-    let token:
-      string | null = null;
+    let token: string | null = null;
 
     if (JWT_SECRET) {
       token = jwt.sign(
         {
-          userId:
-            usuario.id,
+          userId: usuario.id,
 
-          tipo:
-            usuario.tipo,
+          tipo: usuario.tipo,
 
-          tokenVersion:
-            usuario.tokenVersion ??
-            0,
+          tokenVersion: usuario.tokenVersion ?? 0,
 
-          purpose:
-            "registration-consent",
+          purpose: "registration-consent",
         },
         JWT_SECRET,
         {
           expiresIn: "30m",
-        }
+        },
       );
     }
 
     try {
-      const usr = await prisma.usuario.findUnique({ where: { id: usuario.id } });
+      const usr = await prisma.usuario.findUnique({
+        where: { id: usuario.id },
+      });
       let idadeCalc: number | null = null;
       if (usr?.dataNascimento) {
         const d = new Date(usr.dataNascimento);
         const h = new Date();
-        idadeCalc = h.getFullYear() - d.getFullYear() - (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate()) ? 1 : 0);
+        idadeCalc =
+          h.getFullYear() -
+          d.getFullYear() -
+          (h.getMonth() < d.getMonth() ||
+          (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())
+            ? 1
+            : 0);
       }
       const isMenor12 = idadeCalc !== null && idadeCalc < 12;
-      const destino = isMenor12 && usr?.responsavelEmail ? usr.responsavelEmail : usr!.email;
+      const destino =
+        isMenor12 && usr?.responsavelEmail ? usr.responsavelEmail : usr!.email;
 
       await issueEmailVerification({
         userId: usuario.id,
@@ -1288,89 +1310,90 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       usuarioId: usuario.id,
       tipoUsuarioId,
       tipo: usuario.tipo,
+      papelAtivo: usuario.tipo,
+      papeis: usuario.papeis,
       token,
       needsEmailVerification: true,
     });
   } catch (err: any) {
     if (err?.code === "P2002") {
-      const alvo = Array.isArray(err?.meta?.target) ? err.meta.target.join(", ") : "campo único";
-      return res.status(409).json({ error: `Conflito: já existe registro com o mesmo ${alvo}.` });
+      const alvo = Array.isArray(err?.meta?.target)
+        ? err.meta.target.join(", ")
+        : "campo único";
+      return res
+        .status(409)
+        .json({ error: `Conflito: já existe registro com o mesmo ${alvo}.` });
     }
     console.error("Erro ao cadastrar usuário:", err);
     return res.status(500).json({ error: "Erro interno no servidor." });
   }
 };
 
-async function montarSessaoAposVerificacao(
-  usuarioId: string
-) {
-  const usuario =
-    await prisma.usuario.findUnique({
-      where: {
-        id: usuarioId,
-      },
+async function montarSessaoAposVerificacao(usuarioId: string) {
+  const usuario = await prisma.usuario.findUnique({
+    where: {
+      id: usuarioId,
+    },
 
-      include: {
-        atleta: {
-          select: {
-            id: true,
-          },
-        },
-
-        professor: {
-          select: {
-            id: true,
-          },
-        },
-
-        clube: {
-          select: {
-            id: true,
-          },
-        },
-
-        escolinha: {
-          select: {
-            id: true,
-          },
-        },
-
-        olheiro: {
-          select: {
-            id: true,
-          },
-        },
-
-        learningProfile: {
-          select: {
-            id: true,
-          },
-        },
-
-        federacao: {
-          select: {
-            id: true,
-          },
-        },
-
-        marca: {
-          select: {
-            id: true,
-          },
-        },
-
-        administrador: {
-          select: {
-            id: true,
-          },
+    include: {
+      atleta: {
+        select: {
+          id: true,
         },
       },
-    });
+
+      professor: {
+        select: {
+          id: true,
+        },
+      },
+
+      clube: {
+        select: {
+          id: true,
+        },
+      },
+
+      escolinha: {
+        select: {
+          id: true,
+        },
+      },
+
+      olheiro: {
+        select: {
+          id: true,
+        },
+      },
+
+      learningProfile: {
+        select: {
+          id: true,
+        },
+      },
+
+      federacao: {
+        select: {
+          id: true,
+        },
+      },
+
+      marca: {
+        select: {
+          id: true,
+        },
+      },
+
+      administrador: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
 
   if (!usuario) {
-    throw new Error(
-      "Usuário não encontrado após a verificação."
-    );
+    throw new Error("Usuário não encontrado após a verificação.");
   }
 
   const tipoUsuarioId =
@@ -1385,216 +1408,169 @@ async function montarSessaoAposVerificacao(
     usuario.marca?.id ??
     null;
 
-  const authToken =
-    jwt.sign(
-      {
-        userId:
-          usuario.id,
+  const authToken = jwt.sign(
+    {
+      userId: usuario.id,
 
-        tipo:
-          usuario.tipo,
+      tipo: usuario.tipo,
 
-        tokenVersion:
-          usuario.tokenVersion ??
-          0,
-      },
-      JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
-    );
+      tokenVersion: usuario.tokenVersion ?? 0,
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "7d",
+    },
+  );
 
   try {
     await Promise.all([
       prisma.loginEvent.create({
         data: {
-          usuarioId:
-            usuario.id,
+          usuarioId: usuario.id,
         },
       }),
 
       prisma.usuario.update({
         where: {
-          id:
-            usuario.id,
+          id: usuario.id,
         },
 
         data: {
-          lastLoginAt:
-            new Date(),
+          lastLoginAt: new Date(),
 
-          lastSeenAt:
-            new Date(),
+          lastSeenAt: new Date(),
         },
       }),
     ]);
   } catch (error) {
     console.error(
       "[verificarEmail] Falha ao registrar login após verificação:",
-      error
+      error,
     );
   }
 
   return {
-    token:
-      authToken,
+    token: authToken,
 
-    id:
-      usuario.id,
+    id: usuario.id,
 
-    tipo:
-      usuario.tipo,
+    tipo: usuario.tipo,
 
-    nomeDeUsuario:
-      usuario.nomeDeUsuario,
+    nomeDeUsuario: usuario.nomeDeUsuario,
 
     tipoUsuarioId,
 
     usuario: {
-      id:
-        usuario.id,
+      id: usuario.id,
 
-      nomeDeUsuario:
-        usuario.nomeDeUsuario,
+      nomeDeUsuario: usuario.nomeDeUsuario,
 
-      tipo:
-        usuario.tipo,
+      tipo: usuario.tipo,
 
-      email:
-        usuario.email,
+      email: usuario.email,
 
-      verified:
-        true,
+      verified: true,
     },
   };
 }
 
-export async function verificarEmail(
-  req: Request,
-  res: Response
-) {
-  const { token } =
-    req.query as {
-      token?: string;
-    };
+export async function verificarEmail(req: Request, res: Response) {
+  const { token } = req.query as {
+    token?: string;
+  };
 
   if (!token) {
     return res.status(400).json({
       ok: false,
-      message:
-        "Token ausente.",
+      message: "Token ausente.",
     });
   }
 
   try {
-    const rec =
-      await prisma
-        .emailVerification
-        .findFirst({
-          where: {
-            token:
-              String(token),
-          },
-        });
+    const rec = await prisma.emailVerification.findFirst({
+      where: {
+        token: String(token),
+      },
+    });
 
     if (!rec) {
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          message:
-            "Token inválido.",
-        });
+      return res.status(400).json({
+        ok: false,
+        message: "Token inválido.",
+      });
     }
 
-    if (
-      rec.expiraEm &&
-      rec.expiraEm <
-        new Date()
-    ) {
-      return res
-        .status(410)
-        .json({
-          ok: false,
-          message:
-            "Token expirado. Solicite novo envio.",
-        });
+    if (rec.expiraEm && rec.expiraEm < new Date()) {
+      return res.status(410).json({
+        ok: false,
+        message: "Token expirado. Solicite novo envio.",
+      });
     }
 
     if (rec.usadoEm) {
       return res.json({
         ok: true,
 
-        message:
-          "Este e-mail já foi verificado.",
+        message: "Este e-mail já foi verificado.",
 
-        alreadyVerified:
-          true,
+        alreadyVerified: true,
       });
     }
 
     await prisma.$transaction([
       prisma.usuario.update({
         where: {
-          id:
-            rec.usuarioId,
+          id: rec.usuarioId,
         },
 
         data: {
-          verified:
-            true,
+          verified: true,
         },
       }),
 
       prisma.emailVerification.update({
         where: {
-          usuarioId:
-            rec.usuarioId,
+          usuarioId: rec.usuarioId,
         },
 
         data: {
-          usadoEm:
-            new Date(),
+          usadoEm: new Date(),
         },
       }),
     ]);
 
-    const sessao =
-      await montarSessaoAposVerificacao(
-        rec.usuarioId
-      );
+    const sessao = await montarSessaoAposVerificacao(rec.usuarioId);
 
     return res.json({
       ok: true,
 
-      message:
-        "E-mail verificado com sucesso! Sua conta está pronta.",
+      message: "E-mail verificado com sucesso! Sua conta está pronta.",
 
       ...sessao,
     });
   } catch (err) {
-    console.error(
-      "Erro ao verificar e-mail:",
-      err
-    );
+    console.error("Erro ao verificar e-mail:", err);
 
-    return res
-      .status(500)
-      .json({
-        ok: false,
+    return res.status(500).json({
+      ok: false,
 
-        message:
-          "Erro ao verificar e-mail.",
-      });
+      message: "Erro ao verificar e-mail.",
+    });
   }
 }
 
 export async function resendVerification(req: Request, res: Response) {
   try {
-    const rawUser = String(req.body?.nomeDeUsuario || "").trim().toLowerCase();
-    const rawEmail = String(req.body?.email || "").trim().toLowerCase();
+    const rawUser = String(req.body?.nomeDeUsuario || "")
+      .trim()
+      .toLowerCase();
+    const rawEmail = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
     if (!rawUser && !rawEmail) {
-      return res.status(400).json({ message: "Informe nomeDeUsuario ou email." });
+      return res
+        .status(400)
+        .json({ message: "Informe nomeDeUsuario ou email." });
     }
 
     const usuario = await prisma.usuario.findFirst({
@@ -1605,27 +1581,43 @@ export async function resendVerification(req: Request, res: Response) {
         ].filter(Boolean) as any,
       },
     });
-    if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
-    if (usuario.verified) return res.json({ message: "Usuário já verificado." });
+    if (!usuario)
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    if (usuario.verified)
+      return res.json({ message: "Usuário já verificado." });
 
     const raw = crypto.randomBytes(32).toString("hex");
     await prisma.emailVerification.upsert({
       where: { usuarioId: usuario.id },
       update: { token: raw, expiraEm: addHours(new Date(), 24), usadoEm: null },
-      create: { usuarioId: usuario.id, token: raw, expiraEm: addHours(new Date(), 24) },
+      create: {
+        usuarioId: usuario.id,
+        token: raw,
+        expiraEm: addHours(new Date(), 24),
+      },
     });
 
     let idadeCalc: number | null = null;
     if (usuario.dataNascimento) {
       const d = new Date(usuario.dataNascimento);
       const h = new Date();
-      idadeCalc = h.getFullYear() - d.getFullYear() - (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate()) ? 1 : 0);
+      idadeCalc =
+        h.getFullYear() -
+        d.getFullYear() -
+        (h.getMonth() < d.getMonth() ||
+        (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())
+          ? 1
+          : 0);
     }
-    const isMenor12 =
-      idadeCalc !== null &&
-      idadeCalc < 12;
-    const destino = (isMenor12 && usuario.responsavelEmail) ? usuario.responsavelEmail : usuario.email;
-    if (!destino) return res.status(400).json({ message: "Usuário sem e-mail cadastrado." });
+    const isMenor12 = idadeCalc !== null && idadeCalc < 12;
+    const destino =
+      isMenor12 && usuario.responsavelEmail
+        ? usuario.responsavelEmail
+        : usuario.email;
+    if (!destino)
+      return res
+        .status(400)
+        .json({ message: "Usuário sem e-mail cadastrado." });
 
     const verifyUrl = `${FRONTEND_URL}/verificar-email?token=${encodeURIComponent(raw)}`;
 
@@ -1640,10 +1632,16 @@ export async function resendVerification(req: Request, res: Response) {
       estado: usuario.estado ?? null,
     });
 
-    return res.json({ ok: true, message: "Reenviamos o e-mail de verificação.", emailDestino: destino });
+    return res.json({
+      ok: true,
+      message: "Reenviamos o e-mail de verificação.",
+      emailDestino: destino,
+    });
   } catch (err) {
     console.error("Erro no resendVerification:", err);
-    return res.status(500).json({ message: "Falha ao reenviar e-mail de verificação." });
+    return res
+      .status(500)
+      .json({ message: "Falha ao reenviar e-mail de verificação." });
   }
 }
 
@@ -1652,10 +1650,7 @@ function stringParaTipoUsuario(v: any): TipoUsuario | null {
   if (s === "atleta") return TipoUsuario.Atleta;
   if (s === "professor") return TipoUsuario.Professor;
   if (s === "clube") return TipoUsuario.Clube;
-  if (
-    s === "escolinha" ||
-    s === "escola"
-  ) {
+  if (s === "escolinha" || s === "escola") {
     return TipoUsuario.Escolinha;
   }
   if (s === "olheiro") return TipoUsuario.Olheiro;
@@ -1681,5 +1676,7 @@ function mapStatusCref(v: any): StatusCref | null {
 }
 
 function gerarCodigo(prefixo: string) {
-  return `${prefixo}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+  return `${prefixo}-${Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0")}`;
 }
