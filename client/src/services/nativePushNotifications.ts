@@ -5,6 +5,61 @@ import { API } from "../config.js";
 
 let listenersInstalados = false;
 
+function normalizarDestinoPush(
+  raw?: unknown
+) {
+  const fallback =
+    "/notificacoes";
+
+  const value =
+    String(raw || "").trim();
+
+  if (!value) {
+    return fallback;
+  }
+
+  if (
+    value.startsWith("/") &&
+    !value.startsWith("//")
+  ) {
+    return value;
+  }
+
+  try {
+    const url =
+      new URL(value);
+
+    const host =
+      url.hostname.toLowerCase();
+
+    if (
+      host !== "footera.app.br" &&
+      host !==
+        "www.footera.app.br"
+    ) {
+      return fallback;
+    }
+
+    return (
+      url.pathname +
+      url.search +
+      url.hash
+    );
+  } catch {
+    return fallback;
+  }
+}
+
+function abrirDestinoPush(
+  raw?: unknown
+) {
+  const destino =
+    normalizarDestinoPush(raw);
+
+  window.location.href =
+    destino;
+}
+
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 }
@@ -228,18 +283,42 @@ export async function inicializarPushAndroidNativo() {
     }
   });
 
-  PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-    console.log("[push native] clicada:", action);
+  PushNotifications.addListener(
+    "pushNotificationActionPerformed",
+    (action) => {
+      console.log(
+        "[push native] clicada:",
+        action
+      );
 
-    const url =
-      action.notification?.data?.url ||
-      action.notification?.data?.link ||
-      "/notificacoes";
+      const raw =
+        action.notification
+          ?.data?.url ||
+        action.notification
+          ?.data?.link;
 
-    if (url) {
-      window.location.href = String(url);
+      abrirDestinoPush(raw);
     }
-  });
+  );
+
+  LocalNotifications.addListener(
+    "localNotificationActionPerformed",
+    (action) => {
+      console.log(
+        "[push local] clicada:",
+        action
+      );
+
+      const extra =
+        action.notification?.extra ||
+        {};
+
+      abrirDestinoPush(
+        extra.url ||
+        extra.link
+      );
+    }
+  );
 
   listenersInstalados = true;
 

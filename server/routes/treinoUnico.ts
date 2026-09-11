@@ -1,8 +1,28 @@
-import { Router } from "express";
-import { getTreinoUnico } from "server/controllers/TreinoUnicoController.js";
+import {
+  Router,
+} from "express";
 
-const router = Router();
+import {
+  authenticateToken,
+} from "../middlewares/auth.js";
 
-router.get("/", getTreinoUnico);
+import {
+  getTreinoUnico,
+  getTreinoProgramadoPublico,
+} from "../controllers/TreinoUnicoController.js";
+
+const router =
+  Router();
+
+router.get(
+  "/publico/:id",
+  getTreinoProgramadoPublico
+);
+
+router.get(
+  "/",
+  authenticateToken,
+  getTreinoUnico
+);
 
 export default router;

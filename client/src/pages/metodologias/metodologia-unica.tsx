@@ -210,10 +210,37 @@ function Stars({ value }: { value: number }) {
 
 export default function MetodologiaUnicaPage() {
   const [, navigate] = useLocation();
-  const [matchLearning, paramsLearning] = useRoute("/learning/:id");
-  const [matchOld, paramsOld] = useRoute("/metodologias/:id");
+  const [
+    matchPublico,
+    paramsPublico,
+  ] =
+    useRoute(
+      "/metodologia/:id"
+    );
 
-  const params = matchLearning ? paramsLearning : paramsOld;
+  const [
+    matchLearning,
+    paramsLearning,
+  ] =
+    useRoute(
+      "/learning/:id"
+    );
+
+  const [
+    matchOld,
+    paramsOld,
+  ] =
+    useRoute(
+      "/metodologias/:id"
+    );
+
+  const params =
+    matchPublico
+      ? paramsPublico
+      : matchLearning
+      ? paramsLearning
+      : paramsOld;
+  
   const id = params?.id;
   const searchParams = new URLSearchParams(window.location.search);
   const isAvulsa =

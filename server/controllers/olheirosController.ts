@@ -1473,7 +1473,13 @@ export async function recusarSolicitacaoColaboracao(
         `${destino?.nome || "A organização"} recusou o pedido de colaboração.`,
 
       link:
-        "/perfil",
+        solicitacao
+          .destinoUsuarioId
+          ? `/perfil/${encodeURIComponent(
+              solicitacao
+                .destinoUsuarioId
+            )}`
+          : "/notificacoes",
     });
 
     return res.json({

@@ -1158,7 +1158,136 @@ export default function PaginaMensagens() {
   const limite = 20;
 
   useEffect(() => {
+    if (
+      pendingOpenRef.current ||
+      !token
+    ) {
+      return;
+    }
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const otherId =
+      params.get("otherId");
+
+    const grupoId =
+      params.get("grupoId");
+
+    if (!otherId && !grupoId) {
+      return;
+    }
+
+    if (otherId) {
+      const existente =
+        usuariosMutuos.find(
+          (u) =>
+            u.id === otherId
+        );
+
+      if (existente) {
+        selecionarAlvo({
+          tipo: "usuario",
+          usuario: existente,
+        });
+
+        pendingOpenRef.current =
+          true;
+
+        return;
+      }
+
+      void (async () => {
+        try {
+          const resp =
+            await fetch(
+              `${API.BASE_URL}/api/usuarios/${encodeURIComponent(
+                otherId
+              )}`,
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          if (!resp.ok) {
+            return;
+          }
+
+          const usuario =
+            (await resp.json()) as Usuario;
+
+          setUsuariosMutuos(
+            (prev) =>
+              prev.some(
+                (u) =>
+                  u.id ===
+                  usuario.id
+              )
+                ? prev
+                : [
+                    usuario,
+                    ...prev,
+                  ]
+          );
+
+          selecionarAlvo({
+            tipo: "usuario",
+            usuario,
+          });
+        } finally {
+          pendingOpenRef.current =
+            true;
+        }
+      })();
+
+      return;
+    }
+
+    if (grupoId) {
+      const grupo =
+        grupos.find(
+          (g) =>
+            g.id === grupoId
+        );
+
+      if (!grupo) {
+        // Os grupos ainda podem
+        // estar carregando.
+        return;
+      }
+
+      selecionarAlvo({
+        tipo: "grupo",
+        grupo,
+      });
+
+      pendingOpenRef.current =
+        true;
+    }
+  }, [
+    usuariosMutuos,
+    grupos,
+    token,
+  ]);
+
+  useEffect(() => {
     if (pendingOpenRef.current) return;
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    if (
+      params.get("otherId") ||
+      params.get("grupoId")
+    ) {
+      return;
+    }
     try {
       const raw = localStorage.getItem("mensagens_open_target");
       if (!raw) return;
@@ -1197,6 +1326,17 @@ export default function PaginaMensagens() {
   }, [usuariosMutuos, token]);
 
   useEffect(() => {
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    if (
+      params.get("otherId") ||
+      params.get("grupoId")
+    ) {
+      return;
+    }
     try {
       const raw = localStorage.getItem("mensagens_last_target");
       if (!raw) return;

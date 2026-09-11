@@ -250,6 +250,7 @@ async function enviarLembretesTreinos15Min() {
     string,
     {
       alvoId: string;
+      turmaId: string;
       tituloTreino: string;
       usuarioIds: Set<string>;
     }
@@ -285,7 +286,10 @@ async function enviarLembretesTreinos15Min() {
           mensagem: treino.turmaId
             ? `${tituloTreino} da turma começa em cerca de 15 minutos.`
             : `${tituloTreino} começa em cerca de 15 minutos.`,
-          link: "/treinos",
+          link:
+            `/treinos/unico?agendadoId=${encodeURIComponent(
+              treino.id
+            )}`,
         });
       }
     }
@@ -302,11 +306,21 @@ async function enviarLembretesTreinos15Min() {
       const turmaKey = `turma:${treino.turmaId}:${tituloTreino}:${horarioKey}`;
 
       const atual =
-        lembretesTurma.get(turmaKey) ||
-        {
-          alvoId: turmaKey,
+        lembretesTurma.get(
+          turmaKey
+        ) || {
+          alvoId:
+            turmaKey,
+
+          turmaId:
+            String(
+              treino.turmaId
+            ),
+
           tituloTreino,
-          usuarioIds: new Set<string>(),
+
+          usuarioIds:
+            new Set<string>(),
         };
 
       for (const usuarioId of responsaveis) {
@@ -338,7 +352,10 @@ async function enviarLembretesTreinos15Min() {
         tipo: NotificacaoTipo.TREINO,
         titulo: "Treino começando em breve",
         mensagem: `${tituloTreino} começa em cerca de 15 minutos.`,
-        link: "/treinos",
+        link:
+          `/treinos/unico?agendadoId=${encodeURIComponent(
+            treino.id
+          )}`,
       });
     }
   }
@@ -362,7 +379,10 @@ async function enviarLembretesTreinos15Min() {
         tipo: NotificacaoTipo.TREINO,
         titulo: "Treino da turma começando em breve",
         mensagem: `${grupo.tituloTreino} da turma começa em cerca de 15 minutos.`,
-        link: "/treinos",
+        link:
+          `/turma/${encodeURIComponent(
+            grupo.turmaId
+          )}`,
       });
     }
   }
@@ -563,7 +583,10 @@ async function enviarLembretesEventos(params: {
         tipo: NotificacaoTipo.EVENTO,
         titulo: params.titulo,
         mensagem,
-        link: `/eventos/${evento.id}`,
+        link:
+          `/evento/${encodeURIComponent(
+            evento.id
+          )}`,
       });
     }
   }

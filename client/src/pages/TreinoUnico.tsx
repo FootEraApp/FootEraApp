@@ -1,6 +1,6 @@
 // client/src/pages/TreinoUnico
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import {
   CalendarClock,
   ChevronLeft,
@@ -15,7 +15,7 @@ import {
   Star as StarIcon,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import AcoesTreino from "../components/treinos/acoestreino.js";
 
 type ExercicioItem = {
@@ -56,7 +56,11 @@ type TreinoUnicoPayload = {
   origem?: OrigemInfo | null;
   realizacoes?: number | null;
   avaliacaoMedia?: number | null;     
-  avaliacaoCount?: number | null;    
+  avaliacaoCount?: number | null; 
+  publicPreview?: boolean;
+  imagemUrl?: string | null;
+  pontuacao?: number | null;
+  categoria?: string[];   
   avaliacoesPorAgendado?: {
     treinoAgendadoId: string;
     media: number; 
@@ -162,8 +166,26 @@ function Stars({ value }: { value: number }) {
 
 export default function TreinoUnico() {
   const { get } = useQuery();
-  const agendadoId = get("agendadoId");
-  const programadoId = get("programadoId");
+
+  const agendadoId =
+    get("agendadoId");
+
+  const programadoId =
+    get("programadoId");
+
+  const [
+    matchPublico,
+    paramsPublico,
+  ] =
+    useRoute<{
+      id: string;
+    }>("/treino/:id");
+
+  const treinoPublicoId =
+    matchPublico
+      ? paramsPublico?.id
+      : null;
+
   const token = (Storage as any).token ?? localStorage.getItem("token");
 
   const [loading, setLoading] = useState(true);
@@ -175,6 +197,27 @@ export default function TreinoUnico() {
       try {
         setLoading(true);
         setErro(null);
+
+        if (treinoPublicoId) {
+          const res =
+            await fetch(
+              `${API.BASE_URL}/api/treino-unico/publico/${encodeURIComponent(
+                treinoPublicoId
+              )}`
+            );
+
+          if (!res.ok) {
+            throw new Error(
+              `(${res.status}) ${await res.text()}`
+            );
+          }
+
+          const json =
+            await res.json();
+
+          setTreino(json);
+          return;
+        }
 
         if (programadoId) {
           const qs = `programadoId=${encodeURIComponent(programadoId)}`;
@@ -202,13 +245,13 @@ export default function TreinoUnico() {
       }
     };
 
-    if (!agendadoId && !programadoId) {
+    if (!agendadoId && !programadoId && !treinoPublicoId) {
       setErro("Informe agendadoId ou programadoId na URL.");
       setLoading(false);
       return;
     }
     fetchTreino();
-  }, [agendadoId, programadoId]);
+  }, [agendadoId, programadoId, treinoPublicoId]);
 
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";

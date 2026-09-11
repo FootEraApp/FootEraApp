@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.app.footera",
+      "sha256_cert_fingerprints": [
+        "D7:D2:00:E5:F7:D5:41:24:A9:75:86:68:91:61:F0:A5:99:90:CD:1B:61:C3:49:67:10:DC:67:A7:2C:B9:3C:BC"
+      ]
+    }
+  }
+]

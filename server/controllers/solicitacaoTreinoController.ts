@@ -298,7 +298,10 @@ export async function criarSolicitacao(req: Request, res: Response) {
       tipo: NotificacaoTipo.GENERICA,
       titulo: "Solicitação de treino",
       mensagem: "quer treinar junto com você",
-      link: "/notificacoes",
+      link:
+        `/notificacoes?solicitacaoId=${encodeURIComponent(
+          row.id
+        )}`,
     });
     return res.status(201).json({ ...row, ok: true });
   } catch (error) {

@@ -32,6 +32,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="https"
+                    android:host="footera.app.br" />
+
+                <data
+                    android:scheme="https"
+                    android:host="www.footera.app.br" />
+            </intent-filter>
+
         </activity>
 
         <provider

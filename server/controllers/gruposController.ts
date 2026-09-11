@@ -195,7 +195,7 @@ export async function criarGrupo(
         criarNotificacaoEEnviarPush({
           usuarioId: membroId,
           actorId: ownerId,
-          tipo: NotificacaoTipo.MENSAGEM,
+          tipo: NotificacaoTipo.MENSAGEM_GRUPO,
           titulo: "Você foi adicionado a um grupo",
           mensagem: `${nomeCriador} adicionou você ao grupo ${grupo.nome}.`,
           link: `/mensagens?grupoId=${grupo.id}`,
@@ -423,7 +423,7 @@ export async function adicionarMembrosGrupo(req: AuthenticatedRequest, res: Resp
             criarNotificacaoEEnviarPush({
               usuarioId: novoMembroId,
               actorId: userId,
-              tipo: NotificacaoTipo.MENSAGEM,
+              tipo: NotificacaoTipo.MENSAGEM_GRUPO,
               titulo: "Você foi adicionado a um grupo",
               mensagem:
                 `${nomeAdministrador} adicionou você ao grupo ${grupo.nome}.`,
@@ -553,7 +553,7 @@ export async function alterarTipoMembroGrupo(req: AuthenticatedRequest, res: Res
         await criarNotificacaoEEnviarPush({
           usuarioId: membroId,
           actorId: userId,
-          tipo: NotificacaoTipo.MENSAGEM,
+          tipo: NotificacaoTipo.MENSAGEM_GRUPO,
           titulo: "Você agora é administrador",
           mensagem:
             `${nomeResponsavel} tornou você administrador do grupo ${grupo.nome}.`,

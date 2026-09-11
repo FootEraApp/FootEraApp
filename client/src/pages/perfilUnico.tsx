@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
 import { ArrowLeft, Share2, CheckCircle2 } from "lucide-react";
-import { API, APP } from "../config.js";
+import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
@@ -17,6 +17,10 @@ import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import ProfilePostsSection from "../components/perfil/ProfilePostsSection.js";
 import { clearAuthSession, salvarRetornoAuth } from "../utils/authSession.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
+import {
+  PUBLIC_PATHS,
+  publicAppUrl,
+} from "../utils/publicRoutes.js";
 
 type TipoPerfil =
   | "Atleta"
@@ -71,6 +75,21 @@ export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { requireAuth } = useAuthGate();
+  const rotaOrganizacao =
+    window.location.pathname
+      .toLowerCase()
+      .startsWith(
+        "/organizacao/"
+      );
+
+  const tiposOrganizacao =
+    new Set([
+      "Clube",
+      "Escolinha",
+      "Escola",
+      "Federacao",
+      "Marca",
+    ]);
 
   const token = readStoredToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -143,6 +162,23 @@ export default function PerfilUnico() {
         const data = resposta.data;
         const resolvedUsuarioId = data?.usuario?.id ?? null;
 
+        if (
+          rotaOrganizacao &&
+          !tiposOrganizacao.has(
+            String(data?.tipo || "")
+          )
+        ) {
+          setErroPerfil({
+            status: 404,
+            code:
+              "ORGANIZATION_NOT_FOUND",
+            message:
+              "Organização não encontrada.",
+          });
+
+          setLoading(false);
+          return;
+        }
         setPerfilData(data);
         setTipo(data?.tipo ?? null);
         setUsuarioId(resolvedUsuarioId);
@@ -151,13 +187,6 @@ export default function PerfilUnico() {
           setModoVisitante(true);
         }
 
-        if (resolvedUsuarioId && String(resolvedUsuarioId) !== String(id)) {
-          window.history.replaceState(
-            null,
-            "",
-            `/perfil/${encodeURIComponent(resolvedUsuarioId)}`
-          );
-        }
       } catch (erro: any) {
         if (cancelled) return;
 
@@ -190,7 +219,7 @@ export default function PerfilUnico() {
     return () => {
       cancelled = true;
     };
-  }, [id, token]);
+  }, [id, token, rotaOrganizacao]);
 
   useEffect(() => {
     if (!usuarioId || !token || modoVisitante) return;
@@ -387,12 +416,6 @@ export default function PerfilUnico() {
 
     const compartilhar =
       async () => {
-        const basePublica =
-          String(
-            APP.FRONTEND_BASE_URL ||
-              window.location.origin
-          ).replace(/\/+$/, "");
-
         const slugPerfil =
           String(
             perfilData.usuario
@@ -402,10 +425,22 @@ export default function PerfilUnico() {
             .replace(/^@/, "")
             .trim();
 
+        const ehOrganizacao =
+          tiposOrganizacao.has(
+            String(tipo || "")
+          );
+
+        const path =
+          ehOrganizacao
+            ? PUBLIC_PATHS.organizacao(
+                slugPerfil
+              )
+            : PUBLIC_PATHS.profile(
+                slugPerfil
+              );
+
         const url =
-          `${basePublica}/perfil/${encodeURIComponent(
-            slugPerfil
-          )}`;
+          publicAppUrl(path);
 
         try {
           if (
@@ -448,9 +483,7 @@ export default function PerfilUnico() {
             "Entre na FootEra para seguir este perfil.",
 
           returnTo:
-            `/perfil/${encodeURIComponent(
-              usuarioId
-            )}`,
+            `${window.location.pathname}${window.location.search}${window.location.hash}`,
 
           action: {
             type:

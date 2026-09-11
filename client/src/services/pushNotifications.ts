@@ -38,13 +38,31 @@ async function getPublicKey() {
   return String(json.publicKey || "");
 }
 
-async function esperarServiceWorkerReady(timeoutMs = 8000): Promise<ServiceWorkerRegistration> {
+async function esperarServiceWorkerReady(
+  timeoutMs = 8000
+): Promise<ServiceWorkerRegistration> {
   if (!("serviceWorker" in navigator)) {
-    throw new Error("Este navegador não suporta service worker.");
+    throw new Error(
+      "Este navegador não suporta service worker."
+    );
   }
 
-  let registrationAtual: ServiceWorkerRegistration | undefined =
-    await navigator.serviceWorker.getRegistration("/");
+  // Em produção usamos o SW gerado pelo vite-plugin-pwa.
+  // Ele já importa /push-handler.js pelo vite.config.ts.
+  //
+  // Em desenvolvimento o generateSW está desativado,
+  // então podemos usar diretamente o push-handler.js.
+  const workerPath =
+    import.meta.env.PROD
+      ? "/sw.js"
+      : "/push-handler.js";
+
+  let registrationAtual:
+    | ServiceWorkerRegistration
+    | undefined =
+    await navigator.serviceWorker.getRegistration(
+      "/"
+    );
 
   const scriptAtual =
     registrationAtual?.active?.scriptURL ||
@@ -52,24 +70,42 @@ async function esperarServiceWorkerReady(timeoutMs = 8000): Promise<ServiceWorke
     registrationAtual?.installing?.scriptURL ||
     "";
 
-  const precisaRegistrarPushHandler =
-    !registrationAtual || !scriptAtual.includes("/push-handler.js");
+  let workerAtualPath = "";
 
-  if (precisaRegistrarPushHandler) {
+  try {
+    workerAtualPath =
+      scriptAtual
+        ? new URL(scriptAtual).pathname
+        : "";
+  } catch {
+    workerAtualPath = "";
+  }
+
+  const precisaRegistrar =
+    !registrationAtual ||
+    workerAtualPath !== workerPath;
+
+  if (precisaRegistrar) {
     try {
-      registrationAtual = await navigator.serviceWorker.register("/push-handler.js", {
-        scope: "/",
-      });
+      registrationAtual =
+        await navigator.serviceWorker.register(
+          workerPath,
+          {
+            scope: "/",
+          }
+        );
     } catch (e: any) {
       throw new Error(
         e?.message ||
-          "Não foi possível registrar o service worker de push. Verifique se existe client/public/push-handler.js."
+          `Não foi possível registrar o service worker ${workerPath}.`
       );
     }
   }
 
   if (!registrationAtual) {
-    throw new Error("Service worker de push não foi registrado corretamente.");
+    throw new Error(
+      "Service worker não foi registrado corretamente."
+    );
   }
 
   try {
@@ -82,15 +118,18 @@ async function esperarServiceWorkerReady(timeoutMs = 8000): Promise<ServiceWorke
 
   return await Promise.race([
     navigator.serviceWorker.ready,
-    new Promise<ServiceWorkerRegistration>((_, reject) => {
-      window.setTimeout(() => {
-        reject(
-          new Error(
-            "Service worker não ficou pronto a tempo. Recarregue a página e tente ativar novamente."
-          )
-        );
-      }, timeoutMs);
-    }),
+
+    new Promise<ServiceWorkerRegistration>(
+      (_, reject) => {
+        window.setTimeout(() => {
+          reject(
+            new Error(
+              "Service worker não ficou pronto a tempo. Recarregue a página e tente ativar novamente."
+            )
+          );
+        }, timeoutMs);
+      }
+    ),
   ]);
 }
 
