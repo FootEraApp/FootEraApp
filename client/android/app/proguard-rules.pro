@@ -49,3 +49,26 @@
 # Google Play Services Auth
 -keep class com.google.android.gms.auth.** { *; }
 -keep class com.google.android.gms.common.api.** { *; }
+
+# =========================================================
+# Capacitor - metadata de permissões
+# =========================================================
+
+-keepattributes RuntimeVisibleAnnotations
+-keepattributes RuntimeInvisibleAnnotations
+-keepattributes AnnotationDefault
+
+-keep @interface com.getcapacitor.annotation.CapacitorPlugin
+-keep @interface com.getcapacitor.annotation.Permission
+-keep @interface com.getcapacitor.annotation.PermissionCallback
+
+# =========================================================
+# Push Notifications - NÃO remover metadata pelo R8
+# =========================================================
+
+-keep class com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin { *; }
+-keep class com.capacitorjs.plugins.pushnotifications.** { *; }
+
+# Local Notifications também usa permissões
+-keep class com.capacitorjs.plugins.localnotifications.LocalNotificationsPlugin { *; }
+-keep class com.capacitorjs.plugins.localnotifications.** { *; }

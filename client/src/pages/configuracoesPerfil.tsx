@@ -602,8 +602,26 @@ export default function ConfiguracoesPerfil() {
 
       if (isNativePushApp()) {
         const perm = await PushNotifications.checkPermissions();
+        const receive = perm?.receive;
 
-        if (perm.receive === "granted") {
+        if (!receive) {
+          console.warn(
+            "[push native] checkPermissions não retornou receive:",
+            perm
+          );
+
+          setPushDeviceStatus("default");
+          setPushPermission("default");
+          setPushHasSubscription(false);
+          setPushMsg(null);
+          setPushErr(
+            "O Android não retornou o estado da permissão de notificações."
+          );
+
+          return;
+        }
+
+        if (receive === "granted") {
           await inicializarPushAndroidNativo();
 
           setPushPermission("granted");
@@ -625,7 +643,7 @@ export default function ConfiguracoesPerfil() {
           return;
         }
 
-        if (perm.receive === "denied") {
+        if (receive === "denied") {
           setPushDeviceStatus("denied");
           setPushPermission("denied");
           setPushHasSubscription(false);

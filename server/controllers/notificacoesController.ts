@@ -880,6 +880,8 @@ async function enviarPushNativoParaUsuario(params: {
       priority: "high",
       notification: {
         channelId: "footera_default",
+        icon: "ic_stat_footera",
+        color: "#169C36",
       },
     },
   });

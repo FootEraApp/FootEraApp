@@ -190,19 +190,19 @@ export default function PaginaLogin() {
           toast.success(data?.noticeMessage ?? "Sua conta foi reativada por um administrador.");
         }
 
-        const { isAdmin } = applyAuthSession(data, { lembrar: lembrarDeMim });
+        const { isAdmin } = applyAuthSession(data, {
+          lembrar: lembrarDeMim
+        });
 
-        await inicializarPushDepoisDoLogin();
+        const destino = isAdmin
+          ? "/admin"
+          : consumirRetornoAuth("/perfil");
 
-        if (isAdmin) {
-          navigate("/admin");
-        } else {
-          navigate(
-            consumirRetornoAuth(
-              "/perfil"
-            )
-          );
-        }
+        navigate(destino);
+
+        // Push é secundário e não deve bloquear autenticação
+        void inicializarPushDepoisDoLogin();
+
       } catch (err: any) {
         console.error("[APP LOGIN ERRO]", {
           status: err.response?.status,
@@ -305,15 +305,13 @@ export default function PaginaLogin() {
         setRecoverSenha("");
         setDeletedInfo(null);
 
-        await inicializarPushDepoisDoLogin();
-
         navigate(
           isAdmin
             ? "/admin"
-            : consumirRetornoAuth(
-                "/perfil"
-              )
+            : consumirRetornoAuth("/perfil")
         );
+
+        void inicializarPushDepoisDoLogin();
       } catch (e: any) {
         toast.error(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
       } finally {
@@ -398,15 +396,13 @@ export default function PaginaLogin() {
           }
         );
 
-      await inicializarPushDepoisDoLogin();
+      const destino = isAdmin
+        ? "/admin"
+        : consumirRetornoAuth("/perfil");
 
-      navigate(
-        isAdmin
-          ? "/admin"
-          : consumirRetornoAuth(
-              "/perfil"
-            )
-      );
+      navigate(destino);
+
+      void inicializarPushDepoisDoLogin();
     } catch (err: any) {
       console.error("Erro no login com Google:", err.response?.data || err.message);
       setErro(

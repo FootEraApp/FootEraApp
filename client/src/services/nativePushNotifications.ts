@@ -202,7 +202,12 @@ async function mostrarNotificacaoLocal(notification: any) {
           data?.message ||
           data?.texto ||
           "Você tem uma nova notificação.",
+
         channelId: "footera_default",
+
+        smallIcon: "ic_stat_footera",
+        iconColor: "#169C36",
+
         extra: data,
       },
     ],
@@ -221,6 +226,10 @@ export async function mostrarNotificacaoLocalTeste() {
         title: "Teste de notificação FootEra",
         body: "Se você recebeu isso, as notificações locais do app estão funcionando.",
         channelId: "footera_default",
+
+        smallIcon: "ic_stat_footera",
+        iconColor: "#169C36",
+
         extra: {
           url: "/notificacoes",
           tipo: "TESTE_LOCAL",
@@ -244,8 +253,16 @@ export async function inicializarPushAndroidNativo() {
   }
 
   const perm = await PushNotifications.checkPermissions();
+  const receive = perm?.receive;
 
-  if (perm.receive !== "granted") {
+  if (receive !== "granted") {
+    if (!receive) {
+      console.warn(
+        "[push native] checkPermissions sem receive:",
+        perm
+      );
+    }
+
     return false;
   }
 
@@ -337,13 +354,23 @@ export async function ativarPushAndroidNativo() {
   }
 
   let permission = await PushNotifications.checkPermissions();
+  let receive = permission?.receive;
 
-  if (permission.receive !== "granted") {
+  if (receive !== "granted") {
     permission = await PushNotifications.requestPermissions();
+    receive = permission?.receive;
   }
 
-  if (permission.receive !== "granted") {
-    throw new Error("Permissão de notificação negada no Android.");
+  if (!receive) {
+    throw new Error(
+      "O Android não retornou o estado da permissão de notificações."
+    );
+  }
+
+  if (receive !== "granted") {
+    throw new Error(
+      "Permissão de notificação negada no Android."
+    );
   }
 
   await inicializarPushAndroidNativo();
