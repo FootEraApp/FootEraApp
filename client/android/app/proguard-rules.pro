@@ -35,3 +35,17 @@
     public <methods>;
     public <fields>;
 }
+
+# =========================================================
+# Capawesome Google Sign-In
+# =========================================================
+
+-keep class io.capawesome.capacitorjs.plugins.googlesignin.** { *; }
+
+# Credential Manager / Google Identity
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+
+# Google Play Services Auth
+-keep class com.google.android.gms.auth.** { *; }
+-keep class com.google.android.gms.common.api.** { *; }
