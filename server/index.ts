@@ -1,3 +1,4 @@
+// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -142,6 +143,8 @@ import creatorRoutes from "./routes/creator.js";
 import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
 import learningEventosRoutes from "./routes/learningEventos.js";
 import { setupSocket } from "./socket.js";
+
+import usuarioPapelRoutes from "./routes/usuarioPapel.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -338,7 +341,14 @@ app.use("/api/presenca", authenticateToken, presencaRoutes);
 app.use("/api/professores", authenticateToken, professorRoutes);
 app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);
 app.use("/api/seguidores", seguirRoutes);
-app.use("/api/usuarios", authenticateToken, usuarioRoutes);
+
+app.use(
+  "/api/usuarios",
+  authenticateToken,
+  usuarioPapelRoutes,
+  usuarioRoutes,
+);
+
 app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
 app.use("/api/submissoes", authenticateToken, submissoesRoutes);
 app.use("/api/treinos", authenticateToken, treinoRoutes);
