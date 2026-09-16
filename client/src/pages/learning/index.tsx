@@ -25,15 +25,12 @@ import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningCard from "../../components/learning/LearningCard.js";
 import { API } from "@/config.js";
 import CoverImage from "../../components/shared/CoverImage.js";
+import { useAuthGate } from "../../context/AuthGateContext.js";
 
 type TabKey = "explorar" | "minhas" | "criar";
 type FavoritoTipo = "METODOLOGIA" | "METODOLOGIA_AVULSA" | "AULA_AO_VIVO";
 type FiltroFavoritos = "TODOS" | "FAVORITOS";
 
-type FavoritoItem = {
-  tipo: FavoritoTipo;
-  id: string;
-};
 type LearningCriadasResponse = {
   items: any[];
   permissaoCriacao?: LearningPermissaoCriacao;
@@ -569,6 +566,9 @@ export default function LearningPage() {
   const [filtroFavoritosEventos, setFiltroFavoritosEventos] = useState<FiltroFavoritos>("TODOS");
   const [busca, setBusca] = useState("");
   const [, navigate] = useLocation();
+  const {
+    requireAuth,
+  } = useAuthGate();
   const [permissaoCriacao, setPermissaoCriacao] = useState<{
     podeCriar: boolean;
     ehProfessorParceiro?: boolean;
@@ -618,6 +618,9 @@ export default function LearningPage() {
     }
   }
 
+  const token = getToken();
+  const isAuthenticated = Boolean(token);
+
   useEffect(() => {
     let mounted = true;
 
@@ -625,71 +628,176 @@ export default function LearningPage() {
       try {
         setLoading(true);
 
+        // VISITANTE:
+        // carrega somente conteúdo que pode ser visto sem login.
+        if (!isAuthenticated) {
+          const [visiveisRes, eventosRes] =
+            await Promise.allSettled([
+              listMetodologiasVisiveis(),
+              listEventosAoVivoVisiveis(),
+            ]);
+
+          if (!mounted) return;
+
+          setExplorar(
+            visiveisRes.status === "fulfilled"
+              ? visiveisRes.value?.items || []
+              : []
+          );
+
+          setEventosAoVivo(
+            eventosRes.status === "fulfilled"
+              ? eventosRes.value?.items || []
+              : []
+          );
+
+          // Dados privados ficam vazios
+          setAssinadas([]);
+          setCriadas([]);
+          setLivesCriadas([]);
+          setFavoritos([]);
+
+          setPermissaoCriacao(
+            FALLBACK_PERMISSAO_CRIACAO
+          );
+
+          return;
+        }
+
+        // USUÁRIO LOGADO:
+        // catálogo público + dados particulares da conta.
         const promises = [
           listMetodologiasVisiveis(),
+
           listMinhasMetodologiasAssinadas(),
+
           isAtleta
-            ? Promise.resolve(FALLBACK_CRIADAS_RESPONSE)
+            ? Promise.resolve(
+                FALLBACK_CRIADAS_RESPONSE
+              )
             : listMinhasMetodologiasCriadas(),
+
           isAtleta
-            ? Promise.resolve({ items: [] })
+            ? Promise.resolve({
+                items: [] as AulaAoVivoResumo[],
+              })
             : listMinhasAulasAoVivo(),
+
           listEventosAoVivoVisiveis(),
+
           listarFavoritosLearningApi(),
         ] as const;
 
-        const [visiveisRes, assinadasRes, criadasRes, livesRes, eventosRes, favoritosRes,] = await Promise.allSettled(promises);
+        const [
+          visiveisRes,
+          assinadasRes,
+          criadasRes,
+          livesRes,
+          eventosRes,
+          favoritosRes,
+        ] = await Promise.allSettled(
+          promises
+        );
 
         if (!mounted) return;
 
         setExplorar(
-          visiveisRes.status === "fulfilled" ? visiveisRes.value?.items || [] : []
+          visiveisRes.status === "fulfilled"
+            ? visiveisRes.value?.items || []
+            : []
         );
+
         setAssinadas(
-          assinadasRes.status === "fulfilled" ? assinadasRes.value?.items || [] : []
+          assinadasRes.status === "fulfilled"
+            ? assinadasRes.value?.items || []
+            : []
         );
+
         setCriadas(
-          criadasRes.status === "fulfilled" ? criadasRes.value?.items || [] : []
+          criadasRes.status === "fulfilled"
+            ? criadasRes.value?.items || []
+            : []
         );
+
         setLivesCriadas(
-          livesRes.status === "fulfilled" ? livesRes.value?.items || [] : []
+          livesRes.status === "fulfilled"
+            ? livesRes.value?.items || []
+            : []
         );
+
         setEventosAoVivo(
-          eventosRes.status === "fulfilled" ? eventosRes.value?.items || [] : []
+          eventosRes.status === "fulfilled"
+            ? eventosRes.value?.items || []
+            : []
         );
+
         setFavoritos(
-          favoritosRes.status === "fulfilled" ? favoritosRes.value || [] : []
+          favoritosRes.status === "fulfilled"
+            ? favoritosRes.value
+            : []
         );
+
         if (!isAtleta) {
           setPermissaoCriacao(
             criadasRes.status === "fulfilled"
-              ? criadasRes.value?.permissaoCriacao || FALLBACK_PERMISSAO_CRIACAO
+              ? criadasRes.value
+                  ?.permissaoCriacao ||
+                  FALLBACK_PERMISSAO_CRIACAO
               : {
                   ...FALLBACK_PERMISSAO_CRIACAO,
+
                   motivoBloqueio:
                     "Não foi possível validar sua permissão de criação agora. Tente novamente.",
                 }
           );
+        } else {
+          setPermissaoCriacao(
+            FALLBACK_PERMISSAO_CRIACAO
+          );
         }
       } catch (e) {
-        console.error(e);
+        console.error(
+          "Erro ao carregar Learning:",
+          e
+        );
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     })();
 
     return () => {
       mounted = false;
     };
-  }, [isAtleta]);
+  }, [isAuthenticated, isAtleta]);
 
   function isFavorito(tipo: FavoritoTipo, id?: string | null) {
     if (!id) return false;
     return favoritos.includes(favoritoKey(tipo, String(id)));
   }
 
-  async function toggleFavorito(tipo: FavoritoTipo, id?: string | null) {
+  async function toggleFavorito(
+    tipo: FavoritoTipo,
+    id?: string | null
+  ) {
     if (!id) return;
+
+    if (
+      !requireAuth({
+        title:
+          "Entre para continuar",
+
+        message:
+          "Crie sua conta ou entre para adicionar este conteúdo aos favoritos.",
+
+        returnTo:
+          `${window.location.pathname}` +
+          `${window.location.search}`,
+      })
+    ) {
+      return;
+    }
 
     const alvoId = String(id);
     const key = favoritoKey(tipo, alvoId);
@@ -990,30 +1098,72 @@ export default function LearningPage() {
             backHref="/treinos"
         />
 
-        <div className={`grid ${isAtleta ? "grid-cols-2" : "grid-cols-3"} gap-3 mb-5`}>
-        <button type="button" onClick={() => setTab("explorar")}>
-            <TabButton active={tab === "explorar"}>Explorar</TabButton>
-        </button>
-
-        <button type="button" onClick={() => setTab("minhas")}>
-            <TabButton active={tab === "minhas"}>Minhas</TabButton>
-        </button>
-
-        {!isAtleta && (
+        <div
+          className={`grid ${
+            !isAuthenticated
+              ? "grid-cols-1"
+              : isAtleta
+                ? "grid-cols-2"
+                : "grid-cols-3"
+          } gap-3 mb-5`}
+        >
           <button
             type="button"
-            onClick={() => {
-              if (podeCriarMetodologia) {
-                navigate("/learning/create");
-              } else {
-                setTab("criar");
-              }
-            }}
-            className={!podeCriarMetodologia ? "opacity-50" : ""}
+            onClick={() =>
+              setTab("explorar")
+            }
           >
-            <TabButton active={tab === "criar"}>Criar</TabButton>
+            <TabButton
+              active={
+                tab === "explorar"
+              }
+            >
+              Explorar
+            </TabButton>
           </button>
-        )}
+
+          {isAuthenticated && (
+            <button
+              type="button"
+              onClick={() =>
+                setTab("minhas")
+              }
+            >
+              <TabButton
+                active={
+                  tab === "minhas"
+                }
+              >
+                Minhas
+              </TabButton>
+            </button>
+          )}
+
+          {isAuthenticated &&
+            !isAtleta && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    podeCriarMetodologia
+                  ) {
+                    navigate(
+                      "/learning/create"
+                    );
+                  } else {
+                    setTab("criar");
+                  }
+                }}
+              >
+                <TabButton
+                  active={
+                    tab === "criar"
+                  }
+                >
+                  Criar
+                </TabButton>
+              </button>
+            )}
         </div>
 
         {loading ? (

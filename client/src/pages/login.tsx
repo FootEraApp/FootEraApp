@@ -1,4 +1,5 @@
-// client/src/pages/login
+// PS C:\Users\carol\OneDrive\Documentos\Estagio Footera\footera_final\FootEraApp/client/src/pages/login
+// branch do site
 import { toast } from "@/lib/toast";
 import { useState, useEffect, useCallback, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";

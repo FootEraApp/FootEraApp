@@ -1,4 +1,4 @@
-// server/controllers/turmasController
+// Users\carol\OneDrive\Documentos\Estagio Footera\footera_final\FootEraApp\server/controllers/turmasController
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
@@ -695,6 +695,7 @@ export async function listarMinhasTurmas(
           ativo: true,
           clubeId: true,
           escolinhaId: true,
+          vagas: true,
 
           clube: {
             select: {
@@ -716,10 +717,12 @@ export async function listarMinhasTurmas(
                 select: {
                   id: true,
                   nome: true,
+                  fotoUrl: true,
 
                   usuario: {
                     select: {
-                      nome: true,
+                      nomeDeUsuario:
+                        true,
                     },
                   },
                 },
@@ -815,6 +818,8 @@ export async function listarMinhasTurmas(
 
         alunosCount:
           turma._count.membros,
+        vagas:
+          turma.vagas ?? null,
 
         origemTipo,
         origemNome,
@@ -906,6 +911,8 @@ export async function listarTurmas(req: Request, res: Response) {
       return {
         id: t.id,
         nome: t.nome,
+        vagas:
+          t.vagas ?? null,
         categoria:
           t.categoria,
         descricao:
@@ -997,6 +1004,8 @@ export async function listarTurmasComoProfessor(
       return {
         id: t.id,
         nome: t.nome,
+        vagas:
+          t.vagas ?? null,
         categoria: t.categoria ?? null,
         descricao: (t as any).descricao ?? null,
         professorIds: profs.map((p) => p.id),
@@ -1026,12 +1035,38 @@ export async function criarTurma(req: Request, res: Response) {
       professorId,
       atletaIds,
       usuarioIds,
+      vagas,
     } = req.body || {};
 
     if (!nome) {
       return res.status(400).json({
         message: "nome é obrigatório",
       });
+    }
+
+    let vagasNormalizadas:
+      number | null = null;
+
+    if (
+      vagas !== undefined &&
+      vagas !== null &&
+      vagas !== ""
+    ) {
+      const numero =
+        Number(vagas);
+
+      if (
+        !Number.isInteger(numero) ||
+        numero <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "A quantidade de vagas deve ser um número inteiro maior que zero.",
+        });
+      }
+
+      vagasNormalizadas =
+        numero;
     }
 
     const usuarioLogadoId = String((req as any).userId || (req as any).userCtx?.id || "").trim();
@@ -1062,6 +1097,7 @@ export async function criarTurma(req: Request, res: Response) {
     const data: any = {
       nome: String(nome).trim(),
       categoria: parseCategoriasTurma(categoria),
+      vagas: vagasNormalizadas,
     };
 
     if (descricao !== undefined) {
@@ -1078,18 +1114,6 @@ export async function criarTurma(req: Request, res: Response) {
           message: "ownerTipo deve ser Clube ou Escolinha",
         });
       }
-    }
-
-    const turma = await prisma.turma.create({ data });
-
-    if (professorIds.length) {
-      await prisma.turmaProfessor.createMany({
-        data: professorIds.map((pid) => ({
-          turmaId: turma.id,
-          professorId: pid,
-        })),
-        skipDuplicates: true,
-      });
     }
 
     let usuarioIdsFinal: string[] = [];
@@ -1115,12 +1139,47 @@ export async function criarTurma(req: Request, res: Response) {
 
     usuarioIdsFinal = Array.from(new Set(usuarioIdsFinal));
 
+    if (
+      vagasNormalizadas != null &&
+      usuarioIdsFinal.length >
+        vagasNormalizadas
+    ) {
+      return res.status(400).json({
+        code: "TURMA_LOTADA",
+
+        message:
+          `A turma possui ${vagasNormalizadas} vagas, ` +
+          `mas foram informados ${usuarioIdsFinal.length} participantes.`,
+      });
+    }
+
+    const turma =
+      await prisma.turma.create({
+        data,
+      });
+
+    if (professorIds.length) {
+      await prisma.turmaProfessor.createMany({
+        data: professorIds.map(
+          (pid) => ({
+            turmaId: turma.id,
+            professorId: pid,
+          })
+        ),
+
+        skipDuplicates: true,
+      });
+    }
+
     if (usuarioIdsFinal.length) {
       await prisma.turmaUsuario.createMany({
-        data: usuarioIdsFinal.map((uid) => ({
-          turmaId: turma.id,
-          usuarioId: uid,
-        })),
+        data: usuarioIdsFinal.map(
+          (uid) => ({
+            turmaId: turma.id,
+            usuarioId: uid,
+          })
+        ),
+
         skipDuplicates: true,
       });
     }
@@ -1154,14 +1213,65 @@ export async function updateTurma(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const { nome, categoria, descricao, ativo } = req.body as Partial<{
+    const {
+      nome,
+      categoria,
+      descricao,
+      ativo,
+      vagas,
+    } = req.body as Partial<{
       nome: string;
-      categoria: string | string[];
+      categoria:
+        string | string[];
       descricao: string;
       ativo: boolean;
+      vagas:
+        number | string | null;
     }>;
 
     const data: any = {};
+    if (vagas !== undefined) {
+      if (
+        vagas === null ||
+        vagas === ""
+      ) {
+        data.vagas =
+          null;
+      } else {
+        const numero =
+          Number(vagas);
+
+        if (
+          !Number.isInteger(numero) ||
+          numero <= 0
+        ) {
+          return res.status(400).json({
+            message:
+              "A quantidade de vagas deve ser um número inteiro maior que zero.",
+          });
+        }
+
+        const membrosAtuais =
+          await prisma.turmaUsuario.count({
+            where: {
+              turmaId: id,
+            },
+          });
+
+        if (
+          numero <
+          membrosAtuais
+        ) {
+          return res.status(400).json({
+            message:
+              `A turma já possui ${membrosAtuais} participantes. O limite não pode ser menor que isso.`,
+          });
+        }
+
+        data.vagas =
+          numero;
+      }
+    }
     if (nome !== undefined) data.nome = nome;
     if (categoria !== undefined) data.categoria = parseCategoriasTurma(categoria);
     if (descricao !== undefined) data.descricao = descricao;
@@ -1364,6 +1474,19 @@ export async function substituirAlunosTurma(req: AuthenticatedRequest, res: Resp
   const turma = await prisma.turma.findUnique({ where: { id } });
   if (!turma) return res.status(404).json({ message: "Turma não encontrada" });
 
+  if (
+    turma.vagas != null &&
+    usuarioIds.length > turma.vagas
+  ) {
+    return res.status(400).json({
+      code: "TURMA_LOTADA",
+
+      message:
+        `Esta turma possui limite de ${turma.vagas} vagas. ` +
+        `Você tentou adicionar ${usuarioIds.length} participantes.`,
+    });
+  }
+
   const atuais = await prisma.turmaUsuario.findMany({
     where: { turmaId: id },
     select: { usuarioId: true },
@@ -1523,8 +1646,208 @@ export async function frequencia(req: Request, res: Response) {
   }
 }
 
+export async function participarTurma(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const turmaId =
+      String(
+        req.params.id || ""
+      ).trim();
+
+    const usuarioId =
+      String(
+        req.userId ||
+          (req as any).user?.id ||
+          ""
+      ).trim();
+
+    if (!usuarioId) {
+      return res.status(401).json({
+        code: "AUTH_REQUIRED",
+        message:
+          "Entre na FootEra para participar desta turma.",
+      });
+    }
+
+    if (!turmaId) {
+      return res.status(400).json({
+        message:
+          "ID da turma é obrigatório.",
+      });
+    }
+
+    const [turma, atleta] =
+      await Promise.all([
+        prisma.turma.findFirst({
+          where: {
+            id: turmaId,
+            ativo: true,
+          },
+
+          select: {
+            id: true,
+            vagas: true,
+          },
+        }),
+
+        prisma.atleta.findUnique({
+          where: {
+            usuarioId,
+          },
+
+          select: {
+            id: true,
+          },
+        }),
+      ]);
+
+    if (!turma) {
+      return res.status(404).json({
+        message:
+          "Turma não encontrada.",
+      });
+    }
+
+    if (!atleta) {
+      return res.status(403).json({
+        code: "ATLETA_REQUIRED",
+        message:
+          "Você precisa possuir um perfil de Atleta para participar desta turma.",
+      });
+    }
+
+    const permitidos =
+      await buscarUsuarioIdsPermitidosNaTurma(
+        turmaId
+      );
+
+    if (
+      !permitidos.has(
+        usuarioId
+      )
+    ) {
+      return res.status(403).json({
+        code: "VINCULO_REQUIRED",
+        message:
+          "Você precisa possuir vínculo com o responsável desta turma para participar.",
+      });
+    }
+
+    const membroExistente =
+      await prisma.turmaUsuario.findUnique({
+        where: {
+          turmaId_usuarioId: {
+            turmaId,
+            usuarioId,
+          },
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (membroExistente) {
+      const membrosCount =
+        await prisma.turmaUsuario.count({
+          where: {
+            turmaId,
+          },
+        });
+
+      return res.json({
+        ok: true,
+        participando: true,
+        membrosCount,
+
+        vagasDisponiveis:
+          turma.vagas == null
+            ? null
+            : Math.max(
+                0,
+                turma.vagas -
+                  membrosCount
+              ),
+      });
+    }
+
+    const membrosCountAtual =
+      await prisma.turmaUsuario.count({
+        where: {
+          turmaId,
+        },
+      });
+
+    if (
+      turma.vagas != null &&
+      membrosCountAtual >=
+        turma.vagas
+    ) {
+      return res.status(409).json({
+        code:
+          "TURMA_LOTADA",
+
+        message:
+          "Esta turma está lotada.",
+      });
+    }
+
+    await prisma.turmaUsuario.upsert({
+      where: {
+        turmaId_usuarioId: {
+          turmaId,
+          usuarioId,
+        },
+      },
+
+      create: {
+        turmaId,
+        usuarioId,
+      },
+
+      update: {},
+    });
+
+    const membrosCount =
+      await prisma.turmaUsuario.count({
+        where: {
+          turmaId,
+        },
+      });
+
+    return res.status(201).json({
+      ok: true,
+      participando: true,
+      membrosCount,
+      vagasDisponiveis:
+        turma.vagas == null
+          ? null
+          : Math.max(
+              0,
+              turma.vagas -
+                membrosCount
+            ),
+    });
+  } catch (error) {
+    console.error(
+      "[turma/participar]",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Não foi possível participar da turma.",
+    });
+  }
+}
+
 export async function getTurmaPublica(
-  req: Request,
+  req: Request & {
+    user?: any;
+    userId?: string;
+  },
   res: Response
 ) {
   try {
@@ -1553,7 +1876,7 @@ export async function getTurmaPublica(
           descricao: true,
           categoria: true,
           createdAt: true,
-
+          vagas: true,
           clube: {
             select: {
               id: true,
@@ -1584,6 +1907,30 @@ export async function getTurmaPublica(
             },
           },
 
+          professores: {
+            take: 1,
+
+            orderBy: {
+              createdAt: "asc",
+            },
+
+            select: {
+              professor: {
+                select: {
+                  id: true,
+                  nome: true,
+                  fotoUrl: true,
+
+                  usuario: {
+                    select: {
+                      nomeDeUsuario: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+
           _count: {
             select: {
               membros: true,
@@ -1600,6 +1947,18 @@ export async function getTurmaPublica(
       });
     }
 
+    const membrosCount =
+      turma._count.membros;
+
+    const vagasDisponiveis =
+      turma.vagas == null
+        ? null
+        : Math.max(
+            0,
+            turma.vagas -
+              membrosCount
+          );
+          
     const organizacao =
       turma.clube
         ? {
@@ -1634,6 +1993,95 @@ export async function getTurmaPublica(
           }
         : null;
 
+    const professorResponsavel =
+      turma.professores[0]
+        ?.professor;
+
+    const responsavel =
+      organizacao
+        ? {
+            ...organizacao,
+            foto:
+              organizacao.logo,
+          }
+        : professorResponsavel
+        ? {
+            tipo:
+              "Professor",
+
+            id:
+              professorResponsavel.id,
+
+            nome:
+              professorResponsavel.nome,
+
+            foto:
+              professorResponsavel
+                .fotoUrl,
+
+            nomeDeUsuario:
+              professorResponsavel
+                .usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : null;
+
+    const usuarioId =
+      String(
+        req.userId ||
+          req.user?.id ||
+          ""
+      ).trim();
+
+    let participando = false;
+    let podeParticipar = false;
+
+    if (usuarioId) {
+      const [membro, atleta] =
+        await Promise.all([
+          prisma.turmaUsuario.findUnique({
+            where: {
+              turmaId_usuarioId: {
+                turmaId:
+                  turma.id,
+
+                usuarioId,
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          }),
+
+          prisma.atleta.findUnique({
+            where: {
+              usuarioId,
+            },
+
+            select: {
+              id: true,
+            },
+          }),
+        ]);
+
+      participando =
+        Boolean(membro);
+
+      if (atleta) {
+        const permitidos =
+          await buscarUsuarioIdsPermitidosNaTurma(
+            turma.id
+          );
+
+        podeParticipar =
+          permitidos.has(
+            usuarioId
+          );
+      }
+    }
+
     return res.json({
       id: turma.id,
       nome: turma.nome,
@@ -1643,15 +2091,20 @@ export async function getTurmaPublica(
         turma.categoria,
       createdAt:
         turma.createdAt,
-
       organizacao,
-
-      membrosCount:
-        turma._count.membros,
-
+      responsavel,
+      membrosCount,
+      vagas:
+        turma.vagas,
+      vagasDisponiveis,
+      lotada:
+        turma.vagas != null &&
+        vagasDisponiveis === 0,
       professoresCount:
         turma._count
           .professores,
+      participando,
+      podeParticipar,
     });
   } catch (error) {
     console.error(

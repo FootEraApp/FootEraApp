@@ -1,3 +1,4 @@
+// server/index.ts
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -359,7 +360,7 @@ app.use("/api/estatisticas", authenticateToken, estatisticasRoutes);
 app.use("/api/formadores", authenticateToken, formadoresRoutes);
 app.use("/api/checklists", authenticateToken, checklistRoutes);
 app.use("/api/organizacoes", authenticateToken, organizacoesRoutes);
-app.use("/api/turmas", authenticateToken, turmasRoutes);
+app.use("/api/turmas", turmasRoutes);
 app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
 app.use("/api/treinosSalvos", treinosSalvosRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
