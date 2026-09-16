@@ -1,4 +1,4 @@
-// server/middleware/auth.ts
+// server/middlewares/auth.ts
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { Prisma, PrismaClient, TipoUsuario } from "@prisma/client";

@@ -85,6 +85,8 @@ const PaginaTurmaDetalhe =
       )
   );
 
+const PaginaBaixar = lazy(() => import("./pages/baixar.js"));
+
 function RouteLoading() {
   return (
     <div className="min-h-screen bg-[#FEFBE9] flex items-center justify-center px-4">
@@ -108,6 +110,9 @@ export function AppRoutes() {
         <Route path="/cadastro"><PaginaCadastro /></Route>
         <Route path="/verificar-email"><PaginaVerificarEmail /></Route> 
         <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
+
+        <Route path="/baixar"> <PaginaBaixar /> </Route>
+
         <Route path="/content-lab"><FooteraContentLab /></Route>
         <Route path="/esqueci-senha">
           <PublicOnly><PaginaEsqueciSenha /></PublicOnly>
