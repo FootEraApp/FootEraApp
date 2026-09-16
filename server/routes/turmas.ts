@@ -10,20 +10,26 @@ import {
   listarTurmasComoProfessor,
   frequencia,
   updateTurma,
-  getTurmaPublica
+  getTurmaPublica,
+  participarTurma,
 } from "../controllers/turmasController.js";
-import { authenticateToken } from "../middlewares/auth.js";
+import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
 router.get(
   "/publico/:id",
+  optionalAuthenticateToken,
   getTurmaPublica
 );
 
 // Tudo abaixo continua privado.
 router.use(
   authenticateToken
+);
+router.post(
+  "/:id/participar",
+  participarTurma
 );
 router.get("/minhas", listarMinhasTurmas);
 router.get("/como-professor", listarTurmasComoProfessor);

@@ -52,6 +52,7 @@ import {
   listarFavoritosTreinos,
   alternarFavoritoTreino,
   removerFavoritoTreino,
+  iniciarTreinoPublico,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -96,6 +97,10 @@ router.post("/agendados",
   agendarTreino
 );
 
+router.post(
+  "/programados/:id/iniciar-publico",
+  iniciarTreinoPublico
+);
 router.get(
   "/programados/stats",
   authenticateToken,

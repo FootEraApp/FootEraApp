@@ -1,5 +1,5 @@
 // client/src/pages/TreinoUnico
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
   CalendarClock,
@@ -12,11 +12,22 @@ import {
   User,
   CheckCircle2,
   BarChart3,
+  Play,
+  Share2,
   Star as StarIcon,
 } from "lucide-react";
-import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import AcoesTreino from "../components/treinos/acoestreino.js";
+import { toast } from "@/lib/toast";
+
+import {
+  useAuthGate,
+} from "../context/AuthGateContext.js";
+
+import {
+  lerAcaoPendenteAuth,
+  limparAcaoPendenteAuth,
+} from "../utils/authSession.js";
 
 type ExercicioItem = {
   id: string;
@@ -61,6 +72,10 @@ type TreinoUnicoPayload = {
   imagemUrl?: string | null;
   pontuacao?: number | null;
   categoria?: string[];   
+  conteudoProtegido?: boolean;
+  minhasRealizacoes?: number | null;
+  temPerfilAtleta?: boolean;
+  podeIniciar?: boolean;
   avaliacoesPorAgendado?: {
     treinoAgendadoId: string;
     media: number; 
@@ -69,6 +84,20 @@ type TreinoUnicoPayload = {
     avaliadoEm?: string | null;
   }[]; 
 };
+
+function getTokenAtual() {
+  if (
+    typeof window === "undefined"
+  ) {
+    return "";
+  }
+
+  return String(
+    localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      ""
+  ).trim();
+}
 
 function useQuery() {
   const [, setLoc] = useLocation();
@@ -167,6 +196,19 @@ function Stars({ value }: { value: number }) {
 export default function TreinoUnico() {
   const { get } = useQuery();
 
+  const {
+    requireAuth,
+    handleAuthError,
+  } = useAuthGate();
+
+  const token =
+    getTokenAtual();
+
+  const [
+    iniciando,
+    setIniciando,
+  ] = useState(false);
+
   const agendadoId =
     get("agendadoId");
 
@@ -186,8 +228,6 @@ export default function TreinoUnico() {
       ? paramsPublico?.id
       : null;
 
-  const token = (Storage as any).token ?? localStorage.getItem("token");
-
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [treino, setTreino] = useState<TreinoUnicoPayload | null>(null);
@@ -199,12 +239,34 @@ export default function TreinoUnico() {
         setErro(null);
 
         if (treinoPublicoId) {
-          const res =
+          const url =
+            `${API.BASE_URL}/api/treino-unico/publico/${encodeURIComponent(
+              treinoPublicoId
+            )}`;
+
+          let res =
             await fetch(
-              `${API.BASE_URL}/api/treino-unico/publico/${encodeURIComponent(
-                treinoPublicoId
-              )}`
+              url,
+              {
+                headers:
+                  token
+                    ? {
+                        Authorization:
+                          `Bearer ${token}`,
+                      }
+                    : {},
+              }
             );
+
+          // Se houver um token antigo/inválido,
+          // a página continua podendo ser vista como visitante.
+          if (
+            res.status === 401 &&
+            token
+          ) {
+            res =
+              await fetch(url);
+          }
 
           if (!res.ok) {
             throw new Error(
@@ -251,7 +313,7 @@ export default function TreinoUnico() {
       return;
     }
     fetchTreino();
-  }, [agendadoId, programadoId, treinoPublicoId]);
+  }, [agendadoId, programadoId, treinoPublicoId, token]);
 
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
@@ -272,6 +334,327 @@ export default function TreinoUnico() {
     const mediaGeral = somaPonderada / totalCount;
     return { mediaGeral, totalCount };
   }, [treino?.avaliacoesPorAgendado]);
+
+  const iniciarTreinoPublico =
+    useCallback(
+      async (
+        retomandoAposAuth = false
+      ) => {
+        const treinoProgramadoId =
+          String(
+            treino?.treinoProgramadoId ||
+              treinoPublicoId ||
+              ""
+          ).trim();
+
+        if (!treinoProgramadoId) {
+          return;
+        }
+
+        if (
+          treino?.conteudoProtegido
+        ) {
+          toast.error(
+            "Este treino faz parte de uma metodologia. Acesse-o pelo Learning."
+          );
+
+          return;
+        }
+
+        const retorno =
+          `/treino/${encodeURIComponent(
+            treinoProgramadoId
+          )}`;
+
+        const authOptions = {
+          message:
+            "Entre na FootEra para iniciar este treino. Depois de entrar, você volta para esta página.",
+
+          returnTo:
+            retorno,
+
+          action: {
+            type:
+              "START_PUBLIC_TRAINING" as const,
+
+            treinoProgramadoId,
+          },
+        };
+
+        if (
+          !retomandoAposAuth &&
+          !requireAuth(
+            authOptions
+          )
+        ) {
+          return;
+        }
+
+        const tokenAtual =
+          getTokenAtual();
+
+        if (!tokenAtual) {
+          requireAuth(
+            authOptions
+          );
+
+          return;
+        }
+
+        try {
+          setIniciando(true);
+
+          const response =
+            await fetch(
+              `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
+                treinoProgramadoId
+              )}/iniciar-publico`,
+              {
+                method: "POST",
+
+                headers: {
+                  Authorization:
+                    `Bearer ${tokenAtual}`,
+                },
+              }
+            );
+
+          const data =
+            await response
+              .json()
+              .catch(() => ({}));
+
+          if (
+            response.status === 401
+          ) {
+            handleAuthError(
+              {
+                status: 401,
+                response: {
+                  status: 401,
+                  data,
+                },
+              },
+              authOptions
+            );
+
+            return;
+          }
+
+          if (!response.ok) {
+            if (
+              data?.code ===
+              "ATLETA_REQUIRED"
+            ) {
+              limparAcaoPendenteAuth();
+
+              toast.error(
+                data?.message ||
+                  "Você precisa ter um perfil de Atleta para realizar este treino."
+              );
+
+              return;
+            }
+
+            if (
+              data?.code ===
+              "LEARNING_REQUIRED"
+            ) {
+              limparAcaoPendenteAuth();
+
+              toast.error(
+                data?.message ||
+                  "Este treino deve ser acessado pelo Learning."
+              );
+
+              return;
+            }
+
+            throw new Error(
+              data?.message ||
+                "Não foi possível iniciar o treino."
+            );
+          }
+
+          limparAcaoPendenteAuth();
+
+          const treinoAgendadoId =
+            String(
+              data?.treinoAgendadoId ||
+                ""
+            ).trim();
+
+          if (
+            treinoAgendadoId
+          ) {
+            const startedAtMs =
+              data?.startedAt
+                ? new Date(
+                    data.startedAt
+                  ).getTime()
+                : Date.now();
+
+            localStorage.setItem(
+              `footera:treinoTimerStart:${treinoAgendadoId}`,
+              String(
+                Number.isFinite(
+                  startedAtMs
+                )
+                  ? startedAtMs
+                  : Date.now()
+              )
+            );
+          }
+
+          window.location.href =
+            treinoAgendadoId
+              ? `/treinos?openAgendadoId=${encodeURIComponent(
+                  treinoAgendadoId
+                )}`
+              : `/treinos?openAgendadoByProgramadoId=${encodeURIComponent(
+                  treinoProgramadoId
+                )}`;
+        } catch (error: any) {
+          console.error(
+            "Erro ao iniciar treino público:",
+            error
+          );
+
+          toast.error(
+            error?.message ||
+              "Não foi possível iniciar o treino."
+          );
+        } finally {
+          setIniciando(false);
+        }
+      },
+      [
+        treino,
+        treinoPublicoId,
+        requireAuth,
+        handleAuthError,
+      ]
+    );
+
+  const compartilharTreino =
+    useCallback(
+      async () => {
+        if (!treino) {
+          return;
+        }
+
+        const id =
+          treino.treinoProgramadoId ||
+          treinoPublicoId ||
+          treino.id;
+
+        const url =
+          `${window.location.origin}/treino/${encodeURIComponent(
+            String(id)
+          )}`;
+
+        const shareData = {
+          title:
+            `${treino.titulo} na FootEra`,
+
+          text:
+            `Confira o treino "${treino.titulo}" na FootEra.`,
+
+          url,
+        };
+
+        try {
+          if (
+            navigator.share
+          ) {
+            await navigator.share(
+              shareData
+            );
+
+            return;
+          }
+
+          if (
+            navigator.clipboard
+          ) {
+            await navigator.clipboard.writeText(
+              url
+            );
+
+            toast.success(
+              "Link do treino copiado."
+            );
+
+            return;
+          }
+
+          window.prompt(
+            "Copie o link do treino:",
+            url
+          );
+        } catch (error: any) {
+          if (
+            error?.name !==
+            "AbortError"
+          ) {
+            console.error(
+              "Erro ao compartilhar:",
+              error
+            );
+
+            toast.error(
+              "Não foi possível compartilhar o treino."
+            );
+          }
+        }
+      },
+      [
+        treino,
+        treinoPublicoId,
+      ]
+    );
+
+  useEffect(() => {
+    if (
+      !treino ||
+      !treinoPublicoId ||
+      !getTokenAtual()
+    ) {
+      return;
+    }
+
+    const action =
+      lerAcaoPendenteAuth();
+
+    if (
+      !action ||
+      action.type !==
+        "START_PUBLIC_TRAINING"
+    ) {
+      return;
+    }
+
+    const treinoAtualId =
+      String(
+        treino.treinoProgramadoId ||
+          treinoPublicoId
+      );
+
+    if (
+      action.treinoProgramadoId !==
+      treinoAtualId
+    ) {
+      return;
+    }
+
+    void iniciarTreinoPublico(
+      true
+    );
+  }, [
+    treino,
+    treinoPublicoId,
+    iniciarTreinoPublico,
+  ]);
 
   if (loading) return <div className="p-4 text-center">Carregando treino...</div>;
   if (erro)
@@ -365,8 +748,36 @@ export default function TreinoUnico() {
             <div className="flex items-center gap-2 md:col-span-2">
               <CheckCircle2 className="w-4 h-4 text-green-700" />
               <span className="text-gray-800">
-                <strong>Realização:</strong>{" "}
-                Esse treino já foi realizado {Number(treino.realizacoes ?? 0)} vezes
+                {typeof treino.minhasRealizacoes ===
+                  "number" ? (
+                    <>
+                      <strong>
+                        Suas realizações:
+                      </strong>{" "}
+
+                      Você já realizou este treino{" "}
+                      {treino.minhasRealizacoes}{" "}
+                      {treino.minhasRealizacoes === 1
+                        ? "vez"
+                        : "vezes"}
+                    </>
+                  ) : (
+                    <>
+                      <strong>
+                        Realizações:
+                      </strong>{" "}
+
+                      Este treino já foi realizado{" "}
+                      {Number(
+                        treino.realizacoes ?? 0
+                      )}{" "}
+                      {Number(
+                        treino.realizacoes ?? 0
+                      ) === 1
+                        ? "vez"
+                        : "vezes"}
+                    </>
+                  )}
               </span>
             </div>
 
@@ -567,7 +978,11 @@ export default function TreinoUnico() {
               })}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">Nenhum exercício cadastrado.</p>
+            <p className="text-sm text-gray-500">
+              {treino.conteudoProtegido
+                ? "Os exercícios deste treino fazem parte de um conteúdo protegido."
+                : "Nenhum exercício cadastrado."}
+            </p>
           )}
         </section>
 
@@ -587,6 +1002,64 @@ export default function TreinoUnico() {
                 className="px-4 py-2 rounded bg-green-800 hover:bg-green-900 text-white"
               >
                 Fazer Submissão
+              </button>
+            </div>
+          )}
+
+          {treinoPublicoId && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={
+                  compartilharTreino
+                }
+                className="
+                  inline-flex items-center
+                  justify-center gap-2
+                  rounded-lg border
+                  border-green-700
+                  px-4 py-2
+                  font-medium
+                  text-green-800
+                  hover:bg-green-50
+                "
+              >
+                <Share2 className="w-4 h-4" />
+                Compartilhar
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void iniciarTreinoPublico(
+                    false
+                  )
+                }
+                disabled={
+                  iniciando ||
+                  treino.conteudoProtegido ===
+                    true
+                }
+                className={`
+                  inline-flex items-center
+                  justify-center gap-2
+                  rounded-lg px-5 py-2
+                  font-semibold text-white
+                  ${
+                    iniciando ||
+                    treino.conteudoProtegido
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-800 hover:bg-green-900"
+                  }
+                `}
+              >
+                <Play className="w-4 h-4" />
+
+                {treino.conteudoProtegido
+                  ? "Disponível pelo Learning"
+                  : iniciando
+                  ? "Iniciando..."
+                  : "Iniciar treino"}
               </button>
             </div>
           )}

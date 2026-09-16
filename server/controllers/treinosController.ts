@@ -288,6 +288,245 @@ export async function realizadosCount(req: AuthenticatedRequest, res: Response) 
   }
 }
 
+export async function iniciarTreinoPublico(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const usuarioId = getUserId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({
+        code: "AUTH_REQUIRED",
+        message: "Entre na FootEra para iniciar este treino.",
+      });
+    }
+
+    const treinoProgramadoId = String(
+      req.params.id || ""
+    ).trim();
+
+    if (!treinoProgramadoId) {
+      return res.status(400).json({
+        message: "treinoProgramadoId é obrigatório.",
+      });
+    }
+
+    const [atleta, treinoProgramado] =
+      await Promise.all([
+        prisma.atleta.findUnique({
+          where: {
+            usuarioId,
+          },
+          select: {
+            id: true,
+          },
+        }),
+
+        prisma.treinoProgramado.findUnique({
+          where: {
+            id: treinoProgramadoId,
+          },
+          select: {
+            id: true,
+            nome: true,
+            metodologia: true,
+          },
+        }),
+      ]);
+
+    if (!treinoProgramado) {
+      return res.status(404).json({
+        message: "Treino não encontrado.",
+      });
+    }
+
+    // Não permitir burlar conteúdo de Learning/metodologia
+    // usando diretamente o link público do treino.
+    if (treinoProgramado.metodologia) {
+      return res.status(403).json({
+        code: "LEARNING_REQUIRED",
+        message:
+          "Este treino faz parte de uma metodologia. Acesse-o pelo Learning.",
+      });
+    }
+
+    // Não usamos req.user.tipo aqui de propósito.
+    // Um usuário pode ter vários papéis e estar usando
+    // Professor, por exemplo, mas também possuir perfil Atleta.
+    if (!atleta?.id) {
+      return res.status(403).json({
+        code: "ATLETA_REQUIRED",
+        message:
+          "Você precisa ter um perfil de Atleta para realizar este treino.",
+      });
+    }
+
+    const now = new Date();
+    const dayStart = startOfDay(now);
+    const dayEnd = endOfDay(now);
+
+    // Se já iniciou/agendou este mesmo treino hoje,
+    // reutiliza em vez de duplicar.
+    let agendado =
+      await prisma.treinoAgendado.findFirst({
+        where: {
+          atletaId: atleta.id,
+          treinoProgramadoId,
+
+          status: {
+            in: [
+              TreinoAgendadoStatus.AGENDADO,
+              TreinoAgendadoStatus.EM_ANDAMENTO,
+            ],
+          },
+
+          OR: [
+            {
+              dataTreino: {
+                gte: dayStart,
+                lt: dayEnd,
+              },
+            },
+            {
+              dataTreino: null,
+            },
+          ],
+        },
+
+        orderBy: {
+          dataTreino: "desc",
+        },
+      });
+
+    let criadoAgora = false;
+
+    if (!agendado) {
+      const dataExpiracao =
+        new Date(
+          now.getTime() +
+            3 * 24 * 60 * 60 * 1000
+        );
+
+      agendado =
+        await prisma.treinoAgendado.create({
+          data: {
+            titulo:
+              treinoProgramado.nome ||
+              "Treino",
+
+            atletaId:
+              atleta.id,
+
+            treinoProgramadoId,
+
+            dataTreino:
+              now,
+
+            dataOriginal:
+              now,
+
+            dataExpiracao,
+
+            status:
+              TreinoAgendadoStatus.AGENDADO,
+          },
+        });
+
+      criadoAgora = true;
+    }
+
+    const startedAt =
+      agendado.startedAt ??
+      now;
+
+    const [treinoAtualizado, treinoUsuario] =
+      await prisma.$transaction([
+        prisma.treinoAgendado.update({
+          where: {
+            id: agendado.id,
+          },
+          data: {
+            status:
+              TreinoAgendadoStatus.EM_ANDAMENTO,
+
+            startedAt,
+          },
+        }),
+
+        prisma.treinoUsuario.upsert({
+          where: {
+            treinoId_usuarioId: {
+              treinoId:
+                agendado.id,
+
+              usuarioId,
+            },
+          },
+
+          create: {
+            treinoId:
+              agendado.id,
+
+            usuarioId,
+
+            status:
+              TreinoStatus.IN_PROGRESS,
+
+            startedAt,
+          },
+
+          update: {
+            status:
+              TreinoStatus.IN_PROGRESS,
+
+            startedAt,
+
+            completedAt:
+              null,
+          },
+        }),
+      ]);
+
+    syncAgendaAtleta(
+      usuarioId,
+      atleta.id
+    );
+
+    syncTreinoProgramado(
+      treinoProgramadoId
+    );
+
+    return res.json({
+      ok: true,
+      criadoAgora,
+
+      treinoAgendadoId:
+        treinoAtualizado.id,
+
+      treinoProgramadoId,
+
+      treino:
+        treinoAtualizado,
+
+      treinoUsuario,
+
+      startedAt:
+        treinoUsuario.startedAt,
+    });
+  } catch (error) {
+    console.error(
+      "iniciarTreinoPublico",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Não foi possível iniciar o treino.",
+    });
+  }
+}
+
 export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Response) {
   let user: any = getUserFromReq(req);
 
@@ -2596,6 +2835,24 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
     const vinc = await idsInstituicoesAtuais(prisma, atletaUsuarioId!);
 
+    const execucoesDoUsuario =
+      await prisma.treinoUsuario.findMany({
+        where: {
+          usuarioId: req.userId!,
+        },
+
+        select: {
+          treinoId: true,
+        },
+      });
+
+    const idsExecucoesDoUsuario =
+      execucoesDoUsuario
+        .map((item) =>
+          String(item.treinoId || "")
+        )
+        .filter(Boolean);
+
     const donoOr = [
       vinc.clubes.length ? { clubeId: { in: vinc.clubes } } : undefined,
       vinc.escolinhas.length ? { escolinhaId: { in: vinc.escolinhas } } : undefined,
@@ -2607,8 +2864,27 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
     if (donoOr.length) {
       whereBase.OR = [
-        { treinoProgramadoId: null },
-        { treinoProgramado: { is: { OR: donoOr } } },
+        ...(idsExecucoesDoUsuario.length
+          ? [
+              {
+                id: {
+                  in: idsExecucoesDoUsuario,
+                },
+              },
+            ]
+          : []),
+
+        {
+          treinoProgramadoId: null,
+        },
+
+        {
+          treinoProgramado: {
+            is: {
+              OR: donoOr,
+            },
+          },
+        },
       ];
     }
 

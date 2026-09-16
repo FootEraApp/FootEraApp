@@ -5,6 +5,8 @@ import { ArrowLeft, Lock, CheckCircle2, Star } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 import CoverImage from "../../components/shared/CoverImage";
+import { useAuthGate } from "../../context/AuthGateContext.js";
+
 
 const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 type ItemTipo = "VIDEO" | "TREINO" | "AULA" | "MATERIAL" | "DESAFIO" | string;
@@ -270,6 +272,10 @@ export default function MetodologiaUnicaPage() {
   const maxTimeRef = useRef(0);
   const playerEstruturaIdRef = useRef<string | null>(null);
   const playerItemIdRef = useRef<string | null>(null);
+  
+  const {
+    requireAuth,
+  } = useAuthGate();
 
   async function concluirItem(estruturaId: string, itemId: string) {
     if (!id) return;
@@ -657,6 +663,22 @@ export default function MetodologiaUnicaPage() {
   const jaAvaliou = !!data?.viewer?.minhaAvaliacao;
 
   async function assinarMetodologia() {
+    const returnTo =
+      `${window.location.pathname}` +
+      `${window.location.search}`;
+
+    if (
+      !requireAuth({
+        title:
+          "Entre para continuar",
+        message:
+          "Crie sua conta ou entre para assinar esta metodologia.",
+        returnTo,
+      })
+    ) {
+      return;
+    }
+
     if (!data || !id) return;
 
     const motivo = String(data.viewer?.motivoBloqueio || "");

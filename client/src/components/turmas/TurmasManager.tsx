@@ -24,6 +24,7 @@ type TurmaMin = {
   id: string;
   nome: string;
   descricao?: string | null;
+  vagas?: number | null;
   categoria?: string[] | string | null;
   professorIds?: string[];
   professorNomes?: string[];
@@ -191,10 +192,18 @@ export default function TurmasManager({
   const [naoVinculadosUsuarioIds, setNaoVinculadosUsuarioIds] = useState<string[]>([]);
   const [novoNome, setNovoNome] = useState("");
   const [novoDescricao, setNovoDescricao] = useState("");
+  const [
+    novoVagas,
+    setNovoVagas,
+  ] = useState("");
   const [novoCategorias, setNovoCategorias] = useState<string[]>([]);
   const [editandoInfoTurma, setEditandoInfoTurma] = useState(false);
   const [editNomeTurma, setEditNomeTurma] = useState("");
   const [editDescricaoTurma, setEditDescricaoTurma] = useState("");
+  const [
+    editVagasTurma,
+    setEditVagasTurma,
+  ] = useState("");
   const [editCategoriasTurma, setEditCategoriasTurma] = useState<string[]>([]);
   const [novoProfessores, setNovoProfessores] = useState<string[]>(
     professorId ? [professorId] : []
@@ -692,6 +701,12 @@ export default function TurmasManager({
                     turma.descricao
                   )
                 : null,
+            vagas:
+              turma.vagas == null
+                ? null
+                : Number(
+                    turma.vagas
+                  ),
 
             categoria:
               normalizarCategoriasTurma(
@@ -870,6 +885,13 @@ export default function TurmasManager({
       ordenarCategorias(normalizarCategoriasTurma(turma?.categoria))
     );
     setEditDescricaoTurma((turma as any)?.descricao || "");
+    setEditVagasTurma(
+      turma?.vagas != null
+        ? String(
+            turma.vagas
+          )
+        : ""
+    );
     setEditandoInfoTurma(false);
 
     const idsProf = (turma?.professorIds || []).map(String).filter(Boolean);
@@ -975,9 +997,24 @@ export default function TurmasManager({
       await axios.put(
         `${API.BASE_URL}/api/turmas/${selecionada}`,
         {
-          nome: editNomeTurma.trim(),
-          descricao: editDescricaoTurma.trim() || null,
-          categoria: ordenarCategorias(editCategoriasTurma),
+          nome:
+            editNomeTurma.trim(),
+
+          descricao:
+            editDescricaoTurma.trim() ||
+            null,
+
+          categoria:
+            ordenarCategorias(
+              editCategoriasTurma
+            ),
+
+          vagas:
+            editVagasTurma.trim()
+              ? Number(
+                  editVagasTurma
+                )
+              : null,
         },
         { headers }
       );
@@ -1216,6 +1253,12 @@ export default function TurmasManager({
         descricao: novoDescricao.trim() || null,
         categoria: novoCategorias || undefined,
         professorIds: professoresDaNovaTurma,
+        vagas:
+          novoVagas.trim()
+            ? Number(
+                novoVagas
+              )
+            : null,
       };
 
       if (owner) {
@@ -1237,6 +1280,7 @@ export default function TurmasManager({
       setNovoNome("");
       setNovoDescricao("");
       setNovoCategorias([]);
+      setNovoVagas("");
 
       const lista = await carregarTurmas(owner, filtroProf);
       setSelecionada(novaId);
@@ -1558,8 +1602,9 @@ export default function TurmasManager({
                           </div>
 
                           <span className="shrink-0 rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-                            {turma.alunosCount ??
-                              0}{" "}
+                            {turma.vagas != null
+                              ? `${turma.alunosCount ?? 0}/${turma.vagas}`
+                              : `${turma.alunosCount ?? 0}`}{" "}
                             aluno(s)
                           </span>
                         </li>
@@ -1586,6 +1631,27 @@ export default function TurmasManager({
                     placeholder="Descrição da turma"
                     className="mb-2 min-h-[80px] w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                   />
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    Quantidade de vagas
+                  </label>
+
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={novoVagas}
+                    onChange={(e) =>
+                      setNovoVagas(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Ex.: 22"
+                    className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                  />
+
+                  <div className="mb-2 text-xs text-zinc-500">
+                    Deixe em branco para não limitar a quantidade de participantes.
+                  </div>
                   <div className="mb-2 rounded-lg border border-zinc-200 p-2">
                     <div className="mb-2 text-xs font-medium text-zinc-700">
                       Categorias (opcional)
@@ -1804,7 +1870,27 @@ export default function TurmasManager({
                                 className="mb-2 min-h-[80px] w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                                 placeholder="Descrição da turma"
                               />
+                              <label className="block text-xs font-medium text-zinc-700 mb-1">
+                                Quantidade de vagas
+                              </label>
 
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={editVagasTurma}
+                                onChange={(e) =>
+                                  setEditVagasTurma(
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Ex.: 22"
+                                className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                              />
+
+                              <div className="mb-3 text-xs text-zinc-500">
+                                Deixe em branco para não limitar a quantidade de participantes.
+                              </div>
                               <label className="block text-xs font-medium text-zinc-700 mb-1">
                                 Categoria
                               </label>

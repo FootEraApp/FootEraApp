@@ -90,6 +90,16 @@ test.describe("FootEra - rotas públicas e proteção inicial", () => {
       expectedText:
         /FootEra|Content|Lab|conteúdo/i,
     },
+    {
+      path: "/learning",
+      expectedText:
+        /Learning|Carregando Learning/i,
+    },
+    {
+      path: "/pagamentos",
+      expectedText:
+        /Assinaturas|Pagamentos|Carregando pagamentos/i,
+    },
   ];
 
   for (const route of publicRoutes) {
@@ -119,11 +129,14 @@ test.describe("FootEra - rotas públicas e proteção inicial", () => {
   const privateRoutes = [
     "/perfil",
     "/treinos",
-    "/learning",
     "/creator/dashboard",
     "/creator/profile",
     "/creator/eventos",
-    "/pagamentos",
+    "/learning/create",
+    "/learning/live",
+    "/learning/live-studio",
+    "/learning/avaliar",
+    "/metodologias/avaliar",
   ];
 
   for (const route of privateRoutes) {
@@ -188,6 +201,28 @@ test.describe("FootEra - rotas públicas e proteção inicial", () => {
       expect(
         returnTo
       ).toBe(destino);
+    }
+  );
+
+  test(
+    "detalhe de turma permanece público sem token",
+    async ({ page }) => {
+      await page.goto(
+        "/turma/turma-e2e-inexistente",
+        {
+          waitUntil: "domcontentloaded",
+        }
+      );
+
+      await expect(page).toHaveURL(
+        /\/turma\/turma-e2e-inexistente/
+      );
+
+      await expect(
+        page.locator("body")
+      ).toContainText(
+        /Turma não encontrada|Carregando turma|Não foi possível carregar a turma/i
+      );
     }
   );
 

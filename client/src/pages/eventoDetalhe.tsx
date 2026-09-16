@@ -6,31 +6,23 @@ import axios from "axios";
 import {
   useLocation,
 } from "wouter";
-
 import {
   API,
 } from "../config.js";
-
-import Storage from "../../../server/utils/storage.js";
-
 import {
   EventoTipo,
   labelEventoTipo,
 } from "@/utils/eventos.js";
-
 import {
   useAuthGate,
 } from "../context/AuthGateContext.js";
-
 import {
   lerAcaoPendenteAuth,
   limparAcaoPendenteAuth,
 } from "../utils/authSession.js";
-
 import {
   toast,
 } from "@/lib/toast";
-
 
 type Evento = {
   id: string;
@@ -46,6 +38,26 @@ type Evento = {
   vagas?: number | null;
   valorInscricao?: number | string | null;
   requisitos?: string[] | null;
+  clubeId?: string | null;
+  escolinhaId?: string | null;
+  creatorUsuarioId?: string | null;
+
+  totalInscritos?: number;
+  vagasDisponiveis?: number | null;
+
+  inscrito?: boolean;
+  inscricaoStatus?: string | null;
+
+  inscricoesAbertas?: boolean;
+  podeGerenciar?: boolean;
+
+  organizador?: {
+    tipo: string;
+    id: string;
+    nome: string;
+    logo?: string | null;
+    nomeDeUsuario?: string | null;
+  } | null;
 
   status?:
     | "ABERTO"
@@ -55,10 +67,14 @@ type Evento = {
   linkInscricao?: string | null;
 };
 
-
 function lerToken() {
+  if (
+    typeof window === "undefined"
+  ) {
+    return "";
+  }
+
   return (
-    Storage.token ||
     localStorage.getItem(
       "token"
     ) ||
@@ -68,43 +84,6 @@ function lerToken() {
     ""
   );
 }
-
-
-function lerTipoUsuario() {
-  const raw =
-    String(
-      (Storage as any)
-        .tipoSalvo ??
-      localStorage.getItem(
-        "tipoUsuario"
-      ) ??
-      sessionStorage.getItem(
-        "tipoUsuario"
-      ) ??
-      ""
-    )
-      .trim()
-      .toLowerCase();
-
-  if (raw === "escola") {
-    return "escolinha";
-  }
-
-  return raw;
-}
-
-
-function podeConvocar(
-  tipo: string
-) {
-  return [
-    "clube",
-    "escolinha",
-    "professor",
-    "admin",
-  ].includes(tipo);
-}
-
 
 export default function PaginaEventoDetalhe({
   eventoId,
@@ -121,9 +100,6 @@ export default function PaginaEventoDetalhe({
   const token =
     lerToken();
 
-  const tipoUsuario =
-    lerTipoUsuario();
-
   const [ev, setEv] =
     useState<Evento | null>(
       null
@@ -134,6 +110,10 @@ export default function PaginaEventoDetalhe({
     setLoading,
   ] = useState(true);
 
+  const [
+    participando,
+    setParticipando,
+  ] = useState(false);
 
   useEffect(() => {
     if (!eventoId) {
@@ -193,6 +173,218 @@ export default function PaginaEventoDetalhe({
     token,
   ]);
 
+  async function compartilharEvento() {
+    const evento = ev;
+
+    if (!evento) {
+      return;
+    }
+
+    const url =
+      `${window.location.origin}/evento/${encodeURIComponent(
+        evento.id
+      )}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title:
+            `${evento.titulo} na FootEra`,
+
+          text:
+            `Confira o evento "${evento.titulo}" na FootEra.`,
+
+          url,
+        });
+
+        return;
+      }
+
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(
+          url
+        );
+
+        toast.success(
+          "Link do evento copiado."
+        );
+
+        return;
+      }
+
+      window.prompt(
+        "Copie o link do evento:",
+        url
+      );
+    } catch (error: any) {
+      if (
+        error?.name !==
+        "AbortError"
+      ) {
+        toast.error(
+          "Não foi possível compartilhar o evento."
+        );
+      }
+    }
+  }
+
+  async function participarEvento(
+    retomando = false
+  ) {
+    const evento = ev;
+
+    if (!evento) {
+      return;
+    }
+    const retorno =
+      `/evento/${encodeURIComponent(
+        evento.id
+      )}`;
+
+    const options = {
+      message:
+        "Entre na FootEra para participar deste evento.",
+
+      returnTo:
+        retorno,
+
+      action: {
+        type:
+          "JOIN_EVENT" as const,
+
+        eventoId:
+          String(evento.id),
+      },
+    };
+
+    if (
+      !retomando &&
+      !requireAuth(options)
+    ) {
+      return;
+    }
+
+    const tokenAtual =
+      lerToken();
+
+    if (!tokenAtual) {
+      requireAuth(options);
+      return;
+    }
+
+    try {
+      setParticipando(true);
+
+      const response =
+        await fetch(
+          `${API.BASE_URL}/api/eventos/${encodeURIComponent(
+            evento.id
+          )}/participar`,
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${tokenAtual}`,
+            },
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (
+        data?.external &&
+        data?.linkInscricao
+      ) {
+        limparAcaoPendenteAuth();
+
+        window.open(
+          data.linkInscricao,
+          "_blank",
+          "noopener,noreferrer"
+        );
+
+        return;
+      }
+
+      if (
+        response.status ===
+          402 &&
+        data?.code ===
+          "PAYMENT_REQUIRED"
+      ) {
+        limparAcaoPendenteAuth();
+
+        const retorno =
+          `/evento/${encodeURIComponent(
+            evento.id
+          )}`;
+
+        const planoId =
+          `EVENTO:${evento.id}`;
+
+        navigate(
+          `/pagamentos?produto=evento` +
+            `&planoId=${encodeURIComponent(
+              planoId
+            )}` +
+            `&returnTo=${encodeURIComponent(
+              retorno
+            )}`
+        );
+
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            "Não foi possível participar."
+        );
+      }
+
+      limparAcaoPendenteAuth();
+
+      setEv(
+        (atual) =>
+          atual
+            ? {
+                ...atual,
+
+                inscrito: true,
+
+                inscricaoStatus:
+                  data.status ||
+                  "CONFIRMADA",
+
+                totalInscritos:
+                  data.totalInscritos ??
+                  atual.totalInscritos,
+
+                vagasDisponiveis:
+                  data.vagasDisponiveis ??
+                  atual.vagasDisponiveis,
+              }
+            : atual
+      );
+
+      toast.success(
+        "Inscrição confirmada."
+      );
+    } catch (error: any) {
+      limparAcaoPendenteAuth();
+
+      toast.error(
+        error?.message ||
+          "Não foi possível realizar a inscrição."
+      );
+    } finally {
+      setParticipando(false);
+    }
+  }
 
   const abrirConvocacao =
     () => {
@@ -201,7 +393,7 @@ export default function PaginaEventoDetalhe({
       }
 
       const retorno =
-        `/eventos/${encodeURIComponent(
+        `/evento/${encodeURIComponent(
           ev.id
         )}`;
 
@@ -226,9 +418,7 @@ export default function PaginaEventoDetalhe({
       }
 
       if (
-        !podeConvocar(
-          lerTipoUsuario()
-        )
+        !ev.podeGerenciar
       ) {
         toast.error(
           "Seu tipo de perfil não possui permissão para convocar atletas."
@@ -258,6 +448,39 @@ export default function PaginaEventoDetalhe({
     if (
       !action ||
       action.type !==
+        "JOIN_EVENT" ||
+      action.eventoId !==
+        String(ev.id)
+    ) {
+      return;
+    }
+
+    void participarEvento(
+      true
+    );
+
+    // participarEvento é intencionalmente
+    // executada somente quando token/evento mudam.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    token,
+    ev?.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      !token ||
+      !ev?.id
+    ) {
+      return;
+    }
+
+    const action =
+      lerAcaoPendenteAuth();
+
+    if (
+      !action ||
+      action.type !==
         "OPEN_EVENT_CONVOCATION" ||
       action.eventoId !==
         String(ev.id)
@@ -268,9 +491,7 @@ export default function PaginaEventoDetalhe({
     limparAcaoPendenteAuth();
 
     if (
-      !podeConvocar(
-        lerTipoUsuario()
-      )
+      !ev.podeGerenciar
     ) {
       toast.error(
         "Seu tipo de perfil não possui permissão para convocar atletas."
@@ -367,9 +588,9 @@ export default function PaginaEventoDetalhe({
       0;
 
   const mostrarConvocar =
-    !token ||
-    podeConvocar(
-      tipoUsuario
+    Boolean(
+      token &&
+      ev.podeGerenciar
     );
 
   return (
@@ -473,11 +694,33 @@ export default function PaginaEventoDetalhe({
         </div>
 
         <div className="text-sm">
-          <b>Vagas:</b>{" "}
-          {ev.vagas != null
-            ? ev.vagas
-            : "—"}
+          <b>Vagas disponíveis:</b>{" "}
+            {ev.vagas != null
+              ? `${ev.vagasDisponiveis ?? 0} de ${ev.vagas}`
+              : "Sem limite informado"}
         </div>
+
+        {ev.organizador && (
+          <div className="flex items-center gap-3">
+            {ev.organizador.logo && (
+              <img
+                src={ev.organizador.logo}
+                alt=""
+                className="h-10 w-10 rounded-full object-cover"
+              />
+            )}
+
+            <div>
+              <div className="text-xs text-gray-500">
+                Organizado por
+              </div>
+
+              <div className="font-semibold">
+                {ev.organizador.nome}
+              </div>
+            </div>
+          </div>
+        )}
 
         {temRequisitos && (
           <div className="text-sm">
@@ -506,20 +749,93 @@ export default function PaginaEventoDetalhe({
           </div>
         )}
 
-        {ev.linkInscricao && (
-          <div className="pt-2">
-            <a
-              className="inline-block px-4 py-2 rounded bg-green-800 text-white"
-              href={
-                ev.linkInscricao
-              }
-              target="_blank"
-              rel="noreferrer"
+        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={
+              compartilharEvento
+            }
+            className="px-4 py-3 rounded-xl border border-green-700 text-green-800 font-semibold"
+          >
+            Compartilhar
+          </button>
+
+          {ev.podeGerenciar ? (
+            <>
+              <button
+                type="button"
+                onClick={
+                  abrirConvocacao
+                }
+                className="px-4 py-3 rounded-xl bg-green-700 text-white font-semibold"
+              >
+                Convocar atletas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (ev.clubeId) {
+                    navigate(
+                      `/eventos/clubes/${ev.clubeId}`
+                    );
+                  } else if (
+                    ev.escolinhaId
+                  ) {
+                    navigate(
+                      `/eventos/escolas/${ev.escolinhaId}`
+                    );
+                  } else {
+                    navigate(
+                      "/creator/eventos"
+                    );
+                  }
+                }}
+                className="px-4 py-3 rounded-xl border border-green-700 text-green-800 font-semibold"
+              >
+                Gerenciar evento
+              </button>
+            </>
+          ) : ev.inscrito ? (
+            <button
+              disabled
+              className="px-4 py-3 rounded-xl bg-green-100 text-green-800 font-semibold"
             >
-              Inscrever-se
-            </a>
-          </div>
-        )}
+              Inscrito
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                void participarEvento(
+                  false
+                )
+              }
+              disabled={
+                participando ||
+                ev.inscricoesAbertas ===
+                  false ||
+                ev.vagasDisponiveis ===
+                  0
+              }
+              className="px-4 py-3 rounded-xl bg-green-800 text-white font-semibold disabled:opacity-50"
+            >
+              {participando
+                ? "Inscrevendo..."
+                : ev.vagasDisponiveis ===
+                    0
+                ? "Vagas esgotadas"
+                : ev.inscricoesAbertas ===
+                    false
+                ? "Inscrições indisponíveis"
+                : Number(
+                    ev.valorInscricao ?? 0
+                  ) > 0
+                ? "Inscrever-se"
+                : "Participar"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

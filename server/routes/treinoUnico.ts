@@ -4,6 +4,7 @@ import {
 
 import {
   authenticateToken,
+  optionalAuthenticateToken
 } from "../middlewares/auth.js";
 
 import {
@@ -16,6 +17,7 @@ const router =
 
 router.get(
   "/publico/:id",
+  optionalAuthenticateToken,
   getTreinoProgramadoPublico
 );
 

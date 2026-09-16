@@ -2178,6 +2178,7 @@ model Turma {
   ativo             Boolean             @default(true)
   escolinhaId       String?
   clubeId           String?
+  vagas             Int?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   categoria         Categoria[]         @default([])

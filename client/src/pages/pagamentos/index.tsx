@@ -14,8 +14,8 @@ import {
   Receipt,
 } from "lucide-react";
 import { API, FLAGS } from "../../config.js";
-import Storage from "../../../../server/utils/storage.js";
 import { Link } from "wouter";
+import { useAuthGate } from "../../context/AuthGateContext.js";
 
 type Periodicidade = "Mensal" | "Anual";
 type MetodoPagamento = "PIX" | "CREDITO" | "DEBITO" | "BOLETO";
@@ -60,7 +60,6 @@ type Pagamento = {
 };
 
 type Pagador = { nome: string; email: string; cpf?: string; telefone?: string };
-type Cartao = { numero: string; nomeImpresso: string; validade: string; cvv: string };
 
 type BillingState = {
   status: "TRIAL" | "ATIVA" | "BLOQUEADA" | string;
@@ -149,8 +148,6 @@ function PagamentoModal({
   setMethod,
   pagador,
   setPagador,
-  cartao,
-  setCartao,
   total,
   mostrarMsgTrial,
   bloquearCheckoutPorTrial,
@@ -163,10 +160,6 @@ function PagamentoModal({
   boletoPdf,
   sanitizeEmail,
   sanitizeCpf,
-  sanitizePhone,
-  sanitizeCardNumber,
-  sanitizeCvv,
-  formatValidade,
   onlyNameChars,
   brl,
 }: {
@@ -176,12 +169,9 @@ function PagamentoModal({
   setMethod: (m: MetodoPagamento) => void;
   pagador: Pagador;
   setPagador: React.Dispatch<React.SetStateAction<Pagador>>;
-  cartao: Cartao;
-  setCartao: React.Dispatch<React.SetStateAction<Cartao>>;
   total: number;
   mostrarMsgTrial: boolean;
   bloquearCheckoutPorTrial: boolean;
-  polling: boolean;
   canFinalize: boolean;
   checkoutError: string | null;
   onFinalize: () => void;
@@ -192,10 +182,6 @@ function PagamentoModal({
   boletoPdf: string | null;
   sanitizeEmail: (v: string) => string;
   sanitizeCpf: (v: string) => string;
-  sanitizePhone: (v: string) => string;
-  sanitizeCardNumber: (v: string) => string;
-  sanitizeCvv: (v: string) => string;
-  formatValidade: (v: string) => string;
   onlyNameChars: (v: string) => string;
   brl: (n: number | string) => string;
 }) {
@@ -317,14 +303,25 @@ function PagamentoModal({
                 </div>
               )}
 
-              {(method === "CREDITO" || method === "DEBITO") && (
+              {(
+                method === "CREDITO" ||
+                method === "DEBITO"
+              ) && (
                 <div>
                   <div className="font-semibold mb-2">
-                    Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
+                    Pagar com{" "}
+                    {method === "CREDITO"
+                      ? "Cartão de Crédito"
+                      : "Cartão de Débito"}
                   </div>
 
                   <p className="text-sm text-gray-700 mb-3">
-                    Total: <b>{brl(total)}</b>
+                    Total:{" "}
+                    <b>
+                      {brl(
+                        total
+                      )}
+                    </b>
                   </p>
 
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -332,7 +329,15 @@ function PagamentoModal({
                       className="border rounded-md px-3 py-2"
                       placeholder="Nome do titular"
                       value={pagador.nome}
-                      onChange={(e) => setPagador((p) => ({ ...p, nome: onlyNameChars(e.target.value) }))}
+                      onChange={(e) =>
+                        setPagador((p) => ({
+                          ...p,
+                          nome:
+                            onlyNameChars(
+                              e.target.value
+                            ),
+                        }))
+                      }
                       autoComplete="name"
                     />
 
@@ -340,67 +345,25 @@ function PagamentoModal({
                       className="border rounded-md px-3 py-2"
                       placeholder="E-mail do titular"
                       value={pagador.email}
-                      onChange={(e) => setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))}
+                      onChange={(e) =>
+                        setPagador((p) => ({
+                          ...p,
+                          email:
+                            sanitizeEmail(
+                              e.target.value
+                            ),
+                        }))
+                      }
                       type="email"
                       inputMode="email"
                       autoComplete="email"
                     />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="CPF (opcional)"
-                      value={pagador.cpf || ""}
-                      onChange={(e) => setPagador((p) => ({ ...p, cpf: sanitizeCpf(e.target.value) }))}
-                      inputMode="numeric"
-                      maxLength={11}
-                    />
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Telefone (opcional)"
-                      value={pagador.telefone || ""}
-                      onChange={(e) => setPagador((p) => ({ ...p, telefone: sanitizePhone(e.target.value) }))}
-                      inputMode="numeric"
-                      maxLength={11}
-                    />
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2 mt-3">
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Número do cartão"
-                      value={cartao.numero}
-                      onChange={(e) => setCartao((c) => ({ ...c, numero: sanitizeCardNumber(e.target.value) }))}
-                      inputMode="numeric"
-                      autoComplete="cc-number"
-                    />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Nome impresso no cartão"
-                      value={cartao.nomeImpresso}
-                      onChange={(e) => setCartao((c) => ({ ...c, nomeImpresso: onlyNameChars(e.target.value) }))}
-                      autoComplete="name"
-                    />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Validade (MM/AA)"
-                      value={cartao.validade}
-                      onChange={(e) => setCartao((c) => ({ ...c, validade: formatValidade(e.target.value) }))}
-                      inputMode="numeric"
-                      autoComplete="cc-exp"
-                      maxLength={5}
-                    />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="CVV"
-                      value={cartao.cvv}
-                      onChange={(e) => setCartao((c) => ({ ...c, cvv: sanitizeCvv(e.target.value) }))}
-                      inputMode="numeric"
-                      autoComplete="cc-csc"
-                      maxLength={4}
-                    />
+                  <div className="mt-3 rounded-lg border bg-gray-50 p-3 text-sm text-gray-600">
+                    Os dados do cartão serão informados
+                    com segurança no Mercado Pago após
+                    continuar.
                   </div>
                 </div>
               )}
@@ -742,6 +705,28 @@ function rolePagamentoPorTipo(
   return "Atleta";
 }
 
+function tipoCatalogoPorRole(
+  role: RoleUI
+) {
+  switch (role) {
+    case "Professor":
+      return "professor";
+
+    case "Olheiro":
+      return "olheiro";
+
+    case "Organizações":
+      return "clube";
+
+    case "Learning":
+      return "learning";
+
+    case "Atleta":
+    default:
+      return "atleta";
+  }
+}
+
 type MainTier =
   | "PRO"
   | "LEARNING_1"
@@ -898,7 +883,18 @@ type CartItem = {
     | "PLUS"
     | "METODOLOGIA"
     | "METODOLOGIA_AVULSA"
-    | "AULA_AO_VIVO";
+    | "AULA_AO_VIVO"
+    | "EVENTO";
+};
+
+type EventoPagamento = {
+  id: string;
+  titulo: string;
+  valorInscricao:
+    number | string | null;
+  dataEvento?: string;
+  vagasDisponiveis?:
+    number | null;
 };
 
 function uniqueCart(items: CartItem[]) {
@@ -943,14 +939,56 @@ function writePersist(s: PersistState) {
   } catch {}
 }
 
+function normalizarReturnToLocal(
+  valor: string | null
+) {
+  const path =
+    String(valor || "").trim();
+
+  if (
+    !path ||
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
+    path.includes("\\")
+  ) {
+    return "";
+  }
+
+  return path;
+}
+
 export default function PagamentosPage() {
-  const tipo = Storage.tipoSalvo; 
+  const token =
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const isAuthenticated =
+    Boolean(token);
+  const tipo =
+    localStorage.getItem(
+      "tipoUsuario"
+    ) ||
+    sessionStorage.getItem(
+      "tipoUsuario"
+    ) ||
+    localStorage.getItem(
+      "usuarioTipoRaw"
+    ) ||
+    sessionStorage.getItem(
+      "usuarioTipoRaw"
+    ) ||
+    "";
   const [tipoBackend, setTipoBackend] = useState<string | null>(null);
 
   const tipoPagamentoAtual = useMemo(
     () => normalizarTipoPagamento(tipoBackend ?? tipo),
     [tipoBackend, tipo]
   );
+
+  const {
+    requireAuth,
+  } = useAuthGate();
 
   const isPerfilLearningEspecial =
     tipoPagamentoAtual ===
@@ -966,6 +1004,12 @@ export default function PagamentosPage() {
   }, [tipoBackend, tipo]);
 
   const [roleSelected, setRoleSelected] = useState<RoleUI>(roleUI);
+  const contextoLearningEspecial =
+    isPerfilLearningEspecial ||
+    (
+      !isAuthenticated &&
+      roleSelected === "Learning"
+    );
   const [metodologiasAvulsas, setMetodologiasAvulsas] = useState<MetodologiaAvulsa[]>([]);
   const [buscaMetod, setBuscaMetod] = useState("");
   const [aulasAoVivoPagas, setAulasAoVivoPagas] = useState<AulaAoVivoPaga[]>([]);
@@ -989,8 +1033,6 @@ export default function PagamentosPage() {
     setRoleSelected(roleUI);
   }, [roleUI]);
 
-  const token = Storage.token;
-
   const [loading, setLoading] = useState(true);
   const [apiPlans, setApiPlans] = useState<Plan[]>([]);
   const [assinaturaSingle, setAssinaturaSingle] = useState<Assinatura | null>(null);
@@ -999,6 +1041,13 @@ export default function PagamentosPage() {
   const [billingState, setBillingState] = useState<BillingState | null>(null);
   const [openPagamentoModal, setOpenPagamentoModal] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [
+    eventoPagamento,
+    setEventoPagamento,
+  ] =
+    useState<EventoPagamento | null>(
+      null
+    );
 
   const hadPersistRef = useRef(false);
   const appliedUrlPlanRef = useRef(false);
@@ -1009,7 +1058,7 @@ export default function PagamentosPage() {
     !isOlheiro;
 
   const allowMetodologias =
-    isPerfilLearningEspecial ||
+    contextoLearningEspecial ||
     (
       FLAGS
         .PAGAMENTOS_SHOW_METODOLOGIAS_AVULSAS &&
@@ -1028,7 +1077,6 @@ export default function PagamentosPage() {
   const [cupomPreview, setCupomPreview] = useState<{ total: number; base: number; desconto: number; codigo: string; tipo: string } | null>(null);
   const [method, setMethod] = useState<MetodoPagamento>("PIX");
   const [pagador, setPagador] = useState<Pagador>({ nome: "", email: "", cpf: "", telefone: "" });
-  const [cartao, setCartao] = useState<Cartao>({ numero: "", nomeImpresso: "", validade: "", cvv: "" });
   const [pixCopiaECola, setPixCopiaECola] = useState<string | null>(null);
   const [pixQrUrl, setPixQrUrl] = useState<string | null>(null);
   const [boletoLinha, setBoletoLinha] = useState<string | null>(null);
@@ -1036,11 +1084,22 @@ export default function PagamentosPage() {
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }),
-    [token]
-  );
+  const headers =
+    useMemo(
+      () => ({
+        "Content-Type":
+          "application/json",
 
+        ...(token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {}),
+      }),
+      [token]
+    );
+  
   const redirectAfterPayment =
     useMemo(() => {
       const params =
@@ -1048,11 +1107,36 @@ export default function PagamentosPage() {
           window.location.search
         );
 
-      return (
+      return normalizarReturnToLocal(
         params.get("returnTo") ||
-        params.get("redirect") ||
-        ""
+        params.get("redirect")
       );
+    }, []);
+
+  const retornoMercadoPago =
+    useMemo(() => {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      return {
+        status:
+          String(
+            params.get(
+              "mpReturn"
+            ) || ""
+          )
+            .trim()
+            .toLowerCase(),
+
+        pagamentoId:
+          String(
+            params.get(
+              "pagamentoId"
+            ) || ""
+          ).trim(),
+      };
     }, []);
 
   const produtoFromUrl =
@@ -1128,6 +1212,116 @@ export default function PagamentosPage() {
       produtoFromUrl,
       roleSelected,
     ]);
+
+  const eventoIdFromUrl =
+    useMemo(() => {
+      const plano =
+        String(
+          planoIdFromUrl ||
+            ""
+        ).trim();
+
+      if (
+        plano
+          .toUpperCase()
+          .startsWith(
+            "EVENTO:"
+          )
+      ) {
+        return plano
+          .split(":")
+          .slice(1)
+          .join(":")
+          .trim();
+      }
+
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      return String(
+        params.get(
+          "eventoId"
+        ) || ""
+      ).trim();
+    }, [
+      planoIdFromUrl,
+    ]);
+
+  useEffect(() => {
+    if (
+      !eventoIdFromUrl
+    ) {
+      setEventoPagamento(
+        null
+      );
+
+      return;
+    }
+
+    let ativo =
+      true;
+
+    void (async () => {
+      try {
+        const response =
+          await fetch(
+            `${API.BASE_URL}/api/eventos/${encodeURIComponent(
+              eventoIdFromUrl
+            )}`,
+            {
+              headers:
+                token
+                  ? {
+                      Authorization:
+                        `Bearer ${token}`,
+                    }
+                  : undefined,
+            }
+          );
+
+        const data =
+          await response
+            .json()
+            .catch(() => ({}));
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              "Evento não encontrado."
+          );
+        }
+
+        if (ativo) {
+          setEventoPagamento(
+            data
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Erro ao carregar evento para pagamento:",
+          error
+        );
+
+        if (ativo) {
+          setEventoPagamento(
+            null
+          );
+        }
+      }
+    })();
+
+    return () => {
+      ativo = false;
+    };
+  }, [
+    eventoIdFromUrl,
+    token,
+  ]);
 
   useEffect(() => {
     if (!billingState?.precisaEscolherPagamento) return;
@@ -1226,6 +1420,84 @@ export default function PagamentosPage() {
   ]);
 
   useEffect(() => {
+    if (
+      !hydrated ||
+      isAuthenticated
+    ) {
+      return;
+    }
+
+    let ativo = true;
+
+    void (async () => {
+      try {
+        const tipoCatalogo =
+          tipoCatalogoPorRole(
+            roleSelected
+          );
+
+        const tipoQuery =
+          encodeURIComponent(
+            tipoCatalogo
+          );
+
+        const [
+          respostaPlanos,
+          respostaMetodologias,
+        ] =
+          await Promise.all([
+            fetch(
+              `${API.BASE_URL}/api/billing/plans?tipo=${tipoQuery}`
+            ),
+
+            fetch(
+              `${API.BASE_URL}/api/billing/metodologias-avulsas?tipo=${tipoQuery}`
+            ),
+          ]);
+
+        const jsonPlanos =
+          await respostaPlanos
+            .json()
+            .catch(() => ({}));
+
+        const jsonMetodologias =
+          await respostaMetodologias
+            .json()
+            .catch(() => ({}));
+
+        if (!ativo) {
+          return;
+        }
+
+        setApiPlans(
+          respostaPlanos.ok
+            ? jsonPlanos?.plans || []
+            : []
+        );
+
+        setMetodologiasAvulsas(
+          respostaMetodologias.ok
+            ? jsonMetodologias?.items || []
+            : []
+        );
+      } catch (error) {
+        console.error(
+          "Erro ao atualizar catálogo público:",
+          error
+        );
+      }
+    })();
+
+    return () => {
+      ativo = false;
+    };
+  }, [
+    hydrated,
+    isAuthenticated,
+    roleSelected,
+  ]);
+
+  useEffect(() => {
     setCupomPreview(null);
   }, [
     cupomInput,
@@ -1270,13 +1542,38 @@ export default function PagamentosPage() {
     return p.annual ?? 0;
   }
 
-  function annualOk(planoId: string) {
-    const p = getPlan(planoId);
-    return !!p?.annual && (p.annual as number) > 0;
-  }
-
   function buildCart(): CartItem[] {
     const items: CartItem[] = [];
+
+    if (
+      eventoPagamento
+    ) {
+      const valor =
+        Number(
+          eventoPagamento
+            .valorInscricao ??
+            0
+        );
+
+      return [
+        {
+          planoId:
+            `EVENTO:${eventoPagamento.id}`,
+
+          periodicidade:
+            "Mensal",
+
+          label:
+            `Inscrição: ${eventoPagamento.titulo}`,
+
+          price:
+            valor,
+
+          categoria:
+            "EVENTO",
+        },
+      ];
+    }
 
     if (selectedMain) {
       const price = getPrice(selectedMain, "Mensal");
@@ -1335,22 +1632,29 @@ export default function PagamentosPage() {
     return uniqueCart(items);
   }
 
-  const cart = useMemo(
-    () => buildCart(),
-    [
-      selectedMain,
-      pickPro, pickLearning, pickPlus,
-      pickMetods,
-      roleSelected,
-      periodPro, periodLearning, periodPlus,
-      apiPlans,
-      metodologiasAvulsas,  
-      aulasAoVivoPagas, 
-      pickAulasAoVivo,
-      isPerfilLearningEspecial,
-      allowMetodologias,
-    ]
-  );
+  const cart =
+    useMemo(
+      () =>
+        buildCart(),
+      [
+        selectedMain,
+        pickPro,
+        pickLearning,
+        pickPlus,
+        pickMetods,
+        roleSelected,
+        periodPro,
+        periodLearning,
+        periodPlus,
+        apiPlans,
+        metodologiasAvulsas,
+        aulasAoVivoPagas,
+        pickAulasAoVivo,
+        isPerfilLearningEspecial,
+        allowMetodologias,
+        eventoPagamento,
+      ]
+    );
 
   const cartTotalBase = useMemo(() => cart.reduce((s, it) => s + (it.price || 0), 0), [cart]);
 
@@ -1413,6 +1717,29 @@ export default function PagamentosPage() {
     trialAtivoAgora &&
     (billingState?.diasRestantes ?? 0) > 7;
 
+  const carrinhoSomenteAvulso =
+    cart.length > 0 &&
+    cart.every(
+      (item) =>
+        item.categoria ===
+          "METODOLOGIA_AVULSA" ||
+        item.categoria ===
+          "AULA_AO_VIVO" ||
+        item.categoria ===
+          "EVENTO"
+    );
+
+  const carrinhoTemEvento =
+    cart.some(
+      (item) =>
+        item.categoria ===
+        "EVENTO"
+    );
+
+  const bloquearCheckoutEfetivo =
+    bloquearCheckoutPorTrial &&
+    !carrinhoSomenteAvulso;
+
   const isTrial = trialAtivoAgora;
   const isBloqueada = billingState?.bloqueado || statusAssinatura === "BLOQUEADA";
   
@@ -1420,10 +1747,24 @@ export default function PagamentosPage() {
     || assinaturas.some((a) => Boolean(a.trialStartsAt || a.trialEndsAt))
     || Boolean(assinaturaSingle?.trialStartsAt || assinaturaSingle?.trialEndsAt);
 
-  const trialDisponivel = !trialAtivoAgora && !trialJaUsado && !isBloqueada;
+  const trialDisponivel =
+    !carrinhoTemEvento &&
+    !trialAtivoAgora &&
+    !trialJaUsado &&
+    !isBloqueada;
 
   async function loadMe() {
-    const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const me =
+      await fetch(
+        `${API.BASE_URL}/api/billing/me`,
+        {
+          headers,
+        }
+      );
     const data = await me.json();
 
     const arr = Array.isArray(data.assinaturas)
@@ -1476,23 +1817,60 @@ export default function PagamentosPage() {
       setHydrated(true);
 
       try {
-        const cat = await fetch(`${API.BASE_URL}/api/billing/plans`, { headers });
-        const json = await cat.json().catch(() => ({}));
-        setApiPlans(json?.plans || []);
+        if (isAuthenticated) {
+          const cat =
+            await fetch(
+              `${API.BASE_URL}/api/billing/plans`,
+              { headers }
+            );
 
-        await loadMe();
+          const json =
+            await cat
+              .json()
+              .catch(() => ({}));
 
-        const rMet = await fetch(`${API.BASE_URL}/api/billing/metodologias-avulsas`, { headers });
-        const jMet = await rMet.json().catch(() => ({}));
-        setMetodologiasAvulsas(rMet.ok ? (jMet.items || []) : []);
+          setApiPlans(
+            json?.plans || []
+          );
 
-        const rAulas = await fetch(`${API.BASE_URL}/api/billing/aulas-ao-vivo`, {
-          headers,
-        });
+          await loadMe();
 
-        const jAulas = await rAulas.json().catch(() => ({}));
-        setAulasAoVivoPagas(jAulas.items || []);
+          const rMet =
+            await fetch(
+              `${API.BASE_URL}/api/billing/metodologias-avulsas`,
+              { headers }
+            );
 
+          const jMet =
+            await rMet
+              .json()
+              .catch(() => ({}));
+
+          setMetodologiasAvulsas(
+            rMet.ok
+              ? jMet.items || []
+              : []
+          );
+        }
+
+        // este catálogo é igual para
+        // visitante e usuário logado
+        const rAulas =
+          await fetch(
+            `${API.BASE_URL}/api/billing/aulas-ao-vivo`,
+            { headers }
+          );
+
+        const jAulas =
+          await rAulas
+            .json()
+            .catch(() => ({}));
+
+        setAulasAoVivoPagas(
+          rAulas.ok
+            ? jAulas.items || []
+            : []
+        );
       } catch (e) {
         console.error(e);
       } finally {
@@ -1511,8 +1889,6 @@ export default function PagamentosPage() {
     const plano = planoIdFromUrl.trim();
     const planoUpper = plano.toUpperCase();
 
-    appliedUrlPlanRef.current = true;
-
     if (
       isPerfilLearningEspecial &&
       !planoUpper.startsWith(
@@ -1524,6 +1900,9 @@ export default function PagamentosPage() {
       !planoUpper.startsWith(
         "METODOLOGIA:"
       ) &&
+      !planoUpper.startsWith(
+          "EVENTO:"
+        ) &&
       planoUpper !==
         "LEARNING_3"
     ) {
@@ -1549,6 +1928,45 @@ export default function PagamentosPage() {
     setPickAulasAoVivo({});
     setCupomPreview(null);
 
+    if (
+      planoUpper.startsWith(
+        "EVENTO:"
+      )
+    ) {
+      if (
+        !eventoPagamento
+      ) {
+        return;
+      }
+
+      appliedUrlPlanRef.current =
+        true;
+
+      setSelectedMain(
+        null
+      );
+
+      setPickPro(false);
+      setPickLearning(false);
+      setPickPlus(false);
+      setPickMetods({});
+      setPickAulasAoVivo({});
+      setCupomInput("");
+      setCupomPreview(null);
+
+      if (
+        isAuthenticated
+      ) {
+        setOpenPagamentoModal(
+          true
+        );
+      }
+
+      return;
+    }
+
+    appliedUrlPlanRef.current = true;
+
     if (plano.startsWith("METODOLOGIA_AVULSA:")) {
       const metodologiaId = plano.replace("METODOLOGIA_AVULSA:", "").trim();
 
@@ -1560,7 +1978,11 @@ export default function PagamentosPage() {
         setFiltroConteudoMetod("TODOS");
         setFiltroPublicoMetod("TODOS");
 
-        setOpenPagamentoModal(true);
+        if (isAuthenticated) {
+          setOpenPagamentoModal(
+            true
+          );
+        }
       }
 
       setTimeout(() => {
@@ -1595,7 +2017,11 @@ export default function PagamentosPage() {
       });
 
       setBuscaAulaAoVivo("");
-      setOpenPagamentoModal(true);
+      if (isAuthenticated) {
+        setOpenPagamentoModal(
+          true
+        );
+      }
 
       setTimeout(() => {
         document
@@ -1624,7 +2050,11 @@ export default function PagamentosPage() {
 
       setSelectedMain(preferredLearningPlan);
       setPickLearning(true);
-      setOpenPagamentoModal(true);
+      if (isAuthenticated) {
+        setOpenPagamentoModal(
+          true
+        );
+      }
 
       setTimeout(() => {
         document
@@ -1636,7 +2066,11 @@ export default function PagamentosPage() {
     }
 
     setSelectedMain(plano);
-    setOpenPagamentoModal(true);
+    if (isAuthenticated) {
+      setOpenPagamentoModal(
+        true
+      );
+    }
 
     setTimeout(() => {
       document
@@ -1651,6 +2085,8 @@ export default function PagamentosPage() {
     metodologiasAvulsas,
     aulasAoVivoPagas,
     isPerfilLearningEspecial,
+    eventoPagamento,
+    isAuthenticated,
   ]);
 
   useEffect(() => {
@@ -1716,29 +2152,22 @@ export default function PagamentosPage() {
     if (method === "BOLETO") {
       if (!pagador.nome || !pagador.email || !pagador.cpf) return "Informe nome, e-mail e CPF para gerar o boleto.";
     }
-    if (method === "CREDITO" || method === "DEBITO") {
-      if (!pagador.nome || !pagador.email) return "Informe nome e e-mail do titular para finalizar o pagamento.";
-      if (!cartao.numero || !cartao.nomeImpresso || !cartao.validade || !cartao.cvv) return "Preencha todos os dados do cartão para finalizar o pagamento.";
+    if (
+      method === "CREDITO" ||
+      method === "DEBITO"
+    ) {
+      if (
+        !pagador.nome ||
+        !pagador.email
+      ) {
+        return "Informe nome e e-mail para continuar.";
+      }
     }
     if (pagador.nome && !isValidName(pagador.nome)) return "Nome inválido (não use números).";
     if (pagador.email && !isValidEmail(pagador.email)) return "E-mail inválido.";
 
     if (method === "BOLETO") {
       if (!pagador.cpf || sanitizeCpf(pagador.cpf).length !== 11) return "CPF inválido (11 dígitos).";
-    }
-
-    if (method === "CREDITO" || method === "DEBITO") {
-      const parsedVal = parseValidade(cartao.validade);
-      if (!parsedVal) return "Validade inválida (use MM/AA).";
-
-      const STRICT_NEXT_MONTH = false; 
-      if (!isValidadeNaoExpirada(cartao.validade, { strictNextMonth: STRICT_NEXT_MONTH })) {
-        const min = validadeMinimaHoje({ strictNextMonth: STRICT_NEXT_MONTH });
-        const minTxt = `${String(min.mm).padStart(2, "0")}/${String(min.yy).padStart(2, "0")}`;
-        return `Cartão vencido. Validade mínima: ${minTxt}.`;
-      }
-      if (sanitizeCardNumber(cartao.numero).length < 13) return "Número do cartão parece inválido.";
-      if (sanitizeCvv(cartao.cvv).length < 3) return "CVV inválido.";
     }
 
     return null;
@@ -1983,48 +2412,90 @@ export default function PagamentosPage() {
     ]);
 
   const checkoutError = useMemo(() => {
-    if (bloquearCheckoutPorTrial) return "Trial ativo (aguarde faltar 7 dias).";
+    if (bloquearCheckoutEfetivo) return "Trial ativo (aguarde faltar 7 dias).";
     return validarCamposAntesDoCheckout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    bloquearCheckoutPorTrial,
+    bloquearCheckoutEfetivo,
     cart,
     method,
     pagador.nome,
     pagador.email,
     pagador.cpf,
     pagador.telefone,
-    cartao.numero,
-    cartao.nomeImpresso,
-    cartao.validade,
-    cartao.cvv,
   ]);
 
   const canFinalize = !polling && !checkoutError;
 
   async function previewCoupon() {
+    if (carrinhoTemEvento) {
+      setCupomInput("");
+      setCupomPreview(null);
+
+      toast.error(
+        "Cupons não são aplicados a inscrições de eventos."
+      );
+
+      return;
+    }
+
+    if (cart.length !== 1) {
+      setCupomPreview(null);
+
+      toast.error(
+        "O cupom só pode ser usado quando houver 1 item no carrinho."
+      );
+
+      return;
+    }
+
+    if (
+      !requireAuth({
+        title: "Entre para usar o cupom",
+        message:
+          "Crie sua conta ou entre para validar e usar seu cupom.",
+        returnTo:
+          `${window.location.pathname}` +
+          `${window.location.search}`,
+      })
+    ) {
+      return;
+    }
+
     if (!cupomInput) return;
 
-    const item = cart[0];
-
     try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/coupon/apply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          codigo: cupomInput.trim(),
-          items: cart.map((c) => ({ planoId: c.planoId, periodicidade: c.periodicidade })),
-        }),
-      });
+      const r = await fetch(
+        `${API.BASE_URL}/api/billing/coupon/apply`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            codigo: cupomInput.trim(),
+            items: cart.map((c) => ({
+              planoId: c.planoId,
+              periodicidade: c.periodicidade,
+            })),
+          }),
+        }
+      );
 
       if (!r.ok) {
         const e = await r.json();
-        toast.error(e.message || "Cupom inválido");
+
+        toast.error(
+          e.message || "Cupom inválido"
+        );
+
         setCupomPreview(null);
         return;
       }
 
       const data = await r.json();
+
       setCupomPreview({
         total: data.total,
         base: data.base,
@@ -2033,11 +2504,37 @@ export default function PagamentosPage() {
         tipo: data.cupom.tipo,
       });
     } catch {
-      toast.error("Erro ao validar cupom. Para ele ser usado so pode ter o atleta_pro no carrinho.");
+      toast.error(
+        "Erro ao validar cupom."
+      );
     }
   }
 
   async function startTrial() {
+    if (
+      !requireAuth({
+        title:
+          "Entre para iniciar seu mês grátis",
+        message:
+          "Crie sua conta ou entre para ativar seu período gratuito.",
+        returnTo:
+          `${window.location.pathname}` +
+          `${window.location.search}`,
+      })
+    ) {
+      return;
+    }
+
+    if (
+      carrinhoTemEvento
+    ) {
+      toast.error(
+        "Inscrições em eventos não participam do mês grátis."
+      );
+
+      return;
+    }
+
     if (trialAtivoAgora) {
       toast.success("Seu mês grátis já está ativo ✅");
       return;
@@ -2135,8 +2632,68 @@ export default function PagamentosPage() {
     }
   }
 
+  useEffect(() => {
+    if (
+      !isAuthenticated ||
+      !retornoMercadoPago
+        .pagamentoId
+    ) {
+      return;
+    }
+
+    if (
+      retornoMercadoPago
+        .status ===
+      "failure"
+    ) {
+      toast.error(
+        "O pagamento não foi concluído."
+      );
+
+      return;
+    }
+
+    if (
+      retornoMercadoPago
+        .status ===
+        "approved" ||
+      retornoMercadoPago
+        .status ===
+        "pending"
+    ) {
+      setPendingPaymentId(
+        retornoMercadoPago
+          .pagamentoId
+      );
+
+      void pollPaymentStatus(
+        retornoMercadoPago
+          .pagamentoId
+      );
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isAuthenticated,
+    retornoMercadoPago.status,
+    retornoMercadoPago.pagamentoId,
+  ]);
+
   async function startCheckout() {
-    if (bloquearCheckoutPorTrial) {
+    if (
+      !requireAuth({
+        title:
+          "Entre para comprar",
+        message:
+          "Crie sua conta ou entre para finalizar esta compra.",
+        returnTo:
+          `${window.location.pathname}` +
+          `${window.location.search}`,
+      })
+    ) {
+      return;
+    }
+    if (bloquearCheckoutEfetivo) {
       toast.error(
         `Seu mês grátis está ativo. Você poderá escolher a forma de pagamento quando faltarem 7 dias para terminar.\n\nDias restantes: ${billingState?.diasRestantes}`
       );
@@ -2153,53 +2710,148 @@ export default function PagamentosPage() {
     setPendingPaymentId(null);
 
     try {
-      const bundlePayload = {
-        items: cart.map((c) => ({ planoId: c.planoId, periodicidade: c.periodicidade })),
-        metodo: method,
-        cupom: cupomInput || null,
-        pagador,
-        cartao,
-      };
+      const pagamentoDeEvento =
+        cart.length === 1 &&
+        cart[0]
+          .categoria ===
+          "EVENTO";
 
-      const rBundle = await fetch(`${API.BASE_URL}/api/billing/checkout-bundle`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(bundlePayload),
-      });
+      const pagamentoEmBundle =
+        cart.length > 1 &&
+        !pagamentoDeEvento;
 
-      if (rBundle.ok) {
-        const data = await rBundle.json();
+      if (
+        pagamentoEmBundle
+      ) {
+        const bundlePayload = {
+          items:
+            cart.map((c) => ({
+              planoId:
+                c.planoId,
 
-        if (data.pix?.copiaECola || data.pix?.qrCodeUrl) {
-          setPendingPaymentId(data.pagamento?.id || null);
-          setPixCopiaECola(data.pix?.copiaECola || null);
-          setPixQrUrl(data.pix?.qrCodeUrl || null);
-          if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
+              periodicidade:
+                c.periodicidade,
+            })),
+
+          metodo:
+            method,
+
+          cupom:
+            null,
+
+          returnTo:
+            redirectAfterPayment ||
+            "/pagamentos",
+
+          pagador,
+        };
+
+        const rBundle =
+          await fetch(
+            `${API.BASE_URL}/api/billing/checkout-bundle`,
+            {
+              method:
+                "POST",
+
+              headers,
+
+              body:
+                JSON.stringify(
+                  bundlePayload
+                ),
+            }
+          );
+
+        const data =
+          await rBundle
+            .json()
+            .catch(() => ({}));
+
+        if (!rBundle.ok) {
+          if (
+            rBundle.status === 403 &&
+            data?.code === "TRIAL_ACTIVE"
+          ) {
+            toast.error(
+              data?.message ||
+                "Seu mês grátis ainda está ativo."
+            );
+
+            await loadMe();
+            return;
+          }
+
+          toast.error(
+            data?.message ||
+              "Não foi possível iniciar o pagamento."
+          );
+
           return;
         }
 
-        if (data.boleto?.pdfUrl || data.boleto?.linhaDigitavel) {
-          setPendingPaymentId(data.pagamento?.id || null);
-          setBoletoLinha(data.boleto?.linhaDigitavel || null);
-          setBoletoPdf(data.boleto?.pdfUrl || null);
-          if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
+        if (
+          data.pix?.copiaECola ||
+          data.pix?.qrCodeUrl
+        ) {
+          setPendingPaymentId(
+            data.pagamento?.id || null
+          );
+
+          setPixCopiaECola(
+            data.pix?.copiaECola || null
+          );
+
+          setPixQrUrl(
+            data.pix?.qrCodeUrl || null
+          );
+
+          if (data.pagamento?.id) {
+            void pollPaymentStatus(
+              data.pagamento.id
+            );
+          }
+
+          return;
+        }
+
+        if (
+          data.boleto?.pdfUrl ||
+          data.boleto?.linhaDigitavel
+        ) {
+          setPendingPaymentId(
+            data.pagamento?.id || null
+          );
+
+          setBoletoLinha(
+            data.boleto?.linhaDigitavel || null
+          );
+
+          setBoletoPdf(
+            data.boleto?.pdfUrl || null
+          );
+
+          if (data.pagamento?.id) {
+            void pollPaymentStatus(
+              data.pagamento.id
+            );
+          }
+
           return;
         }
 
         if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
+          window.location.href =
+            data.checkoutUrl;
+
           return;
         }
 
-        toast.error(data.message || "Pagamento iniciado.");
-        await loadMe();
-        return;
-      }
-
-      if ((method === "PIX" || method === "BOLETO") && cart.length > 1) {
-        toast.error(
-          "Para PIX/Boleto com múltiplos itens, você precisa do endpoint /checkout-bundle no backend (1 cobrança só)."
+        toast.success(
+          data.message ||
+            "Pagamento iniciado."
         );
+
+        await loadMe();
         return;
       }
 
@@ -2211,9 +2863,18 @@ export default function PagamentosPage() {
             planoId: item.planoId,
             periodicidade: item.periodicidade,
             metodo: method,
-            cupom: cart.length === 1 ? cupomInput || null : null,
+            cupom:
+              item.categoria ===
+                "EVENTO"
+                ? null
+                : cart.length === 1
+                  ? cupomInput ||
+                    null
+                  : null,
+            returnTo:
+              redirectAfterPayment ||
+              "/pagamentos",
             pagador,
-            cartao,
           }),
         });
 
@@ -2260,6 +2921,20 @@ export default function PagamentosPage() {
   }
 
   async function cancelSub(planoId?: string) {
+    if (
+      !requireAuth({
+        title:
+          "Entre para iniciar seu mês grátis",
+        message:
+          "Crie sua conta ou entre para ativar seu período gratuito.",
+        returnTo:
+          `${window.location.pathname}` +
+          `${window.location.search}`,
+      })
+    ) {
+      return;
+    }
+
     if (!confirm("Tem certeza que deseja cancelar essa assinatura?")) return;
     try {
       const r = await fetch(`${API.BASE_URL}/api/billing/cancel`, {
@@ -2282,7 +2957,10 @@ export default function PagamentosPage() {
   const trialEndsAt = billingState?.trialEndsAt ?? assinaturaSingle?.trialEndsAt ?? null;
   const diasTrial = diasRestantesIso(trialEndsAt);
 
-  const mostrarMsgTrial = trialAtivoAgora && !isBloqueada;
+  const mostrarMsgTrial =
+    trialAtivoAgora &&
+    !isBloqueada &&
+    !carrinhoSomenteAvulso;
 
   function onlyDigits(v: string) {
     return (v || "").replace(/\D+/g, "");
@@ -2296,74 +2974,8 @@ export default function PagamentosPage() {
     return (v || "").replace(/\s+/g, "");
   }
 
-  function formatValidade(v: string) {
-    const d = onlyDigits(v).slice(0, 4);
-    if (d.length <= 2) return d;
-
-    const mm = d.slice(0, 2);
-    const aa = d.slice(2);
-
-    const mmNum = Number(mm);
-    if (mm.length === 2 && (mmNum < 1 || mmNum > 12)) {
-      return mm.slice(0, 1);
-    }
-
-    return `${mm}/${aa}`;
-  }
-
-  function validadeMinimaHoje(opts?: { strictNextMonth?: boolean }) {
-    const strictNextMonth = !!opts?.strictNextMonth;
-
-    const now = new Date();
-    let mm = now.getMonth() + 1; 
-    let yy = now.getFullYear() % 100; 
-
-    if (strictNextMonth) {
-      mm += 1;
-      if (mm === 13) {
-        mm = 1;
-        yy = (yy + 1) % 100;
-      }
-    }
-
-    return { mm, yy };
-  }
-
-  function parseValidade(mmAA: string): { mm: number; yy: number } | null {
-    const m = /^(\d{2})\/(\d{2})$/.exec(mmAA);
-    if (!m) return null;
-    const mm = Number(m[1]);
-    const yy = Number(m[2]);
-    if (!Number.isFinite(mm) || !Number.isFinite(yy)) return null;
-    if (mm < 1 || mm > 12) return null;
-    return { mm, yy };
-  }
-
-  function isValidadeNaoExpirada(mmAA: string, opts?: { strictNextMonth?: boolean }) {
-    const parsed = parseValidade(mmAA);
-    if (!parsed) return false;
-
-    const min = validadeMinimaHoje({ strictNextMonth: opts?.strictNextMonth });
-
-    if (parsed.yy > min.yy) return true;
-    if (parsed.yy < min.yy) return false;
-    return parsed.mm >= min.mm;
-  }
-
   function sanitizeCpf(v: string) {
     return onlyDigits(v).slice(0, 11);
-  }
-
-  function sanitizePhone(v: string) {
-    return onlyDigits(v).slice(0, 11); 
-  }
-
-  function sanitizeCardNumber(v: string) {
-    return onlyDigits(v).slice(0, 19);
-  }
-
-  function sanitizeCvv(v: string) {
-    return onlyDigits(v).slice(0, 4);
   }
 
   function isValidEmail(email: string) {
@@ -2374,14 +2986,6 @@ export default function PagamentosPage() {
   function isValidName(name: string) {
     const re = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ' -]*$/;
     return re.test(name.trim());
-  }
-
-  function isValidValidade(mmAA: string) {
-    const parsed = parseValidade(mmAA);
-    if (!parsed) return false;
-    const STRICT_NEXT_MONTH = false;
-
-    return isValidadeNaoExpirada(mmAA, { strictNextMonth: STRICT_NEXT_MONTH });
   }
 
   return (
@@ -2400,7 +3004,7 @@ export default function PagamentosPage() {
 
       <h1 className="text-2xl md:text-3xl font-bold mt-3">Assinaturas & Pagamentos</h1>
       <p className="text-sm text-gray-600 mb-6">
-        {isPerfilLearningEspecial ? (
+        {contextoLearningEspecial ? (
           <>
             Para este tipo de perfil,
             está disponível o plano{" "}
@@ -2606,22 +3210,34 @@ export default function PagamentosPage() {
 
         <div className="flex flex-wrap gap-2">
           {(
-            isPerfilLearningEspecial
+            !isAuthenticated
               ? (
-                  [
-                    "Learning",
-                  ] as RoleUI[]
-                )
-              : (
                   [
                     "Atleta",
                     "Olheiro",
                     "Professor",
                     "Organizações",
+                    "Learning",
                   ] as RoleUI[]
                 )
+              : isPerfilLearningEspecial
+                ? (
+                    [
+                      "Learning",
+                    ] as RoleUI[]
+                  )
+                : (
+                    [
+                      "Atleta",
+                      "Olheiro",
+                      "Professor",
+                      "Organizações",
+                    ] as RoleUI[]
+                  )
           ).map((r) => {
-            const disabled = r !== roleUI;
+            const disabled =
+              isAuthenticated &&
+              r !== roleUI;
 
             return (
               <button
@@ -3062,37 +3678,80 @@ export default function PagamentosPage() {
         )}
       </section>
 
-      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <Gift className="w-5 h-5" />
-          <h2 className="font-semibold text-lg">Cupom</h2>
-        </div>
+      {!carrinhoTemEvento && (
+        <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Gift className="w-5 h-5" />
 
-        <p className="text-sm text-gray-600 mb-3">
-          No momento, cupom funciona por item (se o carrinho tiver 1 item).
-        </p>
-
-        <div className="flex gap-2">
-          <input
-            value={cupomInput}
-            onChange={(e) => setCupomInput(e.target.value)}
-            placeholder="Digite seu cupom"
-            className="flex-1 border rounded-md px-3 py-2"
-          />
-          <button onClick={previewCoupon} className="px-3 py-2 border rounded-md">
-            Validar
-          </button>
-        </div>
-
-        {cupomPreview && (
-          <div className="mt-2 text-sm">
-            <div>Preço base: <b>{brl(cupomPreview.base)}</b></div>
-            <div>Desconto: <b>- {brl(cupomPreview.desconto)}</b></div>
-            <div>Total: <b>{brl(cupomPreview.total)}</b></div>
-            <div className="text-gray-600">Cupom "{cupomPreview.codigo}" ({cupomPreview.tipo})</div>
+            <h2 className="font-semibold text-lg">
+              Cupom
+            </h2>
           </div>
-        )}
-      </section>
+
+          <p className="text-sm text-gray-600 mb-3">
+            No momento, cupom funciona por item
+            (se o carrinho tiver 1 item).
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              value={cupomInput}
+              onChange={(e) =>
+                setCupomInput(
+                  e.target.value
+                )
+              }
+              placeholder="Digite seu cupom"
+              className="flex-1 border rounded-md px-3 py-2"
+            />
+
+            <button
+              onClick={previewCoupon}
+              className="px-3 py-2 border rounded-md"
+            >
+              Validar
+            </button>
+          </div>
+
+          {cupomPreview && (
+            <div className="mt-2 text-sm">
+              <div>
+                Preço base:{" "}
+                <b>
+                  {brl(
+                    cupomPreview.base
+                  )}
+                </b>
+              </div>
+
+              <div>
+                Desconto:{" "}
+                <b>
+                  -{" "}
+                  {brl(
+                    cupomPreview.desconto
+                  )}
+                </b>
+              </div>
+
+              <div>
+                Total:{" "}
+                <b>
+                  {brl(
+                    cupomPreview.total
+                  )}
+                </b>
+              </div>
+
+              <div className="text-gray-600">
+                Cupom "
+                {cupomPreview.codigo}" (
+                {cupomPreview.tipo})
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {!openPagamentoModal && (
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
@@ -3115,7 +3774,7 @@ export default function PagamentosPage() {
             </div>
           </div>
         )}
-        {bloquearCheckoutPorTrial ? (
+        {bloquearCheckoutEfetivo ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
             <div className="font-semibold">Seu mês grátis está ativo ✅</div>
             <div className="mt-1">
@@ -3208,14 +3867,25 @@ export default function PagamentosPage() {
                 </div>
               )}
 
-              {(method === "CREDITO" || method === "DEBITO") && (
+              {(
+                method === "CREDITO" ||
+                method === "DEBITO"
+              ) && (
                 <div>
                   <div className="font-semibold mb-2">
-                    Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
+                    Pagar com{" "}
+                    {method === "CREDITO"
+                      ? "Cartão de Crédito"
+                      : "Cartão de Débito"}
                   </div>
 
                   <p className="text-sm text-gray-700 mb-3">
-                    Total: <b>{brl(totalComCupomLocal())}</b>
+                    Total:{" "}
+                    <b>
+                      {brl(
+                        totalComCupomLocal()
+                      )}
+                    </b>
                   </p>
 
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -3224,7 +3894,13 @@ export default function PagamentosPage() {
                       placeholder="Nome do titular"
                       value={pagador.nome}
                       onChange={(e) =>
-                        setPagador((p) => ({ ...p, nome: onlyNameChars(e.target.value) }))
+                        setPagador((p) => ({
+                          ...p,
+                          nome:
+                            onlyNameChars(
+                              e.target.value
+                            ),
+                        }))
                       }
                       autoComplete="name"
                     />
@@ -3234,68 +3910,24 @@ export default function PagamentosPage() {
                       placeholder="E-mail do titular"
                       value={pagador.email}
                       onChange={(e) =>
-                        setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))
+                        setPagador((p) => ({
+                          ...p,
+                          email:
+                            sanitizeEmail(
+                              e.target.value
+                            ),
+                        }))
                       }
                       type="email"
                       inputMode="email"
                       autoComplete="email"
-                      pattern="^[A-Za-z][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
-                    />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="CPF (opcional)"
-                      value={pagador.cpf || ""}
-                      onChange={(e) => setPagador((p) => ({ ...p, cpf: sanitizeCpf(e.target.value) }))}
-                      inputMode="numeric"
-                      maxLength={11}
-                    />
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Telefone (opcional)"
-                      value={pagador.telefone || ""}
-                      onChange={(e) => setPagador((p) => ({ ...p, telefone: sanitizePhone(e.target.value) }))}
-                      inputMode="numeric"
-                      maxLength={11}
                     />
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2 mt-3">
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Número do cartão"
-                      value={cartao.numero}
-                      onChange={(e) => setCartao((c) => ({ ...c, numero: sanitizeCardNumber(e.target.value) }))}
-                      inputMode="numeric"
-                      autoComplete="cc-number"
-                    />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Nome impresso no cartão"
-                      value={cartao.nomeImpresso}
-                      onChange={(e) => setCartao((c) => ({ ...c, nomeImpresso: onlyNameChars(e.target.value) }))}
-                      autoComplete="name"
-                    />
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="Validade (MM/AA)"
-                      value={cartao.validade}
-                      onChange={(e) => setCartao((c) => ({ ...c, validade: formatValidade(e.target.value) }))}
-                      inputMode="numeric"
-                      autoComplete="cc-exp"
-                      maxLength={5}
-                    />
-
-                    <input
-                      className="border rounded-md px-3 py-2"
-                      placeholder="CVV"
-                      value={cartao.cvv}
-                      onChange={(e) => setCartao((c) => ({ ...c, cvv: sanitizeCvv(e.target.value) }))}
-                      inputMode="numeric"
-                      autoComplete="cc-csc"
-                      maxLength={4}
-                    />
+                  <div className="mt-3 rounded-lg border bg-gray-50 p-3 text-sm text-gray-600">
+                    Os dados do cartão serão informados
+                    com segurança no Mercado Pago após
+                    continuar.
                   </div>
                 </div>
               )}
@@ -3443,12 +4075,9 @@ export default function PagamentosPage() {
         setMethod={setMethod}
         pagador={pagador}
         setPagador={setPagador}
-        cartao={cartao}
-        setCartao={setCartao}
         total={totalComCupomLocal()}
         mostrarMsgTrial={mostrarMsgTrial}
-        bloquearCheckoutPorTrial={bloquearCheckoutPorTrial}
-        polling={polling}
+        bloquearCheckoutPorTrial={bloquearCheckoutEfetivo}
         canFinalize={canFinalize}
         checkoutError={checkoutError}
         onFinalize={startCheckout}
@@ -3459,10 +4088,6 @@ export default function PagamentosPage() {
         boletoPdf={boletoPdf}
         sanitizeEmail={sanitizeEmail}
         sanitizeCpf={sanitizeCpf}
-        sanitizePhone={sanitizePhone}
-        sanitizeCardNumber={sanitizeCardNumber}
-        sanitizeCvv={sanitizeCvv}
-        formatValidade={formatValidade}
         onlyNameChars={onlyNameChars}
         brl={brl}
       />

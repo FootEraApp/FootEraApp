@@ -619,6 +619,10 @@ export default function TreinosAtletas() {
   }, [location]);
 
   const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId"); 
+  const openAgendadoId =
+  qs.get(
+    "openAgendadoId"
+  );
   const qsMetodologiaId = qs.get("metodologiaId");
   const qsEstruturaId = qs.get("estruturaId");
   const qsMetodologiaItemId = qs.get("metodologiaItemId");
@@ -662,6 +666,62 @@ export default function TreinosAtletas() {
       }
     >
   >({});
+
+  useEffect(() => {
+    if (
+      !treinosAgendados.length
+    ) {
+      return;
+    }
+
+    setStatusPorTreino(
+      (prev) => {
+        const next = {
+          ...prev,
+        };
+
+        let mudou =
+          false;
+
+        for (
+          const treino of
+          treinosAgendados
+        ) {
+          if (
+            next[treino.id]
+          ) {
+            continue;
+          }
+
+          next[
+            treino.id
+          ] = {
+            status:
+              treino.meuStatus ||
+              "PENDING",
+
+            startedAt:
+              treino.startedAt ??
+              null,
+
+            completedAt:
+              treino.completedAt ??
+              null,
+          };
+
+          mudou =
+            true;
+        }
+
+        return mudou
+          ? next
+          : prev;
+      }
+    );
+  }, [
+    treinosAgendados,
+  ]);
+
   const [checklistByTreino, setChecklistByTreino] = useState<
     Record<string, Checklist>
   >({});
@@ -851,49 +911,119 @@ useEffect(() => {
   }
 }
 
-useEffect(() => {
-  if (!openAgendadoByProgramadoId) return;
-  if (!treinosAgendados.length) return;
+  useEffect(() => {
+    if (
+      !openAgendadoId &&
+      !openAgendadoByProgramadoId
+    ) {
+      return;
+    }
 
-  const alvo = treinosAgendados.find(
-    (t) => String(t?.treinoProgramado?.id || "") === String(openAgendadoByProgramadoId)
-  );
+    if (
+      !treinosAgendados.length
+    ) {
+      return;
+    }
 
-  if (!alvo?.id) return;
+    const alvo =
+      openAgendadoId
+        ? treinosAgendados.find(
+            (t) =>
+              String(t?.id || "") ===
+              String(
+                openAgendadoId
+              )
+          )
+        : treinosAgendados.find(
+            (t) =>
+              String(
+                t?.treinoProgramado
+                  ?.id || ""
+              ) ===
+              String(
+                openAgendadoByProgramadoId
+              )
+          );
 
-  if (qsMetodologiaId && qsEstruturaId && qsMetodologiaItemId) {
-    localStorage.setItem(
-      METODOLOGIA_LINK_KEY(alvo.id),
-      JSON.stringify({
-        metodologiaId: qsMetodologiaId,
-        estruturaId: qsEstruturaId,
-        metodologiaItemId: qsMetodologiaItemId,
-      })
+    if (!alvo?.id) {
+      return;
+    }
+
+    if (
+      qsMetodologiaId &&
+      qsEstruturaId &&
+      qsMetodologiaItemId
+    ) {
+      localStorage.setItem(
+        METODOLOGIA_LINK_KEY(
+          alvo.id
+        ),
+        JSON.stringify({
+          metodologiaId:
+            qsMetodologiaId,
+
+          estruturaId:
+            qsEstruturaId,
+
+          metodologiaItemId:
+            qsMetodologiaItemId,
+        })
+      );
+    }
+
+    setExpandedId(
+      alvo.id
     );
-  }
 
-  setExpandedId(alvo.id);
-  setFullscreenId(alvo.id);
+    setFullscreenId(
+      alvo.id
+    );
 
-  const next = new URLSearchParams(window.location.search);
-  next.delete("openAgendadoByProgramadoId");
-  next.delete("metodologiaId");
-  next.delete("estruturaId");
-  next.delete("metodologiaItemId");
+    const next =
+      new URLSearchParams(
+        window.location.search
+      );
 
-  const qs = next.toString();
-  navigate(qs ? `/treinos?${qs}` : "/treinos", { replace: true });
-}, [
-  openAgendadoByProgramadoId,
-  treinosAgendados,
-  qsMetodologiaId,
-  qsEstruturaId,
-  qsMetodologiaItemId,
-  navigate,
-]);
+    next.delete(
+      "openAgendadoId"
+    );
 
+    next.delete(
+      "openAgendadoByProgramadoId"
+    );
 
+    next.delete(
+      "metodologiaId"
+    );
 
+    next.delete(
+      "estruturaId"
+    );
+
+    next.delete(
+      "metodologiaItemId"
+    );
+
+    const nextQs =
+      next.toString();
+
+    navigate(
+      nextQs
+        ? `/treinos?${nextQs}`
+        : "/treinos",
+      {
+        replace: true,
+      }
+    );
+  }, [
+    openAgendadoId,
+    openAgendadoByProgramadoId,
+    treinosAgendados,
+    qsMetodologiaId,
+    qsEstruturaId,
+    qsMetodologiaItemId,
+    navigate,
+  ]);
 
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -1568,40 +1698,76 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }, []);
 
   useEffect(() => {
-    if (!openAgendadoByProgramadoId) return;
-    if (!qsMetodologiaId || !qsMetodologiaItemId) return;
-    if (!treinosAgendados?.length) return;
-
-    const alvo = treinosAgendados.find(
-      (t) => String(t.treinoProgramado?.id || "") === String(openAgendadoByProgramadoId)
-    );
-
-    if (!alvo) {
-      toast.error("Esse treino ainda não está nos seus treinos agendados. Agende primeiro e tente novamente.");
+    if (!treinosAgendados.length) {
       return;
     }
 
-    try {
-      localStorage.setItem(
-        METODOLOGIA_LINK_KEY(alvo.id),
-        JSON.stringify({
-          metodologiaId: qsMetodologiaId,
-          metodologiaItemId: qsMetodologiaItemId,
-          estruturaId: qsEstruturaId,
-        })
-      );
-    } catch {}
+    setStatusPorTreino((prev) => {
+      const next = {
+        ...prev,
+      };
 
-    setFullscreenId(alvo.id);
+      let mudou = false;
 
-    try {
-      const clean = new URL(window.location.href);
-      clean.searchParams.delete("openAgendadoByProgramadoId");
-      clean.searchParams.delete("metodologiaId");
-      clean.searchParams.delete("metodologiaItemId");
-      window.history.replaceState({}, "", clean.toString());
-    } catch {}
-  }, [openAgendadoByProgramadoId, qsMetodologiaId, qsMetodologiaItemId, treinosAgendados]);
+      for (const treino of treinosAgendados) {
+        const atual = next[treino.id];
+
+        const backendStatus =
+          String(
+            treino.meuStatus ||
+              "PENDING"
+          );
+
+        // READY_TO_SUBMIT é um estado temporário
+        // somente do frontend.
+        if (
+          atual?.status ===
+          "READY_TO_SUBMIT"
+        ) {
+          continue;
+        }
+
+        const deveAtualizar =
+          !atual ||
+          (
+            backendStatus !==
+              "PENDING" &&
+            atual.status !==
+              backendStatus
+          ) ||
+          (
+            treino.completedAt &&
+            atual.completedAt !==
+              treino.completedAt
+          );
+
+        if (!deveAtualizar) {
+          continue;
+        }
+
+        next[treino.id] = {
+          status:
+            backendStatus,
+
+          startedAt:
+            treino.startedAt ??
+            atual?.startedAt ??
+            null,
+
+          completedAt:
+            treino.completedAt ??
+            atual?.completedAt ??
+            null,
+        };
+
+        mudou = true;
+      }
+
+      return mudou
+        ? next
+        : prev;
+    });
+  }, [treinosAgendados]);
 
   const tipo = String(
     (Storage as any).tipoSalvo ?? localStorage.getItem("tipo") ?? ""
@@ -1862,7 +2028,9 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
     };
   }, [menuTreinosAberto]);
 
-  async function iniciar(id: string) {
+  async function iniciar(
+    id: string
+  ) {
     if (
       !requireAuth({
         message:
@@ -1871,21 +2039,92 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
     ) {
       return;
     }
+
     try {
-      const nowMs = Date.now();
-      localStorage.setItem(TIMER_KEY(id), String(nowMs));
+      const token =
+        getToken();
 
-      setStatusPorTreino((s) => ({
-        ...s,
-        [id]: { status: "IN_PROGRESS", startedAt: new Date().toISOString() },
-      }));
+      if (!token) {
+        return;
+      }
 
-      setElapsedByTreino((prev) => ({
-        ...prev,
-        [id]: 0,
-      }));
-    } catch (e) {
-      console.error(e);
+      const response =
+        await fetch(
+          `${API.BASE_URL}/api/treinos/agendados/${encodeURIComponent(
+            id
+          )}/iniciar`,
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "Não foi possível iniciar o treino."
+        );
+      }
+
+      const startedAt =
+        data?.startedAt ||
+        new Date().toISOString();
+
+      const startedAtMs =
+        new Date(
+          startedAt
+        ).getTime();
+
+      localStorage.setItem(
+        TIMER_KEY(id),
+        String(
+          Number.isFinite(
+            startedAtMs
+          )
+            ? startedAtMs
+            : Date.now()
+        )
+      );
+
+      setStatusPorTreino(
+        (state) => ({
+          ...state,
+
+          [id]: {
+            status:
+              "IN_PROGRESS",
+
+            startedAt,
+          },
+        })
+      );
+
+      setElapsedByTreino(
+        (prev) => ({
+          ...prev,
+          [id]: 0,
+        })
+      );
+    } catch (error: any) {
+      console.error(
+        "Erro ao iniciar treino:",
+        error
+      );
+
+      toast.error(
+        error?.message ||
+          "Não foi possível iniciar o treino."
+      );
     }
   }
 

@@ -37,6 +37,11 @@ r.post(
 r.get("/:eventoId/convocacao", authenticateToken, getConvocacaoEvento);
 r.put("/:eventoId/convocacao", authenticateToken, upsertConvocacaoEvento);
 
+r.post(
+  "/:id/participar",
+  authenticateToken,
+  ctrl.participarEvento
+);
 r.get(
   "/:id",
   optionalAuthenticateToken,

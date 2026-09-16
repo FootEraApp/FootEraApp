@@ -38,6 +38,158 @@ function labelPosicao(pos?: string) {
   return map[p] || p;
 }
 
+async function podeGerenciarConvocacao(
+  req: AuthenticatedRequest,
+  eventoId: string,
+  turmaId: string
+) {
+  const usuarioId =
+    String(
+      req.userId ||
+        req.user?.id ||
+        ""
+    ).trim();
+
+  if (!usuarioId) {
+    return false;
+  }
+
+  const isAdmin =
+    req.user?.isAdmin ===
+      true ||
+    String(
+      req.user?.tipo ||
+      ""
+    ).toLowerCase() ===
+      "admin";
+
+  if (isAdmin) {
+    return true;
+  }
+
+  const [
+    evento,
+    turma,
+  ] =
+    await Promise.all([
+      prisma.evento.findUnique({
+        where: {
+          id:
+            eventoId,
+        },
+
+        select: {
+          creatorUsuarioId:
+            true,
+
+          clube: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+
+          escolinha: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+
+          federacao: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+
+          marca: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+        },
+      }),
+
+      prisma.turma.findUnique({
+        where: {
+          id:
+            turmaId,
+        },
+
+        select: {
+          clube: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+
+          escolinha: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+
+          professores: {
+            select: {
+              professor: {
+                select: {
+                  usuarioId:
+                    true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+  if (
+    !evento ||
+    !turma
+  ) {
+    return false;
+  }
+
+  const gerenciaEvento =
+    [
+      evento.creatorUsuarioId,
+      evento.clube
+        ?.usuarioId,
+      evento.escolinha
+        ?.usuarioId,
+      evento.federacao
+        ?.usuarioId,
+      evento.marca
+        ?.usuarioId,
+    ]
+      .filter(Boolean)
+      .includes(usuarioId);
+
+  const gerenciaTurma =
+    [
+      turma.clube
+        ?.usuarioId,
+      turma.escolinha
+        ?.usuarioId,
+      ...turma.professores.map(
+        (item) =>
+          item.professor
+            .usuarioId
+      ),
+    ]
+      .filter(Boolean)
+      .includes(usuarioId);
+
+  return (
+    gerenciaEvento &&
+    gerenciaTurma
+  );
+}
+
 export async function getConvocacaoEvento(req: AuthenticatedRequest, res: Response) {
   try {
     const { eventoId } = req.params;
@@ -45,6 +197,20 @@ export async function getConvocacaoEvento(req: AuthenticatedRequest, res: Respon
 
     if (!eventoId) return res.status(400).json({ error: "eventoId obrigatório" });
     if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
+
+    const permitido =
+      await podeGerenciarConvocacao(
+        req,
+        eventoId,
+        turmaId
+      );
+
+    if (!permitido) {
+      return res.status(403).json({
+        error:
+          "Sem permissão para visualizar esta convocação.",
+      });
+    }
 
     const c = await prisma.eventoConvocacao.findFirst({
       where: { eventoId, turmaId },
@@ -57,20 +223,45 @@ export async function getConvocacaoEvento(req: AuthenticatedRequest, res: Respon
   }
 }
 
-export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Response) {
+export async function upsertConvocacaoEvento(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
     const { eventoId } = req.params;
+
     const {
       turmaId,
       nome,
       formacao,
-      escala,       
-      reservasIds,  
+      escala,
+      reservasIds,
     } = req.body ?? {};
 
-    const tipo = String(req.user?.tipo || "").toLowerCase();
-    if (!["clube", "escolinha", "professor", "admin"].includes(tipo)) {
-      return res.status(403).json({ error: "Sem permissão para convocar." });
+    if (!eventoId) {
+      return res.status(400).json({
+        error: "eventoId obrigatório",
+      });
+    }
+
+    if (!turmaId) {
+      return res.status(400).json({
+        error: "turmaId obrigatório",
+      });
+    }
+
+    const permitido =
+      await podeGerenciarConvocacao(
+        req,
+        eventoId,
+        String(turmaId)
+      );
+
+    if (!permitido) {
+      return res.status(403).json({
+        error:
+          "Sem permissão para salvar esta convocação.",
+      });
     }
 
     if (!eventoId) return res.status(400).json({ error: "eventoId obrigatório" });
