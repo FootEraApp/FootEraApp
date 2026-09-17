@@ -85,7 +85,7 @@ router.post("/:postId/like", authenticateToken, curtirPostagem);
 
 router.post(
   "/:postId/compartilhar",
-  authenticateToken,
+  optionalAuthenticateToken,
   registrarCompartilhamento
 );
 
