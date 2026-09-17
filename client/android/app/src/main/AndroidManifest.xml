@@ -49,10 +49,6 @@
                 <data
                     android:scheme="https"
                     android:host="footera.app.br" />
-
-                <data
-                    android:scheme="https"
-                    android:host="www.footera.app.br" />
             </intent-filter>
 
         </activity>

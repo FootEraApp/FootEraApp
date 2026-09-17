@@ -432,12 +432,34 @@ export const registrarCompartilhamento = async (req: AuthedReq, res: Response) =
       });
     }
 
-    await prisma.postagem.update({
-      where: { id: postId },
-      data: { compartilhamentos: { increment: 1 } },
-    });
+    const postagemAtualizada =
+      await prisma.postagem.update({
+        where: {
+          id: postId,
+        },
 
-    return res.status(200).json({ message: "Compartilhamento registrado." });
+        data: {
+          compartilhamentos: {
+            increment: 1,
+          },
+        },
+
+        select: {
+          compartilhamentos:
+            true,
+        },
+      });
+
+    return res
+      .status(200)
+      .json({
+        message:
+          "Compartilhamento registrado.",
+
+        compartilhamentos:
+          postagemAtualizada
+            .compartilhamentos,
+      });
   } catch (error) {
     console.error("Erro ao registrar compartilhamento:", error);
     return res.status(500).json({ message: "Erro ao registrar compartilhamento." });

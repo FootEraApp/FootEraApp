@@ -1,11 +1,10 @@
 import { toast } from "@/lib/toast";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { getPostById, PostagemComUsuario, likePost, comentarPost } from "../services/feedService.js";
 import { format } from "date-fns";
-import { FaHeart, FaRegHeart, FaTrash, FaShare } from "react-icons/fa";
+import { FaHeart, FaRegHeart, FaTrash, FaShare, FaRegCommentDots } from "react-icons/fa";
 import { Link } from "wouter";
-import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { CircleX, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import PostImage from "../components/PostImage.js";
@@ -18,10 +17,76 @@ import {
   limparAcaoPendenteAuth,
 } from "../utils/authSession.js";
 
+function extrairConquista(
+  conteudo?: string | null
+) {
+  const texto =
+    String(
+      conteudo || ""
+    ).trim();
+
+  const match =
+    texto.match(
+      /^🏆\s*Conquista(?:\s*\([^)]+\))?\s*:\s*(.+)$/is
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const corpo =
+    match[1].trim();
+
+  const partes =
+    corpo.split(
+      /\s+—\s+/
+    );
+
+  const titulo =
+    String(
+      partes.shift() || ""
+    ).trim();
+
+  let detalhes =
+    partes
+      .join(" — ")
+      .trim();
+
+  let comentario =
+    "";
+
+  const comId =
+    detalhes.match(
+      /^(.*?)(?:\s*⏱️)?\s*\[[^\]]+\]\s*(.*)$/s
+    );
+
+  if (comId) {
+    detalhes =
+      String(
+        comId[1] || ""
+      ).trim();
+
+    comentario =
+      String(
+        comId[2] || ""
+      ).trim();
+  }
+
+  return {
+    titulo,
+    detalhes,
+    comentario,
+  };
+}
+
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
   const [post, setPost] = useState<PostagemComUsuario | null>(null);
   const [comentario, setComentario] = useState("");
+  const comentarioRef =
+    useRef<HTMLTextAreaElement | null>(
+      null
+    );
   const [carregando, setCarregando] = useState(false);
   const [
     carregandoPost,
@@ -43,8 +108,15 @@ function PostUnico(): JSX.Element {
   const [, setLocation] = useLocation();
   const [modalAberto, setModalAberto] = useState(false);
 
-  const token = Storage.token || "";
-  const usuarioId = Storage.usuarioId || "";
+  const token =
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const usuarioId =
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
+    "";
   
   useEffect(() => {
     if (!match || !params?.id) {
@@ -107,6 +179,173 @@ function PostUnico(): JSX.Element {
     };
   }, [match, params?.id]);
 
+  async function registrarCompartilhamento(
+      origem:
+        | "copiar"
+        | "whatsapp"
+        | "email"
+        | "footera"
+    ) {
+      const postId =
+        post?.id ??
+        params?.id;
+
+      if (!postId) {
+        return;
+      }
+
+      try {
+        const tokenRaw =
+          localStorage.getItem(
+            "token"
+          ) ||
+          sessionStorage.getItem(
+            "token"
+          );
+
+        const headers: Record<
+          string,
+          string
+        > = {
+          "Content-Type":
+            "application/json",
+        };
+
+        if (tokenRaw) {
+          headers.Authorization =
+            tokenRaw.startsWith(
+              "Bearer "
+            )
+              ? tokenRaw
+              : `Bearer ${tokenRaw}`;
+        }
+
+        const response =
+          await fetch(
+            `${API.BASE_URL}/api/post/${encodeURIComponent(
+              postId
+            )}/compartilhar`,
+            {
+              method:
+                "POST",
+
+              headers,
+
+              body:
+                JSON.stringify({
+                  origem,
+                }),
+
+              // importante se a página
+              // mudar logo após o clique
+              keepalive:
+                true,
+            }
+          );
+
+        if (!response.ok) {
+          console.warn(
+            "Não foi possível registrar o compartilhamento:",
+            response.status
+          );
+
+          return;
+        }
+
+        const data =
+          await response
+            .json()
+            .catch(() => ({}));
+
+        setPost((prev) => {
+          if (!prev) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+
+            compartilhamentos:
+              typeof data
+                ?.compartilhamentos ===
+              "number"
+                ? data.compartilhamentos
+                : Number(
+                    prev
+                      .compartilhamentos ??
+                      0
+                  ) + 1,
+          };
+        });
+      } catch (error) {
+        console.error(
+          "Erro ao registrar compartilhamento:",
+          error
+        );
+      }
+    }
+
+  const postIdPublico =
+    post?.id ??
+    params?.id ??
+    "";
+
+  const publicUrl =
+    window.location.hostname ===
+    "localhost"
+      ? `${window.location.origin}/post/${encodeURIComponent(
+          postIdPublico
+        )}`
+      : `https://footera.app.br/post/${encodeURIComponent(
+          postIdPublico
+        )}`;
+
+  async function handleCopiarLink() {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      await registrarCompartilhamento("copiar");
+      toast.success("Link copiado!");
+    } catch {
+      toast.error("Não foi possível copiar o link.");
+    }
+  }
+
+  function handleCompartilharWhatsapp() {
+    const texto =
+      encodeURIComponent(
+        publicUrl
+      );
+
+    window.open(
+      `https://wa.me/?text=${texto}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    void registrarCompartilhamento(
+      "whatsapp"
+    );
+  }
+
+  function handleCompartilharEmail() {
+    const assunto =
+      encodeURIComponent(
+        "Veja esta postagem no FootEra"
+      );
+
+    const corpo =
+      encodeURIComponent(
+        publicUrl
+      );
+
+    void registrarCompartilhamento(
+      "email"
+    );
+
+    window.location.href =
+      `mailto:?subject=${assunto}&body=${corpo}`;
+  }
+
   async function handleCurtir() {
     if (!post?.id) return;
 
@@ -115,9 +354,17 @@ function PostUnico(): JSX.Element {
         message:
           "Entre na FootEra para curtir esta publicação.",
 
+        returnTo:
+          `/post/${encodeURIComponent(
+            post.id
+          )}`,
+
         action: {
-          type: "LIKE_POST",
-          postId: post.id,
+          type:
+            "LIKE_POST",
+
+          postId:
+            post.id,
         },
       })
     ) {
@@ -152,6 +399,11 @@ function PostUnico(): JSX.Element {
       !requireAuth({
         message:
           "Entre na FootEra para comentar nesta publicação.",
+
+        returnTo:
+          `/post/${encodeURIComponent(
+            post.id
+          )}`,
 
         action: {
           type:
@@ -231,6 +483,11 @@ function PostUnico(): JSX.Element {
         message:
           "Entre na FootEra para repostar esta publicação.",
 
+        returnTo:
+          `/post/${encodeURIComponent(
+            post.id
+          )}`,
+
         action: {
           type:
             "REPOST_POST",
@@ -297,15 +554,7 @@ function PostUnico(): JSX.Element {
       action.type ===
       "LIKE_POST"
     ) {
-      const confirmar =
-        window.confirm(
-          "Você entrou na FootEra. Deseja curtir esta publicação agora?"
-        );
-
-      if (confirmar) {
-        void handleCurtir();
-      }
-
+      void handleCurtir();
       return;
     }
 
@@ -326,6 +575,22 @@ function PostUnico(): JSX.Element {
           "Agora você pode escrever seu comentário."
         );
       }
+
+      window.setTimeout(() => {
+        document
+          .getElementById(
+            "comentarios-post"
+          )
+          ?.scrollIntoView({
+            behavior:
+              "smooth",
+            block:
+              "start",
+          });
+
+        comentarioRef.current
+          ?.focus();
+      }, 300);
 
       return;
     }
@@ -374,6 +639,50 @@ function PostUnico(): JSX.Element {
     );
   }
 
+  function abrirComentarios() {
+    if (!post?.id) {
+      return;
+    }
+
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para comentar nesta publicação.",
+
+        returnTo:
+          `/post/${encodeURIComponent(
+            post.id
+          )}`,
+
+        action: {
+          type:
+            "COMMENT_POST",
+
+          postId:
+            post.id,
+        },
+      })
+    ) {
+      return;
+    }
+
+    document
+      .getElementById(
+        "comentarios-post"
+      )
+      ?.scrollIntoView({
+        behavior:
+          "smooth",
+        block:
+          "start",
+      });
+
+    window.setTimeout(() => {
+      comentarioRef.current
+        ?.focus();
+    }, 350);
+  }
+
   if (carregandoPost) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -410,6 +719,11 @@ function PostUnico(): JSX.Element {
                   openAuthGate({
                     message:
                       "Entre para verificar se sua conta possui acesso a esta publicação.",
+
+                    returnTo:
+                      `/post/${encodeURIComponent(
+                        params?.id || ""
+                      )}`,
                   })
                 }
                 className="rounded-xl bg-green-700 px-4 py-2 text-white font-semibold"
@@ -492,7 +806,8 @@ function PostUnico(): JSX.Element {
       </div>
     );
   }
-  const linkCompartilhado = `${APP.FRONTEND_BASE_URL}/post/${post.id}`;
+  const linkCompartilhado =
+  publicUrl;
   const curtidas =
     post.curtidas || [];
 
@@ -513,123 +828,584 @@ function PostUnico(): JSX.Element {
           .totalCurtidas
       : curtidas.length;
 
-  return (
-    <div className="max-w-xl mx-auto p-4">
-      <h2 className="text-xl font-bold mb-2">{post.usuario.nome}</h2>
-      <p className="text-gray-600 mb-2">
-        {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
-      </p>
-      {post.repostOf && (
-        <p className="text-xs text-gray-500 -mt-1 mb-2">
-          Repostou de <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
-        </p>
-      )}
-      {post.repostOf ? (
-      <>
-        {post.conteudo?.trim() && (
-          <p className="mb-3">{post.conteudo}</p>
-        )}
+  const conquista =
+    extrairConquista(
+      post.conteudo
+    );
 
-        <div className="border rounded-xl p-3 bg-gray-50">
-          <div className="flex items-center gap-2 mb-1">
+  const avatarAutor =
+    publicImgUrl(
+      post.usuario?.foto
+    ) ||
+    `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`;
+
+  const autorRef =
+    String(
+      post.usuario
+        ?.nomeDeUsuario ||
+        post.usuario?.id ||
+        ""
+    );
+
+  const tipoAutor =
+    String(
+      post.usuario?.tipo ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const ehOrganizacao =
+    [
+      "clube",
+      "escolinha",
+      "escola",
+      "federacao",
+      "marca",
+    ].includes(
+      tipoAutor
+    );
+
+  const linkAutor =
+    ehOrganizacao
+      ? `/organizacao/${encodeURIComponent(
+          autorRef
+        )}`
+      : `/profile/${encodeURIComponent(
+          autorRef
+        )}`;
+
+  const totalComentarios =
+    post.comentarios?.length ??
+    0;
+
+  return (
+  <main className="min-h-screen bg-[#FEFBE9] px-4 py-6 pb-24">
+    <div className="mx-auto max-w-2xl">
+      <article
+        className="
+          overflow-hidden
+          rounded-3xl
+          border
+          border-gray-200
+          bg-white
+          shadow-sm
+        "
+      >
+        {/* CABEÇALHO */}
+        <div className="flex items-center gap-3 px-5 pt-5">
+          <Link
+            href={linkAutor}
+            className="shrink-0"
+          >
             <img
-              src={publicImgUrl(post.repostOf.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`}
-              alt="avatar original"
-              className="w-7 h-7 rounded-full object-cover"
+              src={avatarAutor}
+              alt={
+                post.usuario?.nome ||
+                "Perfil"
+              }
+              className="
+                h-12
+                w-12
+                rounded-full
+                border
+                border-gray-200
+                object-cover
+              "
             />
-            <div>
-              <p className="text-sm font-semibold">{post.repostOf.usuario?.nome}</p>
-              <p className="text-[11px] text-gray-500">
-                {format(new Date(post.repostOf.dataCriacao), "dd/MM, HH:mm")}
-              </p>
-            </div>
+          </Link>
+
+          <div className="min-w-0 flex-1">
+            <Link
+              href={linkAutor}
+              className="
+                block
+                truncate
+                font-bold
+                text-gray-950
+                hover:text-green-800
+              "
+            >
+              {post.usuario?.nome}
+            </Link>
+
+            <p className="text-sm text-gray-500">
+              {format(
+                new Date(
+                  post.dataCriacao
+                ),
+                "dd/MM, HH:mm"
+              )}
+            </p>
           </div>
 
-          <p className="text-sm text-gray-800 whitespace-pre-line">
-            {post.repostOf.conteudo}
-          </p>
-
-          {post.repostOf.imagemUrl && (
-            <div className="mt-2">
-              <PostImage src={publicImgUrl(post.repostOf.imagemUrl) ?? undefined} />
-            </div>
-          )}
-
-          {post.repostOf.videoUrl && (
-            <video controls className="w-full mt-2 rounded-lg">
-              <source src={publicImgUrl(post.repostOf.videoUrl) ?? ""} type="video/mp4" />
-            </video>
+          {post.usuario.id ===
+            usuarioId && (
+            <button
+              type="button"
+              onClick={
+                handleExcluirPost
+              }
+              className="
+                rounded-full
+                p-2
+                text-gray-400
+                transition
+                hover:bg-red-50
+                hover:text-red-600
+              "
+              title="Excluir publicação"
+            >
+              <FaTrash />
+            </button>
           )}
         </div>
-      </>
-    ) : (
-      <>
-        <p className="mb-4">{post.conteudo}</p>
 
-        {post.tipoMidia === "Imagem" && post.imagemUrl && (
-          <PostImage src={publicImgUrl(post.imagemUrl) ?? undefined} />
+        {/* REPOST */}
+        {post.repostOf && (
+          <p className="px-5 pt-3 text-xs text-gray-500">
+            Repostou de{" "}
+            <strong>
+              {post.repostOf.usuario
+                ?.nome ||
+                "Usuário"}
+            </strong>
+          </p>
         )}
 
-        {post.tipoMidia === "Video" && post.videoUrl && (
-          <video controls className="w-full rounded-lg">
-            <source src={publicImgUrl(post.videoUrl) ?? ""} type="video/mp4" />
-          </video>
-        )}
-      </>
-    )}
-      
-      <div className="mt-4 flex items-center gap-4 text-xl">
-        <button onClick={handleCurtir} className="text-black-500 hover:text-black-600">
-          {jaCurtiu ? <FaHeart /> : <FaRegHeart />}
-        </button>
-        <span className="text-sm">{totalCurtidas}</span>
+        {/* CONTEÚDO */}
+        <div className="px-5 pb-5 pt-4">
+          {post.repostOf ? (
+            <>
+              {post.conteudo?.trim() && (
+                <p className="mb-4 whitespace-pre-line text-gray-800">
+                  {post.conteudo}
+                </p>
+              )}
 
-        {post.usuario.id === usuarioId && (
-          <button onClick={handleExcluirPost} className="text-black-700 hover:text-black-800 ml-auto">
-            <FaTrash />
-          </button>
-        )}
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <img
+                    src={
+                      publicImgUrl(
+                        post.repostOf
+                          .usuario?.foto
+                      ) ||
+                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+                    }
+                    alt="Perfil"
+                    className="h-9 w-9 rounded-full object-cover"
+                  />
 
-        <button onClick={() => setModalAberto(true)} className="text-black-600 hover:text-black-800 ml-auto">
-          <FaShare />
-        </button>
-        <button onClick={handleRepost} className="text-black-600 hover:text-black-800">
-          <FaRetweet />
-        </button>
-        <span className="text-sm">{post.reposts ?? post.compartilhamentos ?? 0}</span>
-      </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {
+                        post.repostOf
+                          .usuario?.nome
+                      }
+                    </p>
 
-      <div className="mt-6">
-        <h3 className="font-semibold mb-2">Comentários:</h3>
-        {post.comentarios?.map((comentario) => (
-          <div key={comentario.id} className="mt-2 p-2 bg-gray-100 rounded-lg">
-            <p className="text-sm font-semibold">{comentario.usuario?.nome}</p>
-            <p className="text-sm">{comentario.conteudo}</p>
+                    <p className="text-xs text-gray-500">
+                      {format(
+                        new Date(
+                          post.repostOf
+                            .dataCriacao
+                        ),
+                        "dd/MM, HH:mm"
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="whitespace-pre-line text-sm text-gray-800">
+                  {
+                    post.repostOf
+                      .conteudo
+                  }
+                </p>
+
+                {post.repostOf
+                  .imagemUrl && (
+                  <div className="mt-3 overflow-hidden rounded-xl">
+                    <PostImage
+                      src={
+                        publicImgUrl(
+                          post.repostOf
+                            .imagemUrl
+                        ) ??
+                        undefined
+                      }
+                    />
+                  </div>
+                )}
+
+                {post.repostOf
+                  .videoUrl && (
+                  <video
+                    controls
+                    className="mt-3 w-full rounded-xl"
+                  >
+                    <source
+                      src={
+                        publicImgUrl(
+                          post.repostOf
+                            .videoUrl
+                        ) ?? ""
+                      }
+                      type="video/mp4"
+                    />
+                  </video>
+                )}
+              </div>
+            </>
+          ) : conquista ? (
+            <div
+              className="
+                rounded-2xl
+                border
+                border-amber-300
+                bg-amber-50/40
+                p-4
+              "
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className="
+                    flex
+                    h-11
+                    w-11
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-xl
+                    border
+                    border-gray-200
+                    bg-white
+                    text-xl
+                  "
+                >
+                  🏆
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-amber-950">
+                    Conquista:{" "}
+                    {
+                      conquista.titulo
+                    }
+                  </h2>
+
+                  {conquista.detalhes && (
+                    <p className="mt-1 text-sm text-amber-900">
+                      {
+                        conquista.detalhes
+                      }
+                    </p>
+                  )}
+
+                  {conquista.comentario && (
+                    <p className="mt-3 italic text-gray-700">
+                      “
+                      {
+                        conquista.comentario
+                      }
+                      ”
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {post.conteudo && (
+                <p className="whitespace-pre-line text-gray-800">
+                  {post.conteudo}
+                </p>
+              )}
+            </>
+          )}
+
+          {!post.repostOf &&
+            post.tipoMidia ===
+              "Imagem" &&
+            post.imagemUrl && (
+              <div className="mt-4 overflow-hidden rounded-2xl">
+                <PostImage
+                  src={
+                    publicImgUrl(
+                      post.imagemUrl
+                    ) ??
+                    undefined
+                  }
+                />
+              </div>
+            )}
+
+          {!post.repostOf &&
+            post.tipoMidia ===
+              "Video" &&
+            post.videoUrl && (
+              <video
+                controls
+                className="mt-4 w-full rounded-2xl"
+              >
+                <source
+                  src={
+                    publicImgUrl(
+                      post.videoUrl
+                    ) ?? ""
+                  }
+                  type="video/mp4"
+                />
+              </video>
+            )}
+
+          {/* AÇÕES */}
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={
+                handleCurtir
+              }
+              className={`
+                inline-flex
+                h-11
+                min-w-[72px]
+                items-center
+                justify-center
+                gap-2
+                rounded-full
+                border
+                px-4
+                transition
+                ${
+                  jaCurtiu
+                    ? "border-red-200 bg-red-50 text-red-600"
+                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                }
+              `}
+            >
+              {jaCurtiu ? (
+                <FaHeart />
+              ) : (
+                <FaRegHeart />
+              )}
+
+              <span>
+                {totalCurtidas}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                abrirComentarios
+              }
+              className="
+                inline-flex
+                h-11
+                min-w-[72px]
+                items-center
+                justify-center
+                gap-2
+                rounded-full
+                border
+                border-gray-200
+                px-4
+                text-gray-600
+                transition
+                hover:bg-gray-50
+              "
+            >
+              <FaRegCommentDots />
+
+              <span>
+                {totalComentarios}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                handleRepost
+              }
+              className="
+                inline-flex
+                h-11
+                min-w-[72px]
+                items-center
+                justify-center
+                gap-2
+                rounded-full
+                border
+                border-gray-200
+                px-4
+                text-gray-600
+                transition
+                hover:bg-gray-50
+              "
+            >
+              <FaRetweet />
+
+              <span>
+                {Number(
+                  post.reposts ??
+                  0
+                )}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setModalAberto(
+                  true
+                )
+              }
+              className="
+                inline-flex
+                h-11
+                min-w-[72px]
+                items-center
+                justify-center
+                gap-2
+                rounded-full
+                border
+                border-gray-200
+                px-4
+                text-gray-600
+                transition
+                hover:bg-gray-50
+              "
+              title="Compartilhar"
+            >
+              <FaShare />
+
+              <span>
+                {Number(
+                  post
+                    .compartilhamentos ??
+                    0
+                )}
+              </span>
+            </button>
           </div>
-        ))}
+        </div>
+      </article>
+
+      {/* COMENTÁRIOS */}
+      <section
+        id="comentarios-post"
+        className="
+          mt-4
+          rounded-3xl
+          border
+          border-gray-200
+          bg-white
+          p-5
+          shadow-sm
+        "
+      >
+        <h3 className="font-bold text-gray-900">
+          Comentários
+        </h3>
+
+        <div className="mt-4 space-y-3">
+          {post.comentarios
+            ?.length ? (
+            post.comentarios.map(
+              (item) => (
+                <div
+                  key={item.id}
+                  className="flex gap-3 rounded-2xl bg-gray-50 p-3"
+                >
+                  <img
+                    src={
+                      publicImgUrl(
+                        item.usuario
+                          ?.foto
+                      ) ||
+                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+                    }
+                    alt="Perfil"
+                    className="h-9 w-9 shrink-0 rounded-full object-cover"
+                  />
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {
+                        item.usuario
+                          ?.nome
+                      }
+                    </p>
+
+                    <p className="mt-0.5 whitespace-pre-line text-sm text-gray-700">
+                      {
+                        item.conteudo
+                      }
+                    </p>
+                  </div>
+                </div>
+              )
+            )
+          ) : (
+            <p className="text-sm text-gray-500">
+              Ainda não há comentários.
+            </p>
+          )}
+        </div>
 
         {usuarioId ? (
           <form
             onSubmit={
               handleComentarioSubmit
             }
-            className="mt-4"
+            className="mt-5"
           >
             <textarea
+              ref={comentarioRef}
               value={comentario}
               onChange={(e) =>
                 setComentario(
                   e.target.value
                 )
               }
-              className="w-full p-2 border rounded mb-2"
+              className="
+                min-h-[100px]
+                w-full
+                resize-none
+                rounded-2xl
+                border
+                border-gray-200
+                p-3
+                outline-none
+                transition
+                focus:border-green-600
+                focus:ring-2
+                focus:ring-green-600/10
+              "
               placeholder="Escreva um comentário..."
             />
 
             <button
               type="submit"
-              disabled={carregando}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              disabled={
+                carregando ||
+                !comentario.trim()
+              }
+              className="
+                mt-2
+                rounded-xl
+                bg-green-700
+                px-5
+                py-2.5
+                font-semibold
+                text-white
+                transition
+                hover:bg-green-800
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
             >
               {carregando
                 ? "Enviando..."
@@ -639,48 +1415,66 @@ function PostUnico(): JSX.Element {
         ) : (
           <button
             type="button"
-            onClick={() => {
-              if (!post?.id) {
-                return;
-              }
-
-              openAuthGate({
-                message:
-                  "Entre na FootEra para comentar nesta publicação.",
-
-                action: {
-                  type:
-                    "COMMENT_POST",
-
-                  postId:
-                    post.id,
-                },
-              });
-            }}
-            className="mt-4 w-full rounded-lg border border-green-700 py-2 text-green-700 font-semibold"
+            onClick={
+              abrirComentarios
+            }
+            className="
+              mt-5
+              w-full
+              rounded-xl
+              border
+              border-green-700
+              px-4
+              py-3
+              font-semibold
+              text-green-800
+              transition
+              hover:bg-green-50
+            "
           >
             Entre para comentar
           </button>
         )}
-      </div>
+      </section>
 
-            <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-              <Link href="/feed" className="hover:underline">
-                <House /> 
-              </Link>
-              <Link href="/explorar" className="hover:underline">
-                <Search /> 
-              </Link>
-              <Link href="/post" className="hover:underline">
-                <CirclePlus /> 
-              </Link>
-              <Link href="/treinos" className="hover:underline">
-                <Volleyball /> 
-              </Link>
-              <Link href="/perfil" className="hover:underline">
-                <User /> 
-              </Link>
-            </nav>
+      {usuarioId && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+          <Link
+            href="/feed"
+            className="hover:underline"
+          >
+            <House />
+          </Link>
+
+          <Link
+            href="/explorar"
+            className="hover:underline"
+          >
+            <Search />
+          </Link>
+
+          <Link
+            href="/post"
+            className="hover:underline"
+          >
+            <CirclePlus />
+          </Link>
+
+          <Link
+            href="/treinos"
+            className="hover:underline"
+          >
+            <Volleyball />
+          </Link>
+
+          <Link
+            href="/perfil"
+            className="hover:underline"
+          >
+            <User />
+          </Link>
+        </nav>
+      )}
 
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
@@ -696,35 +1490,66 @@ function PostUnico(): JSX.Element {
             />
 
             <button
-              className="w-full bg-green-700 text-white py-2 rounded mb-4 hover:bg-green-800"
-              onClick={() => {
-                navigator.clipboard.writeText(linkCompartilhado);
-                toast.success("Link copiado!");
-              }}
+              type="button"
+              className="
+                mb-4
+                w-full
+                rounded-xl
+                bg-green-700
+                py-3
+                font-semibold
+                text-white
+                transition
+                hover:bg-green-800
+              "
+              onClick={
+                handleCopiarLink
+              }
             >
               Copiar Link
             </button>
 
-            <div className="flex justify-between items-center space-x-2">
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(linkCompartilhado)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 text-sm text-center flex-1"
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={handleCompartilharWhatsapp}
+                className="rounded-xl bg-green-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-600"
               >
                 WhatsApp
-              </a>
-              <a
-                href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(linkCompartilhado)}`}
-                className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 text-sm text-center flex-1"
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCompartilharEmail}
+                className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
               >
                 Email
-              </a>
+              </button>
+
               <a
-                href={linkCompartilhado}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-800 hover:underline text-sm text-center flex-1"
+                href={publicUrl}
+                onClick={() => {
+                  void registrarCompartilhamento(
+                    "footera"
+                  );
+                }}
+                className="
+                  flex
+                  items-center
+                  justify-center
+                  rounded-xl
+                  border
+                  border-green-300
+                  bg-green-100
+                  px-4
+                  py-3
+                  text-center
+                  text-sm
+                  font-semibold
+                  text-green-800
+                  transition
+                  hover:bg-green-200
+                "
               >
                 Ver no FootEra
               </a>
@@ -740,6 +1565,7 @@ function PostUnico(): JSX.Element {
         </div>
       )}
     </div>
+   </main>
   );
 }
 
