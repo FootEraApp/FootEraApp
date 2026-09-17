@@ -2038,9 +2038,6 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
 
 export async function listMetodologiasVisiveis(req: Request, res: Response) {
   try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
-
     const publicoPermitido: MetodologiaPublicoAlvo[] = [
       MetodologiaPublicoAlvo.ATLETAS,
       MetodologiaPublicoAlvo.PROFISSIONAIS,
@@ -2070,7 +2067,13 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
           criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
           _count: { select: { assinantes: true, estruturas: true } },
           estruturas: {
-            include: { itens: true },
+            select: {
+              itens: {
+                select: {
+                  tipo: true,
+                },
+              },
+            },
           },
         },
       }),
@@ -2094,28 +2097,96 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
       estruturaCount: learningCountsById[m.id]?.estruturaCount ?? 0,
     }));
 
-    const avulsasOut = avulsasItems.map((m) => {
-      const itens = m.estruturas.flatMap((e) => e.itens || []);
-      return {
-        ...m,
-        logoUrl: m.capaUrl ?? null,
-        origemRegistro: "AVULSA" as const,
-        videoCount: itens.filter((it) => it.tipo === "VIDEO").length,
-        aulaCount: itens.filter((it) => it.tipo === "AULA").length,
-        aulaAoVivoCount: itens.filter((it) => it.tipo === "AULA_AO_VIVO").length,
-        aulasAoVivoCount: itens.filter((it) => it.tipo === "AULA_AO_VIVO").length,
-        treinoCount: itens.filter((it) => it.tipo === "TREINO").length,
-        materialCount: itens.filter((it) => it.tipo === "MATERIAL").length,
-        desafioCount: itens.filter((it) => it.tipo === "DESAFIO").length,
-        estruturaCount: m.estruturas.length,
-        _count: {
-          ...(m as any)._count,
-          assinantes: (m as any)._count?.assinantes ?? 0,
-          estruturas: (m as any)._count?.estruturas ?? m.estruturas.length,
-        },
-        totalAssinantes: (m as any)._count?.assinantes ?? 0,
-      };
-    });
+    const avulsasOut =
+      avulsasItems.map((m) => {
+        const {
+          estruturas,
+          ...metodologiaPublica
+        } = m;
+
+        const itens =
+          estruturas.flatMap(
+            (e) =>
+              e.itens || []
+          );
+
+        return {
+          ...metodologiaPublica,
+
+          logoUrl:
+            m.capaUrl ?? null,
+
+          origemRegistro:
+            "AVULSA" as const,
+
+          videoCount:
+            itens.filter(
+              (it) =>
+                it.tipo === "VIDEO"
+            ).length,
+
+          aulaCount:
+            itens.filter(
+              (it) =>
+                it.tipo === "AULA"
+            ).length,
+
+          aulaAoVivoCount:
+            itens.filter(
+              (it) =>
+                it.tipo ===
+                "AULA_AO_VIVO"
+            ).length,
+
+          aulasAoVivoCount:
+            itens.filter(
+              (it) =>
+                it.tipo ===
+                "AULA_AO_VIVO"
+            ).length,
+
+          treinoCount:
+            itens.filter(
+              (it) =>
+                it.tipo === "TREINO"
+            ).length,
+
+          materialCount:
+            itens.filter(
+              (it) =>
+                it.tipo === "MATERIAL"
+            ).length,
+
+          desafioCount:
+            itens.filter(
+              (it) =>
+                it.tipo === "DESAFIO"
+            ).length,
+
+          estruturaCount:
+            estruturas.length,
+
+          _count: {
+            ...(m as any)._count,
+
+            assinantes:
+              (m as any)
+                ._count
+                ?.assinantes ?? 0,
+
+            estruturas:
+              (m as any)
+                ._count
+                ?.estruturas ??
+              estruturas.length,
+          },
+
+          totalAssinantes:
+            (m as any)
+              ._count
+              ?.assinantes ?? 0,
+        };
+      });
 
     const items = [...learningOut, ...avulsasOut].sort(
       (a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime()

@@ -55,9 +55,18 @@ router.post(
 
 router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
-router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
-router.get("/eventos-ao-vivo/visiveis", authenticateToken, listEventosAoVivoVisiveis);
+router.get(
+  "/visiveis",
+  optionalAuthenticateToken,
+  listMetodologiasVisiveis
+);
+
+router.get(
+  "/eventos-ao-vivo/visiveis",
+  optionalAuthenticateToken,
+  listEventosAoVivoVisiveis
+);
 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);
 router.get("/favoritos", authenticateToken, listarFavoritosLearning);
 router.post("/favoritos/toggle", authenticateToken, alternarFavoritoLearning);

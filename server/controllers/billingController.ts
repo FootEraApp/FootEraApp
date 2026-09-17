@@ -125,6 +125,12 @@ function assertPlanoPermitido(
     normalizePlanoId(planoId);
 
   if (
+    isEvento(planoNorm)
+  ) {
+    return;
+  }
+
+  if (
     isMetodologiaAvulsa(
       planoNorm
     )
@@ -273,6 +279,31 @@ const API_BASE_URL = (process.env.APP_BASE_URL || "http://localhost:3001").repla
   /\/+$/,
   ""
 );
+const FRONTEND_URL =
+  (
+    process.env.FRONTEND_URL ||
+    "http://localhost:5173"
+  ).replace(/\/+$/, "");
+
+function normalizarReturnToPagamento(
+  valor: unknown
+) {
+  const path =
+    String(
+      valor ?? ""
+    ).trim();
+
+  if (
+    !path ||
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
+    path.includes("\\")
+  ) {
+    return "/pagamentos";
+  }
+
+  return path;
+}
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || "";
 
 const HAS_MERCADO_PAGO =
@@ -308,20 +339,13 @@ type Pagador = {
   telefone?: string;
 };
 
-type Cartao = {
-  numero: string;
-  nomeImpresso: string;
-  validade: string;  
-  cvv: string;
-};
-
 type StartCheckoutBody = {
   planoId: string;
   periodicidade: Periodicidade;
   metodo: MetodoPagamento;
   cupom?: string | null;
   pagador?: Pagador;
-  cartao?: Cartao;
+  returnTo?: string | null;
 };
 
 const pagadorSchema = z.object({
@@ -329,13 +353,6 @@ const pagadorSchema = z.object({
   email: z.string().trim().min(1).optional(),
   cpf: z.string().trim().optional(),
   telefone: z.string().trim().optional(),
-});
-
-const cartaoSchema = z.object({
-  numero: z.string().optional(),
-  nomeImpresso: z.string().optional(),
-  validade: z.string().optional(),
-  cvv: z.string().optional(),
 });
 
 const startCheckoutSchema = z.object({
@@ -346,15 +363,31 @@ const startCheckoutSchema = z.object({
   metodo: z.enum(["PIX", "CREDITO", "DEBITO", "BOLETO"]).optional(),
   cupom: z.string().trim().optional().nullable(),
   pagador: pagadorSchema.optional(),
-  cartao: cartaoSchema.optional(),
+  returnTo:
+    z.string()
+      .trim()
+      .optional()
+      .nullable(),
 });
 
 type StartBundleBody = {
-  items: Array<{ planoId: string; periodicidade: Periodicidade }>;
-  metodo: MetodoPagamento;
-  cupom?: string | null;
-  pagador?: Pagador;
-  cartao?: Cartao;
+  items:
+    Array<{
+      planoId: string;
+      periodicidade: Periodicidade;
+    }>;
+
+  metodo:
+    MetodoPagamento;
+
+  cupom?:
+    string | null;
+
+  pagador?:
+    Pagador;
+
+  returnTo?:
+    string | null;
 };
 
 type CartItem = { planoId: string; periodicidade: Periodicidade };
@@ -375,21 +408,6 @@ async function getUserTipo(usuarioId: string) {
 
 function onlyDigits(s: string) {
   return (s || "").replace(/\D+/g, "");
-}
-
-function luhnOk(num: string) {
-  let sum = 0,
-    alt = false;
-  for (let i = num.length - 1; i >= 0; i--) {
-    let n = parseInt(num.charAt(i), 10);
-    if (alt) {
-      n *= 2;
-      if (n > 9) n -= 9;
-    }
-    sum += n;
-    alt = !alt;
-  }
-  return sum % 10 === 0;
 }
 
 function addMonths(d: Date, months: number) {
@@ -632,6 +650,21 @@ function normalizePlanoId(planoId: string) {
     return `AULA_AO_VIVO:${id}`;
   }
 
+  if (
+    raw
+      .toUpperCase()
+      .startsWith("EVENTO:")
+  ) {
+    const id =
+      raw
+        .split(":")
+        .slice(1)
+        .join(":")
+        .trim();
+
+    return `EVENTO:${id}`;
+  }
+
   return raw.toUpperCase();
 }
 
@@ -645,6 +678,31 @@ function isMetodologiaLearning(planoId: string) {
 
 function isAulaAoVivo(planoId: string) {
   return String(planoId || "").toUpperCase().startsWith("AULA_AO_VIVO:");
+}
+
+function isEvento(
+  planoId: string
+) {
+  return String(
+    planoId || ""
+  )
+    .toUpperCase()
+    .startsWith(
+      "EVENTO:"
+    );
+}
+
+function extractEventoId(
+  planoId: string
+) {
+  return String(
+    planoId || ""
+  )
+    .replace(
+      /^EVENTO:/i,
+      ""
+    )
+    .trim();
 }
 
 function extractAulaAoVivoId(planoId: string) {
@@ -1034,6 +1092,248 @@ function findPlan(planoId: string) {
   return PLANS.find((p) => p.id === id);
 }
 
+async function assertEventoDisponivelParaCompra(
+  planoId: string,
+  usuarioId: string
+) {
+  const eventoId =
+    extractEventoId(
+      planoId
+    );
+
+  const [
+    evento,
+    atleta,
+    inscricao,
+  ] =
+    await Promise.all([
+      prisma.evento.findUnique({
+        where: {
+          id:
+            eventoId,
+        },
+
+        select: {
+          id: true,
+          titulo: true,
+          status: true,
+          dataEvento: true,
+          inscricaoInicio:
+            true,
+          inscricaoFim:
+            true,
+          vagas: true,
+          valorInscricao:
+            true,
+          linkInscricao:
+            true,
+        },
+      }),
+
+      prisma.atleta.findUnique({
+        where: {
+          usuarioId,
+        },
+
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.inscricaoEvento.findUnique({
+        where: {
+          eventoId_usuarioId: {
+            eventoId,
+            usuarioId,
+          },
+        },
+
+        select: {
+          status: true,
+        },
+      }),
+    ]);
+
+  if (!evento) {
+    const err: any =
+      new Error(
+        "Evento não encontrado."
+      );
+
+    err.statusCode = 404;
+    err.code =
+      "EVENTO_NOT_FOUND";
+
+    throw err;
+  }
+
+  if (!atleta) {
+    const err: any =
+      new Error(
+        "Você precisa possuir um perfil de Atleta para participar deste evento."
+      );
+
+    err.statusCode = 403;
+    err.code =
+      "ATLETA_REQUIRED";
+
+    throw err;
+  }
+
+  if (
+    evento.linkInscricao
+  ) {
+    const err: any =
+      new Error(
+        "Este evento utiliza inscrição externa."
+      );
+
+    err.statusCode = 409;
+    err.code =
+      "EXTERNAL_REGISTRATION";
+
+    throw err;
+  }
+
+  const agora =
+    new Date();
+
+  if (
+    evento.status !==
+      "ABERTO" ||
+    evento.dataEvento <=
+      agora
+  ) {
+    const err: any =
+      new Error(
+        "Este evento não está disponível para inscrições."
+      );
+
+    err.statusCode = 409;
+    err.code =
+      "EVENT_UNAVAILABLE";
+
+    throw err;
+  }
+
+  if (
+    evento.inscricaoInicio &&
+    agora <
+      evento.inscricaoInicio
+  ) {
+    const err: any =
+      new Error(
+        "As inscrições ainda não começaram."
+      );
+
+    err.statusCode = 409;
+    throw err;
+  }
+
+  if (
+    evento.inscricaoFim &&
+    agora >
+      evento.inscricaoFim
+  ) {
+    const err: any =
+      new Error(
+        "As inscrições foram encerradas."
+      );
+
+    err.statusCode = 409;
+    throw err;
+  }
+
+  if (
+    inscricao &&
+    [
+      "CONFIRMADA",
+      "PRESENCA_OK",
+    ].includes(
+      String(
+        inscricao.status
+      )
+    )
+  ) {
+    const err: any =
+      new Error(
+        "Você já está inscrito neste evento."
+      );
+
+    err.statusCode = 409;
+    err.code =
+      "ALREADY_REGISTERED";
+
+    throw err;
+  }
+
+  if (
+    evento.vagas != null
+  ) {
+    const outrosInscritos =
+      await prisma.inscricaoEvento.count({
+        where: {
+          eventoId,
+
+          usuarioId: {
+            not:
+              usuarioId,
+          },
+
+          status: {
+            not:
+              "CANCELADA",
+          },
+        },
+      });
+
+    if (
+      outrosInscritos >=
+      evento.vagas
+    ) {
+      const err: any =
+        new Error(
+          "As vagas deste evento estão esgotadas."
+        );
+
+      err.statusCode = 409;
+      err.code =
+        "EVENT_FULL";
+
+      throw err;
+    }
+  }
+
+  const valor =
+    Number(
+      evento.valorInscricao ??
+        0
+    );
+
+  if (
+    !Number.isFinite(
+      valor
+    ) ||
+    valor <= 0
+  ) {
+    const err: any =
+      new Error(
+        "Este evento não exige pagamento."
+      );
+
+    err.statusCode = 400;
+    err.code =
+      "EVENT_FREE";
+
+    throw err;
+  }
+
+  return {
+    ...evento,
+    valor,
+  };
+}
+
 async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<number> {
   const id = normalizePlanoId(planoId);
 
@@ -1066,6 +1366,39 @@ async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<
     }
 
     return valor;
+  }
+
+  if (
+    isEvento(id)
+  ) {
+    const eventoId =
+      extractEventoId(
+        id
+      );
+
+    const evento =
+      await prisma.evento.findUnique({
+        where: {
+          id:
+            eventoId,
+        },
+
+        select: {
+          valorInscricao:
+            true,
+        },
+      });
+
+    if (!evento) {
+      throw new Error(
+        "Evento não encontrado."
+      );
+    }
+
+    return Number(
+      evento.valorInscricao ??
+        0
+    );
   }
 
   const p = findPlan(id);
@@ -1424,20 +1757,43 @@ function pickPrincipalAssinatura(
   );
 }
 
-export async function getPlans(req: Request, res: Response) {
+export async function getPlans(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
     const usuarioId = getUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const tipo = await getUserTipo(usuarioId);
-    const allowed = allowedPlanIdsByTipo(tipo);
+    const tipoQuery = String(
+      req.query.tipo ?? ""
+    ).trim();
 
-    const plans = PLANS.filter((p) => allowed.includes(p.id));
+    const tipo = usuarioId
+      ? await getUserTipo(usuarioId)
+      : normalizeTipoBilling(
+          tipoQuery || "atleta"
+        );
 
-    return res.json({ plans });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Erro ao carregar planos" });
+    const permitidos =
+      new Set(
+        allowedPlanIdsByTipo(tipo)
+      );
+
+    const plans =
+      PLANS.filter((plan) =>
+        permitidos.has(plan.id)
+      );
+
+    return res.json({
+      plans,
+      tipoUsuario: tipo,
+    });
+  } catch (error: any) {
+    return sendError(
+      res,
+      error,
+      "Erro ao carregar planos."
+    );
   }
 }
 
@@ -1749,6 +2105,18 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ message: "Plano inválido" });
     }
 
+    if (
+      isEvento(planoNorm)
+    ) {
+      return res.status(400).json({
+        code:
+          "EVENT_TRIAL_NOT_ALLOWED",
+
+        message:
+          "Inscrições em eventos não participam do mês grátis.",
+      });
+    }
+
     if (!["Mensal", "Anual"].includes(periodicidadeFinal as any)) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
@@ -1759,14 +2127,34 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const isAvulsa = isMetodologiaAvulsa(planoNorm);
     const isLearningMetodologia = isMetodologiaLearning(planoNorm);
     const isAula = isAulaAoVivo(planoNorm);
-    const isPlanoPrincipal = !isAvulsa && !isLearningMetodologia && !isAula;
+    const isEventoCompra =
+      isEvento(
+        planoNorm
+      );
 
+    const isPlanoPrincipal =
+      !isAvulsa &&
+      !isLearningMetodologia &&
+      !isAula &&
+      !isEventoCompra;
     if (isAula) {
       await assertAulaAoVivoDisponivelParaCompra(planoNorm);
     }
 
     if (isPlanoPrincipal && !findPlan(planoNorm)) {
       return res.status(400).json({ message: "Plano inválido" });
+    }
+
+    if (
+      isEvento(planoNorm)
+    ) {
+      return res.status(400).json({
+        code:
+          "EVENT_TRIAL_NOT_ALLOWED",
+
+        message:
+          "Inscrições em eventos não participam do mês grátis.",
+      });
     }
 
     const jaUsouTrialNaConta = await (prisma as any).assinatura.findFirst({
@@ -2093,60 +2481,227 @@ async function guardTrialRule(usuarioId: string) {
   return { metodoPreferido, principal };
 }
 
-function validateMetodoAndFields(metodo: MetodoPagamento, pagador?: Pagador, cartao?: Cartao) {
-  const METODOS_VALIDOS: MetodoPagamento[] = ["PIX", "CREDITO", "DEBITO", "BOLETO"];
-  if (!METODOS_VALIDOS.includes(metodo)) throw new Error("Método de pagamento inválido");
+function validateMetodoAndFields(
+  metodo: MetodoPagamento,
+  pagador?: Pagador
+) {
+  const METODOS_VALIDOS:
+    MetodoPagamento[] = [
+      "PIX",
+      "CREDITO",
+      "DEBITO",
+      "BOLETO",
+    ];
+
+  if (
+    !METODOS_VALIDOS.includes(
+      metodo
+    )
+  ) {
+    throw new Error(
+      "Método de pagamento inválido"
+    );
+  }
 
   if (metodo === "PIX") {
-    if (!pagador?.nome || !pagador?.email) throw new Error("Informe nome e e-mail para PIX");
-  }
-  if (metodo === "BOLETO") {
-    if (!pagador?.nome || !pagador?.email || !pagador?.cpf) throw new Error("Informe nome, e-mail e CPF para boleto");
-  }
-  if (metodo === "CREDITO" || metodo === "DEBITO") {
-    const num = onlyDigits(cartao?.numero || "");
-    const cvv = onlyDigits(cartao?.cvv || "");
-    const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(cartao?.validade || "");
-
-    if (!cartao?.nomeImpresso || num.length < 13 || !luhnOk(num) || !validadeOk || !(cvv.length === 3 || cvv.length === 4)) {
-      throw new Error("Dados de cartão inválidos");
+    if (
+      !pagador?.nome ||
+      !pagador?.email
+    ) {
+      throw new Error(
+        "Informe nome e e-mail para PIX"
+      );
     }
-    if (!pagador?.nome || !pagador?.email) throw new Error("Informe nome e e-mail do titular");
+  }
+
+  if (metodo === "BOLETO") {
+    if (
+      !pagador?.nome ||
+      !pagador?.email ||
+      !pagador?.cpf
+    ) {
+      throw new Error(
+        "Informe nome, e-mail e CPF para boleto"
+      );
+    }
+  }
+
+  if (
+    metodo === "CREDITO" ||
+    metodo === "DEBITO"
+  ) {
+    if (
+      !pagador?.nome ||
+      !pagador?.email
+    ) {
+      throw new Error(
+        "Informe nome e e-mail do titular"
+      );
+    }
   }
 }
 
 async function approvePaymentAndProvision(
   pagamentoId: string,
-  items: Array<{ planoId: string; periodicidade: Periodicidade }>
+  items: Array<{
+    planoId: string;
+    periodicidade: Periodicidade;
+  }>
 ) {
-  const now = new Date();
+  const now =
+    new Date();
 
-  const pagamentoAtual = await prisma.pagamento.findUnique({
-    where: { id: pagamentoId },
-    select: { usuarioId: true },
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      const pagamentoAtual =
+        await tx.pagamento.findUnique({
+          where: {
+            id: pagamentoId,
+          },
 
-  if (!pagamentoAtual) {
-    const err: any = new Error("Pagamento não encontrado.");
-    err.statusCode = 404;
-    err.code = "PAGAMENTO_NOT_FOUND";
-    throw err;
-  }
+          select: {
+            id: true,
+            usuarioId: true,
+            status: true,
+          },
+        });
 
-  const tipoAtual = await getUserTipo(pagamentoAtual.usuarioId);
+      if (!pagamentoAtual) {
+        const err: any =
+          new Error(
+            "Pagamento não encontrado."
+          );
 
-  for (const it of items) {
-    assertPlanoPermitido(tipoAtual, normalizePlanoId(it.planoId));
-  }
+        err.statusCode = 404;
+        err.code =
+          "PAGAMENTO_NOT_FOUND";
 
-  return prisma.$transaction(async (tx) => {
-    const pg = await tx.pagamento.update({
-      where: { id: pagamentoId },
-      data: { status: "APROVADO", pagoEm: now } as any,
-    });
+        throw err;
+      }
 
-    for (const it of items) {
+      if (
+        pagamentoAtual.status ===
+        PagamentoStatus.APROVADO
+      ) {
+        return tx.pagamento
+          .findUniqueOrThrow({
+            where: {
+              id: pagamentoId,
+            },
+          });
+      }
+
+      if (
+        pagamentoAtual.status !==
+        PagamentoStatus.PENDENTE
+      ) {
+        const err: any =
+          new Error(
+            "Este pagamento não está pendente."
+          );
+
+        err.statusCode = 409;
+        err.code =
+          "PAYMENT_NOT_PENDING";
+
+        throw err;
+      }
+
+      const claim =
+        await tx.pagamento.updateMany({
+          where: {
+            id: pagamentoId,
+            status:
+              PagamentoStatus.PENDENTE,
+          },
+
+          data: {
+            status:
+              PagamentoStatus.APROVADO,
+            pagoEm:
+              now,
+          },
+        });
+
+      if (
+        claim.count === 0
+      ) {
+        return tx.pagamento
+          .findUniqueOrThrow({
+            where: {
+              id: pagamentoId,
+            },
+          });
+      }
+
+      const pg =
+        await tx.pagamento
+          .findUniqueOrThrow({
+            where: {
+              id: pagamentoId,
+            },
+          });
+
+      for (
+        const it of items
+      ) {
+        // daqui para baixo mantenha
+        // exatamente a lógica que você já tem
       const pid = normalizePlanoId(it.planoId);
+
+      if (
+        isEvento(pid)
+      ) {
+        const eventoId =
+          extractEventoId(
+            pid
+          );
+
+        const evento =
+          await tx.evento.findUnique({
+            where: {
+              id:
+                eventoId,
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        if (!evento) {
+          throw new Error(
+            "Evento do pagamento não foi encontrado."
+          );
+        }
+
+        await tx.inscricaoEvento.upsert({
+          where: {
+            eventoId_usuarioId: {
+              eventoId,
+              usuarioId:
+                pg.usuarioId,
+            },
+          },
+
+          update: {
+            status:
+              "CONFIRMADA",
+          },
+
+          create: {
+            eventoId,
+
+            usuarioId:
+              pg.usuarioId,
+
+            status:
+              "CONFIRMADA",
+          },
+        });
+
+        continue;
+      }
 
       if (isMetodologiaAvulsa(pid)) {
         const metodologiaAvulsaId = extractMetodologiaId(pid);
@@ -2275,28 +2830,99 @@ export async function startCheckout(req: Request, res: Response) {
     const usuarioId = getUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const { planoId, periodicidade, metodo, cupom, pagador, cartao } =
-      startCheckoutSchema.parse(req.body) as StartCheckoutBody;
+    const {
+      planoId,
+      periodicidade,
+      metodo,
+      cupom,
+      pagador,
+      returnTo,
+    } =
+      startCheckoutSchema.parse(
+        req.body
+      ) as StartCheckoutBody;
 
-    const { metodoPreferido } = await guardTrialRule(usuarioId);
+    const planoNorm =
+      normalizePlanoId(
+        planoId
+      );
 
-    const tipo = await getUserTipo(usuarioId);
-    assertPlanoPermitido(tipo, planoId);
+    const compraAvulsa =
+      isMetodologiaAvulsa(
+        planoNorm
+      ) ||
+      isAulaAoVivo(
+        planoNorm
+      ) ||
+      isEvento(
+        planoNorm
+      );
 
-    const metodoFinal = (metodo || metodoPreferido) as MetodoPagamento;
-    if (!metodoFinal) return res.status(400).json({ message: "Escolha um método de pagamento" });
+    const trialInfo =
+      compraAvulsa
+        ? {
+            metodoPreferido:
+              null,
+          }
+        : await guardTrialRule(
+            usuarioId
+          );
 
-    const planoNorm = normalizePlanoId(planoId);
+    const tipo =
+      await getUserTipo(
+        usuarioId
+      );
+
+    assertPlanoPermitido(
+      tipo,
+      planoNorm
+    );
+
+    const metodoFinal =
+      (
+        metodo ||
+        trialInfo.metodoPreferido
+      ) as MetodoPagamento;
 
     const aulaAoVivoParaCheckout =
       isAulaAoVivo(planoNorm)
         ? await assertAulaAoVivoDisponivelParaCompra(planoNorm)
         : null;
+    
+    const eventoParaCheckout =
+      isEvento(planoNorm)
+        ? await assertEventoDisponivelParaCompra(
+            planoNorm,
+            usuarioId
+          )
+        : null;
 
     if (
-      isMetodologiaAvulsa(planoNorm) ||
-      isMetodologiaLearning(planoNorm) ||
-      isAulaAoVivo(planoNorm)
+      isEvento(planoNorm) &&
+      cupom
+    ) {
+      return res.status(400).json({
+        code:
+          "EVENT_COUPON_NOT_ALLOWED",
+
+        message:
+          "Cupons não são aplicados a inscrições de eventos.",
+      });
+    }
+
+    if (
+      isMetodologiaAvulsa(
+        planoNorm
+      ) ||
+      isMetodologiaLearning(
+        planoNorm
+      ) ||
+      isAulaAoVivo(
+        planoNorm
+      ) ||
+      isEvento(
+        planoNorm
+      )
     ) {
     } else {
       const plan = findPlan(planoNorm);
@@ -2305,7 +2931,7 @@ export async function startCheckout(req: Request, res: Response) {
       }
     }
     try {
-      validateMetodoAndFields(metodoFinal, pagador, cartao);
+      validateMetodoAndFields(metodoFinal, pagador);
     } catch (e: any) {
       return res.status(400).json({ message: e.message || "Campos inválidos" });
     }
@@ -2345,26 +2971,29 @@ export async function startCheckout(req: Request, res: Response) {
         plano: planoNorm,
         periodicidade,
         metodo: metodoFinal,
-        status: total === 0 ? PagamentoStatus.APROVADO : PagamentoStatus.PENDENTE,
         valor: totalDecimal,
         moeda: "BRL",
         provider,
         providerRef: `TEMP-${Date.now()}`,
         cupomId: cupomRow?.id ?? null,
-        pagoEm: total === 0 ? new Date() : null,
+        status:
+          PagamentoStatus.PENDENTE,
+        pagoEm: null,
       },
     });
 
     if (total === 0) {
-      await approvePaymentAndProvision(
-        pagamento.id,
-        [
-          {
-            planoId: planoNorm,
-            periodicidade,
-          },
-        ]
-      );
+      pagamento =
+        await approvePaymentAndProvision(
+          pagamento.id,
+          [
+            {
+              planoId:
+                planoNorm,
+              periodicidade,
+            },
+          ]
+        );
 
       if (cupomRow) {
         await resgatarCupom(
@@ -2424,32 +3053,66 @@ export async function startCheckout(req: Request, res: Response) {
 
     let planTitle = "Plano";
 
-    if (isMetodologiaAvulsa(planoNorm)) {
-      const mid = extractMetodologiaId(planoNorm);
-      const pr = await computeMetodologiaAvulsaPricing(mid);
+    if (
+      isEvento(planoNorm)
+    ) {
+      planTitle =
+        `Inscrição: ${
+          eventoParaCheckout?.titulo ??
+          "Evento FootEra"
+        }`;
+    } else if (
+      isMetodologiaAvulsa(
+        planoNorm
+      )
+    ) {
+      const mid =
+        extractMetodologiaId(
+          planoNorm
+        );
 
-      planTitle = `Metodologia Avulsa: ${pr.titulo}`;
-    } else if (isAulaAoVivo(planoNorm)) {
-      planTitle = `Evento ao vivo: ${
-        aulaAoVivoParaCheckout?.titulo ?? "Evento ao vivo"
-      }`;
+      const pr =
+        await computeMetodologiaAvulsaPricing(
+          mid
+        );
+
+      planTitle =
+        `Metodologia Avulsa: ${pr.titulo}`;
+    } else if (
+      isAulaAoVivo(
+        planoNorm
+      )
+    ) {
+      planTitle =
+        `Evento ao vivo: ${
+          aulaAoVivoParaCheckout?.titulo ??
+          "Evento ao vivo"
+        }`;
     } else {
-      const plan = findPlan(planoNorm);
+      const plan =
+        findPlan(
+          planoNorm
+        );
 
       if (!plan) {
         return res.status(400).json({
-          message: "Plano inválido",
+          message:
+            "Plano inválido",
         });
       }
 
-      planTitle = plan.title;
+      planTitle =
+        plan.title;
     }
 
     if (metodoFinal === "PIX") {
       try {
         const mpResp: any = await mercadopago.payment.create({
           transaction_amount: Number(total.toFixed(2)),
-          description: `Assinatura ${planTitle} (${periodicidade})`,
+          description:
+            isEvento(planoNorm)
+              ? planTitle
+              : `Assinatura ${planTitle} (${periodicidade})`,
           payment_method_id: "pix",
           payer: {
             email: pagador!.email,
@@ -2486,13 +3149,34 @@ export async function startCheckout(req: Request, res: Response) {
           status: "PENDENTE",
           pagamento,
           pix: { copiaECola: qr_code, qrCodeUrl },
-          message: "Pagamento PIX criado. A assinatura será liberada após confirmação do pagamento.",
+          message:
+            isEvento(planoNorm)
+              ? "Pagamento PIX criado. Sua inscrição será confirmada após a aprovação do pagamento."
+              : "Pagamento PIX criado. A assinatura será liberada após confirmação do pagamento.",
         });
       } catch (err: any) {
         return sendError(res, err, "Falha ao criar pagamento PIX com Mercado Pago");
       }
     }
 
+    const retornoSeguro =
+      normalizarReturnToPagamento(
+        returnTo
+      );
+
+    const retornoEncoded =
+      encodeURIComponent(
+        retornoSeguro
+      );
+
+    const pagamentoIdEncoded =
+      encodeURIComponent(
+        pagamento.id
+      );
+
+    const retornoPagamentoBase =
+      `${FRONTEND_URL}/pagamentos`;
+      
     try {
       const mpPrefResp: any = await mercadopago.preferences.create({
         items: [
@@ -2507,6 +3191,28 @@ export async function startCheckout(req: Request, res: Response) {
         metadata: { pagamentoId: pagamento.id, usuarioId, planoId: normalizePlanoId(planoId) },
         external_reference: pagamento.id,
         notification_url: `${API_BASE_URL}/api/billing/mercadopago/webhook`,
+        back_urls: {
+          success:
+            `${retornoPagamentoBase}` +
+            `?mpReturn=approved` +
+            `&pagamentoId=${pagamentoIdEncoded}` +
+            `&returnTo=${retornoEncoded}`,
+
+          pending:
+            `${retornoPagamentoBase}` +
+            `?mpReturn=pending` +
+            `&pagamentoId=${pagamentoIdEncoded}` +
+            `&returnTo=${retornoEncoded}`,
+
+          failure:
+            `${retornoPagamentoBase}` +
+            `?mpReturn=failure` +
+            `&pagamentoId=${pagamentoIdEncoded}` +
+            `&returnTo=${retornoEncoded}`,
+        },
+
+        auto_return:
+          "approved",
       });
 
       const prefBody: any = mpPrefResp?.body || mpPrefResp;
@@ -2550,10 +3256,48 @@ export async function startCheckoutBundle(req: Request, res: Response) {
 
     const tipo = await getUserTipo(usuarioId);
 
-    const { items, metodo, cupom, pagador, cartao } = req.body as StartBundleBody;
+    const { items, metodo, cupom, pagador, returnTo } = req.body as StartBundleBody;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Informe items do carrinho." });
+    }
+
+    if (cupom) {
+      return res.status(400).json({
+        code:
+          "BUNDLE_COUPON_NOT_ALLOWED",
+
+        message:
+          "Cupons só podem ser usados em compras com 1 item.",
+      });
+    }
+
+    const normalizedItems =
+      items.map((it) => ({
+        planoId:
+          normalizePlanoId(
+            it.planoId
+          ),
+
+        periodicidade:
+          it.periodicidade,
+      }));
+
+    if (
+      normalizedItems.some(
+        (item) =>
+          isEvento(
+            item.planoId
+          )
+      )
+    ) {
+      return res.status(400).json({
+        code:
+          "EVENT_BUNDLE_NOT_ALLOWED",
+
+        message:
+          "Inscrições de eventos devem ser pagas individualmente.",
+      });
     }
 
     const { metodoPreferido } = await guardTrialRule(usuarioId);
@@ -2562,16 +3306,12 @@ export async function startCheckoutBundle(req: Request, res: Response) {
     if (!metodoFinal) return res.status(400).json({ message: "Escolha um método de pagamento" });
 
     try {
-      validateMetodoAndFields(metodoFinal, pagador, cartao);
+      validateMetodoAndFields(metodoFinal, pagador);
     } catch (e: any) {
       return res.status(400).json({ message: e.message || "Campos inválidos" });
     }
 
     let totalBase = 0;
-    const normalizedItems = items.map((it) => ({
-      planoId: normalizePlanoId(it.planoId),
-      periodicidade: it.periodicidade,
-    }));
 
     for (const it of normalizedItems) {
       assertPlanoPermitido(tipo, it.planoId);
@@ -2600,73 +3340,79 @@ export async function startCheckoutBundle(req: Request, res: Response) {
       totalBase += await priceFor(it.planoId, it.periodicidade);
     }
 
-    let desconto = 0;
-    let cupomRow: any = null;
+    const total = Math.max(
+      0,
+      totalBase
+    );
 
-    if (cupom) {
-      const it0 = normalizedItems[0];
+    const totalDecimal =
+      new Prisma.Decimal(
+        total.toFixed(2)
+      );
 
-      const check = await computeCouponDiscount(cupom, usuarioId, it0.planoId, it0.periodicidade);
-      if (!check.ok || !check.cupom) {
-        return res.status(400).json({ message: check.reason || "Cupom inválido" });
-      }
-      cupomRow = check.cupom;
-
-      if (cupomRow.tipo === "PERCENTUAL" && typeof cupomRow.descontoPerc === "number") {
-        desconto = (Math.max(0, Math.min(100, cupomRow.descontoPerc)) * totalBase) / 100;
-      } else if (cupomRow.tipo === "VALOR" && cupomRow.descontoFixo != null) {
-        desconto = Number(cupomRow.descontoFixo);
-      } else if (cupomRow.tipo === "PRESENTE") {
-        if (cupomRow.plano || cupomRow.periodicidade) {
-          const alvoPlano = cupomRow.plano ? normalizePlanoId(cupomRow.plano) : null;
-          const alvoPer = cupomRow.periodicidade ? (cupomRow.periodicidade as Periodicidade) : null;
-
-          let presenteBase = 0;
-          for (const it of normalizedItems) {
-            const planoOk = !alvoPlano || it.planoId === alvoPlano;
-            const perOk = !alvoPer || it.periodicidade === alvoPer;
-            if (planoOk && perOk) {
-              presenteBase += await priceFor(it.planoId, it.periodicidade);
-            }
-          }
-          desconto = presenteBase;
-        } else {
-          desconto = totalBase;
-        }
-      }
-
-      desconto = Math.max(0, Math.min(totalBase, desconto));
-    }
-
-    const total = Math.max(0, totalBase - desconto);
-    const totalDecimal = new Prisma.Decimal(total.toFixed(2));
-    const provider = HAS_MERCADO_PAGO ? "MERCADOPAGO" : "INTERNAL_FAKE";
+    const provider =
+      HAS_MERCADO_PAGO
+        ? "MERCADOPAGO"
+        : "INTERNAL_FAKE";
 
     let pagamento = await prisma.pagamento.create({
       data: {
         usuarioId,
-        plano: "BUNDLE",
-        periodicidade: "Mensal",
-        metodo: metodoFinal,
-        status: total === 0 ? PagamentoStatus.APROVADO : PagamentoStatus.PENDENTE,
-        valor: totalDecimal,
-        moeda: "BRL",
+
+        plano:
+          "BUNDLE",
+
+        periodicidade:
+          "Mensal",
+
+        metodo:
+          metodoFinal,
+
+        valor:
+          totalDecimal,
+
+        moeda:
+          "BRL",
+
         provider,
-        providerRef: `BUNDLE-${Date.now()}`,
-        cupomId: cupomRow?.id ?? null,
-        pagoEm: total === 0 ? new Date() : null,
+
+        providerRef:
+          `BUNDLE-${Date.now()}`,
+
+        cupomId:
+          null,
+
+        status:
+          PagamentoStatus.PENDENTE,
+
+        pagoEm:
+          null,
+
+        meta: {
+          bundleItems:
+            normalizedItems,
+        } as Prisma.InputJsonValue,
       },
     });
 
     if (total === 0) {
-      await approvePaymentAndProvision(pagamento.id, normalizedItems);
-      if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
+      pagamento =
+        await approvePaymentAndProvision(
+          pagamento.id,
+          normalizedItems
+        );
 
       return res.json({
-        status: "APROVADO",
+        status:
+          "APROVADO",
+
         pagamento,
-        assinaturas: normalizedItems,
-        message: "Assinaturas ativadas sem cobrança (cupom/presente).",
+
+        assinaturas:
+          normalizedItems,
+
+        message:
+          "Assinaturas ativadas sem cobrança (cupom/presente).",
       });
     }
 
@@ -2759,6 +3505,24 @@ export async function startCheckoutBundle(req: Request, res: Response) {
     }
 
     try {
+      const retornoSeguro =
+        normalizarReturnToPagamento(
+          returnTo
+        );
+
+      const retornoEncoded =
+        encodeURIComponent(
+          retornoSeguro
+        );
+
+      const pagamentoIdEncoded =
+        encodeURIComponent(
+          pagamento.id
+        );
+
+      const retornoPagamentoBase =
+        `${FRONTEND_URL}/pagamentos`;
+
       const mpPrefResp: any = await mercadopago.preferences.create({
         items: [
           {
@@ -2772,6 +3536,28 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         metadata: { pagamentoId: pagamento.id, usuarioId, bundleItems: normalizedItems },
         external_reference: pagamento.id,
         notification_url: `${API_BASE_URL}/api/billing/mercadopago/webhook`,
+        back_urls: {
+          success:
+            `${retornoPagamentoBase}` +
+            `?mpReturn=approved` +
+            `&pagamentoId=${pagamentoIdEncoded}` +
+            `&returnTo=${retornoEncoded}`,
+
+          pending:
+            `${retornoPagamentoBase}` +
+            `?mpReturn=pending` +
+            `&pagamentoId=${pagamentoIdEncoded}` +
+            `&returnTo=${retornoEncoded}`,
+
+          failure:
+            `${retornoPagamentoBase}` +
+            `?mpReturn=failure` +
+            `&pagamentoId=${pagamentoIdEncoded}` +
+            `&returnTo=${retornoEncoded}`,
+        },
+
+        auto_return:
+          "approved",
       });
 
       const prefBody: any = mpPrefResp?.body || mpPrefResp;
@@ -2897,24 +3683,75 @@ export async function providerWebhook(req: Request, res: Response) {
       return res.status(403).json({ message: "Use o webhook oficial do Mercado Pago para este pagamento" });
     }
 
-    const now = new Date();
+    if (
+      tipo ===
+      "payment_approved"
+    ) {
+      if (
+        pagamento.plano ===
+        "BUNDLE"
+      ) {
+        const pagamentoMeta =
+          (
+            pagamento.meta ||
+            {}
+          ) as any;
 
-    if (tipo === "payment_approved") {
-      if (pagamento.plano !== "BUNDLE") {
+        const bundleItems =
+          Array.isArray(
+            pagamentoMeta.bundleItems
+          )
+            ? pagamentoMeta.bundleItems
+            : [];
+
+        if (
+          bundleItems.length ===
+          0
+        ) {
+          throw new Error(
+            "Pagamento bundle aprovado sem itens registrados."
+          );
+        }
+
+        const items =
+          bundleItems.map(
+            (item: any) => ({
+              planoId:
+                normalizePlanoId(
+                  item.planoId
+                ),
+
+              periodicidade:
+                item.periodicidade as Periodicidade,
+            })
+          );
+
         await approvePaymentAndProvision(
           pagamento.id,
-          [
-            {
-              planoId: pagamento.plano,
-              periodicidade: pagamento.periodicidade,
-            },
-          ]
+          items
         );
 
-        return res.json({ ok: true });
+        return res.json({
+          ok: true,
+        });
       }
 
-      return res.json({ ok: true });
+      await approvePaymentAndProvision(
+        pagamento.id,
+        [
+          {
+            planoId:
+              pagamento.plano,
+
+            periodicidade:
+              pagamento.periodicidade,
+          },
+        ]
+      );
+
+      return res.json({
+        ok: true,
+      });
     }
 
     if (tipo === "payment_canceled" || tipo === "payment_refunded") {
@@ -2970,34 +3807,82 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
 
     const now = new Date();
 
-    if (status === "approved") {
-      if (pagamento.plano === "BUNDLE" && Array.isArray(meta.bundleItems)) {
-        const tipo = await getUserTipo(pagamento.usuarioId);
+    if (
+      status === "approved"
+    ) {
+      if (
+        pagamento.plano ===
+        "BUNDLE"
+      ) {
+        const pagamentoMeta =
+          (
+            pagamento.meta ||
+            {}
+          ) as any;
 
-        const items = meta.bundleItems.map((x: any) => ({
-          planoId: normalizePlanoId(x.planoId),
-          periodicidade: x.periodicidade as Periodicidade,
-        }));
+        const bundleItemsRaw =
+          Array.isArray(
+            pagamentoMeta.bundleItems
+          )
+            ? pagamentoMeta.bundleItems
+            : Array.isArray(
+                  meta.bundleItems
+                )
+              ? meta.bundleItems
+              : [];
 
-        for (const it of items) {
-          assertPlanoPermitido(tipo, it.planoId);
+        if (
+          bundleItemsRaw.length ===
+          0
+        ) {
+          throw new Error(
+            "Pagamento bundle aprovado sem itens registrados."
+          );
         }
 
-        await approvePaymentAndProvision(pagamento.id, items);
-        return res.status(200).json({ ok: true });
+        const items =
+          bundleItemsRaw.map(
+            (item: any) => ({
+              planoId:
+                normalizePlanoId(
+                  item.planoId
+                ),
+
+              periodicidade:
+                item.periodicidade as Periodicidade,
+            })
+          );
+
+        await approvePaymentAndProvision(
+          pagamento.id,
+          items
+        );
+
+        return res
+          .status(200)
+          .json({
+            ok: true,
+          });
       }
 
       await approvePaymentAndProvision(
         pagamento.id,
         [
           {
-            planoId: pagamento.plano,
-            periodicidade: pagamento.periodicidade,
+            planoId:
+              pagamento.plano,
+
+            periodicidade:
+              pagamento.periodicidade,
           },
         ]
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true,
+        });
     }
 
     if (status === "cancelled" || status === "rejected") {
@@ -3415,9 +4300,6 @@ export async function getAulasAoVivoPagas(
                 nomeDeUsuario:
                   true,
 
-                email:
-                  true,
-
                 tipo:
                   true,
               },
@@ -3443,9 +4325,6 @@ export async function getAulasAoVivoPagas(
                 nomeDeUsuario:
                   true,
 
-                email:
-                  true,
-
                 tipo:
                   true,
               },
@@ -3467,9 +4346,6 @@ export async function getAulasAoVivoPagas(
                       true,
 
                     nomeDeUsuario:
-                      true,
-
-                    email:
                       true,
 
                     tipo:

@@ -15,12 +15,12 @@ model Usuario {
   nome          String
   email         String @unique
 
-  googleSub      String?      @unique
-  googleEmail    String?
-  googlePicture  String?
-  authProvider   AuthProvider @default(LOCAL)
-  localLoginEnabled Boolean @default(true)
-  googleLinkedAt DateTime?
+  googleSub         String?      @unique
+  googleEmail       String?
+  googlePicture     String?
+  authProvider      AuthProvider @default(LOCAL)
+  localLoginEnabled Boolean      @default(true)
+  googleLinkedAt    DateTime?
 
   foto String?
 
@@ -2344,9 +2344,9 @@ model Turma {
   escolinhaId String?
   escolinha   Escolinha?  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
 
-  clubeId String?
-  clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-
+  clubeId     String?
+  clube       Clube?           @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  vagas       Int?
   professores TurmaProfessor[]
   membros     TurmaUsuario[]
 

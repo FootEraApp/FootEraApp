@@ -1,4 +1,4 @@
-// client/src/routes
+// client/src/routes.tsx
 import { Route, Switch } from "wouter";
 import { Private, PublicOnly, HomeRedirect } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";
@@ -181,15 +181,17 @@ export function AppRoutes() {
         <Route path="/admin/login"><PaginaLoginAdmin /></Route>
         {FLAGS.PAGAMENTOS_ENABLED ? (
           <Route path="/pagamentos">
-            <Private><PaginaPagamentos /></Private>
+            <PaginaPagamentos />
           </Route>
         ) : (
           <Route path="/pagamentos">
-            <Private>
-              <div style={{ padding: 16 }}>
-                Estamos reformulando a página de pagamentos no momento.
-              </div>
-            </Private>
+            <div
+              style={{
+                padding: 16,
+              }}
+            >
+              Estamos reformulando a página de pagamentos no momento.
+            </div>
           </Route>
         )}
         {FLAGS.DESAFIOS_ENABLED ? (
@@ -339,7 +341,15 @@ export function AppRoutes() {
               <Private><AvaliarMetodologia /></Private>
             </Route>
             <Route path="/metodologias/:id">
-              <Private><MetodologiaUnicaPage /></Private>
+              <MetodologiaUnicaPage />
+            </Route>
+
+            <Route path="/learning/:id">
+              <MetodologiaUnicaPage />
+            </Route>
+
+            <Route path="/learning">
+              <LearningPage />
             </Route>
             <Route path="/learning/create">
               <Private><LearningCreatePage /></Private>
@@ -356,15 +366,11 @@ export function AppRoutes() {
             <Route path="/learning/avaliar">
               <Private><AvaliarMetodologia /></Private>
             </Route>
-            <Route path="/learning/evento/sala-copa"><Private><SalaCopaEventoPage /></Private></Route> 
+            <Route path="/learning/evento/sala-copa">
+              <SalaCopaEventoPage />
+            </Route>
             <Route path="/learning/evento/:aulaId">
               {() => <LearningEventoAoVivoPage />}
-            </Route>
-            <Route path="/learning/:id">
-              <Private><MetodologiaUnicaPage /></Private>
-            </Route>
-            <Route path="/learning">
-              <Private><LearningPage /></Private>
             </Route>
           </>
         ) : (

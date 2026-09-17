@@ -35,6 +35,17 @@ export const PUBLIC_PATHS = {
 
   join: (token: string) =>
     `/join/${ref(token)}`,
+
+  learning: () =>
+    "/learning",
+
+  learningEvento: (
+    id: string
+  ) =>
+    `/learning/evento/${ref(id)}`,
+
+  pagamentos: () =>
+    "/pagamentos",
 } as const;
 
 export function publicAppUrl(
@@ -60,6 +71,11 @@ const DEEP_LINK_PATHS = [
   /^\/metodologias\/[^/]+\/?$/i,
   /^\/desafios\/[^/]+\/?$/i,
   /^\/treinos\/unico\/?$/i,
+  /^\/learning\/?$/i,
+  /^\/learning\/evento\/[^/]+\/?$/i,
+  /^\/learning\/evento\/sala-copa\/?$/i,
+  /^\/learning\/(?!create\/?$|live\/?$|live-studio\/?$|avaliar\/?$)[^/]+\/?$/i,
+  /^\/pagamentos\/?$/i,
 ];
 
 export function deepLinkPathFromUrl(

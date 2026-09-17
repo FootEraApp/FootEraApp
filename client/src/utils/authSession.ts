@@ -41,9 +41,21 @@ export type PendingAuthAction =
       postId: string;
     }
   | {
-    type: "OPEN_EVENT_CONVOCATION";
-    eventoId: string;
-  };
+      type: "START_PUBLIC_TRAINING";
+      treinoProgramadoId: string;
+    }
+  | {
+      type: "JOIN_TURMA";
+      turmaId: string;
+    }
+  | {
+      type: "JOIN_EVENT";
+      eventoId: string;
+    }
+  | {
+      type: "OPEN_EVENT_CONVOCATION";
+      eventoId: string;
+    };
 
 const SESSION_KEYS = [
   "token",
@@ -66,6 +78,7 @@ const MAP_TIPO: Record<string, string> = {
   learning: "learning",
   federacao: "federacao",
   marca: "marca",
+  creator: "creator",
 };
 
 export function applyAuthSession(
@@ -386,6 +399,57 @@ function validarAcaoPendente(
     return {
       type,
       postId,
+    };
+  }
+
+  if (
+    type ===
+    "START_PUBLIC_TRAINING"
+  ) {
+    const treinoProgramadoId =
+      identificadorValido(
+        valor.treinoProgramadoId
+      );
+
+    if (!treinoProgramadoId) {
+      return null;
+    }
+
+    return {
+      type,
+      treinoProgramadoId,
+    };
+  }
+
+  if (type === "JOIN_TURMA") {
+    const turmaId =
+      identificadorValido(
+        valor.turmaId
+      );
+
+    if (!turmaId) {
+      return null;
+    }
+
+    return {
+      type,
+      turmaId,
+    };
+  }
+
+  if (type === "JOIN_EVENT") {
+    const eventoId =
+      identificadorValido(
+        valor.eventoId
+      );
+
+    if (!eventoId) {
+      return null;
+    }
+
+    return {
+      type,
+      eventoId,
     };
   }
 

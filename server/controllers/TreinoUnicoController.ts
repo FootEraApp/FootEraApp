@@ -9,12 +9,11 @@ type RowEx = {
   duracao?: string | null;
   descanso?: string | null;
   ordem?: number | null;
-
+  descricaoExecucao?: string | null;
   exercicio?: {
     id: string;
     nome: string;
     objetivo?: string | null;
-    descricao?: string | null;
     videoDemonstrativoUrl: string | null;
     nivel: string | null;
   } | null;
@@ -36,28 +35,76 @@ type RowEx = {
   } | null;
 };
 
-function montarExercicios(rows: RowEx[]) {
+function montarExercicios(
+  rows: RowEx[]
+) {
   return (rows ?? [])
-    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+    .sort(
+      (a, b) =>
+        (a.ordem ?? 0) -
+        (b.ordem ?? 0)
+    )
     .map((x) => {
-      const base = x.exercicio ?? x.exercicioTemporario ?? x.exercicioPersonalizado;
+      const base =
+        x.exercicio ??
+        x.exercicioTemporario ??
+        x.exercicioPersonalizado;
+
+      const descricaoBase =
+        x.exercicio
+          ? x.exercicio.objetivo ??
+            null
+          : x.exercicioTemporario
+              ?.descricao ??
+            x.exercicioPersonalizado
+              ?.descricao ??
+            null;
 
       return {
-        id: base?.id ?? x.id ?? "",
-        nome: base?.nome ?? "",
-        repeticoes: x.repeticoes ?? null,
-        series: x.series ?? null,
-        duracao: x.duracao ?? null,
-        descanso: x.descanso ?? null,
-        descricao:
-          (x.exercicio ? x.exercicio.objetivo : null) ??
-          base?.descricao ??
+        id:
+          base?.id ??
+          x.id ??
+          "",
+
+        nome:
+          base?.nome ??
+          "",
+
+        repeticoes:
+          x.repeticoes ??
           null,
-        videoUrl: base?.videoDemonstrativoUrl ?? null,
-        nivel: base?.nivel ?? null,
+
+        series:
+          x.series ??
+          null,
+
+        duracao:
+          x.duracao ??
+          null,
+
+        descanso:
+          x.descanso ??
+          null,
+
+        descricao:
+          x.descricaoExecucao ??
+          descricaoBase ??
+          null,
+
+        videoUrl:
+          base
+            ?.videoDemonstrativoUrl ??
+          null,
+
+        nivel:
+          base?.nivel ??
+          null,
       };
     })
-    .filter((e) => e.nome);
+    .filter(
+      (e) =>
+        e.nome
+    );
 }
 
 function montarOrigem(tp: any) {
@@ -140,7 +187,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
               exercicios: {
                 include: {
                   exercicio: {
-                    select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true, nivel: true },
+                    select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true, nivel: true, },
                   },
                   exercicioTemporario: {
                     select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
@@ -160,7 +207,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
 
       if (!ag) return res.status(404).json({ message: "Treino agendado não encontrado." });
 
-      const tpId = ag.treinoProgramado?.id ?? null;
+      const tpId = ag.treinoProgramadoId ?? null;
 
       const est = tpId
         ? await prisma.estatisticaTreino.findUnique({
@@ -194,7 +241,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
         exercicios: {
           include: {
             exercicio: {
-              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true, nivel: true },
+              select: { id: true, nome: true, objetivo: true, videoDemonstrativoUrl: true, nivel: true},
             },
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
@@ -340,6 +387,46 @@ export async function getTreinoProgramadoPublico(
                 nome: true,
               },
             },
+
+            metodologias: {
+              select: {
+                id: true,
+              },
+            },
+
+            exercicios: {
+              include: {
+                exercicio: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    objetivo: true,
+                    videoDemonstrativoUrl: true,
+                    nivel: true,
+                  },
+                },
+
+                exercicioTemporario: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    descricao: true,
+                    videoDemonstrativoUrl: true,
+                    nivel: true,
+                  },
+                },
+
+                exercicioPersonalizado: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    descricao: true,
+                    videoDemonstrativoUrl: true,
+                    nivel: true,
+                  },
+                },
+              },
+            },
           },
         });
 
@@ -349,6 +436,10 @@ export async function getTreinoProgramadoPublico(
           "Treino não encontrado.",
       });
     }
+
+    const conteudoProtegido =
+      Boolean(tp.metodologia) ||
+      tp.metodologias.length > 0;
 
     const estatistica =
       await prisma
@@ -363,6 +454,38 @@ export async function getTreinoProgramadoPublico(
           },
         });
 
+    const viewerUsuarioId = String(
+      (req as AuthenticatedRequest).userId ??
+        (req as any).user?.id ??
+        ""
+    ).trim();
+
+    let minhasRealizacoes: number | null = null;
+    let temPerfilAtleta = false;
+
+    if (viewerUsuarioId) {
+      const atletaViewer = await prisma.atleta.findUnique({
+        where: {
+          usuarioId: viewerUsuarioId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (atletaViewer?.id) {
+        temPerfilAtleta = true;
+
+        minhasRealizacoes =
+          await prisma.treinoAgendado.count({
+            where: {
+              atletaId: atletaViewer.id,
+              treinoProgramadoId: tp.id,
+              status: "CONCLUIDO",
+            },
+          });
+      }
+    }
     return res.json({
       tipo:
         "programado",
@@ -433,8 +556,22 @@ export async function getTreinoProgramadoPublico(
             ?.realizacoes ?? 0
         ),
 
-      // Não liberar conteúdo do treino no preview.
-      exercicios: [],
+      minhasRealizacoes,
+
+      temPerfilAtleta,
+
+      podeIniciar:
+        temPerfilAtleta &&
+        !conteudoProtegido,
+
+      exercicios:
+        conteudoProtegido
+          ? []
+          : montarExercicios(
+              tp.exercicios ?? []
+            ),
+
+      conteudoProtegido,
     });
   } catch (error) {
     console.error(

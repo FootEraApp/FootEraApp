@@ -50,78 +50,136 @@ export async function auth(req: any, res: Response, next: NextFunction) {
 
     const payload: any = jwt.verify(token, JWT_SECRET);
 
-    const userId = String(payload.id);
-    let tipo: string | undefined = (payload.tipo || payload.tipoUsuario || "").toLowerCase();
-    let tipoUsuarioId: string | undefined = payload.tipoUsuarioId;
+    const userId =
+      String(payload.id);
 
-    if (!tipoUsuarioId) {
-      const club = await prisma.clube.findFirst({
-        where: { usuarioId: userId },
-        select: { id: true },
-      });
-      if (club) {
-        tipo = "clube";
-        tipoUsuarioId = club.id;
-      }
-    }
-
-    if (!tipoUsuarioId) {
-      const escola = await prisma.escolinha.findFirst({
-        where: { usuarioId: userId },
-        select: { id: true },
-      });
-      if (escola) {
-        tipo = "escolinha";
-        tipoUsuarioId = escola.id;
-      }
-    }
-
-    if (!tipoUsuarioId) {
-      const professor = await prisma.professor.findFirst({
-        where: { usuarioId: userId },
-        select: { id: true },
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          tipo: true,
+        },
       });
 
-      if (professor) {
-        tipo = "professor";
-        tipoUsuarioId = professor.id;
-      }
-    }
+    const tipo =
+      normalizarTipo(
+        usuario?.tipo ||
+        payload.tipo ||
+        payload.tipoUsuario
+      );
+
+    let tipoUsuarioId:
+      | string
+      | undefined;
 
     if (!tipoUsuarioId) {
-      const olheiro = await prisma.olheiro.findFirst({
-        where: { usuarioId: userId },
-        select: { id: true },
-      });
+      let perfil:
+        | { id: string }
+        | null = null;
 
-      if (olheiro) {
-        tipo = "olheiro";
-        tipoUsuarioId = olheiro.id;
+      switch (tipo) {
+        case "atleta":
+          perfil =
+            await prisma.atleta.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "clube":
+          perfil =
+            await prisma.clube.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "escola":
+        case "escolinha":
+          perfil =
+            await prisma.escolinha.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "professor":
+          perfil =
+            await prisma.professor.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "olheiro":
+          perfil =
+            await prisma.olheiro.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "federacao":
+          perfil =
+            await prisma.federacao.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "marca":
+          perfil =
+            await prisma.marca.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
+
+        case "creator":
+          perfil =
+            await prisma.creator.findFirst({
+              where: {
+                usuarioId: userId,
+              },
+              select: {
+                id: true,
+              },
+            });
+          break;
       }
-    }
 
-    if (!tipoUsuarioId) {
-      const federacao = await prisma.federacao.findFirst({
-        where: { usuarioId: userId },
-        select: { id: true },
-      });
-
-      if (federacao) {
-        tipo = "federacao";
-        tipoUsuarioId = federacao.id;
-      }
-    }
-
-    if (!tipoUsuarioId) {
-      const marca = await prisma.marca.findFirst({
-        where: { usuarioId: userId },
-        select: { id: true },
-      });
-
-      if (marca) {
-        tipo = "marca";
-        tipoUsuarioId = marca.id;
-      }
+      tipoUsuarioId =
+        perfil?.id;
     }
 
     req.user = {
@@ -262,69 +320,141 @@ function validarDatasEventoPayload(params: {
   return "";
 }
 
-export async function listarPublicos(req: Request & { user?: any }, res: Response) {
+export async function listarPublicos(
+  req: Request & {
+    user?: any;
+    userId?: string;
+  },
+  res: Response
+) {
   try {
-    const creatorUsuarioId = String(req.query.creatorUsuarioId || "").trim();
+    const creatorUsuarioId =
+      String(
+        req.query.creatorUsuarioId ||
+        ""
+      ).trim();
 
-    const agora = new Date();
+    const agora =
+      new Date();
 
     const where: any = {
-      status: "ABERTO",
+      status:
+        "ABERTO",
+
       dataEvento: {
-        gte: agora,
+        gte:
+          agora,
       },
     };
 
-    if (creatorUsuarioId) {
-      where.creatorUsuarioId = creatorUsuarioId;
+    if (
+      creatorUsuarioId
+    ) {
+      where.creatorUsuarioId =
+        creatorUsuarioId;
     }
 
-    const eventos = await prisma.evento.findMany({
-      where,
-      include: {
-        clube: true,
-        escolinha: true,
-        inscricoes: true,
-      },
-      orderBy: { dataEvento: "asc" },
-    });
+    const eventos =
+      await prisma.evento.findMany({
+        where,
 
-    const userId = req.user?.id;
+        include: {
+          clube: true,
+          escolinha: true,
 
-    const mapped =
-      eventos.map((ev) => {
-        const {
-          inscricoes,
-          ...eventoPublico
-        } = ev;
+          inscricoes: {
+            select: {
+              usuarioId:
+                true,
 
-        return {
-          ...eventoPublico,
+              status:
+                true,
+            },
+          },
+        },
 
-          tipoLabel:
-            mapEventoTipoLabel(
-              ev.tipo
-            ),
-
-          totalInscritos:
-            inscricoes?.length ??
-            0,
-
-          inscrito:
-            userId
-              ? inscricoes.some(
-                  (i) =>
-                    i.usuarioId ===
-                    userId
-                )
-              : false,
-        };
+        orderBy: {
+          dataEvento:
+            "asc",
+        },
       });
 
-    return res.json(mapped);
-  } catch (e) {
-    console.error("Erro listando eventos públicos", e);
-    return res.status(500).json({ message: "Erro interno" });
+    const userId =
+      String(
+        req.userId ||
+          req.user?.id ||
+          ""
+      ).trim();
+
+    const mapped =
+      eventos.map(
+        (ev) => {
+          const {
+            inscricoes,
+            ...eventoPublico
+          } = ev;
+
+          const inscricoesAtivas =
+            inscricoes.filter(
+              (inscricao) =>
+                inscricao.status !==
+                "CANCELADA"
+            );
+
+          const totalInscritos =
+            inscricoesAtivas.length;
+
+          const vagasDisponiveis =
+            ev.vagas == null
+              ? null
+              : Math.max(
+                  0,
+                  ev.vagas -
+                    totalInscritos
+                );
+
+          const inscrito =
+            Boolean(
+              userId &&
+                inscricoesAtivas.some(
+                  (
+                    inscricao
+                  ) =>
+                    inscricao.usuarioId ===
+                    userId
+                )
+            );
+
+          return {
+            ...eventoPublico,
+
+            tipoLabel:
+              mapEventoTipoLabel(
+                ev.tipo
+              ),
+
+            totalInscritos,
+
+            vagasDisponiveis,
+
+            inscrito,
+          };
+        }
+      );
+
+    return res.json(
+      mapped
+    );
+  } catch (error) {
+    console.error(
+      "Erro listando eventos públicos",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Erro interno",
+    });
   }
 }
 
@@ -467,15 +597,567 @@ export async function criar(req: any, res: Response) {
   }
 }
 
-export async function obter(req: Request, res: Response) {
-  const { id } = req.params;
-  const ev = await prisma.evento.findUnique({ where: { id } });
-  if (!ev) return res.status(404).json({ error: "Evento não encontrado" });
+export async function obter(
+  req: Request & {
+    user?: any;
+    userId?: string;
+  },
+  res: Response
+) {
+  try {
+    const id =
+      String(
+        req.params.id || ""
+      ).trim();
 
-  res.json({
-    ...ev,
-    tipoLabel: mapEventoTipoLabel(ev.tipo),
-  });
+    const usuarioId =
+      String(
+        req.userId ||
+          req.user?.id ||
+          ""
+      ).trim();
+
+    const ev =
+      await prisma.evento.findUnique({
+        where: {
+          id,
+        },
+
+        include: {
+          clube: {
+            select: {
+              id: true,
+              nome: true,
+              logo: true,
+              usuarioId: true,
+
+              usuario: {
+                select: {
+                  nomeDeUsuario:
+                    true,
+                },
+              },
+            },
+          },
+
+          escolinha: {
+            select: {
+              id: true,
+              nome: true,
+              logo: true,
+              usuarioId: true,
+
+              usuario: {
+                select: {
+                  nomeDeUsuario:
+                    true,
+                },
+              },
+            },
+          },
+
+          federacao: {
+            select: {
+              id: true,
+              nome: true,
+              logo: true,
+              usuarioId: true,
+
+              usuario: {
+                select: {
+                  nomeDeUsuario:
+                    true,
+                },
+              },
+            },
+          },
+
+          marca: {
+            select: {
+              id: true,
+              nome: true,
+              logo: true,
+              usuarioId: true,
+
+              usuario: {
+                select: {
+                  nomeDeUsuario:
+                    true,
+                },
+              },
+            },
+          },
+
+          inscricoes: {
+            select: {
+              usuarioId: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+    if (!ev) {
+      return res.status(404).json({
+        error:
+          "Evento não encontrado",
+      });
+    }
+
+    const creator =
+      ev.creatorUsuarioId
+        ? await prisma.usuario.findUnique({
+            where: {
+              id:
+                ev.creatorUsuarioId,
+            },
+
+            select: {
+              id: true,
+              nome: true,
+              foto: true,
+              nomeDeUsuario:
+                true,
+            },
+          })
+        : null;
+
+    const inscricoesAtivas =
+      ev.inscricoes.filter(
+        (item) =>
+          item.status !==
+          "CANCELADA"
+      );
+
+    const minhaInscricao =
+      usuarioId
+        ? ev.inscricoes.find(
+            (item) =>
+              item.usuarioId ===
+                usuarioId &&
+              item.status !==
+                "CANCELADA"
+          )
+        : undefined;
+
+    const totalInscritos =
+      inscricoesAtivas.length;
+
+    const vagasDisponiveis =
+      ev.vagas == null
+        ? null
+        : Math.max(
+            0,
+            ev.vagas -
+              totalInscritos
+          );
+
+    const podeGerenciar =
+      Boolean(
+        usuarioId &&
+          (
+            ev.creatorUsuarioId ===
+              usuarioId ||
+
+            ev.clube?.usuarioId ===
+              usuarioId ||
+
+            ev.escolinha
+              ?.usuarioId ===
+              usuarioId ||
+
+            ev.federacao
+              ?.usuarioId ===
+              usuarioId ||
+
+            ev.marca?.usuarioId ===
+              usuarioId ||
+
+            req.user?.isAdmin ===
+              true ||
+
+            String(
+              req.user?.tipo || ""
+            ).toLowerCase() ===
+              "admin"
+          )
+      );
+
+    const organizador =
+      ev.clube
+        ? {
+            tipo: "Clube",
+            id: ev.clube.id,
+            nome: ev.clube.nome,
+            logo: ev.clube.logo,
+            nomeDeUsuario:
+              ev.clube.usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : ev.escolinha
+        ? {
+            tipo: "Escolinha",
+            id:
+              ev.escolinha.id,
+            nome:
+              ev.escolinha.nome,
+            logo:
+              ev.escolinha.logo,
+            nomeDeUsuario:
+              ev.escolinha
+                .usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : ev.federacao
+        ? {
+            tipo: "Federacao",
+            id:
+              ev.federacao.id,
+            nome:
+              ev.federacao.nome,
+            logo:
+              ev.federacao.logo,
+            nomeDeUsuario:
+              ev.federacao
+                .usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : ev.marca
+        ? {
+            tipo: "Marca",
+            id: ev.marca.id,
+            nome: ev.marca.nome,
+            logo: ev.marca.logo,
+            nomeDeUsuario:
+              ev.marca.usuario
+                ?.nomeDeUsuario ??
+              null,
+          }
+        : creator
+        ? {
+            tipo:
+              ev.creatorTipo ||
+              "Creator",
+
+            id:
+              creator.id,
+
+            nome:
+              creator.nome,
+
+            logo:
+              creator.foto,
+
+            nomeDeUsuario:
+              creator.nomeDeUsuario,
+          }
+        : null;
+
+    const agora =
+      new Date();
+
+    const inscricoesAbertas =
+      ev.status === "ABERTO" &&
+      ev.dataEvento > agora &&
+      (
+        !ev.inscricaoInicio ||
+        agora >=
+          ev.inscricaoInicio
+      ) &&
+      (
+        !ev.inscricaoFim ||
+        agora <=
+          ev.inscricaoFim
+      );
+
+    const {
+      inscricoes,
+      ...eventoPublico
+    } = ev;
+
+    return res.json({
+      ...eventoPublico,
+
+      tipoLabel:
+        mapEventoTipoLabel(
+          ev.tipo
+        ),
+
+      organizador,
+
+      totalInscritos,
+      vagasDisponiveis,
+
+      inscrito:
+        Boolean(
+          minhaInscricao
+        ),
+
+      inscricaoStatus:
+        minhaInscricao?.status ??
+        null,
+
+      inscricoesAbertas,
+      podeGerenciar,
+    });
+  } catch (error) {
+    console.error(
+      "Erro ao obter evento:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível carregar o evento.",
+    });
+  }
+}
+
+export async function participarEvento(
+  req: any,
+  res: Response
+) {
+  try {
+    const eventoId =
+      String(
+        req.params.id || ""
+      ).trim();
+
+    const usuarioId =
+      String(
+        req.userId ||
+          req.user?.id ||
+          ""
+      ).trim();
+
+    if (!usuarioId) {
+      return res.status(401).json({
+        code: "AUTH_REQUIRED",
+        message:
+          "Entre na FootEra para participar deste evento.",
+      });
+    }
+
+    const [evento, atleta] =
+      await Promise.all([
+        prisma.evento.findUnique({
+          where: {
+            id: eventoId,
+          },
+        }),
+
+        prisma.atleta.findUnique({
+          where: {
+            usuarioId,
+          },
+
+          select: {
+            id: true,
+          },
+        }),
+      ]);
+
+    if (!evento) {
+      return res.status(404).json({
+        message:
+          "Evento não encontrado.",
+      });
+    }
+
+    if (!atleta) {
+      return res.status(403).json({
+        code: "ATLETA_REQUIRED",
+        message:
+          "Você precisa possuir um perfil de Atleta para participar deste evento.",
+      });
+    }
+
+    const agora =
+      new Date();
+
+    if (
+      evento.status !==
+        "ABERTO" ||
+      evento.dataEvento <=
+        agora
+    ) {
+      return res.status(409).json({
+        message:
+          "Este evento não está disponível para inscrições.",
+      });
+    }
+
+    if (
+      evento.inscricaoInicio &&
+      agora <
+        evento.inscricaoInicio
+    ) {
+      return res.status(409).json({
+        message:
+          "As inscrições ainda não começaram.",
+      });
+    }
+
+    if (
+      evento.inscricaoFim &&
+      agora >
+        evento.inscricaoFim
+    ) {
+      return res.status(409).json({
+        message:
+          "As inscrições já foram encerradas.",
+      });
+    }
+
+    const existente =
+      await prisma.inscricaoEvento.findUnique({
+        where: {
+          eventoId_usuarioId: {
+            eventoId,
+            usuarioId,
+          },
+        },
+      });
+
+    if (
+      existente &&
+      existente.status !==
+        "CANCELADA"
+    ) {
+      return res.json({
+        ok: true,
+        inscrito: true,
+        status:
+          existente.status,
+      });
+    }
+
+    const total =
+      await prisma.inscricaoEvento.count({
+        where: {
+          eventoId,
+
+          status: {
+            not:
+              "CANCELADA",
+          },
+        },
+      });
+
+    if (
+      evento.vagas != null &&
+      total >= evento.vagas
+    ) {
+      return res.status(409).json({
+        code: "EVENT_FULL",
+        message:
+          "As vagas deste evento estão esgotadas.",
+      });
+    }
+
+    /*
+     * Se existe link externo de inscrição,
+     * mantém o fluxo já existente.
+     */
+    if (
+      evento.linkInscricao
+    ) {
+      return res.json({
+        ok: true,
+        external: true,
+        linkInscricao:
+          evento.linkInscricao,
+      });
+    }
+
+    const valor =
+      Number(
+        evento.valorInscricao ??
+          0
+      );
+
+    if (
+      Number.isFinite(valor) &&
+      valor > 0
+    ) {
+      return res.status(402).json({
+        code:
+          "PAYMENT_REQUIRED",
+
+        message:
+          "Este evento possui inscrição paga.",
+
+        eventoId,
+        valor,
+      });
+    }
+
+    const inscricao =
+      await prisma.inscricaoEvento.upsert({
+        where: {
+          eventoId_usuarioId: {
+            eventoId,
+            usuarioId,
+          },
+        },
+
+        create: {
+          eventoId,
+          usuarioId,
+          status:
+            "CONFIRMADA",
+        },
+
+        update: {
+          status:
+            "CONFIRMADA",
+        },
+      });
+
+    const totalInscritos =
+      await prisma.inscricaoEvento.count({
+        where: {
+          eventoId,
+
+          status: {
+            not:
+              "CANCELADA",
+          },
+        },
+      });
+
+    return res.status(201).json({
+      ok: true,
+      inscrito: true,
+
+      status:
+        inscricao.status,
+
+      totalInscritos,
+
+      vagasDisponiveis:
+        evento.vagas == null
+          ? null
+          : Math.max(
+              0,
+              evento.vagas -
+                totalInscritos
+            ),
+    });
+  } catch (error) {
+    console.error(
+      "participarEvento:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Não foi possível realizar a inscrição.",
+    });
+  }
 }
 
 function mapEventoToAgendaItem(ev: any) {
@@ -536,42 +1218,176 @@ export async function minhaAgenda(req: any, res: Response) {
 
       if (!atleta?.id) return res.json([]);
 
-      const convWhere: any = {
-        atletaId: atleta.id,
-        evento: {
-          status: "ABERTO",
-          dataEvento: { gte: fromDate },
+      const eventoWhereAtleta:
+        any = {
+        status: "ABERTO",
+
+        dataEvento: {
+          gte:
+            fromDate,
         },
       };
 
-      if (toDate) convWhere.evento.dataEvento.lte = toDate;
-
-      if (alvoId) {
-        const clube = await prisma.clube.findUnique({
-          where: { id: String(alvoId) },
-          select: { id: true },
-        });
-        if (clube) convWhere.evento.clubeId = clube.id;
+      if (toDate) {
+        eventoWhereAtleta
+          .dataEvento.lte =
+          toDate;
       }
 
-      const convocacoes = await prisma.eventoConvocado.findMany({
-        where: convWhere,
-        include: {
-          evento: { select: { id: true, tipo: true, titulo: true, dataEvento: true } },
-        },
-        orderBy: { evento: { dataEvento: "asc" } },
-        take: 200,
-      });
+      if (alvoId) {
+        const clube =
+          await prisma.clube.findUnique({
+            where: {
+              id:
+                String(alvoId),
+            },
 
-      const items = convocacoes.map((c) => ({
-        id: c.evento.id,
-        tipo: c.evento.tipo ?? "EVENTO",
-        tipoLabel: mapEventoTipoLabel(c.evento.tipo),
-        titulo: c.evento.titulo,
-        inicio: c.evento.dataEvento,
-        fim: null,
-        origem: "CONVOCACAO" as const,
-      }));
+            select: {
+              id: true,
+            },
+          });
+
+        if (clube) {
+          eventoWhereAtleta.clubeId =
+            clube.id;
+        }
+      }
+
+      const [
+        convocacoes,
+        inscricoes,
+      ] = await Promise.all([
+        prisma.eventoConvocado.findMany({
+          where: {
+            atletaId:
+              atleta.id,
+
+            evento: eventoWhereAtleta,
+          },
+
+          include: {
+            evento: {
+              select: {
+                id: true,
+                tipo: true,
+                titulo: true,
+                dataEvento: true,
+              },
+            },
+          },
+
+          orderBy: {
+            evento: {
+              dataEvento:
+                "asc",
+            },
+          },
+
+          take: 200,
+        }),
+
+        prisma.inscricaoEvento.findMany({
+          where: {
+            usuarioId,
+
+            status: {
+              not:
+                "CANCELADA",
+            },
+
+            evento:
+              eventoWhereAtleta,
+          },
+
+          include: {
+            evento: {
+              select: {
+                id: true,
+                tipo: true,
+                titulo: true,
+                dataEvento: true,
+              },
+            },
+          },
+
+          take: 200,
+        }),
+      ]);
+
+      const mapa =
+        new Map<
+          string,
+          {
+            id: string;
+            tipo: any;
+            titulo: string;
+            inicio: Date;
+            fim: null;
+          }
+        >();
+
+      for (
+        const item of convocacoes
+      ) {
+        mapa.set(
+          item.evento.id,
+          {
+            id:
+              item.evento.id,
+
+            tipo:
+              item.evento.tipo ??
+              "EVENTO",
+
+            titulo:
+              item.evento.titulo,
+
+            inicio:
+              item.evento.dataEvento,
+
+            fim:
+              null,
+          }
+        );
+      }
+
+      for (
+        const item of inscricoes
+      ) {
+        mapa.set(
+          item.evento.id,
+          {
+            id:
+              item.evento.id,
+
+            tipo:
+              item.evento.tipo ??
+              "EVENTO",
+
+            titulo:
+              item.evento.titulo,
+
+            inicio:
+              item.evento.dataEvento,
+
+            fim:
+              null,
+          }
+        );
+      }
+
+      const items =
+        Array.from(
+          mapa.values()
+        ).sort(
+          (a, b) =>
+            new Date(
+              a.inicio
+            ).getTime() -
+            new Date(
+              b.inicio
+            ).getTime()
+        );
 
       return res.json(items);
     }
@@ -593,43 +1409,195 @@ export async function minhaAgenda(req: any, res: Response) {
   }
 }
 
-export async function eventosDoAtleta(req: any, res: Response) {
+export async function eventosDoAtleta(
+  req: any,
+  res: Response
+) {
   try {
-    const usuarioId = String(req.user?.id || "").trim();
-    if (!usuarioId) return res.json([]);
+    const usuarioId =
+      String(
+        req.user?.id ||
+        req.userId ||
+        ""
+      ).trim();
 
-    const atleta = await prisma.atleta.findFirst({
-      where: { usuarioId },
-      select: { id: true },
+    if (!usuarioId) {
+      return res.json([]);
+    }
+
+    const atleta =
+      await prisma.atleta.findFirst({
+        where: {
+          usuarioId,
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (!atleta?.id) {
+      return res.json([]);
+    }
+
+    const agora =
+      new Date();
+
+    const [
+      convocacoes,
+      inscricoes,
+    ] =
+      await Promise.all([
+        prisma.eventoConvocado.findMany({
+          where: {
+            atletaId:
+              atleta.id,
+
+            evento: {
+              status:
+                "ABERTO",
+
+              dataEvento: {
+                gte:
+                  agora,
+              },
+            },
+          },
+
+          include: {
+            evento: {
+              select: {
+                id: true,
+                tipo: true,
+                titulo: true,
+                dataEvento:
+                  true,
+              },
+            },
+          },
+
+          take: 200,
+        }),
+
+        prisma.inscricaoEvento.findMany({
+          where: {
+            usuarioId,
+
+            status: {
+              not:
+                "CANCELADA",
+            },
+
+            evento: {
+              status:
+                "ABERTO",
+
+              dataEvento: {
+                gte:
+                  agora,
+              },
+            },
+          },
+
+          include: {
+            evento: {
+              select: {
+                id: true,
+                tipo: true,
+                titulo: true,
+                dataEvento:
+                  true,
+              },
+            },
+          },
+
+          take: 200,
+        }),
+      ]);
+
+    const mapa =
+      new Map<string, any>();
+
+    for (
+      const item of
+      convocacoes
+    ) {
+      mapa.set(
+        item.evento.id,
+        {
+          id:
+            item.evento.id,
+
+          tipo:
+            item.evento.tipo ??
+            "EVENTO",
+
+          titulo:
+            item.evento.titulo,
+
+          inicio:
+            item.evento
+              .dataEvento,
+
+          fim:
+            null,
+        }
+      );
+    }
+
+    for (
+      const item of
+      inscricoes
+    ) {
+      mapa.set(
+        item.evento.id,
+        {
+          id:
+            item.evento.id,
+
+          tipo:
+            item.evento.tipo ??
+            "EVENTO",
+
+          titulo:
+            item.evento.titulo,
+
+          inicio:
+            item.evento
+              .dataEvento,
+
+          fim:
+            null,
+        }
+      );
+    }
+
+    const items =
+      Array.from(
+        mapa.values()
+      ).sort(
+        (a, b) =>
+          new Date(
+            a.inicio
+          ).getTime() -
+          new Date(
+            b.inicio
+          ).getTime()
+      );
+
+    return res.json(
+      items
+    );
+  } catch (error) {
+    console.error(
+      "Erro em eventos.eventosDoAtleta:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Erro ao carregar eventos do atleta",
     });
-    if (!atleta?.id) return res.json([]);
-
-    const agora = new Date();
-
-    const convocacoes = await prisma.eventoConvocado.findMany({
-      where: {
-        atletaId: atleta.id,
-        evento: { status: "ABERTO", dataEvento: { gte: agora } },
-      },
-      include: {
-        evento: { select: { id: true, tipo: true, titulo: true, dataEvento: true } },
-      },
-      orderBy: { evento: { dataEvento: "asc" } },
-      take: 200,
-    });
-
-    const items = convocacoes.map((c) => ({
-      id: c.evento.id,
-      tipo: c.evento.tipo ?? "EVENTO",
-      titulo: c.evento.titulo,
-      inicio: c.evento.dataEvento,
-      fim: null,
-    }));
-
-    return res.json(items);
-  } catch (e) {
-    console.error("Erro em eventos.eventosDoAtleta:", e);
-    return res.status(500).json({ error: "Erro ao carregar eventos do atleta" });
   }
 }
 
@@ -640,15 +1608,21 @@ function normalizarTipo(tipo?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function podeCriarEvento(tipo?: string | null) {
-  const t = normalizarTipo(tipo);
+function podeCriarEvento(
+  tipo?: string | null
+) {
+  const t =
+    normalizarTipo(tipo);
+
   return [
     "professor",
     "olheiro",
     "clube",
     "escolinha",
+    "escola",
     "federacao",
     "marca",
+    "creator",
   ].includes(t);
 }
 
@@ -803,8 +1777,15 @@ export async function criarEventoCreator(req: any, res: Response) {
       data.clubeId = String(req.user.tipoUsuarioId);
     }
 
-    if (tipoUsuario === "escolinha" && req.user?.tipoUsuarioId) {
-      data.escolinhaId = String(req.user.tipoUsuarioId);
+    if (
+      (
+        tipoUsuario === "escolinha" ||
+        tipoUsuario === "escola"
+      ) &&
+      req.user?.tipoUsuarioId
+    ) {
+      data.escolinhaId =
+        String(req.user.tipoUsuarioId);
     }
 
     if (tipoUsuario === "federacao" && req.user?.tipoUsuarioId) {
