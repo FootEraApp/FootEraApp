@@ -40,24 +40,30 @@ type DirectTipo =
   | "DESAFIO"
   | "USUARIO";
 
+export type ShareAction =
+  | "copiar"
+  | "whatsapp"
+  | "email"
+  | "nativo"
+  | "footera"
+  | "direct";
+
 type Props = {
   open: boolean;
   onClose: () => void;
-
   titulo: string;
-
   // Ex.: /treino/123
   path: string;
-
   directTipo?: DirectTipo;
-
   // POST → id do post
   // USUARIO → id do usuário
   // DESAFIO → id do desafio
   // NORMAL → opcional; usa título + URL se não informar
   directConteudo?: string;
-
   mostrarDirect?: boolean;
+    onAction?: (
+    action: ShareAction
+  ) => void | Promise<void>;
 };
 
 const FOTO_FALLBACK =
@@ -83,6 +89,7 @@ export default function PublicShareModal({
   directTipo = "NORMAL",
   directConteudo,
   mostrarDirect = true,
+  onAction,
 }: Props) {
   const [
     usuarios,
@@ -225,10 +232,31 @@ export default function PublicShareModal({
     );
   }
 
+  async function notificarAcao(
+    action: ShareAction
+  ) {
+    if (!onAction) {
+      return;
+    }
+
+    try {
+      await onAction(action);
+    } catch (error) {
+      console.error(
+        "[PublicShareModal] Erro ao registrar ação:",
+        error
+      );
+    }
+  }
+
   async function copiar() {
     try {
       await navigator.clipboard
         .writeText(url);
+
+      void notificarAcao(
+        "copiar"
+      );
 
       toast.success(
         "Link copiado!"
@@ -248,6 +276,10 @@ export default function PublicShareModal({
       "_blank",
       "noopener,noreferrer"
     );
+
+    void notificarAcao(
+      "whatsapp"
+    );
   }
 
   function email() {
@@ -260,6 +292,10 @@ export default function PublicShareModal({
       encodeURIComponent(
         `Confira no FootEra:\n${url}`
       );
+
+    void notificarAcao(
+      "email"
+    );
 
     window.location.href =
       `mailto:?subject=${subject}&body=${body}`;
@@ -274,6 +310,10 @@ export default function PublicShareModal({
           title: titulo,
           url,
         });
+
+        void notificarAcao(
+          "nativo"
+        );
 
         return;
       }
@@ -366,6 +406,9 @@ export default function PublicShareModal({
         )
       );
 
+      await notificarAcao(
+        "direct"
+      );
       toast.success(
         "Compartilhado pelo Direct!"
       );
@@ -742,6 +785,11 @@ export default function PublicShareModal({
 
           <a
             href={url}
+            onClick={() => {
+            void notificarAcao(
+                "footera"
+            );
+            }}
             className="
               flex
               items-center

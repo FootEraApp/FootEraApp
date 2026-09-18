@@ -13,7 +13,6 @@ import {
 import {
   House,
   Send,
-  CircleCheck,
   Trophy,
 } from "lucide-react";
 import {
@@ -21,6 +20,7 @@ import {
   likePost,
   comentarPost,
   PostagemComUsuario,
+  registrarCompartilhamentoPost,
   deletarPost,
   repostPost,
   deletarComentario,
@@ -29,7 +29,6 @@ import {
 import { format } from "date-fns";
 import { Link, useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
-import { API, APP } from "../config.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import socket from "../services/socket.js";
 import { http } from "../services/http.js";
@@ -41,17 +40,7 @@ import {
   lerAcaoPendenteAuth,
   limparAcaoPendenteAuth,
 } from "../utils/authSession.js";
-
-interface Usuario {
-  id: string;
-  nome: string;
-  foto?: string | null;
-}
-
-async function getUsuariosMutuos(): Promise<Usuario[]> {
-  const { data } = await http.get<Usuario[]>("/api/seguidores/mutuos");
-  return data;
-}
+import PublicShareModal from "../components/share/PublicShareModal.js";
 
 const ENABLE_TOP_HOME_BUTTON = false;
 
@@ -537,15 +526,15 @@ function PaginaFeed(): JSX.Element {
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>(
     {}
   );
-  const [modalAberto, setModalAberto] = useState(false);
-  const [linkCompartilhado, setLinkCompartilhado] = useState("");
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
-  const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [carregandoMutuos, setCarregandoMutuos] = useState(false);
-  const [enviandoDM, setEnviandoDM] = useState(false);
-  const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
+  const [
+    postCompartilhar,
+    setPostCompartilhar,
+  ] =
+    useState<PostagemComUsuario | null>(
+      null
+    );
   const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos">("todos");
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
@@ -570,7 +559,7 @@ function PaginaFeed(): JSX.Element {
     "";
 
   React.useEffect(() => {
-    setModalAberto(false);
+    setPostCompartilhar(null);
     setComentariosModalAberto(false);
     setPostSelecionado(null);
 
@@ -885,58 +874,12 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
-  const handleCompartilhar =
-    async (
-      postId: string
+  const handleCompartilhar = (
+      post: PostagemComUsuario
     ) => {
-      const link =
-        `${APP.FRONTEND_BASE_URL}/post/${postId}`;
-
-      setLinkCompartilhado(
-        link
+      setPostCompartilhar(
+        post
       );
-
-      setIdCompartilhado(
-        postId
-      );
-
-      setModalAberto(true);
-
-      if (!userId) {
-        setUsuariosMutuos([]);
-        setSelecionados(
-          new Set()
-        );
-
-        return;
-      }
-
-      try {
-        setCarregandoMutuos(
-          true
-        );
-
-        setSelecionados(
-          new Set()
-        );
-
-        const lista =
-          await getUsuariosMutuos();
-
-        setUsuariosMutuos(
-          lista
-        );
-      } catch (e) {
-        console.error(e);
-
-        toast.error(
-          "Não foi possível carregar seus contatos."
-        );
-      } finally {
-        setCarregandoMutuos(
-          false
-        );
-      }
     };
 
   const handleApagar = async (postId: string) => {
@@ -1144,757 +1087,591 @@ function PaginaFeed(): JSX.Element {
     setComentariosModalAberto(true);
   };
 
-  const toggleSelecionado = (id: string) => {
-    setSelecionados((prev) => {
-      const novo = new Set(prev);
-      if (novo.has(id)) novo.delete(id);
-      else novo.add(id);
-      return novo;
-    });
-  };
-
-  const enviarCompartilhamentoPorDM = async () => {
-    if (
-      !requireAuth({
-        message:
-          "Entre na FootEra para enviar esta publicação por mensagem.",
-      })
-    ) {
-      return;
-    }
-
-    if (selecionados.size === 0) return;
-
-    const token = Storage.token;
-
-    try {
-      setEnviandoDM(true);
-      await Promise.all(
-        Array.from(selecionados).map(async (paraId) => {
-          const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              paraId,
-              conteudo: idCompartilhado,
-              tipo: "POST",
-            }),
-          });
-
-          if (!resp.ok) {
-            const body = await resp.json().catch(() => ({}));
-
-            const error: any = new Error(
-              body?.message ||
-                body?.error ||
-                "Falha ao enviar a publicação por mensagem."
-            );
-
-            error.status = resp.status;
-            error.code = body?.code;
-
-            throw error;
-          }
-        })
-      );
-
-      toast.success("Post compartilhado por mensagem!");
-      setModalAberto(false);
-    } catch (e: any) {
-      if (
-        handleAuthError(e, {
-          message:
-            "Sua sessão expirou. Entre novamente para continuar.",
-        })
-      ) {
-        return;
-      }
-
-      console.error(e);
-      toast.error(
-        e?.message ||
-          "Falha ao enviar mensagens."
-      );
-    } finally {
-      setEnviandoDM(false);
-    }
-  };
-
-return (
-  <div className="px-4 pt-3 pb-24 space-y-6">
-    <div className="max-w-xl mx-auto flex items-center justify-between gap-2 mb-4 px-1">
-      <div className="flex items-center gap-2 min-w-0">
-        <button
-          onClick={() => selecionarFiltro("todos")}
-          className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
-            filtro === "todos"
-              ? "bg-green-700 text-white border-green-700"
-              : "bg-white text-green-700 border-green-200"
-          }`}
-        >
-          Ver tudo
-        </button>
-
-        {userId && (
-          <>
-            <button
-              onClick={() => selecionarFiltro("seguindo")}
-              className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
-                filtro === "seguindo"
-                  ? "bg-green-700 text-white border-green-700"
-                  : "bg-white text-green-700 border-green-200"
-              }`}
-            >
-              Seguindo
-            </button>
-
-            <button
-              onClick={() => selecionarFiltro("favoritos")}
-              className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
-                filtro === "favoritos"
-                  ? "bg-green-700 text-white border-green-700"
-                  : "bg-white text-green-700 border-green-200"
-              }`}
-            >
-              Favoritos
-            </button>
-          </>
-        )}
-      </div>
-
-      <button
-        type="button"
-        aria-label="Abrir mensagens"
-        onClick={() => {
-          if (
-            requireAuth({
-              message: "Entre na FootEra para acessar suas mensagens.",
-            })
-          ) {
-            setLocation("/mensagens");
-          }
-        }}
-        className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-green-700 bg-green-700 text-white shadow-sm hover:bg-green-800 active:scale-95 transition"
-      >
-        <Send className="h-4 w-4" />
-      </button>
-    </div>
-
-      {carregandoPosts && (
-        <div className="max-w-xl mx-auto space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-40 rounded-2xl bg-white shadow-md animate-pulse" />
-          ))}
-        </div>
-      )}
-
-      {!carregandoPosts && erroFeed && (
-        <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
-          <p>Não foi possível carregar o feed agora. Verifique sua conexão e tente de novo.</p>
+  return (
+    <div className="px-4 pt-3 pb-24 space-y-6">
+      <div className="max-w-xl mx-auto flex items-center justify-between gap-2 mb-4 px-1">
+        <div className="flex items-center gap-2 min-w-0">
           <button
-            type="button"
-            onClick={() => carregarFeed()}
-            className="mt-3 px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 transition"
+            onClick={() => selecionarFiltro("todos")}
+            className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
+              filtro === "todos"
+                ? "bg-green-700 text-white border-green-700"
+                : "bg-white text-green-700 border-green-200"
+            }`}
           >
-            Tentar novamente
+            Ver tudo
           </button>
-        </div>
-      )}
 
-      {!carregandoPosts && !erroFeed && posts.length === 0 && (
-        <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
-          <p>
-            {{
-              todos: userId
-                ? "Ainda não há publicações para você ver."
-                : "Ainda não há publicações públicas disponíveis para visitantes.",
-              seguindo:
-                "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
-              favoritos: "Você não tem nenhum usuário favoritado.",
-            }[filtro]}
-          </p>
-
-          {(filtro === "seguindo" || filtro === "favoritos") && (
-            <Link
-              href="/explorar"
-              className="text-green-700 underline mt-2 inline-block"
-            >
-              Explorar perfis
-            </Link>
-          )}
-        </div>
-      )}
-
-      {!carregandoPosts && !erroFeed && posts.map((post) => {
-        const curtidas = post.curtidas || [];
-        const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
-        const totalCurtidas =
-          typeof (
-            post as any
-          ).totalCurtidas ===
-          "number"
-            ? (post as any)
-                .totalCurtidas
-            : curtidas.length;
-        const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
-        const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
-        const parsed = parseAchievement(post.conteudo);
-        const isAchievement = !!parsed;
-        const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
-
-        return (
-          <div
-            key={post.id}
-            className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Link
-                  href={`/perfil/${post.usuario.id}`}
-                  title={`Ver perfil de ${post.usuario.nome}`}
-                  className="shrink-0"
-                >
-                  <Avatar
-                    foto={post.usuario.foto}
-                    alt={post.usuario.nome}
-                    className="w-10 h-10 cursor-pointer"
-                  />
-                </Link>
-                <div>
-                  <p className="font-semibold">{post.usuario.nome}</p>
-                  <p className="text-xs text-gray-500">
-                    {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
-                  </p>
-                </div>
-              </div>
-              {((post as any).usuarioId === Storage.usuarioId ||
-                post?.usuario?.id === Storage.usuarioId) && (
-                <button
-                  onClick={() => handleApagar(post.id)}
-                  title="Apagar postagem"
-                  className="text-red-600 hover:text-red-800 p-2"
-                >
-                  <FaTrash />
-                </button>
-              )}
-            </div>
-
-            {post.repostOf && (
-              <div className="text-xs text-gray-500 -mt-1">
-                Repostou de <strong>{username(post.repostOf.usuario)}</strong>
-              </div>
-            )}
-
-            <div>
-              {post.repostOf ? (
-                  <>
-                    {(() => {
-                      const clean = cleanText(post.conteudo);
-
-                      return clean ? (
-                        <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
-                          {clean}
-                        </p>
-                      ) : null;
-                    })()}
-
-                    {(() => {
-                      const chain = getRepostChain(post); 
-                      const root = chain.length ? chain[chain.length - 1] : null;
-                      const intermediarios = chain.slice(0, -1);
-
-                      return (
-                        <div className="border rounded-xl p-3 bg-gray-50 space-y-2">
-                          {intermediarios.map((item, idx) => {
-                            const texto = cleanText(item.conteudo);
-                            if (!texto) return null;
-
-                            return (
-                              <div key={`${item.id}-${idx}`} className="text-sm text-gray-700">
-                                <span className="font-semibold">{username(item.usuario)}</span>{" "}
-                                <span className="text-gray-600">repostou:</span>{" "}
-                                <span className="italic">“{texto}”</span>
-                              </div>
-                            );
-                          })}
-
-                          {root && (
-                            <div className="border rounded-xl p-3 bg-white">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Link
-                                  href={`/perfil/${root.usuario?.id ?? ""}`}
-                                  title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
-                                  className="shrink-0"
-                                >
-                                  <Avatar
-                                    foto={root.usuario?.foto}
-                                    alt={root.usuario?.nome || "avatar original"}
-                                    className="w-7 h-7 cursor-pointer"
-                                  />
-                                </Link>
-
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold truncate">
-                                    {root.usuario?.nome}{" "}
-                                    <span className="text-gray-500 font-normal">
-                                      ({username(root.usuario)})
-                                    </span>
-                                  </p>
-                                  <p className="text-[11px] text-gray-500">
-                                    {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {!!cleanText(root.conteudo) && (
-                                <p className="text-sm text-gray-800 whitespace-pre-line">
-                                  {cleanText(root.conteudo)}
-                                </p>
-                              )}
-
-                              {publicImgUrl(root.imagemUrl) && (
-                                <img
-                                  src={publicImgUrl(root.imagemUrl) ?? undefined}
-                                  alt="Post original"
-                                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                                />
-                              )}
-
-                              {publicImgUrl(root.videoUrl) && (
-                                <video controls className="w-full mt-2 rounded-lg">
-                                  <source src={publicImgUrl(root.videoUrl) ?? ""} type="video/mp4" />
-                                </video>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </>
-                ) : (
-                <>
-                  {!isAchievement && (
-                    <p className="text-gray-800 font-medium whitespace-pre-line">
-                      {post.conteudo}
-                    </p>
-                  )}
-
-                  {isAchievement && parsed && (
-                    <AchievementShareCard parsed={parsed} conquista={conquista} />
-                  )}
-
-                  {imgSrc && (
-                    <img
-                      src={imgSrc}
-                      alt="Post"
-                      className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                    />
-                  )}
-
-                  {videoSrc && (
-                    <video controls className="w-full mt-2 rounded-lg">
-                      <source src={videoSrc} type="video/mp4" />
-                    </video>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="flex justify-between text-gray-600 mt-2 px-2">
-              <button
-                className="flex items-center gap-1"
-                onClick={() => handleLike(post.id)}
-              >
-                {jaCurtiu ? (
-                  <FaHeart className="text-black" />
-                ) : (
-                  <FaRegHeart />
-                )}{" "}
-                <span>{totalCurtidas}</span>
-              </button>
-
-              <button
-                className="flex items-center gap-1"
-                onClick={() => abrirModalComentarios(post)}
-              >
-                <FaRegCommentDots />{" "}
-                <span>{post.comentarios?.length || 0}</span>
-              </button>
-
-              <button
-                className="flex items-center gap-1"
-                onClick={() => handleCompartilhar(post.id)}
-              >
-                <FaShare />
-              </button>
-
-              <button
-                className="flex items-center gap-1"
-                onClick={() => handleRepost(post.id)}
-                title="Repostar"
-              >
-                <FaRetweet />
-                <span>
-                  {(post as any).reposts ?? (post as any).compartilhamentos ?? 0}
-                </span>
-              </button>
-            </div>
-
-            {mostrarInputPorPost[post.id] && (
-              <>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={comentarioTextoPorPost[post.id] || ""}
-                    onChange={(e) =>
-                      setComentarioTextoPorPost((prev) => ({
-                        ...prev,
-                        [post.id]: e.target.value,
-                      }))
-                    }
-                    placeholder="Adicione um comentário..."
-                    className="w-full border rounded px-3 py-2 text-sm"
-                  />
-                  <button
-                    onClick={() =>
-                      handleComentario(
-                        post.id,
-                        comentarioTextoPorPost[post.id] || ""
-                      )
-                    }
-                  >
-                    <FaPaperPlane className="text-green-800" />
-                  </button>
-                </div>
-
-                {post.comentarios?.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {post.comentarios.map((comentario) => (
-                      <div key={comentario.id} className="flex gap-2 items-start">
-                        <Link
-                          href={`/perfil/${comentario.usuarioId ?? ""}`}
-                          title={`Ver perfil de ${comentario.usuario?.nome ?? "Usuário"}`}
-                          className="shrink-0"
-                        >
-                          <Avatar
-                            foto={comentario.usuario?.foto}
-                            alt={comentario.usuario?.nome || "avatar"}
-                            className="w-8 h-8 cursor-pointer"
-                          />
-                        </Link>
-                        <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
-                          <div className="flex justify-between text-sm text-gray-600">
-                            <span className="font-semibold">
-                              {comentario.usuario?.nome}
-                            </span>
-                            <span>
-                              {format(
-                                new Date(comentario.dataCriacao),
-                                "dd/MM, HH:mm"
-                              )}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-800">
-                            {comentario.conteudo}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })}
-
-      <BottomNav active="feed" />
-
-      <BottomSheet
-        open={modalAberto}
-        onClose={() => setModalAberto(false)}
-        heightPct={72}
-        ariaLabel="Compartilhar postagem"
-      >
-        <h2 className="text-base font-bold mb-3 text-center">
-          Compartilhar Postagem
-        </h2>
-
-        <div className="mb-3">
-          {!userId ? (
-            <button
-              type="button"
-              onClick={() =>
-                openAuthGate({
-                  message:
-                    "Entre na FootEra para compartilhar esta publicação com seus contatos.",
-                })
-              }
-              className="w-full rounded-lg border border-green-700 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50"
-            >
-              Entre para enviar por mensagem
-            </button>
-          ) : (
+          {userId && (
             <>
-              <p className="text-sm text-gray-700 mb-2">
-                Enviar por mensagem:
-              </p>
-
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {carregandoMutuos && (
-                  <span className="text-sm text-gray-500">
-                    Carregando contatos...
-                  </span>
-                )}
-
-                {!carregandoMutuos && usuariosMutuos.length === 0 && (
-                  <span className="text-sm text-gray-500">
-                    Você ainda não tem contatos mútuos.
-                  </span>
-                )}
-
-                {usuariosMutuos.map((u) => {
-                  const selecionado = selecionados.has(u.id);
-
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => toggleSelecionado(u.id)}
-                      title={u.nome}
-                      className="
-                        relative
-                        w-[76px]
-                        shrink-0
-                        text-center
-                      "
-                    >
-                      <div
-                        className={`
-                          mx-auto
-                          w-fit
-                          rounded-full
-                          border-2
-                          ${
-                            selecionado
-                              ? "border-green-600"
-                              : "border-transparent"
-                          }
-                        `}
-                      >
-                        <Avatar
-                          foto={u.foto}
-                          alt={u.nome}
-                          className="w-14 h-14"
-                        />
-                      </div>
-
-                      <span
-                        className="
-                          mt-1
-                          block
-                          truncate
-                          text-xs
-                          text-gray-700
-                        "
-                      >
-                        {u.nome}
-                      </span>
-
-                      {selecionado && (
-                        <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
-                          <CircleCheck className="w-5 h-5 text-green-600" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
               <button
-                disabled={selecionados.size === 0 || enviandoDM}
-                onClick={enviarCompartilhamentoPorDM}
-                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded ${
-                  selecionados.size === 0 || enviandoDM
-                    ? "bg-gray-300 text-gray-600"
-                    : "bg-green-700 text-white hover:bg-green-800"
+                onClick={() => selecionarFiltro("seguindo")}
+                className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
+                  filtro === "seguindo"
+                    ? "bg-green-700 text-white border-green-700"
+                    : "bg-white text-green-700 border-green-200"
                 }`}
               >
-                <Send className="w-4 h-4" />
-                {enviandoDM
-                  ? "Enviando..."
-                  : `Enviar para ${selecionados.size} contato(s)`}
+                Seguindo
+              </button>
+
+              <button
+                onClick={() => selecionarFiltro("favoritos")}
+                className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition ${
+                  filtro === "favoritos"
+                    ? "bg-green-700 text-white border-green-700"
+                    : "bg-white text-green-700 border-green-200"
+                }`}
+              >
+                Favoritos
               </button>
             </>
           )}
         </div>
 
-        <div className="border-t my-3" />
-
-        <input
-          type="text"
-          value={linkCompartilhado}
-          readOnly
-          onFocus={(e) => e.target.select()}
-          className="w-full border rounded px-3 py-2 text-sm mb-3"
-        />
-
         <button
-          className="w-full bg-green-700 text-white py-2 rounded mb-3 hover:bg-green-800"
+          type="button"
+          aria-label="Abrir mensagens"
           onClick={() => {
-            navigator.clipboard.writeText(linkCompartilhado);
-            toast.success("Link copiado!");
+            if (
+              requireAuth({
+                message: "Entre na FootEra para acessar suas mensagens.",
+              })
+            ) {
+              setLocation("/mensagens");
+            }
           }}
+          className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-green-700 bg-green-700 text-white shadow-sm hover:bg-green-800 active:scale-95 transition"
         >
-          Copiar Link
+          <Send className="h-4 w-4" />
         </button>
+      </div>
 
-        <div className="flex justify-between items-center gap-2">
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(linkCompartilhado)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 text-sm text-center flex-1"
-          >
-            WhatsApp
-          </a>
+        {carregandoPosts && (
+          <div className="max-w-xl mx-auto space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-40 rounded-2xl bg-white shadow-md animate-pulse" />
+            ))}
+          </div>
+        )}
 
-          <a
-            href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(
-              linkCompartilhado
-            )}`}
-            className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 text-sm text-center flex-1"
-          >
-            Email
-          </a>
+        {!carregandoPosts && erroFeed && (
+          <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
+            <p>Não foi possível carregar o feed agora. Verifique sua conexão e tente de novo.</p>
+            <button
+              type="button"
+              onClick={() => carregarFeed()}
+              className="mt-3 px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 transition"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
-          <button
-            onClick={() => (window.location.href = linkCompartilhado)}
-            className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-900 text-sm text-center flex-1"
-          >
-            FootEra
-          </button>
-        </div>
-      </BottomSheet>
+        {!carregandoPosts && !erroFeed && posts.length === 0 && (
+          <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
+            <p>
+              {{
+                todos: userId
+                  ? "Ainda não há publicações para você ver."
+                  : "Ainda não há publicações públicas disponíveis para visitantes.",
+                seguindo:
+                  "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
+                favoritos: "Você não tem nenhum usuário favoritado.",
+              }[filtro]}
+            </p>
 
-      <BottomSheet
-        open={comentariosModalAberto && !!postSelecionado}
-        onClose={() => setComentariosModalAberto(false)}
-        heightPct={50}
-        ariaLabel="Comentários da postagem"
-      >
-        {postSelecionado && (
-          <div className="mx-auto w-full h-full max-w-[1110px]">
-            <div className="bg-white border rounded-2xl shadow-md h-full flex flex-col overflow-hidden">
-              <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
-                <h2 className="text-base font-bold">Comentários</h2>
+            {(filtro === "seguindo" || filtro === "favoritos") && (
+              <Link
+                href="/explorar"
+                className="text-green-700 underline mt-2 inline-block"
+              >
+                Explorar perfis
+              </Link>
+            )}
+          </div>
+        )}
+
+        {!carregandoPosts && !erroFeed && posts.map((post) => {
+          const curtidas = post.curtidas || [];
+          const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
+          const totalCurtidas =
+            typeof (
+              post as any
+            ).totalCurtidas ===
+            "number"
+              ? (post as any)
+                  .totalCurtidas
+              : curtidas.length;
+          const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
+          const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
+          const parsed = parseAchievement(post.conteudo);
+          const isAchievement = !!parsed;
+          const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
+
+          return (
+            <div
+              key={post.id}
+              className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/perfil/${post.usuario.id}`}
+                    title={`Ver perfil de ${post.usuario.nome}`}
+                    className="shrink-0"
+                  >
+                    <Avatar
+                      foto={post.usuario.foto}
+                      alt={post.usuario.nome}
+                      className="w-10 h-10 cursor-pointer"
+                    />
+                  </Link>
+                  <div>
+                    <p className="font-semibold">{post.usuario.nome}</p>
+                    <p className="text-xs text-gray-500">
+                      {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
+                    </p>
+                  </div>
+                </div>
+                {((post as any).usuarioId === Storage.usuarioId ||
+                  post?.usuario?.id === Storage.usuarioId) && (
+                  <button
+                    onClick={() => handleApagar(post.id)}
+                    title="Apagar postagem"
+                    className="text-red-600 hover:text-red-800 p-2"
+                  >
+                    <FaTrash />
+                  </button>
+                )}
+              </div>
+
+              {post.repostOf && (
+                <div className="text-xs text-gray-500 -mt-1">
+                  Repostou de <strong>{username(post.repostOf.usuario)}</strong>
+                </div>
+              )}
+
+              <div>
+                {post.repostOf ? (
+                    <>
+                      {(() => {
+                        const clean = cleanText(post.conteudo);
+
+                        return clean ? (
+                          <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
+                            {clean}
+                          </p>
+                        ) : null;
+                      })()}
+
+                      {(() => {
+                        const chain = getRepostChain(post); 
+                        const root = chain.length ? chain[chain.length - 1] : null;
+                        const intermediarios = chain.slice(0, -1);
+
+                        return (
+                          <div className="border rounded-xl p-3 bg-gray-50 space-y-2">
+                            {intermediarios.map((item, idx) => {
+                              const texto = cleanText(item.conteudo);
+                              if (!texto) return null;
+
+                              return (
+                                <div key={`${item.id}-${idx}`} className="text-sm text-gray-700">
+                                  <span className="font-semibold">{username(item.usuario)}</span>{" "}
+                                  <span className="text-gray-600">repostou:</span>{" "}
+                                  <span className="italic">“{texto}”</span>
+                                </div>
+                              );
+                            })}
+
+                            {root && (
+                              <div className="border rounded-xl p-3 bg-white">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Link
+                                    href={`/perfil/${root.usuario?.id ?? ""}`}
+                                    title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
+                                    className="shrink-0"
+                                  >
+                                    <Avatar
+                                      foto={root.usuario?.foto}
+                                      alt={root.usuario?.nome || "avatar original"}
+                                      className="w-7 h-7 cursor-pointer"
+                                    />
+                                  </Link>
+
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold truncate">
+                                      {root.usuario?.nome}{" "}
+                                      <span className="text-gray-500 font-normal">
+                                        ({username(root.usuario)})
+                                      </span>
+                                    </p>
+                                    <p className="text-[11px] text-gray-500">
+                                      {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {!!cleanText(root.conteudo) && (
+                                  <p className="text-sm text-gray-800 whitespace-pre-line">
+                                    {cleanText(root.conteudo)}
+                                  </p>
+                                )}
+
+                                {publicImgUrl(root.imagemUrl) && (
+                                  <img
+                                    src={publicImgUrl(root.imagemUrl) ?? undefined}
+                                    alt="Post original"
+                                    className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                                  />
+                                )}
+
+                                {publicImgUrl(root.videoUrl) && (
+                                  <video controls className="w-full mt-2 rounded-lg">
+                                    <source src={publicImgUrl(root.videoUrl) ?? ""} type="video/mp4" />
+                                  </video>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                  <>
+                    {!isAchievement && (
+                      <p className="text-gray-800 font-medium whitespace-pre-line">
+                        {post.conteudo}
+                      </p>
+                    )}
+
+                    {isAchievement && parsed && (
+                      <AchievementShareCard parsed={parsed} conquista={conquista} />
+                    )}
+
+                    {imgSrc && (
+                      <img
+                        src={imgSrc}
+                        alt="Post"
+                        className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                      />
+                    )}
+
+                    {videoSrc && (
+                      <video controls className="w-full mt-2 rounded-lg">
+                        <source src={videoSrc} type="video/mp4" />
+                      </video>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex justify-between text-gray-600 mt-2 px-2">
                 <button
-                  onClick={() => setComentariosModalAberto(false)}
-                  className="text-gray-500 hover:text-gray-800"
-                  aria-label="Fechar"
-                  title="Fechar"
+                  className="flex items-center gap-1"
+                  onClick={() => handleLike(post.id)}
                 >
-                  ✕
+                  {jaCurtiu ? (
+                    <FaHeart className="text-black" />
+                  ) : (
+                    <FaRegHeart />
+                  )}{" "}
+                  <span>{totalCurtidas}</span>
+                </button>
+
+                <button
+                  className="flex items-center gap-1"
+                  onClick={() => abrirModalComentarios(post)}
+                >
+                  <FaRegCommentDots />{" "}
+                  <span>{post.comentarios?.length || 0}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="flex items-center gap-1"
+                  onClick={() =>
+                    handleCompartilhar(
+                      post
+                    )
+                  }
+                  title="Compartilhar"
+                >
+                  <FaShare />
+
+                  <span>
+                    {Number(
+                      post.compartilhamentos ??
+                        0
+                    )}
+                  </span>
+                </button>
+
+                <button
+                  className="flex items-center gap-1"
+                  onClick={() => handleRepost(post.id)}
+                  title="Repostar"
+                >
+                  <FaRetweet />
+                  <span>
+                    {Number(
+                      post.reposts ?? 0
+                    )}
+                  </span>
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white">
-                {postSelecionado.comentarios.length === 0 && (
-                  <p className="text-sm text-gray-500">
-                    Seja o primeiro a comentar!
-                  </p>
-                )}
-
-                {postSelecionado.comentarios.map((comentario) => (
-                  <div key={comentario.id} className="flex gap-3">
-                    <Link
-                      href={`/perfil/${comentario.usuarioId ?? ""}`}
-                      title={`Ver perfil de ${
-                        comentario.usuario?.nome ?? "Usuário"
-                      }`}
-                      className="shrink-0"
+              {mostrarInputPorPost[post.id] && (
+                <>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={comentarioTextoPorPost[post.id] || ""}
+                      onChange={(e) =>
+                        setComentarioTextoPorPost((prev) => ({
+                          ...prev,
+                          [post.id]: e.target.value,
+                        }))
+                      }
+                      placeholder="Adicione um comentário..."
+                      className="w-full border rounded px-3 py-2 text-sm"
+                    />
+                    <button
+                      onClick={() =>
+                        handleComentario(
+                          post.id,
+                          comentarioTextoPorPost[post.id] || ""
+                        )
+                      }
                     >
-                      <Avatar
-                        foto={comentario.usuario?.foto}
-                        alt={comentario.usuario?.nome || "avatar"}
-                        className="w-9 h-9 flex-shrink-0 cursor-pointer"
-                      />
-                    </Link>
-                    <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-gray-800">
-                          {comentario.usuario?.nome}
-                        </span>
-                        <span className="text-[11px] text-gray-500">
-                          {format(
-                            new Date(comentario.dataCriacao),
-                            "dd/MM, HH:mm"
-                          )}
-                        </span>
-                        {String(comentario.usuarioId) === String(Storage.usuarioId) && (
-                          <button
-                            onClick={() => handleApagarComentario(comentario.id, postSelecionado.id)}
-                            className="text-gray-400 hover:text-red-600"
-                            title="Apagar comentário"
-                            aria-label="Apagar comentário"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-800 mt-1">
-                        {comentario.conteudo}
-                      </p>
-                    </div>
+                      <FaPaperPlane className="text-green-800" />
+                    </button>
                   </div>
-                ))}
-              </div>
 
-              <div className="border-t bg-gray-50 px-3 py-3 shrink-0 sticky bottom-0">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={comentarioTextoPorPost[postSelecionado.id] || ""}
-                    onChange={(e) =>
-                      setComentarioTextoPorPost((prev) => ({
-                        ...prev,
-                        [postSelecionado.id]: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
+                  {post.comentarios?.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {post.comentarios.map((comentario) => (
+                        <div key={comentario.id} className="flex gap-2 items-start">
+                          <Link
+                            href={`/perfil/${comentario.usuarioId ?? ""}`}
+                            title={`Ver perfil de ${comentario.usuario?.nome ?? "Usuário"}`}
+                            className="shrink-0"
+                          >
+                            <Avatar
+                              foto={comentario.usuario?.foto}
+                              alt={comentario.usuario?.nome || "avatar"}
+                              className="w-8 h-8 cursor-pointer"
+                            />
+                          </Link>
+                          <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
+                            <div className="flex justify-between text-sm text-gray-600">
+                              <span className="font-semibold">
+                                {comentario.usuario?.nome}
+                              </span>
+                              <span>
+                                {format(
+                                  new Date(comentario.dataCriacao),
+                                  "dd/MM, HH:mm"
+                                )}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-800">
+                              {comentario.conteudo}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+
+        <BottomNav active="feed" />
+
+        {postCompartilhar && (
+          <PublicShareModal
+            open={
+              !!postCompartilhar
+            }
+            onClose={() =>
+              setPostCompartilhar(
+                null
+              )
+            }
+            titulo={`Post de ${
+              postCompartilhar
+                .usuario?.nome ||
+              "FootEra"
+            }`}
+            path={`/post/${encodeURIComponent(
+              postCompartilhar.id
+            )}`}
+            directTipo="POST"
+            directConteudo={
+              postCompartilhar.id
+            }
+            onAction={async (
+              origem
+            ) => {
+              const data =
+                await registrarCompartilhamentoPost(
+                  postCompartilhar.id,
+                  origem
+                );
+
+              if (!data) {
+                return;
+              }
+
+              setPosts(
+                (anteriores) =>
+                  anteriores.map(
+                    (item) =>
+                      item.id ===
+                      postCompartilhar.id
+                        ? {
+                            ...item,
+
+                            compartilhamentos:
+                              typeof data
+                                ?.compartilhamentos ===
+                              "number"
+                                ? data
+                                    .compartilhamentos
+                                : Number(
+                                    item
+                                      .compartilhamentos ??
+                                      0
+                                  ) +
+                                  1,
+                          }
+                        : item
+                  )
+              );
+            }}
+          />
+        )}
+
+        <BottomSheet
+          open={comentariosModalAberto && !!postSelecionado}
+          onClose={() => setComentariosModalAberto(false)}
+          heightPct={50}
+          ariaLabel="Comentários da postagem"
+        >
+          {postSelecionado && (
+            <div className="mx-auto w-full h-full max-w-[1110px]">
+              <div className="bg-white border rounded-2xl shadow-md h-full flex flex-col overflow-hidden">
+                <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
+                  <h2 className="text-base font-bold">Comentários</h2>
+                  <button
+                    onClick={() => setComentariosModalAberto(false)}
+                    className="text-gray-500 hover:text-gray-800"
+                    aria-label="Fechar"
+                    title="Fechar"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white">
+                  {postSelecionado.comentarios.length === 0 && (
+                    <p className="text-sm text-gray-500">
+                      Seja o primeiro a comentar!
+                    </p>
+                  )}
+
+                  {postSelecionado.comentarios.map((comentario) => (
+                    <div key={comentario.id} className="flex gap-3">
+                      <Link
+                        href={`/perfil/${comentario.usuarioId ?? ""}`}
+                        title={`Ver perfil de ${
+                          comentario.usuario?.nome ?? "Usuário"
+                        }`}
+                        className="shrink-0"
+                      >
+                        <Avatar
+                          foto={comentario.usuario?.foto}
+                          alt={comentario.usuario?.nome || "avatar"}
+                          className="w-9 h-9 flex-shrink-0 cursor-pointer"
+                        />
+                      </Link>
+                      <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-gray-800">
+                            {comentario.usuario?.nome}
+                          </span>
+                          <span className="text-[11px] text-gray-500">
+                            {format(
+                              new Date(comentario.dataCriacao),
+                              "dd/MM, HH:mm"
+                            )}
+                          </span>
+                          {String(comentario.usuarioId) === String(Storage.usuarioId) && (
+                            <button
+                              onClick={() => handleApagarComentario(comentario.id, postSelecionado.id)}
+                              className="text-gray-400 hover:text-red-600"
+                              title="Apagar comentário"
+                              aria-label="Apagar comentário"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-800 mt-1">
+                          {comentario.conteudo}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t bg-gray-50 px-3 py-3 shrink-0 sticky bottom-0">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={comentarioTextoPorPost[postSelecionado.id] || ""}
+                      onChange={(e) =>
+                        setComentarioTextoPorPost((prev) => ({
+                          ...prev,
+                          [postSelecionado.id]: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleComentario(
+                            postSelecionado.id,
+                            comentarioTextoPorPost[postSelecionado.id] || ""
+                          );
+                        }
+                      }}
+                      placeholder="Adicione um comentário..."
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
+                    />
+
+                    <button
+                      onClick={() =>
                         handleComentario(
                           postSelecionado.id,
                           comentarioTextoPorPost[postSelecionado.id] || ""
-                        );
+                        )
                       }
-                    }}
-                    placeholder="Adicione um comentário..."
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
-                  />
-
-                  <button
-                    onClick={() =>
-                      handleComentario(
-                        postSelecionado.id,
-                        comentarioTextoPorPost[postSelecionado.id] || ""
-                      )
-                    }
-                    className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
-                    title="Enviar"
-                  >
-                    <FaPaperPlane />
-                  </button>
+                      className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
+                      title="Enviar"
+                    >
+                      <FaPaperPlane />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </BottomSheet>
-    </div>
-  );
-}
+          )}
+        </BottomSheet>
+      </div>
+    );
+  }
 
 export default PaginaFeed;

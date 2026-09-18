@@ -348,48 +348,6 @@ export default function TurmaDetalhe() {
     };
   }, [id]);
 
-  async function compartilhar() {
-    if (!turma) return;
-
-    const url =
-      `${window.location.origin}/turma/${encodeURIComponent(
-        turma.id
-      )}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title:
-            `${turma.nome} na FootEra`,
-
-          text:
-            `Confira a turma "${turma.nome}" na FootEra.`,
-
-          url,
-        });
-
-        return;
-      }
-
-      await navigator.clipboard.writeText(
-        url
-      );
-
-      toast.success(
-        "Link da turma copiado."
-      );
-    } catch (error: any) {
-      if (
-        error?.name !==
-        "AbortError"
-      ) {
-        toast.error(
-          "Não foi possível compartilhar."
-        );
-      }
-    }
-  }
-
   if (loading) {
     return (
       <div className="p-8 text-center">

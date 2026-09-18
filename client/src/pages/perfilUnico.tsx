@@ -18,9 +18,9 @@ import ProfilePostsSection from "../components/perfil/ProfilePostsSection.js";
 import { clearAuthSession, salvarRetornoAuth } from "../utils/authSession.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
 import {
-  PUBLIC_PATHS,
-  publicAppUrl,
+  PUBLIC_PATHS
 } from "../utils/publicRoutes.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
 
 type TipoPerfil =
   | "Atleta"
@@ -103,6 +103,10 @@ export default function PerfilUnico() {
   const [modoVisitante, setModoVisitante] = useState(!token);
   const [abaPublica, setAbaPublica] =
     useState<"perfil" | "postagens">("perfil");
+  const [
+    shareVisitanteOpen,
+    setShareVisitanteOpen,
+  ] = useState(false);
 
   function irParaLogin() {
     salvarRetornoAuth();
@@ -414,63 +418,30 @@ export default function PerfilUnico() {
         ? "Informações do Atleta"
         : `Informações do ${tipo}`;
 
-    const compartilhar =
-      async () => {
-        const slugPerfil =
-          String(
-            perfilData.usuario
-              ?.nomeDeUsuario ||
-              usuarioId
+    const slugPerfil =
+      String(
+        perfilData.usuario
+          ?.nomeDeUsuario ||
+          usuarioId
+      )
+        .replace(/^@/, "")
+        .trim();
+
+    const ehOrganizacao =
+      tiposOrganizacao.has(
+        String(
+          tipo || ""
+        )
+      );
+
+    const sharePath =
+      ehOrganizacao
+        ? PUBLIC_PATHS.organizacao(
+            slugPerfil
           )
-            .replace(/^@/, "")
-            .trim();
-
-        const ehOrganizacao =
-          tiposOrganizacao.has(
-            String(tipo || "")
+        : PUBLIC_PATHS.profile(
+            slugPerfil
           );
-
-        const path =
-          ehOrganizacao
-            ? PUBLIC_PATHS.organizacao(
-                slugPerfil
-              )
-            : PUBLIC_PATHS.profile(
-                slugPerfil
-              );
-
-        const url =
-          publicAppUrl(path);
-
-        try {
-          if (
-            navigator.share
-          ) {
-            await navigator.share({
-              title:
-                `${nome} na FootEra`,
-              url,
-            });
-
-            return;
-          }
-
-          await navigator.clipboard
-            .writeText(url);
-        } catch (e: any) {
-          if (
-            e?.name ===
-            "AbortError"
-          ) {
-            return;
-          }
-
-          console.error(
-            "Erro ao compartilhar:",
-            e
-          );
-        }
-      };
 
     const seguirComoVisitante =
       () => {
@@ -583,7 +554,9 @@ export default function PerfilUnico() {
                 <button
                   type="button"
                   onClick={() =>
-                    void compartilhar()
+                    setShareVisitanteOpen(
+                      true
+                    )
                   }
                   className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-green-900 shadow-sm hover:bg-amber-200"
                 >
@@ -828,6 +801,23 @@ export default function PerfilUnico() {
             />
           )}
         </div>
+
+        <PublicShareModal
+          open={
+            shareVisitanteOpen
+          }
+          onClose={() =>
+            setShareVisitanteOpen(
+              false
+            )
+          }
+          titulo={`${nome} na FootEra`}
+          path={sharePath}
+          directTipo="USUARIO"
+          directConteudo={
+            usuarioId
+          }
+        />
       </div>
     );
   }
@@ -911,6 +901,7 @@ export default function PerfilUnico() {
       <div className="h-16" aria-hidden="true" />
 
       {!modoVisitante && <BottomNav />}
+      
     </div>
   );
 }
