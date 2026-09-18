@@ -1,12 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
 import { toast } from "@/lib/toast";
 import { useRoute, useLocation } from "wouter";
-import { getPostById, PostagemComUsuario, likePost, comentarPost } from "../services/feedService.js";
 import { format } from "date-fns";
 import { FaHeart, FaRegHeart, FaTrash, FaShare, FaRegCommentDots } from "react-icons/fa";
 import { Link } from "wouter";
 import { API, APP } from "../config.js";
-import { CircleX, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import PostImage from "../components/PostImage.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 import { FaRetweet } from "react-icons/fa";
@@ -16,6 +15,14 @@ import {
   lerAcaoPendenteAuth,
   limparAcaoPendenteAuth,
 } from "../utils/authSession.js";
+import {
+  getPostById,
+  PostagemComUsuario,
+  likePost,
+  comentarPost,
+  registrarCompartilhamentoPost,
+} from "../services/feedService.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
 
 function extrairConquista(
   conteudo?: string | null
@@ -102,7 +109,10 @@ function PostUnico(): JSX.Element {
     message: string;
   } | null>(null);
   const [, setLocation] = useLocation();
-  const [modalAberto, setModalAberto] = useState(false);
+  const [
+    shareOpen,
+    setShareOpen,
+  ] = useState(false);
 
   const {
     requireAuth,
@@ -180,112 +190,6 @@ function PostUnico(): JSX.Element {
     };
   }, [match, params?.id]);
 
-  async function registrarCompartilhamento(
-    origem:
-      | "copiar"
-      | "whatsapp"
-      | "email"
-      | "footera"
-  ) {
-    const postId =
-      post?.id ??
-      params?.id;
-
-    if (!postId) {
-      return;
-    }
-
-    try {
-      const tokenRaw =
-        localStorage.getItem(
-          "token"
-        ) ||
-        sessionStorage.getItem(
-          "token"
-        );
-
-      const headers: Record<
-        string,
-        string
-      > = {
-        "Content-Type":
-          "application/json",
-      };
-
-      if (tokenRaw) {
-        headers.Authorization =
-          tokenRaw.startsWith(
-            "Bearer "
-          )
-            ? tokenRaw
-            : `Bearer ${tokenRaw}`;
-      }
-
-      const response =
-        await fetch(
-          `${API.BASE_URL}/api/post/${encodeURIComponent(
-            postId
-          )}/compartilhar`,
-          {
-            method:
-              "POST",
-
-            headers,
-
-            body:
-              JSON.stringify({
-                origem,
-              }),
-
-            // importante se a página
-            // mudar logo após o clique
-            keepalive:
-              true,
-          }
-        );
-
-      if (!response.ok) {
-        console.warn(
-          "Não foi possível registrar o compartilhamento:",
-          response.status
-        );
-
-        return;
-      }
-
-      const data =
-        await response
-          .json()
-          .catch(() => ({}));
-
-      setPost((prev) => {
-        if (!prev) {
-          return prev;
-        }
-
-        return {
-          ...prev,
-
-          compartilhamentos:
-            typeof data
-              ?.compartilhamentos ===
-            "number"
-              ? data.compartilhamentos
-              : Number(
-                  prev
-                    .compartilhamentos ??
-                    0
-                ) + 1,
-        };
-      });
-    } catch (error) {
-      console.error(
-        "Erro ao registrar compartilhamento:",
-        error
-      );
-    }
-  }
-
   async function handleCurtir() {
     if (!post?.id) return;
 
@@ -317,67 +221,6 @@ function PostUnico(): JSX.Element {
     } catch (err) {
       console.error("Erro ao curtir o post:", err);
     }
-  }
-
-  const postIdPublico =
-    post?.id ??
-    params?.id ??
-    "";
-
-  const publicUrl =
-    window.location.hostname ===
-    "localhost"
-      ? `${window.location.origin}/post/${encodeURIComponent(
-          postIdPublico
-        )}`
-      : `https://footera.app.br/post/${encodeURIComponent(
-          postIdPublico
-      )}`;
-
-  async function handleCopiarLink() {
-    try {
-      await navigator.clipboard.writeText(publicUrl);
-      await registrarCompartilhamento("copiar");
-      toast.success("Link copiado!");
-    } catch {
-      toast.error("Não foi possível copiar o link.");
-    }
-  }
-
-  function handleCompartilharWhatsapp() {
-    const texto =
-      encodeURIComponent(
-        publicUrl
-      );
-
-    window.open(
-      `https://wa.me/?text=${texto}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-
-    void registrarCompartilhamento(
-      "whatsapp"
-    );
-  }
-
-  function handleCompartilharEmail() {
-    const assunto =
-      encodeURIComponent(
-        "Veja esta postagem no FootEra"
-      );
-
-    const corpo =
-      encodeURIComponent(
-        publicUrl
-      );
-
-    void registrarCompartilhamento(
-      "email"
-    );
-
-    window.location.href =
-      `mailto:?subject=${assunto}&body=${corpo}`;
   }
 
   async function handleComentarioSubmit(
@@ -807,8 +650,6 @@ function PostUnico(): JSX.Element {
     );
   }
 
-  const linkCompartilhado =
-  publicUrl;
   const curtidas =
     post.curtidas || [];
 
@@ -1259,7 +1100,7 @@ function PostUnico(): JSX.Element {
               <button
                 type="button"
                 onClick={() =>
-                  setModalAberto(
+                  setShareOpen(
                     true
                   )
                 }
@@ -1477,94 +1318,60 @@ function PostUnico(): JSX.Element {
           </nav>
         )}
 
-      {modalAberto && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
-            <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Postagem</h2>
+      <PublicShareModal
+        open={shareOpen}
+        onClose={() =>
+          setShareOpen(
+            false
+          )
+        }
+        titulo={`Post de ${
+          post.usuario?.nome ||
+          "FootEra"
+        }`}
+        path={`/post/${encodeURIComponent(
+          post.id
+        )}`}
+        directTipo="POST"
+        directConteudo={
+          post.id
+        }
+        onAction={async (
+          origem
+        ) => {
+          const data =
+            await registrarCompartilhamentoPost(
+              post.id,
+              origem
+            );
 
-            <input
-              type="text"
-              value={linkCompartilhado}
-              readOnly
-              onFocus={(e) => e.target.select()}
-              className="w-full border rounded px-3 py-2 text-sm mb-3"
-            />
+          if (!data) {
+            return;
+          }
 
-            <button
-              type="button"
-              className="
-                mb-4
-                w-full
-                rounded-xl
-                bg-green-700
-                py-3
-                font-semibold
-                text-white
-                transition
-                hover:bg-green-800
-              "
-              onClick={
-                handleCopiarLink
-              }
-            >
-              Copiar Link
-            </button>
+          setPost(
+            (anterior) =>
+              anterior
+                ? {
+                    ...anterior,
 
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={handleCompartilharWhatsapp}
-                className="rounded-xl bg-green-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-600"
-              >
-                WhatsApp
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCompartilharEmail}
-                className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
-              >
-                Email
-              </button>
-
-              <a
-                href={publicUrl}
-                onClick={() => {
-                  void registrarCompartilhamento(
-                    "footera"
-                  );
-                }}
-                className="
-                  flex
-                  items-center
-                  justify-center
-                  rounded-xl
-                  border
-                  border-green-300
-                  bg-green-100
-                  px-4
-                  py-3
-                  text-center
-                  text-sm
-                  font-semibold
-                  text-green-800
-                  transition
-                  hover:bg-green-200
-                "
-              >
-                Ver no FootEra
-              </a>
-            </div>
-
-            <button
-              onClick={() => setModalAberto(false)}
-              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
-            >
-              <CircleX />
-            </button>
-          </div>
-        </div>
-      )}
+                    compartilhamentos:
+                      typeof data
+                        ?.compartilhamentos ===
+                      "number"
+                        ? data
+                            .compartilhamentos
+                        : Number(
+                            anterior
+                              .compartilhamentos ??
+                              0
+                          ) +
+                          1,
+                  }
+                : anterior
+          );
+        }}
+      />
     </div>
    </main>
   );
