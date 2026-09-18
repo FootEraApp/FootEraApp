@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Heart, MessageCircle, Share, Volleyball, User, CirclePlus, Search, House,
@@ -11,6 +11,8 @@ import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { FLAGS } from "../config.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+import { PUBLIC_PATHS } from "../utils/publicRoutes.js";
 
 const TODAS_CATEGORIAS = ["Sub3","Sub5","Sub7","Sub9","Sub11","Sub13","Sub15","Sub16","Livre"] as const;
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
@@ -238,6 +240,7 @@ function DesafiosInner() {
   const [aba, setAba] = useState<"feed" | "ranking" | "rankingGlobal">("feed");
   const [subsDesafios, setSubsDesafios] = useState<Submissao[]>([]);
   const [subsTreinos, setSubsTreinos] = useState<Submissao[]>([]);
+  const [itemCompartilhar, setItemCompartilhar] = useState<Submissao | null>(null);
 
   const applyUpdate = (alvo: Submissao, patch: Partial<Submissao>) => {
     setSubsDesafios(prev => prev.map(s => s.id === alvo.id ? { ...s, ...patch } : s));
@@ -292,11 +295,6 @@ function DesafiosInner() {
       setComentarioTexto((p) => ({ ...p, [sub.id]: "" }));
     } catch { toast.error("Não foi possível comentar."); }
   };
-  const compartilhar = async (subId: string) => {
-    const link = `${window.location.origin}/desafios?submissao=${subId}`;
-    try { await navigator.clipboard.writeText(link); toast.success("Link da submissão copiado!"); } catch { toast.error("Não foi possível copiar o link."); }
-  };
-
   const seteDiasAtras = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); return d; }, []);
   type RankAgg = { atleta: Atleta; total: number; best?: Submissao };
   const rankingSemanal = useMemo<RankAgg[]>(() => {
@@ -399,8 +397,13 @@ function DesafiosInner() {
                 <button className="flex items-center gap-1 cursor-pointer" title="Ver comentários">
                   <MessageCircle className="w-4 h-4"/><span>{sub.comentariosCount}</span>
                 </button>
-                <button onClick={()=>compartilhar(sub.id)} className="flex items-center gap-1 cursor-pointer" title="Copiar link">
-                  <Share className="w-4 h-4"/><span>Compartilhar</span>
+                <button
+                  onClick={() => setItemCompartilhar(sub)}
+                  className="flex items-center gap-1 cursor-pointer"
+                  title={sub.tipo === "TREINO" ? "Compartilhar treino" : "Compartilhar desafio"}
+                >
+                  <Share className="w-4 h-4"/>
+                  <span>Compartilhar</span>
                 </button>
               </div>
               <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -420,6 +423,25 @@ function DesafiosInner() {
             </div>
           );
         })
+      )}
+
+      {itemCompartilhar && (
+        <PublicShareModal
+          open={!!itemCompartilhar}
+          onClose={() => setItemCompartilhar(null)}
+          titulo={itemCompartilhar.desafio.titulo}
+          path={
+            itemCompartilhar.tipo === "TREINO"
+              ? PUBLIC_PATHS.treino(itemCompartilhar.desafio.id)
+              : PUBLIC_PATHS.desafio(itemCompartilhar.desafio.id)
+          }
+          directTipo={itemCompartilhar.tipo === "DESAFIO" ? "DESAFIO" : "NORMAL"}
+          directConteudo={
+            itemCompartilhar.tipo === "DESAFIO"
+              ? itemCompartilhar.desafio.id
+              : undefined
+          }
+        />
       )}
     </>
   );

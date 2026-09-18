@@ -1,5 +1,4 @@
 import { API } from "../config.js";
-import { toast } from "@/lib/toast";
 import { readToken } from "../utils/auth.js";
 
 export interface Usuario {
@@ -274,39 +273,72 @@ export async function repostPost(postId: string, comentario = ""): Promise<Repos
   return r.json();
 }
 
-export async function compartilharPost(postId: string) {
-  const link = `${window.location.origin}/post/${postId}`;
-  const bearer = readBearerToken();
+export type OrigemCompartilhamentoPost =
+  | "copiar"
+  | "whatsapp"
+  | "email"
+  | "nativo"
+  | "footera"
+  | "direct";
 
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: "FootEra",
-        url: link,
-      });
-    } else {
-      await navigator.clipboard.writeText(link);
-      toast.success("Link copiado para a área de transferência!");
-    }
-  } catch (error: any) {
-    if (error?.name === "AbortError") {
-      return;
-    }
+export async function registrarCompartilhamentoPost(
+  postId: string,
+  origem: OrigemCompartilhamentoPost
+) {
+  const bearer =
+    readBearerToken();
 
-    console.error("Erro ao compartilhar link:", error);
-    toast.error("Não foi possível compartilhar o link.");
-    return;
+  const headers: Record<
+    string,
+    string
+  > = {
+    "Content-Type":
+      "application/json",
+  };
+
+  if (bearer) {
+    headers.Authorization =
+      bearer;
   }
 
-  // Registrar o compartilhamento é um efeito secundário.
-  // Visitante pode compartilhar normalmente sem autenticação.
-  if (bearer) {
-    void fetch(`${API.BASE_URL}/api/feed/post/${postId}/compartilhar`, {
-      method: "POST",
-      headers: { Authorization: bearer },
-    }).catch((error) => {
-      console.error("Erro ao registrar compartilhamento:", error);
-    });
+  try {
+    const response =
+      await fetch(
+        `${API.BASE_URL}/api/post/${encodeURIComponent(
+          postId
+        )}/compartilhar`,
+        {
+          method: "POST",
+
+          headers,
+
+          body: JSON.stringify({
+            origem,
+          }),
+
+          keepalive: true,
+        }
+      );
+
+    if (!response.ok) {
+      console.warn(
+        "Não foi possível registrar o compartilhamento:",
+        response.status
+      );
+
+      return null;
+    }
+
+    return await response
+      .json()
+      .catch(() => ({}));
+  } catch (error) {
+    console.error(
+      "Erro ao registrar compartilhamento:",
+      error
+    );
+
+    return null;
   }
 }
 

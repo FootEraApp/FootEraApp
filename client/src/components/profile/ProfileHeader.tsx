@@ -26,6 +26,11 @@ import {
   lerAcaoPendenteAuth,
   limparAcaoPendenteAuth,
 } from "../../utils/authSession.js";
+import PublicShareModal from "../share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 interface Usuario {
   id: string;
@@ -144,10 +149,6 @@ export default function ProfileHeader({
   creatorUsuarioId = null,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
-  const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [enviandoDM, setEnviandoDM] = useState(false);
-  const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
   const [ehFavorito, setEhFavorito] = useState(false);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
@@ -233,6 +234,31 @@ export default function ProfileHeader({
     text: string;
     onYes: () => Promise<void> | void;
   } | null>(null);
+
+  const tipoCompartilhamento =
+    normalizeTipo(
+      perfilTipo ||
+        perfilTipoProp
+    );
+
+  const ehOrganizacaoCompartilhamento =
+    [
+      "clube",
+      "escolinha",
+      "federacao",
+      "marca",
+    ].includes(
+      tipoCompartilhamento
+    );
+
+  const sharePathPerfil =
+    ehOrganizacaoCompartilhamento
+      ? PUBLIC_PATHS.organizacao(
+          perfilId
+        )
+      : PUBLIC_PATHS.profile(
+          perfilId
+        );
 
   function avisarVinculoAlterado() {
     window.dispatchEvent(new CustomEvent("footera:vinculo-treino-alterado", {
@@ -1035,177 +1061,10 @@ useEffect(() => {
     );
   }
 
-  const carregarUsuariosMutuos = async () => {
-    const token = Storage.token;
-    setCarregandoMutuos(true);
-    try {
-      const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = res.ok ? await res.json() : [];
-      setUsuariosMutuos(Array.isArray(data) ? data : []);
-    } catch {
-      setUsuariosMutuos([]);
-    } finally {
-      setCarregandoMutuos(false);
-    }
-  };
-
-  async function compartilharPerfilExterno() {
-    const url =
-      `${window.location.origin}/perfil/${encodeURIComponent(
-        perfilId
-      )}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title:
-            `${nome} na FootEra`,
-          url,
-        });
-
-        return;
-      }
-
-      await navigator.clipboard.writeText(
-        url
-      );
-
-      toast.success(
-        "Link do perfil copiado!"
-      );
-    } catch (e) {
-      console.error(
-        "Erro ao compartilhar perfil:",
-        e
-      );
-    }
-  }
-
   const abrirModalCompartilhar =
     () => {
-      const token =
-        Storage.token;
-
-      if (!token) {
-        void compartilharPerfilExterno();
-        return;
-      }
-
       setModalAberto(true);
-      setSelecionados(
-        new Set()
-      );
-
-      void carregarUsuariosMutuos();
     };
-
-  const toggleSelecionado = (idUsuario: string) => {
-    setSelecionados((prev) => {
-      const novo = new Set(prev);
-      novo.has(idUsuario) ? novo.delete(idUsuario) : novo.add(idUsuario);
-      return novo;
-    });
-  };
-
-  const enviarCompartilhamentoPorDM = async () => {
-    if (
-      !requireAuth({
-        message:
-          "Entre na FootEra para enviar este perfil por mensagem.",
-      })
-    ) {
-      return;
-    }
-
-    if (selecionados.size === 0) {
-      toast.error(
-        "Selecione ao menos uma pessoa."
-      );
-      return;
-    }
-
-    const token = Storage.token;
-
-    if (!token) {
-      return;
-    }
-
-    try {
-      setEnviandoDM(true);
-
-      await Promise.all(
-        Array.from(selecionados).map(
-          async (paraId) => {
-            const resp = await fetch(
-              `${API.BASE_URL}/api/mensagem`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  paraId,
-                  conteudo: perfilId,
-                  tipo: "USUARIO",
-                }),
-              }
-            );
-
-            if (!resp.ok) {
-              const body =
-                await resp
-                  .json()
-                  .catch(
-                    () => ({})
-                  );
-
-              const error: any =
-                new Error(
-                  body?.message ||
-                    body?.error ||
-                    "Não foi possível compartilhar o perfil por mensagem."
-                );
-
-              error.status =
-                resp.status;
-
-              error.code =
-                body?.code;
-
-              throw error;
-            }
-          }
-        )
-      );
-
-      toast.success(
-        "Perfil compartilhado por mensagem!"
-      );
-
-      setModalAberto(false);
-    } catch (e: any) {
-      if (
-        handleAuthError(e, {
-          message:
-            "Sua sessão expirou. Entre novamente para continuar.",
-        })
-      ) {
-        return;
-      }
-
-      toast.error(
-        e?.message ||
-          "Não foi possível compartilhar o perfil por mensagem."
-      );
-    } finally {
-      setEnviandoDM(false);
-    }
-  };
 
   const rawAvatar = foto ?? avatar ?? null;
   const alvoUsuarioIdFavorito = isOwnProfile
@@ -2271,81 +2130,22 @@ useEffect(() => {
         </div>
       )}
 
-      {modalAberto && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
-            <h2 className="text-lg font-bold mb-4 text-center">
-              Compartilhar Perfil
-            </h2>
-            <div className="mb-4">
-              <p className="text-sm text-gray-700 mb-2">
-                Enviar por mensagem:
-              </p>
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {carregandoMutuos && (
-                  <span className="text-sm text-gray-500">
-                    Carregando contatos...
-                  </span>
-                )}
-                {!carregandoMutuos && usuariosMutuos.length === 0 && (
-                  <span className="text-sm text-gray-500">
-                    Você ainda não tem contatos mútuos.
-                  </span>
-                )}
-                {usuariosMutuos.map((u) => {
-                  const selecionado = selecionados.has(u.id);
-                  const fotoSrc = u.foto ?? null;
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => toggleSelecionado(u.id)}
-                      title={u.nome}
-                      className={`relative shrink-0 rounded-full border-2 ${
-                        selecionado
-                          ? "border-green-600"
-                          : "border-transparent"
-                      }`}
-                    >
-                      <img
-                        src={fotoSrc}
-                        alt={u.nome}
-                        className="w-14 h-14"
-                      />
-                      {selecionado && (
-                        <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
-                          <CircleCheck className="w-5 h-5 text-green-600" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                disabled={selecionados.size === 0 || enviandoDM}
-                onClick={enviarCompartilhamentoPorDM}
-                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
-                  ${
-                    selecionados.size === 0 || enviandoDM
-                      ? "bg-gray-300 text-gray-600"
-                      : "bg-green-700 text-white hover:bg-green-800"
-                  }`}
-              >
-                <Send className="w-4 h-4" />
-                {enviandoDM
-                  ? "Enviando..."
-                  : `Enviar para ${selecionados.size} contato(s)`}
-              </button>
-            </div>
-            <button
-              onClick={() => setModalAberto(false)}
-              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
-              aria-label="Fechar modal"
-            >
-              <CircleX />
-            </button>
-          </div>
-        </div>
-      )}
+      <PublicShareModal
+        open={modalAberto}
+        onClose={() =>
+          setModalAberto(
+            false
+          )
+        }
+        titulo={`${nome} na FootEra`}
+        path={
+          sharePathPerfil
+        }
+        directTipo="USUARIO"
+        directConteudo={
+          perfilId
+        }
+      />
 
       {confirmBox?.open && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">

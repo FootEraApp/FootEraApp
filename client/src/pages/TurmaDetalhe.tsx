@@ -35,6 +35,12 @@ import {
   toast,
 } from "@/lib/toast";
 
+import PublicShareModal from "../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../utils/publicRoutes.js";
+
 type TurmaPublica = {
   id: string;
   nome: string;
@@ -92,6 +98,12 @@ export default function TurmaDetalhe() {
     participandoLoading,
     setParticipandoLoading,
   ] = useState(false);
+
+  const [
+    shareOpen,
+    setShareOpen,
+  ] =
+    useState(false);
 
   const participar =
   useCallback(
@@ -336,48 +348,6 @@ export default function TurmaDetalhe() {
     };
   }, [id]);
 
-  async function compartilhar() {
-    if (!turma) return;
-
-    const url =
-      `${window.location.origin}/turma/${encodeURIComponent(
-        turma.id
-      )}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title:
-            `${turma.nome} na FootEra`,
-
-          text:
-            `Confira a turma "${turma.nome}" na FootEra.`,
-
-          url,
-        });
-
-        return;
-      }
-
-      await navigator.clipboard.writeText(
-        url
-      );
-
-      toast.success(
-        "Link da turma copiado."
-      );
-    } catch (error: any) {
-      if (
-        error?.name !==
-        "AbortError"
-      ) {
-        toast.error(
-          "Não foi possível compartilhar."
-        );
-      }
-    }
-  }
-
   if (loading) {
     return (
       <div className="p-8 text-center">
@@ -543,14 +513,33 @@ export default function TurmaDetalhe() {
         <div className="mt-6 flex flex-col sm:flex-row gap-3">
           <button
             type="button"
-            onClick={
-              compartilhar
+            onClick={() =>
+              setShareOpen(
+                true
+              )
             }
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-green-700 px-4 py-3 font-semibold text-green-800 hover:bg-green-50"
           >
             <Share2 size={18} />
             Compartilhar
           </button>
+
+          {turma && (
+            <PublicShareModal
+              open={shareOpen}
+              onClose={() =>
+                setShareOpen(
+                  false
+                )
+              }
+              titulo={
+                turma.nome
+              }
+              path={PUBLIC_PATHS.turma(
+                turma.id
+              )}
+            />
+          )}
 
           {turma.participando ? (
             <button

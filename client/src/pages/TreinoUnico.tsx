@@ -28,6 +28,11 @@ import {
   lerAcaoPendenteAuth,
   limparAcaoPendenteAuth,
 } from "../utils/authSession.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../utils/publicRoutes.js";
 
 type ExercicioItem = {
   id: string;
@@ -207,6 +212,11 @@ export default function TreinoUnico() {
   const [
     iniciando,
     setIniciando,
+  ] = useState(false);
+
+  const [
+    shareOpen,
+    setShareOpen,
   ] = useState(false);
 
   const agendadoId =
@@ -533,84 +543,6 @@ export default function TreinoUnico() {
         treinoPublicoId,
         requireAuth,
         handleAuthError,
-      ]
-    );
-
-  const compartilharTreino =
-    useCallback(
-      async () => {
-        if (!treino) {
-          return;
-        }
-
-        const id =
-          treino.treinoProgramadoId ||
-          treinoPublicoId ||
-          treino.id;
-
-        const url =
-          `${window.location.origin}/treino/${encodeURIComponent(
-            String(id)
-          )}`;
-
-        const shareData = {
-          title:
-            `${treino.titulo} na FootEra`,
-
-          text:
-            `Confira o treino "${treino.titulo}" na FootEra.`,
-
-          url,
-        };
-
-        try {
-          if (
-            navigator.share
-          ) {
-            await navigator.share(
-              shareData
-            );
-
-            return;
-          }
-
-          if (
-            navigator.clipboard
-          ) {
-            await navigator.clipboard.writeText(
-              url
-            );
-
-            toast.success(
-              "Link do treino copiado."
-            );
-
-            return;
-          }
-
-          window.prompt(
-            "Copie o link do treino:",
-            url
-          );
-        } catch (error: any) {
-          if (
-            error?.name !==
-            "AbortError"
-          ) {
-            console.error(
-              "Erro ao compartilhar:",
-              error
-            );
-
-            toast.error(
-              "Não foi possível compartilhar o treino."
-            );
-          }
-        }
-      },
-      [
-        treino,
-        treinoPublicoId,
       ]
     );
 
@@ -1009,8 +941,10 @@ export default function TreinoUnico() {
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="button"
-                onClick={
-                  compartilharTreino
+                onClick={() =>
+                  setShareOpen(
+                    true
+                  )
                 }
                 className="
                   inline-flex items-center
@@ -1061,6 +995,24 @@ export default function TreinoUnico() {
                   : "Iniciar treino"}
               </button>
             </div>
+          )}
+
+          {treinoPublicoId && (
+            <PublicShareModal
+              open={shareOpen}
+              onClose={() =>
+                setShareOpen(
+                  false
+                )
+              }
+              titulo={
+                treino?.titulo ||
+                "Treino FootEra"
+              }
+              path={PUBLIC_PATHS.treino(
+                treinoPublicoId
+              )}
+            />
           )}
         </div>
       </main>

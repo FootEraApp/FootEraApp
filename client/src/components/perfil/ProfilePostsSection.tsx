@@ -7,9 +7,18 @@ import { APP, API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import axios from "axios";
 import { X } from "lucide-react";
-import { getFeedPosts, deletarComentario, compartilharPost, likePost, comentarPost, repostPost, type PostagemComUsuario } from "../../services/feedService.js";
+import {
+  getFeedPosts,
+  deletarComentario,
+  registrarCompartilhamentoPost,
+  likePost,
+  comentarPost,
+  repostPost,
+  type PostagemComUsuario,
+} from "../../services/feedService.js";
 import Avatar from "../shared/Avatar.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
+import PublicShareModal from "../share/PublicShareModal.js";
 
 type ConquistaDB = {
   id: string;
@@ -165,6 +174,13 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     handleAuthError,
     openAuthGate,
   } = useAuthGate();
+  const [
+    postCompartilhar,
+    setPostCompartilhar,
+  ] =
+    useState<PostagemComUsuario | null>(
+      null
+    );
 
   const token =
     (Storage as any)?.token ||
@@ -803,16 +819,93 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                     </button>
 
                     <button
-                      onClick={() => compartilharPost(post.id)}
+                      type="button"
+                      onClick={() =>
+                        setPostCompartilhar(
+                          post
+                        )
+                      }
                       className="flex items-center gap-2 px-3 py-2 rounded-full border bg-white border-gray-200 text-gray-700"
+                      title="Compartilhar"
                     >
                       <FaShare />
+
+                      <span>
+                        {Number(
+                          post.compartilhamentos ??
+                            0
+                        )}
+                      </span>
                     </button>
                   </div>
                 </div>
               </div>
             );
           })}
+
+          {postCompartilhar && (
+            <PublicShareModal
+              open={
+                !!postCompartilhar
+              }
+              onClose={() =>
+                setPostCompartilhar(
+                  null
+                )
+              }
+              titulo={`Post de ${
+                postCompartilhar
+                  .usuario?.nome ||
+                "FootEra"
+              }`}
+              path={`/post/${encodeURIComponent(
+                postCompartilhar.id
+              )}`}
+              directTipo="POST"
+              directConteudo={
+                postCompartilhar.id
+              }
+              onAction={async (
+                origem
+              ) => {
+                const data =
+                  await registrarCompartilhamentoPost(
+                    postCompartilhar.id,
+                    origem
+                  );
+
+                if (!data) {
+                  return;
+                }
+
+                setPosts(
+                  (anteriores) =>
+                    anteriores.map(
+                      (item) =>
+                        item.id ===
+                        postCompartilhar.id
+                          ? {
+                              ...item,
+
+                              compartilhamentos:
+                                typeof data
+                                  ?.compartilhamentos ===
+                                "number"
+                                  ? data
+                                      .compartilhamentos
+                                  : Number(
+                                      item
+                                        .compartilhamentos ??
+                                        0
+                                    ) +
+                                    1,
+                            }
+                          : item
+                    )
+                );
+              }}
+            />
+          )}
 
           {comentariosModalAberto && postSelecionado && (
             <div className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center">

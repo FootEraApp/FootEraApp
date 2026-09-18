@@ -16,8 +16,10 @@ import {
   Eye,
   EyeOff,
   Users,
+  Share2
 } from "lucide-react";
 import { API } from "@/config.js";
+import PublicShareModal from "../../../components/share/PublicShareModal.js";
 
 type EtapaAcesso =
   | "FORMULARIO"
@@ -192,6 +194,10 @@ export default function SalaCopaEventoPage() {
   const [carregandoEvento, setCarregandoEvento] = useState(true);
   const [erro, setErro] = useState("");
   const [evento, setEvento] = useState<SalaCopaEvento | null>(null);
+  const [
+    shareOpen,
+    setShareOpen,
+  ] = useState(false);
 
   const preco = Number(
     evento?.acesso?.preco ??
@@ -234,6 +240,37 @@ export default function SalaCopaEventoPage() {
         : "Gratuito";
 
   const tituloEvento = evento?.titulo || "Sala Copa";
+
+  const origemCompartilhamento =
+    evento?.origem ===
+    "AVULSA"
+      ? "avulsa"
+      : "learning";
+
+  const metodologiaIdCompartilhamento =
+    evento?.metodologiaAvulsaId ||
+    evento?.metodologiaId ||
+    new URLSearchParams(
+      window.location.search
+    ).get(
+      "metodologiaId"
+    ) ||
+    "";
+
+  const sharePathSalaCopa =
+    `/learning/evento/sala-copa?aulaId=${encodeURIComponent(
+      aulaId
+    )}` +
+    `&origem=${encodeURIComponent(
+      origemCompartilhamento
+    )}` +
+    (
+      metodologiaIdCompartilhamento
+        ? `&metodologiaId=${encodeURIComponent(
+            metodologiaIdCompartilhamento
+          )}`
+        : ""
+    );
 
   const subtituloFixo =
   "Encontros ao vivo para quem quer aprender, debater e evoluir no esporte.";
@@ -517,13 +554,26 @@ export default function SalaCopaEventoPage() {
         </div>
 
         <div className="relative mx-auto max-w-6xl px-5 py-6">
-          <button
-            type="button"
-            onClick={voltar}
-            className="mb-8 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
+          <div className="mb-8 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={voltar}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setShareOpen(true)
+              }
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+              title="Compartilhar evento"
+            >
+              <Share2 className="h-5 w-5" />
+            </button>
+          </div>
 
           <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
             <div className="pb-8">
@@ -910,6 +960,20 @@ export default function SalaCopaEventoPage() {
             </div>
           </div>
         </div>
+
+        <PublicShareModal
+          open={shareOpen}
+          onClose={() =>
+            setShareOpen(false)
+          }
+          titulo={
+            tituloEvento
+          }
+          path={
+            sharePathSalaCopa
+          }
+        />
+
       </section>
     </div>
   );
