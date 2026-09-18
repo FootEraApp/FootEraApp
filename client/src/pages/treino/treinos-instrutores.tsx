@@ -8,11 +8,17 @@ import {
   Pencil,
   Trash2,
   Star as StarIcon,
+  Share2,
 } from "lucide-react";
 import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
+import PublicShareModal from "../../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 const Storage = {
   get token() {
@@ -555,6 +561,12 @@ export default function TreinosInstrutores({
   const [metodologias, setMetodologias] = useState<MetodologiaCard[]>([]);
   const [loadingMetodologias, setLoadingMetodologias] = useState(false);
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
+  const [
+    treinoCompartilhar,
+    setTreinoCompartilhar,
+  ] = useState<TreinoProgramado | null>(
+    null
+  );
 
   function getExerciseVideoKey(ex: ExercicioSessaoDetalhe) {
     if (ex.exercicioId) return `catalogo:${ex.exercicioId}`;
@@ -2613,6 +2625,32 @@ export default function TreinosInstrutores({
         <div className="flex items-center gap-2 flex-shrink-0">
           <BotaoFavoritoTreino treinoId={treino.id} />
 
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+
+              setTreinoCompartilhar(
+                treino
+              );
+            }}
+            className="
+              p-2
+              rounded-lg
+              border
+              hover:bg-green-50
+            "
+            title="Compartilhar treino"
+          >
+            <Share2
+              className="
+                w-4
+                h-4
+                text-green-800
+              "
+            />
+          </button>
+
           {podeEditar && (
             <>
               <button
@@ -3671,6 +3709,25 @@ export default function TreinosInstrutores({
             </div>
           </div>
         </div>
+      )}
+
+            {treinoCompartilhar && (
+        <PublicShareModal
+          open={
+            !!treinoCompartilhar
+          }
+          onClose={() =>
+            setTreinoCompartilhar(
+              null
+            )
+          }
+          titulo={
+            treinoCompartilhar.nome
+          }
+          path={PUBLIC_PATHS.treino(
+            treinoCompartilhar.id
+          )}
+        />
       )}
 
       <BottomNav active="treinos" />

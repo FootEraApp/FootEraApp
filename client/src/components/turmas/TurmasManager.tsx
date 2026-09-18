@@ -15,10 +15,15 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Trash2,
+  Share2,
 } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../utils/storage.js";
 import AgendaTreinos from "../../components/agenda/AgendaTreinos";
+import PublicShareModal from "../share/PublicShareModal.js";
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 type TurmaMin = {
   id: string;
@@ -211,7 +216,14 @@ export default function TurmasManager({
   const [freqLoading, setFreqLoading] = useState(false);
   const [freqData, setFreqData] = useState<any>(null);
   const [freqYear, setFreqYear] = useState(new Date().getFullYear());
-  
+  const [
+    turmaCompartilhar,
+    setTurmaCompartilhar,
+  ] =
+    useState<TurmaMin | null>(
+      null
+    );
+
   const turmaSelecionada = useMemo(
     () => turmas.find((t) => String(t.id) === String(selecionada)),
     [turmas, selecionada]
@@ -1603,12 +1615,48 @@ const carregarAtletasVinculados =
                             </div>
                           </div>
 
-                          <span className="shrink-0 rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-                            {turma.vagas != null
-                              ? `${turma.alunosCount ?? 0}/${turma.vagas}`
-                              : `${turma.alunosCount ?? 0}`}{" "}
-                            aluno(s)
-                          </span>
+                          <div
+                            className="
+                              flex
+                              shrink-0
+                              items-center
+                              gap-2
+                            "
+                          >
+                            <button
+                              type="button"
+                              title="Compartilhar turma"
+                              onClick={(e) => {
+                                e.stopPropagation();
+
+                                setTurmaCompartilhar(
+                                  turma
+                                );
+                              }}
+                              className="
+                                inline-flex
+                                h-9
+                                w-9
+                                items-center
+                                justify-center
+                                rounded-lg
+                                border
+                                border-zinc-200
+                                bg-white
+                                text-green-800
+                                hover:bg-green-50
+                              "
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </button>
+
+                            <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
+                              {turma.vagas != null
+                                ? `${turma.alunosCount ?? 0}/${turma.vagas}`
+                                : `${turma.alunosCount ?? 0}`}{" "}
+                              aluno(s)
+                            </span>
+                          </div>
                         </li>
                       );
                     })}
@@ -2403,6 +2451,25 @@ const carregarAtletasVinculados =
           </div>
         </div>
       ) : null}
+
+      {turmaCompartilhar && (
+        <PublicShareModal
+          open={
+            !!turmaCompartilhar
+          }
+          onClose={() =>
+            setTurmaCompartilhar(
+              null
+            )
+          }
+          titulo={
+            turmaCompartilhar.nome
+          }
+          path={PUBLIC_PATHS.turma(
+            turmaCompartilhar.id
+          )}
+        />
+      )}
 
       {confirmLeaveOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">

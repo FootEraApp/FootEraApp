@@ -28,6 +28,11 @@ import {
   lerAcaoPendenteAuth,
   limparAcaoPendenteAuth,
 } from "../utils/authSession.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../utils/publicRoutes.js";
 
 type ExercicioItem = {
   id: string;
@@ -207,6 +212,11 @@ export default function TreinoUnico() {
   const [
     iniciando,
     setIniciando,
+  ] = useState(false);
+
+  const [
+    shareOpen,
+    setShareOpen,
   ] = useState(false);
 
   const agendadoId =
@@ -1009,8 +1019,10 @@ export default function TreinoUnico() {
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="button"
-                onClick={
-                  compartilharTreino
+                onClick={() =>
+                  setShareOpen(
+                    true
+                  )
                 }
                 className="
                   inline-flex items-center
@@ -1061,6 +1073,24 @@ export default function TreinoUnico() {
                   : "Iniciar treino"}
               </button>
             </div>
+          )}
+
+          {treinoPublicoId && (
+            <PublicShareModal
+              open={shareOpen}
+              onClose={() =>
+                setShareOpen(
+                  false
+                )
+              }
+              titulo={
+                treino?.titulo ||
+                "Treino FootEra"
+              }
+              path={PUBLIC_PATHS.treino(
+                treinoPublicoId
+              )}
+            />
           )}
         </div>
       </main>

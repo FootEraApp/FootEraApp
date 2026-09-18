@@ -17,8 +17,10 @@ import {
   Video,
   Eye,
   EyeOff,
+  Share2,
 } from "lucide-react";
 import { API } from "@/config.js";
+import PublicShareModal from "../../../components/share/PublicShareModal.js";
 
 type AulaStatus = "AGENDADA" | "AO_VIVO" | "FINALIZADA" | "CANCELADA";
 
@@ -204,6 +206,10 @@ export default function LearningEventoAoVivoPage() {
   const [etapa, setEtapa] = useState<EtapaAcesso>("FORMULARIO");
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
+  const [
+    shareOpen,
+    setShareOpen,
+  ] = useState(false);
 
   const [form, setForm] = useState<Form>({
     nome: "",
@@ -556,13 +562,26 @@ export default function LearningEventoAoVivoPage() {
         </div>
 
         <div className="relative mx-auto max-w-6xl px-5 py-6">
-          <button
-            type="button"
-            onClick={voltar}
-            className="mb-8 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
+          <div className="mb-8 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={voltar}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setShareOpen(true)
+              }
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+              title="Compartilhar evento"
+            >
+              <Share2 className="h-5 w-5" />
+            </button>
+          </div>
 
           <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
             <div className="pb-8">
@@ -940,6 +959,20 @@ export default function LearningEventoAoVivoPage() {
             </div>
           </div>
         </div>
+
+        <PublicShareModal
+          open={shareOpen}
+          onClose={() =>
+            setShareOpen(false)
+          }
+          titulo={
+            evento?.titulo ||
+            "Evento FootEra"
+          }
+          path={`/learning/evento/${encodeURIComponent(
+            aulaId
+          )}`}
+        />
       </section>
     </div>
   );

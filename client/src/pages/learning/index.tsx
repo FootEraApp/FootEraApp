@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   Star,
+  Share2,
 } from "lucide-react";
 import {
   listMetodologiasVisiveis,
@@ -26,6 +27,11 @@ import LearningCard from "../../components/learning/LearningCard.js";
 import { API } from "@/config.js";
 import CoverImage from "../../components/shared/CoverImage.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
+import PublicShareModal from "../../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 type TabKey = "explorar" | "minhas" | "criar";
 type FavoritoTipo = "METODOLOGIA" | "METODOLOGIA_AVULSA" | "AULA_AO_VIVO";
@@ -341,6 +347,7 @@ function EventoAoVivoExploreCard({
   aula,
   onVerEvento,
   onVerMetodologia,
+  onShare,
   favorito,
   onToggleFavorito,
 }: {
@@ -349,6 +356,7 @@ function EventoAoVivoExploreCard({
   onVerMetodologia?: () => void;
   favorito?: boolean;
   onToggleFavorito?: () => void;
+  onShare: () => void;
 }) {
   const statusInfo = getLiveStatusInfo(aula.status);
   const origemTipo = String(aula.origemTipo || "").toUpperCase();
@@ -514,6 +522,33 @@ function EventoAoVivoExploreCard({
                 Ver metodologia
               </button>
             ) : null}
+
+            <button
+              type="button"
+              onClick={
+                onShare
+              }
+              className="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                border
+                border-green-200
+                bg-green-50
+                px-4
+                py-3
+                text-sm
+                font-black
+                text-green-800
+                hover:bg-green-100
+              "
+            >
+              <Share2 className="h-4 w-4" />
+              Compartilhar
+            </button>
+
           </div>
         </div>
       </div>
@@ -566,6 +601,13 @@ export default function LearningPage() {
   const [filtroFavoritosEventos, setFiltroFavoritosEventos] = useState<FiltroFavoritos>("TODOS");
   const [busca, setBusca] = useState("");
   const [, navigate] = useLocation();
+  const [
+    shareAlvo,
+    setShareAlvo,
+  ] = useState<{
+    titulo: string;
+    path: string;
+  } | null>(null);
   const {
     requireAuth,
   } = useAuthGate();
@@ -594,6 +636,53 @@ export default function LearningPage() {
 
   const isAtleta = tipoUsuario === "atleta";
   const podeCriarMetodologia = !isAtleta && !!permissaoCriacao?.podeCriar;
+
+  function botaoCompartilharMetodologia(
+    item: any,
+    avulsa = false
+  ) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const pathBase =
+            PUBLIC_PATHS.metodologia(
+              item.id
+            );
+
+          setShareAlvo({
+            titulo:
+              item.titulo ||
+              "Metodologia FootEra",
+
+            path:
+              avulsa
+                ? `${pathBase}?origem=avulsa`
+                : pathBase,
+          });
+        }}
+        className="
+          inline-flex
+          h-10
+          w-10
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-green-200
+          bg-white
+          text-green-800
+          hover:bg-green-50
+        "
+        title="Compartilhar metodologia"
+      >
+        <Share2 className="h-4 w-4" />
+      </button>
+    );
+  }
 
   async function handleDeleteMetodologia(
     id: string,
@@ -1444,6 +1533,17 @@ export default function LearningPage() {
                               ? () => navigate(metodologiaHref)
                               : undefined
                           }
+                          onShare={() =>
+                            setShareAlvo({
+                              titulo:
+                                aula.titulo,
+
+                              path:
+                                getEventoPublicoUrl(
+                                  aula
+                                ),
+                            })
+                          }
                           favorito={isFavorito("AULA_AO_VIVO", aula.id)}
                           onToggleFavorito={() => toggleFavorito("AULA_AO_VIVO", aula.id)}
                         />
@@ -1473,29 +1573,53 @@ export default function LearningPage() {
                           href={`/learning/${item.id}`}
                           actionLabel="Ver metodologia"
                           extraActions={
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                toggleFavorito("METODOLOGIA", item.id);
-                              }}
-                              className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
-                                isFavorito("METODOLOGIA", item.id)
-                                  ? "border-amber-300 bg-amber-50 text-amber-600"
-                                  : "border-slate-300 bg-white text-slate-500"
-                              }`}
-                              title={
-                                isFavorito("METODOLOGIA", item.id)
-                                  ? "Remover dos favoritos"
-                                  : "Adicionar aos favoritos"
-                              }
-                            >
-                              <Star
-                                className="w-4 h-4"
-                                fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
-                              />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+
+                                  toggleFavorito(
+                                    "METODOLOGIA",
+                                    item.id
+                                  );
+                                }}
+                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                  isFavorito(
+                                    "METODOLOGIA",
+                                    item.id
+                                  )
+                                    ? "border-amber-300 bg-amber-50 text-amber-600"
+                                    : "border-slate-300 bg-white text-slate-500"
+                                }`}
+                                title={
+                                  isFavorito(
+                                    "METODOLOGIA",
+                                    item.id
+                                  )
+                                    ? "Remover dos favoritos"
+                                    : "Adicionar aos favoritos"
+                                }
+                              >
+                                <Star
+                                  className="w-4 h-4"
+                                  fill={
+                                    isFavorito(
+                                      "METODOLOGIA",
+                                      item.id
+                                    )
+                                      ? "currentColor"
+                                      : "none"
+                                  }
+                                />
+                              </button>
+
+                              {botaoCompartilharMetodologia(
+                                item,
+                                false
+                              )}
+                            </>
                           }
                         />
                       ))
@@ -1524,29 +1648,53 @@ export default function LearningPage() {
                           href={`/learning/${item.id}?origem=avulsa`}
                           actionLabel="Ver metodologia"
                           extraActions={
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                toggleFavorito("METODOLOGIA_AVULSA", item.id);
-                              }}
-                              className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
-                                isFavorito("METODOLOGIA_AVULSA", item.id)
-                                  ? "border-amber-300 bg-amber-50 text-amber-600"
-                                  : "border-slate-300 bg-white text-slate-500"
-                              }`}
-                              title={
-                                isFavorito("METODOLOGIA", item.id)
-                                  ? "Remover dos favoritos"
-                                  : "Adicionar aos favoritos"
-                              }
-                            >
-                              <Star
-                                className="w-4 h-4"
-                                fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
-                              />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+
+                                  toggleFavorito(
+                                    "METODOLOGIA_AVULSA",
+                                    item.id
+                                  );
+                                }}
+                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                  isFavorito(
+                                    "METODOLOGIA_AVULSA",
+                                    item.id
+                                  )
+                                    ? "border-amber-300 bg-amber-50 text-amber-600"
+                                    : "border-slate-300 bg-white text-slate-500"
+                                }`}
+                                title={
+                                  isFavorito(
+                                    "METODOLOGIA_AVULSA",
+                                    item.id
+                                  )
+                                    ? "Remover dos favoritos"
+                                    : "Adicionar aos favoritos"
+                                }
+                              >
+                                <Star
+                                  className="w-4 h-4"
+                                  fill={
+                                    isFavorito(
+                                      "METODOLOGIA_AVULSA",
+                                      item.id
+                                    )
+                                      ? "currentColor"
+                                      : "none"
+                                  }
+                                />
+                              </button>
+
+                              {botaoCompartilharMetodologia(
+                                item,
+                                true
+                              )}
+                            </>
                           }
                         />
                       ))
@@ -1744,6 +1892,35 @@ export default function LearningPage() {
                                       fill={isFavorito("AULA_AO_VIVO", aula.id) ? "currentColor" : "none"}
                                     />
                                   </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShareAlvo({
+                                        titulo:
+                                          aula.titulo,
+
+                                        path:
+                                          eventoUrl,
+                                      })
+                                    }
+                                    className="
+                                      inline-flex
+                                      h-11
+                                      w-11
+                                      items-center
+                                      justify-center
+                                      rounded-xl
+                                      border
+                                      border-green-200
+                                      bg-white
+                                      text-green-800
+                                      hover:bg-green-50
+                                    "
+                                    title="Compartilhar evento"
+                                  >
+                                    <Share2 className="h-4 w-4" />
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => navigate(`/learning/live-studio?aulaId=${aula.id}`)}
@@ -1839,6 +2016,11 @@ export default function LearningPage() {
                                       fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
                                     />
                                   </button>
+                                  
+                                  {botaoCompartilharMetodologia(
+                                    item,
+                                    false
+                                  )}
 
                                   <button
                                     type="button"
@@ -1912,6 +2094,11 @@ export default function LearningPage() {
                                     />
                                   </button>
 
+                                  {botaoCompartilharMetodologia(
+                                    item,
+                                    true
+                                  )}
+
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1958,29 +2145,53 @@ export default function LearningPage() {
                           : "Continuar"
                       }
                       extraActions={
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFavorito("METODOLOGIA", item.id);
-                          }}
-                          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
-                            isFavorito("METODOLOGIA", item.id)
-                              ? "border-amber-300 bg-amber-50 text-amber-600"
-                              : "border-slate-300 bg-white text-slate-500"
-                          }`}
-                          title={
-                            isFavorito("METODOLOGIA", item.id)
-                              ? "Remover dos favoritos"
-                              : "Adicionar aos favoritos"
-                          }
-                        >
-                          <Star
-                            className="w-4 h-4"
-                            fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
-                          />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+
+                              toggleFavorito(
+                                "METODOLOGIA",
+                                item.id
+                              );
+                            }}
+                            className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                              isFavorito(
+                                "METODOLOGIA",
+                                item.id
+                              )
+                                ? "border-amber-300 bg-amber-50 text-amber-600"
+                                : "border-slate-300 bg-white text-slate-500"
+                            }`}
+                            title={
+                              isFavorito(
+                                "METODOLOGIA",
+                                item.id
+                              )
+                                ? "Remover dos favoritos"
+                                : "Adicionar aos favoritos"
+                            }
+                          >
+                            <Star
+                              className="w-4 h-4"
+                              fill={
+                                isFavorito(
+                                  "METODOLOGIA",
+                                  item.id
+                                )
+                                  ? "currentColor"
+                                  : "none"
+                              }
+                            />
+                          </button>
+
+                          {botaoCompartilharMetodologia(
+                            item,
+                            false
+                          )}
+                        </>
                       }
                     />
                   ))
@@ -2005,29 +2216,53 @@ export default function LearningPage() {
                           : "Continuar"
                       }
                       extraActions={
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFavorito("METODOLOGIA_AVULSA", item.id);
-                          }}
-                          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
-                            isFavorito("METODOLOGIA_AVULSA", item.id)
-                              ? "border-amber-300 bg-amber-50 text-amber-600"
-                              : "border-slate-300 bg-white text-slate-500"
-                          }`}
-                          title={
-                            isFavorito("METODOLOGIA_AVULSA", item.id)
-                              ? "Remover dos favoritos"
-                              : "Adicionar aos favoritos"
-                          }
-                        >
-                          <Star
-                            className="w-4 h-4"
-                            fill={isFavorito("METODOLOGIA_AVULSA", item.id) ? "currentColor" : "none"}
-                          />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+
+                              toggleFavorito(
+                                "METODOLOGIA_AVULSA",
+                                item.id
+                              );
+                            }}
+                            className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                              isFavorito(
+                                "METODOLOGIA_AVULSA",
+                                item.id
+                              )
+                                ? "border-amber-300 bg-amber-50 text-amber-600"
+                                : "border-slate-300 bg-white text-slate-500"
+                            }`}
+                            title={
+                              isFavorito(
+                                "METODOLOGIA_AVULSA",
+                                item.id
+                              )
+                                ? "Remover dos favoritos"
+                                : "Adicionar aos favoritos"
+                            }
+                          >
+                            <Star
+                              className="w-4 h-4"
+                              fill={
+                                isFavorito(
+                                  "METODOLOGIA_AVULSA",
+                                  item.id
+                                )
+                                  ? "currentColor"
+                                  : "none"
+                              }
+                            />
+                          </button>
+
+                          {botaoCompartilharMetodologia(
+                            item,
+                            true
+                          )}
+                        </>
                       }
                     />
                   ))
@@ -2059,6 +2294,23 @@ export default function LearningPage() {
             </div>
           )
         ) : null}
+
+        {shareAlvo && (
+          <PublicShareModal
+            open={!!shareAlvo}
+            onClose={() =>
+              setShareAlvo(
+                null
+              )
+            }
+            titulo={
+              shareAlvo.titulo
+            }
+            path={
+              shareAlvo.path
+            }
+          />
+        )}
       </div>
     </div>
   );
