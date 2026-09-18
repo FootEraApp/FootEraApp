@@ -16,8 +16,14 @@ import {
   Trash2,
   Search,
   ArrowUpDown,
+  Share2,
 } from "lucide-react";
 import CoverImage from "../../components/shared/CoverImage.js";
+import PublicShareModal from "../../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 type EventoListItem = {
   id: string;
@@ -415,6 +421,13 @@ export default function CreatorEventosPage() {
   const [loading, setLoading] = useState(true);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
+  const [
+    shareAlvo,
+    setShareAlvo,
+  ] = useState<{
+    titulo: string;
+    path: string;
+  } | null>(null);
 
   const [ordenacao, setOrdenacao] =
     useState<OrdenacaoEventos>(
@@ -884,18 +897,56 @@ export default function CreatorEventosPage() {
                   )}
                 </div>
 
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() =>
-                      editarLiveLearning(aula)
+                      setShareAlvo({
+                        titulo:
+                          aula.titulo,
+
+                        path:
+                          getEventoPublicoUrl(
+                            aula
+                          ),
+                      })
                     }
                     className="
-                      flex h-9 w-9
-                      items-center justify-center
+                      flex
+                      h-9
+                      w-9
+                      items-center
+                      justify-center
                       rounded-full
-                      border border-emerald-200
-                      bg-white text-emerald-800
+                      border
+                      border-emerald-200
+                      bg-white
+                      text-emerald-800
+                      hover:bg-emerald-50
+                    "
+                    title="Compartilhar evento"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      editarLiveLearning(
+                        aula
+                      )
+                    }
+                    className="
+                      flex
+                      h-9
+                      w-9
+                      items-center
+                      justify-center
+                      rounded-full
+                      border
+                      border-emerald-200
+                      bg-white
+                      text-emerald-800
                       hover:bg-emerald-50
                     "
                     title="Editar aula ao vivo"
@@ -910,14 +961,21 @@ export default function CreatorEventosPage() {
                       `live_${aula.id}`
                     }
                     onClick={() =>
-                      apagarLiveLearning(aula)
+                      apagarLiveLearning(
+                        aula
+                      )
                     }
                     className="
-                      flex h-9 w-9
-                      items-center justify-center
+                      flex
+                      h-9
+                      w-9
+                      items-center
+                      justify-center
                       rounded-full
-                      border border-red-200
-                      bg-white text-red-600
+                      border
+                      border-red-200
+                      bg-white
+                      text-red-600
                       hover:bg-red-50
                       disabled:opacity-50
                     "
@@ -1052,59 +1110,105 @@ export default function CreatorEventosPage() {
           <div className="flex shrink-0 items-start gap-2">
             <span
               className="
-                h-fit rounded
+                h-fit
+                rounded
                 bg-green-100
-                px-2 py-1
-                text-xs text-green-900
+                px-2
+                py-1
+                text-xs
+                text-green-900
               "
             >
               {evento.status}
             </span>
 
-            <button
-              type="button"
-              onClick={() =>
-                editarEventoNormal(
-                  evento.id
-                )
-              }
-              className="
-                flex h-9 w-9
-                items-center justify-center
-                rounded-full
-                border border-emerald-200
-                bg-white text-emerald-800
-                hover:bg-emerald-50
-              "
-              title="Editar evento"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setShareAlvo({
+                    titulo:
+                      evento.titulo,
 
-            <button
-              type="button"
-              disabled={
-                apagandoId ===
-                `evento_${evento.id}`
-              }
-              onClick={() =>
-                apagarEventoNormal(
-                  evento.id
-                )
-              }
-              className="
-                flex h-9 w-9
-                items-center justify-center
-                rounded-full
-                border border-red-200
-                bg-white text-red-600
-                hover:bg-red-50
-                disabled:opacity-50
-              "
-              title="Apagar evento"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+                    path:
+                      PUBLIC_PATHS.evento(
+                        evento.id
+                      ),
+                  })
+                }
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                  rounded-full
+                  border
+                  border-emerald-200
+                  bg-white
+                  text-emerald-800
+                  hover:bg-emerald-50
+                "
+                title="Compartilhar evento"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  editarEventoNormal(
+                    evento.id
+                  )
+                }
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                  rounded-full
+                  border
+                  border-emerald-200
+                  bg-white
+                  text-emerald-800
+                  hover:bg-emerald-50
+                "
+                title="Editar evento"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  apagandoId ===
+                  `evento_${evento.id}`
+                }
+                onClick={() =>
+                  apagarEventoNormal(
+                    evento.id
+                  )
+                }
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                  rounded-full
+                  border
+                  border-red-200
+                  bg-white
+                  text-red-600
+                  hover:bg-red-50
+                  disabled:opacity-50
+                "
+                title="Apagar evento"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1116,8 +1220,9 @@ export default function CreatorEventosPage() {
 
         <div className="mt-3 flex gap-3">
           <Link
-            href={`/eventos/${evento.id}`}
-            className="text-sm text-green-800 underline"
+            href={PUBLIC_PATHS.evento(
+              evento.id
+            )}
           >
             Ver detalhes
           </Link>
@@ -1330,6 +1435,23 @@ export default function CreatorEventosPage() {
               </section>
             )}
           </div>
+        )}
+
+        {shareAlvo && (
+          <PublicShareModal
+            open={!!shareAlvo}
+            onClose={() =>
+              setShareAlvo(
+                null
+              )
+            }
+            titulo={
+              shareAlvo.titulo
+            }
+            path={
+              shareAlvo.path
+            }
+          />
         )}
       </div>
     </div>

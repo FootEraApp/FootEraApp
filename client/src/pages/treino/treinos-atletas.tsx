@@ -26,6 +26,11 @@ import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "../../components/layout/BottomNav.js";
 import Avatar from "../../components/shared/Avatar.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
+import PublicShareModal from "../../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 type AgendaTipo =
   | "TREINO"
@@ -1025,25 +1030,25 @@ useEffect(() => {
     navigate,
   ]);
 
-  const [modalAberto, setModalAberto] = useState(false);
-  const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [enviandoDM, setEnviandoDM] = useState(false);
-  const [carregandoMutuos, setCarregandoMutuos] = useState(false);
-  const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
-
+  const [
+    desafioCompartilhar,
+    setDesafioCompartilhar,
+  ] =
+    useState<Desafio | null>(
+      null
+    );
   const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
   const [agendaAberta, setAgendaAberta] = useState(false);
 
-const [dataAgendaSelecionada, setDataAgendaSelecionada] = useState(() => {
-  const agora = new Date();
+  const [dataAgendaSelecionada, setDataAgendaSelecionada] = useState(() => {
+    const agora = new Date();
 
-  return new Date(
-    agora.getFullYear(),
-    agora.getMonth(),
-    agora.getDate()
-  );
-});
+    return new Date(
+      agora.getFullYear(),
+      agora.getMonth(),
+      agora.getDate()
+    );
+  });
 
   type MainTab = "treinos" | "learning";
   const [mainTab, setMainTab] = useState<MainTab>("treinos");
@@ -1285,44 +1290,23 @@ function navegarPeloMenu(rota: string) {
     });
   }
 
-  function abrirModalCompartilhar(id: string) {
-    setDesafioParaCompartilhar(id);
-    setModalAberto(true);
-    carregarUsuariosMutuos();
-    setSelecionados(new Set());
-  }
-
-  async function enviarDesafioDM() {
-    if (selecionados.size === 0 || !desafioParaCompartilhar) return;
-
-    const token = getToken();
-    setEnviandoDM(true);
-
-    try {
-      await Promise.all(
-        Array.from(selecionados).map((paraId) =>
-          fetch(`${API.BASE_URL}/api/mensagem`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              paraId,
-              conteudo: desafioParaCompartilhar,
-              tipo: "DESAFIO",
-            }),
-          })
-        )
+  function abrirModalCompartilhar(
+    id: string
+  ) {
+    const desafio =
+      desafios.find(
+        (item) =>
+          String(item.id) ===
+          String(id)
       );
-      toast.success("Desafio enviado!");
-      setModalAberto(false);
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao enviar DM.");
-    } finally {
-      setEnviandoDM(false);
+
+    if (!desafio) {
+      return;
     }
+
+    setDesafioCompartilhar(
+      desafio
+    );
   }
 
   async function carregarEventosAtleta() {
@@ -1890,29 +1874,6 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }
 
   const tiles: TileInfo[] = ordenados.map((t) => computeTile(t));
-
-  async function carregarUsuariosMutuos() {
-    try {
-      setCarregandoMutuos(true);
-
-      const token = getToken();
-      if (!token) return;
-
-      const r = await fetch(`${API.BASE_URL}/api/usuarios/mutuos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!r.ok) throw new Error("Falha ao carregar usuários");
-      const js = await r.json();
-
-      setUsuariosMutuos(Array.isArray(js) ? js : []);
-    } catch (err) {
-      console.error("Erro ao carregar usuários mútuos:", err);
-      setUsuariosMutuos([]);
-    } finally {
-      setCarregandoMutuos(false);
-    }
-  }
 
   useEffect(() => {
     const initialChecklist: Record<string, Checklist> = {};
@@ -3013,7 +2974,9 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
                                       {item.origem === "desafio" && (
                                         <Link
-                                          href={`/desafios/${item.id}`}
+                                          href={PUBLIC_PATHS.desafio(
+                                            item.id
+                                          )}
                                           className="text-green-700 text-xs sm:text-sm"
                                         >
                                           Ver
@@ -3022,7 +2985,9 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
                                       {item.origem === "evento" && (
                                         <Link
-                                          href={`/eventos/${item.id}`}
+                                          href={PUBLIC_PATHS.evento(
+                                            item.id
+                                          )}
                                           className="text-green-700 text-xs sm:text-sm"
                                         >
                                           Ver evento
@@ -3154,7 +3119,9 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
                                   >
                                     <h4 className="font-bold text-yellow-700 text-lg mb-1">
                                       <Link
-                                        href={`/desafios/${desafio.id}`}
+                                        href={PUBLIC_PATHS.desafio(
+                                          desafio.id
+                                        )}
                                         className="hover:underline"
                                       >
                                         {desafio.titulo}
@@ -3188,7 +3155,11 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
                                       <button
                                         onClick={() =>
-                                          navigate(`/desafios/${desafio.id}`)
+                                          navigate(
+                                            PUBLIC_PATHS.desafio(
+                                              desafio.id
+                                            )
+                                          )
                                         }
                                         className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
                                         title="Ver desafio"
@@ -3764,76 +3735,27 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
         </div>
       )}
 
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold">
-                Compartilhar desafio
-              </h3>
-              <button
-                onClick={() => setModalAberto(false)}
-                className="p-2 rounded-md hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {carregandoMutuos ? (
-              <p className="text-gray-600">Carregando usuários...</p>
-            ) : usuariosMutuos.length === 0 ? (
-              <p className="text-gray-600">Nenhum usuário disponível.</p>
-            ) : (
-              <div className="max-h-72 overflow-y-auto space-y-2 mb-3 pr-1">
-                {usuariosMutuos.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      const set = new Set(selecionados);
-                      set.has(u.id) ? set.delete(u.id) : set.add(u.id);
-                      setSelecionados(set);
-                    }}
-                    className={`w-full flex items-center gap-3 p-2 rounded-lg border text-left ${
-                      selecionados.has(u.id)
-                        ? "bg-green-50 border-green-300"
-                        : "bg-white"
-                    }`}
-                  >
-                    <Avatar
-                      foto={u.foto}
-                      alt={u.nome || "Usuário"}
-                      className="w-10 h-10 border"
-                    />
-
-                    <div className="flex-1">
-                      <div className="font-medium">{u.nome}</div>
-                      <div className="text-xs text-gray-500">
-                        @{u.usuario}
-                      </div>
-                    </div>
-
-                    {selecionados.has(u.id) && (
-                      <Check className="w-5 h-5 text-green-700" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <button
-              disabled={selecionados.size === 0 || enviandoDM}
-              onClick={() => enviarDesafioDM()}
-              className={`w-full py-2.5 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${
-                selecionados.size === 0 || enviandoDM
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-green-700 hover:bg-green-800"
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              Enviar
-            </button>
-          </div>
-        </div>
+      {desafioCompartilhar && (
+        <PublicShareModal
+          open={
+            !!desafioCompartilhar
+          }
+          onClose={() =>
+            setDesafioCompartilhar(
+              null
+            )
+          }
+          titulo={
+            desafioCompartilhar.titulo
+          }
+          path={PUBLIC_PATHS.desafio(
+            desafioCompartilhar.id
+          )}
+          directTipo="DESAFIO"
+          directConteudo={
+            desafioCompartilhar.id
+          }
+        />
       )}
 
       {posicaoModalAberto && (

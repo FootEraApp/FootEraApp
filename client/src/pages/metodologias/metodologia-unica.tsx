@@ -1,12 +1,16 @@
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Lock, CheckCircle2, Star } from "lucide-react";
+import { ArrowLeft, Lock, CheckCircle2, Star, Share2 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 import CoverImage from "../../components/shared/CoverImage";
 import { useAuthGate } from "../../context/AuthGateContext.js";
+import PublicShareModal from "../../components/share/PublicShareModal.js";
 
+import {
+  PUBLIC_PATHS,
+} from "../../utils/publicRoutes.js";
 
 const AVATAR_FALLBACK = "/assets/usuarios/footera-logo-fundo-verde.png";
 type ItemTipo = "VIDEO" | "TREINO" | "AULA" | "MATERIAL" | "DESAFIO" | string;
@@ -267,6 +271,11 @@ export default function MetodologiaUnicaPage() {
   const [maxTime, setMaxTime] = useState(0); 
   const [playerEstruturaId, setPlayerEstruturaId] = useState<string | null>(null);
   const [videoConcluindo, setVideoConcluindo] = useState(false);
+  const [
+    shareOpen,
+    setShareOpen,
+  ] =
+    useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoConcluindoRef = useRef(false);
   const maxTimeRef = useRef(0);
@@ -872,13 +881,44 @@ export default function MetodologiaUnicaPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-3 sm:p-4 xl:p-8">
-      <button
-        type="button"
-        onClick={handleVoltar}
-        className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-[#216c43] text-[#216c43] bg-white"
-      >
-        <ArrowLeft className="w-5 h-5" />
-      </button>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={
+            handleVoltar
+          }
+          className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-[#216c43] text-[#216c43] bg-white"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            setShareOpen(
+              true
+            )
+          }
+          className="
+            inline-flex
+            h-11
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border
+            border-green-700
+            bg-white
+            px-4
+            font-semibold
+            text-green-800
+            hover:bg-green-50
+          "
+        >
+          <Share2 className="h-4 w-4" />
+          Compartilhar
+        </button>
+      </div>
 
       <div className="mt-4 rounded-2xl border bg-white p-4 sm:p-5 xl:p-6 shadow-sm overflow-hidden">
         <div className="flex flex-col xl:flex-row xl:items-start gap-5">
@@ -1384,6 +1424,17 @@ export default function MetodologiaUnicaPage() {
           </div>
         ))}
       </div>
+
+       <PublicShareModal
+        open={shareOpen}
+        onClose={() =>
+          setShareOpen(false)
+        }
+        titulo={data.titulo}
+        path={PUBLIC_PATHS.metodologia(
+          data.id
+        )}
+      />
 
       {playerOpen && playerItem && (
         <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">

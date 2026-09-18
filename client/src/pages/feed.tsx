@@ -456,7 +456,17 @@ function BottomSheet({
           <div className="w-full flex justify-center pt-2">
             <div className="h-1.5 w-12 rounded-full bg-gray-300" />
           </div>
-          <div className="h-full px-4 pb-4 pt-2 flex flex-col">{children}</div>
+          <div
+            className="
+              h-full
+              overflow-y-auto
+              px-4
+              pb-[calc(24px+env(safe-area-inset-bottom))]
+              pt-2
+            "
+          >
+            {children}
+          </div>
         </div>
       </div>
     </div>
@@ -1605,7 +1615,7 @@ return (
       <BottomSheet
         open={modalAberto}
         onClose={() => setModalAberto(false)}
-        heightPct={40}
+        heightPct={72}
         ariaLabel="Compartilhar postagem"
       >
         <h2 className="text-base font-bold mb-3 text-center">
@@ -1653,17 +1663,44 @@ return (
                       key={u.id}
                       onClick={() => toggleSelecionado(u.id)}
                       title={u.nome}
-                      className={`relative shrink-0 rounded-full border-2 ${
-                        selecionado
-                          ? "border-green-600"
-                          : "border-transparent"
-                      }`}
+                      className="
+                        relative
+                        w-[76px]
+                        shrink-0
+                        text-center
+                      "
                     >
-                      <Avatar
-                        foto={u.foto}
-                        alt={u.nome}
-                        className="w-14 h-14"
-                      />
+                      <div
+                        className={`
+                          mx-auto
+                          w-fit
+                          rounded-full
+                          border-2
+                          ${
+                            selecionado
+                              ? "border-green-600"
+                              : "border-transparent"
+                          }
+                        `}
+                      >
+                        <Avatar
+                          foto={u.foto}
+                          alt={u.nome}
+                          className="w-14 h-14"
+                        />
+                      </div>
+
+                      <span
+                        className="
+                          mt-1
+                          block
+                          truncate
+                          text-xs
+                          text-gray-700
+                        "
+                      >
+                        {u.nome}
+                      </span>
 
                       {selecionado && (
                         <span className="absolute -bottom-1 -right-1 bg-white rounded-full">

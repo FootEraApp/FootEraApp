@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Share2 } from "lucide-react";
 import { API } from "../config.js";
-import Storage from "../../../server/utils/storage.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+import {
+  PUBLIC_PATHS,
+} from "../utils/publicRoutes.js";
 
 interface Desafio {
   id: string;
@@ -21,6 +24,11 @@ export default function DesafioUnico() {
   const [desafio, setDesafio] = useState<Desafio | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [
+    shareOpen,
+    setShareOpen,
+  ] =
+    useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -88,15 +96,36 @@ export default function DesafioUnico() {
 
   return (
     <main className="max-w-3xl mx-auto p-6">
-      <button
-        onClick={() => setLocation("/treinos")}
-        className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded hover:bg-green-800"
-      >
-        <ArrowLeft size={18} />
-        Voltar à lista
-      </button>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <button
+          onClick={() =>
+            setLocation(
+              "/treinos"
+            )
+          }
+          className="inline-flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded hover:bg-green-800"
+        >
+          <ArrowLeft size={18} />
+          Voltar à lista
+        </button>
 
-      <h1 className="text-3xl font-bold mb-4 text-gray-800">{desafio.titulo}</h1>
+        <button
+          type="button"
+          onClick={() =>
+            setShareOpen(
+              true
+            )
+          }
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-green-700 text-green-800 hover:bg-green-50"
+          title="Compartilhar desafio"
+        >
+          <Share2 size={18} />
+        </button>
+      </div>
+
+      <h1 className="text-3xl font-bold mb-4 text-gray-800">
+        {desafio.titulo}
+      </h1>
 
       {imagemSrc && (
         <img
@@ -128,6 +157,25 @@ export default function DesafioUnico() {
           {new Date(desafio.createdAt).toLocaleDateString("pt-BR")}
         </div>
       </div>
+
+      <PublicShareModal
+        open={shareOpen}
+        onClose={() =>
+          setShareOpen(
+            false
+          )
+        }
+        titulo={
+          desafio.titulo
+        }
+        path={PUBLIC_PATHS.desafio(
+          desafio.id
+        )}
+        directTipo="DESAFIO"
+        directConteudo={
+          desafio.id
+        }
+      />
     </main>
   );
 }

@@ -23,6 +23,11 @@ import {
 import {
   toast,
 } from "@/lib/toast";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+
+import {
+  PUBLIC_PATHS,
+} from "../utils/publicRoutes.js";
 
 type Evento = {
   id: string;
@@ -115,6 +120,12 @@ export default function PaginaEventoDetalhe({
     setParticipando,
   ] = useState(false);
 
+  const [
+    shareOpen,
+    setShareOpen,
+  ] =
+    useState(false);
+
   useEffect(() => {
     if (!eventoId) {
       setLoading(false);
@@ -172,61 +183,6 @@ export default function PaginaEventoDetalhe({
     eventoId,
     token,
   ]);
-
-  async function compartilharEvento() {
-    const evento = ev;
-
-    if (!evento) {
-      return;
-    }
-
-    const url =
-      `${window.location.origin}/evento/${encodeURIComponent(
-        evento.id
-      )}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title:
-            `${evento.titulo} na FootEra`,
-
-          text:
-            `Confira o evento "${evento.titulo}" na FootEra.`,
-
-          url,
-        });
-
-        return;
-      }
-
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(
-          url
-        );
-
-        toast.success(
-          "Link do evento copiado."
-        );
-
-        return;
-      }
-
-      window.prompt(
-        "Copie o link do evento:",
-        url
-      );
-    } catch (error: any) {
-      if (
-        error?.name !==
-        "AbortError"
-      ) {
-        toast.error(
-          "Não foi possível compartilhar o evento."
-        );
-      }
-    }
-  }
 
   async function participarEvento(
     retomando = false
@@ -752,13 +708,32 @@ export default function PaginaEventoDetalhe({
         <div className="mt-6 flex flex-col sm:flex-row gap-3">
           <button
             type="button"
-            onClick={
-              compartilharEvento
+            onClick={() =>
+              setShareOpen(
+                true
+              )
             }
             className="px-4 py-3 rounded-xl border border-green-700 text-green-800 font-semibold"
           >
             Compartilhar
           </button>
+
+          {ev && (
+            <PublicShareModal
+              open={shareOpen}
+              onClose={() =>
+                setShareOpen(
+                  false
+                )
+              }
+              titulo={
+                ev.titulo
+              }
+              path={PUBLIC_PATHS.evento(
+                ev.id
+              )}
+            />
+          )}
 
           {ev.podeGerenciar ? (
             <>
