@@ -1702,8 +1702,6 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
               "PENDING"
           );
 
-        // READY_TO_SUBMIT é um estado temporário
-        // somente do frontend.
         if (
           atual?.status ===
           "READY_TO_SUBMIT"
@@ -3755,6 +3753,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
           directConteudo={
             desafioCompartilhar.id
           }
+          destinatarioPapel="Atleta"
         />
       )}
 

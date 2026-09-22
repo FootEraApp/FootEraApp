@@ -872,46 +872,71 @@ export default function PaginaNotificacoes() {
             const actorId = actor?.id || n.actorId || null;
             const actorLabel = actor?.nomeDeUsuario ? `@${actor.nomeDeUsuario}` : "Usuário";
 
-            if (isFollow && actorId) {
+            if (
+              isFollow &&
+              actorId
+            ) {
               return (
                 <div
                   key={n.id}
                   className={`relative z-0 bg-white shadow-md rounded-2xl p-4 ${
-                    modoSelecao ? "pl-12" : ""
+                    modoSelecao
+                      ? "pl-12"
+                      : ""
                   } border border-green-200`}
                 >
-                  <BotaoSelecaoNotificacao id={n.id} />
-                  <BotaoApagarNotificacao id={n.id} />
+                  <BotaoSelecaoNotificacao
+                    id={n.id}
+                  />
+
+                  <BotaoApagarNotificacao
+                    id={n.id}
+                  />
 
                   <div className="flex items-center gap-3 pr-10">
                     <Avatar
-                      foto={n.actor?.foto}
+                      foto={
+                        n.actor?.foto
+                      }
                       alt={`Foto de ${actorLabel}`}
                       className="w-12 h-12 bg-white"
                     />
 
                     <div className="flex-1">
                       <p className="font-semibold text-green-900 flex items-center gap-2">
-                        {n.titulo || "Novo seguidor"}
-                        {n.lida === false && (
+                        {n.titulo ||
+                          "Novo seguidor"}
+
+                        {n.lida ===
+                          false && (
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
                             Novo
                           </span>
                         )}
                       </p>
 
-                      {!!data && <p className="text-xs text-gray-500 mt-0.5">{data}</p>}
+                      {!!data && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {data}
+                        </p>
+                      )}
 
                       <p className="text-sm text-gray-700 mt-2">
-                        {actorLabel} quer te seguir
+                        {msgLimpa ||
+                          `${actorLabel} começou a seguir você`}
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           className="rounded-lg bg-green-800 text-white text-sm px-4 py-2 hover:bg-green-900"
                           onClick={async () => {
-                            await marcarComoLida(n.id);
-                            setLocation(`/perfil/${actorId}`);
+                            await marcarComoLida(
+                              n.id
+                            );
+
+                            setLocation(
+                              `/perfil/${actorId}`
+                            );
                           }}
                         >
                           Ver perfil
@@ -920,50 +945,16 @@ export default function PaginaNotificacoes() {
                         <button
                           className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
                           onClick={async () => {
-                            const token = Storage.token;
-                            if (!token) return;
+                            await seguirDeVolta(
+                              actorId
+                            );
 
-                            await fetch(`${API.BASE_URL}/api/seguidores/aceitar`, {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`,
-                              },
-                              body: JSON.stringify({
-                                notificacaoId: n.id,
-                                seguidorUsuarioId: actorId,
-                              }),
-                            });
-
-                            setNotificacoes((prev) => prev.filter((x) => x.id !== n.id));
-                            setPendingSeguirDeVolta({ actorId, actorLabel });
+                            await marcarComoLida(
+                              n.id
+                            );
                           }}
                         >
-                          Aceitar
-                        </button>
-
-                        <button
-                          className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
-                          onClick={async () => {
-                            const token = Storage.token;
-                            if (!token) return;
-
-                            await fetch(`${API.BASE_URL}/api/seguidores/recusar`, {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`,
-                              },
-                              body: JSON.stringify({
-                                notificacaoId: n.id,
-                                seguidorUsuarioId: actorId,
-                              }),
-                            });
-
-                            setNotificacoes((prev) => prev.filter((x) => x.id !== n.id));
-                          }}
-                        >
-                          Recusar
+                          Seguir de volta
                         </button>
                       </div>
                     </div>

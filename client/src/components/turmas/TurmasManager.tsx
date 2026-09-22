@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/components/turmas/TurmasManager
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -16,6 +15,7 @@ import {
   PanelLeftOpen,
   Trash2,
   Share2,
+  QrCode,
 } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../utils/storage.js";
@@ -24,6 +24,7 @@ import PublicShareModal from "../share/PublicShareModal.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
+import ConviteQrModal from "../share/ConviteQrModal.js";
 
 type TurmaMin = {
   id: string;
@@ -223,6 +224,25 @@ export default function TurmasManager({
     useState<TurmaMin | null>(
       null
     );
+
+  const [
+    conviteTurmaToken,
+    setConviteTurmaToken,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    qrTurmaToken,
+    setQrTurmaToken,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    criandoConviteTurma,
+    setCriandoConviteTurma,
+  ] = useState(false);
 
   const turmaSelecionada = useMemo(
     () => turmas.find((t) => String(t.id) === String(selecionada)),
@@ -1204,6 +1224,136 @@ export default function TurmasManager({
     }
   };
 
+  const obterConviteTurmaToken =
+    async (): Promise<string | null> => {
+      const turmaId =
+        String(
+          selecionada || ""
+        ).trim();
+
+      if (!turmaId) {
+        toast.error(
+          "Selecione uma turma."
+        );
+
+        return null;
+      }
+
+      if (
+        !podeGerenciarTurma
+      ) {
+        toast.error(
+          "Você não pode criar convites para esta turma."
+        );
+
+        return null;
+      }
+
+      if (!token) {
+        toast.error(
+          "Sua sessão expirou. Entre novamente."
+        );
+
+        return null;
+      }
+
+      try {
+        setCriandoConviteTurma(
+          true
+        );
+
+        const {
+          data,
+        } =
+          await axios.post(
+            `${API.BASE_URL}/api/convites`,
+            {
+              tipo:
+                "TURMA",
+
+              turmaId,
+
+              usoUnico:
+                false,
+
+              expiresInDays:
+                30,
+            },
+            {
+              headers,
+            }
+          );
+
+        const tokenConvite =
+          String(
+            data?.token ??
+              data?.convite
+                ?.token ??
+              ""
+          ).trim();
+
+        if (!tokenConvite) {
+          throw new Error(
+            "O servidor não retornou o token do convite."
+          );
+        }
+
+        return tokenConvite;
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "Erro ao obter convite da turma:",
+          error
+        );
+
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            error?.response?.data
+              ?.error ||
+            error?.message ||
+            "Não foi possível criar o convite da turma."
+        );
+
+        return null;
+      } finally {
+        setCriandoConviteTurma(
+          false
+        );
+      }
+    };
+
+
+  const criarConviteTurma =
+    async () => {
+      const tokenConvite =
+        await obterConviteTurmaToken();
+
+      if (!tokenConvite) {
+        return;
+      }
+
+      setConviteTurmaToken(
+        tokenConvite
+      );
+    };
+
+
+  const mostrarQrTurma =
+    async () => {
+      const tokenConvite =
+        await obterConviteTurmaToken();
+
+      if (!tokenConvite) {
+        return;
+      }
+
+      setQrTurmaToken(
+        tokenConvite
+      );
+    };
+
   const deletarTurmaSelecionada = async () => {
     const turmaId = String(selecionada || "").trim();
     if (!turmaId) return;
@@ -1791,7 +1941,7 @@ export default function TurmasManager({
                 <div className="flex flex-col gap-4">
                   <div className="rounded-xl border border-zinc-200 bg-white flex flex-col min-h-0">
                     <div className="border-b border-zinc-100 p-2 flex-none">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="w-full overflow-x-auto sm:w-auto">
                           <div className="inline-flex min-w-max rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                         <button
@@ -1839,17 +1989,129 @@ export default function TurmasManager({
                       </div>
 
                       {abaDireita === "membros" ? (
-                        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-end sm:gap-2">
+                        <div
+                          className="
+                            grid
+                            grid-cols-2
+                            gap-2
+                            lg:flex
+                            lg:flex-wrap
+                            lg:items-center
+                            lg:justify-end
+                          "
+                        >
                           {podeSairDaTurma ? (
                             <button
                               type="button"
                               onClick={pedirSairDaTurma}
                               disabled={salvando || leavingTurma}
-                              className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-amber-200 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-60 whitespace-nowrap"
+                              className="
+                                inline-flex
+                                min-h-11
+                                w-full
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-xl
+                                border
+                                border-emerald-200
+                                bg-emerald-50
+                                px-3
+                                py-2.5
+                                text-sm
+                                font-medium
+                                text-emerald-800
+                                hover:bg-emerald-100
+                                disabled:opacity-60
+                                whitespace-nowrap
+                                lg:w-auto
+                              "
                               title="Sair desta turma (ela não aparecerá mais para você)"
                             >
                               {leavingTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                               Sair da turma
+                            </button>
+                          ) : null}
+
+                          {podeGerenciarTurma ? (
+                            <button
+                              type="button"
+                              onClick={
+                                criarConviteTurma
+                              }
+                              disabled={
+                                criandoConviteTurma ||
+                                !selecionada
+                              }
+                              className="
+                                inline-flex
+                                min-h-11
+                                w-full
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-xl
+                                border
+                                border-emerald-200
+                                bg-emerald-50
+                                px-3
+                                py-2.5
+                                text-sm
+                                font-medium
+                                text-emerald-800
+                                hover:bg-emerald-100
+                                disabled:opacity-60
+                                whitespace-nowrap
+                                lg:w-auto
+                              "
+                            >
+                              {criandoConviteTurma ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Plus className="h-4 w-4" />
+                              )}
+
+                              Convidar atleta
+                            </button>
+                          ) : null}
+
+                          {podeGerenciarTurma ? (
+                            <button
+                              type="button"
+                              onClick={
+                                mostrarQrTurma
+                              }
+                              disabled={
+                                criandoConviteTurma ||
+                                !selecionada
+                              }
+                              className="
+                                col-span-2
+                                lg:col-span-1
+                                inline-flex
+                                min-h-11
+                                w-full
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-xl
+                                border
+                                border-emerald-200
+                                bg-white
+                                px-3
+                                py-2.5
+                                text-sm
+                                font-medium
+                                text-emerald-800
+                                hover:bg-emerald-50
+                                disabled:opacity-60
+                                whitespace-nowrap
+                                lg:w-auto
+                              "
+                            >
+                              <QrCode className="h-4 w-4" />
+
+                              Mostrar QR Code
                             </button>
                           ) : null}
 
@@ -1869,7 +2131,27 @@ export default function TurmasManager({
                               type="button"
                               onClick={deletarTurmaSelecionada}
                               disabled={deletandoTurma || salvando || !selecionada}
-                              className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-red-200 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
+                              className="
+                                inline-flex
+                                min-h-11
+                                w-full
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-xl
+                                border
+                                border-red-200
+                                bg-white
+                                px-3
+                                py-2.5
+                                text-sm
+                                font-medium
+                                text-red-700
+                                hover:bg-red-50
+                                disabled:opacity-60
+                                whitespace-nowrap
+                                lg:w-auto
+                              "
                               title="Excluir esta turma"
                             >
                               {deletandoTurma ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -1880,7 +2162,25 @@ export default function TurmasManager({
                           <button
                             onClick={salvarMembros}
                             disabled={salvando}
-                            className="inline-flex h-10 sm:h-auto items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-70 whitespace-nowrap"
+                            className="
+                              inline-flex
+                              min-h-11
+                              w-full
+                              items-center
+                              justify-center
+                              gap-2
+                              rounded-xl
+                              bg-emerald-600
+                              px-3
+                              py-2.5
+                              text-sm
+                              font-medium
+                              text-white
+                              hover:bg-emerald-700
+                              disabled:opacity-70
+                              whitespace-nowrap
+                              lg:w-auto
+                            "
                           >
                             {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                             Salvar alterações
@@ -2465,6 +2765,65 @@ export default function TurmasManager({
           path={PUBLIC_PATHS.turma(
             turmaCompartilhar.id
           )}
+          destinatarioPapel="Atleta"
+          mensagemWhatsApp={`⚽ Confira a turma "${turmaCompartilhar.nome}" no FootEra!`}
+        />
+      )}
+
+      {conviteTurmaToken && (
+        <PublicShareModal
+          open={
+            !!conviteTurmaToken
+          }
+          onClose={() =>
+            setConviteTurmaToken(
+              null
+            )
+          }
+          titulo={
+            turmaSelecionada?.nome
+              ? `Convite · ${turmaSelecionada.nome}`
+              : "Convite para turma"
+          }
+          path={PUBLIC_PATHS.join(
+            conviteTurmaToken
+          )}
+          mostrarDirect
+          destinatarioPapel="Atleta"
+          mensagemWhatsApp={
+            turmaSelecionada?.nome
+              ? `⚽ Você foi convidado para participar da turma "${turmaSelecionada.nome}" no FootEra!\n\nAcesse o convite pelo link abaixo:`
+              : "⚽ Você foi convidado para participar de uma turma no FootEra!\n\nAcesse o convite pelo link abaixo:"
+          }
+        />
+      )}
+
+      {qrTurmaToken && (
+        <ConviteQrModal
+          open={
+            !!qrTurmaToken
+          }
+          token={
+            qrTurmaToken
+          }
+          titulo={
+            turmaSelecionada?.nome
+              ? `Turma · ${turmaSelecionada.nome}`
+              : "Convite para turma"
+          }
+          onClose={() =>
+            setQrTurmaToken(
+              null
+            )
+          }
+          onTokenChange={
+            setQrTurmaToken
+          }
+          onDisabled={() =>
+            setQrTurmaToken(
+              null
+            )
+          }
         />
       )}
 

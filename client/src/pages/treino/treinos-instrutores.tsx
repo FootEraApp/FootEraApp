@@ -3710,7 +3710,7 @@ export default function TreinosInstrutores({
         </div>
       )}
 
-            {treinoCompartilhar && (
+      {treinoCompartilhar && (
         <PublicShareModal
           open={
             !!treinoCompartilhar
@@ -3726,6 +3726,7 @@ export default function TreinosInstrutores({
           path={PUBLIC_PATHS.treino(
             treinoCompartilhar.id
           )}
+          destinatarioPapel="Atleta"
         />
       )}
 

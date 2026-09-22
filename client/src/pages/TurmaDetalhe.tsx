@@ -538,6 +538,7 @@ export default function TurmaDetalhe() {
               path={PUBLIC_PATHS.turma(
                 turma.id
               )}
+              destinatarioPapel="Atleta"
             />
           )}
 

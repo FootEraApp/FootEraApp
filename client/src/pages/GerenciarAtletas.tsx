@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {CirclePlus } from "lucide-react";
@@ -18,6 +17,8 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import AgendaTreinos, { normalizeAgendadosPayload } from "@/components/agenda/AgendaTreinos";
 import { loadGestorContext, clearGestorContext } from "../utils/gestorSession";
 import Avatar from "../components/shared/Avatar";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+import { PUBLIC_PATHS } from "../utils/publicRoutes.js";
 
 export type CategoriaBase =
   | "Sub3"
@@ -326,6 +327,15 @@ const GerenciarAtletas: React.FC = () => {
   const [aba, setAba] = useState<"atletas" | "professores">("atletas");
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [turmasProfessorId, setTurmasProfessorId] = useState<string | null>(null);
+  const [
+    conviteAtletaToken,
+    setConviteAtletaToken,
+  ] = useState<string | null>(null);
+
+  const [
+    criandoConviteAtleta,
+    setCriandoConviteAtleta,
+  ] = useState(false);
   const [professores, setProfessores] = useState<ProfessorMin[]>([]);
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState<string | null>(null);
@@ -1027,6 +1037,100 @@ async function salvarAvaliacao() {
     }
   }
 
+  const criarConviteAtletaProfessor =
+    async () => {
+      if (
+        contextoTipo !==
+        "Professor"
+      ) {
+        toast.error(
+          "Este convite deve ser criado pelo perfil de Professor."
+        );
+        return;
+      }
+
+      const professorId =
+        String(
+          contextoTipoUsuarioId ||
+            ""
+        ).trim();
+
+      if (!professorId) {
+        toast.error(
+          "Não foi possível identificar o professor."
+        );
+        return;
+      }
+
+      if (!token) {
+        toast.error(
+          "Sua sessão expirou. Entre novamente."
+        );
+        return;
+      }
+
+      try {
+        setCriandoConviteAtleta(
+          true
+        );
+
+        const { data } =
+          await axios.post(
+            `${API.BASE_URL}/api/convites`,
+            {
+              tipo:
+                "ATLETA_VINCULO",
+
+              professorId,
+
+              usoUnico:
+                true,
+
+              expiresInDays:
+                30,
+            },
+            {
+              headers,
+            }
+          );
+
+        const tokenConvite =
+          String(
+            data?.token ??
+              data?.convite?.token ??
+              ""
+          ).trim();
+
+        if (!tokenConvite) {
+          throw new Error(
+            "O servidor não retornou o token do convite."
+          );
+        }
+
+        setConviteAtletaToken(
+          tokenConvite
+        );
+      } catch (error: any) {
+        console.error(
+          "Erro ao criar convite para atleta:",
+          error
+        );
+
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            error?.response?.data
+              ?.error ||
+            error?.message ||
+            "Não foi possível criar o convite."
+        );
+      } finally {
+        setCriandoConviteAtleta(
+          false
+        );
+      }
+    };
+    
   return (
      <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-44 sm:pb-40 lg:pb-36">
       {tipo === "Professor" && modoGestor && contextoTipoUsuarioId && gestorCtx?.org && (
@@ -1153,6 +1257,42 @@ async function salvarAvaliacao() {
         </div>
 
         <div className="flex w-full flex-wrap items-center justify-start sm:justify-end gap-2">
+          {contextoTipo ===
+            "Professor" && (
+            <button
+              type="button"
+              onClick={
+                criarConviteAtletaProfessor
+              }
+              disabled={
+                criandoConviteAtleta
+              }
+              className="
+                inline-flex
+                items-center
+                gap-2
+                rounded-xl
+                bg-emerald-600
+                px-2.5
+                py-2
+                text-sm
+                font-semibold
+                text-white
+                hover:bg-emerald-700
+                disabled:opacity-60
+              "
+            >
+              {criandoConviteAtleta ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CirclePlus className="h-4 w-4 shrink-0" />
+              )}
+
+              <span className="whitespace-nowrap">
+                Convidar atleta
+              </span>
+            </button>
+          )}
           {tipo && (
             <>
               {tipo !== "Professor" && (
@@ -1904,6 +2044,25 @@ async function salvarAvaliacao() {
                 )}
               </div>
             </div>
+          )}
+
+          {conviteAtletaToken && (
+            <PublicShareModal
+              open={
+                !!conviteAtletaToken
+              }
+              onClose={() =>
+                setConviteAtletaToken(
+                  null
+                )
+              }
+              titulo="Convite para atleta"
+              path={PUBLIC_PATHS.join(
+                conviteAtletaToken
+              )}
+              mostrarDirect
+              destinatarioPapel="Atleta"
+            />
           )}
 
         <div className="h-24 sm:h-20 lg:h-16" aria-hidden="true" />

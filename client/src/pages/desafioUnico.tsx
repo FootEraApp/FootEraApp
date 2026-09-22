@@ -175,6 +175,7 @@ export default function DesafioUnico() {
         directConteudo={
           desafio.id
         }
+        destinatarioPapel="Atleta"
       />
     </main>
   );

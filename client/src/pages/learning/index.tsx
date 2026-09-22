@@ -26,8 +26,9 @@ import LearningCard from "../../components/learning/LearningCard.js";
 import { API } from "@/config.js";
 import CoverImage from "../../components/shared/CoverImage.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
-import PublicShareModal from "../../components/share/PublicShareModal.js";
-
+import PublicShareModal, {
+  type PapelDestinatario,
+} from "../../components/share/PublicShareModal.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
@@ -289,6 +290,45 @@ function normalizarTexto(value: any) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function papeisDestinoPorPublicoAlvo(
+  publicoAlvo?: unknown
+): PapelDestinatario[] | undefined {
+  const alvo =
+    String(
+      publicoAlvo || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    alvo === "ATLETAS"
+  ) {
+    return [
+      "Atleta",
+    ];
+  }
+
+  if (
+    alvo ===
+    "PROFISSIONAIS"
+  ) {
+    return [
+      "Professor",
+    ];
+  }
+
+  if (
+    alvo === "AMBOS"
+  ) {
+    return [
+      "Atleta",
+      "Professor",
+    ];
+  }
+
+  return undefined;
 }
 
 function getEventoPublicoUrl(aula: AulaAoVivoResumo) {
@@ -605,6 +645,8 @@ export default function LearningPage() {
   ] = useState<{
     titulo: string;
     path: string;
+    destinatarioPapeis?:
+      PapelDestinatario[];
   } | null>(null);
   const {
     requireAuth,
@@ -660,6 +702,12 @@ export default function LearningPage() {
               avulsa
                 ? `${pathBase}?origem=avulsa`
                 : pathBase,
+
+            destinatarioPapeis:
+              papeisDestinoPorPublicoAlvo(
+                item.publicoAlvo ||
+                  "AMBOS"
+              ),
           });
         }}
         className="
@@ -715,8 +763,6 @@ export default function LearningPage() {
       try {
         setLoading(true);
 
-        // VISITANTE:
-        // carrega somente conteúdo que pode ser visto sem login.
         if (!isAuthenticated) {
           const [visiveisRes, eventosRes] =
             await Promise.allSettled([
@@ -738,12 +784,10 @@ export default function LearningPage() {
               : []
           );
 
-          // Dados privados ficam vazios
           setAssinadas([]);
           setCriadas([]);
           setLivesCriadas([]);
           setFavoritos([]);
-
           setPermissaoCriacao(
             FALLBACK_PERMISSAO_CRIACAO
           );
@@ -751,8 +795,6 @@ export default function LearningPage() {
           return;
         }
 
-        // USUÁRIO LOGADO:
-        // catálogo público + dados particulares da conta.
         const promises = [
           listMetodologiasVisiveis(),
 
@@ -1540,6 +1582,13 @@ export default function LearningPage() {
                                 getEventoPublicoUrl(
                                   aula
                                 ),
+                              destinatarioPapeis:
+                                papeisDestinoPorPublicoAlvo(
+                                  aula.metodologiaAvulsa
+                                    ?.publicoAlvo ??
+                                    aula.metodologia
+                                      ?.publicoAlvo
+                                ),
                             })
                           }
                           favorito={isFavorito("AULA_AO_VIVO", aula.id)}
@@ -1900,6 +1949,13 @@ export default function LearningPage() {
 
                                         path:
                                           eventoUrl,
+                                        destinatarioPapeis:
+                                          papeisDestinoPorPublicoAlvo(
+                                            aula.metodologiaAvulsa
+                                              ?.publicoAlvo ??
+                                              aula.metodologia
+                                                ?.publicoAlvo
+                                          ),
                                       })
                                     }
                                     className="
@@ -2307,6 +2363,9 @@ export default function LearningPage() {
             }
             path={
               shareAlvo.path
+            }
+            destinatarioPapeis={
+              shareAlvo.destinatarioPapeis
             }
           />
         )}

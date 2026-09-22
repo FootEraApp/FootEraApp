@@ -86,7 +86,13 @@ const PaginaTurmaDetalhe =
   );
 
 const PaginaBaixar = lazy(() => import("./pages/baixar.js"));
-
+const PaginaJoinConvite =
+  lazy(
+    () =>
+      import(
+        "./pages/JoinConvite.js"
+      )
+  );
 function RouteLoading() {
   return (
     <div className="min-h-screen bg-[#FEFBE9] flex items-center justify-center px-4">
@@ -120,8 +126,6 @@ export function AppRoutes() {
         <Route path="/resetar-senha">
           <PublicOnly><PaginaResetarSenha /></PublicOnly>
         </Route>
-
-        {/* URLs públicas oficiais da FootEra */}
 
         <Route path="/profile/:id">
           <PaginaPerfilUnico />
@@ -166,17 +170,7 @@ export function AppRoutes() {
         </Route>
 
         <Route path="/join/:token">
-          <div className="min-h-screen flex items-center justify-center p-6 bg-[#FEFBE9]">
-            <div className="max-w-md w-full bg-white border rounded-2xl p-6 text-center shadow-sm">
-              <h1 className="text-xl font-bold text-green-900">
-                Convite FootEra
-              </h1>
-
-              <p className="mt-2 text-gray-600">
-                O sistema de convites será conectado a este link na próxima etapa.
-              </p>
-            </div>
-          </div>
+          <PaginaJoinConvite />
         </Route>
         
         <Route path="/admin/login"><PaginaLoginAdmin /></Route>

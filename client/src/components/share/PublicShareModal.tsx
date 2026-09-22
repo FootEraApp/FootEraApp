@@ -10,6 +10,7 @@ import {
   Send,
   Share2,
   X,
+  QrCode,
 } from "lucide-react";
 
 import {
@@ -28,12 +29,28 @@ import {
   publicImgUrl,
 } from "../../utils/publicUrl.js";
 
+import PublicQrModal from "./PublicQrModal.js";
+
 type UsuarioShare = {
   id: string;
   nome: string;
   foto?: string | null;
+  tipo?: string | null;
+  papeis?: string[];
 };
 
+export type PapelDestinatario =
+  | "Atleta"
+  | "Professor"
+  | "Clube"
+  | "Escolinha"
+  | "Escola"
+  | "Olheiro"
+  | "Marca"
+  | "Federacao"
+  | "Learning"
+  | "Creator";
+  
 type DirectTipo =
   | "NORMAL"
   | "POST"
@@ -46,22 +63,21 @@ export type ShareAction =
   | "email"
   | "nativo"
   | "footera"
-  | "direct";
+  | "direct"
+  | "qrcode";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   titulo: string;
-  // Ex.: /treino/123
   path: string;
   directTipo?: DirectTipo;
-  // POST → id do post
-  // USUARIO → id do usuário
-  // DESAFIO → id do desafio
-  // NORMAL → opcional; usa título + URL se não informar
+  mensagemWhatsApp?: string;
   directConteudo?: string;
   mostrarDirect?: boolean;
-    onAction?: (
+  destinatarioPapel?: PapelDestinatario;
+  destinatarioPapeis?: PapelDestinatario[];
+  onAction?: (
     action: ShareAction
   ) => void | Promise<void>;
 };
@@ -86,10 +102,13 @@ export default function PublicShareModal({
   onClose,
   titulo,
   path,
+  mensagemWhatsApp,
   directTipo = "NORMAL",
   directConteudo,
   mostrarDirect = true,
+  destinatarioPapel,
   onAction,
+  destinatarioPapeis,
 }: Props) {
   const [
     usuarios,
@@ -115,8 +134,27 @@ export default function PublicShareModal({
     setEnviando,
   ] = useState(false);
 
+  const [
+    qrOpen,
+    setQrOpen,
+  ] = useState(false);
+
   const token =
     lerToken();
+
+  const papeisDestino =
+    Array.from(
+      new Set([
+        ...(destinatarioPapeis ?? []),
+
+        ...(destinatarioPapel
+          ? [destinatarioPapel]
+          : []),
+      ])
+    ).sort();
+
+  const papeisDestinoKey =
+    papeisDestino.join(",");
 
   const url =
     useMemo(
@@ -129,6 +167,10 @@ export default function PublicShareModal({
 
   useEffect(() => {
     if (!open) {
+      setQrOpen(
+        false
+      );
+
       return;
     }
 
@@ -150,9 +192,27 @@ export default function PublicShareModal({
       try {
         setCarregando(true);
 
+        const params =
+          new URLSearchParams();
+
+        params.set(
+          "modo",
+          "convite"
+        );
+
+        if (papeisDestinoKey) {
+          params.set(
+            "papeis",
+            papeisDestinoKey
+          );
+        }
+
+        const query =
+          `?${params.toString()}`;
+
         const response =
           await fetch(
-            `${API.BASE_URL}/api/seguidores/mutuos`,
+            `${API.BASE_URL}/api/seguidores/mutuos${query}`,
             {
               headers: {
                 Authorization:
@@ -203,6 +263,7 @@ export default function PublicShareModal({
     open,
     token,
     mostrarDirect,
+    papeisDestinoKey,
   ]);
 
   if (!open) {
@@ -268,10 +329,29 @@ export default function PublicShareModal({
     }
   }
 
+  function abrirQrCode() {
+    void notificarAcao(
+      "qrcode"
+    );
+
+    setQrOpen(
+      true
+    );
+  }
+
   function whatsapp() {
+    const mensagem =
+      String(
+        mensagemWhatsApp ||
+          titulo
+      ).trim();
+
+    const texto =
+      `${mensagem}\n\n${url}`;
+
     window.open(
       `https://wa.me/?text=${encodeURIComponent(
-        `${titulo}\n${url}`
+        texto
       )}`,
       "_blank",
       "noopener,noreferrer"
@@ -308,6 +388,9 @@ export default function PublicShareModal({
       ) {
         await navigator.share({
           title: titulo,
+          text:
+            mensagemWhatsApp ||
+            titulo,
           url,
         });
 
@@ -427,6 +510,7 @@ export default function PublicShareModal({
   }
 
   return (
+    <>
     <div
       className="
         fixed
@@ -525,7 +609,11 @@ export default function PublicShareModal({
             ) : usuarios.length ===
               0 ? (
               <p className="text-sm text-gray-500">
-                Você ainda não possui contatos mútuos.
+                {papeisDestino.length > 0
+                  ? `Nenhum contato vinculado ou seguidor mútuo com os papéis ${papeisDestino.join(
+                      " ou "
+                    )} disponível.`
+                  : "Você ainda não possui contatos vinculados ou seguidores mútuos."}
               </p>
             ) : (
               <div
@@ -563,7 +651,7 @@ export default function PublicShareModal({
                           )
                         }
                         className="
-                          w-[76px]
+                          w-[92px]
                           shrink-0
                           text-center
                         "
@@ -614,6 +702,30 @@ export default function PublicShareModal({
                             usuario.nome
                           }
                         </span>
+                        {Array.isArray(
+                          usuario.papeis
+                        ) &&
+                          usuario.papeis.length >
+                            0 && (
+                            <span
+                              className="
+                                mt-0.5
+                                block
+                                truncate
+                                text-[10px]
+                                text-gray-500
+                              "
+                              title={
+                                usuario.papeis.join(
+                                  ", "
+                                )
+                              }
+                            >
+                              {usuario.papeis.join(
+                                " · "
+                              )}
+                            </span>
+                          )}
                       </button>
                     );
                   }
@@ -706,6 +818,34 @@ export default function PublicShareModal({
         >
           <Copy className="h-4 w-4" />
           Copiar link
+        </button>
+
+        <button
+          type="button"
+          onClick={
+            abrirQrCode
+          }
+          className="
+            mt-2
+            inline-flex
+            w-full
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border
+            border-emerald-300
+            bg-emerald-50
+            px-4
+            py-3
+            font-semibold
+            text-emerald-800
+            hover:bg-emerald-100
+          "
+        >
+          <QrCode className="h-5 w-5" />
+
+          Mostrar QR Code
         </button>
 
         <div
@@ -810,6 +950,24 @@ export default function PublicShareModal({
           </a>
         </div>
       </div>
-    </div>
-  );
+        </div>
+
+    <PublicQrModal
+      open={
+        qrOpen
+      }
+      titulo={
+        titulo
+      }
+      url={
+        url
+      }
+      onClose={() =>
+        setQrOpen(
+          false
+        )
+      }
+    />
+  </>
+);
 }

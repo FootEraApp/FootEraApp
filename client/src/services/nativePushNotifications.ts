@@ -33,9 +33,7 @@ function normalizarDestinoPush(
       url.hostname.toLowerCase();
 
     if (
-      host !== "footera.app.br" &&
-      host !==
-        "www.footera.app.br"
+      host !== "footera.app.br"
     ) {
       return fallback;
     }

@@ -18,6 +18,9 @@ model Usuario {
   tipo          TipoUsuario
 
   papeis                          UsuarioPapel[]
+  convitesCriados                 Convite[]                     @relation("ConviteCriador")
+  convitesRecebidos               Convite[]                     @relation("ConviteDestinatario")
+  convitesUsados                  ConviteUso[]
   cidade                          String?
   estado                          String?
   pais                            String?
@@ -280,6 +283,7 @@ model Professor {
   TreinoSalvo                 TreinoSalvo[]
   TreinoSalvoReuso            TreinoSalvoReuso[]
   turmasParticipando          TurmaProfessor[]
+  convites                    Convite[]
 
   @@index([organizacaoId])
 }
@@ -337,6 +341,59 @@ model OrganizacaoGestor {
   @@index([professorId])
   @@index([tipo, ownerId])
   @@index([ativo])
+}
+
+model Convite {
+  id     String        @id @default(uuid())
+  token  String        @unique @default(uuid())
+  tipo   ConviteTipo
+  status ConviteStatus @default(ATIVO)
+
+  criadoPorId           String
+  destinatarioUsuarioId String?
+
+  organizacaoTipo OrganizacaoTipo?
+  organizacaoId   String?
+
+  turmaId     String?
+  professorId String?
+
+  usoUnico Boolean @default(true)
+
+  expiresAt   DateTime
+  utilizadoEm DateTime?
+  canceladoEm DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  criadoPor           Usuario    @relation("ConviteCriador", fields: [criadoPorId], references: [id], onDelete: Cascade)
+  destinatarioUsuario Usuario?   @relation("ConviteDestinatario", fields: [destinatarioUsuarioId], references: [id], onDelete: SetNull)
+  turma               Turma?     @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  professor           Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  usos ConviteUso[]
+
+  @@index([status, expiresAt])
+  @@index([tipo, status])
+  @@index([criadoPorId])
+  @@index([destinatarioUsuarioId])
+  @@index([turmaId])
+  @@index([professorId])
+  @@index([organizacaoTipo, organizacaoId])
+}
+
+model ConviteUso {
+  id        String   @id @default(uuid())
+  conviteId String
+  usuarioId String
+  createdAt DateTime @default(now())
+
+  convite Convite @relation(fields: [conviteId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([conviteId, usuarioId])
+  @@index([usuarioId])
 }
 
 model Amigo {
@@ -1385,13 +1442,20 @@ model SolicitacaoVinculo {
 }
 
 model SolicitacaoTreino {
-  id             String   @id @default(uuid())
+  id             String @id @default(uuid())
   remetenteId    String
   destinatarioId String
-  status         String?
-  criadoEm       DateTime @default(now())
-  destinatario   Usuario  @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
-  remetente      Usuario  @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+
+  remetentePapel    TipoUsuario?
+  destinatarioPapel TipoUsuario?
+
+  status   String?
+  criadoEm DateTime @default(now())
+
+  destinatario Usuario @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
+  remetente    Usuario @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+
+  @@index([remetenteId, destinatarioId, status])
 }
 
 model SolicitacaoColaboracaoOlheiro {
@@ -2191,6 +2255,7 @@ model Turma {
   escolinha         Escolinha?          @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   professores       TurmaProfessor[]
   membros           TurmaUsuario[]
+  convites          Convite[]
 }
 
 model TurmaProfessor {
@@ -3312,6 +3377,19 @@ enum MetodologiaArea {
 enum OrganizacaoTipo {
   CLUBE
   ESCOLINHA
+}
+
+enum ConviteTipo {
+  ORGANIZACAO
+  TURMA
+  PROFESSOR
+  ATLETA_VINCULO
+}
+
+enum ConviteStatus {
+  ATIVO
+  UTILIZADO
+  CANCELADO
 }
 
 enum TipoExercicio {

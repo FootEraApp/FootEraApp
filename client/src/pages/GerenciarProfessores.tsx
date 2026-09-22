@@ -19,9 +19,14 @@ import {
   CirclePlus,
   ShieldCheck,
   X,
+  UserPlus,
 } from "lucide-react";
 import GerenciarOrganizacao, { type OrgGestorItem } from "./GerenciarOrganizacao.js";
 import { loadGestorContext, setGestorOrg, clearGestorContext } from "../utils/gestorSession";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+import {
+  PUBLIC_PATHS,
+} from "../utils/publicRoutes.js";
 
 type TipoEntidade = "Escola" | "Clube" | "Professor" | null;
 
@@ -187,6 +192,20 @@ const GerenciarProfessores: React.FC = () => {
   const [orgsLoading, setOrgsLoading] = useState(false);
   const [orgsError, setOrgsError] = useState<string | null>(null);
 
+  const [
+    conviteProfessorToken,
+    setConviteProfessorToken,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    criandoConviteProfessor,
+    setCriandoConviteProfessor,
+  ] =
+    useState(false);
+
   const carregarOrgsGerenciaveis = async () => {
     if (!token) return;
 
@@ -263,6 +282,18 @@ const GerenciarProfessores: React.FC = () => {
     !(tipo === "Professor" && subAbaTurmas === "minhas")
       ? { tipo: contextoTipo === "Escola" ? "Escolinha" : "Clube", id: contextoTipoUsuarioId }
       : undefined;
+
+  const podeConvidarProfessor =
+    Boolean(owner) &&
+    (
+      tipo !== "Professor" ||
+      (
+        Boolean(
+          orgSelecionada
+        ) &&
+        podeVerProfessores
+      )
+    );
 
   const descobrirPerfil = async () => {
     try {
@@ -794,6 +825,100 @@ const GerenciarProfessores: React.FC = () => {
     setLocation(`/perfil/GerenciarProfessores?tab=organizacoes`);
   };
 
+  const criarConviteProfessor =
+    async () => {
+      if (
+        !owner ||
+        !podeConvidarProfessor
+      ) {
+        toast.error(
+          "Você não tem permissão para convidar professores."
+        );
+
+        return;
+      }
+
+      if (!token) {
+        toast.error(
+          "Sua sessão expirou."
+        );
+
+        return;
+      }
+
+      try {
+        setCriandoConviteProfessor(
+          true
+        );
+
+        const organizacaoTipo =
+          owner.tipo ===
+          "Clube"
+            ? "CLUBE"
+            : "ESCOLINHA";
+
+        const {
+          data,
+        } =
+          await axios.post(
+            `${API.BASE_URL}/api/convites`,
+            {
+              tipo:
+                "PROFESSOR",
+
+              organizacaoTipo,
+
+              organizacaoId:
+                owner.id,
+
+              usoUnico:
+                true,
+
+              expiresInDays:
+                30,
+            },
+            {
+              headers,
+            }
+          );
+
+        const tokenConvite =
+          String(
+            data?.token ??
+              data?.convite?.token ??
+              ""
+          ).trim();
+
+        if (!tokenConvite) {
+          throw new Error(
+            "O servidor não retornou o token do convite."
+          );
+        }
+
+        setConviteProfessorToken(
+          tokenConvite
+        );
+      } catch (error: any) {
+        console.error(
+          "Erro ao criar convite de professor:",
+          error
+        );
+
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            error?.response?.data
+              ?.error ||
+            error?.message ||
+            "Não foi possível criar o convite."
+        );
+      } finally {
+        setCriandoConviteProfessor(
+          false
+        );
+      }
+    };
+
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-40 sm:pb-36">
       {tipo === "Professor" && orgSelecionada && (
@@ -972,6 +1097,48 @@ const GerenciarProfessores: React.FC = () => {
         <div className="flex w-full flex-wrap items-center justify-start sm:justify-end gap-2">
           {owner && (
             <>
+              {aba ===
+                "professores" &&
+                podeConvidarProfessor && (
+                  <button
+                    type="button"
+                    disabled={
+                      criandoConviteProfessor
+                    }
+                    onClick={() =>
+                      void criarConviteProfessor()
+                    }
+                    className="
+                      inline-flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-emerald-200
+                      bg-emerald-50
+                      px-2.5
+                      py-2
+                      text-sm
+                      font-semibold
+                      text-emerald-800
+                      hover:bg-emerald-100
+                      disabled:cursor-not-allowed
+                      disabled:opacity-60
+                    "
+                  >
+                    {criandoConviteProfessor ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-4 w-4" />
+                    )}
+
+                    <span>
+                      {criandoConviteProfessor
+                        ? "Criando..."
+                        : "Convidar professor"}
+                    </span>
+                  </button>
+                )}
               <button
                 onClick={() => {
                   setProfessorSelecionado(undefined);
@@ -1408,6 +1575,27 @@ const GerenciarProfessores: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+
+      {conviteProfessorToken && (
+        <PublicShareModal
+          open={
+            !!conviteProfessorToken
+          }
+          onClose={() =>
+            setConviteProfessorToken(
+              null
+            )
+          }
+          titulo="Convite para professor"
+          path={
+            PUBLIC_PATHS.join(
+              conviteProfessorToken
+            )
+          }
+          mostrarDirect
+          destinatarioPapel="Professor"
+        />
       )}
 
       <TurmasManager

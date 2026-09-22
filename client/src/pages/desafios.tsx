@@ -441,6 +441,7 @@ function DesafiosInner() {
               ? itemCompartilhar.desafio.id
               : undefined
           }
+          destinatarioPapel="Atleta"
         />
       )}
     </>

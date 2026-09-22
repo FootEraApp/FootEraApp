@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/GerenciarOrganizacao.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API } from "../config.js";
@@ -11,8 +10,12 @@ import {
   PlusCircle,
   Save,
   Trash2,
+  QrCode,
 } from "lucide-react";
 import { setGestorOrg } from "../utils/gestorSession.js";
+import PublicShareModal from "../components/share/PublicShareModal.js";
+import { PUBLIC_PATHS } from "../utils/publicRoutes.js";
+import ConviteQrModal from "../components/share/ConviteQrModal.js";
 
 type TipoEntidade = "Escola" | "Clube" | "Professor" | null;
 
@@ -173,10 +176,149 @@ export default function GerenciarOrganizacao({
   });
 
   const [saving, setSaving] = useState(false);
+  const [
+    conviteOrganizacaoToken,
+    setConviteOrganizacaoToken,
+  ] = useState<string | null>(null);
+
+  const [
+    criandoConviteOrganizacao,
+    setCriandoConviteOrganizacao,
+  ] = useState(false);
+
+  const [
+    qrOrganizacaoToken,
+    setQrOrganizacaoToken,
+  ] = useState<string | null>(
+    null
+  );
+
   const tipoApi = useMemo(() => {
     if (!owner) return null;
     return owner.tipo === "Clube" ? "CLUBE" : "ESCOLINHA";
   }, [owner]);
+
+  const obterConviteOrganizacaoToken =
+    async (): Promise<string | null> => {
+      if (
+        !owner ||
+        !tipoApi
+      ) {
+        toast.error(
+          "Não foi possível identificar a organização."
+        );
+
+        return null;
+      }
+
+      if (!headers) {
+        toast.error(
+          "Sua sessão expirou. Entre novamente."
+        );
+
+        return null;
+      }
+
+      try {
+        setCriandoConviteOrganizacao(
+          true
+        );
+
+        const {
+          data,
+        } =
+          await axios.post(
+            `${API.BASE_URL}/api/convites`,
+            {
+              tipo:
+                "ORGANIZACAO",
+
+              organizacaoTipo:
+                tipoApi,
+
+              organizacaoId:
+                owner.id,
+
+              usoUnico:
+                false,
+
+              expiresInDays:
+                30,
+            },
+            {
+              headers,
+            }
+          );
+
+        const tokenConvite =
+          String(
+            data?.token ??
+              data?.convite
+                ?.token ??
+              ""
+          ).trim();
+
+        if (!tokenConvite) {
+          throw new Error(
+            "O servidor não retornou o token do convite."
+          );
+        }
+
+        return tokenConvite;
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "Erro ao obter convite da organização:",
+          error
+        );
+
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            error?.response?.data
+              ?.error ||
+            error?.message ||
+            "Não foi possível criar o convite."
+        );
+
+        return null;
+      } finally {
+        setCriandoConviteOrganizacao(
+          false
+        );
+      }
+    };
+
+
+  const criarConviteOrganizacao =
+    async () => {
+      const tokenConvite =
+        await obterConviteOrganizacaoToken();
+
+      if (!tokenConvite) {
+        return;
+      }
+
+      setConviteOrganizacaoToken(
+        tokenConvite
+      );
+    };
+
+
+  const mostrarQrOrganizacao =
+    async () => {
+      const tokenConvite =
+        await obterConviteOrganizacaoToken();
+
+      if (!tokenConvite) {
+        return;
+      }
+
+      setQrOrganizacaoToken(
+        tokenConvite
+      );
+    };
 
   const carregarGestores = async () => {
     if (!owner || !tipoApi) return;
@@ -481,13 +623,93 @@ export default function GerenciarOrganizacao({
           </div>
         </div>
 
-        <button
-          onClick={carregarGestores}
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50"
-        >
-          <Building2 className="h-4 w-4" />
-          Recarregar
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={
+              criarConviteOrganizacao
+            }
+            disabled={
+              criandoConviteOrganizacao ||
+              !owner
+            }
+            className="
+              inline-flex
+              items-center
+              gap-2
+              rounded-xl
+              bg-emerald-600
+              px-3
+              py-2
+              text-xs
+              font-semibold
+              text-white
+              hover:bg-emerald-700
+              disabled:opacity-60
+            "
+          >
+            {criandoConviteOrganizacao ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <PlusCircle className="h-4 w-4" />
+            )}
+
+            Convidar atleta
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              mostrarQrOrganizacao
+            }
+            disabled={
+              criandoConviteOrganizacao ||
+              !owner
+            }
+            className="
+              inline-flex
+              items-center
+              gap-2
+              rounded-xl
+              border
+              border-emerald-200
+              bg-white
+              px-3
+              py-2
+              text-xs
+              font-semibold
+              text-emerald-800
+              hover:bg-emerald-50
+              disabled:opacity-60
+            "
+          >
+            <QrCode className="h-4 w-4" />
+
+            Mostrar QR Code
+          </button>
+
+          <button
+            type="button"
+            onClick={carregarGestores}
+            className="
+              inline-flex
+              items-center
+              gap-2
+              rounded-xl
+              border
+              border-zinc-200
+              bg-white
+              px-3
+              py-2
+              text-xs
+              text-zinc-700
+              hover:bg-zinc-50
+            "
+          >
+            <Building2 className="h-4 w-4" />
+            Recarregar
+          </button>
+        </div>
       </div>
 
       {!owner ? (
@@ -656,6 +878,59 @@ export default function GerenciarOrganizacao({
             )}
           </div>
         </div>
+      )}
+
+      {conviteOrganizacaoToken && (
+        <PublicShareModal
+          open={
+            !!conviteOrganizacaoToken
+          }
+          onClose={() =>
+            setConviteOrganizacaoToken(
+              null
+            )
+          }
+          titulo="Convite para atleta"
+          path={PUBLIC_PATHS.join(
+            conviteOrganizacaoToken
+          )}
+          mostrarDirect
+          destinatarioPapel="Atleta"
+          mensagemWhatsApp={
+            owner?.tipo === "Clube"
+              ? "⚽ Você recebeu um convite para se vincular a um clube no FootEra!\n\nAcesse o convite pelo link abaixo:"
+              : "⚽ Você recebeu um convite para se vincular a uma escolinha no FootEra!\n\nAcesse o convite pelo link abaixo:"
+          }
+        />
+      )}
+
+      {qrOrganizacaoToken && (
+        <ConviteQrModal
+          open={
+            !!qrOrganizacaoToken
+          }
+          token={
+            qrOrganizacaoToken
+          }
+          titulo={
+            owner?.tipo === "Clube"
+              ? "Convite do clube"
+              : "Convite da escolinha"
+          }
+          onClose={() =>
+            setQrOrganizacaoToken(
+              null
+            )
+          }
+          onTokenChange={
+            setQrOrganizacaoToken
+          }
+          onDisabled={() =>
+            setQrOrganizacaoToken(
+              null
+            )
+          }
+        />
       )}
     </div>
   );
