@@ -20,6 +20,25 @@ export type AuthSessionResponse = {
   clube?: { id?: string };
   escolinha?: { id?: string };
   atleta?: { id?: string };
+  learningProfile?: {
+    id?: string;
+  };
+
+  federacao?: {
+    id?: string;
+  };
+
+  marca?: {
+    id?: string;
+  };
+
+  creator?: {
+    id?: string;
+  };
+
+  administrador?: {
+    id?: string;
+  };
 };
 
 export type PendingAuthAction =
@@ -115,13 +134,49 @@ export function applyAuthSession(
   store.setItem("tipoUsuario", isAdmin ? "admin" : MAP_TIPO[rawTipo] ?? "atleta");
   store.setItem("usuarioTipoRaw", rawTipo);
 
+  const tipoAtivo =
+    MAP_TIPO[rawTipo] ??
+    rawTipo;
+
+  const idsPorTipo:
+    Record<
+      string,
+      string | number | null | undefined
+    > = {
+      atleta:
+        data?.atleta?.id,
+
+      professor:
+        data?.professor?.id,
+
+      clube:
+        data?.clube?.id,
+
+      escolinha:
+        data?.escolinha?.id,
+
+      olheiro:
+        data?.olheiro?.id,
+
+      learning:
+        data?.learningProfile?.id,
+
+      federacao:
+        data?.federacao?.id,
+
+      marca:
+        data?.marca?.id,
+
+      creator:
+        data?.creator?.id,
+
+      admin:
+        data?.administrador?.id,
+    };
+
   const tipoUsuarioId =
-    data.tipoUsuarioId ||
-    data?.olheiro?.id ||
-    data?.professor?.id ||
-    data?.clube?.id ||
-    data?.escolinha?.id ||
-    data?.atleta?.id ||
+    data.tipoUsuarioId ??
+    idsPorTipo[tipoAtivo] ??
     null;
 
   if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));

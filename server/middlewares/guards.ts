@@ -2,6 +2,10 @@ import type { Response, NextFunction } from "express";
 import type { AuthenticatedRequest } from "./auth.js";
 import { canDetailed } from "../services/entitlements.js";
 import { PrismaClient } from "@prisma/client";
+import {
+  canPermission,
+  type AppPermission,
+} from "../services/permissions.js";
 
 const prisma = new PrismaClient();
 
@@ -33,6 +37,47 @@ export function requireCapability(
   };
 }
 
+export function requirePermission(
+  permission: AppPermission,
+) {
+  return async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    const userId =
+      String(
+        req.userId ??
+          (req as any).user?.id ??
+          (req as any).authUser?.id ??
+          "",
+      ).trim();
+
+    if (!userId) {
+      return res.status(401).json({
+        error: "Não autenticado.",
+        code: "UNAUTHENTICATED",
+      });
+    }
+
+    const permitido =
+      await canPermission(
+        userId,
+        permission,
+      );
+
+    if (!permitido) {
+      return res.status(403).json({
+        error: "Sem permissão.",
+        code: "PERMISSION_DENIED",
+        permission,
+      });
+    }
+
+    return next();
+  };
+}
+
 export function requireOrgSeat(getOrgId: (req: AuthenticatedRequest) => string | null | undefined) {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const orgId = getOrgId(req);
@@ -53,10 +98,38 @@ export function requireOrgSeat(getOrgId: (req: AuthenticatedRequest) => string |
   };
 }
 
-export function requireAdmin(req: any, res: any, next: any) {
-  const user = req.authUser || req.user;
-  if (!user || !user.isAdmin) {
-    return res.status(403).json({ message: "Acesso restrito a administradores." });
+export async function requireAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  const userId =
+    String(
+      req.userId ??
+        (req as any).user?.id ??
+        (req as any).authUser?.id ??
+        "",
+    ).trim();
+
+  if (!userId) {
+    return res.status(401).json({
+      message:
+        "Não autenticado.",
+    });
   }
-  next();
+
+  const permitido =
+    await canPermission(
+      userId,
+      "VER_ADMIN",
+    );
+
+  if (!permitido) {
+    return res.status(403).json({
+      message:
+        "Acesso restrito a administradores.",
+    });
+  }
+
+  return next();
 }

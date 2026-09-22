@@ -1,6 +1,6 @@
 // client/src/pages/treino/treinos-instrutores
 import { toast } from "@/lib/toast";
-import { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
+import { useMemo, useEffect, useState, useRef, type SVGProps, useContext } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Check,
@@ -15,7 +15,9 @@ import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import MeusExerciciosTab from "../../components/treinos/meusExerciciosTab.js";
 import PublicShareModal from "../../components/share/PublicShareModal.js";
-
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
@@ -546,6 +548,16 @@ export default function TreinosInstrutores({
   tipo: UsuarioLogado["tipo"] | "";
 }) {
   const [, navigate] = useLocation();
+
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const podeCriarTreino =
+    authContext?.can(
+      "CRIAR_TREINO"
+    ) ?? false;
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [abaProfessor, setAbaProfessor] = useState<
@@ -2563,7 +2575,12 @@ export default function TreinosInstrutores({
   ]);
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
-    const podeEditar = isTreinoMeuDeVerdade(treino, usuario);
+    const podeEditar =
+      podeCriarTreino &&
+      isTreinoMeuDeVerdade(
+        treino,
+        usuario
+      );
     const meuId = String(usuario?.tipoUsuarioId || usuario?.usuarioId || "").trim();
     const souDono =
       (String(usuario?.tipo || "").toLowerCase() === "professor" && String(treino.professorId || "").trim() === meuId) ||
@@ -2685,10 +2702,7 @@ export default function TreinosInstrutores({
   };
 
   const isGestor =
-    usuario?.tipo &&
-    ["professor", "admin", "escola", "escolinha", "clube"].includes(
-      String(usuario.tipo).toLowerCase(),
-    );
+    podeCriarTreino;
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
@@ -2819,15 +2833,24 @@ export default function TreinosInstrutores({
                       : "Mostrar favoritos"}
                   </button>
 
-                  <button
-                    className="bg-green-800 text-white px-4 py-2 rounded-lg"
-                    onClick={() => {
-                      sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
-                      navigate("/treinos/novo");
-                    }}
-                  >
-                    Criar novo treino
-                  </button>
+                  {podeCriarTreino ? (
+                    <button
+                      className="bg-green-800 text-white px-4 py-2 rounded-lg"
+                      onClick={() => {
+                        sessionStorage.setItem(
+                          "treino_returnTo",
+                          window.location.pathname +
+                            window.location.search
+                        );
+
+                        navigate(
+                          "/treinos/novo"
+                        );
+                      }}
+                    >
+                      Criar novo treino
+                    </button>
+                  ) : null}
                 </div>
               </div>
 

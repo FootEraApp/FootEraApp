@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useContext} from "react";
 import axios from "axios";
 import {
   X,
@@ -25,6 +25,9 @@ import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
 import ConviteQrModal from "../share/ConviteQrModal.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type TurmaMin = {
   id: string;
@@ -138,6 +141,15 @@ export default function TurmasManager({
 
   const token = getToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const podeGerenciarTurmasPorPapel =
+    authContext?.can(
+      "GERENCIAR_TURMA"
+    ) ?? false;
   const professorAlvoId = String(professorId ?? "").trim();
   const userObj = readUserObj();
   const meuProfessorId =
@@ -251,6 +263,11 @@ export default function TurmasManager({
 
   const podeGerenciarTurma =
     useMemo(() => {
+      if (
+        !podeGerenciarTurmasPorPapel
+      ) {
+        return false;
+      }
       if (!turmaSelecionada) {
         return false;
       }
@@ -290,6 +307,7 @@ export default function TurmasManager({
       turmaSelecionada,
       owner?.id,
       meuProfessorId,
+      podeGerenciarTurmasPorPapel,
     ]);
 
   const podeExcluirTurma = podeGerenciarTurma; 
@@ -1814,7 +1832,8 @@ const carregarAtletasVinculados =
                 )}
               </div>
 
-              {owner || tipoUsuarioLogado === "professor" || meuProfessorId ? (
+              {podeGerenciarTurmasPorPapel &&
+                (owner || meuProfessorId) ? (
                 <div className="rounded-xl border border-zinc-200 bg-white p-3">
                   <div className="mb-2 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                     <Plus className="h-4 w-4" /> Criar nova turma
@@ -2160,32 +2179,43 @@ const carregarAtletasVinculados =
                             </button>
                           ) : null}
 
-                          <button
-                            onClick={salvarMembros}
-                            disabled={salvando}
-                            className="
-                              inline-flex
-                              min-h-11
-                              w-full
-                              items-center
-                              justify-center
-                              gap-2
-                              rounded-xl
-                              bg-emerald-600
-                              px-3
-                              py-2.5
-                              text-sm
-                              font-medium
-                              text-white
-                              hover:bg-emerald-700
-                              disabled:opacity-70
-                              whitespace-nowrap
-                              lg:w-auto
-                            "
-                          >
-                            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            Salvar alterações
-                          </button>
+                          {podeGerenciarTurma ? (
+                            <button
+                              onClick={
+                                salvarMembros
+                              }
+                              disabled={
+                                salvando
+                              }
+                              className="
+                                inline-flex
+                                min-h-11
+                                w-full
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-xl
+                                bg-emerald-600
+                                px-3
+                                py-2.5
+                                text-sm
+                                font-medium
+                                text-white
+                                hover:bg-emerald-700
+                                disabled:opacity-70
+                                whitespace-nowrap
+                                lg:w-auto
+                              "
+                            >
+                              {salvando ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Save className="h-4 w-4" />
+                              )}
+
+                              Salvar alterações
+                            </button>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

@@ -45,6 +45,9 @@ function toTipoUsuario(s: string): TipoUsuario {
     case "marca":
       return TipoUsuario.Marca;
 
+    case "creator":
+      return TipoUsuario.Creator;
+
     case "atleta":
     default:
       return TipoUsuario.Atleta;
@@ -346,6 +349,7 @@ const parceiro = Boolean(dbUser?.parceiro);
       "federacao",
       "marca",
       "atleta",
+      "creator",
     ]);
 
     const tipo =

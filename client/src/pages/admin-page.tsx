@@ -1,6 +1,6 @@
 // client/src/pages/admin-page
 import { toast as notify } from "@/lib/toast";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useContext} from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
@@ -14,6 +14,9 @@ import {
   ativarPushNotifications,
   desativarPushNotifications,
 } from "../services/pushNotifications.js";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 
 type Tab =
   | "dashboard"
@@ -56,6 +59,7 @@ type UsuarioTipo =
   | "federacao"
   | "professor"
   | "admin"
+  | "creator"
   | "olheiro";
   
 type StatusConta =
@@ -100,6 +104,7 @@ type TipoCriadorMetodologia =
   | "Federacao"
   | "Learning"
   | "Atleta"
+  | "Creator"
   | "Admin";
 
 type OrdenacaoAssinaturasAdmin =
@@ -119,6 +124,7 @@ const tipoToServer: Record<UsuarioTipo, string> = {
   professor: "Professor",
   admin: "Admin",
   olheiro: "Olheiro",
+  creator: "Creator"
 };
 
 interface UsuarioAdmin {
@@ -256,8 +262,6 @@ function toAbsoluteUrl(raw?: string | null) {
       "https://footera.app.br"
   ).replace(/\/+$/, "");
 
-  // Assets/vídeos antigos apontando para localhost.
-  // Precisam ir para o host público de assets da FootEra.
   const localStatic = v.match(
     /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2)(?::\d+)?(\/(?:assets|videos)\/.*)$/i
   );
@@ -266,8 +270,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return `${assetsBase}${localStatic[1]}`;
   }
 
-  // URLs antigas do backend local, como /uploads/...
-  // Precisam usar a API do ambiente atual.
   const localBackend = v.match(
     /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2):3001(\/.*)?$/i
   );
@@ -282,7 +284,6 @@ function toAbsoluteUrl(raw?: string | null) {
     }`;
   }
 
-  // URLs externas/S3/CDN já corretas.
   if (
     v.startsWith("blob:") ||
     v.startsWith("data:") ||
@@ -292,11 +293,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return v;
   }
 
-  // Assets estáticos da FootEra.
-  //
-  // Isso faz:
-  // localhost -> https://footera.app.br/assets/...
-  // produção  -> https://footera.app.br/assets/...
   if (
     v.startsWith("/assets/") ||
     v.startsWith("/videos/")
@@ -311,7 +307,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return `${assetsBase}/${v}`;
   }
 
-  // Arquivos servidos pelo backend.
   if (v.startsWith("/exercicios/")) {
     return `${apiBase}${v}`;
   }
@@ -334,7 +329,6 @@ function toAbsoluteUrl(raw?: string | null) {
     return `${apiBase}/${v}`;
   }
 
-  // YouTube ID puro
   if (/^[\w-]{11}$/.test(v)) {
     return `https://www.youtube.com/watch?v=${v}`;
   }
@@ -501,7 +495,15 @@ function compararDataCriacaoAdmin(
 }
 
 export default function AdminDashboard() {
-  const [aba, setAba] = useState<Tab>("dashboard");
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const [aba, setAba] =
+    useState<Tab>(
+      "dashboard"
+    );
 
   const tabs: Tab[] = [
     "dashboard",
@@ -2049,7 +2051,10 @@ useEffect(() => {
     return d ? new Date(d).toLocaleString("pt-BR") : "—";
   }
 
-  const isAdminBase = true;
+  const isAdminBase =
+    authContext?.can(
+      "VER_ADMIN"
+    ) ?? false;
 
   const isImage = (u: string) => /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(u);
 
@@ -2812,19 +2817,14 @@ async function confirmarExcluirProfessor() {
   const exerciciosFiltrados = useMemo(() => {
     return (Array.isArray(exercicios) ? exercicios : []).filter(
       (ex: any) => {
-        // busca textual
         if (!matchesText(ex, exDebQ)) {
           return false;
         }
 
-        // categoria
         if (!itemHasCategoria(ex, exCat)) {
           return false;
         }
 
-        // -----------------------------------
-        // FILTRO: COM VÍDEO / SEM VÍDEO
-        // -----------------------------------
         const videoUrl = resolveVideoUrl(ex);
         const possuiVideo = Boolean(videoUrl);
 
@@ -2842,9 +2842,6 @@ async function confirmarExcluirProfessor() {
           return false;
         }
 
-        // -----------------------------------
-        // FILTRO: EXERCICIO / PERSONALIZADO
-        // -----------------------------------
         const origem = String(
           ex?.origem || "catalogo"
         )
@@ -3747,7 +3744,6 @@ async function agendarManutencaoPersonalizada() {
                 className="border rounded px-3 py-2 w-full sm:w-[min(520px,100%)]"
               />
 
-              {/* Filtro por vídeo */}
               <select
                 value={exFiltroVideo}
                 onChange={(e) =>
@@ -3774,7 +3770,6 @@ async function agendarManutencaoPersonalizada() {
                 </option>
               </select>
 
-              {/* Filtro por origem */}
               <select
                 value={exFiltroOrigem}
                 onChange={(e) =>
@@ -5532,7 +5527,6 @@ async function agendarManutencaoPersonalizada() {
               <h4 className="font-semibold text-green-800 mb-2">🔍 Funcionalidades</h4>
               {[
                 { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
-                //{ key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
                 { key: "allowAthleteChallenges", label: "allow_athete_challenges", desc: "Permite que atletas participem de desafios" },
                 { key: "allowProfileEditing", label: "allow_profile_editing", desc: "Permite edição de perfis pelos usuários" },
               ].map((item) => (

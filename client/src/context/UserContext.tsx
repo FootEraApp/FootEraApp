@@ -29,6 +29,26 @@ export interface Score {
   responsibility: number;
 }
 
+export type AppPermission =
+  | "CRIAR_TREINO"
+  | "GERENCIAR_TURMA"
+  | "GERENCIAR_ORGANIZACAO"
+  | "CRIAR_EVENTO"
+  | "PUBLICAR_METODOLOGIA"
+  | "VER_ADMIN";
+
+export type PermissionMap =
+  Record<AppPermission, boolean>;
+
+const EMPTY_PERMISSIONS: PermissionMap = {
+  CRIAR_TREINO: false,
+  GERENCIAR_TURMA: false,
+  GERENCIAR_ORGANIZACAO: false,
+  CRIAR_EVENTO: false,
+  PUBLICAR_METODOLOGIA: false,
+  VER_ADMIN: false,
+};
+
 export interface UserContextType {
   user: User | null;
   score: Score | null;
@@ -45,6 +65,16 @@ export interface UserContextType {
   setIsLoading?: React.Dispatch<
     React.SetStateAction<boolean>
   >;
+  permissions: PermissionMap;
+
+  permissionsLoading: boolean;
+
+  can: (
+    permission: AppPermission
+  ) => boolean;
+
+  refreshPermissions:
+    () => Promise<void>;
 }
 
 export const UserContext =
@@ -99,6 +129,95 @@ export function UserProvider({
   const [isLoading, setIsLoading] =
     useState(false);
 
+  const [
+    permissions,
+    setPermissions,
+  ] = useState<PermissionMap>({
+    ...EMPTY_PERMISSIONS,
+  });
+
+  const [
+    permissionsLoading,
+    setPermissionsLoading,
+  ] = useState(false);
+
+
+  const refreshPermissions =
+    useCallback(
+      async () => {
+        const token =
+          localStorage.getItem(
+            "token"
+          ) ||
+          sessionStorage.getItem(
+            "token"
+          ) ||
+          "";
+
+        if (!token) {
+          setPermissions({
+            ...EMPTY_PERMISSIONS,
+          });
+
+          setPermissionsLoading(
+            false
+          );
+
+          return;
+        }
+
+        try {
+          setPermissionsLoading(
+            true
+          );
+
+          const response =
+            await axios.get(
+              `${API.BASE_URL}/api/permissoes/me`,
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          setPermissions({
+            ...EMPTY_PERMISSIONS,
+            ...(response.data
+              ?.permissions ?? {}),
+          });
+        } catch (error) {
+          console.error(
+            "[UserContext] Erro ao carregar permissões:",
+            error
+          );
+
+          setPermissions({
+            ...EMPTY_PERMISSIONS,
+          });
+        } finally {
+          setPermissionsLoading(
+            false
+          );
+        }
+      },
+      []
+    );
+
+
+  const can =
+    useCallback(
+      (
+        permission:
+          AppPermission
+      ) =>
+        permissions[
+          permission
+        ] === true,
+      [permissions]
+    );
+
   const syncSession =
     useCallback(() => {
       setUser(
@@ -109,9 +228,14 @@ export function UserProvider({
   useEffect(() => {
     syncSession();
 
-    const onAuthChanged = () => {
-      syncSession();
-    };
+    void refreshPermissions();
+
+    const onAuthChanged =
+      () => {
+        syncSession();
+
+        void refreshPermissions();
+      };
 
     window.addEventListener(
       "footera:auth-changed",
@@ -124,7 +248,10 @@ export function UserProvider({
         onAuthChanged
       );
     };
-  }, [syncSession]);
+  }, [
+    syncSession,
+    refreshPermissions,
+  ]);
 
   const login = async (
     username: string,
@@ -149,6 +276,7 @@ export function UserProvider({
       );
 
       syncSession();
+      await refreshPermissions();
     } finally {
       setIsLoading(false);
     }
@@ -159,6 +287,13 @@ export function UserProvider({
       Storage.clearAuth();
       setUser(null);
       setScore(null);
+      setPermissions({
+        ...EMPTY_PERMISSIONS,
+      });
+
+      setPermissionsLoading(
+        false
+      );
 
       if (
         typeof window !==
@@ -188,6 +323,11 @@ export function UserProvider({
         logout,
         setUser,
         setIsLoading,
+
+        permissions,
+        permissionsLoading,
+        can,
+        refreshPermissions,
       }}
     >
       {children}

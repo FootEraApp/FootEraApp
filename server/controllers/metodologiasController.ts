@@ -23,6 +23,9 @@ import {
   emitirCertificadoMetodologia,
 } from "../services/conquistasMetodologia.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
 
 function calcularDatasExecucao(estrutura: any, assinatura: any) {
   const modo = estrutura?.modoExecucao;
@@ -84,15 +87,20 @@ function getUserId(req: Request): string | null {
   );
 }
 
-async function isAdminUser(userId: string | null | undefined) {
-  if (!userId) return false;
+async function isAdminUser(
+  userId:
+    | string
+    | null
+    | undefined,
+) {
+  if (!userId) {
+    return false;
+  }
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: userId },
-    select: { tipo: true },
-  });
-
-  return String(usuario?.tipo || "").toLowerCase().trim() === "admin";
+  return canPermission(
+    userId,
+    "VER_ADMIN",
+  );
 }
 
 function asNullableString(v: any): string | null {
@@ -823,46 +831,70 @@ function pickPrincipalAssinatura(
   );
 }
 
-async function getPermissaoCriacaoMetodologia(userId: string) {
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      tipo: true,
-      parceiro: true,
-      creator: {
+async function getPermissaoCriacaoMetodologia(
+  userId: string,
+) {
+  const [
+    usuario,
+    podeCriar,
+  ] =
+    await Promise.all([
+      prisma.usuario.findUnique({
+        where: {
+          id: userId,
+        },
+
         select: {
           id: true,
-          ativo: true,
+          tipo: true,
+          parceiro: true,
+
+          creator: {
+            select: {
+              id: true,
+              ativo: true,
+            },
+          },
         },
-      },
-    },
-  });
+      }),
 
-  const tipo = String(usuario?.tipo || "").toLowerCase().trim();
+      canPermission(
+        userId,
+        "PUBLICAR_METODOLOGIA",
+      ),
+    ]);
 
-  const tiposPermitidos = [
-    "professor",
-    "clube",
-    "escolinha",
-    "admin",
-    "profissional",
-    "federação",
-    "federacao",
-    "marca",
-  ];
+  const tipo =
+    String(
+      usuario?.tipo || "",
+    )
+      .toLowerCase()
+      .trim();
 
-  const temCreatorAtivo = usuario?.creator?.ativo === true;
-  const podeCriar = tiposPermitidos.includes(tipo) || temCreatorAtivo;
-  
   return {
     podeCriar,
-    ehProfessorParceiro: tipo === "professor" ? usuario?.parceiro === true : false,
-    temPlanoElegivel: false,
-    planoPrincipal: null,
-    motivoBloqueio: podeCriar
-      ? null
-      : "Apenas perfis autorizados ou usuários com Creator ativo podem criar metodologias.",
+
+    ehProfessorParceiro:
+      tipo === "professor"
+        ? usuario?.parceiro ===
+          true
+        : false,
+
+    temCreatorAtivo:
+      usuario?.creator?.ativo ===
+      true,
+
+    temPlanoElegivel:
+      false,
+
+    planoPrincipal:
+      null,
+
+    motivoBloqueio:
+      podeCriar
+        ? null
+        : "Seu perfil ativo não possui permissão para publicar metodologias.",
+
     planosPermitidos: [],
   };
 }
