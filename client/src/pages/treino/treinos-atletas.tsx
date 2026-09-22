@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-atletas
 import { toast } from "@/lib/toast";
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";

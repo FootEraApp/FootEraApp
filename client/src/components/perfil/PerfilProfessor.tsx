@@ -1,3 +1,4 @@
+// client/src/components/perfil/perfilProfessor
 import { useEffect, useMemo, useState, useCallback, ReactNode } from "react";
 import { toast } from "@/lib/toast";
 import axios from "axios";
@@ -66,7 +67,12 @@ type CertificadoResumo = {
   pdfUrl?: string | null;
 };
 type Props = { idDaUrl?: string };
-type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
+type UsuarioMin = {
+  id: string;
+  nome: string;
+  email: string;
+  foto?: string | null;
+};
 
 type MetricsProf = {
   treinosProgramados: number;
@@ -118,7 +124,12 @@ type AtletaItem = {
 type SolicitacaoItem = {
   id: string;
   remetenteId: string;
-  remetente: { id: string; usuarioId: string; nomeDeUsuario: string; foto: string | null };
+  remetente: {
+    id: string;
+    usuarioId: string;
+    nomeDeUsuario: string;
+    foto: string | null;
+  };
   status?: "PENDENTE" | "APROVADO" | "REJEITADO";
   criadaEm?: string;
 };
@@ -138,9 +149,9 @@ type Turma = {
   nome: string;
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
-  professorIds?: string[];  
-  professorNomes?: string[]; 
-  professorNome?: string | null; 
+  professorIds?: string[];
+  professorNomes?: string[];
+  professorNome?: string | null;
   alunosCount?: number | null;
   categoria?: string | string[] | null;
 };
@@ -262,11 +273,19 @@ export default function PerfilProfessor({
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [mostrarTodosVinculados, setMostrarTodosVinculados] = useState(false);
-  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(
+    null,
+  );
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
-  const [privacidade, setPrivacidade] = useState<{ mostrarEmail: boolean } | null>(null);
-  const [notaPorAtleta, setNotaPorAtleta] = useState<Record<string, string>>({});
-  const [notificarPorAtleta, setNotificarPorAtleta] = useState<Record<string, boolean>>({});
+  const [privacidade, setPrivacidade] = useState<{
+    mostrarEmail: boolean;
+  } | null>(null);
+  const [notaPorAtleta, setNotaPorAtleta] = useState<Record<string, string>>(
+    {},
+  );
+  const [notificarPorAtleta, setNotificarPorAtleta] = useState<
+    Record<string, boolean>
+  >({});
   const [salvandoNota, setSalvandoNota] = useState<Record<string, boolean>>({});
   const [eventos, setEventos] = useState<EventoPerfilItem[]>([]);
   const [eventosLoading, setEventosLoading] = useState(false);
@@ -290,27 +309,33 @@ export default function PerfilProfessor({
 
   const [buscaEscolinha, setBuscaEscolinha] = useState("");
   const [buscaClube, setBuscaClube] = useState("");
-  const [treinosCriados, setTreinosCriados] = useState<TreinoCriado[] | null>(null);
+  const [treinosCriados, setTreinosCriados] = useState<TreinoCriado[] | null>(
+    null,
+  );
 
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [turmas, setTurmas] = useState<Turma[] | null>(null);
   const [turmasLoading, setTurmasLoading] = useState(false);
-  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(
+    null,
+  );
 
   const professorId = data?.professor?.id;
   const escolinhasDisponiveis = orgsDisponiveis.filter(
     (o) =>
       o.tipo === "Escolinha" &&
-      o.nome.toLowerCase().includes(buscaEscolinha.toLowerCase())
+      o.nome.toLowerCase().includes(buscaEscolinha.toLowerCase()),
   );
 
   const clubesDisponiveis = orgsDisponiveis.filter(
     (o) =>
       o.tipo === "Clube" &&
-      o.nome.toLowerCase().includes(buscaClube.toLowerCase())
+      o.nome.toLowerCase().includes(buscaClube.toLowerCase()),
   );
 
-  const escolinhaAtual = orgsDisponiveis.find((o) => o.id === escolinhaSelecionada);
+  const escolinhaAtual = orgsDisponiveis.find(
+    (o) => o.id === escolinhaSelecionada,
+  );
   const clubeAtual = orgsDisponiveis.find((o) => o.id === clubeSelecionado);
 
   const abas: Array<{
@@ -351,31 +376,34 @@ export default function PerfilProfessor({
   }, [data?.professor?.clubeId, data?.professor?.escolinhaId]);
 
   const rawToken =
-    Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
 
   const headers = useMemo(
     () => (rawToken ? { Authorization: `Bearer ${rawToken}` } : undefined),
-    [rawToken]
+    [rawToken],
   );
 
   const usuarioIdStorage =
-    Storage.usuarioId || localStorage.getItem("usuarioId") || sessionStorage.getItem("usuarioId") || "";
-
-  const tipoUsuarioIdStorage =
-    Storage.tipoUsuarioId ||
-    localStorage.getItem("tipoUsuarioId") ||
-    sessionStorage.getItem("tipoUsuarioId") ||
+    Storage.usuarioId ||
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
     "";
 
   const isOwn = !idDaUrl || idDaUrl === usuarioIdStorage;
-  const targetId = isOwn ? (tipoUsuarioIdStorage || "me") : (idDaUrl as string);
+  // Para o próprio perfil, o backend resolve "me" usando o papel atualmente
+  // salvo em Usuario.tipo. Não reutilize tipoUsuarioId, pois ele pode ser o ID
+  // do papel que estava em uso antes da troca.
+  const targetId = isOwn ? "me" : (idDaUrl as string);
 
   const usuarioCreatorDoPerfil = String(
     creatorUsuarioId ||
       data?.usuario?.id ||
       data?.professor?.usuarioId ||
       (isOwn ? usuarioIdStorage : "") ||
-      ""
+      "",
   ).trim();
 
   const mostrarCreator = Boolean(hasCreator && usuarioCreatorDoPerfil);
@@ -401,21 +429,20 @@ export default function PerfilProfessor({
           ? { Authorization: `Bearer ${rawToken}` }
           : undefined;
 
-        const [eventosResultado, livesResultado] =
-          await Promise.allSettled([
-            axios.get(`${API.BASE_URL}/api/eventos`, {
-              params: {
-                creatorUsuarioId: usuarioCreatorDoPerfil,
-              },
-              headers: requestHeaders,
-            }),
-            axios.get(
-              `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-                usuarioCreatorDoPerfil
-              )}`,
-              { headers: requestHeaders }
-            ),
-          ]);
+        const [eventosResultado, livesResultado] = await Promise.allSettled([
+          axios.get(`${API.BASE_URL}/api/eventos`, {
+            params: {
+              creatorUsuarioId: usuarioCreatorDoPerfil,
+            },
+            headers: requestHeaders,
+          }),
+          axios.get(
+            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
+              usuarioCreatorDoPerfil,
+            )}`,
+            { headers: requestHeaders },
+          ),
+        ]);
 
         if (cancelado) return;
 
@@ -427,12 +454,12 @@ export default function PerfilProfessor({
         const eventosArray = Array.isArray(eventosPayload)
           ? eventosPayload
           : Array.isArray(eventosPayload?.items)
-          ? eventosPayload.items
-          : Array.isArray(eventosPayload?.eventos)
-          ? eventosPayload.eventos
-          : Array.isArray(eventosPayload?.data)
-          ? eventosPayload.data
-          : [];
+            ? eventosPayload.items
+            : Array.isArray(eventosPayload?.eventos)
+              ? eventosPayload.eventos
+              : Array.isArray(eventosPayload?.data)
+                ? eventosPayload.data
+                : [];
 
         const creatorPayload =
           livesResultado.status === "fulfilled"
@@ -446,20 +473,18 @@ export default function PerfilProfessor({
             titulo: String(evento.titulo ?? evento.nome ?? "Evento"),
             descricao: evento.descricao ?? null,
             data: String(
-              evento.dataEvento ?? evento.data ?? evento.inicio ?? ""
+              evento.dataEvento ?? evento.data ?? evento.inicio ?? "",
             ),
-            tipoLabel: String(
-              evento.tipoLabel ?? evento.tipo ?? "Evento"
-            ),
+            tipoLabel: String(evento.tipoLabel ?? evento.tipo ?? "Evento"),
             status: String(evento.status ?? "ABERTO"),
             cidade: evento.cidade ?? null,
             estado: evento.estado ?? null,
             totalParticipantes: null,
-          })
+          }),
         );
 
         const aulasAoVivo: EventoPerfilItem[] = Array.isArray(
-          creatorPayload?.eventosAoVivo
+          creatorPayload?.eventosAoVivo,
         )
           ? creatorPayload.eventosAoVivo.map((aula: any) => ({
               id: String(aula.id),
@@ -502,17 +527,13 @@ export default function PerfilProfessor({
             return Number.isFinite(timestamp) && timestamp >= agora;
           })
           .sort(
-            (a, b) =>
-              new Date(a.data).getTime() - new Date(b.data).getTime()
+            (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime(),
           );
 
         const unicos = Array.from(
           new Map(
-            proximos.map((evento) => [
-              `${evento.origem}:${evento.id}`,
-              evento,
-            ])
-          ).values()
+            proximos.map((evento) => [`${evento.origem}:${evento.id}`, evento]),
+          ).values(),
         );
 
         setEventos(unicos);
@@ -546,10 +567,7 @@ export default function PerfilProfessor({
     setMostrarTodosEventos(false);
   }, [usuarioCreatorDoPerfil]);
 
-  const eventosVisiveis = mostrarTodosEventos
-    ? eventos
-    : eventos.slice(0, 5);
-
+  const eventosVisiveis = mostrarTodosEventos ? eventos : eventos.slice(0, 5);
 
   useEffect(() => {
     setVinculados(null);
@@ -616,23 +634,36 @@ export default function PerfilProfessor({
         },
       });
 
-      const lista = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
+      const lista = Array.isArray(r.data)
+        ? r.data
+        : (r.data?.items ?? r.data?.data ?? []);
 
       const parseDate = (x: any) =>
-        x?.criadoEm || x?.createdAt || x?.dataCriacao || x?.created_at || new Date().toISOString();
+        x?.criadoEm ||
+        x?.createdAt ||
+        x?.dataCriacao ||
+        x?.created_at ||
+        new Date().toISOString();
 
       setTreinosCriados(
         (lista ?? []).map((t: any) => {
           const criadoPorMim =
             String(t?.professorId ?? "") === profId ||
-            String(t?.criadorProfessorId ?? t?.criadorProfessor?.id ?? "") === profId;
+            String(t?.criadorProfessorId ?? t?.criadorProfessor?.id ?? "") ===
+              profId;
 
           const souColab =
             Array.isArray(t?.professores) &&
-            t.professores.some((p: any) => String(p?.professorId ?? p?.professor?.id ?? "") === profId);
+            t.professores.some(
+              (p: any) =>
+                String(p?.professorId ?? p?.professor?.id ?? "") === profId,
+            );
 
-          const papel: "Criador" | "Colaborador" =
-            criadoPorMim ? "Criador" : souColab ? "Colaborador" : "Colaborador";
+          const papel: "Criador" | "Colaborador" = criadoPorMim
+            ? "Criador"
+            : souColab
+              ? "Colaborador"
+              : "Colaborador";
 
           return {
             id: String(t.id),
@@ -640,12 +671,15 @@ export default function PerfilProfessor({
             criadoEm: String(parseDate(t)),
             categoria: t.categoria ?? null,
             nivel: t.nivel ?? t.level ?? null,
-            alunos: t._count?.atletas ?? t._count?.agendamentos ?? t.alunosCount ?? null,
+            alunos:
+              t._count?.atletas ??
+              t._count?.agendamentos ??
+              t.alunosCount ??
+              null,
             papel,
           };
-        })
+        }),
       );
-
     } catch {
       setTreinosCriados([]);
     }
@@ -659,118 +693,68 @@ export default function PerfilProfessor({
     setTurmasLoading(true);
 
     try {
-      const resposta = await axios.get(
-        `${API.BASE_URL}/api/turmas`,
-        {
-          headers,
-          params: {
-            professorId,
-          },
-        }
-      );
+      const resposta = await axios.get(`${API.BASE_URL}/api/turmas`, {
+        headers,
+        params: {
+          professorId,
+        },
+      });
 
-      const listaBruta = Array.isArray(
-        resposta.data
-      )
+      const listaBruta = Array.isArray(resposta.data)
         ? resposta.data
-        : Array.isArray(
-            resposta.data?.items
-          )
-        ? resposta.data.items
-        : Array.isArray(
-            resposta.data?.data
-          )
-        ? resposta.data.data
-        : [];
+        : Array.isArray(resposta.data?.items)
+          ? resposta.data.items
+          : Array.isArray(resposta.data?.data)
+            ? resposta.data.data
+            : [];
 
-      const mapa = new Map<
-        string,
-        Turma
-      >();
+      const mapa = new Map<string, Turma>();
 
       for (const item of listaBruta) {
-        const id = String(
-          item?.id ?? ""
-        ).trim();
+        const id = String(item?.id ?? "").trim();
 
         if (!id) continue;
 
-        const professorIds =
-          Array.isArray(
-            item?.professorIds
-          )
-            ? item.professorIds.map(
-                String
-              )
-            : [];
+        const professorIds = Array.isArray(item?.professorIds)
+          ? item.professorIds.map(String)
+          : [];
 
-        if (
-          !professorIds.includes(
-            String(professorId)
-          )
-        ) {
+        if (!professorIds.includes(String(professorId))) {
           continue;
         }
 
-        const professorNomes =
-          Array.isArray(
-            item?.professorNomes
-          )
-            ? item.professorNomes
-                .map(String)
-                .filter(Boolean)
-            : Array.isArray(
-                item?.professores
-              )
+        const professorNomes = Array.isArray(item?.professorNomes)
+          ? item.professorNomes.map(String).filter(Boolean)
+          : Array.isArray(item?.professores)
             ? item.professores
                 .map(
                   (professor: any) =>
-                    professor?.nome ??
-                    professor?.usuario?.nome
+                    professor?.nome ?? professor?.usuario?.nome,
                 )
                 .filter(Boolean)
             : [];
 
-        const categoria =
-          Array.isArray(
-            item?.categoria
-          )
-            ? item.categoria
-                .map(String)
-                .filter(Boolean)
-                .join(", ")
-            : item?.categoria != null
+        const categoria = Array.isArray(item?.categoria)
+          ? item.categoria.map(String).filter(Boolean).join(", ")
+          : item?.categoria != null
             ? String(item.categoria)
             : null;
 
         mapa.set(id, {
           id,
 
-          nome: String(
-            item?.nome ??
-              item?.titulo ??
-              "Turma"
-          ),
+          nome: String(item?.nome ?? item?.titulo ?? "Turma"),
 
-          ownerTipo:
-            item?.ownerTipo ??
-            item?.tipoOwner ??
-            null,
+          ownerTipo: item?.ownerTipo ?? item?.tipoOwner ?? null,
 
-          ownerId:
-            item?.ownerId ??
-            item?.clubeId ??
-            item?.escolinhaId ??
-            null,
+          ownerId: item?.ownerId ?? item?.clubeId ?? item?.escolinhaId ?? null,
 
           professorIds,
           professorNomes,
 
           professorNome:
             item?.professorNome ??
-            (professorNomes.length > 0
-              ? professorNomes.join(", ")
-              : null),
+            (professorNomes.length > 0 ? professorNomes.join(", ") : null),
 
           alunosCount:
             item?.alunosCount ??
@@ -783,27 +767,18 @@ export default function PerfilProfessor({
         });
       }
 
-      setTurmas(
-        Array.from(
-          mapa.values()
-        )
-      );
+      setTurmas(Array.from(mapa.values()));
     } catch (error: any) {
       console.error(
         "[PerfilProfessor.reloadTurmas]",
-        error?.response?.data ??
-          error
+        error?.response?.data ?? error,
       );
 
       setTurmas([]);
     } finally {
       setTurmasLoading(false);
     }
-  }, [
-    rawToken,
-    professorId,
-    headers,
-  ]);
+  }, [rawToken, professorId, headers]);
 
   useEffect(() => {
     let cancel = false;
@@ -812,11 +787,18 @@ export default function PerfilProfessor({
       if (!rawToken) return;
 
       try {
-        const r = await axios.get(`${API.BASE_URL}/api/configuracoes-perfil/privacidade`, {
-          headers: { Authorization: `Bearer ${rawToken}` },
-        });
+        const r = await axios.get(
+          `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
+          {
+            headers: { Authorization: `Bearer ${rawToken}` },
+          },
+        );
 
-        const mostrarEmail = !!(r.data?.mostrarEmail ?? r.data?.email ?? r.data?.mostrar_email);
+        const mostrarEmail = !!(
+          r.data?.mostrarEmail ??
+          r.data?.email ??
+          r.data?.mostrar_email
+        );
         if (!cancel) setPrivacidade({ mostrarEmail });
       } catch {
         if (!cancel) setPrivacidade({ mostrarEmail: false });
@@ -838,26 +820,15 @@ export default function PerfilProfessor({
       void reloadTurmas();
     }
 
-    window.addEventListener(
-      "footera:turma-alterada",
-      atualizarTurmas
-    );
+    window.addEventListener("footera:turma-alterada", atualizarTurmas);
 
     return () => {
-      window.removeEventListener(
-        "footera:turma-alterada",
-        atualizarTurmas
-      );
+      window.removeEventListener("footera:turma-alterada", atualizarTurmas);
     };
   }, [reloadTurmas]);
 
   useEffect(() => {
-    if (
-      aba !== "atletas" ||
-      !rawToken ||
-      !canEdit ||
-      solicitacoes !== null
-    ) {
+    if (aba !== "atletas" || !rawToken || !canEdit || solicitacoes !== null) {
       return;
     }
 
@@ -867,18 +838,16 @@ export default function PerfilProfessor({
       try {
         const { data } = await axios.get<SolicitacaoItem[]>(
           `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
-          { headers }
+          { headers },
         );
 
         if (cancelado) return;
 
         const pendentes = (Array.isArray(data) ? data : []).filter(
           (solicitacao) =>
-            String(
-              solicitacao.status ?? "PENDENTE"
-            )
+            String(solicitacao.status ?? "PENDENTE")
               .toUpperCase()
-              .includes("PEND")
+              .includes("PEND"),
         );
 
         setSolicitacoes(pendentes);
@@ -892,20 +861,16 @@ export default function PerfilProfessor({
     return () => {
       cancelado = true;
     };
-  }, [
-    aba,
-    rawToken,
-    headers,
-    canEdit,
-    solicitacoes,
-  ]);
+  }, [aba, rawToken, headers, canEdit, solicitacoes]);
 
   const fetchVinculados = useCallback(async () => {
     if (!rawToken) return;
     const h = { Authorization: `Bearer ${rawToken}` };
 
-    const tipoId = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
-    const usuarioTarget = isOwn ? Storage.usuarioId : data?.usuario?.id;
+    const tipoId =
+      data?.professor?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+    const usuarioTarget =
+      data?.usuario?.id ?? (isOwn ? Storage.usuarioId : null);
 
     const candidates = [
       { professorId: tipoId, incluirPontuacao: 1 },
@@ -918,11 +883,16 @@ export default function PerfilProfessor({
     let lista: any[] = [];
     for (const params of candidates) {
       try {
-        const r = await axios.get(`${API.BASE_URL}/api/treinos/atletas-vinculados`, {
-          headers: h,
-          params,
-        });
-        const arr = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
+        const r = await axios.get(
+          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
+          {
+            headers: h,
+            params,
+          },
+        );
+        const arr = Array.isArray(r.data)
+          ? r.data
+          : (r.data?.items ?? r.data?.data ?? []);
         if (Array.isArray(arr) && arr.length) {
           lista = arr;
           break;
@@ -934,7 +904,12 @@ export default function PerfilProfessor({
       id: x.id ?? x.atletaId ?? x.usuarioId,
       usuarioId: x.usuarioId ?? x.userId ?? x.usuario?.id ?? null,
       atletaId: x.atletaId ?? x.atleta?.id ?? null,
-      nome: x.nome ?? x.usuario?.nome ?? x.atleta?.nome ?? x.nomeDeUsuario ?? "Atleta",
+      nome:
+        x.nome ??
+        x.usuario?.nome ??
+        x.atleta?.nome ??
+        x.nomeDeUsuario ??
+        "Atleta",
       foto: x.foto ?? x.usuario?.foto ?? x.atleta?.foto ?? null,
       posicao: x.posicao ?? x.atleta?.posicao ?? null,
       idade: x.idade ?? x.atleta?.idade ?? null,
@@ -958,22 +933,22 @@ export default function PerfilProfessor({
         try {
           const r2 = await axios.get(
             `${API.BASE_URL}/api/perfil/${encodeURIComponent(uid)}/pontuacao`,
-            { headers: h }
+            { headers: h },
           );
 
           const total = pickPontuacaoFromPerfilPontuacaoEndpoint(r2.data);
           return {
             ...a,
-            pontuacao: typeof total === "number" ? total : a.pontuacao ?? null,
+            pontuacao:
+              typeof total === "number" ? total : (a.pontuacao ?? null),
           };
         } catch {
           return a;
         }
-      })
+      }),
     );
 
     setVinculados(enriched);
-
   }, [rawToken, isOwn, data?.professor?.id, data?.usuario?.id]);
 
   useEffect(() => {
@@ -981,8 +956,10 @@ export default function PerfilProfessor({
     const cancel = { v: false };
 
     async function fetchObservados() {
-      const usuarioTarget = isOwn ? Storage.usuarioId : data?.usuario?.id;
-      const tipoId = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
+      const usuarioTarget =
+        data?.usuario?.id ?? (isOwn ? Storage.usuarioId : null);
+      const tipoId =
+        data?.professor?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
       const params: any = { incluirPontuacao: 1, incluirNotas: 1 };
       if (usuarioTarget) params.usuarioId = usuarioTarget;
       if (tipoId) params.tipoUsuarioId = tipoId;
@@ -990,7 +967,7 @@ export default function PerfilProfessor({
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/observados`,
-          { headers, params }
+          { headers, params },
         );
         const arr = Array.isArray(lista) ? lista : [];
         if (!cancel.v) {
@@ -1067,7 +1044,7 @@ export default function PerfilProfessor({
 
     const usuarioIdPerfil = isOwn
       ? usuarioIdStorage
-      : data?.usuario?.id ?? null;
+      : (data?.usuario?.id ?? null);
 
     if (!usuarioIdPerfil) {
       setCertificados([]);
@@ -1078,7 +1055,7 @@ export default function PerfilProfessor({
       try {
         const { data: resp } = await axios.get(
           `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioIdPerfil)}`,
-          { headers }
+          { headers },
         );
 
         const items = Array.isArray(resp?.items) ? resp.items : [];
@@ -1098,10 +1075,13 @@ export default function PerfilProfessor({
 
     (async () => {
       try {
-        const r = await axios.get(`${API.BASE_URL}/api/conquistas/certificados`, {
-          headers,
-          params: isOwn ? undefined : { usuarioId: idDaUrl },
-        });
+        const r = await axios.get(
+          `${API.BASE_URL}/api/conquistas/certificados`,
+          {
+            headers,
+            params: isOwn ? undefined : { usuarioId: idDaUrl },
+          },
+        );
 
         const items = Array.isArray(r.data?.items) ? r.data.items : [];
         setCertificados(items);
@@ -1121,14 +1101,9 @@ export default function PerfilProfessor({
 
     const parseOrg = (
       x: any,
-      tipoFallback?: "Escolinha" | "Clube"
+      tipoFallback?: "Escolinha" | "Clube",
     ): Organizacao => {
-      const tipo = String(
-        x.tipo ??
-        x.kind ??
-        tipoFallback ??
-        "Escolinha"
-      );
+      const tipo = String(x.tipo ?? x.kind ?? tipoFallback ?? "Escolinha");
 
       const fotoOrganizacao =
         x.clube?.logo ??
@@ -1147,12 +1122,7 @@ export default function PerfilProfessor({
         null;
 
       return {
-        id: String(
-          x.id ??
-          x.clube?.id ??
-          x.escolinha?.id ??
-          x.escola?.id
-        ),
+        id: String(x.id ?? x.clube?.id ?? x.escolinha?.id ?? x.escola?.id),
 
         usuarioId:
           x.usuarioId ??
@@ -1166,15 +1136,15 @@ export default function PerfilProfessor({
 
         nome: String(
           x.nome ??
-          x.clube?.nome ??
-          x.escolinha?.nome ??
-          x.escola?.nome ??
-          x.nomeEscolinha ??
-          x.nomeClube ??
-          x.nomeFantasia ??
-          x.razaoSocial ??
-          x.titulo ??
-          "Organização"
+            x.clube?.nome ??
+            x.escolinha?.nome ??
+            x.escola?.nome ??
+            x.nomeEscolinha ??
+            x.nomeClube ??
+            x.nomeFantasia ??
+            x.razaoSocial ??
+            x.titulo ??
+            "Organização",
         ),
 
         tipo: tipo as "Escolinha" | "Clube",
@@ -1186,11 +1156,19 @@ export default function PerfilProfessor({
     (async () => {
       try {
         const [disp, vinc] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/organizacoes/disponiveis`, { headers }),
-          axios.get(`${API.BASE_URL}/api/professores/${professorId}/vinculos`, { headers }),
+          axios.get(`${API.BASE_URL}/api/organizacoes/disponiveis`, {
+            headers,
+          }),
+          axios.get(`${API.BASE_URL}/api/professores/${professorId}/vinculos`, {
+            headers,
+          }),
         ]);
-        const d1 = Array.isArray(disp.data) ? disp.data : disp.data?.items ?? disp.data?.data ?? [];
-        const v1 = Array.isArray(vinc.data) ? vinc.data : vinc.data?.items ?? vinc.data?.data ?? [];
+        const d1 = Array.isArray(disp.data)
+          ? disp.data
+          : (disp.data?.items ?? disp.data?.data ?? []);
+        const v1 = Array.isArray(vinc.data)
+          ? vinc.data
+          : (vinc.data?.items ?? vinc.data?.data ?? []);
         setOrgsDisponiveis(d1.map((o: any) => parseOrg(o)));
         setOrgsVinculadas(v1.map((o: any) => parseOrg(o)));
       } catch {
@@ -1199,8 +1177,12 @@ export default function PerfilProfessor({
             axios.get(`${API.BASE_URL}/api/escolinhas`, { headers }),
             axios.get(`${API.BASE_URL}/api/clubes`, { headers }),
           ]);
-          const esA = Array.isArray(es.data) ? es.data : es.data?.items ?? es.data?.data ?? [];
-          const clA = Array.isArray(cl.data) ? cl.data : cl.data?.items ?? cl.data?.data ?? [];
+          const esA = Array.isArray(es.data)
+            ? es.data
+            : (es.data?.items ?? es.data?.data ?? []);
+          const clA = Array.isArray(cl.data)
+            ? cl.data
+            : (cl.data?.items ?? cl.data?.data ?? []);
           setOrgsDisponiveis([
             ...esA.map((x: any) => parseOrg(x, "Escolinha")),
             ...clA.map((x: any) => parseOrg(x, "Clube")),
@@ -1213,9 +1195,18 @@ export default function PerfilProfessor({
     })();
   }, [rawToken, headers, professorId]);
 
-  if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
+  if (loading)
+    return (
+      <div className="text-center p-10 text-green-800">
+        Carregando perfil...
+      </div>
+    );
   if (!data || !data.professor)
-    return <div className="text-center p-10 text-red-600">Professor não encontrado.</div>;
+    return (
+      <div className="text-center p-10 text-red-600">
+        Professor não encontrado.
+      </div>
+    );
 
   const nome = data.usuario?.nome || data.professor.nome;
   const emailDoPerfil = data.usuario?.email ? String(data.usuario.email) : "";
@@ -1226,12 +1217,15 @@ export default function PerfilProfessor({
 
   const time = data.professor.escola || "Professor";
 
-
   const unlockedIds = data.metrics.conquistasUnlocked ?? [];
-  const extraFromGrupos = (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
-  const unlockedFinal = Array.from(new Set([...unlockedIds, ...extraFromGrupos]));
+  const extraFromGrupos =
+    (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
+  const unlockedFinal = Array.from(
+    new Set([...unlockedIds, ...extraFromGrupos]),
+  );
   const conquistasCount = unlockedFinal.length;
-  const alunosCount = vinculados?.length ?? data.metrics.alunosRelacionados ?? 0;
+  const alunosCount =
+    vinculados?.length ?? data.metrics.alunosRelacionados ?? 0;
   const usuarioPerfilId =
     data.usuario?.id ||
     data.professor.usuarioId ||
@@ -1250,12 +1244,15 @@ export default function PerfilProfessor({
     if (!rawToken) return;
 
     const key = String(alvoUsuarioId);
-    const item = (observados ?? []).find((x) => String(x.usuarioId ?? x.atletaId ?? x.id) === key);
+    const item = (observados ?? []).find(
+      (x) => String(x.usuarioId ?? x.atletaId ?? x.id) === key,
+    );
     const idParaPatch =
       String(item?.observadoId ?? "").trim() ||
       String(item?.atletaId ?? "").trim() ||
       key;
     const ownerId =
+      data.professor.id ||
       Storage.tipoUsuarioId ||
       localStorage.getItem("tipoUsuarioId") ||
       sessionStorage.getItem("tipoUsuarioId") ||
@@ -1270,14 +1267,14 @@ export default function PerfilProfessor({
       setSalvandoNota((p) => ({ ...p, [key]: true }));
 
       await axios.patch(
-        `${API.BASE_URL}/api/observados/${encodeURIComponent(idParaPatch)}`, 
+        `${API.BASE_URL}/api/observados/${encodeURIComponent(idParaPatch)}`,
         {
-          ownerId,              
-          tipo,                 
+          ownerId,
+          tipo,
           notaInterna: notaPorAtleta[key] ?? "",
           alertarMudancas: !!notificarPorAtleta[key],
         },
-        { headers }
+        { headers },
       );
 
       setObservados((prev) =>
@@ -1289,7 +1286,7 @@ export default function PerfilProfessor({
             notaInterna: notaPorAtleta[key] ?? "",
             alertarMudancas: !!notificarPorAtleta[key],
           };
-        })
+        }),
       );
     } catch (e) {
       console.error(e);
@@ -1302,36 +1299,49 @@ export default function PerfilProfessor({
   async function enviarSolicitacaoOrganizacao(
     org: Organizacao | undefined,
     vinculoAtualId: string | null | undefined,
-    tipo: "escolinha" | "clube"
+    tipo: "escolinha" | "clube",
   ) {
     if (!rawToken || !professorId) return;
 
     try {
       if (!org) {
-        toast.error(`Selecione uma ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
+        toast.error(
+          `Selecione uma ${tipo === "escolinha" ? "escolinha" : "clube"}.`,
+        );
         return;
       }
 
       if (org.id === vinculoAtualId) {
-        toast.info(`Você já está vinculado a esse ${tipo === "escolinha" ? "escolinha" : "clube"}.`);
+        toast.info(
+          `Você já está vinculado a esse ${tipo === "escolinha" ? "escolinha" : "clube"}.`,
+        );
         return;
       }
 
       if (!org.usuarioId) {
-        toast.error(`${org.nome} não possui usuário vinculado para receber solicitação.`);
+        toast.error(
+          `${org.nome} não possui usuário vinculado para receber solicitação.`,
+        );
         return;
       }
 
       await axios.post(
         `${API.BASE_URL}/api/solicitacoes-treino`,
         { destinatarioId: org.usuarioId },
-        { headers }
+        { headers },
       );
 
-      toast.success(`Solicitação enviada para ${org.nome}. Aguarde a confirmação.`);
+      toast.success(
+        `Solicitação enviada para ${org.nome}. Aguarde a confirmação.`,
+      );
     } catch (e: any) {
-      console.error("[PerfilProfessor.enviarSolicitacaoOrganizacao]", e?.response?.data || e);
-      toast.error(e?.response?.data?.message || "Erro ao enviar solicitação de vínculo.");
+      console.error(
+        "[PerfilProfessor.enviarSolicitacaoOrganizacao]",
+        e?.response?.data || e,
+      );
+      toast.error(
+        e?.response?.data?.message || "Erro ao enviar solicitação de vínculo.",
+      );
     }
   }
 
@@ -1383,7 +1393,6 @@ export default function PerfilProfessor({
 
       {aba === "visao" && (
         <div className="mt-5 px-3 sm:px-4 grid gap-5 sm:gap-6">
-
           <SectionCard
             title="Informações do Professor"
             right={
@@ -1453,14 +1462,13 @@ export default function PerfilProfessor({
               </li>
             </ul>
           </SectionCard>
-          <SectionCard
-            title="Vínculos com Escolinha e Clube"
-            right={null}
-          >
+          <SectionCard title="Vínculos com Escolinha e Clube" right={null}>
             {canEdit ? (
               <div className="grid gap-5">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-green-900">Escolinha</label>
+                  <label className="text-sm font-medium text-green-900">
+                    Escolinha
+                  </label>
 
                   {escolinhaAtual && (
                     <button
@@ -1468,7 +1476,8 @@ export default function PerfilProfessor({
                       onClick={() => setEscolinhaSelecionada("")}
                       className="w-fit text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
                     >
-                      {escolinhaAtual.nome} <span className="ml-1 text-gray-500">×</span>
+                      {escolinhaAtual.nome}{" "}
+                      <span className="ml-1 text-gray-500">×</span>
                     </button>
                   )}
 
@@ -1491,29 +1500,44 @@ export default function PerfilProfessor({
                     </label>
 
                     {escolinhasDisponiveis.map((o) => (
-                      <label key={o.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                      <label
+                        key={o.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
                         <input
                           type="radio"
                           name="escolinhaVinculoProfessor"
                           checked={escolinhaSelecionada === o.id}
                           onChange={() => setEscolinhaSelecionada(o.id)}
                         />
-                        <Avatar foto={getOrgFoto(o)} alt={o.nome} className="w-7 h-7" />
+                        <Avatar
+                          foto={getOrgFoto(o)}
+                          alt={o.nome}
+                          className="w-7 h-7"
+                        />
                         <span className="text-sm">{o.nome}</span>
                       </label>
                     ))}
                   </div>
                   <button
-                      type="button"
-                      onClick={() => enviarSolicitacaoOrganizacao(escolinhaAtual, data?.professor?.escolinhaId, "escolinha")}
-                      className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
-                    >
-                      Solicitar vínculo com escolinha
-                    </button>
+                    type="button"
+                    onClick={() =>
+                      enviarSolicitacaoOrganizacao(
+                        escolinhaAtual,
+                        data?.professor?.escolinhaId,
+                        "escolinha",
+                      )
+                    }
+                    className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
+                  >
+                    Solicitar vínculo com escolinha
+                  </button>
                 </div>
 
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-green-900">Clube</label>
+                  <label className="text-sm font-medium text-green-900">
+                    Clube
+                  </label>
 
                   {clubeAtual && (
                     <button
@@ -1521,7 +1545,8 @@ export default function PerfilProfessor({
                       onClick={() => setClubeSelecionado("")}
                       className="w-fit text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
                     >
-                      {clubeAtual.nome} <span className="ml-1 text-gray-500">×</span>
+                      {clubeAtual.nome}{" "}
+                      <span className="ml-1 text-gray-500">×</span>
                     </button>
                   )}
 
@@ -1567,7 +1592,13 @@ export default function PerfilProfessor({
                   </div>
                   <button
                     type="button"
-                    onClick={() => enviarSolicitacaoOrganizacao(clubeAtual, data?.professor?.clubeId, "clube")}
+                    onClick={() =>
+                      enviarSolicitacaoOrganizacao(
+                        clubeAtual,
+                        data?.professor?.clubeId,
+                        "clube",
+                      )
+                    }
                     className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
                   >
                     Solicitar vínculo com clube
@@ -1575,8 +1606,8 @@ export default function PerfilProfessor({
                 </div>
 
                 <p className="text-xs text-green-900/70">
-                  Cada vínculo envia uma solicitação para a organização aceitar. Depois de aceito,
-                  ele ficará salvo no seu perfil.
+                  Cada vínculo envia uma solicitação para a organização aceitar.
+                  Depois de aceito, ele ficará salvo no seu perfil.
                 </p>
               </div>
             ) : (
@@ -1589,11 +1620,19 @@ export default function PerfilProfessor({
                       className="flex items-center justify-between rounded-xl border border-green-100 p-3 hover:bg-green-50"
                     >
                       <div className="flex items-center gap-3">
-                        <Avatar foto={getOrgFoto(o)} alt={o.nome} className="w-10 h-10" />
+                        <Avatar
+                          foto={getOrgFoto(o)}
+                          alt={o.nome}
+                          className="w-10 h-10"
+                        />
 
                         <div>
-                          <div className="text-sm font-medium text-green-900">{o.nome}</div>
-                          <div className="text-xs text-green-900/70">{o.tipo}</div>
+                          <div className="text-sm font-medium text-green-900">
+                            {o.nome}
+                          </div>
+                          <div className="text-xs text-green-900/70">
+                            {o.tipo}
+                          </div>
                         </div>
                       </div>
 
@@ -1601,7 +1640,9 @@ export default function PerfilProfessor({
                     </Link>
                   ))
                 ) : (
-                  <div className="text-sm text-green-900/70">Nenhum vínculo público.</div>
+                  <div className="text-sm text-green-900/70">
+                    Nenhum vínculo público.
+                  </div>
                 )}
               </div>
             )}
@@ -1621,7 +1662,9 @@ export default function PerfilProfessor({
             }
           >
             {turmasLoading ? (
-              <div className="text-sm text-green-900/70">Carregando turmas…</div>
+              <div className="text-sm text-green-900/70">
+                Carregando turmas…
+              </div>
             ) : turmas && turmas.length > 0 ? (
               <ul className="grid grid-cols-1 gap-3">
                 {turmas.map((t) => (
@@ -1630,15 +1673,22 @@ export default function PerfilProfessor({
                     className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-green-100 p-3 sm:p-4"
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-green-900">{t.nome}</div>
+                      <div className="text-sm font-medium text-green-900">
+                        {t.nome}
+                      </div>
                       <div className="text-xs text-green-900/70">
                         {t.categoria ? `Cat. ${t.categoria}` : "Sem categoria"}
                         {" • "}
-                        {typeof t.alunosCount === "number" ? `${t.alunosCount} alunos` : "—"}
+                        {typeof t.alunosCount === "number"
+                          ? `${t.alunosCount} alunos`
+                          : "—"}
                       </div>
                       <div className="text-xs text-green-900/70 mt-0.5">
                         <b>Professores:</b>{" "}
-                        {t.professorNome || (t.professorNomes?.length ? t.professorNomes.join(", ") : "—")}
+                        {t.professorNome ||
+                          (t.professorNomes?.length
+                            ? t.professorNomes.join(", ")
+                            : "—")}
                       </div>
                     </div>
 
@@ -1665,7 +1715,9 @@ export default function PerfilProfessor({
                 </button>
               </div>
             ) : (
-              <div className="text-sm text-green-900/70">Nenhuma turma pública cadastrada.</div>
+              <div className="text-sm text-green-900/70">
+                Nenhuma turma pública cadastrada.
+              </div>
             )}
           </SectionCard>
 
@@ -1696,7 +1748,9 @@ export default function PerfilProfessor({
                         {t.nome}{" "}
                         <span
                           className={`text-xs ${
-                            t.papel === "Criador" ? "text-green-700" : "text-slate-600"
+                            t.papel === "Criador"
+                              ? "text-green-700"
+                              : "text-slate-600"
                           }`}
                         >
                           ({t.papel})
@@ -1707,7 +1761,9 @@ export default function PerfilProfessor({
                         {new Date(t.criadoEm).toLocaleString()}
                         {t.categoria ? ` • Cat. ${t.categoria}` : ""}
                         {t.nivel ? ` • ${t.nivel}` : ""}
-                        {typeof t.alunos === "number" ? ` • ${t.alunos} alunos` : ""}
+                        {typeof t.alunos === "number"
+                          ? ` • ${t.alunos} alunos`
+                          : ""}
                       </div>
                     </div>
                   </li>
@@ -1756,9 +1812,7 @@ export default function PerfilProfessor({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() =>
-                    setSubAba(item.id as SubAba)
-                  }
+                  onClick={() => setSubAba(item.id as SubAba)}
                   className={`
                     min-w-0 py-2 px-2 rounded-lg
                     text-sm font-medium
@@ -1771,9 +1825,7 @@ export default function PerfilProfessor({
                   `}
                 >
                   <span className="inline-flex items-center justify-center gap-1.5">
-                    <span className="truncate">
-                      {item.label}
-                    </span>
+                    <span className="truncate">{item.label}</span>
 
                     <span
                       className={`
@@ -1816,9 +1868,7 @@ export default function PerfilProfessor({
                     <ul className="grid grid-cols-1 gap-3">
                       {vinculadosVisiveis.map((atleta) => {
                         const perfilId =
-                          atleta.usuarioId ??
-                          atleta.atletaId ??
-                          atleta.id;
+                          atleta.usuarioId ?? atleta.atletaId ?? atleta.id;
 
                         return (
                           <li
@@ -1857,8 +1907,7 @@ export default function PerfilProfessor({
                             </div>
 
                             <div className="flex items-center justify-between gap-3 sm:justify-end">
-                              {typeof atleta.pontuacao ===
-                                "number" && (
+                              {typeof atleta.pontuacao === "number" && (
                                 <span
                                   className="
                                     rounded border border-green-200
@@ -1893,9 +1942,7 @@ export default function PerfilProfessor({
                         <button
                           type="button"
                           onClick={() =>
-                            setMostrarTodosVinculados(
-                              (valor) => !valor
-                            )
+                            setMostrarTodosVinculados((valor) => !valor)
                           }
                           className="
                             rounded-lg border border-green-200
@@ -1937,10 +1984,7 @@ export default function PerfilProfessor({
                 title="Atletas Observados"
                 right={
                   canEdit ? (
-                    <Link
-                      href="/explorar"
-                      className="text-sm text-green-800"
-                    >
+                    <Link href="/explorar" className="text-sm text-green-800">
                       Descobrir novos atletas
                     </Link>
                   ) : null
@@ -1950,9 +1994,7 @@ export default function PerfilProfessor({
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((atleta) => {
                       const key = String(
-                        atleta.usuarioId ??
-                          atleta.atletaId ??
-                          atleta.id
+                        atleta.usuarioId ?? atleta.atletaId ?? atleta.id,
                       );
 
                       return (
@@ -1996,8 +2038,7 @@ export default function PerfilProfessor({
                             </div>
 
                             <div className="flex items-center justify-between gap-3 sm:justify-end">
-                              {typeof atleta.pontuacao ===
-                                "number" && (
+                              {typeof atleta.pontuacao === "number" && (
                                 <span
                                   className="
                                     rounded border border-green-200
@@ -2053,35 +2094,25 @@ export default function PerfilProfessor({
                                 <input
                                   type="checkbox"
                                   className="mt-0.5"
-                                  checked={
-                                    !!notificarPorAtleta[key]
-                                  }
+                                  checked={!!notificarPorAtleta[key]}
                                   onChange={(event) => {
-                                    setNotificarPorAtleta(
-                                      (anterior) => ({
-                                        ...anterior,
-                                        [key]:
-                                          event.target.checked,
-                                      })
-                                    );
+                                    setNotificarPorAtleta((anterior) => ({
+                                      ...anterior,
+                                      [key]: event.target.checked,
+                                    }));
                                   }}
                                 />
 
                                 <span>
-                                  Notificar mudanças
-                                  (pontuação, posição, idade,
+                                  Notificar mudanças (pontuação, posição, idade,
                                   novos treinos/desafios)
                                 </span>
                               </label>
 
                               <button
                                 type="button"
-                                onClick={() =>
-                                  salvarNotaInterna(key)
-                                }
-                                disabled={
-                                  !!salvandoNota[key]
-                                }
+                                onClick={() => salvarNotaInterna(key)}
+                                disabled={!!salvandoNota[key]}
                                 className="
                                   mt-3 inline-flex items-center
                                   justify-center rounded-xl
@@ -2090,9 +2121,7 @@ export default function PerfilProfessor({
                                   disabled:opacity-60
                                 "
                               >
-                                {salvandoNota[key]
-                                  ? "Salvando..."
-                                  : "Salvar"}
+                                {salvandoNota[key] ? "Salvando..." : "Salvar"}
                               </button>
                             </div>
                           )}
@@ -2110,26 +2139,19 @@ export default function PerfilProfessor({
               <SectionCard
                 title="Solicitações de Atletas"
                 right={
-                  <Link
-                    href="/notificacoes"
-                    className="text-sm text-green-800"
-                  >
+                  <Link href="/notificacoes" className="text-sm text-green-800">
                     Abrir notificações
                   </Link>
                 }
               >
-                {solicitacoes &&
-                solicitacoes.length > 0 ? (
+                {solicitacoes && solicitacoes.length > 0 ? (
                   <ul className="space-y-3">
                     {solicitacoes.map((solicitacao) => {
                       const nomeRemetente =
-                        solicitacao.remetente
-                          ?.nomeDeUsuario ||
-                        "Usuário";
+                        solicitacao.remetente?.nomeDeUsuario || "Usuário";
 
                       const perfilRemetenteId =
-                        solicitacao.remetente
-                          ?.usuarioId ||
+                        solicitacao.remetente?.usuarioId ||
                         solicitacao.remetenteId;
 
                       return (
@@ -2146,10 +2168,7 @@ export default function PerfilProfessor({
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <Avatar
-                              foto={
-                                solicitacao.remetente
-                                  ?.foto ?? null
-                              }
+                              foto={solicitacao.remetente?.foto ?? null}
                               alt={nomeRemetente}
                               className="w-10 h-10 shrink-0"
                             />
@@ -2297,7 +2316,7 @@ export default function PerfilProfessor({
                           <span className="rounded-full border border-green-200 bg-green-50 px-2 py-1 text-[11px] text-green-900">
                             {String(evento.status || "Evento").replaceAll(
                               "_",
-                              " "
+                              " ",
                             )}
                           </span>
                           <ChevronRight className="h-4 w-4 text-green-700" />
@@ -2313,9 +2332,7 @@ export default function PerfilProfessor({
           </SectionCard>
 
           {usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection
-              creatorUsuarioId={usuarioCreatorDoPerfil}
-            />
+            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
           ) : null}
         </div>
       )}
@@ -2325,7 +2342,10 @@ export default function PerfilProfessor({
           <SectionCard
             title="Conquistas e Troféus"
             right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+              <Link
+                href="/perfil/conquistas"
+                className="text-sm text-green-800"
+              >
                 Ver conquistas
               </Link>
             }
@@ -2335,9 +2355,14 @@ export default function PerfilProfessor({
                 {unlockedFinal.map((id) => {
                   const a = ACHIEVEMENTS[id] ?? { title: id, desc: "" };
                   return (
-                    <div key={id} className="rounded-xl p-4 border border-green-100 text-center">
+                    <div
+                      key={id}
+                      className="rounded-xl p-4 border border-green-100 text-center"
+                    >
                       <Trophy className="mx-auto mb-2" />
-                      <div className="text-sm font-medium text-green-900">{a.title}</div>
+                      <div className="text-sm font-medium text-green-900">
+                        {a.title}
+                      </div>
                       <div className="text-xs text-green-900/70">{a.desc}</div>
                       {a.tier && (
                         <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
@@ -2357,9 +2382,14 @@ export default function PerfilProfessor({
             {certificados && certificados.length > 0 ? (
               <div className="flex items-center justify-between">
                 <div className="text-green-900 font-medium">
-                  {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                  {certificados.length} certificado
+                  {certificados.length > 1 ? "s" : ""} emitido
+                  {certificados.length > 1 ? "s" : ""}
                 </div>
-                <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                <Link
+                  href="/perfil/conquistas"
+                  className="text-sm text-green-800"
+                >
                   Ver certificados
                 </Link>
               </div>
@@ -2381,7 +2411,7 @@ export default function PerfilProfessor({
       <TurmasManager
         open={turmasOpen && canEdit}
         onClose={handleCloseTurmas}
-        professorId={professorId} 
+        professorId={professorId}
         mostrarTodasDoProfessor
       />
       <div className="h-6" />
