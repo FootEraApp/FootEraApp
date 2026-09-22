@@ -64,8 +64,6 @@ const DEEP_LINK_PATHS = [
   /^\/metodologia\/[^/]+\/?$/i,
   /^\/desafio\/[^/]+\/?$/i,
   /^\/join\/[^/]+\/?$/i,
-
-  // Compatibilidade com links antigos
   /^\/perfil\/[^/]+\/?$/i,
   /^\/eventos\/[^/]+\/?$/i,
   /^\/metodologias\/[^/]+\/?$/i,
@@ -88,8 +86,7 @@ export function deepLinkPathFromUrl(
       url.hostname.toLowerCase();
 
     if (
-      host !== "footera.app.br" &&
-      host !== "www.footera.app.br"
+      host !== "footera.app.br"
     ) {
       return null;
     }

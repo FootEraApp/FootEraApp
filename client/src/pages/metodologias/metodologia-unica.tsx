@@ -5,8 +5,9 @@ import { ArrowLeft, Lock, CheckCircle2, Star, Share2 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
-import PublicShareModal from "../../components/share/PublicShareModal.js";
-
+import PublicShareModal, {
+  type PapelDestinatario,
+} from "../../components/share/PublicShareModal.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
@@ -212,6 +213,40 @@ function Stars({ value }: { value: number }) {
       })}
     </div>
   );
+}
+
+function papeisDestinoMetodologia(
+  publicoAlvo?: string | null
+): PapelDestinatario[] {
+  const alvo =
+    String(
+      publicoAlvo ||
+        "AMBOS"
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    alvo === "ATLETAS"
+  ) {
+    return [
+      "Atleta",
+    ];
+  }
+
+  if (
+    alvo ===
+    "PROFISSIONAIS"
+  ) {
+    return [
+      "Professor",
+    ];
+  }
+
+  return [
+    "Atleta",
+    "Professor",
+  ];
 }
 
 export default function MetodologiaUnicaPage() {
@@ -1438,6 +1473,11 @@ export default function MetodologiaUnicaPage() {
         path={PUBLIC_PATHS.metodologia(
           data.id
         )}
+        destinatarioPapeis={
+          papeisDestinoMetodologia(
+            data.publicoAlvo
+          )
+        }
       />
 
       {playerOpen && playerItem && (
