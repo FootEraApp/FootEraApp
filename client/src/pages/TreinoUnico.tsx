@@ -268,8 +268,6 @@ export default function TreinoUnico() {
               }
             );
 
-          // Se houver um token antigo/inválido,
-          // a página continua podendo ser vista como visitante.
           if (
             res.status === 401 &&
             token
@@ -1012,6 +1010,7 @@ export default function TreinoUnico() {
               path={PUBLIC_PATHS.treino(
                 treinoPublicoId
               )}
+              destinatarioPapel="Atleta"
             />
           )}
         </div>

@@ -7,8 +7,6 @@ import {
   Edit,
   Bell,
   Mail,
-  CircleX,
-  CircleCheck,
   Send,
   Eye,
   UserPlus,
@@ -171,6 +169,10 @@ export default function ProfileHeader({
   const [perfilTipo, setPerfilTipo] = useState<string | null>(perfilTipoProp ?? null);
   const [perfilTipoId, setPerfilTipoId] = useState<string | null>(perfilTipoIdProp ?? null);
   const [checouVinculo, setChecouVinculo] = useState(false);
+  const [
+    vinculoRefreshKey,
+    setVinculoRefreshKey,
+  ] = useState(0);
   const [presenceOnline, setPresenceOnline] = useState<boolean | null>(null);
   const [presenceLastSeenAt, setPresenceLastSeenAt] = useState<string | null>(null);
   const [presencePrivacyBlocked, setPresencePrivacyBlocked] = useState<boolean>(false);
@@ -487,75 +489,98 @@ export default function ProfileHeader({
   };
 }, [perfilId, isOwnProfile, isMe]);
 
-useEffect(() => {
-  if (isOwnProfile || isMe) return;
+  useEffect(() => {
+    if (isOwnProfile || isMe) return;
 
-  const token =
-    Storage.token ||
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    "";
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
 
-  const usuarioAlvoId = String(perfilId || "").trim();
+    const usuarioAlvoId = String(perfilId || "").trim();
 
-  if (!token || !usuarioAlvoId) return;
+    if (!token || !usuarioAlvoId) return;
 
-  setChecouVinculo(false);
-  setTemVinculoTreino(false);
-
-  if (!alvoTipoNormGlobal || !viewerTipoNorm) return;
-
-  if (!podeChecarVinculo) {
+    setChecouVinculo(false);
     setTemVinculoTreino(false);
-    setChecouVinculo(true);
-    return;
-  }
 
-  let alive = true;
-
-  (async () => {
-    try {
-      const qs = new URLSearchParams({ usuarioAlvoId }).toString();
-      const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
-
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!alive) return;
-
-      if (!resp.ok) {
-        setTemVinculoTreino(false);
-        setChecouVinculo(true);
-        return;
-      }
-
-      const body = await resp.json().catch(() => null as any);
-
-      const vinculo = Boolean(
-        body?.vinculo === true || body?.relacao || body?.relacaoId
+    if (
+      !alvoTipoNormGlobal ||
+      !viewerTipoNorm
+    ) {
+      setTemVinculoTreino(
+        false
       );
 
-      setTemVinculoTreino(vinculo);
-      setChecouVinculo(true);
-    } catch {
-      if (!alive) return;
+      setChecouVinculo(
+        true
+      );
+
+      return;
+    }
+
+    if (!podeChecarVinculo) {
       setTemVinculoTreino(false);
       setChecouVinculo(true);
+      return;
     }
-  })();
 
-  return () => {
-    alive = false;
-  };
-}, [
-  perfilId,
-  isOwnProfile,
-  isMe,
-  viewerTipoNorm,
-  alvoTipoNormGlobal,
-  podeChecarVinculo,
-]);
+    let alive = true;
+
+    (async () => {
+      try {
+        const qs =
+          new URLSearchParams({
+            usuarioAlvoId,
+
+            meuPapel:
+              viewerTipoNorm,
+
+            alvoPapel:
+              alvoTipoNormGlobal,
+          }).toString();
+        const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
+
+        const resp = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!alive) return;
+
+        if (!resp.ok) {
+          setTemVinculoTreino(false);
+          setChecouVinculo(true);
+          return;
+        }
+
+        const body = await resp.json().catch(() => null as any);
+
+        const vinculo = Boolean(
+          body?.vinculo === true || body?.relacao || body?.relacaoId
+        );
+
+        setTemVinculoTreino(vinculo);
+        setChecouVinculo(true);
+      } catch {
+        if (!alive) return;
+        setTemVinculoTreino(false);
+        setChecouVinculo(true);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    perfilId,
+    isOwnProfile,
+    isMe,
+    viewerTipoNorm,
+    alvoTipoNormGlobal,
+    podeChecarVinculo,
+    vinculoRefreshKey,
+  ]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -1147,8 +1172,28 @@ useEffect(() => {
 
         const statusJson = statusResp.ok ? await statusResp.json().catch(() => null) : null;
 
-        setSeguindo(Boolean(statusJson?.seguindo || isSeguindo));
-        setFollowPendente(Boolean(statusJson?.pendente && !statusJson?.seguindo));
+        const agoraSegue =
+          Boolean(
+            statusJson?.seguindo ||
+              isSeguindo
+          );
+
+        setSeguindo(
+          agoraSegue
+        );
+
+        setFollowPendente(
+          false
+        );
+
+        if (cacheKey) {
+          localStorage.setItem(
+            cacheKey,
+            agoraSegue
+              ? "1"
+              : "0"
+          );
+        }
 
         if (cacheKey) localStorage.setItem(cacheKey, isSeguindo ? "1" : "0");
       } catch {
@@ -1209,20 +1254,24 @@ useEffect(() => {
 
   useEffect(() => {
     function onVinculoAlterado() {
-      setChecouVinculo(false);
-      setTemVinculoTreino(false);
-      setTreinoJunto(false);
-      setSouSolicitanteTreino(null);
-      localStorage.removeItem(storageKey);
-      setSolicitacaoTreinoRecebidaId(null);
+      setVinculoRefreshKey(
+        (valor) =>
+          valor + 1
+      );
     }
 
-    window.addEventListener("footera:vinculo-treino-alterado", onVinculoAlterado);
+    window.addEventListener(
+      "footera:vinculo-treino-alterado",
+      onVinculoAlterado
+    );
 
     return () => {
-      window.removeEventListener("footera:vinculo-treino-alterado", onVinculoAlterado);
+      window.removeEventListener(
+        "footera:vinculo-treino-alterado",
+        onVinculoAlterado
+      );
     };
-  }, [storageKey]);
+  }, []);
 
   useEffect(() => {
     if (!alvoUsuarioIdFavorito) return;
@@ -1333,9 +1382,20 @@ useEffect(() => {
     });
 
     if (resp.ok) {
-      toast.success("Solicitação enviada. Aguarde a pessoa aceitar.");
-      setFollowPendente(true);
-      setSeguindo(false);
+      setSeguindo(true);
+      setFollowPendente(false);
+
+      if (cacheKey) {
+        localStorage.setItem(
+          cacheKey,
+          "1"
+        );
+      }
+
+      toast.success(
+        `Agora você está seguindo ${nome}.`
+      );
+
       return true;
     }
 
@@ -1439,27 +1499,41 @@ useEffect(() => {
       return;
     }
 
-    if (followPendente) {
-      toast.success("Solicitação já enviada. Aguarde a pessoa aceitar.");
-      return;
-    }
-
     if (seguindo) {
-      const ok = await deixarDeSeguir(perfilId);
+      const confirmar =
+        window.confirm(
+          `Deseja parar de seguir ${nome}?`
+        );
+
+      if (!confirmar) {
+        return;
+      }
+
+      const ok =
+        await deixarDeSeguir(
+          perfilId
+        );
+
       if (ok) {
         setSeguindo(false);
         setFollowPendente(false);
-        if (cacheKey) localStorage.setItem(cacheKey, "0");
+
+        if (cacheKey) {
+          localStorage.setItem(
+            cacheKey,
+            "0"
+          );
+        }
+
+        toast.success(
+          `Você parou de seguir ${nome}.`
+        );
       }
+
       return;
     }
 
-    const ok = await seguirUsuario();
-    if (ok) {
-      setSeguindo(false);
-      setFollowPendente(true);
-      if (cacheKey) localStorage.setItem(cacheKey, "0");
-    }
+    await seguirUsuario();
   };
 
   const solicitarTreino = async (): Promise<boolean> => {
@@ -1475,7 +1549,16 @@ useEffect(() => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ destinatarioId: perfilId }),
+      body: JSON.stringify({
+        destinatarioId:
+          perfilId,
+
+        remetentePapel:
+          viewerTipoNorm,
+
+        destinatarioPapel:
+          alvoTipoNormGlobal,
+      }),
     });
 
     if (resp.ok) {
@@ -1526,6 +1609,12 @@ useEffect(() => {
         body: JSON.stringify({
           usuarioAlvoId:
             perfilId,
+
+          meuPapel:
+            viewerTipoNorm,
+
+          alvoPapel:
+            alvoTipoNormGlobal,
         }),
       }
     );
@@ -1555,75 +1644,81 @@ useEffect(() => {
       ) {
         return;
       }
-    if (temVinculoTreino) {
-      const confirmar = window.confirm(
-        `Tem certeza que deseja desvincular de ${nome}?`
+
+      if (
+        temVinculoTreino
+      ) {
+        const confirmar =
+          window.confirm(
+            `Deseja parar de treinar junto com ${nome}?`
+          );
+
+        if (!confirmar) {
+          return;
+        }
+
+        const ok =
+          await desvincularTreino();
+
+        if (!ok) {
+          toast.error(
+            "Não foi possível encerrar o vínculo agora."
+          );
+
+          return;
+        }
+
+        setTemVinculoTreino(
+          false
+        );
+
+        setChecouVinculo(
+          true
+        );
+
+        toast.success(
+          `Você não treina mais junto com ${nome}.`
+        );
+
+        avisarVinculoAlterado();
+
+        return;
+      }
+
+      const confirmar =
+        window.confirm(
+          `Deseja começar a treinar junto com ${nome}?`
+        );
+
+      if (!confirmar) {
+        return;
+      }
+
+      const ok =
+        await solicitarTreino();
+
+      if (!ok) {
+        toast.error(
+          "Não foi possível criar o vínculo agora."
+        );
+
+        return;
+      }
+
+      setTemVinculoTreino(
+        true
       );
 
-      if (!confirmar) return;
+      setChecouVinculo(
+        true
+      );
 
-      const ok = await desvincularTreino();
+      toast.success(
+        `Agora você treina junto com ${nome}.`
+      );
 
-      if (ok) {
-        setTemVinculoTreino(false);
-        setTreinoJunto(false);
-        setSouSolicitanteTreino(null);
-        localStorage.removeItem(storageKey);
-        avisarVinculoAlterado();
-      } else {
-        toast.error("Não foi possível desvincular agora.");
-      }
-
-      return;
-    }
-
-    if (treinoJunto && souSolicitanteTreino) {
-      const confirmar = window.confirm("Deseja cancelar a solicitação de treino?");
-      if (!confirmar) return;
-
-      const ok = await cancelarSolicitacaoTreino(perfilId);
-      if (ok) {
-        setTreinoJunto(false);
-        setSouSolicitanteTreino(null);
-        localStorage.removeItem(storageKey);
-        avisarVinculoAlterado();
-      }
-      return;
-    }
-
-    if (
-      treinoJunto &&
-      souSolicitanteTreino ===
-        false
-    ) {
-      const destino =
-        solicitacaoTreinoRecebidaId
-          ? `/notificacoes?solicitacaoId=${encodeURIComponent(
-              solicitacaoTreinoRecebidaId
-            )}`
-          : "/notificacoes";
-
-      window.location.href =
-        destino;
-
-      return;
-    }
-
-    const confirmar = window.confirm(
-      `Tem certeza que deseja criar vínculo de treino com ${nome}?`
-    );
-
-    if (!confirmar) return;
-
-    const ok = await solicitarTreino();
-
-    if (ok) {
-      setTreinoJunto(true);
-      setSouSolicitanteTreino(true);
-      localStorage.setItem(storageKey, "1");
       avisarVinculoAlterado();
-    }
-  };
+    };
 
   const observarAtleta = async (
     id: string
@@ -1766,26 +1861,32 @@ useEffect(() => {
     podeChecarVinculo;
 
 
-  let treinoLabel = "Treinar juntos";
-  let treinoTitle = "Solicitar treino em conjunto";
-  let treinoBtnClass = temVinculoTreino
-    ? "bg-white/10 text-white border border-white/40"
-    : "bg-green-400 text-green-900";
+  let treinoLabel =
+    "Treinar juntos";
+
+  let treinoTitle =
+    "Criar vínculo de treino";
+
+  let treinoBtnClass =
+    "bg-green-400 text-green-900";
 
   if (treinoLoading) {
-    treinoLabel = "...";
-    treinoTitle = "Carregando...";
-  } else if (temVinculoTreino) {
-    treinoLabel = "Já treino junto";
-    treinoTitle = "Vocês já possuem vínculo de treinamento";
-  } else if (treinoJunto && souSolicitanteTreino) {
-    treinoLabel = "Solicitação enviada";
-    treinoTitle = "Cancelar solicitação de treino em conjunto";
-    treinoBtnClass = "bg-white/10 text-white border border-white/40";
-  } else if (treinoJunto && souSolicitanteTreino === false) {
-    treinoLabel = "Responder convite";
-    treinoTitle = "Você recebeu um convite para treinar junto";
-    treinoBtnClass = "bg-amber-300 text-green-900";
+    treinoLabel =
+      "...";
+
+    treinoTitle =
+      "Carregando...";
+  } else if (
+    temVinculoTreino
+  ) {
+    treinoLabel =
+      "Já treino junto";
+
+    treinoTitle =
+      "Clique para encerrar o vínculo de treino";
+
+    treinoBtnClass =
+      "bg-white/10 text-white border border-white/40";
   }
 
   const onlineText = (() => {
@@ -1967,7 +2068,7 @@ useEffect(() => {
               aria-pressed={!!seguindo}
               onClick={toggleSeguir}
               className={`${btnBase} ${
-                seguindo || followPendente
+                seguindo
                   ? "bg-white/10 text-white border border-white/40"
                   : "bg-green-600 text-green-900"
               } 
@@ -1978,8 +2079,6 @@ useEffect(() => {
                   ? "Carregando..."
                   : seguindo
                   ? "Deixar de seguir"
-                  : followPendente
-                  ? "Solicitação enviada"
                   : "Seguir"
               }
             >
@@ -1989,8 +2088,6 @@ useEffect(() => {
                   ? "..."
                   : seguindo
                   ? "Seguindo"
-                  : followPendente
-                  ? "Solicitação enviada"
                   : "Seguir"}
               </span>
             </button>
@@ -2037,7 +2134,9 @@ useEffect(() => {
             {mostrarTreinarJuntos && (
               <button
                 disabled={treinoDisabled}
-                aria-pressed={!!(temVinculoTreino || treinoJunto)}
+                aria-pressed={
+                  !!temVinculoTreino
+                }
                 onClick={toggleTreino}
                 className={`${btnBase} ${treinoBtnClass}
                       disabled:opacity-60 disabled:cursor-not-allowed

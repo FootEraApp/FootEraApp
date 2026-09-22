@@ -1,4 +1,3 @@
-//C:\Users\carol\OneDrive\Documentos\Estagio Footera\footera_final\FootEraApp\client\src\pages\TurmaDetalhe.tsx
 import {
   useCallback,
   useEffect,
@@ -538,6 +537,7 @@ export default function TurmaDetalhe() {
               path={PUBLIC_PATHS.turma(
                 turma.id
               )}
+              destinatarioPapel="Atleta"
             />
           )}
 

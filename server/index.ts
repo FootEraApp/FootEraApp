@@ -83,6 +83,7 @@ import rankingRoutes from "./routes/ranking.js";
 import seguirRoutes from "./routes/seguir.js";
 import rotaSeguidorMutuo from "./routes/seguidorMutuo.js";
 import solicitacaoTreinoRoutes from "./routes/solicitacaoTreino.js";
+import convitesRoutes from "./routes/convites.js";
 import submissoesRoutes from "./routes/submissoes.js";
 import termoRoutes from "./routes/termo.js";
 import treinoRoutes from "./routes/treinos.js";
@@ -351,6 +352,10 @@ app.use(
 );
 
 app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
+app.use(
+  "/api/convites",
+  convitesRoutes
+);
 app.use("/api/submissoes", authenticateToken, submissoesRoutes);
 app.use("/api/treinos", treinoRoutes);
 app.use("/api/treino-unico", treinoUnicoRoutes);

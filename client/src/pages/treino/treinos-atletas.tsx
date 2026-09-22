@@ -905,149 +905,149 @@ useEffect(() => {
   }
 
   async function carregarCatalogoExercicios() {
-  try {
-    const token = getToken();
-    if (!token) return;
+    try {
+      const token = getToken();
+      if (!token) return;
 
-    const r = await fetch(`${API.BASE_URL}/api/exercicios`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      const r = await fetch(`${API.BASE_URL}/api/exercicios`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    if (!r.ok) return;
+      if (!r.ok) return;
 
-    const js = await r.json();
-    const arr: any[] = Array.isArray(js) ? js : js.items ?? js.exercicios ?? [];
+      const js = await r.json();
+      const arr: any[] = Array.isArray(js) ? js : js.items ?? js.exercicios ?? [];
 
-    const mapa: Record<string, { video?: string | null; img?: string | null }> = {};
-    for (const ex of arr) {
-      const key = normNome(ex?.nome);
-      if (!key) continue;
+      const mapa: Record<string, { video?: string | null; img?: string | null }> = {};
+      for (const ex of arr) {
+        const key = normNome(ex?.nome);
+        if (!key) continue;
 
-      mapa[key] = {
-        video: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
-        img: ex?.imgDemonstrativaUrl ?? ex?.imagemUrl ?? null,
-      };
+        mapa[key] = {
+          video: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
+          img: ex?.imgDemonstrativaUrl ?? ex?.imagemUrl ?? null,
+        };
+      }
+
+      setMidiaPorNomeExercicio(mapa);
+    } catch (e) {
+      console.warn("[TREINOS] falha ao carregar catálogo de exercícios:", e);
+    }
+  }
+
+  useEffect(() => {
+    if (
+      !openAgendadoId &&
+      !openAgendadoByProgramadoId
+    ) {
+      return;
     }
 
-    setMidiaPorNomeExercicio(mapa);
-  } catch (e) {
-    console.warn("[TREINOS] falha ao carregar catálogo de exercícios:", e);
-  }
-}
-
-useEffect(() => {
-  if (
-    !openAgendadoId &&
-    !openAgendadoByProgramadoId
-  ) {
-    return;
-  }
-
-  if (
-    !treinosAgendados.length
-  ) {
-    return;
-  }
-
-  const alvo =
-    openAgendadoId
-      ? treinosAgendados.find(
-          (t) =>
-            String(t?.id || "") ===
-            String(
-              openAgendadoId
-            )
-        )
-      : treinosAgendados.find(
-          (t) =>
-            String(
-              t?.treinoProgramado
-                ?.id || ""
-            ) ===
-            String(
-              openAgendadoByProgramadoId
-            )
-        );
-
-  if (!alvo?.id) {
-    return;
-  }
-
-  if (
-    qsMetodologiaId &&
-    qsEstruturaId &&
-    qsMetodologiaItemId
-  ) {
-    localStorage.setItem(
-      METODOLOGIA_LINK_KEY(
-        alvo.id
-      ),
-      JSON.stringify({
-        metodologiaId:
-          qsMetodologiaId,
-
-        estruturaId:
-          qsEstruturaId,
-
-        metodologiaItemId:
-          qsMetodologiaItemId,
-      })
-    );
-  }
-
-  setExpandedId(
-    alvo.id
-  );
-
-  setFullscreenId(
-    alvo.id
-  );
-
-  const next =
-    new URLSearchParams(
-      window.location.search
-    );
-
-  next.delete(
-    "openAgendadoId"
-  );
-
-  next.delete(
-    "openAgendadoByProgramadoId"
-  );
-
-  next.delete(
-    "metodologiaId"
-  );
-
-  next.delete(
-    "estruturaId"
-  );
-
-  next.delete(
-    "metodologiaItemId"
-  );
-
-  const nextQs =
-    next.toString();
-
-  navigate(
-    nextQs
-      ? `/treinos?${nextQs}`
-      : "/treinos",
-    {
-      replace: true,
+    if (
+      !treinosAgendados.length
+    ) {
+      return;
     }
-  );
-}, [
-  openAgendadoId,
-  openAgendadoByProgramadoId,
-  treinosAgendados,
-  qsMetodologiaId,
-  qsEstruturaId,
-  qsMetodologiaItemId,
-  navigate,
-]);
+
+    const alvo =
+      openAgendadoId
+        ? treinosAgendados.find(
+            (t) =>
+              String(t?.id || "") ===
+              String(
+                openAgendadoId
+              )
+          )
+        : treinosAgendados.find(
+            (t) =>
+              String(
+                t?.treinoProgramado
+                  ?.id || ""
+              ) ===
+              String(
+                openAgendadoByProgramadoId
+              )
+          );
+
+    if (!alvo?.id) {
+      return;
+    }
+
+    if (
+      qsMetodologiaId &&
+      qsEstruturaId &&
+      qsMetodologiaItemId
+    ) {
+      localStorage.setItem(
+        METODOLOGIA_LINK_KEY(
+          alvo.id
+        ),
+        JSON.stringify({
+          metodologiaId:
+            qsMetodologiaId,
+
+          estruturaId:
+            qsEstruturaId,
+
+          metodologiaItemId:
+            qsMetodologiaItemId,
+        })
+      );
+    }
+
+    setExpandedId(
+      alvo.id
+    );
+
+    setFullscreenId(
+      alvo.id
+    );
+
+    const next =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    next.delete(
+      "openAgendadoId"
+    );
+
+    next.delete(
+      "openAgendadoByProgramadoId"
+    );
+
+    next.delete(
+      "metodologiaId"
+    );
+
+    next.delete(
+      "estruturaId"
+    );
+
+    next.delete(
+      "metodologiaItemId"
+    );
+
+    const nextQs =
+      next.toString();
+
+    navigate(
+      nextQs
+        ? `/treinos?${nextQs}`
+        : "/treinos",
+      {
+        replace: true,
+      }
+    );
+  }, [
+    openAgendadoId,
+    openAgendadoByProgramadoId,
+    treinosAgendados,
+    qsMetodologiaId,
+    qsEstruturaId,
+    qsMetodologiaItemId,
+    navigate,
+  ]);
 
   const [
     desafioCompartilhar,
@@ -1727,8 +1727,6 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
               "PENDING"
           );
 
-        // READY_TO_SUBMIT é um estado temporário
-        // somente do frontend.
         if (
           atual?.status ===
           "READY_TO_SUBMIT"
@@ -3787,6 +3785,7 @@ return (
           directConteudo={
             desafioCompartilhar.id
           }
+          destinatarioPapel="Atleta"
         />
       )}
 

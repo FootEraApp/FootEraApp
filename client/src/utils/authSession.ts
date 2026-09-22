@@ -55,6 +55,10 @@ export type PendingAuthAction =
   | {
       type: "OPEN_EVENT_CONVOCATION";
       eventoId: string;
+    }
+  | {
+      type: "ACCEPT_INVITE";
+      token: string;
     };
 
 const SESSION_KEYS = [
@@ -469,6 +473,25 @@ function validarAcaoPendente(
     return {
       type,
       eventoId,
+    };
+  }
+
+  if (
+    type ===
+    "ACCEPT_INVITE"
+  ) {
+    const token =
+      identificadorValido(
+        valor.token
+      );
+
+    if (!token) {
+      return null;
+    }
+
+    return {
+      type,
+      token,
     };
   }
 
