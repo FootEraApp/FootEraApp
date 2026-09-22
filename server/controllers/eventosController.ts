@@ -4,6 +4,13 @@ import dayjs from "dayjs";
 import jwt from "jsonwebtoken";
 import { getIO } from "../socket.js";
 import { prisma } from "../prisma.js";
+import {
+  resolveUserContext,
+} from "../services/planResolver.js";
+
+import {
+  canPermission,
+} from "../services/permissions.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
@@ -40,218 +47,229 @@ function syncEventos(opts: { clubeId?: string | null; escolinhaId?: string | nul
   if (opts.escolinhaId) io.to(`escolinha:${opts.escolinhaId}`).emit("eventos:sync", { scope: "escolinha", id: opts.escolinhaId });
 }
 
-export async function auth(req: any, res: Response, next: NextFunction) {
+export async function auth(
+  req: any,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const h = req.headers.authorization || "";
-    const [scheme, token] = h.split(" ");
-    if (scheme !== "Bearer" || !token) {
-      return res.status(401).json({ error: "Não autorizado" });
+    const h =
+      req.headers.authorization || "";
+
+    const [scheme, token] =
+      h.split(" ");
+
+    if (
+      scheme !== "Bearer" ||
+      !token
+    ) {
+      return res.status(401).json({
+        error: "Não autorizado",
+      });
     }
 
-    const payload: any = jwt.verify(token, JWT_SECRET);
+    const payload: any =
+      jwt.verify(
+        token,
+        JWT_SECRET,
+      );
 
     const userId =
       String(payload.id);
 
-    const usuario =
-      await prisma.usuario.findUnique({
-        where: {
-          id: userId,
-        },
-        select: {
-          tipo: true,
-        },
-      });
+    const contexto =
+      await resolveUserContext(
+        userId,
+      );
 
     const tipo =
       normalizarTipo(
-        usuario?.tipo ||
-        payload.tipo ||
-        payload.tipoUsuario
+        contexto.tipo,
       );
 
-    let tipoUsuarioId:
-      | string
-      | undefined;
-
-    if (!tipoUsuarioId) {
-      let perfil:
-        | { id: string }
-        | null = null;
-
-      switch (tipo) {
-        case "atleta":
-          perfil =
-            await prisma.atleta.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "clube":
-          perfil =
-            await prisma.clube.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "escola":
-        case "escolinha":
-          perfil =
-            await prisma.escolinha.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "professor":
-          perfil =
-            await prisma.professor.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "olheiro":
-          perfil =
-            await prisma.olheiro.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "federacao":
-          perfil =
-            await prisma.federacao.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "marca":
-          perfil =
-            await prisma.marca.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-
-        case "creator":
-          perfil =
-            await prisma.creator.findFirst({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-          break;
-      }
-
-      tipoUsuarioId =
-        perfil?.id;
-    }
+    const tipoUsuarioId =
+      contexto.tipoUsuarioId ??
+      undefined;
 
     req.user = {
-      id: payload.id,
-      role: payload.role,
+      id: userId,
+
+      role:
+        payload.role,
+
       tipo,
+
       tipoUsuarioId,
+
       isAdmin:
-        String(payload.role || "").toLowerCase() === "admin" ||
-        payload.isAdmin === true,
+        contexto.isAdmin === true,
     };
-    next();
+
+    req.userId =
+      userId;
+
+    return next();
   } catch (e) {
-    console.error("Erro no auth eventos:", e);
-    return res.status(401).json({ error: "Token inválido" });
+    console.error(
+      "Erro no auth eventos:",
+      e,
+    );
+
+    return res.status(401).json({
+      error: "Token inválido",
+    });
   }
 }
 
 export async function ehDonoDoClubeOuAdmin(
   req: any,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
-  const { clubeId } = req.params;
-  const user = req.user || {};
-  const isAdmin = user.role === "admin" || user.tipo === "admin";
+  const clubeId =
+    String(
+      req.params.clubeId ||
+        "",
+    ).trim();
 
-  if (isAdmin) return next();
+  const userId =
+    String(
+      req.user?.id ||
+        "",
+    ).trim();
 
-  if (user.tipo === "clube" && String(user.tipoUsuarioId) === String(clubeId)) {
+  if (!userId) {
+    return res
+      .status(401)
+      .json({
+        error:
+          "Não autenticado.",
+      });
+  }
+
+  const isAdmin =
+    await canPermission(
+      userId,
+      "VER_ADMIN",
+    );
+
+  if (isAdmin) {
     return next();
   }
 
-  const club = await prisma.clube.findUnique({
-    where: { id: String(clubeId) },
-    select: { usuarioId: true },
-  });
+  const podeGerenciar =
+    await canPermission(
+      userId,
+      "GERENCIAR_ORGANIZACAO",
+    );
 
-  if (club && String(club.usuarioId) === String(user.id)) {
+  if (!podeGerenciar) {
+    return res
+      .status(403)
+      .json({
+        error:
+          "Sem permissão.",
+      });
+  }
+
+  const clube =
+    await prisma.clube.findFirst({
+      where: {
+        id: clubeId,
+        usuarioId: userId,
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  if (clube) {
     return next();
   }
 
-  return res.status(403).json({ error: "Sem permissão" });
+  return res
+    .status(403)
+    .json({
+      error:
+        "Sem permissão.",
+    });
 }
 
 export async function ehDonoDaEscolinhaOuAdmin(
   req: any,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
-  const user = req.user || {};
-  const tipo = String(user.tipo || user.role || "").toLowerCase();
-  const tipoUsuarioId = String(user.tipoUsuarioId || "");
+  const userId =
+    String(
+      req.user?.id ||
+        "",
+    ).trim();
 
-  const isAdmin =
-    tipo === "admin" ||
-    user.isAdmin === true ||
-    String(user.role || "").toLowerCase() === "admin";
+  const escolinhaId =
+    String(
+      req.params.escolinhaId ||
+        req.params.escolaId ||
+        "",
+    ).trim();
 
-  if (isAdmin) return next();
-
-  const paramId = String(
-    (req.params.escolinhaId || req.params.escolaId || "").trim()
-  );
-
-  if (!paramId || !tipoUsuarioId || paramId !== tipoUsuarioId) {
-    return res.status(403).json({
-      error: "Você não tem permissão para gerenciar eventos desta escolinha.",
-    });
+  if (!userId) {
+    return res
+      .status(401)
+      .json({
+        error:
+          "Não autenticado.",
+      });
   }
 
-  return next();
+  const isAdmin =
+    await canPermission(
+      userId,
+      "VER_ADMIN",
+    );
+
+  if (isAdmin) {
+    return next();
+  }
+
+  const podeGerenciar =
+    await canPermission(
+      userId,
+      "GERENCIAR_ORGANIZACAO",
+    );
+
+  if (!podeGerenciar) {
+    return res
+      .status(403)
+      .json({
+        error:
+          "Você não tem permissão para gerenciar esta escolinha.",
+      });
+  }
+
+  const escolinha =
+    await prisma.escolinha.findFirst({
+      where: {
+        id: escolinhaId,
+        usuarioId: userId,
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  if (escolinha) {
+    return next();
+  }
+
+  return res
+    .status(403)
+    .json({
+      error:
+        "Você não tem permissão para gerenciar esta escolinha.",
+    });
 }
 
 function parseDate(v: any): Date | null {
@@ -1058,10 +1076,6 @@ export async function participarEvento(
       });
     }
 
-    /*
-     * Se existe link externo de inscrição,
-     * mantém o fluxo já existente.
-     */
     if (
       evento.linkInscricao
     ) {
@@ -1608,24 +1622,6 @@ function normalizarTipo(tipo?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function podeCriarEvento(
-  tipo?: string | null
-) {
-  const t =
-    normalizarTipo(tipo);
-
-  return [
-    "professor",
-    "olheiro",
-    "clube",
-    "escolinha",
-    "escola",
-    "federacao",
-    "marca",
-    "creator",
-  ].includes(t);
-}
-
 export async function listarMeusEventosCreator(req: any, res: Response) {
   try {
     const usuarioId = String(req.user?.id || "").trim();
@@ -1662,7 +1658,13 @@ export async function criarEventoCreator(req: any, res: Response) {
       return res.status(401).json({ error: "Não autenticado." });
     }
 
-    if (!podeCriarEvento(tipoUsuario)) {
+    const podeCriar =
+      await canPermission(
+        usuarioId,
+        "CRIAR_EVENTO",
+      );
+
+    if (!podeCriar) {
       return res.status(403).json({
         error: "Este tipo de usuário não pode criar eventos.",
       });
@@ -1853,7 +1855,13 @@ export async function atualizarEventoCreator(req: any, res: Response) {
       return res.status(401).json({ error: "Não autenticado." });
     }
 
-    if (!podeCriarEvento(tipoUsuario)) {
+    const podeCriar =
+      await canPermission(
+        usuarioId,
+        "CRIAR_EVENTO",
+      );
+
+    if (!podeCriar) {
       return res.status(403).json({
         error: "Este tipo de usuário não pode editar eventos.",
       });

@@ -7,6 +7,9 @@ import { prisma } from "../prisma.js";
 import { validateGoogleCredential } from "../services/googleTokenService.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
 import { calcularIdadePorNascimento, categoriaAtletaPorIdade } from "../utils/categoriaAtleta.js";
+import {
+  getProfileIdForRole,
+} from "../services/roles.js";
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
@@ -158,16 +161,10 @@ async function montarRespostaAuth(usuarioId: string) {
   }
 
   const tipoUsuarioId =
-    usuario.atleta?.id ??
-    usuario.professor?.id ??
-    usuario.clube?.id ??
-    usuario.escolinha?.id ??
-    usuario.olheiro?.id ??
-    usuario.administrador?.id ??
-    usuario.learningProfile?.id ??
-    usuario.federacao?.id ??
-    usuario.marca?.id ??
-    null;
+    await getProfileIdForRole(
+      usuario.id,
+      usuario.tipo,
+    );
 
   const token = gerarJwt(usuario);
 

@@ -18,6 +18,9 @@ import {
   calcularIdadePorNascimento,
   categoriaAtletaPorIdade,
 } from "../utils/categoriaAtleta.js";
+import {
+  getProfileIdForRole,
+} from "../services/roles.js";
 
 const FRONTEND_URL = (
   process.env.WEB_BASE_URL || "https://footera.app.br"
@@ -1408,16 +1411,10 @@ async function montarSessaoAposVerificacao(usuarioId: string) {
   }
 
   const tipoUsuarioId =
-    usuario.atleta?.id ??
-    usuario.professor?.id ??
-    usuario.clube?.id ??
-    usuario.escolinha?.id ??
-    usuario.olheiro?.id ??
-    usuario.administrador?.id ??
-    usuario.learningProfile?.id ??
-    usuario.federacao?.id ??
-    usuario.marca?.id ??
-    null;
+    await getProfileIdForRole(
+      usuario.id,
+      usuario.tipo,
+    );
 
   const authToken = jwt.sign(
     {

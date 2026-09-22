@@ -2,6 +2,9 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getUserFlags } from "../services/flags.js";
+import {
+  getProfileIdForRole,
+} from "../services/roles.js";
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -160,17 +163,11 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    const tipoUsuarioId: string | null =
-      usuario.atleta?.id ??
-      usuario.professor?.id ??
-      usuario.clube?.id ??
-      usuario.escolinha?.id ??
-      usuario.olheiro?.id ??
-      usuario.administrador?.id ??
-      usuario.learningProfile?.id ??
-      usuario.federacao?.id ??
-      usuario.marca?.id ??
-      null;
+    const tipoUsuarioId =
+      await getProfileIdForRole(
+        usuario.id,
+        usuario.tipo,
+      );
 
     await prisma.loginEvent.create({
       data: { usuarioId: usuario.id },

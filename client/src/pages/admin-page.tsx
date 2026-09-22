@@ -1,5 +1,5 @@
 import { toast as notify } from "@/lib/toast";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useContext } from "react";
 import { API, APP } from "../config.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
@@ -20,6 +20,9 @@ import {
   inicializarPushAndroidNativo,
   mostrarNotificacaoLocalTeste,
 } from "../services/nativePushNotifications.js";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 
 type Tab =
   | "dashboard"
@@ -62,6 +65,7 @@ type UsuarioTipo =
   | "federacao"
   | "professor"
   | "admin"
+  | "creator"
   | "olheiro";
   
 type StatusConta =
@@ -106,6 +110,7 @@ type TipoCriadorMetodologia =
   | "Federacao"
   | "Learning"
   | "Atleta"
+  | "Creator"
   | "Admin";
 
 type OrdenacaoAssinaturasAdmin =
@@ -123,6 +128,7 @@ const tipoToServer: Record<UsuarioTipo, string> = {
   marca: "Marca",
   federacao: "Federacao",
   professor: "Professor",
+  creator: "Creator",
   admin: "Admin",
   olheiro: "Olheiro",
 };
@@ -469,7 +475,15 @@ function compararDataCriacaoAdmin(
 }
 
 export default function AdminDashboard() {
-  const [aba, setAba] = useState<Tab>("dashboard");
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const [aba, setAba] =
+    useState<Tab>(
+      "dashboard"
+    );
 
   const tabs: Tab[] = [
     "dashboard",
@@ -1802,7 +1816,10 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
     return d ? new Date(d).toLocaleString("pt-BR") : "—";
   }
 
-  const isAdminBase = true;
+  const isAdminBase =
+    authContext?.can(
+      "VER_ADMIN"
+    ) ?? false;
 
   const isImage = (u: string) => /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(u);
 

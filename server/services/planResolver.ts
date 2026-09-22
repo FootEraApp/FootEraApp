@@ -1,5 +1,8 @@
 // server/services/planResolve
 import { PrismaClient, TipoUsuario } from "@prisma/client";
+import {
+  getProfileIdForRole,
+} from "./roles.js";
 
 const prisma = new PrismaClient();
 
@@ -77,10 +80,16 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
       ? asPlano(assinaturaAtual.plano)
     : "FREE";
 
+  const tipoUsuarioId =
+    await getProfileIdForRole(
+      usuario.id,
+      usuario.tipo,
+    );
+
   return {
     id: usuario.id,
     tipo: usuario.tipo,
-    tipoUsuarioId: null,
+    tipoUsuarioId,
     plano,
     isAdmin: !!usuario.administrador,
     parceiro: usuario.parceiro,

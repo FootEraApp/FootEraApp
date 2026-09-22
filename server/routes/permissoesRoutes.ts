@@ -1,48 +1,119 @@
-import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.js";
-import { prisma } from "../prisma.js";
+import {
+  Router,
+} from "express";
 
-const router = Router();
-router.use(authenticateToken);
+import {
+  authenticateToken,
+} from "../middlewares/auth.js";
 
-router.get("/metodologias/criar", async (req: any, res) => {
-  const userId = req.user?.id;
-  const tipo = String(req.user?.tipo || "").toLowerCase();
-  const ORGANIZACOES_PRO = "ORGANIZACOES_PRO";
-  const PROFESSOR_PRO = "PROFESSOR_PRO";
+import {
+  canPermission,
+  getPermissionSnapshot,
+} from "../services/permissions.js";
 
-  if (!userId) return res.status(401).json({ canCreate: false });
-  if (!["professor", "clube", "escolinha"].includes(tipo)) {
-    return res.json({ canCreate: false });
-  }
 
-  let isParceiro = false;
-  if (tipo === "professor") {
-    const prof = await prisma.usuario.findFirst({
-      where: { id: userId },
-      select: { parceiro: true },
-    });
-    isParceiro = Boolean(prof?.parceiro);
-    if (isParceiro) return res.json({ canCreate: true });
-  }
+const router =
+  Router();
 
-  const agora = new Date();
-  const assinatura = await prisma.assinatura.findFirst({
-    where: {
-      usuarioId: userId,
-      status: "ATIVA",
-      trialEndsAt: { gt: agora }, 
-    },
-    select: { id: true },
-  }).catch(() => null);
+router.use(
+  authenticateToken,
+);
 
-  const produtoId = String((assinatura as any)?.produtoId || "").toUpperCase();
 
-  if (tipo === "clube" || tipo === "escolinha") {
-    return res.json({ canCreate: produtoId === ORGANIZACOES_PRO });
-  }
+function getUserId(
+  req: any,
+) {
+  return String(
+    req.userId ??
+      req.user?.id ??
+      req.authUser?.id ??
+      "",
+  ).trim();
+}
 
-  return res.json({ canCreate: produtoId === PROFESSOR_PRO });
-});
+
+router.get(
+  "/me",
+  async (req: any, res) => {
+    try {
+      const userId =
+        getUserId(req);
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({
+            error:
+              "Não autenticado.",
+          });
+      }
+
+      const permissions =
+        await getPermissionSnapshot(
+          userId,
+        );
+
+      return res.json({
+        permissions,
+      });
+    } catch (error) {
+      console.error(
+        "[permissoes/me]",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Não foi possível carregar as permissões.",
+        });
+    }
+  },
+);
+
+
+router.get(
+  "/metodologias/criar",
+  async (req: any, res) => {
+    try {
+      const userId =
+        getUserId(req);
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({
+            canCreate:
+              false,
+          });
+      }
+
+      const canCreate =
+        await canPermission(
+          userId,
+          "PUBLICAR_METODOLOGIA",
+        );
+
+      return res.json({
+        canCreate,
+        permission:
+          "PUBLICAR_METODOLOGIA",
+      });
+    } catch (error) {
+      console.error(
+        "[permissoes/metodologias/criar]",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          canCreate:
+            false,
+        });
+    }
+  },
+);
 
 export default router;
