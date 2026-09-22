@@ -1,19 +1,26 @@
+//client/src/pages/perfil
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
+
+// perfis tipo:
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
+import PerfilLearning from "@/components/perfil/PerfilLearning.js";
+import PerfilMarca from "@/components/perfil/PerfilMarca.js";
+import PerfilFederacao from "@/components/perfil/PerfilFederacao.js";
+
 import HealthBanner from "../components/legal/HealthBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
 import BottomNav from "@/components/layout/BottomNav.js";
-import PerfilLearning from "@/components/perfil/PerfilLearning.js";
-import PerfilMarca from "@/components/perfil/PerfilMarca.js";
-import PerfilFederacao from "@/components/perfil/PerfilFederacao.js";
+
+
+
 import { API } from "../config.js";
 
 type TipoPerfil =

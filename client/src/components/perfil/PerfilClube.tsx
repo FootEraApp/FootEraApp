@@ -6,15 +6,16 @@ import Storage from "../../../../server/utils/storage.js";
 import { API, APP, FLAGS } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
-import { 
-  Activity, 
+import {
+  Activity,
   ChevronRight,
   CalendarClock,
   Trophy,
   CameraIcon as VideoCamera,
   PlusCircle,
   FileText,
-  BookOpen } from "lucide-react";
+  BookOpen,
+} from "lucide-react";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
@@ -147,19 +148,15 @@ type AtividadeRecente = {
   id: string;
   tipo: AtividadeRecenteTipo | string;
   titulo: string;
-  createdAt?: string | null;   
-  criadoEm?: string | null;   
+  createdAt?: string | null;
+  criadoEm?: string | null;
   imagemUrl?: string | null;
   link?: string | null;
 };
 
 function parseDateSafe(it: any) {
   const raw =
-    it?.createdAt ??
-    it?.criadoEm ??
-    it?.data ??
-    it?.created_at ??
-    null;
+    it?.createdAt ?? it?.criadoEm ?? it?.data ?? it?.created_at ?? null;
 
   const d = raw ? new Date(raw) : null;
   return d && !isNaN(+d) ? d : null;
@@ -205,14 +202,14 @@ function SectionCard({
 
 async function fetchPontuacaoTotalByUsuarioId(
   usuarioId: string,
-  headers: any
+  headers: any,
 ): Promise<number | null> {
   if (!usuarioId) return null;
 
   try {
     const r = await fetch(
       `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/pontuacao`,
-      { headers }
+      { headers },
     );
     if (!r.ok) return null;
     const data = await r.json();
@@ -240,13 +237,14 @@ export default function PerfilClube({
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
   const canEdit = isOwn;
-  const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
+  const targetId = isOwn ? "me" : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadClube | null>(null);
   const [loading, setLoading] = useState(true);
   const [aba, setAba] = useState<AbaTopo>("perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
+  const [mostrarTodosVinculados, setMostrarTodosVinculados] = useState(false);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
   const [vinculadosPreview, setVinculadosPreview] = useState<AtletaItem[]>([]);
@@ -257,7 +255,7 @@ export default function PerfilClube({
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
   const [atletasHeaderCount, setAtletasHeaderCount] = useState<number | null>(
-    null
+    null,
   );
   const [contagensAtletas, setContagensAtletas] = useState({
     vinculados: 0,
@@ -286,21 +284,28 @@ export default function PerfilClube({
     mostrarEmail: boolean;
   } | null>(null);
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
-  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(
+    null,
+  );
 
-  const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
-  const entidadeUsuarioId = isOwn
-    ? Storage.usuarioId
-    : data?.clube?.usuarioId ?? null;
+  const vinculadosParaExibir = vinculados ?? vinculadosPreview;
+
+  const vinculadosVisiveis = mostrarTodosVinculados
+    ? vinculadosParaExibir
+    : vinculadosParaExibir.slice(0, 5);
+
+  const clubeId = data?.clube?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+  const entidadeUsuarioId =
+    data?.usuario?.id ??
+    data?.clube?.usuarioId ??
+    (isOwn ? Storage.usuarioId : null);
 
   useEffect(() => {
+    setMostrarTodosVinculados(false);
     setMostrarTodosEventos(false);
   }, [targetId, subAba]);
 
-  function extrairListaResposta(
-    payload: any,
-    chaves: string[] = []
-  ): any[] {
+  function extrairListaResposta(payload: any, chaves: string[] = []): any[] {
     if (Array.isArray(payload)) {
       return payload;
     }
@@ -335,46 +340,44 @@ export default function PerfilClube({
           },
         }),
 
-        axios.get(
-          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
-          { headers }
-        ),
+        axios.get(`${API.BASE_URL}/api/solicitacoes-treino/recebidas`, {
+          headers,
+        }),
       ]);
 
     const vinculadosLista =
       vinculadosResult.status === "fulfilled"
-        ? extrairListaResposta(
-            vinculadosResult.value.data,
-            ["atletas", "items", "data"]
-          )
+        ? extrairListaResposta(vinculadosResult.value.data, [
+            "atletas",
+            "items",
+            "data",
+          ])
         : null;
 
     const observadosLista =
       observadosResult.status === "fulfilled"
-        ? extrairListaResposta(
-            observadosResult.value.data,
-            ["observados", "items", "data"]
-          )
+        ? extrairListaResposta(observadosResult.value.data, [
+            "observados",
+            "items",
+            "data",
+          ])
         : null;
 
     const solicitacoesLista =
       solicitacoesResult.status === "fulfilled"
-        ? extrairListaResposta(
-            solicitacoesResult.value.data,
-            ["solicitacoes", "items", "data"]
-          )
+        ? extrairListaResposta(solicitacoesResult.value.data, [
+            "solicitacoes",
+            "items",
+            "data",
+          ])
         : null;
 
     setContagensAtletas((prev) => ({
       vinculados:
-        vinculadosLista !== null
-          ? vinculadosLista.length
-          : prev.vinculados,
+        vinculadosLista !== null ? vinculadosLista.length : prev.vinculados,
 
       observados:
-        observadosLista !== null
-          ? observadosLista.length
-          : prev.observados,
+        observadosLista !== null ? observadosLista.length : prev.observados,
 
       solicitacoes:
         solicitacoesLista !== null
@@ -388,12 +391,7 @@ export default function PerfilClube({
   }
 
   useEffect(() => {
-    if (
-      aba !== "atletas" ||
-      !token ||
-      !clubeId ||
-      !canEdit
-    ) {
+    if (aba !== "atletas" || !token || !clubeId || !canEdit) {
       return;
     }
 
@@ -421,23 +419,27 @@ export default function PerfilClube({
       try {
         const { data } = await axios.get(
           `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
-          { headers }
+          { headers },
         );
-        if (!cancel) setPrivacidade({
-          perfilVisivel: data?.perfilVisivel ?? true,
-          permitirMensagens: data?.permitirMensagens ?? true,
-          mostrarEmail: data?.mostrarEmail ?? false,
-        });
+        if (!cancel)
+          setPrivacidade({
+            perfilVisivel: data?.perfilVisivel ?? true,
+            permitirMensagens: data?.permitirMensagens ?? true,
+            mostrarEmail: data?.mostrarEmail ?? false,
+          });
       } catch {
-        if (!cancel) setPrivacidade({
-          perfilVisivel: true,
-          permitirMensagens: true,
-          mostrarEmail: false,
-        });
+        if (!cancel)
+          setPrivacidade({
+            perfilVisivel: true,
+            permitirMensagens: true,
+            mostrarEmail: false,
+          });
       }
     })();
 
-    return () => { cancel = true; };
+    return () => {
+      cancel = true;
+    };
   }, [token]);
 
   useEffect(() => {
@@ -450,10 +452,12 @@ export default function PerfilClube({
       try {
         const { data } = await axios.get(
           `${API.BASE_URL}/api/eventos/clubes/${clubeId}`,
-          { headers }
+          { headers },
         );
 
-        const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+        const arr = Array.isArray(data)
+          ? data
+          : (data?.items ?? data?.data ?? []);
         if (!cancel) setEventosCount((arr ?? []).length);
       } catch {
         if (!cancel) setEventosCount(0);
@@ -468,7 +472,10 @@ export default function PerfilClube({
   useEffect(() => {
     if (!token) return;
 
-    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.clube?.usuarioId ?? null);
+    const usuarioIdEnt =
+      data?.usuario?.id ??
+      data?.clube?.usuarioId ??
+      (isOwn ? Storage.usuarioId : null);
     if (!usuarioIdEnt) return;
 
     let cancel = false;
@@ -477,7 +484,7 @@ export default function PerfilClube({
       try {
         const { data: resp } = await axios.get(
           `${API.BASE_URL}/api/conquistas/${encodeURIComponent(usuarioIdEnt)}?onlyConcluidas=1`,
-          { headers, withCredentials: true }
+          { headers, withCredentials: true },
         );
 
         const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
@@ -497,11 +504,14 @@ export default function PerfilClube({
       cancel = true;
     };
   }, [token, isOwn, data?.clube?.usuarioId]);
-  
+
   useEffect(() => {
     if (!token) return;
 
-    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.clube?.usuarioId ?? null);
+    const usuarioIdEnt =
+      data?.usuario?.id ??
+      data?.clube?.usuarioId ??
+      (isOwn ? Storage.usuarioId : null);
     if (!usuarioIdEnt) return;
 
     let cancel = false;
@@ -510,7 +520,7 @@ export default function PerfilClube({
       try {
         const { data: resp } = await axios.get(
           `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioIdEnt)}`,
-          { headers }
+          { headers },
         );
 
         const items = Array.isArray(resp?.items) ? resp.items : [];
@@ -530,7 +540,7 @@ export default function PerfilClube({
 
     let cancel = false;
     (async () => {
-      const idEntidade = clubeId; 
+      const idEntidade = clubeId;
       if (!idEntidade) {
         if (!cancel) {
           setAtletasHeaderCount(0);
@@ -555,10 +565,10 @@ export default function PerfilClube({
         const rows: any[] = Array.isArray(resp.data?.atletas)
           ? resp.data.atletas
           : Array.isArray(resp.data)
-          ? resp.data
-          : Array.isArray(resp.data?.items)
-          ? resp.data.items
-          : [];
+            ? resp.data
+            : Array.isArray(resp.data?.items)
+              ? resp.data.items
+              : [];
 
         if (cancel) return;
 
@@ -567,13 +577,13 @@ export default function PerfilClube({
         const top5 = rows.slice(0, 5);
         const mapped = await Promise.all(
           top5.map(async (r) => {
-            const usuarioIdRow =
-              String(r.usuarioId ?? r.usuario?.id ?? r.usuario?.usuarioId ?? "").trim();
+            const usuarioIdRow = String(
+              r.usuarioId ?? r.usuario?.id ?? r.usuario?.usuarioId ?? "",
+            ).trim();
 
-            const pontuacaoTotal =
-              usuarioIdRow
-                ? await fetchPontuacaoTotalByUsuarioId(usuarioIdRow, headers)
-                : null;
+            const pontuacaoTotal = usuarioIdRow
+              ? await fetchPontuacaoTotalByUsuarioId(usuarioIdRow, headers)
+              : null;
 
             return {
               id: r.id || r.atletaId,
@@ -586,11 +596,13 @@ export default function PerfilClube({
               pontuacao:
                 (typeof pontuacaoTotal === "number" ? pontuacaoTotal : null) ??
                 (typeof r.pontuacao === "number" ? r.pontuacao : null) ??
-                (typeof r.pontuacaoTotal === "number" ? r.pontuacaoTotal : null) ??
+                (typeof r.pontuacaoTotal === "number"
+                  ? r.pontuacaoTotal
+                  : null) ??
                 (typeof r.pontos === "number" ? r.pontos : null) ??
                 null,
             };
-          })
+          }),
         );
 
         if (cancel) return;
@@ -636,7 +648,7 @@ export default function PerfilClube({
       try {
         const resp = await axios.get<PayloadClube>(
           `${API.BASE_URL}/api/perfil/clube/${targetId}`,
-          { headers }
+          { headers },
         );
         if (!cancel) setData(resp.data);
       } catch {
@@ -666,7 +678,7 @@ export default function PerfilClube({
       try {
         const { data: itens } = await axios.get<AtividadeRecente[]>(
           `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
-          { headers }
+          { headers },
         );
 
         if (cancel.v) return;
@@ -677,7 +689,7 @@ export default function PerfilClube({
           createdAt:
             it?.createdAt ??
             it?.criadoEm ??
-            it?.createAt ??   
+            it?.createAt ??
             it?.created_at ??
             null,
         }));
@@ -693,7 +705,14 @@ export default function PerfilClube({
     return () => {
       cancel.v = true;
     };
-  }, [aba, token, isOwn, data?.usuario?.id, data?.clube?.usuarioId, atividades]);
+  }, [
+    aba,
+    token,
+    isOwn,
+    data?.usuario?.id,
+    data?.clube?.usuarioId,
+    atividades,
+  ]);
 
   useEffect(() => {
     if (!token) return;
@@ -706,11 +725,40 @@ export default function PerfilClube({
         return;
       }
       try {
-        const { data: lista } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
+        const { data: resp } = await axios.get<{
+          atletas: AtletaItem[];
+        }>(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params: {
+            vinculo: "clube",
+            id: clubeId,
+            order: "pontuacao_desc",
+          },
+        });
+
+        const base = Array.isArray(resp?.atletas) ? resp.atletas : [];
+
+        const comPontuacaoReal = await Promise.all(
+          base.map(async (atleta) => {
+            const usuarioId = String(atleta.usuarioId || "").trim();
+
+            const pontuacao = usuarioId
+              ? await fetchPontuacaoTotalByUsuarioId(usuarioId, headers)
+              : null;
+
+            return {
+              ...atleta,
+              pontuacao:
+                typeof pontuacao === "number"
+                  ? pontuacao
+                  : (atleta.pontuacao ?? null),
+            };
+          }),
         );
-        if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
+
+        if (!cancel.v) {
+          setVinculados(comPontuacaoReal);
+        }
       } catch {
         if (!cancel.v) setVinculados([]);
       }
@@ -733,7 +781,7 @@ export default function PerfilClube({
               incluirPontuacao: 1,
               incluirNotas: 1,
             },
-          }
+          },
         );
         if (!cancel.v) {
           setObservados(Array.isArray(lista) ? lista : []);
@@ -758,7 +806,7 @@ export default function PerfilClube({
       try {
         const { data } = await axios.get<Solicitacao[]>(
           `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
-          { headers }
+          { headers },
         );
         if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -770,7 +818,8 @@ export default function PerfilClube({
     if (aba === "atletas") {
       if (subAba === "vinculados") fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
-      if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
+      if (subAba === "solicitacoes" && solicitacoes == null)
+        fetchSolicitacoes();
     }
     return () => {
       cancel.v = true;
@@ -791,7 +840,7 @@ export default function PerfilClube({
         headers,
         params: {
           vinculo: "clube",
-          id: entidadeUsuarioId, 
+          id: entidadeUsuarioId,
           limit: 200,
         },
       });
@@ -803,7 +852,9 @@ export default function PerfilClube({
           headers,
           params: { ownerTipo: "Clube", ownerId: clubeId },
         });
-        lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+        lista = (
+          Array.isArray(data) ? data : (data?.items ?? data?.data ?? [])
+        ) as any[];
       }
 
       setProfessores(
@@ -814,7 +865,7 @@ export default function PerfilClube({
           codigo: p.codigo ?? null,
           cref: p.cref ?? null,
           fotoUrl: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
-        }))
+        })),
       );
     } catch {
       setProfessores([]);
@@ -843,11 +894,7 @@ export default function PerfilClube({
     if (!item) return "";
 
     return String(
-      item.nome ||
-        item.nomePublico ||
-        item.nomeDeUsuario ||
-        item.email ||
-        ""
+      item.nome || item.nomePublico || item.nomeDeUsuario || item.email || "",
     ).trim();
   }
 
@@ -905,7 +952,7 @@ export default function PerfilClube({
         data?.clube?.usuarioId ||
         entidadeUsuarioId ||
         (isOwn ? Storage.usuarioId : "") ||
-        ""
+        "",
     ).trim();
 
     if (!id && !usuarioCreatorId) {
@@ -933,9 +980,9 @@ export default function PerfilClube({
       const perfilCreatorPromise = usuarioCreatorId
         ? axios.get(
             `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-              usuarioCreatorId
+              usuarioCreatorId,
             )}`,
-            { headers }
+            { headers },
           )
         : Promise.resolve({ data: null });
 
@@ -965,15 +1012,15 @@ export default function PerfilClube({
         Array.isArray(payload)
           ? payload
           : Array.isArray(payload?.items)
-          ? payload.items
-          : Array.isArray(payload?.eventos)
-          ? payload.eventos
-          : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
+            ? payload.items
+            : Array.isArray(payload?.eventos)
+              ? payload.eventos
+              : Array.isArray(payload?.data)
+                ? payload.data
+                : [];
 
       const eventosDoClube: EventoPreview[] = extrairEventos(
-        eventosClubeResp
+        eventosClubeResp,
       ).map((ev: any) => ({
         id: String(ev.id),
         titulo: String(ev.titulo ?? ev.nome ?? "Evento"),
@@ -995,7 +1042,7 @@ export default function PerfilClube({
         "";
 
       const eventosGeraisDoCreator: EventoPreview[] = extrairEventos(
-        eventosCreatorResp
+        eventosCreatorResp,
       ).map((ev: any) => ({
         id: String(ev.id),
         titulo: String(ev.titulo ?? ev.nome ?? "Evento"),
@@ -1011,7 +1058,7 @@ export default function PerfilClube({
       }));
 
       const aulasAoVivoCreator: EventoPreview[] = Array.isArray(
-        creatorResp?.eventosAoVivo
+        creatorResp?.eventosAoVivo,
       )
         ? creatorResp.eventosAoVivo.map((aula: any) => ({
             id: String(aula.id),
@@ -1074,7 +1121,7 @@ export default function PerfilClube({
         .sort(
           (a, b) =>
             new Date(a.dataEvento || 0).getTime() -
-            new Date(b.dataEvento || 0).getTime()
+            new Date(b.dataEvento || 0).getTime(),
         );
 
       setEventosPreview(todos);
@@ -1086,7 +1133,7 @@ export default function PerfilClube({
       setEventosErro(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
-          "Não foi possível carregar os eventos agora."
+          "Não foi possível carregar os eventos agora.",
       );
     } finally {
       setEventosLoading(false);
@@ -1105,21 +1152,30 @@ export default function PerfilClube({
         headers,
         params: { ownerTipo: "Clube", ownerId: clubeId },
       });
-      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+      const arr = Array.isArray(data)
+        ? data
+        : (data?.items ?? data?.data ?? []);
       setTurmas(
         (arr ?? []).map((t: any) => ({
           id: String(t.id),
           nome: String(t.nome ?? t.titulo ?? "Turma"),
+          categoria: t.categoria ?? null,
           ownerTipo: t.ownerTipo ?? "Clube",
           ownerId: t.ownerId ?? clubeId,
-          professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
-          professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+          professorIds: Array.isArray(t.professorIds)
+            ? t.professorIds.map(String)
+            : [],
+          professorNomes: Array.isArray(t.professorNomes)
+            ? t.professorNomes
+            : [],
           professorNome:
             t.professorNome ??
-            (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+            (Array.isArray(t.professorNomes)
+              ? t.professorNomes.join(", ")
+              : null) ??
             null,
           alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
-        }))
+        })),
       );
     } catch {
       setTurmas([]);
@@ -1129,10 +1185,14 @@ export default function PerfilClube({
   }
 
   useEffect(() => {
-    if (aba === "professores" && canEdit) {
-      loadProfessores();
-      loadTurmas();
+    if (aba === "perfil") {
+      void loadTurmas();
     }
+
+    if (aba === "professores" && canEdit) {
+      void loadProfessores();
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, canEdit, token, clubeId, entidadeUsuarioId]);
 
@@ -1162,46 +1222,33 @@ export default function PerfilClube({
       }
     }
 
-    window.addEventListener(
-      "focus",
-      atualizarDadosDosAtletas
-    );
+    window.addEventListener("focus", atualizarDadosDosAtletas);
 
     window.addEventListener(
       "footera:vinculo-treino-alterado",
-      atualizarDadosDosAtletas
+      atualizarDadosDosAtletas,
     );
 
-    document.addEventListener(
-      "visibilitychange",
-      aoAlterarVisibilidade
-    );
+    document.addEventListener("visibilitychange", aoAlterarVisibilidade);
 
     return () => {
-      window.removeEventListener(
-        "focus",
-        atualizarDadosDosAtletas
-      );
+      window.removeEventListener("focus", atualizarDadosDosAtletas);
 
       window.removeEventListener(
         "footera:vinculo-treino-alterado",
-        atualizarDadosDosAtletas
+        atualizarDadosDosAtletas,
       );
 
-      document.removeEventListener(
-        "visibilitychange",
-        aoAlterarVisibilidade
-      );
+      document.removeEventListener("visibilitychange", aoAlterarVisibilidade);
     };
   }, [token, clubeId, canEdit]);
 
   async function salvarObservado(atletaId: string) {
     if (!token || !clubeId) return;
-    const edit =
-      observadoEdits[atletaId] || {
-        notaInterna: "",
-        alertarMudancas: false,
-      };
+    const edit = observadoEdits[atletaId] || {
+      notaInterna: "",
+      alertarMudancas: false,
+    };
 
     setSavingById((s) => ({ ...s, [atletaId]: true }));
     setErrorById((e) => ({ ...e, [atletaId]: null }));
@@ -1214,7 +1261,7 @@ export default function PerfilClube({
           notaInterna: edit.notaInterna,
           alertarMudancas: edit.alertarMudancas,
         },
-        { headers }
+        { headers },
       );
       setObservados((prev) =>
         (prev || []).map((a) =>
@@ -1224,8 +1271,8 @@ export default function PerfilClube({
                 notaInterna: edit.notaInterna,
                 alertarMudancas: edit.alertarMudancas,
               }
-            : a
-        )
+            : a,
+        ),
       );
     } catch (err: any) {
       setErrorById((e) => ({
@@ -1248,16 +1295,14 @@ export default function PerfilClube({
     );
   if (!data || !data.clube)
     return (
-      <div className="text-center p-10 text-red-600">
-        Clube não encontrado.
-      </div>
+      <div className="text-center p-10 text-red-600">Clube não encontrado.</div>
     );
 
   const nome = data.clube.nome || data.usuario?.nome || "Clube";
   const emailDoPerfil =
-  (data?.usuario?.email && String(data.usuario.email)) ||
-  (data?.clube?.email && String(data.clube.email)) ||
-  "";
+    (data?.usuario?.email && String(data.usuario.email)) ||
+    (data?.clube?.email && String(data.clube.email)) ||
+    "";
 
   const headerFoto =
     (typeof data.clube.logo === "string" && data.clube.logo) ||
@@ -1276,8 +1321,14 @@ export default function PerfilClube({
       label: "Atletas",
       value: atletasHeaderCount ?? athletesCount ?? data.metrics?.atletas ?? 0,
     },
-    { label: "Eventos", value: (typeof eventosCount === "number" ? eventosCount : 0) },
-    { label: "Conquistas", value: (typeof conquistasCount === "number" ? conquistasCount : 0) },
+    {
+      label: "Eventos",
+      value: typeof eventosCount === "number" ? eventosCount : 0,
+    },
+    {
+      label: "Conquistas",
+      value: typeof conquistasCount === "number" ? conquistasCount : 0,
+    },
   ];
   const clubeIdStr = data.clube.id;
 
@@ -1286,7 +1337,7 @@ export default function PerfilClube({
       data.clube.usuarioId ||
       data.usuario?.id ||
       (isOwn ? Storage.usuarioId : "") ||
-      ""
+      "",
   ).trim();
 
   const mostrarCreator = Boolean(hasCreator || creatorAtivoLocal);
@@ -1295,7 +1346,7 @@ export default function PerfilClube({
     : eventosPreview.slice(0, 5);
 
   return (
-     <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-2xl mx-auto">
       <ProfileHeader
         nome={nome}
         time={time}
@@ -1353,7 +1404,7 @@ export default function PerfilClube({
           </div>
         </div>
       </div>
-      
+
       {aba === "perfil" && (
         <section className="mt-4 px-3 sm:px-4 grid gap-4">
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
@@ -1384,9 +1435,7 @@ export default function PerfilClube({
                   <b>Estádio:</b> {data.clube.estadio}
                 </li>
               )}
-              {(data.clube.cidade ||
-                data.clube.estado ||
-                data.clube.pais) && (
+              {(data.clube.cidade || data.clube.estado || data.clube.pais) && (
                 <li>
                   <b>Localização:</b>{" "}
                   {[data.clube.cidade, data.clube.estado, data.clube.pais]
@@ -1440,7 +1489,7 @@ export default function PerfilClube({
             )}
           </div>
 
-<div className="bg-white/70 rounded-xl p-4 shadow-sm">
+          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-1">
               FootEra Formadores
             </h3>
@@ -1460,7 +1509,11 @@ export default function PerfilClube({
                 <button
                   type="button"
                   className="inline-block rounded-lg bg-gray-300 text-gray-600 px-4 py-2 font-semibold cursor-not-allowed"
-                  onClick={() => toast.error("A página FootEra Formadores está em atualização no momento.")}
+                  onClick={() =>
+                    toast.error(
+                      "A página FootEra Formadores está em atualização no momento.",
+                    )
+                  }
                 >
                   Módulo Formadores em manuntenção
                 </button>
@@ -1477,7 +1530,8 @@ export default function PerfilClube({
                   {data.clube.responsavel || data.usuario?.nome}
                 </li>
               )}
-              {privacidade?.mostrarEmail && (data.clube.email || data.usuario?.email) ? (
+              {privacidade?.mostrarEmail &&
+              (data.clube.email || data.usuario?.email) ? (
                 <li>
                   <b>Email:</b> {data.clube.email || data.usuario?.email}
                 </li>
@@ -1494,45 +1548,164 @@ export default function PerfilClube({
           </div>
 
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-green-900 mb-2">
-              Documentação
-            </h3>
+            <h3 className="font-semibold text-green-900 mb-2">Documentação</h3>
             {data.clube.cnpj ? (
               <p className="text-sm text-green-900/90">
                 <b>CNPJ:</b> {data.clube.cnpj}
               </p>
             ) : (
-              <p className="text-sm text-green-900/70">
-                Sem CNPJ informado.
-              </p>
+              <p className="text-sm text-green-900/70">Sem CNPJ informado.</p>
             )}
           </div>
 
+          <SectionCard
+            title="Turmas do Clube"
+            right={
+              canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfessorSelecionado(undefined);
+                    setTurmasOpen(true);
+                  }}
+                  className="
+                    text-sm px-3 py-1.5 rounded-md
+                    bg-green-600 text-white
+                    inline-flex items-center gap-1
+                  "
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Administrar
+                </button>
+              ) : null
+            }
+          >
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">
+                Carregando turmas…
+              </div>
+            ) : turmas.length > 0 ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {turmas.map((turma) => (
+                  <li
+                    key={turma.id}
+                    className="
+                      flex flex-col gap-3 rounded-xl
+                      border border-green-100 p-3
+                      sm:flex-row sm:items-center
+                      sm:justify-between sm:p-4
+                    "
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-green-900">
+                        {turma.nome}
+                      </div>
+
+                      <div className="text-xs text-green-900/70">
+                        {turma.categoria
+                          ? `Cat. ${turma.categoria}`
+                          : "Sem categoria"}
+
+                        {" • "}
+
+                        {typeof turma.alunosCount === "number"
+                          ? `${turma.alunosCount} alunos`
+                          : "—"}
+                      </div>
+
+                      <div className="mt-0.5 text-xs text-green-900/70">
+                        <b>Professores:</b>{" "}
+                        {turma.professorNome ||
+                          (turma.professorNomes?.length
+                            ? turma.professorNomes.join(", ")
+                            : "—")}
+                      </div>
+                    </div>
+
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfessorSelecionado(turma.professorIds?.[0]);
+
+                          setTurmasOpen(true);
+                        }}
+                        className="
+                          inline-flex w-full items-center
+                          justify-center rounded-lg
+                          border border-green-200
+                          px-3 py-2 text-sm text-green-800
+                          hover:bg-green-50 sm:w-auto
+                        "
+                      >
+                        Administrar
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid gap-3">
+                <EmptyState text="Nenhuma turma cadastrada no clube." />
+
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfessorSelecionado(undefined);
+                      setTurmasOpen(true);
+                    }}
+                    className="
+                      px-4 py-2 rounded-md
+                      border border-green-200 text-green-900
+                    "
+                  >
+                    Abrir gerenciamento
+                  </button>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-green-900 mb-2">Atividade Recente</h3>
+            <h3 className="font-semibold text-green-900 mb-2">
+              Atividade Recente
+            </h3>
 
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
                 {atividades.slice(0, 6).map((a) => {
                   const tipoNorm = String(a.tipo || "").toUpperCase();
 
-                   const Icon =
-                    a.tipo === "Evento" ? CalendarClock :
-                    a.tipo === "Metodologia" ? BookOpen :
-                    a.tipo === "Desafio" ? Trophy :
-                    a.tipo === "Vídeo" || a.tipo === "Video" ? VideoCamera :
-                    a.tipo === "Treino" ? Activity :
-                    a.tipo === "Postagem" ? FileText :
-                    Activity;
-                    
+                  const Icon =
+                    a.tipo === "Evento"
+                      ? CalendarClock
+                      : a.tipo === "Metodologia"
+                        ? BookOpen
+                        : a.tipo === "Desafio"
+                          ? Trophy
+                          : a.tipo === "Vídeo" || a.tipo === "Video"
+                            ? VideoCamera
+                            : a.tipo === "Treino"
+                              ? Activity
+                              : a.tipo === "Postagem"
+                                ? FileText
+                                : Activity;
+
                   const tipoLabel =
-                    tipoNorm === "METODOLOGIA" ? "Metodologia"
-                    : tipoNorm === "VIDEO" ? "Vídeo"
-                    : tipoNorm === "TREINO" ? "Treino"
-                    : tipoNorm === "DESAFIO" ? "Desafio"
-                    : tipoNorm === "POSTAGEM" ? "Postagem"
-                    : tipoNorm === "EVENTO" ? "Evento"
-                    : "Atividade";
+                    tipoNorm === "METODOLOGIA"
+                      ? "Metodologia"
+                      : tipoNorm === "VIDEO"
+                        ? "Vídeo"
+                        : tipoNorm === "TREINO"
+                          ? "Treino"
+                          : tipoNorm === "DESAFIO"
+                            ? "Desafio"
+                            : tipoNorm === "POSTAGEM"
+                              ? "Postagem"
+                              : tipoNorm === "EVENTO"
+                                ? "Evento"
+                                : "Atividade";
 
                   const d = parseDateSafe(a);
 
@@ -1559,7 +1732,9 @@ export default function PerfilClube({
                       ) : null}
 
                       <div className="text-sm">
-                        <div className="font-medium text-green-900">{a.titulo}</div>
+                        <div className="font-medium text-green-900">
+                          {a.titulo}
+                        </div>
                         <div className="text-xs text-green-900/70">
                           {tipoLabel} • {dataStr}
                         </div>
@@ -1593,7 +1768,6 @@ export default function PerfilClube({
               <EmptyState text="Nenhuma atividade recente" />
             )}
           </div>
-
         </section>
       )}
 
@@ -1626,7 +1800,9 @@ export default function PerfilClube({
                   onClick={() => setMostrarTodosEventos((valor) => !valor)}
                   className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
                 >
-                  {mostrarTodosEventos ? "Mostrar menos" : `Ver todos (${eventosPreview.length})`}
+                  {mostrarTodosEventos
+                    ? "Mostrar menos"
+                    : `Ver todos (${eventosPreview.length})`}
                 </button>
               ) : null}
             </div>
@@ -1638,7 +1814,9 @@ export default function PerfilClube({
 
             <div className="mt-3">
               {eventosLoading ? (
-                <div className="text-sm text-green-900/70">Carregando eventos…</div>
+                <div className="text-sm text-green-900/70">
+                  Carregando eventos…
+                </div>
               ) : eventosErro ? (
                 <div className="text-sm text-red-600">{eventosErro}</div>
               ) : eventosVisiveis.length > 0 ? (
@@ -1673,8 +1851,8 @@ export default function PerfilClube({
                       ev.origem === "AULA_AO_VIVO_CREATOR"
                         ? `/learning/evento/${ev.id}`
                         : ev.origem === "EVENTO_CREATOR"
-                        ? `/eventos/${ev.id}`
-                        : `/eventos/clubes/${clubeIdStr}`;
+                          ? `/eventos/${ev.id}`
+                          : `/eventos/clubes/${clubeIdStr}`;
 
                     return (
                       <Link
@@ -1752,9 +1930,7 @@ export default function PerfilClube({
           </div>
 
           {mostrarCreator && usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection
-              creatorUsuarioId={usuarioCreatorDoPerfil}
-            />
+            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
           ) : null}
         </section>
       )}
@@ -1762,9 +1938,11 @@ export default function PerfilClube({
       {aba === "postagens" && (
         <section className="mt-4 px-3 sm:px-4">
           {(() => {
-            const postsUserId = isOwn
-              ? String(Storage.usuarioId || "")
-              : String(data?.usuario?.id ?? data?.clube?.usuarioId ?? "");
+            const postsUserId = String(
+              data?.usuario?.id ??
+                data?.clube?.usuarioId ??
+                (isOwn ? Storage.usuarioId : ""),
+            );
 
             return postsUserId ? (
               <ProfilePostsSection usuarioId={postsUserId} />
@@ -1835,64 +2013,121 @@ export default function PerfilClube({
                 </Link>
               }
             >
-              {vinculadosPreview.length > 0 ? (
-                <ul className="space-y-2">
-                  {vinculadosPreview.map((a) => (
-                    <li
-                      key={a.atletaId}
-                      className="flex items-center gap-3"
-                    >
-                      <Avatar
-                        foto={a.foto ?? null}
-                        alt={a.nome}
-                        className="w-9 h-9"
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-green-900">
-                          {a.nome}
-                        </div>
-                        <div className="text-xs text-green-900/70">
-                          {[
-                            a.posicao,
-                            a.categoria,
-                            a.pontuacao != null
-                              ? `${a.pontuacao} pts`
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" • ")}
-                        </div>
-                      </div>
-                      <Link
-                        href={`/perfil/${a.usuarioId ?? a.id}`}
-                        className="text-xs text-green-800"
-                      
+              {vinculadosParaExibir.length > 0 ? (
+                <>
+                  <ul className="grid grid-cols-1 gap-3">
+                    {vinculadosVisiveis.map((a) => (
+                      <li
+                        key={a.atletaId || a.id}
+                        className="
+                          flex flex-col gap-3 rounded-xl
+                          border border-green-100 p-3
+                          sm:flex-row sm:items-center
+                        "
                       >
-                        Ver
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <Avatar
+                            foto={a.foto ?? null}
+                            alt={a.nome}
+                            className="w-10 h-10 shrink-0"
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-green-900 truncate">
+                              {a.nome}
+                            </div>
+
+                            <div className="text-xs text-green-900/70">
+                              {[
+                                a.posicao,
+                                a.idade != null ? `${a.idade} anos` : null,
+                                a.categoria,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 sm:justify-end">
+                          {typeof a.pontuacao === "number" && (
+                            <span
+                              className="
+                                text-[11px] px-2 py-0.5 rounded
+                                bg-green-100 text-green-800
+                                border border-green-200
+                              "
+                            >
+                              {a.pontuacao} pts
+                            </span>
+                          )}
+
+                          <Link
+                            href={`/perfil/${a.usuarioId ?? a.id}`}
+                            className="
+                              text-sm text-green-800
+                              inline-flex items-center gap-1
+                              whitespace-nowrap
+                            "
+                          >
+                            Ver perfil
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {vinculadosParaExibir.length > 5 && (
+                    <div className="mt-4 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMostrarTodosVinculados((valor) => !valor)
+                        }
+                        className="
+                          rounded-lg border border-green-200
+                          px-4 py-2 text-sm font-medium
+                          text-green-900 hover:bg-green-50
+                        "
+                      >
+                        {mostrarTodosVinculados
+                          ? "Mostrar menos"
+                          : `Ver todos (${vinculadosParaExibir.length})`}
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
-                <p className="text-sm text-green-900/70">
-                  Nenhum atleta vinculado ainda.
-                </p>
+                <div>
+                  <EmptyState text="Nenhum atleta vinculado ainda" />
+
+                  <div className="flex justify-center">
+                    <Link
+                      href="/explorar"
+                      className="
+                        px-4 py-2 rounded-md
+                        border border-green-200
+                        text-green-900
+                      "
+                    >
+                      Ver atletas
+                    </Link>
+                  </div>
+                </div>
               )}
             </SectionCard>
           )}
 
           {subAba === "observados" && (
-            <SectionCard
-              title="Atletas Observados"
-            >
+            <SectionCard title="Atletas Observados">
               {observados && observados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
                   {observados.map((a) => {
-                    const edit =
-                      observadoEdits[a.atletaId] || {
-                        notaInterna: a.notaInterna ?? "",
-                        alertarMudancas: !!a.alertarMudancas,
-                      };
+                    const edit = observadoEdits[a.atletaId] || {
+                      notaInterna: a.notaInterna ?? "",
+                      alertarMudancas: !!a.alertarMudancas,
+                    };
                     const saving = !!savingById[a.atletaId];
                     const errMsg = errorById[a.atletaId] || null;
 
@@ -1916,9 +2151,7 @@ export default function PerfilClube({
                                 a.posicao,
                                 a.idade ? `${a.idade} anos` : "",
                                 a.categoria ? `Cat. ${a.categoria}` : "",
-                                a.pontuacao != null
-                                  ? `${a.pontuacao} pts`
-                                  : "",
+                                a.pontuacao != null ? `${a.pontuacao} pts` : "",
                               ]
                                 .filter(Boolean)
                                 .join(" • ")}
@@ -1928,8 +2161,7 @@ export default function PerfilClube({
                             href={`/perfil/${a.usuarioId ?? a.id}`}
                             className="text-sm text-green-800 inline-flex items-center gap-1"
                           >
-                            Ver perfil{" "}
-                            <ChevronRight className="w-4 h-4" />
+                            Ver perfil <ChevronRight className="w-4 h-4" />
                           </Link>
                         </div>
 
@@ -1967,8 +2199,8 @@ export default function PerfilClube({
                                 }))
                               }
                             />
-                            Notificar mudanças (pontuação, posição, idade,
-                            novos treinos/desafios)
+                            Notificar mudanças (pontuação, posição, idade, novos
+                            treinos/desafios)
                           </label>
 
                           <div className="flex items-center gap-3">
@@ -2004,10 +2236,7 @@ export default function PerfilClube({
             <SectionCard
               title="Solicitações de Atletas"
               right={
-                <Link
-                  href="/notificacoes"
-                  className="text-sm text-green-800"
-                >
+                <Link href="/notificacoes" className="text-sm text-green-800">
                   Abrir notificações
                 </Link>
               }
@@ -2038,8 +2267,7 @@ export default function PerfilClube({
                         href={`/perfil/${s.remetenteId}`}
                         className="text-sm text-green-800 inline-flex items-center gap-1"
                       >
-                        Ver perfil{" "}
-                        <ChevronRight className="w-4 h-4" />
+                        Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </li>
                   ))}
@@ -2216,7 +2444,10 @@ export default function PerfilClube({
           <SectionCard
             title="Conquistas e Troféus"
             right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+              <Link
+                href="/perfil/conquistas"
+                className="text-sm text-green-800"
+              >
                 Ver conquistas
               </Link>
             }
@@ -2246,14 +2477,19 @@ export default function PerfilClube({
           <SectionCard
             title="Certificados emitidos"
             right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+              <Link
+                href="/perfil/conquistas"
+                className="text-sm text-green-800"
+              >
                 Ver certificados
               </Link>
             }
           >
             {certificados && certificados.length > 0 ? (
               <div className="text-green-900 font-medium">
-                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                {certificados.length} certificado
+                {certificados.length > 1 ? "s" : ""} emitido
+                {certificados.length > 1 ? "s" : ""}
               </div>
             ) : (
               <EmptyState text="Nenhum certificado emitido ainda." />

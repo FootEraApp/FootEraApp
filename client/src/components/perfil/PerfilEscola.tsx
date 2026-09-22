@@ -10,7 +10,7 @@ import {
   PlusCircle,
   BookOpen,
   FileText,
-  CameraIcon
+  CameraIcon,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
@@ -22,7 +22,11 @@ import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js"; 
 import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
 
-type Props = { idDaUrl?: string; hasCreator?: boolean; creatorUsuarioId?: string | null };
+type Props = {
+  idDaUrl?: string;
+  hasCreator?: boolean;
+  creatorUsuarioId?: string | null;
+};
 type UsuarioMin = {
   id: string;
   nome: string;
@@ -64,7 +68,7 @@ type PayloadEscola = {
 };
 
 type AtletaItem = {
-  id: string; 
+  id: string;
   usuarioId: string;
   nome: string;
   foto?: string | null;
@@ -75,8 +79,8 @@ type AtletaItem = {
   observadoEm?: string;
   categoria?: string | null;
   pontuacao?: number | null;
-  observadoId?: string;      
-  atletaId?: string;       
+  observadoId?: string;
+  atletaId?: string;
   notaInterna?: string | null;
   alertarMudancas?: boolean | null;
 };
@@ -110,10 +114,11 @@ type ProfessorItem = {
 type Turma = {
   id: string;
   nome: string;
+  categoria?: string | null;
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
-  professorIds?: string[];      
-  professorNomes?: string[];    
+  professorIds?: string[];
+  professorNomes?: string[];
   professorNome?: string | null;
   alunosCount?: number | null;
 };
@@ -168,11 +173,7 @@ function SectionCard({
 
 function parseDateSafe(it: any) {
   const raw =
-    it?.createdAt ??
-    it?.criadoEm ??
-    it?.data ??
-    it?.created_at ??
-    null;
+    it?.createdAt ?? it?.criadoEm ?? it?.data ?? it?.created_at ?? null;
 
   const d = raw ? new Date(raw) : null;
   return d && !isNaN(+d) ? d : null;
@@ -196,33 +197,43 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuarioId = null }: Props) {
+export default function PerfilEscola({
+  idDaUrl,
+  hasCreator = false,
+  creatorUsuarioId = null,
+}: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  const isOwn =
-    !idDaUrl ||
-    idDaUrl === Storage.usuarioId ||
-    idDaUrl === Storage.tipoUsuarioId;
+  const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
   const canEdit = isOwn;
-  const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
+  const targetId = isOwn ? "me" : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadEscola | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "professores" | "postagens";
+  type Aba =
+    | "visao"
+    | "eventos"
+    | "atletas"
+    | "conquistas"
+    | "professores"
+    | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
   const [subAba, setSubAba] = useState<SubAba>("vinculados");
 
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
+  const [mostrarTodosVinculados, setMostrarTodosVinculados] = useState(false);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
-  const [obsDraft, setObsDraft] = useState<Record<string, { nota: string; alertar: boolean }>>({});
+  const [obsDraft, setObsDraft] = useState<
+    Record<string, { nota: string; alertar: boolean }>
+  >({});
   const [obsSaving, setObsSaving] = useState<Record<string, boolean>>({});
   const [obsMsg, setObsMsg] = useState<Record<string, string>>({});
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(
-    null
+    null,
   );
   const [contagensAtletas, setContagensAtletas] = useState({
     vinculados: 0,
@@ -251,15 +262,28 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   } | null>(null);
 
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
-  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
+  const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(
+    null,
+  );
 
-  const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
-  const entidadeUsuarioId = (isOwn ? Storage.usuarioId : data?.escolinha?.usuarioId) ?? null;
-  
-  function extrairListaResposta(
-    payload: any,
-    chaves: string[] = []
-  ): any[] {
+  const vinculadosParaExibir = vinculados ?? [];
+
+  const vinculadosVisiveis = mostrarTodosVinculados
+    ? vinculadosParaExibir
+    : vinculadosParaExibir.slice(0, 5);
+
+  const escolinhaId =
+    data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+  const entidadeUsuarioId =
+    data?.usuario?.id ??
+    data?.escolinha?.usuarioId ??
+    (isOwn ? Storage.usuarioId : null);
+
+  useEffect(() => {
+    setMostrarTodosVinculados(false);
+  }, [targetId, subAba]);
+
+  function extrairListaResposta(payload: any, chaves: string[] = []): any[] {
     if (Array.isArray(payload)) {
       return payload;
     }
@@ -294,46 +318,44 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           },
         }),
 
-        axios.get(
-          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
-          { headers }
-        ),
+        axios.get(`${API.BASE_URL}/api/solicitacoes-treino/recebidas`, {
+          headers,
+        }),
       ]);
 
     const vinculadosLista =
       vinculadosResult.status === "fulfilled"
-        ? extrairListaResposta(
-            vinculadosResult.value.data,
-            ["atletas", "items", "data"]
-          )
+        ? extrairListaResposta(vinculadosResult.value.data, [
+            "atletas",
+            "items",
+            "data",
+          ])
         : null;
 
     const observadosLista =
       observadosResult.status === "fulfilled"
-        ? extrairListaResposta(
-            observadosResult.value.data,
-            ["observados", "items", "data"]
-          )
+        ? extrairListaResposta(observadosResult.value.data, [
+            "observados",
+            "items",
+            "data",
+          ])
         : null;
 
     const solicitacoesLista =
       solicitacoesResult.status === "fulfilled"
-        ? extrairListaResposta(
-            solicitacoesResult.value.data,
-            ["solicitacoes", "items", "data"]
-          )
+        ? extrairListaResposta(solicitacoesResult.value.data, [
+            "solicitacoes",
+            "items",
+            "data",
+          ])
         : null;
 
     setContagensAtletas((prev) => ({
       vinculados:
-        vinculadosLista !== null
-          ? vinculadosLista.length
-          : prev.vinculados,
+        vinculadosLista !== null ? vinculadosLista.length : prev.vinculados,
 
       observados:
-        observadosLista !== null
-          ? observadosLista.length
-          : prev.observados,
+        observadosLista !== null ? observadosLista.length : prev.observados,
 
       solicitacoes:
         solicitacoesLista !== null
@@ -342,13 +364,15 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     }));
   }
 
-  async function buscarPontuacaoRealDoUsuario(usuarioId: string): Promise<number | null> {
+  async function buscarPontuacaoRealDoUsuario(
+    usuarioId: string,
+  ): Promise<number | null> {
     if (!token || !usuarioId) return null;
 
     try {
       const { data } = await axios.get(
         `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/pontuacao`,
-        { headers }
+        { headers },
       );
 
       const performance = Number(data?.performance) || 0;
@@ -362,12 +386,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   }
 
   useEffect(() => {
-    if (
-      aba !== "atletas" ||
-      !token ||
-      !escolinhaId ||
-      !canEdit
-    ) {
+    if (aba !== "atletas" || !token || !escolinhaId || !canEdit) {
       return;
     }
 
@@ -385,12 +404,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   useEffect(() => {
     setEventos(null);
     setMostrarTodosEventos(false);
-  }, [
-    targetId,
-    hasCreator,
-    creatorUsuarioId,
-    entidadeUsuarioId,
-  ]);
+  }, [targetId, hasCreator, creatorUsuarioId, entidadeUsuarioId]);
 
   useEffect(() => {
     if (!token || !escolinhaId || !canEdit) return;
@@ -409,36 +423,24 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       }
     }
 
-    window.addEventListener(
-      "focus",
-      atualizarDadosDosAtletas
-    );
+    window.addEventListener("focus", atualizarDadosDosAtletas);
 
     window.addEventListener(
       "footera:vinculo-treino-alterado",
-      atualizarDadosDosAtletas
+      atualizarDadosDosAtletas,
     );
 
-    document.addEventListener(
-      "visibilitychange",
-      aoAlterarVisibilidade
-    );
+    document.addEventListener("visibilitychange", aoAlterarVisibilidade);
 
     return () => {
-      window.removeEventListener(
-        "focus",
-        atualizarDadosDosAtletas
-      );
+      window.removeEventListener("focus", atualizarDadosDosAtletas);
 
       window.removeEventListener(
         "footera:vinculo-treino-alterado",
-        atualizarDadosDosAtletas
+        atualizarDadosDosAtletas,
       );
 
-      document.removeEventListener(
-        "visibilitychange",
-        aoAlterarVisibilidade
-      );
+      document.removeEventListener("visibilitychange", aoAlterarVisibilidade);
     };
   }, [token, escolinhaId, canEdit]);
 
@@ -457,7 +459,10 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   useEffect(() => {
     if (!token) return;
 
-    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.escolinha?.usuarioId ?? null);
+    const usuarioIdEnt =
+      data?.usuario?.id ??
+      data?.escolinha?.usuarioId ??
+      (isOwn ? Storage.usuarioId : null);
     if (!usuarioIdEnt) return;
 
     let cancel = false;
@@ -466,7 +471,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       try {
         const { data: resp } = await axios.get(
           `${API.BASE_URL}/api/conquistas/${encodeURIComponent(usuarioIdEnt)}?onlyConcluidas=1`,
-          { headers, withCredentials: true }
+          { headers, withCredentials: true },
         );
 
         const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
@@ -490,7 +495,10 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   useEffect(() => {
     if (!token) return;
 
-    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.escolinha?.usuarioId ?? null);
+    const usuarioIdEnt =
+      data?.usuario?.id ??
+      data?.escolinha?.usuarioId ??
+      (isOwn ? Storage.usuarioId : null);
     if (!usuarioIdEnt) return;
 
     let cancel = false;
@@ -499,7 +507,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       try {
         const { data: resp } = await axios.get(
           `${API.BASE_URL}/api/conquistas/certificados/${encodeURIComponent(usuarioIdEnt)}`,
-          { headers }
+          { headers },
         );
 
         const items = Array.isArray(resp?.items) ? resp.items : [];
@@ -557,7 +565,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       try {
         const resp = await axios.get<PayloadEscola>(
           `${API.BASE_URL}/api/perfil/escola/${targetId}`,
-          { headers }
+          { headers },
         );
         if (!cancel) setData(resp.data);
       } catch (e) {
@@ -581,7 +589,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       try {
         const { data } = await axios.get(
           `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
-          { headers }
+          { headers },
         );
 
         if (cancel) return;
@@ -610,8 +618,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
-    const targetUserForActivities =
-      isOwn ? "me" : (data?.usuario?.id ?? data?.escolinha?.usuarioId ?? "");
+    const targetUserForActivities = isOwn
+      ? "me"
+      : (data?.usuario?.id ?? data?.escolinha?.usuarioId ?? "");
 
     async function loadAtividadesIfNeeded() {
       if (aba !== "visao" || atividades != null || !targetUserForActivities)
@@ -619,9 +628,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       try {
         const { data: itens } = await axios.get<AtividadeRecente[]>(
           `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
-          { headers }
+          { headers },
         );
-         if (!cancel.v) {
+        if (!cancel.v) {
           const arr = Array.isArray(itens) ? itens : [];
           const seen = new Set<string>();
 
@@ -642,7 +651,8 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     }
 
     async function fetchVinculados() {
-      const entidadeId = isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id;
+      const entidadeId =
+        data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
       if (!entidadeId) return;
 
       try {
@@ -655,7 +665,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               id: entidadeId,
               order: "pontuacao_desc",
             },
-          }
+          },
         );
 
         const base = Array.isArray(resp?.atletas) ? resp.atletas : [];
@@ -668,7 +678,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               ...a,
               pontuacao: typeof pts === "number" ? pts : (a.pontuacao ?? null),
             };
-          })
+          }),
         );
 
         setVinculados(comPontuacaoReal);
@@ -689,9 +699,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
             params: {
               tipoUsuarioId: tipoId,
               incluirPontuacao: 1,
-              incluirNotas: 1, 
+              incluirNotas: 1,
             },
-          }
+          },
         );
 
         const arr = Array.isArray(lista) ? lista : [];
@@ -713,7 +723,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       try {
         const { data } = await axios.get<SolicitacaoItem[]>(
           `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
-          { headers }
+          { headers },
         );
         if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -748,7 +758,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     escolinhaId,
     atividades,
     eventos,
-    eventosLoading
+    eventosLoading,
   ]);
 
   async function loadProfessores() {
@@ -765,7 +775,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         headers,
         params: {
           vinculo: "escolinha",
-          id: entidadeUsuarioId, 
+          id: entidadeUsuarioId,
           limit: 200,
         },
       });
@@ -781,7 +791,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
             escolinhaId: escolinhaId,
           },
         });
-        lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+        lista = (
+          Array.isArray(data) ? data : (data?.items ?? data?.data ?? [])
+        ) as any[];
       }
 
       setProfessores(
@@ -792,7 +804,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           codigo: p.codigo ?? null,
           cref: p.cref ?? null,
           fotoUrl: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
-        }))
+        })),
       );
     } catch {
       setProfessores([]);
@@ -820,7 +832,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           tipo: "Escolinha",
           tipoUsuarioId: escolinhaId,
         },
-        { headers }
+        { headers },
       );
 
       setObservados((prev) => {
@@ -828,7 +840,11 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         return prev.map((x) => {
           const kx = String(x.observadoId ?? x.atletaId ?? x.id);
           if (kx !== key) return x;
-          return { ...x, notaInterna: draft.nota, alertarMudancas: draft.alertar };
+          return {
+            ...x,
+            notaInterna: draft.nota,
+            alertarMudancas: draft.alertar,
+          };
         });
       });
 
@@ -863,11 +879,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     if (!item) return "";
 
     return String(
-      item.nome ||
-        item.nomePublico ||
-        item.nomeDeUsuario ||
-        item.email ||
-        ""
+      item.nome || item.nomePublico || item.nomeDeUsuario || item.email || "",
     ).trim();
   }
 
@@ -919,14 +931,14 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
   async function loadEventosEscolinha() {
     const escolaId =
-      (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+      data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
 
     const usuarioCreatorId = String(
       creatorUsuarioId ||
         data?.escolinha?.usuarioId ||
         entidadeUsuarioId ||
         (isOwn ? Storage.usuarioId : "") ||
-        ""
+        "",
     ).trim();
 
     if (!escolaId && !usuarioCreatorId) {
@@ -958,9 +970,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       const perfilCreatorPromise = usuarioCreatorId
         ? axios.get(
             `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-              usuarioCreatorId
+              usuarioCreatorId,
             )}`,
-            { headers }
+            { headers },
           )
         : Promise.resolve({ data: null });
 
@@ -990,15 +1002,15 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         Array.isArray(payload)
           ? payload
           : Array.isArray(payload?.items)
-          ? payload.items
-          : Array.isArray(payload?.eventos)
-          ? payload.eventos
-          : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
+            ? payload.items
+            : Array.isArray(payload?.eventos)
+              ? payload.eventos
+              : Array.isArray(payload?.data)
+                ? payload.data
+                : [];
 
       const eventosDaEscola: EventoItem[] = extrairEventos(
-        eventosEscolaResp
+        eventosEscolaResp,
       ).map((e: any) => {
         const dt = e.dataEvento ?? e.data ?? e.inicio ?? null;
 
@@ -1026,7 +1038,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         "";
 
       const eventosGeraisDoCreator: EventoItem[] = extrairEventos(
-        eventosCreatorResp
+        eventosCreatorResp,
       ).map((e: any) => ({
         id: String(e.id),
         titulo: String(e.titulo ?? e.nome ?? "Evento"),
@@ -1044,7 +1056,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       }));
 
       const aulasAoVivoCreator: EventoItem[] = Array.isArray(
-        creatorResp?.eventosAoVivo
+        creatorResp?.eventosAoVivo,
       )
         ? creatorResp.eventosAoVivo.map((aula: any) => ({
             id: String(aula.id),
@@ -1134,21 +1146,30 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
         headers,
         params: { ownerTipo: "Escolinha", ownerId: escolinhaId },
       });
-      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+      const arr = Array.isArray(data)
+        ? data
+        : (data?.items ?? data?.data ?? []);
       setTurmas(
         (arr ?? []).map((t: any) => ({
           id: String(t.id),
           nome: String(t.nome ?? t.titulo ?? "Turma"),
+          categoria: t.categoria ?? null,
           ownerTipo: t.ownerTipo ?? "Escolinha",
           ownerId: t.ownerId ?? escolinhaId,
-          professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
-          professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+          professorIds: Array.isArray(t.professorIds)
+            ? t.professorIds.map(String)
+            : [],
+          professorNomes: Array.isArray(t.professorNomes)
+            ? t.professorNomes
+            : [],
           professorNome:
             t.professorNome ??
-            (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+            (Array.isArray(t.professorNomes)
+              ? t.professorNomes.join(", ")
+              : null) ??
             null,
           alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
-        }))
+        })),
       );
     } catch {
       setTurmas([]);
@@ -1158,17 +1179,22 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
   }
 
   useEffect(() => {
-    if (aba === "professores" && canEdit) {
-      loadProfessores();
-      loadTurmas();
+    if (aba === "visao") {
+      void loadTurmas();
     }
+
+    if (aba === "professores" && canEdit) {
+      void loadProfessores();
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, canEdit, escolinhaId, token, entidadeUsuarioId]);
 
   useEffect(() => {
     if (!token) return;
 
-    const ownerId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+    const ownerId =
+      data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
 
     if (!ownerId) {
       setConquistasReal(0);
@@ -1184,7 +1210,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           {
             headers,
             params: { ownerTipo: "Escolinha", ownerId },
-          }
+          },
         );
 
         const count = Number(resp?.count ?? 0);
@@ -1219,9 +1245,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
     undefined;
 
   const perfilUsuarioId: string =
-    (data.usuario && data.usuario.id) ||
-    data.escolinha.usuarioId ||
-    "";
+    (data.usuario && data.usuario.id) || data.escolinha.usuarioId || "";
 
   const localidade = data.escolinha.cidade
     ? `${data.escolinha.cidade}${
@@ -1236,15 +1260,16 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
       data.escolinha.usuarioId ||
       data.usuario?.id ||
       (isOwn ? Storage.usuarioId : "") ||
-      ""
+      "",
   ).trim();
 
   const mostrarCreator = Boolean(hasCreator || creatorAtivoLocal);
   const eventosVisiveis = mostrarTodosEventos
-    ? eventos ?? []
+    ? (eventos ?? [])
     : (eventos ?? []).slice(0, 5);
 
-  const ownerIdDashboard = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? data.escolinha.id;
+  const ownerIdDashboard =
+    data.escolinha.id || (isOwn ? Storage.tipoUsuarioId : "");
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -1325,7 +1350,10 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               )}
               {privacidade?.mostrarEmail ? (
                 <li>
-                  <b>Email:</b> {data.escolinha.email ?? data.usuario?.email ?? "Não informado"}
+                  <b>Email:</b>{" "}
+                  {data.escolinha.email ??
+                    data.usuario?.email ??
+                    "Não informado"}
                 </li>
               ) : null}
 
@@ -1365,9 +1393,14 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
           <SectionCard title="Dashboard da Escolinha">
             {ownerIdDashboard ? (
-              <DashboardOrganizacao ownerTipo="Escolinha" ownerId={ownerIdDashboard} />
+              <DashboardOrganizacao
+                ownerTipo="Escolinha"
+                ownerId={ownerIdDashboard}
+              />
             ) : (
-              <div className="text-sm text-green-900/70">Sem ID da escolinha para carregar o dashboard.</div>
+              <div className="text-sm text-green-900/70">
+                Sem ID da escolinha para carregar o dashboard.
+              </div>
             )}
           </SectionCard>
 
@@ -1389,7 +1422,11 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   <button
                     type="button"
                     className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-gray-300 text-gray-600 cursor-not-allowed"
-                    onClick={() => toast.error("A página FootEra Formadores está em atualização no momento.")}
+                    onClick={() =>
+                      toast.error(
+                        "A página FootEra Formadores está em atualização no momento.",
+                      )
+                    }
                   >
                     <Shield className="w-4 h-4" />
                     Módulo Formadores em manuntenção
@@ -1403,6 +1440,114 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               </p>
             </SectionCard>
           )}
+
+          <SectionCard
+            title="Turmas da Escolinha"
+            right={
+              canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfessorSelecionado(undefined);
+                    setTurmasOpen(true);
+                  }}
+                  className="
+                    text-sm px-3 py-1.5 rounded-md
+                    bg-green-600 text-white
+                    inline-flex items-center gap-1
+                  "
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Administrar
+                </button>
+              ) : null
+            }
+          >
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">
+                Carregando turmas…
+              </div>
+            ) : turmas.length > 0 ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {turmas.map((turma) => (
+                  <li
+                    key={turma.id}
+                    className="
+                      flex flex-col gap-3 rounded-xl
+                      border border-green-100 p-3
+                      sm:flex-row sm:items-center
+                      sm:justify-between sm:p-4
+                    "
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-green-900">
+                        {turma.nome}
+                      </div>
+
+                      <div className="text-xs text-green-900/70">
+                        {turma.categoria
+                          ? `Cat. ${turma.categoria}`
+                          : "Sem categoria"}
+
+                        {" • "}
+
+                        {typeof turma.alunosCount === "number"
+                          ? `${turma.alunosCount} alunos`
+                          : "—"}
+                      </div>
+
+                      <div className="mt-0.5 text-xs text-green-900/70">
+                        <b>Professores:</b>{" "}
+                        {turma.professorNome ||
+                          (turma.professorNomes?.length
+                            ? turma.professorNomes.join(", ")
+                            : "—")}
+                      </div>
+                    </div>
+
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfessorSelecionado(turma.professorIds?.[0]);
+                          setTurmasOpen(true);
+                        }}
+                        className="
+                          inline-flex w-full items-center
+                          justify-center rounded-lg
+                          border border-green-200
+                          px-3 py-2 text-sm text-green-800
+                          hover:bg-green-50 sm:w-auto
+                        "
+                      >
+                        Administrar
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid gap-3">
+                <EmptyState text="Nenhuma turma cadastrada na escolinha." />
+
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfessorSelecionado(undefined);
+                      setTurmasOpen(true);
+                    }}
+                    className="
+                      px-4 py-2 rounded-md
+                      border border-green-200 text-green-900
+                    "
+                  >
+                    Abrir gerenciamento
+                  </button>
+                )}
+              </div>
+            )}
+          </SectionCard>
 
           <SectionCard
             title="Treinos"
@@ -1460,32 +1605,34 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
                   const content = (
                     <div className="flex items-center gap-3">
-                        {a.tipo === "Evento" ? (
-                          <CalendarClock className="w-5 h-5 text-green-700" />
-                        ) : a.tipo === "Treino" ? (
-                          <Activity className="w-5 h-5 text-green-700" />
-                        ) : a.tipo === "Desafio" ? (
-                          <Trophy className="w-5 h-5 text-green-700" />
-                        ) : a.tipo === "Metodologia" ? (
-                          <BookOpen className="w-5 h-5 text-green-700" />
-                        ) : a.tipo === "Vídeo" ? (
-                          <CameraIcon className="w-5 h-5 text-green-700" />
-                        ) : a.tipo === "Postagem" ? (
-                          <FileText className="w-5 h-5 text-green-700" />
-                        ) : (
-                          <Activity className="w-5 h-5 text-green-700" />
-                        )}
+                      {a.tipo === "Evento" ? (
+                        <CalendarClock className="w-5 h-5 text-green-700" />
+                      ) : a.tipo === "Treino" ? (
+                        <Activity className="w-5 h-5 text-green-700" />
+                      ) : a.tipo === "Desafio" ? (
+                        <Trophy className="w-5 h-5 text-green-700" />
+                      ) : a.tipo === "Metodologia" ? (
+                        <BookOpen className="w-5 h-5 text-green-700" />
+                      ) : a.tipo === "Vídeo" ? (
+                        <CameraIcon className="w-5 h-5 text-green-700" />
+                      ) : a.tipo === "Postagem" ? (
+                        <FileText className="w-5 h-5 text-green-700" />
+                      ) : (
+                        <Activity className="w-5 h-5 text-green-700" />
+                      )}
 
-                        {a.imagemUrl ? (
-                          <img
-                            src={normalizeImg(a.imagemUrl) ?? undefined}
-                            alt={a.titulo}
-                            className="w-10 h-10 rounded-lg object-cover border border-green-100"
-                          />
-                        ) : null}
+                      {a.imagemUrl ? (
+                        <img
+                          src={normalizeImg(a.imagemUrl) ?? undefined}
+                          alt={a.titulo}
+                          className="w-10 h-10 rounded-lg object-cover border border-green-100"
+                        />
+                      ) : null}
 
-                        <div className="text-sm">
-                        <div className="font-medium text-green-900">{a.titulo}</div>
+                      <div className="text-sm">
+                        <div className="font-medium text-green-900">
+                          {a.titulo}
+                        </div>
                         <div className="text-xs text-green-900/70">
                           {d ? d.toLocaleString("pt-BR") : "Data não informada"}
                         </div>
@@ -1542,13 +1689,16 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   onClick={() => setMostrarTodosEventos((valor) => !valor)}
                   className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
                 >
-                  {mostrarTodosEventos ? "Mostrar menos" : `Ver todos (${eventos?.length ?? 0})`}
+                  {mostrarTodosEventos
+                    ? "Mostrar menos"
+                    : `Ver todos (${eventos?.length ?? 0})`}
                 </button>
               ) : null
             }
           >
             <p className="text-sm text-green-900/80 mt-1">
-              Confira os próximos eventos, peneiras, amistosos, avaliações e aulas ao vivo.
+              Confira os próximos eventos, peneiras, amistosos, avaliações e
+              aulas ao vivo.
             </p>
 
             {isOwn && (
@@ -1569,7 +1719,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
 
             <div className="mt-5">
               {eventosLoading ? (
-                <div className="text-sm text-green-900/70">Carregando eventos…</div>
+                <div className="text-sm text-green-900/70">
+                  Carregando eventos…
+                </div>
               ) : eventosVisiveis.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
                   {eventosVisiveis.map((e) => {
@@ -1661,9 +1813,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           </SectionCard>
 
           {mostrarCreator && usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection
-              creatorUsuarioId={usuarioCreatorDoPerfil}
-            />
+            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
           ) : null}
         </div>
       )}
@@ -1725,54 +1875,104 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   </Link>
                 }
               >
-                {vinculados && vinculados.length > 0 ? (
-                  <ul className="grid grid-cols-1 gap-3">
-                    {vinculados.map((a) => (
-                      <li
-                        key={a.id}
-                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3"
-                      >
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">
-                            {a.nome}
-                          </div>
-                          <div className="text-xs text-green-900/70">
-                            {[
-                              a.posicao,
-                              a.idade ? `${a.idade} anos` : null,
-                              a.categoria,
-                            ]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </div>
-                        </div>
-                        {typeof a.pontuacao === "number" && (
-                          <span className="text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
-                            {a.pontuacao} pts
-                          </span>
-                        )}
-                        <Link
-                          href={`/perfil/${a.usuarioId}`}
-                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1"
+                {vinculadosParaExibir.length > 0 ? (
+                  <>
+                    <ul className="grid grid-cols-1 gap-3">
+                      {vinculadosVisiveis.map((a) => (
+                        <li
+                          key={a.atletaId ?? a.id}
+                          className="
+                            flex flex-col gap-3 rounded-xl
+                            border border-green-100 p-3
+                            sm:flex-row sm:items-center
+                          "
                         >
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <Avatar
+                              foto={a.foto ?? null}
+                              alt={a.nome}
+                              className="w-10 h-10 shrink-0"
+                            />
+
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-green-900 truncate">
+                                {a.nome}
+                              </div>
+
+                              <div className="text-xs text-green-900/70">
+                                {[
+                                  a.posicao,
+                                  a.idade != null ? `${a.idade} anos` : null,
+                                  a.categoria,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" • ")}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 sm:justify-end">
+                            {typeof a.pontuacao === "number" && (
+                              <span
+                                className="
+                                  text-[11px] px-2 py-0.5 rounded
+                                  bg-green-100 text-green-800
+                                  border border-green-200
+                                "
+                              >
+                                {a.pontuacao} pts
+                              </span>
+                            )}
+
+                            <Link
+                              href={`/perfil/${a.usuarioId ?? a.id}`}
+                              className="
+                                text-sm text-green-800
+                                inline-flex items-center gap-1
+                                whitespace-nowrap
+                              "
+                            >
+                              Ver perfil
+                              <ChevronRight className="w-4 h-4" />
+                            </Link>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {vinculadosParaExibir.length > 5 && (
+                      <div className="mt-4 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMostrarTodosVinculados((valor) => !valor)
+                          }
+                          className="
+                            rounded-lg border border-green-200
+                            px-4 py-2 text-sm font-medium
+                            text-green-900 hover:bg-green-50
+                          "
+                        >
+                          {mostrarTodosVinculados
+                            ? "Mostrar menos"
+                            : `Ver todos (${vinculadosParaExibir.length})`}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div>
                     <EmptyState text="Nenhum atleta vinculado ainda" />
+
                     <div className="flex justify-center">
-                      <Link href="/explorar">
-                        <button className="px-3 sm:px-4 py-2 rounded-md border border-green-200 text-green-900">
-                          Ver atletas
-                        </button>
+                      <Link
+                        href="/explorar"
+                        className="
+                          px-3 sm:px-4 py-2 rounded-md
+                          border border-green-200 text-green-900
+                        "
+                      >
+                        Ver atletas
                       </Link>
                     </div>
                   </div>
@@ -1797,7 +1997,10 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((a) => {
                       const key = String(a.observadoId ?? a.atletaId ?? a.id);
-                      const draft = obsDraft[key] ?? { nota: "", alertar: false };
+                      const draft = obsDraft[key] ?? {
+                        nota: "",
+                        alertar: false,
+                      };
                       const saving = !!obsSaving[key];
                       const msg = obsMsg[key];
 
@@ -1807,12 +2010,22 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                           className="rounded-2xl border border-green-100 p-3 bg-white"
                         >
                           <div className="flex items-center gap-3">
-                            <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                            <Avatar
+                              foto={a.foto ?? null}
+                              alt={a.nome}
+                              className="w-10 h-10"
+                            />
 
                             <div className="flex-1">
-                              <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                              <div className="text-sm font-medium text-green-900">
+                                {a.nome}
+                              </div>
                               <div className="text-xs text-green-900/70">
-                                {[a.posicao ?? "-", a.idade ? `${a.idade} anos` : null, a.categoria]
+                                {[
+                                  a.posicao ?? "-",
+                                  a.idade ? `${a.idade} anos` : null,
+                                  a.categoria,
+                                ]
                                   .filter(Boolean)
                                   .join(" • ")}
                               </div>
@@ -1851,13 +2064,17 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                               onChange={(e) =>
                                 setObsDraft((p) => ({
                                   ...p,
-                                  [key]: { ...draft, alertar: e.target.checked },
+                                  [key]: {
+                                    ...draft,
+                                    alertar: e.target.checked,
+                                  },
                                 }))
                               }
                               className="mt-1"
                             />
                             <span className="text-green-900/90">
-                              Notificar mudanças (pontuação, posição, idade, novos treinos/desafios)
+                              Notificar mudanças (pontuação, posição, idade,
+                              novos treinos/desafios)
                             </span>
                           </label>
 
@@ -1867,7 +2084,9 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                               onClick={() => salvarObservado(a)}
                               disabled={saving}
                               className={`px-4 py-2 rounded-xl text-white font-semibold text-sm ${
-                                saving ? "bg-green-400" : "bg-green-600 hover:bg-green-700"
+                                saving
+                                  ? "bg-green-400"
+                                  : "bg-green-600 hover:bg-green-700"
                               }`}
                             >
                               {saving ? "Salvando..." : "Salvar"}
@@ -1908,10 +2127,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
               <SectionCard
                 title="Solicitações de Atletas"
                 right={
-                  <Link
-                    href="/notificacoes"
-                    className="text-sm text-green-800"
-                  >
+                  <Link href="/notificacoes" className="text-sm text-green-800">
                     Abrir notificações
                   </Link>
                 }
@@ -1939,9 +2155,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                               </div>
                               <div className="text-xs text-green-900/70">
                                 {s.criadaEm
-                                  ? new Date(
-                                      s.criadaEm
-                                    ).toLocaleString()
+                                  ? new Date(s.criadaEm).toLocaleString()
                                   : "—"}
                                 {s.status ? ` • ${s.status}` : ""}
                               </div>
@@ -1969,7 +2183,10 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           <SectionCard
             title="Conquistas e Troféus"
             right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+              <Link
+                href="/perfil/conquistas"
+                className="text-sm text-green-800"
+              >
                 Ver conquistas
               </Link>
             }
@@ -1999,14 +2216,19 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
           <SectionCard
             title="Certificados emitidos"
             right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+              <Link
+                href="/perfil/conquistas"
+                className="text-sm text-green-800"
+              >
                 Ver certificados
               </Link>
             }
           >
             {certificados && certificados.length > 0 ? (
               <div className="text-green-900 font-medium">
-                {certificados.length} certificado{certificados.length > 1 ? "s" : ""} emitido{certificados.length > 1 ? "s" : ""}
+                {certificados.length} certificado
+                {certificados.length > 1 ? "s" : ""} emitido
+                {certificados.length > 1 ? "s" : ""}
               </div>
             ) : (
               <EmptyState text="Nenhum certificado emitido ainda." />
@@ -2038,7 +2260,6 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
                 </button>
               </Link>
             }
-
           >
             {professoresLoading ? (
               <div className="text-sm text-green-900/70">
@@ -2204,9 +2425,7 @@ export default function PerfilEscola({ idDaUrl, hasCreator = false, creatorUsuar
             loadProfessores();
           }}
           owner={
-            escolinhaId
-              ? { tipo: "Escolinha", id: escolinhaId }
-              : undefined
+            escolinhaId ? { tipo: "Escolinha", id: escolinhaId } : undefined
           }
           professorId={professorSelecionado}
         />

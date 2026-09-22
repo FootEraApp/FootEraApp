@@ -2,7 +2,14 @@ import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  Activity, CalendarClock, PlusCircle, ChevronRight, Save, Loader2, X, Pencil
+  Activity,
+  CalendarClock,
+  PlusCircle,
+  ChevronRight,
+  Save,
+  Loader2,
+  X,
+  Pencil,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
@@ -36,7 +43,12 @@ type PayloadOlheiro = {
     emailPublico?: string | null;
     telefonePublico?: string | null;
     siteOuLinkedin?: string | null;
-    colaboracaoClube?: { id: string; usuarioId?: string | null; nome: string; logo?: string | null } | null;
+    colaboracaoClube?: {
+      id: string;
+      usuarioId?: string | null;
+      nome: string;
+      logo?: string | null;
+    } | null;
     colaboracaoEscolinha?: {
       id: string;
       usuarioId?: string | null;
@@ -48,11 +60,11 @@ type PayloadOlheiro = {
   };
   metrics: {
     atletasAcompanhados?: number;
-    observados?: number;          
+    observados?: number;
     indicacoesEnviadas?: number;
-    indicacoes?: number;          
+    indicacoes?: number;
     reputacaoScore?: number;
-    reputacao?: number;          
+    reputacao?: number;
     indicacoesAprovadas?: number;
     taxaAprovacao?: number;
     atletasAssinados?: number | null;
@@ -132,8 +144,14 @@ type EventoPerfilItem = {
 };
 
 function SectionCard({
-  title, children, right,
-}: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+  title,
+  children,
+  right,
+}: {
+  title: string;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+}) {
   return (
     <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
       <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
@@ -180,7 +198,7 @@ export default function PerfilOlheiro({
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
-  const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
+  const targetId = isOwn ? "me" : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadOlheiro | null>(null);
   const [loading, setLoading] = useState(true);
@@ -188,7 +206,8 @@ export default function PerfilOlheiro({
   type Aba = "visao" | "atletas" | "eventos" | "indicacoes" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
   type SubAbaAtletas = "observados";
-  const [subAbaAtletas, setSubAbaAtletas] = useState<SubAbaAtletas>("observados");
+  const [subAbaAtletas, setSubAbaAtletas] =
+    useState<SubAbaAtletas>("observados");
 
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [indicacoes, setIndicacoes] = useState<IndicacaoItem[] | null>(null);
@@ -197,17 +216,24 @@ export default function PerfilOlheiro({
   const [indicAtletaId, setIndicAtletaId] = useState("");
   const [clubeQuery, setClubeQuery] = useState("");
   const [destinos, setDestinos] = useState<ResultadoBuscaDestino[]>([]);
-  const [destinoSel, setDestinoSel] = useState<ResultadoBuscaDestino | null>(null);
+  const [destinoSel, setDestinoSel] = useState<ResultadoBuscaDestino | null>(
+    null,
+  );
   const [enviando, setEnviando] = useState(false);
-  const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    tipo: "ok" | "erro";
+    msg: string;
+  } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
-  const [creatorUsuarioIdLocal, setCreatorUsuarioIdLocal] = useState<string | null>(null);
+  const [creatorUsuarioIdLocal, setCreatorUsuarioIdLocal] = useState<
+    string | null
+  >(null);
   const [eventos, setEventos] = useState<EventoPerfilItem[]>([]);
 
   const perfilUsuarioId = String(
-    data?.usuario?.id || data?.olheiro?.usuarioId || ""
+    data?.usuario?.id || data?.olheiro?.usuarioId || "",
   ).trim();
 
   const usuarioCreatorDoPerfil = String(
@@ -215,12 +241,12 @@ export default function PerfilOlheiro({
       creatorUsuarioIdLocal ||
       perfilUsuarioId ||
       (isOwn ? Storage.usuarioId : "") ||
-      ""
+      "",
   ).trim();
 
   const mostrarCreator = Boolean(
     (hasCreator && usuarioCreatorDoPerfil) ||
-      (creatorAtivoLocal && creatorUsuarioIdLocal)
+      (creatorAtivoLocal && creatorUsuarioIdLocal),
   );
 
   const creatorLinkUsuarioId = usuarioCreatorDoPerfil;
@@ -236,7 +262,7 @@ export default function PerfilOlheiro({
       try {
         const resp = await axios.get<PayloadOlheiro>(
           `${API.BASE_URL}/api/perfil/olheiro/${targetId}`,
-          { headers }
+          { headers },
         );
         if (!cancel) setData(resp.data);
       } catch (e) {
@@ -246,24 +272,35 @@ export default function PerfilOlheiro({
         if (!cancel) setLoading(false);
       }
     })();
-    return () => { cancel = true; };
+    return () => {
+      cancel = true;
+    };
   }, [targetId, token]);
 
   useEffect(() => {
     if (aba === "atletas") setObservados(null);
   }, [aba]);
-  
+
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
+    const targetUserForActivities =
+      data?.usuario?.id ??
+      data?.olheiro?.usuarioId ??
+      (isOwn ? Storage.usuarioId : idDaUrl);
 
     async function fetchAtividades() {
+      if (!targetUserForActivities) {
+        if (!cancel.v) setAtividades([]);
+        return;
+      }
+
       try {
-        const { data } = await axios.get<AtividadeRecente[]>(
-          `${API.BASE_URL}/api/perfil/${targetId}/atividades`,
-          { headers }
+        const { data: itens } = await axios.get<AtividadeRecente[]>(
+          `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
+          { headers },
         );
-        if (!cancel.v) setAtividades(Array.isArray(data) ? data : []);
+        if (!cancel.v) setAtividades(Array.isArray(itens) ? itens : []);
       } catch {
         if (!cancel.v) setAtividades([]);
       }
@@ -271,10 +308,7 @@ export default function PerfilOlheiro({
 
     async function fetchObservados() {
       const ownerId =
-        (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ??
-        data?.olheiro?.id ??
-        Storage.tipoUsuarioId ??
-        null;
+        data?.olheiro?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
 
       if (!ownerId) {
         if (!cancel.v) setObservados([]);
@@ -288,10 +322,10 @@ export default function PerfilOlheiro({
             headers,
             params: {
               incluirPontuacao: 1,
-              ownerId,         
-              tipo: "olheiro", 
+              ownerId,
+              tipo: "olheiro",
             },
-          }
+          },
         );
 
         if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
@@ -301,12 +335,16 @@ export default function PerfilOlheiro({
     }
 
     async function fetchIndicacoes() {
-      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ?? null;
-      if (!tipoId) { if (!cancel.v) setIndicacoes([]); return; }
+      const tipoId =
+        data?.olheiro?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+      if (!tipoId) {
+        if (!cancel.v) setIndicacoes([]);
+        return;
+      }
       try {
         const { data: lista } = await axios.get<IndicacaoItem[]>(
           `${API.BASE_URL}/api/indicacoes/olheiros/${tipoId}/indicacoes`,
-          { headers }
+          { headers },
         );
         if (!cancel.v) setIndicacoes(Array.isArray(lista) ? lista : []);
       } catch {
@@ -315,15 +353,31 @@ export default function PerfilOlheiro({
     }
 
     if (aba === "visao" && atividades == null) fetchAtividades();
-    if (aba === "atletas" && subAbaAtletas === "observados" && observados == null) {
+    if (
+      aba === "atletas" &&
+      subAbaAtletas === "observados" &&
+      observados == null
+    ) {
       fetchObservados();
     }
     if (aba === "indicacoes" && indicacoes == null) fetchIndicacoes();
 
-    return () => { cancel.v = true; };
+    return () => {
+      cancel.v = true;
+    };
   }, [
-    aba, subAbaAtletas, targetId, token,
-    data?.olheiro?.id, atividades, observados, indicacoes, isOwn
+    aba,
+    subAbaAtletas,
+    targetId,
+    token,
+    data?.usuario?.id,
+    data?.olheiro?.id,
+    data?.olheiro?.usuarioId,
+    atividades,
+    observados,
+    indicacoes,
+    isOwn,
+    idDaUrl,
   ]);
 
   const buscarClubes = useMemo(
@@ -335,73 +389,57 @@ export default function PerfilOlheiro({
         try {
           const r = await axios.get<any[]>(
             `${API.BASE_URL}/api/cadastro/buscar`,
-            { params: { query: q }, headers }
+            { params: { query: q }, headers },
           );
-          const arr: ResultadoBuscaDestino[] = (Array.isArray(r.data) ? r.data : [])
-        .filter(
-          (x) =>
-            x?.id &&
-            x?.nome &&
-            (x?.tipo === "Clube" || x?.tipo === "Escolinha")
-        )
-        .map((x) => ({
-          id: String(x.id),
-          tipo: x.tipo === "Escolinha" ? "Escolinha" : "Clube",
-          nome: String(x.nome),
-          username: String(x.username || ""),
-          fotoUrl: x.fotoUrl ?? null,
-        }));
+          const arr: ResultadoBuscaDestino[] = (
+            Array.isArray(r.data) ? r.data : []
+          )
+            .filter(
+              (x) =>
+                x?.id &&
+                x?.nome &&
+                (x?.tipo === "Clube" || x?.tipo === "Escolinha"),
+            )
+            .map((x) => ({
+              id: String(x.id),
+              tipo: x.tipo === "Escolinha" ? "Escolinha" : "Clube",
+              nome: String(x.nome),
+              username: String(x.username || ""),
+              fotoUrl: x.fotoUrl ?? null,
+            }));
           setDestinos(arr);
         } catch {
           setDestinos([]);
         }
       }, 400),
-    [headers]
+    [headers],
   );
 
-  async function apagarIndicacao(
-    indicacaoId: string
-  ) {
-    if (
-      !confirm(
-        "Deseja apagar esta indicação?"
-      )
-    ) {
+  async function apagarIndicacao(indicacaoId: string) {
+    if (!confirm("Deseja apagar esta indicação?")) {
       return;
     }
 
     try {
       await axios.delete(
-        `${API.BASE_URL}/api/indicacoes/${encodeURIComponent(
-          indicacaoId
-        )}`,
-        { headers }
+        `${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}`,
+        { headers },
       );
 
       setIndicacoes((anteriores) =>
         Array.isArray(anteriores)
-          ? anteriores.filter(
-              (indicacao) =>
-                indicacao.id !==
-                indicacaoId
-            )
-          : anteriores
+          ? anteriores.filter((indicacao) => indicacao.id !== indicacaoId)
+          : anteriores,
       );
 
-      const perfilAtualizado =
-        await axios.get<PayloadOlheiro>(
-          `${API.BASE_URL}/api/perfil/olheiro/${targetId}`,
-          { headers }
-        );
-
-      setData(
-        perfilAtualizado.data
+      const perfilAtualizado = await axios.get<PayloadOlheiro>(
+        `${API.BASE_URL}/api/perfil/olheiro/${targetId}`,
+        { headers },
       );
+
+      setData(perfilAtualizado.data);
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.error ||
-          "Falha ao apagar indicação."
-      );
+      toast.error(error?.response?.data?.error || "Falha ao apagar indicação.");
     }
   }
 
@@ -409,44 +447,53 @@ export default function PerfilOlheiro({
     try {
       const { data } = await axios.get(
         `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
-        { headers }
+        { headers },
       );
-      setNotes(p => ({ ...p, [atletaId]: { texto: data?.texto ?? "", saving: false, dirty: false } }));
+      setNotes((p) => ({
+        ...p,
+        [atletaId]: { texto: data?.texto ?? "", saving: false, dirty: false },
+      }));
     } catch {
-      setNotes(p => ({ ...p, [atletaId]: { texto: "", saving: false, dirty: false } }));
+      setNotes((p) => ({
+        ...p,
+        [atletaId]: { texto: "", saving: false, dirty: false },
+      }));
     }
   }
 
-async function salvarNota(atletaId: string) {
-  const texto = notes[atletaId]?.texto ?? "";
+  async function salvarNota(atletaId: string) {
+    const texto = notes[atletaId]?.texto ?? "";
 
-  setNotes(p => {
-    const prev = p[atletaId] ?? { texto: "", saving: false, dirty: false };
-    return { ...p, [atletaId]: { ...prev, saving: true } };
-  });
+    setNotes((p) => {
+      const prev = p[atletaId] ?? { texto: "", saving: false, dirty: false };
+      return { ...p, [atletaId]: { ...prev, saving: true } };
+    });
 
-  try {
-    await axios.put(
-      `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
-      { texto },
-      { headers: { "Content-Type": "application/json", ...(headers || {}) } }
-    );
+    try {
+      await axios.put(
+        `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
+        { texto },
+        { headers: { "Content-Type": "application/json", ...(headers || {}) } },
+      );
 
-    setNotes(p => ({
-      ...p,
-      [atletaId]: { texto, saving: false, dirty: false },
-    }));
-  } catch {
-    setNotes(p => ({
-      ...p,
-      [atletaId]: { texto, saving: false, dirty: true },
-    }));
+      setNotes((p) => ({
+        ...p,
+        [atletaId]: { texto, saving: false, dirty: false },
+      }));
+    } catch {
+      setNotes((p) => ({
+        ...p,
+        [atletaId]: { texto, saving: false, dirty: true },
+      }));
+    }
   }
-}
 
   useEffect(() => {
     if (clubeQuery) buscarClubes(clubeQuery);
-    else { setDestinos([]); setDestinoSel(null); }
+    else {
+      setDestinos([]);
+      setDestinoSel(null);
+    }
   }, [clubeQuery]);
 
   useEffect(() => {
@@ -504,21 +551,20 @@ async function salvarNota(atletaId: string) {
           ? { Authorization: `Bearer ${token}` }
           : undefined;
 
-        const [eventosResultado, livesResultado] =
-          await Promise.allSettled([
-            axios.get(`${API.BASE_URL}/api/eventos`, {
-              params: {
-                creatorUsuarioId: usuarioCreatorDoPerfil,
-              },
-              headers: requestHeaders,
-            }),
-            axios.get(
-              `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-                usuarioCreatorDoPerfil
-              )}`,
-              { headers: requestHeaders }
-            ),
-          ]);
+        const [eventosResultado, livesResultado] = await Promise.allSettled([
+          axios.get(`${API.BASE_URL}/api/eventos`, {
+            params: {
+              creatorUsuarioId: usuarioCreatorDoPerfil,
+            },
+            headers: requestHeaders,
+          }),
+          axios.get(
+            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
+              usuarioCreatorDoPerfil,
+            )}`,
+            { headers: requestHeaders },
+          ),
+        ]);
 
         if (cancelado) return;
 
@@ -530,12 +576,12 @@ async function salvarNota(atletaId: string) {
         const eventosArray = Array.isArray(eventosPayload)
           ? eventosPayload
           : Array.isArray(eventosPayload?.items)
-          ? eventosPayload.items
-          : Array.isArray(eventosPayload?.eventos)
-          ? eventosPayload.eventos
-          : Array.isArray(eventosPayload?.data)
-          ? eventosPayload.data
-          : [];
+            ? eventosPayload.items
+            : Array.isArray(eventosPayload?.eventos)
+              ? eventosPayload.eventos
+              : Array.isArray(eventosPayload?.data)
+                ? eventosPayload.data
+                : [];
 
         const creatorPayload =
           livesResultado.status === "fulfilled"
@@ -549,20 +595,18 @@ async function salvarNota(atletaId: string) {
             titulo: String(evento.titulo ?? evento.nome ?? "Evento"),
             descricao: evento.descricao ?? null,
             data: String(
-              evento.dataEvento ?? evento.data ?? evento.inicio ?? ""
+              evento.dataEvento ?? evento.data ?? evento.inicio ?? "",
             ),
-            tipoLabel: String(
-              evento.tipoLabel ?? evento.tipo ?? "Evento"
-            ),
+            tipoLabel: String(evento.tipoLabel ?? evento.tipo ?? "Evento"),
             status: String(evento.status ?? "ABERTO"),
             cidade: evento.cidade ?? null,
             estado: evento.estado ?? null,
             totalParticipantes: null,
-          })
+          }),
         );
 
         const aulasAoVivo: EventoPerfilItem[] = Array.isArray(
-          creatorPayload?.eventosAoVivo
+          creatorPayload?.eventosAoVivo,
         )
           ? creatorPayload.eventosAoVivo.map((aula: any) => ({
               id: String(aula.id),
@@ -605,17 +649,13 @@ async function salvarNota(atletaId: string) {
             return Number.isFinite(timestamp) && timestamp >= agora;
           })
           .sort(
-            (a, b) =>
-              new Date(a.data).getTime() - new Date(b.data).getTime()
+            (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime(),
           );
 
         const unicos = Array.from(
           new Map(
-            proximos.map((evento) => [
-              `${evento.origem}:${evento.id}`,
-              evento,
-            ])
-          ).values()
+            proximos.map((evento) => [`${evento.origem}:${evento.id}`, evento]),
+          ).values(),
         );
 
         setEventos(unicos);
@@ -649,15 +689,18 @@ async function salvarNota(atletaId: string) {
     setMostrarTodosEventos(false);
   }, [usuarioCreatorDoPerfil]);
 
-  const eventosVisiveis = mostrarTodosEventos
-    ? eventos
-    : eventos.slice(0, 5);
-
+  const eventosVisiveis = mostrarTodosEventos ? eventos : eventos.slice(0, 5);
 
   async function enviarIndicacao() {
     setFeedback(null);
-    if (!indicAtletaId) { setFeedback({ tipo: "erro", msg: "Informe o ID do atleta." }); return; }
-    if (!destinoSel) { setFeedback({ tipo: "erro", msg: "Selecione um clube ou escolinha." }); return; }
+    if (!indicAtletaId) {
+      setFeedback({ tipo: "erro", msg: "Informe o ID do atleta." });
+      return;
+    }
+    if (!destinoSel) {
+      setFeedback({ tipo: "erro", msg: "Selecione um clube ou escolinha." });
+      return;
+    }
 
     try {
       setEnviando(true);
@@ -666,9 +709,10 @@ async function salvarNota(atletaId: string) {
         {
           atletaId: indicAtletaId,
           clubeId: destinoSel?.tipo === "Clube" ? destinoSel.id : undefined,
-          escolinhaId: destinoSel?.tipo === "Escolinha" ? destinoSel.id : undefined
+          escolinhaId:
+            destinoSel?.tipo === "Escolinha" ? destinoSel.id : undefined,
         },
-        { headers: { "Content-Type": "application/json", ...(headers || {}) } }
+        { headers: { "Content-Type": "application/json", ...(headers || {}) } },
       );
       setFeedback({ tipo: "ok", msg: "Indicação enviada com sucesso!" });
       setIndicAtletaId("");
@@ -678,21 +722,32 @@ async function salvarNota(atletaId: string) {
       setIndicacoes(null);
       setAba("indicacoes");
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || "Falha ao enviar indicação.";
+      const msg =
+        e?.response?.data?.error || e?.message || "Falha ao enviar indicação.";
       setFeedback({ tipo: "erro", msg });
     } finally {
       setEnviando(false);
     }
   }
 
-  if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
-  if (!data || !data.olheiro) return <div className="text-center p-10 text-red-600">Olheiro não encontrado.</div>;
+  if (loading)
+    return (
+      <div className="text-center p-10 text-green-800">
+        Carregando perfil...
+      </div>
+    );
+  if (!data || !data.olheiro)
+    return (
+      <div className="text-center p-10 text-red-600">
+        Olheiro não encontrado.
+      </div>
+    );
 
   const nome = data.usuario?.nome || "Olheiro";
   const emailDoPerfil =
-  (data?.usuario?.email && String(data.usuario.email)) ||
-  (data?.olheiro?.emailPublico && String(data.olheiro.emailPublico)) ||
-  "";
+    (data?.usuario?.email && String(data.usuario.email)) ||
+    (data?.olheiro?.emailPublico && String(data.olheiro.emailPublico)) ||
+    "";
   const headerFoto: string | undefined =
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     (typeof data.olheiro.fotoUrl === "string" && data.olheiro.fotoUrl) ||
@@ -704,17 +759,15 @@ async function salvarNota(atletaId: string) {
       .colaboracaoEscolinha ||
     null;
 
-  const colaboracaoAtual =
-    clubeColab
-      ? {
-          ...clubeColab,
-          tipo: "CLUBE" as const,
-        }
-      : escolinhaColab
+  const colaboracaoAtual = clubeColab
+    ? {
+        ...clubeColab,
+        tipo: "CLUBE" as const,
+      }
+    : escolinhaColab
       ? {
           ...escolinhaColab,
-          tipo:
-            "ESCOLINHA" as const,
+          tipo: "ESCOLINHA" as const,
         }
       : null;
 
@@ -730,7 +783,11 @@ async function salvarNota(atletaId: string) {
     data.olheiro.totalIndicacoes ??
     0;
 
-  const atletasCount = (observados?.length ?? data.metrics?.observados ?? data.metrics?.atletasAcompanhados ?? 0);
+  const atletasCount =
+    observados?.length ??
+    data.metrics?.observados ??
+    data.metrics?.atletasAcompanhados ??
+    0;
   const time = colaboracaoAtual?.nome || "Olheiro";
   const indicacoesAprovadas = data.metrics?.indicacoesAprovadas ?? undefined;
   const taxaAprovacao = data.metrics?.taxaAprovacao ?? undefined;
@@ -759,8 +816,7 @@ async function salvarNota(atletaId: string) {
         <div className="px-4 mt-2">
           <Link
             href={`/perfil/${
-              colaboracaoAtual.usuarioId ??
-              colaboracaoAtual.id
+              colaboracaoAtual.usuarioId ?? colaboracaoAtual.id
             }`}
             className="
               inline-flex
@@ -780,54 +836,44 @@ async function salvarNota(atletaId: string) {
           >
             {colaboracaoAtual.logo ? (
               <Avatar
-                foto={
-                  colaboracaoAtual.logo
-                }
-                alt={
-                  colaboracaoAtual.nome
-                }
+                foto={colaboracaoAtual.logo}
+                alt={colaboracaoAtual.nome}
                 className="w-4 h-4 rounded border"
               />
             ) : null}
-
-            Colabora com{" "}
-            <b className="ml-1">
-              {
-                colaboracaoAtual.nome
-              }
-            </b>
+            Colabora com <b className="ml-1">{colaboracaoAtual.nome}</b>
           </Link>
         </div>
       )}
 
       <div className="mt-4 px-3 sm:px-4">
-      <div className="bg-white/90 rounded-xl p-1 border border-green-100">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
-          {[
-            { id: "visao", label: "Visão Geral" },
-            { id: "atletas", label: "Atletas" },
-            { id: "indicacoes", label: "Indicações" },
-            { id: "eventos", label: "Eventos" },
-            { id: "postagens", label: "Postagens" },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setAba(t.id as Aba)}
-              className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
-                aba === t.id
-                  ? "bg-green-600 text-white shadow-sm"
-                  : "text-green-900 hover:bg-green-50"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="bg-white/90 rounded-xl p-1 border border-green-100">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
+            {[
+              { id: "visao", label: "Visão Geral" },
+              { id: "atletas", label: "Atletas" },
+              { id: "indicacoes", label: "Indicações" },
+              { id: "eventos", label: "Eventos" },
+              { id: "postagens", label: "Postagens" },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setAba(t.id as Aba)}
+                className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
+                  aba === t.id
+                    ? "bg-green-600 text-white shadow-sm"
+                    : "text-green-900 hover:bg-green-50"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
       </div>
 
       {aba === "visao" && (
-         <div className="mt-5 px-3 sm:px-4 grid gap-5 sm:gap-6">
+        <div className="mt-5 px-3 sm:px-4 grid gap-5 sm:gap-6">
           <SectionCard
             title="Informações do Olheiro"
             right={
@@ -853,7 +899,9 @@ async function salvarNota(atletaId: string) {
             }
           >
             <ul className="text-sm text-green-900/90 space-y-2">
-              <li><b>Nome:</b> {nome}</li>
+              <li>
+                <b>Nome:</b> {nome}
+              </li>
 
               {emailDoPerfil ? (
                 <li>
@@ -861,8 +909,16 @@ async function salvarNota(atletaId: string) {
                 </li>
               ) : null}
 
-              {data.olheiro.headline && <li><b>Headline:</b> {data.olheiro.headline}</li>}
-              {data.olheiro.areaAtuacao && <li><b>Área de atuação:</b> {data.olheiro.areaAtuacao}</li>}
+              {data.olheiro.headline && (
+                <li>
+                  <b>Headline:</b> {data.olheiro.headline}
+                </li>
+              )}
+              {data.olheiro.areaAtuacao && (
+                <li>
+                  <b>Área de atuação:</b> {data.olheiro.areaAtuacao}
+                </li>
+              )}
               <li>
                 <b>Experiência:</b> {data.olheiro.anosExperiencia ?? 0} ano
                 {(data.olheiro.anosExperiencia ?? 0) === 1 ? "" : "s"}
@@ -874,20 +930,15 @@ async function salvarNota(atletaId: string) {
 
                   {colaboracaoAtual.logo ? (
                     <Avatar
-                      foto={
-                        colaboracaoAtual.logo
-                      }
-                      alt={
-                        colaboracaoAtual.nome
-                      }
+                      foto={colaboracaoAtual.logo}
+                      alt={colaboracaoAtual.nome}
                       className="w-5 h-5 rounded border"
                     />
                   ) : null}
 
                   <Link
                     href={`/perfil/${
-                      colaboracaoAtual.usuarioId ??
-                      colaboracaoAtual.id
+                      colaboracaoAtual.usuarioId ?? colaboracaoAtual.id
                     }`}
                     className="underline text-green-800"
                   >
@@ -899,7 +950,9 @@ async function salvarNota(atletaId: string) {
 
             {data.olheiro.descricao && (
               <div className="mt-3">
-                <div className="text-sm font-semibold text-green-900">Sobre: </div>
+                <div className="text-sm font-semibold text-green-900">
+                  Sobre:{" "}
+                </div>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-green-900/90">
                   {data.olheiro.descricao}
                 </p>
@@ -907,33 +960,43 @@ async function salvarNota(atletaId: string) {
             )}
           </SectionCard>
 
-          <SectionCard
-            title="Reputação & Impacto"
-          >
+          <SectionCard title="Reputação & Impacto">
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border border-green-100 p-3">
                 <div className="text-xs text-green-900/70">Reputação</div>
-                <div className="text-xl font-bold text-green-900">{reputacaoScore}</div>
+                <div className="text-xl font-bold text-green-900">
+                  {reputacaoScore}
+                </div>
               </div>
               <div className="rounded-lg border border-green-100 p-3">
                 <div className="text-xs text-green-900/70">Indicações</div>
-                <div className="text-xl font-bold text-green-900">{kpiIndicacoes}</div>
+                <div className="text-xl font-bold text-green-900">
+                  {kpiIndicacoes}
+                </div>
               </div>
               <div className="rounded-lg border border-green-100 p-3">
                 <div className="text-xs text-green-900/70">Aprovadas</div>
-                <div className="text-xl font-bold text-green-900">{indicacoesAprovadas ?? "—"}</div>
+                <div className="text-xl font-bold text-green-900">
+                  {indicacoesAprovadas ?? "—"}
+                </div>
               </div>
             </div>
 
             <div className="mt-3">
               <div className="flex items-center justify-between text-xs text-green-900/70 mb-1">
                 <span>Taxa de aprovação</span>
-                <span>{typeof taxaAprovacao === "number" ? `${Math.round(taxaAprovacao * 100)}%` : "—"}</span>
+                <span>
+                  {typeof taxaAprovacao === "number"
+                    ? `${Math.round(taxaAprovacao * 100)}%`
+                    : "—"}
+                </span>
               </div>
               <div className="h-2 w-full rounded-full bg-green-100 overflow-hidden">
                 <div
                   className="h-2 bg-green-600"
-                  style={{ width: `${Math.max(0, Math.min(100, Math.round((taxaAprovacao ?? 0) * 100)))}%` }}
+                  style={{
+                    width: `${Math.max(0, Math.min(100, Math.round((taxaAprovacao ?? 0) * 100)))}%`,
+                  }}
                 />
               </div>
             </div>
@@ -944,17 +1007,33 @@ async function salvarNota(atletaId: string) {
               <li>
                 <b>E-mail:</b>{" "}
                 {data.olheiro.emailPublico ? (
-                  <a className="text-green-800 underline" href={`mailto:${data.olheiro.emailPublico}`}>{data.olheiro.emailPublico}</a>
-                ) : "—"}
+                  <a
+                    className="text-green-800 underline"
+                    href={`mailto:${data.olheiro.emailPublico}`}
+                  >
+                    {data.olheiro.emailPublico}
+                  </a>
+                ) : (
+                  "—"
+                )}
               </li>
-              <li><b>Telefone:</b> {data.olheiro.telefonePublico || "—"}</li>
+              <li>
+                <b>Telefone:</b> {data.olheiro.telefonePublico || "—"}
+              </li>
               <li>
                 <b>Site/LinkedIn:</b>{" "}
                 {data.olheiro.siteOuLinkedin ? (
-                  <a className="text-green-800 underline" href={data.olheiro.siteOuLinkedin} target="_blank" rel="noreferrer">
+                  <a
+                    className="text-green-800 underline"
+                    href={data.olheiro.siteOuLinkedin}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {data.olheiro.siteOuLinkedin}
                   </a>
-                ) : "—"}
+                ) : (
+                  "—"
+                )}
               </li>
             </ul>
           </SectionCard>
@@ -967,7 +1046,9 @@ async function salvarNota(atletaId: string) {
             <button
               onClick={() => setSubAbaAtletas("observados")}
               className={`py-2 rounded-lg text-sm font-medium ${
-                subAbaAtletas === "observados" ? "bg-green-600 text-white" : "text-green-900"
+                subAbaAtletas === "observados"
+                  ? "bg-green-600 text-white"
+                  : "text-green-900"
               }`}
             >
               Observados
@@ -993,18 +1074,32 @@ async function salvarNota(atletaId: string) {
                     const atletaKey = a.atletaId || a.id;
 
                     return (
-                      <li key={a.id} className="flex flex-col gap-2 rounded-xl border border-green-100 p-3">
+                      <li
+                        key={a.id}
+                        className="flex flex-col gap-2 rounded-xl border border-green-100 p-3"
+                      >
                         <div className="flex items-center gap-3">
-                          <Avatar foto={withAvatarFallback(a.foto)} alt={a.nome} className="w-10 h-10" />
+                          <Avatar
+                            foto={withAvatarFallback(a.foto)}
+                            alt={a.nome}
+                            className="w-10 h-10"
+                          />
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                            <div className="text-sm font-medium text-green-900">
+                              {a.nome}
+                            </div>
                             <div className="text-xs text-green-900/70">
-                              {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                              {[a.posicao, a.idade ? `${a.idade} anos` : ""]
+                                .filter(Boolean)
+                                .join(" • ")}
                             </div>
                           </div>
-                            <Link href={`/perfil/${a.usuarioId || a.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
-                              Ver perfil <ChevronRight className="w-4 h-4" />
-                            </Link>
+                          <Link
+                            href={`/perfil/${a.usuarioId || a.id}`}
+                            className="text-sm text-green-800 inline-flex items-center gap-1"
+                          >
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </Link>
                         </div>
 
                         {isOwn && (
@@ -1013,11 +1108,14 @@ async function salvarNota(atletaId: string) {
                               onClick={() => {
                                 const willOpen = openNoteId !== atletaKey;
                                 setOpenNoteId(willOpen ? atletaKey : null);
-                                if (willOpen && notes[atletaKey] === undefined) fetchNota(atletaKey);
+                                if (willOpen && notes[atletaKey] === undefined)
+                                  fetchNota(atletaKey);
                               }}
                               className="text-xs px-2 py-1 rounded-md border border-green-200 text-green-900 hover:bg-green-50"
                             >
-                              {openNoteId === atletaKey ? "Ocultar anotações" : "Anotações do atleta"}
+                              {openNoteId === atletaKey
+                                ? "Ocultar anotações"
+                                : "Anotações do atleta"}
                             </button>
 
                             {openNoteId === atletaKey && (
@@ -1029,9 +1127,20 @@ async function salvarNota(atletaId: string) {
                                   value={notes[atletaKey]?.texto ?? ""}
                                   onChange={(e) => {
                                     const texto = e.target.value;
-                                    setNotes(p => {
-                                      const prev = p[atletaKey] ?? { texto: "", saving: false, dirty: false };
-                                      return { ...p, [atletaKey]: { ...prev, texto, dirty: true } };
+                                    setNotes((p) => {
+                                      const prev = p[atletaKey] ?? {
+                                        texto: "",
+                                        saving: false,
+                                        dirty: false,
+                                      };
+                                      return {
+                                        ...p,
+                                        [atletaKey]: {
+                                          ...prev,
+                                          texto,
+                                          dirty: true,
+                                        },
+                                      };
                                     });
                                   }}
                                 />
@@ -1040,7 +1149,10 @@ async function salvarNota(atletaId: string) {
                                   <button
                                     type="button"
                                     onClick={() => salvarNota(atletaKey)}
-                                    disabled={!notes[atletaKey]?.dirty || notes[atletaKey]?.saving}
+                                    disabled={
+                                      !notes[atletaKey]?.dirty ||
+                                      notes[atletaKey]?.saving
+                                    }
                                     className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
                                   >
                                     {notes[atletaKey]?.saving ? (
@@ -1060,11 +1172,10 @@ async function salvarNota(atletaId: string) {
                                     {notes[atletaKey]?.saving
                                       ? "Salvando…"
                                       : notes[atletaKey]?.dirty
-                                      ? "Alterações pendentes"
-                                      : "Salvo"}
+                                        ? "Alterações pendentes"
+                                        : "Salvo"}
                                   </div>
                                 </div>
-
                               </div>
                             )}
                           </div>
@@ -1096,7 +1207,9 @@ async function salvarNota(atletaId: string) {
           <SectionCard title="Nova Indicação">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1">ID do Atleta</label>
+                <label className="block text-sm font-medium mb-1">
+                  ID do Atleta
+                </label>
                 <input
                   className="w-full border rounded px-3 py-2"
                   placeholder="ex: 1f2a3b4c-..."
@@ -1105,7 +1218,9 @@ async function salvarNota(atletaId: string) {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Buscar Clube ou Escolinha</label>
+                <label className="block text-sm font-medium mb-1">
+                  Buscar Clube ou Escolinha
+                </label>
                 <input
                   className="w-full border rounded px-3 py-2"
                   placeholder="Digite ao menos 2 letras..."
@@ -1113,7 +1228,9 @@ async function salvarNota(atletaId: string) {
                   onChange={(e) => setClubeQuery(e.target.value)}
                 />
                 {clubeQuery && destinos.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-1">Buscando organizações...</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Buscando organizações...
+                  </p>
                 )}
                 {destinos.length > 0 && (
                   <div className="max-h-44 overflow-auto border rounded mt-2">
@@ -1128,10 +1245,16 @@ async function salvarNota(atletaId: string) {
                           }`}
                           onClick={() => setDestinoSel(c)}
                         >
-                          <Avatar foto={c.fotoUrl} alt={c.nome} className="w-7 h-7" />
+                          <Avatar
+                            foto={c.fotoUrl}
+                            alt={c.nome}
+                            className="w-7 h-7"
+                          />
                           <div className="text-sm">
                             <div className="font-medium">{c.nome}</div>
-                            <div className="text-xs text-gray-500">@{c.username}</div>
+                            <div className="text-xs text-gray-500">
+                              @{c.username}
+                            </div>
                           </div>
                         </button>
                       );
@@ -1140,15 +1263,23 @@ async function salvarNota(atletaId: string) {
                 )}
                 {destinoSel && (
                   <div className="mt-2 text-xs text-gray-600">
-                    Selecionado: <span className="font-medium">{destinoSel.nome}</span>
-                    <button className="ml-2 underline text-green-700" onClick={() => setDestinoSel(null)}>trocar</button>
+                    Selecionado:{" "}
+                    <span className="font-medium">{destinoSel.nome}</span>
+                    <button
+                      className="ml-2 underline text-green-700"
+                      onClick={() => setDestinoSel(null)}
+                    >
+                      trocar
+                    </button>
                   </div>
                 )}
               </div>
             </div>
 
             {feedback && (
-              <p className={`mt-3 text-sm ${feedback.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+              <p
+                className={`mt-3 text-sm ${feedback.tipo === "ok" ? "text-green-700" : "text-red-600"}`}
+              >
                 {feedback.msg}
               </p>
             )}
@@ -1169,7 +1300,8 @@ async function salvarNota(atletaId: string) {
               <ul className="grid grid-cols-1 gap-3">
                 {indicacoes.map((i) => {
                   const destino = i.clube ?? i.escolinha ?? null;
-                  const destinoPerfilId = destino?.usuarioId ?? destino?.id ?? "";
+                  const destinoPerfilId =
+                    destino?.usuarioId ?? destino?.id ?? "";
 
                   const nomeAtleta =
                     i.atleta?.usuario?.nome ||
@@ -1178,9 +1310,7 @@ async function salvarNota(atletaId: string) {
                     "Atleta";
 
                   const fotoAtleta =
-                    i.atleta?.usuario?.foto ??
-                    i.atleta?.foto ??
-                    null;
+                    i.atleta?.usuario?.foto ?? i.atleta?.foto ?? null;
 
                   const atletaPerfilId =
                     i.atleta?.usuario?.id ||
@@ -1189,7 +1319,10 @@ async function salvarNota(atletaId: string) {
                     "";
 
                   return (
-                    <li key={i.id} className="relative flex items-center gap-3 rounded-xl border border-green-100 p-3">
+                    <li
+                      key={i.id}
+                      className="relative flex items-center gap-3 rounded-xl border border-green-100 p-3"
+                    >
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1203,7 +1336,7 @@ async function salvarNota(atletaId: string) {
                       >
                         <X className="w-3 h-3" />
                       </button>
-                     <Link
+                      <Link
                         href={`/perfil/${atletaPerfilId}`}
                         className="flex min-w-0 flex-1 items-center gap-3 pr-8"
                       >
@@ -1223,9 +1356,7 @@ async function salvarNota(atletaId: string) {
                               ? new Date(i.criadoEm).toLocaleString("pt-BR")
                               : "—"}
 
-                            {i.status
-                              ? ` • ${i.status}`
-                              : ""}
+                            {i.status ? ` • ${i.status}` : ""}
                           </div>
                         </div>
                       </Link>
@@ -1240,12 +1371,20 @@ async function salvarNota(atletaId: string) {
                             alt={destino.nome}
                             className="w-8 h-8"
                           />
-                          <div className="text-xs text-green-900/80">{destino.nome}</div>
+                          <div className="text-xs text-green-900/80">
+                            {destino.nome}
+                          </div>
                         </Link>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <Avatar foto={AVATAR_FALLBACK} alt="Destino" className="w-8 h-8" />
-                          <div className="text-xs text-green-900/50">Destino não encontrado</div>
+                          <Avatar
+                            foto={AVATAR_FALLBACK}
+                            alt="Destino"
+                            className="w-8 h-8"
+                          />
+                          <div className="text-xs text-green-900/50">
+                            Destino não encontrado
+                          </div>
                         </div>
                       )}
 
@@ -1369,7 +1508,7 @@ async function salvarNota(atletaId: string) {
                           <span className="rounded-full border border-green-200 bg-green-50 px-2 py-1 text-[11px] text-green-900">
                             {String(evento.status || "Evento").replaceAll(
                               "_",
-                              " "
+                              " ",
                             )}
                           </span>
                           <ChevronRight className="h-4 w-4 text-green-700" />
@@ -1385,9 +1524,7 @@ async function salvarNota(atletaId: string) {
           </SectionCard>
 
           {usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection
-              creatorUsuarioId={usuarioCreatorDoPerfil}
-            />
+            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
           ) : null}
         </div>
       )}
