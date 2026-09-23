@@ -5,8 +5,12 @@ import {
   ConviteTipo,
   OrganizacaoTipo,
   Prisma,
+  FuncaoMembroOrganizacao,
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
+import {
+  sincronizarMembroOrganizacaoLegada,
+} from "../services/organizacoes.js";
 
 type PermissaoOrganizacao = "professores" | "atletasTurmas";
 type StatusPublico = "ATIVO" | "EXPIRADO" | "CANCELADO" | "USADO";
@@ -902,6 +906,21 @@ async function vincularAtletaOrganizacao(
       });
     }
 
+    await sincronizarMembroOrganizacaoLegada({
+      tx,
+
+      tipo:
+        "CLUBE",
+
+      ownerId:
+        clube.id,
+
+      usuarioId,
+
+      funcao:
+        FuncaoMembroOrganizacao.MEMBRO,
+    });
+
     return atleta;
   }
 
@@ -947,6 +966,21 @@ async function vincularAtletaOrganizacao(
       },
     });
   }
+
+  await sincronizarMembroOrganizacaoLegada({
+    tx,
+
+    tipo:
+      "ESCOLINHA",
+
+    ownerId:
+      escolinha.id,
+
+    usuarioId,
+
+    funcao:
+      FuncaoMembroOrganizacao.MEMBRO,
+  });
 
   return atleta;
 }
@@ -1008,6 +1042,21 @@ async function vincularProfessorOrganizacao(
       data: { clubeId: clube.id },
     });
 
+    await sincronizarMembroOrganizacaoLegada({
+      tx,
+
+      tipo:
+        "CLUBE",
+
+      ownerId:
+        clube.id,
+
+      usuarioId,
+
+      funcao:
+        FuncaoMembroOrganizacao.PROFESSOR,
+    });
+
     return professor;
   }
 
@@ -1035,6 +1084,21 @@ async function vincularProfessorOrganizacao(
   await tx.professor.update({
     where: { id: professor.id },
     data: { escolinhaId: escolinha.id },
+  });
+
+  await sincronizarMembroOrganizacaoLegada({
+    tx,
+
+    tipo:
+      "ESCOLINHA",
+
+    ownerId:
+      escolinha.id,
+
+    usuarioId,
+
+    funcao:
+      FuncaoMembroOrganizacao.PROFESSOR,
   });
 
   return professor;

@@ -26,6 +26,7 @@ model Usuario {
   tipo TipoUsuario
 
   papeis                    UsuarioPapel[]
+  membrosOrganizacao        MembroOrganizacao[]
   convitesCriados           Convite[]           @relation("ConviteCriador")
   convitesRecebidos         Convite[]           @relation("ConviteDestinatario")
   convitesUsados            ConviteUso[]
@@ -353,6 +354,46 @@ model OrganizacaoGestor {
   @@index([professorId])
   @@index([tipo, ownerId])
   @@index([ativo])
+}
+
+model Organizacao {
+  id    String          @id @default(uuid())
+  tipo  TipoOrganizacao
+  nome  String
+  ativo Boolean         @default(true)
+  legacyKey String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  membros MembroOrganizacao[]
+
+  clube     Clube?
+  escolinha Escolinha?
+  marca     Marca?
+  federacao Federacao?
+
+  @@index([tipo, ativo])
+  @@index([nome])
+}
+
+model MembroOrganizacao {
+  id            String                  @id @default(uuid())
+  organizacaoId String
+  usuarioId     String
+  funcao        FuncaoMembroOrganizacao
+  permissoes    Json?
+  ativo         Boolean                 @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, usuarioId])
+  @@index([usuarioId, ativo])
+  @@index([organizacaoId, funcao, ativo])
 }
 
 model Convite {
@@ -1452,24 +1493,27 @@ model Midia {
 }
 
 model Escolinha {
-  id                     String                   @id @default(uuid())
-  usuarioId              String?                  @unique
-  nome                   String                   @unique
-  cnpj                   String?                  @unique
-  telefone1              String?
-  telefone2              String?
-  email                  String?                  @unique
-  siteOficial            String?
-  sede                   String?
-  logradouro             String?
-  numero                 String?
-  complemento            String?
-  bairro                 String?
-  cidade                 String?
-  estado                 String?
-  pais                   String?
-  cep                    String?
-  logo                   String?
+  id            String       @id @default(uuid())
+  usuarioId     String?      @unique
+  nome          String       @unique
+  cnpj          String?      @unique
+  telefone1     String?
+  telefone2     String?
+  email         String?      @unique
+  siteOficial   String?
+  sede          String?
+  logradouro    String?
+  numero        String?
+  complemento   String?
+  bairro        String?
+  cidade        String?
+  estado        String?
+  pais          String?
+  cep           String?
+  logo          String?
+  organizacaoId String?      @unique
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+
   dataCriacao            DateTime                 @default(now())
   atletas                Atleta[]
   observacoes            AtletaObservado[]        @relation("ObservacaoEscolinha")
@@ -1535,6 +1579,8 @@ model Clube {
   descricao   String?
   responsavel String?
 
+  organizacaoId          String?                  @unique
+  organizacao            Organizacao?             @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
   categorias             Categoria[]
   atletas                Atleta[]
   observacoes            AtletaObservado[]        @relation("ObservacaoClube")
@@ -3092,9 +3138,11 @@ model LearningProfile {
 }
 
 model Federacao {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid())
+  usuarioId     String       @unique
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacaoId String?      @unique
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
   nome        String
   cnpj        String?
@@ -3120,9 +3168,11 @@ model Federacao {
 }
 
 model Marca {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid())
+  usuarioId     String       @unique
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacaoId String?      @unique
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
   nome        String
   cnpj        String?
@@ -3622,6 +3672,20 @@ enum MetodologiaArea {
 enum OrganizacaoTipo {
   CLUBE
   ESCOLINHA
+}
+
+enum TipoOrganizacao {
+  CLUBE
+  ESCOLA
+  MARCA
+  FEDERACAO
+}
+
+enum FuncaoMembroOrganizacao {
+  PROPRIETARIO
+  ADMINISTRADOR
+  PROFESSOR
+  MEMBRO
 }
 
 enum ConviteTipo {

@@ -21,6 +21,9 @@ import {
 import {
   getProfileIdForRole,
 } from "../services/roles.js";
+import {
+  garantirOrganizacaoLegada,
+} from "../services/organizacoes.js";
 
 const FRONTEND_URL = (
   process.env.WEB_BASE_URL || "https://footera.app.br"
@@ -1002,6 +1005,17 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
+
+        await garantirOrganizacaoLegada({
+          tipo:
+            "CLUBE",
+
+          ownerId:
+            clube.id,
+
+          proprietarioUsuarioId:
+            usuario.id,
+        });
         tipoUsuarioId = clube.id;
         break;
       }
@@ -1029,6 +1043,17 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             logo: null,
           },
           select: { id: true },
+        });
+
+        await garantirOrganizacaoLegada({
+          tipo:
+            "ESCOLINHA",
+
+          ownerId:
+            escolinha.id,
+
+          proprietarioUsuarioId:
+            usuario.id,
         });
         tipoUsuarioId = escolinha.id;
         break;
@@ -1159,6 +1184,17 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
         });
 
+        await garantirOrganizacaoLegada({
+          tipo:
+            "FEDERACAO",
+
+          ownerId:
+            federacao.id,
+
+          proprietarioUsuarioId:
+            usuario.id,
+        });
+
         tipoUsuarioId = federacao.id;
         break;
       }
@@ -1197,6 +1233,17 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             nomePublico: nomeOrganizacao || usuario.nome,
             headline: "Canal oficial FootEra",
           },
+        });
+
+        await garantirOrganizacaoLegada({
+          tipo:
+            "MARCA",
+
+          ownerId:
+            marca.id,
+
+          proprietarioUsuarioId:
+            usuario.id,
         });
         tipoUsuarioId = marca.id;
         break;

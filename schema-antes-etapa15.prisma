@@ -1,0 +1,3439 @@
+﻿generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model Usuario {
+  id            String      @id @default(uuid())
+  nomeDeUsuario String      @unique
+  senhaHash     String
+  nome          String
+  email         String      @unique
+  foto          String?
+  tipo          TipoUsuario
+
+  papeis                          UsuarioPapel[]
+  convitesCriados                 Convite[]                     @relation("ConviteCriador")
+  convitesRecebidos               Convite[]                     @relation("ConviteDestinatario")
+  convitesUsados                  ConviteUso[]
+  cidade                          String?
+  estado                          String?
+  pais                            String?
+  cpf                             String?
+  dataNascimento                  DateTime?
+  responsavelNome                 String?
+  responsavelEmail                String?
+  responsavelTelefone             String?
+  configuracoesPrivacidade        Json?
+  dataCriacao                     DateTime                      @default(now())
+  codigo                          String?
+  verified                        Boolean                       @default(false)
+  destaque                        Boolean                       @default(false)
+  configuracoesNotificacoes       Json?
+  senhaAtualizadaEm               DateTime?
+  tokenVersion                    Int                           @default(0)
+  parceiro                        Boolean                       @default(false)
+  lastLoginAt                     DateTime?
+  lastLogoutAt                    DateTime?
+  lastSeenAt                      DateTime?
+  deleteScheduledAt               DateTime?
+  deletedAt                       DateTime?
+  blockedAt                       DateTime?
+  blockedReason                   String?
+  reactivatedAt                   DateTime?
+  status                          AccountStatus                 @default(ATIVO)
+  cep                             String?
+  authProvider                    AuthProvider                  @default(LOCAL)
+  localLoginEnabled               Boolean                       @default(true)
+  googleEmail                     String?
+  googleLinkedAt                  DateTime?
+  googlePicture                   String?
+  googleSub                       String?                       @unique
+  logradouro                      String?
+  administrador                   Administrador?
+  amigosDe                        Amigo[]                       @relation("AmigoUsuario")
+  amigos                          Amigo[]                       @relation("UsuarioAmigo")
+  assinatura                      Assinatura[]
+  atividadesRecentes              AtividadeRecente[]
+  atleta                          Atleta?
+  aulasAoVivoComoConvidado        AulaAoVivo[]                  @relation("AulaAoVivoConvidado")
+  aulasAoVivoCriadas              AulaAoVivo[]                  @relation("AulaAoVivoCriador")
+  aulasAoVivoAcessos              AulaAoVivoAcesso[]
+  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]         @relation("AulaAoVivoConvidadoUsuario")
+  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]          @relation("AulaAoVivoMensagemDeletadaPor")
+  aulasAoVivoMensagens            AulaAoVivoMensagem[]          @relation("AulaAoVivoMensagemUsuario")
+  aulasAoVivoPresencas            AulaAoVivoPresenca[]          @relation("AulaAoVivoPresencaUsuario")
+  AvaliacaoMetodologia            AvaliacaoMetodologia[]
+  AvaliacaoTreino                 AvaliacaoTreino[]
+  certificadosMetodologia         CertificadoMetodologia[]
+  clube                           Clube?
+  comentarios                     Comentario[]
+  Consentimento                   Consentimento[]
+  creator                         Creator?
+  comprasCreator                  CreatorVenda[]                @relation("CreatorVendaComprador")
+  Cupom                           Cupom[]
+  CupomResgate                    CupomResgate[]
+  curtidas                        Curtida[]
+  desafiosCriados                 DesafioEmGrupo[]              @relation("CriadorDesafioEmGrupo")
+  EmailVerification               EmailVerification?
+  escolinha                       Escolinha?
+  ExercicioPersonalizado          ExercicioPersonalizado[]
+  favoritadoPor                   FavoritoUsuario[]             @relation("UsuarioFavorito")
+  favoritos                       FavoritoUsuario[]             @relation("UsuarioFavoritador")
+  federacao                       Federacao?
+  feedbacks                       Feedback[]
+  gruposDono                      Grupo[]                       @relation("GruposQuePossuo")
+  convitesEvento                  InscricaoEvento[]             @relation("ConvitesEvento")
+  inscricoesEvento                InscricaoEvento[]
+  learningFavoritos               LearningFavorito[]
+  learningProfile                 LearningProfile?
+  lembretesNotificacaoEnviados    LembreteNotificacaoEnviado[]
+  LogAuditoria                    LogAuditoria[]
+  logsErro                        LogErro[]
+  LoginEvent                      LoginEvent[]
+  marca                           Marca?
+  MembroGrupo                     MembroGrupo[]
+  mensagensEnviadas               Mensagem[]                    @relation("MensagensEnviadas")
+  mensagensRecebidas              Mensagem[]                    @relation("MensagensRecebidas")
+  mensagensReferenciando          Mensagem[]                    @relation("UsuarioMensagemReferencia")
+  MensagemGrupo                   MensagemGrupo[]
+  metodologiasCriadas             Metodologia[]                 @relation("MetodologiaCriador")
+  metodologiasAssinadas           MetodologiaAssinante[]
+  metodologiasAvulsasCriadas      MetodologiaAvulsa[]           @relation("MetodologiaAvulsaCriador")
+  MetodologiaItemSubmissao        MetodologiaItemSubmissao[]
+  notificacoesGeradas             Notificacao[]                 @relation("NotificacaoActor")
+  notificacoes                    Notificacao[]                 @relation("NotificacaoUsuario")
+  olheiro                         Olheiro?
+  Pagamento                       Pagamento[]
+  parceiroInfo                    Parceiro?
+  PasswordReset                   PasswordReset[]
+  postagens                       Postagem[]
+  professor                       Professor?
+  pushDeviceTokens                PushDeviceToken[]
+  pushSubscriptions               PushSubscription[]
+  seguidores                      Seguidor[]                    @relation("Seguido")
+  seguindo                        Seguidor[]                    @relation("Seguidor")
+  SessaoTreinoTurma               SessaoTreinoTurma[]
+  solicitacoesRecebidas           SolicitacaoTreino[]           @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas            SolicitacaoTreino[]           @relation("SolicitacoesEnviadas")
+  submissaoDesafios               SubmissaoDesafio[]
+  submissaoEmGrupo                SubmissaoDesafioEmGrupo[]
+  submissaoTreinos                SubmissaoTreino[]
+  SubmissionChecklist             SubmissionChecklist[]
+  treinosFavoritos                TreinoFavorito[]
+  treinosCriadosComoAdmin         TreinoProgramado[]            @relation("TreinoProgramadoCriadorUsuario")
+  treinoRealizado                 TreinoRealizado[]
+  TreinoRotina                    TreinoRotina[]
+  TreinoSalvo                     TreinoSalvo[]
+  TreinoUsuario                   TreinoUsuario[]
+  Turmas                          TurmaUsuario[]
+  desafiosEmGrupo                 DesafioEmGrupo[]              @relation("MembrosDesafioEmGrupo")
+  visualizacoesPontuacaoFeitas    PerfilPontuacaoVisualizacao[] @relation("PerfilPontuacaoViewer")
+  visualizacoesPontuacaoRecebidas PerfilPontuacaoVisualizacao[] @relation("PerfilPontuacaoAlvo")
+
+  @@index([deletedAt])
+  @@index([deleteScheduledAt])
+}
+
+model UsuarioPapel {
+  id        String      @id @default(uuid())
+  usuarioId String
+  papel     TipoUsuario
+
+  status StatusUsuarioPapel @default(PENDENTE)
+
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+  ativadoEm        DateTime?
+  desativadoEm     DateTime?
+  perfilCompletoEm DateTime?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, papel])
+  @@index([usuarioId, status])
+  @@index([papel, status])
+}
+
+model PerfilPontuacaoVisualizacao {
+  id                   String   @id @default(uuid())
+  viewerUsuarioId      String
+  perfilUsuarioId      String
+  ultimaPontuacaoVista Int      @default(0)
+  visualizadoEm        DateTime @default(now())
+  criadoEm             DateTime @default(now())
+  atualizadoEm         DateTime @updatedAt
+
+  viewer Usuario @relation("PerfilPontuacaoViewer", fields: [viewerUsuarioId], references: [id], onDelete: Cascade)
+
+  perfil Usuario @relation("PerfilPontuacaoAlvo", fields: [perfilUsuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerUsuarioId, perfilUsuarioId])
+  @@index([viewerUsuarioId])
+  @@index([perfilUsuarioId])
+}
+
+model GooglePreCadastro {
+  id            String   @id @default(uuid())
+  token         String   @unique
+  googleSub     String
+  email         String
+  emailVerified Boolean  @default(false)
+  nome          String?
+  foto          String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([googleSub])
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model Parceiro {
+  id           String   @id @default(uuid())
+  usuarioId    String   @unique
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerification {
+  id        String    @id @default(uuid())
+  usuarioId String    @unique
+  token     String    @unique
+  criadoEm  DateTime  @default(now())
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Assinatura {
+  id                        String           @id @default(uuid())
+  usuarioId                 String
+  plano                     String
+  periodicidade             Periodicidade
+  startsAt                  DateTime
+  renovaEm                  DateTime
+  canceledAt                DateTime?
+  ativo                     Boolean          @default(true)
+  lembreteEnviado           Boolean          @default(false)
+  providerSubscriptionId    String?          @unique
+  bloqueadoEm               DateTime?
+  metodoPreferido           MetodoPagamento?
+  metodoPreferidoDefinidoEm DateTime?
+  status                    AssinaturaStatus @default(TRIAL)
+  trialEndsAt               DateTime?
+  trialStartsAt             DateTime?
+  usuario                   Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, plano])
+  @@index([startsAt])
+  @@index([canceledAt])
+  @@index([status])
+  @@index([trialEndsAt])
+}
+
+model Professor {
+  id                          String                      @id @default(uuid())
+  codigo                      String?
+  cref                        String?
+  areaFormacao                String?
+  escola                      String?
+  fotoUrl                     String?
+  nome                        String
+  usuarioId                   String?                     @unique
+  statusCref                  StatusCref?
+  qualificacoes               String[]
+  certificacoes               String[]
+  escolinhaId                 String?
+  clubeId                     String?
+  organizacaoId               String?
+  email                       String?                     @db.VarChar(191)
+  dataNascimento              DateTime?
+  descricao                   String?
+  AtletaHistoricoVinculo      AtletaHistoricoVinculo[]
+  observacoes                 AtletaObservado[]           @relation("ObservacaoProfessor")
+  conquistas                  ConquistaVinculo[]          @relation("ConquistaProfessor")
+  estatExerciciosRecomendados EstatisticaExercicio[]      @relation("ExEstRec_Rec")
+  estatExerciciosUltimo       EstatisticaExercicio[]      @relation("ExEstRec_Ult")
+  Metodologia                 Metodologia[]
+  MetodologiaAvulsa           MetodologiaAvulsa[]
+  olheirosColaboradores       Olheiro[]                   @relation("OlheiroColabProfessor")
+  OrganizacaoGestor           OrganizacaoGestor[]
+  Clube                       Clube?                      @relation(fields: [clubeId], references: [id])
+  Escolinha                   Escolinha?                  @relation(fields: [escolinhaId], references: [id])
+  usuario                     Usuario?                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  clubes                      ProfessorClube[]
+  escolinhas                  ProfessorEscolinha[]
+  parceriasComoProfessorA     ProfessorParceiro[]         @relation("ProfessorA")
+  parceriasComoProfessorB     ProfessorParceiro[]         @relation("ProfessorB")
+  relacoesTreinamento         RelacaoTreinamento[]        @relation("RelacaoProfessor")
+  TreinoAgendado              TreinoAgendado[]
+  TreinoProfessorUso          TreinoProfessorUso[]
+  treinosCriados              TreinoProgramado[]          @relation("TreinoProgramadoCriador")
+  treinosProgramados          TreinoProgramado[]
+  treinosParticipando         TreinoProgramadoProfessor[]
+  TreinoRotina                TreinoRotina[]
+  TreinoSalvo                 TreinoSalvo[]
+  TreinoSalvoReuso            TreinoSalvoReuso[]
+  turmasParticipando          TurmaProfessor[]
+  convites                    Convite[]
+
+  @@index([organizacaoId])
+}
+
+model ProfessorClube {
+  id          String    @id @default(uuid())
+  professorId String
+  clubeId     String
+  papel       String?
+  createdAt   DateTime  @default(now())
+  clube       Clube     @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, clubeId])
+  @@index([clubeId])
+}
+
+model ProfessorEscolinha {
+  id          String    @id @default(uuid())
+  professorId String
+  escolinhaId String
+  papel       String?
+  createdAt   DateTime  @default(now())
+  escolinha   Escolinha @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, escolinhaId])
+  @@index([escolinhaId])
+}
+
+model ProfessorParceiro {
+  id           String    @id @default(uuid())
+  professorAId String
+  professorBId String
+  criadoEm     DateTime  @default(now())
+  professorA   Professor @relation("ProfessorA", fields: [professorAId], references: [id], onDelete: Cascade)
+  professorB   Professor @relation("ProfessorB", fields: [professorBId], references: [id], onDelete: Cascade)
+
+  @@unique([professorAId, professorBId])
+}
+
+model OrganizacaoGestor {
+  id          String          @id @default(uuid())
+  tipo        OrganizacaoTipo
+  ownerId     String
+  professorId String
+  papel       String?
+  permissoes  Json?
+  ativo       Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  professor   Professor       @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@unique([tipo, ownerId, professorId])
+  @@index([professorId])
+  @@index([tipo, ownerId])
+  @@index([ativo])
+}
+
+model Convite {
+  id     String        @id @default(uuid())
+  token  String        @unique @default(uuid())
+  tipo   ConviteTipo
+  status ConviteStatus @default(ATIVO)
+
+  criadoPorId           String
+  destinatarioUsuarioId String?
+
+  organizacaoTipo OrganizacaoTipo?
+  organizacaoId   String?
+
+  turmaId     String?
+  professorId String?
+
+  usoUnico Boolean @default(true)
+
+  expiresAt   DateTime
+  utilizadoEm DateTime?
+  canceladoEm DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  criadoPor           Usuario    @relation("ConviteCriador", fields: [criadoPorId], references: [id], onDelete: Cascade)
+  destinatarioUsuario Usuario?   @relation("ConviteDestinatario", fields: [destinatarioUsuarioId], references: [id], onDelete: SetNull)
+  turma               Turma?     @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  professor           Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  usos ConviteUso[]
+
+  @@index([status, expiresAt])
+  @@index([tipo, status])
+  @@index([criadoPorId])
+  @@index([destinatarioUsuarioId])
+  @@index([turmaId])
+  @@index([professorId])
+  @@index([organizacaoTipo, organizacaoId])
+}
+
+model ConviteUso {
+  id        String   @id @default(uuid())
+  conviteId String
+  usuarioId String
+  createdAt DateTime @default(now())
+
+  convite Convite @relation(fields: [conviteId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([conviteId, usuarioId])
+  @@index([usuarioId])
+}
+
+model Amigo {
+  id        String   @id @default(uuid())
+  usuarioId String
+  amigoId   String
+  local     String?
+  seguindo  Boolean? @default(false)
+  amigo     Usuario  @relation("AmigoUsuario", fields: [amigoId], references: [id], onDelete: Cascade)
+  usuario   Usuario  @relation("UsuarioAmigo", fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Olheiro {
+  id                     String            @id @default(uuid())
+  usuarioId              String            @unique
+  fotoUrl                String?
+  headline               String?
+  descricao              String?
+  areaAtuacao            String?
+  anosExperiencia        Int               @default(0)
+  emailPublico           String?
+  telefonePublico        String?
+  siteOuLinkedin         String?
+  colaboracaoClubeId     String?
+  reputacaoScore         Int               @default(0)
+  totalIndicacoes        Int               @default(0)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  clubeId                String?
+  colaboracaoEscolinhaId String?
+  colaboracaoProfessorId String?
+  dataNascimento         DateTime?
+  AtletaObservado        AtletaObservado[]
+  Indicacao              Indicacao[]
+  ListaOlheiro           ListaOlheiro[]
+  Clube                  Clube?            @relation(fields: [clubeId], references: [id])
+  colaboracaoClube       Clube?            @relation("OlheiroColabClube", fields: [colaboracaoClubeId], references: [id], onDelete: SetNull)
+  colaboracaoEscolinha   Escolinha?        @relation("OlheiroColabEscolinha", fields: [colaboracaoEscolinhaId], references: [id], onDelete: SetNull)
+  colaboracaoProfessor   Professor?        @relation("OlheiroColabProfessor", fields: [colaboracaoProfessorId], references: [id], onDelete: SetNull)
+  usuario                Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([areaAtuacao])
+  @@index([colaboracaoClubeId])
+  @@index([colaboracaoProfessorId])
+  @@index([colaboracaoEscolinhaId])
+}
+
+model Mensagem {
+  id        String          @id @default(uuid())
+  deId      String
+  paraId    String
+  conteudo  String
+  criadaEm  DateTime        @default(now())
+  lida      Boolean         @default(false)
+  atletaId  String?
+  desafioId String?
+  postId    String?
+  tipo      TipoMensagem    @default(NORMAL)
+  usuarioId String?
+  atleta    Atleta?         @relation("AtletaMensagens", fields: [atletaId], references: [id], onDelete: SetNull)
+  de        Usuario         @relation("MensagensEnviadas", fields: [deId], references: [id], onDelete: Cascade)
+  desafio   DesafioOficial? @relation("DesafioMensagemReferencia", fields: [desafioId], references: [id])
+  para      Usuario         @relation("MensagensRecebidas", fields: [paraId], references: [id], onDelete: Cascade)
+  post      Postagem?       @relation("PostMensagemReferencia", fields: [postId], references: [id])
+  usuario   Usuario?        @relation("UsuarioMensagemReferencia", fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Atleta {
+  id                            String                     @id @default(uuid())
+  usuarioId                     String                     @unique
+  nome                          String?
+  sobrenome                     String?
+  email                         String?                    @unique
+  senhaHash                     String?
+  idade                         Int
+  cpf                           String?
+  telefone1                     String?
+  telefone2                     String?
+  nacionalidade                 String?
+  naturalidade                  String?
+  posicao                       PosicaoCampo?
+  altura                        Decimal?
+  peso                          Decimal?
+  seloQualidade                 String?
+  foto                          String?
+  categoria                     Categoria[]
+  consentimento                 Boolean                    @default(false)
+  clubeId                       String?
+  escolinhaId                   String?
+  statusConexao                 StatusConexao              @default(Pendente)
+  dataCriacao                   DateTime                   @default(now())
+  dataUltimaModificacao         DateTime?
+  perfilTipoTreinoAtualizadoEm  DateTime?
+  pontosTotal                   Int?                       @default(0)
+  perfilTipoTreino              TipoTreino?
+  dataNascimento                DateTime?
+  contatoOlheiroPermitido       Boolean                    @default(false)
+  contatoOlheiroConsentidoEm    DateTime?
+  contatoOlheiroConsentidoPorId String?
+  clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  AtletaElenco                  AtletaElenco[]
+  AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
+  observadores                  AtletaObservado[]          @relation("ObservacaoAtleta")
+  avaliacoesTreino              AvaliacaoTreino[]
+  conquistas                    ConquistaVinculo[]         @relation("ConquistaAtleta")
+  DocumentoFormador             DocumentoFormador[]
+  EstatisticaAtleta             EstatisticaAtleta?
+  Indicacao                     Indicacao[]
+  ListaOlheiroItem              ListaOlheiroItem[]
+  mensagens                     Mensagem[]                 @relation("AtletaMensagens")
+  midias                        Midia[]
+  pontuacao                     PontuacaoAtleta?
+  postagens                     Postagem[]
+  PresencaSessaoTreino          PresencaSessaoTreino[]
+  Ranking                       Ranking?
+  relacoesTreinamento           RelacaoTreinamento[]       @relation("RelacaoAtleta")
+  solicitacoesVinculo           SolicitacaoVinculo[]
+  submissoesDesafio             SubmissaoDesafio[]
+  SubmissaoTreino               SubmissaoTreino[]
+  TransferenciaFormador         TransferenciaFormador[]
+  treinosAgendados              TreinoAgendado[]
+  treinosLivres                 TreinoLivre[]
+  treinosRecebidos              TreinoProgramadoRecebido[]
+  TreinoRotinaAtribuicao        TreinoRotinaAtribuicao[]
+  Video                         Video[]
+  VinculoFormacao               VinculoFormacao[]
+}
+
+model TreinoProgramado {
+  id                       String                           @id @default(uuid())
+  codigo                   String?
+  nome                     String
+  descricao                String?
+  nivel                    Nivel
+  createdAt                DateTime                         @default(now())
+  dataAgendada             DateTime?
+  categoria                Categoria[]
+  dicas                    String[]
+  duracao                  Int?
+  escolinhaId              String?
+  clubeId                  String?
+  expiraEm                 DateTime?
+  imagemUrl                String?
+  metas                    String?
+  naoExpira                Boolean                          @default(false)
+  pontuacao                Int?
+  tipoTreino               TipoTreino?
+  objetivo                 String?
+  criadorProfessorId       String?
+  professorId              String?
+  metodologia              Boolean                          @default(false)
+  parceiro                 Boolean                          @default(false)
+  criadorUsuarioId         String?
+  sessaoTreinoId           String?
+  EstatisticaTreino        EstatisticaTreino?
+  temporarios              ExercicioTemporario[]
+  metodologiaAvulsaItens   MetodologiaAvulsaEstruturaItem[] @relation("TreinoProgramadoMetodologiaAvulsaItens")
+  MetodologiaEstruturaItem MetodologiaEstruturaItem[]
+  metodologiaItens         MetodologiaItem[]
+  metodologias             MetodologiaTreino[]
+  SessaoTreinoTurma        SessaoTreinoTurma[]
+  treinoAgendado           TreinoAgendado[]
+  favoritadoPor            TreinoFavorito[]
+  TreinoProfessorUso       TreinoProfessorUso[]
+  clube                    Clube?                           @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  criadorProfessor         Professor?                       @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id], onDelete: SetNull)
+  criadorUsuario           Usuario?                         @relation("TreinoProgramadoCriadorUsuario", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
+  escolinha                Escolinha?                       @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  Professor                Professor?                       @relation(fields: [professorId], references: [id])
+  sessaoTreino             TreinoSessao?                    @relation(fields: [sessaoTreinoId], references: [id], onDelete: SetNull)
+  exercicios               TreinoProgramadoExercicio[]
+  professores              TreinoProgramadoProfessor[]
+  TreinoProgramadoRecebido TreinoProgramadoRecebido[]
+  realizados               TreinoRealizado[]
+  TreinoRotinaItem         TreinoRotinaItem[]
+
+  @@index([sessaoTreinoId])
+  @@index([criadorProfessorId])
+  @@index([criadorUsuarioId])
+}
+
+model TreinoSessao {
+  id              String             @id @default(uuid())
+  nome            String
+  nomeNormalizado String             @unique
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  treinos         TreinoProgramado[]
+}
+
+model TreinoProgramadoProfessor {
+  id                 String           @id @default(cuid())
+  treinoProgramadoId String
+  professorId        String
+  papel              String?
+  professor          Professor        @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  treinoProgramado   TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+
+  @@unique([treinoProgramadoId, professorId])
+  @@index([professorId])
+  @@index([treinoProgramadoId])
+}
+
+model TreinoProgramadoExercicio {
+  id                       String                  @id @default(uuid())
+  treinoProgramadoId       String
+  exercicioId              String?
+  ordem                    Int
+  repeticoes               String
+  exercicioTemporarioId    String?
+  exercicioPersonalizadoId String?
+  descanso                 String?
+  duracao                  String?
+  series                   Int?
+  descricaoExecucao        String?
+  exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
+  exercicioPersonalizado   ExercicioPersonalizado? @relation(fields: [exercicioPersonalizadoId], references: [id])
+  exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
+  treinoProgramado         TreinoProgramado        @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+
+  @@index([treinoProgramadoId])
+  @@index([exercicioId])
+  @@index([exercicioTemporarioId])
+  @@index([exercicioPersonalizadoId])
+}
+
+model Exercicio {
+  id                         String                       @id @default(uuid())
+  codigo                     String                       @unique
+  nome                       String                       @unique
+  nivel                      Nivel
+  categorias                 Categoria[]
+  videoDemonstrativoUrl      String?
+  createdAt                  DateTime                     @default(now())
+  criadoPorId                String?
+  descanso                   String?
+  duracao                    String?
+  espacoNecessario           EspacoExercicio?
+  favorito                   Boolean                      @default(false)
+  materiaisNecessarios       String?
+  modoExecucao               ModoExecucaoExercicio?
+  objetivo                   String?
+  quantidadeAtletas          String?
+  repeticoes                 String?
+  series                     Int?
+  tags                       String[]
+  tipo                       TipoExercicio?
+  updatedAt                  DateTime                     @default(now()) @updatedAt
+  faixaEtaria                FaixaEtariaExercicio[]
+  nomeNormalizado            String?                      @unique
+  EstatisticaExercicio       EstatisticaExercicio?
+  SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
+  treinoProgramadoExercicios TreinoProgramadoExercicio[]
+}
+
+model ExercicioTemporario {
+  id                         String                       @id @default(uuid())
+  treinoProgramadoId         String
+  codigo                     String?
+  nome                       String
+  descricao                  String?
+  nivel                      Nivel
+  videoDemonstrativoUrl      String?
+  categorias                 Categoria[]
+  videoPosterUrl             String?
+  treinoProgramado           TreinoProgramado             @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
+  treinos                    TreinoProgramadoExercicio[]
+
+  @@index([treinoProgramadoId])
+}
+
+model ExercicioPersonalizado {
+  id                         String                       @id @default(uuid())
+  nome                       String
+  descricao                  String?
+  nivel                      Nivel?
+  categorias                 Categoria[]                  @default([])
+  videoDemonstrativoUrl      String?
+  criadorUsuarioId           String
+  criadoEm                   DateTime                     @default(now())
+  atualizadoEm               DateTime                     @updatedAt
+  videoPosterUrl             String?
+  nomeNormalizado            String?
+  descanso                   String?
+  duracao                    String?
+  espacoNecessario           EspacoExercicio?
+  materiaisNecessarios       String?
+  modoExecucao               ModoExecucaoExercicio?
+  quantidadeAtletas          String?
+  repeticoes                 String?
+  series                     Int?
+  tags                       String[]                     @default([])
+  tipo                       TipoExercicio?
+  favorito                   Boolean                      @default(false)
+  criadorUsuario             Usuario                      @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
+  treinos                    TreinoProgramadoExercicio[]
+
+  @@index([criadorUsuarioId])
+}
+
+model CertificadoMetodologia {
+  id                     String             @id @default(uuid())
+  usuarioId              String
+  metodologiaId          String?
+  metodologiaAssinanteId String?
+  codigoValidacao        String             @unique
+  nomeUsuario            String
+  tituloMetodologia      String
+  nomeEmissor            String
+  concluidoEm            DateTime?
+  emitidoEm              DateTime           @default(now())
+  imagemUrl              String?
+  pdfUrl                 String?
+  metodologiaAvulsaId    String?
+  metodologiaAvulsa      MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  metodologia            Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario                Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, metodologiaId])
+  @@unique([usuarioId, metodologiaAvulsaId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
+}
+
+model Metodologia {
+  id                       String                     @id @default(uuid())
+  titulo                   String
+  descricao                String?
+  capaUrl                  String?
+  nivel                    Nivel?
+  categorias               Categoria[]                @default([])
+  ativo                    Boolean                    @default(false)
+  criadorUsuarioId         String
+  professorId              String?
+  clubeId                  String?
+  escolinhaId              String?
+  totalSemanas             Int?
+  totalAssinantes          Int                        @default(0)
+  mediaAvaliacao           Float?
+  totalReviews             Int                        @default(0)
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  publicoAlvo              MetodologiaPublicoAlvo     @default(AMBOS)
+  area                     MetodologiaArea?
+  estruturaTipo            MetodologiaEstruturaTipo
+  geraBadge                Boolean                    @default(false)
+  geraCertificado          Boolean                    @default(false)
+  tipo                     MetodologiaTipo
+  federacaoId              String?
+  marcaId                  String?
+  aulasAoVivo              AulaAoVivo[]
+  avaliacoes               AvaliacaoMetodologia[]
+  certificados             CertificadoMetodologia[]
+  vendasCreator            CreatorVenda[]
+  clube                    Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  criadorUsuario           Usuario                    @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  escolinha                Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  Federacao                Federacao?                 @relation(fields: [federacaoId], references: [id])
+  Marca                    Marca?                     @relation(fields: [marcaId], references: [id])
+  professor                Professor?                 @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  assinantes               MetodologiaAssinante[]
+  estruturas               MetodologiaEstrutura[]
+  itens                    MetodologiaItem[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  MetodologiaTreino        MetodologiaTreino[]
+
+  @@index([criadorUsuarioId])
+  @@index([professorId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+  @@index([ativo])
+}
+
+model MetodologiaEstrutura {
+  id                       String                          @id @default(uuid())
+  metodologiaId            String
+  tipo                     MetodologiaEstruturaTipo
+  titulo                   String
+  descricao                String?
+  objetivo                 String?
+  ordem                    Int
+  duracaoSemanas           Int?
+  treinosPorSemana         Int?
+  quantidadeMinConclusao   Int?
+  modoExecucao             MetodologiaModoExecucao?
+  pontosPorItem            Int?
+  bonusConsistencia        Int?
+  bonusFinal               Int?
+  permiteAtraso            Boolean                         @default(true)
+  ativo                    Boolean                         @default(true)
+  criadoEm                 DateTime                        @default(now())
+  atualizadoEm             DateTime                        @updatedAt
+  prazoFinal               DateTime?
+  percentualPerdaAtraso    Int?                            @default(20)
+  prazoInicio              DateTime?
+  aulasAoVivo              AulaAoVivo[]
+  metodologia              Metodologia                     @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  itens                    MetodologiaEstruturaItem[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+  progressos               MetodologiaProgressoEstrutura[]
+
+  @@unique([metodologiaId, ordem])
+  @@index([metodologiaId])
+}
+
+model MetodologiaTreino {
+  id                 String           @id @default(uuid())
+  metodologiaId      String
+  treinoProgramadoId String
+  criadoEm           DateTime         @default(now())
+  metodologia        Metodologia      @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  treino             TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+
+  @@unique([metodologiaId, treinoProgramadoId])
+  @@index([metodologiaId])
+  @@index([treinoProgramadoId])
+}
+
+model MetodologiaEstruturaItem {
+  id                       String                     @id @default(uuid())
+  estruturaId              String
+  ordem                    Int
+  titulo                   String
+  descricao                String?
+  tipo                     MetodologiaItemTipo
+  videoUrl                 String?
+  thumbUrl                 String?
+  arquivoUrl               String?
+  materialUrl              String?
+  duracaoMin               Int?
+  treinoProgramadoId       String?
+  pontos                   Int?
+  obrigatorio              Boolean                    @default(true)
+  publicado                Boolean                    @default(true)
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  aulaAoVivo               AulaAoVivo?
+  estrutura                MetodologiaEstrutura       @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  treinoProgramado         TreinoProgramado?          @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  @@unique([estruturaId, ordem])
+  @@index([estruturaId])
+  @@index([treinoProgramadoId])
+}
+
+model MetodologiaProgressoEstrutura {
+  id                     String                     @id @default(uuid())
+  metodologiaAssinanteId String
+  estruturaId            String
+  iniciadoEm             DateTime?
+  concluidoEm            DateTime?
+  status                 MetodologiaProgressoStatus @default(NAO_INICIADA)
+  itensConcluidos        Int                        @default(0)
+  pontosGanhos           Int                        @default(0)
+  cicloInicioEm          DateTime?
+  cicloFimEm             DateTime?
+  ultimoAcessoEm         DateTime?
+  progresso              Json?
+  estrutura              MetodologiaEstrutura       @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  metodologiaAssinante   MetodologiaAssinante       @relation(fields: [metodologiaAssinanteId], references: [id], onDelete: Cascade)
+
+  @@unique([metodologiaAssinanteId, estruturaId])
+  @@index([estruturaId])
+}
+
+model MetodologiaItem {
+  id                 String                  @id @default(uuid())
+  metodologiaId      String
+  semana             Int
+  ordem              Int
+  titulo             String
+  descricao          String?
+  tipo               MetodologiaConteudoTipo @default(TREINO)
+  videoUrl           String?
+  thumbUrl           String?
+  duracaoMin         Int?
+  treinoProgramadoId String?
+  pontos             Int?
+  publicado          Boolean                 @default(true)
+  criadoEm           DateTime                @default(now())
+  atualizadoEm       DateTime                @updatedAt
+  metodologia        Metodologia             @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  treinoProgramado   TreinoProgramado?       @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
+
+  @@unique([metodologiaId, semana, ordem])
+  @@index([metodologiaId])
+  @@index([treinoProgramadoId])
+  @@index([semana])
+}
+
+model MetodologiaItemSubmissao {
+  id                  String                          @id @default(uuid())
+  metodologiaId       String?
+  estruturaId         String?
+  itemId              String?
+  usuarioId           String
+  tipoItem            String
+  observacao          String?
+  arquivoUrl          String?
+  mimeType            String?
+  status              String                          @default("ENVIADA")
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+  metodologiaAvulsaId String?
+  estruturaAvulsaId   String?
+  itemAvulsaId        String?
+  estruturaAvulsa     MetodologiaAvulsaEstrutura?     @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+  estrutura           MetodologiaEstrutura?           @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  itemAvulsa          MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+  item                MetodologiaEstruturaItem?       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa   MetodologiaAvulsa?              @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  metodologia         Metodologia?                    @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario             Usuario                         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([metodologiaId, estruturaId, itemId, usuarioId])
+  @@index([metodologiaAvulsaId, estruturaAvulsaId, itemAvulsaId, usuarioId])
+}
+
+model MetodologiaAssinante {
+  id                  String                          @id @default(uuid())
+  metodologiaId       String?
+  usuarioId           String
+  status              MetodologiaAssinaturaStatus     @default(ATIVA)
+  iniciouEm           DateTime                        @default(now())
+  cancelouEm          DateTime?
+  concluiuEm          DateTime?
+  aulasConcluidas     Int                             @default(0)
+  pontosGanhos        Int                             @default(0)
+  progresso           Json?
+  lastAccessAt        DateTime?
+  expiraEm            DateTime?
+  origem              MetodologiaAssinaturaOrigem     @default(LEARNING)
+  metodologiaAvulsaId String?
+  metodologiaAvulsa   MetodologiaAvulsa?              @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  metodologia         Metodologia?                    @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario             Usuario                         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  progressosEstrutura MetodologiaProgressoEstrutura[]
+
+  @@unique([metodologiaId, usuarioId])
+  @@unique([metodologiaAvulsaId, usuarioId])
+  @@index([usuarioId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
+  @@index([status])
+}
+
+model MetodologiaAvulsa {
+  id                       String                       @id @default(uuid())
+  titulo                   String
+  descricao                String?
+  capaUrl                  String?
+  ativo                    Boolean                      @default(false)
+  criadorUsuarioId         String
+  professorId              String?
+  clubeId                  String?
+  escolinhaId              String?
+  publicoAlvo              MetodologiaPublicoAlvo       @default(AMBOS)
+  tipo                     MetodologiaTipo
+  estruturaTipo            MetodologiaEstruturaTipo
+  area                     MetodologiaArea?
+  geraCertificado          Boolean                      @default(false)
+  geraBadge                Boolean                      @default(false)
+  precoAssinaturaMensal    Decimal                      @db.Decimal(10, 2)
+  criadoEm                 DateTime                     @default(now())
+  atualizadoEm             DateTime                     @updatedAt
+  mediaAvaliacao           Float?
+  totalReviews             Int                          @default(0)
+  federacaoId              String?
+  marcaId                  String?
+  aulasAoVivo              AulaAoVivo[]
+  AvaliacaoMetodologia     AvaliacaoMetodologia[]
+  certificados             CertificadoMetodologia[]
+  vendasCreator            CreatorVenda[]
+  assinantes               MetodologiaAssinante[]
+  clube                    Clube?                       @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  criadorUsuario           Usuario                      @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  escolinha                Escolinha?                   @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  Federacao                Federacao?                   @relation(fields: [federacaoId], references: [id])
+  Marca                    Marca?                       @relation(fields: [marcaId], references: [id])
+  professor                Professor?                   @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  estruturas               MetodologiaAvulsaEstrutura[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  @@index([criadorUsuarioId])
+  @@index([ativo])
+}
+
+model MetodologiaAvulsaEstrutura {
+  id                       String                           @id @default(uuid())
+  metodologiaAvulsaId      String
+  tipo                     MetodologiaEstruturaTipo
+  titulo                   String
+  descricao                String?
+  objetivo                 String?
+  ordem                    Int
+  duracaoSemanas           Int?
+  treinosPorSemana         Int?
+  quantidadeMinConclusao   Int?
+  modoExecucao             MetodologiaModoExecucao?
+  pontosPorItem            Int?
+  bonusConsistencia        Int?
+  bonusFinal               Int?
+  permiteAtraso            Boolean                          @default(true)
+  prazoInicio              DateTime?
+  prazoFinal               DateTime?
+  percentualPerdaAtraso    Int?                             @default(20)
+  ativo                    Boolean                          @default(true)
+  criadoEm                 DateTime                         @default(now())
+  atualizadoEm             DateTime                         @updatedAt
+  aulasAoVivo              AulaAoVivo[]
+  metodologiaAvulsa        MetodologiaAvulsa                @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  itens                    MetodologiaAvulsaEstruturaItem[]
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  @@unique([metodologiaAvulsaId, ordem])
+  @@index([metodologiaAvulsaId])
+}
+
+model MetodologiaAvulsaEstruturaItem {
+  id                       String                     @id @default(uuid())
+  estruturaId              String
+  ordem                    Int
+  titulo                   String
+  descricao                String?
+  tipo                     MetodologiaItemTipo
+  videoUrl                 String?
+  thumbUrl                 String?
+  arquivoUrl               String?
+  materialUrl              String?
+  duracaoMin               Int?
+  treinoProgramadoId       String?
+  pontos                   Int?
+  obrigatorio              Boolean                    @default(true)
+  publicado                Boolean                    @default(true)
+  criadoEm                 DateTime                   @default(now())
+  atualizadoEm             DateTime                   @updatedAt
+  aulaAoVivo               AulaAoVivo?
+  estrutura                MetodologiaAvulsaEstrutura @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  treinoProgramado         TreinoProgramado?          @relation("TreinoProgramadoMetodologiaAvulsaItens", fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
+  MetodologiaItemSubmissao MetodologiaItemSubmissao[]
+
+  @@unique([estruturaId, ordem])
+  @@index([estruturaId])
+}
+
+model AulaAoVivo {
+  id                           String                          @id @default(uuid())
+  titulo                       String
+  descricao                    String?
+  status                       AulaAoVivoStatus                @default(AGENDADA)
+  dataInicio                   DateTime
+  dataFim                      DateTime?
+  iniciouEm                    DateTime?
+  finalizouEm                  DateTime?
+  cancelouEm                   DateTime?
+  urlStream                    String?
+  streamKey                    String?
+  provedorStream               String?
+  videoGravadoUrl              String?
+  thumbUrl                     String?
+  duracaoMin                   Int?
+  chatAtivo                    Boolean                         @default(true)
+  gravacaoAtiva                Boolean                         @default(true)
+  replayDisponivel             Boolean                         @default(false)
+  totalMensagens               Int                             @default(0)
+  totalParticipantes           Int                             @default(0)
+  criadorUsuarioId             String?
+  metodologiaId                String?
+  estruturaId                  String?
+  itemId                       String?                         @unique
+  metodologiaAvulsaId          String?
+  estruturaAvulsaId            String?
+  itemAvulsaId                 String?                         @unique
+  criadoEm                     DateTime                        @default(now())
+  atualizadoEm                 DateTime                        @updatedAt
+  ivsChannelArn                String?
+  ivsIngestEndpoint            String?
+  ivsRecordingConfigurationArn String?
+  ivsRecordingId               String?
+  ivsRecordingS3Prefix         String?
+  ivsRecordingStatus           String?
+  ivsStreamKeyArn              String?
+  slug                         String?                         @unique
+  convidadoDescricao           String?
+  convidadoNome                String?
+  convidadoUsuarioId           String?
+  inscricaoFim                 DateTime?
+  inscricaoInicio              DateTime?
+  acessoPago                   Boolean                         @default(false)
+  precoAcesso                  Decimal?                        @db.Decimal(10, 2)
+  convidadoUsuario             Usuario?                        @relation("AulaAoVivoConvidado", fields: [convidadoUsuarioId], references: [id], onDelete: SetNull)
+  criadorUsuario               Usuario?                        @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
+  estruturaAvulsa              MetodologiaAvulsaEstrutura?     @relation(fields: [estruturaAvulsaId], references: [id], onDelete: Cascade)
+  estrutura                    MetodologiaEstrutura?           @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
+  itemAvulsa                   MetodologiaAvulsaEstruturaItem? @relation(fields: [itemAvulsaId], references: [id], onDelete: Cascade)
+  item                         MetodologiaEstruturaItem?       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa            MetodologiaAvulsa?              @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  metodologia                  Metodologia?                    @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  acessos                      AulaAoVivoAcesso[]
+  convidados                   AulaAoVivoConvidado[]
+  mensagens                    AulaAoVivoMensagem[]
+  presencas                    AulaAoVivoPresenca[]
+
+  @@index([status])
+  @@index([dataInicio])
+  @@index([criadorUsuarioId])
+  @@index([metodologiaId])
+  @@index([estruturaId])
+  @@index([metodologiaAvulsaId])
+  @@index([estruturaAvulsaId])
+  @@index([ivsRecordingId])
+}
+
+model AulaAoVivoAcesso {
+  id           String     @id @default(uuid())
+  aulaAoVivoId String
+  usuarioId    String
+  status       String     @default("ATIVO")
+  origem       String     @default("PAGAMENTO")
+  valorPago    Decimal?   @db.Decimal(10, 2)
+  criadoEm     DateTime   @default(now())
+  pagoEm       DateTime?
+  expiraEm     DateTime?
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+  usuario      Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([aulaAoVivoId, usuarioId])
+  @@index([usuarioId])
+  @@index([aulaAoVivoId])
+}
+
+model AulaAoVivoConvidado {
+  id           String     @id @default(uuid())
+  aulaAoVivoId String
+  usuarioId    String?
+  nome         String?
+  descricao    String?
+  ordem        Int        @default(1)
+  criadoEm     DateTime   @default(now())
+  atualizadoEm DateTime   @updatedAt
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+  usuario      Usuario?   @relation("AulaAoVivoConvidadoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+}
+
+model AulaAoVivoMensagem {
+  id            String           @id @default(uuid())
+  aulaAoVivoId  String
+  usuarioId     String
+  mensagem      String
+  tipo          TipoMensagemLive @default(TEXTO)
+  deletada      Boolean          @default(false)
+  deletadaEm    DateTime?
+  deletadaPorId String?
+  criadoEm      DateTime         @default(now())
+  aulaAoVivo    AulaAoVivo       @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+  deletadaPor   Usuario?         @relation("AulaAoVivoMensagemDeletadaPor", fields: [deletadaPorId], references: [id], onDelete: SetNull)
+  usuario       Usuario          @relation("AulaAoVivoMensagemUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+  @@index([deletadaPorId])
+  @@index([criadoEm])
+}
+
+model AulaAoVivoPresenca {
+  id           String     @id @default(uuid())
+  aulaAoVivoId String
+  usuarioId    String
+  entrouEm     DateTime   @default(now())
+  ultimoPingEm DateTime   @default(now())
+  saiuEm       DateTime?
+  entrouAoVivo Boolean    @default(false)
+  aulaAoVivo   AulaAoVivo @relation(fields: [aulaAoVivoId], references: [id], onDelete: Cascade)
+  usuario      Usuario    @relation("AulaAoVivoPresencaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([aulaAoVivoId, usuarioId])
+  @@index([aulaAoVivoId])
+  @@index([usuarioId])
+  @@index([ultimoPingEm])
+  @@index([entrouAoVivo])
+}
+
+model DesafioOficial {
+  id               String             @id @default(uuid())
+  titulo           String             @unique
+  descricao        String
+  imagemUrl        String?
+  nivel            Nivel
+  categoria        Categoria[]
+  createdAt        DateTime           @default(now())
+  prazoSubmissao   DateTime?
+  pontuacao        Int?
+  regras           String?
+  tipoMetrificacao String?            @map("tipoMetrifica├º├úo")
+  desafiosEmGrupo  DesafioEmGrupo[]   @relation("DesafioOficial_EmGrupo")
+  mensagens        Mensagem[]         @relation("DesafioMensagemReferencia")
+  submissoes       SubmissaoDesafio[]
+}
+
+model Seguidor {
+  id                String  @id @default(uuid())
+  seguidoUsuarioId  String
+  seguidorUsuarioId String
+  seguidoUsuario    Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id], onDelete: Cascade)
+  seguidorUsuario   Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([seguidorUsuarioId, seguidoUsuarioId])
+  @@index([seguidoUsuarioId])
+  @@index([seguidorUsuarioId])
+}
+
+model RelacaoTreinamento {
+  id            String     @id @default(uuid())
+  professorId   String?
+  atletaId      String?
+  escolinhaId   String?
+  clubeId       String?
+  organizacaoId String?
+  ativo         Boolean    @default(true)
+  criadoEm      DateTime   @default(now())
+  encerradoEm   DateTime?
+  atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+  @@index([ativo])
+}
+
+model AtletaObservado {
+  id                     String                   @id @default(uuid())
+  professorId            String?
+  escolinhaId            String?
+  clubeId                String?
+  atletaId               String
+  criadoEm               DateTime                 @default(now())
+  atualizadoEm           DateTime                 @updatedAt
+  olheiroId              String?
+  ativo                  Boolean                  @default(true)
+  alertarMudancas        Boolean                  @default(false)
+  notaInterna            String?
+  atleta                 Atleta                   @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
+  clube                  Clube?                   @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha              Escolinha?               @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  olheiro                Olheiro?                 @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
+  professor              Professor?               @relation("ObservacaoProfessor", fields: [professorId], references: [id], onDelete: Cascade)
+  TreinoRotinaAtribuicao TreinoRotinaAtribuicao[]
+
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([escolinhaId])
+  @@index([clubeId])
+  @@index([olheiroId])
+}
+
+model Postagem {
+  id                String               @id @default(uuid())
+  conteudo          String
+  imagemUrl         String?
+  videoUrl          String?
+  tipoMidia         TipoMidia?
+  dataCriacao       DateTime             @default(now())
+  visibilidade      VisibilidadePostagem @default(LOGADO)
+  usuarioId         String
+  atletaId          String?
+  clubeId           String?
+  escolinhaId       String?
+  compartilhamentos Int?                 @default(0)
+  repostOfId        String?
+  reposts           Int                  @default(0)
+  oculto            Boolean              @default(false)
+  reportedCount     Int                  @default(0)
+  comentarios       Comentario[]
+  curtidas          Curtida[]
+  logsErro          LogErro[]
+  mensagens         Mensagem[]           @relation("PostMensagemReferencia")
+  atleta            Atleta?              @relation(fields: [atletaId], references: [id], onDelete: SetNull)
+  clube             Clube?               @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha         Escolinha?           @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  repostOf          Postagem?            @relation("Reposts", fields: [repostOfId], references: [id])
+  repostedBy        Postagem[]           @relation("Reposts")
+  usuario           Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, conteudo, repostOfId])
+  @@index([visibilidade, dataCriacao])
+  @@index([repostOfId])
+}
+
+model Midia {
+  id                 String            @id @default(uuid())
+  url                String
+  tipo               TipoMidia
+  dataCriacao        DateTime          @default(now())
+  dataEnvio          DateTime
+  descricao          String
+  titulo             String
+  atletaId           String?
+  escolinhaId        String?
+  clubeId            String?
+  submissaoDesafioId String?
+  submissaoTreinoId  String?
+  criadoEm           DateTime          @default(now())
+  durationSec        Int?
+  width              Int?
+  height             Int?
+  sizeBytes          Int?
+  processedUrl       String?
+  thumbUrl           String?
+  fps                Int?
+  lastAccessAt       DateTime?
+  storageClass       StorageClass
+  atualizadoEm       DateTime          @updatedAt
+  atleta             Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  clube              Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha          Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  submissaoDesafio   SubmissaoDesafio? @relation("Midias_SubmissaoDesafio", fields: [submissaoDesafioId], references: [id], onDelete: Cascade)
+  submissaoTreino    SubmissaoTreino?  @relation("Midias_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+}
+
+model Escolinha {
+  id                     String                   @id @default(uuid())
+  usuarioId              String?                  @unique
+  nome                   String                   @unique
+  cnpj                   String?                  @unique
+  telefone1              String?
+  telefone2              String?
+  email                  String?                  @unique
+  siteOficial            String?
+  sede                   String?
+  logradouro             String?
+  numero                 String?
+  complemento            String?
+  bairro                 String?
+  cidade                 String?
+  estado                 String?
+  pais                   String?
+  cep                    String?
+  logo                   String?
+  dataCriacao            DateTime                 @default(now())
+  categorias             Categoria[]
+  descricao              String?
+  atletas                Atleta[]
+  AtletaHistoricoVinculo AtletaHistoricoVinculo[]
+  observacoes            AtletaObservado[]        @relation("ObservacaoEscolinha")
+  conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
+  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  eventos                Evento[]
+  indicacoes             Indicacao[]
+  Metodologia            Metodologia[]
+  MetodologiaAvulsa      MetodologiaAvulsa[]
+  midias                 Midia[]
+  olheirosColaboradores  Olheiro[]                @relation("OlheiroColabEscolinha")
+  postagens              Postagem[]
+  Professor              Professor[]
+  ProfessorEscolinha     ProfessorEscolinha[]
+  relacoesTreinamento    RelacaoTreinamento[]     @relation("RelacaoEscolinha")
+  treinoProgramado       TreinoProgramado[]
+  TreinoRotina           TreinoRotina[]
+  TreinoSalvo            TreinoSalvo[]
+  Turma                  Turma[]
+}
+
+model Comentario {
+  id            String            @id @default(uuid())
+  conteudo      String
+  dataCriacao   DateTime          @default(now())
+  usuarioId     String
+  postagemId    String?
+  submissaoId   String?
+  oculto        Boolean           @default(false)
+  reportedCount Int               @default(0)
+  postagem      Postagem?         @relation(fields: [postagemId], references: [id])
+  submissao     SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+  usuario       Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([postagemId])
+  @@index([submissaoId])
+}
+
+model Clube {
+  id                     String                   @id @default(uuid())
+  usuarioId              String                   @unique
+  nome                   String                   @unique
+  cnpj                   String?                  @unique
+  telefone1              String?
+  telefone2              String?
+  email                  String?                  @unique
+  siteOficial            String?                  @unique
+  sede                   String?
+  estadio                String?
+  logradouro             String?
+  numero                 String?
+  complemento            String?
+  bairro                 String?
+  cidade                 String?
+  estado                 String?
+  pais                   String?
+  cep                    String?
+  logo                   String?
+  dataCriacao            DateTime                 @default(now())
+  descricao              String?
+  responsavel            String?
+  categorias             Categoria[]
+  atletas                Atleta[]
+  AtletaHistoricoVinculo AtletaHistoricoVinculo[]
+  observacoes            AtletaObservado[]        @relation("ObservacaoClube")
+  usuario                Usuario                  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  conquistas             ConquistaVinculo[]       @relation("ConquistaClube")
+  Evento                 Evento[]
+  Indicacao              Indicacao[]
+  Metodologia            Metodologia[]
+  MetodologiaAvulsa      MetodologiaAvulsa[]
+  midias                 Midia[]
+  Olheiro                Olheiro[]
+  olheirosColaboradores  Olheiro[]                @relation("OlheiroColabClube")
+  postagens              Postagem[]
+  Professor              Professor[]
+  ProfessorClube         ProfessorClube[]
+  relacoesTreinamento    RelacaoTreinamento[]     @relation("RelacaoClube")
+  treinoProgramado       TreinoProgramado[]
+  TreinoRotina           TreinoRotina[]
+  TreinoSalvo            TreinoSalvo[]
+  Turma                  Turma[]
+}
+
+model SolicitacaoVinculo {
+  id           String   @id @default(uuid())
+  atletaId     String
+  entidadeId   String
+  tipoEntidade String
+  status       String?
+  criadoEm     DateTime @default(now())
+  atleta       Atleta   @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model SolicitacaoTreino {
+  id             String @id @default(uuid())
+  remetenteId    String
+  destinatarioId String
+
+  remetentePapel    TipoUsuario?
+  destinatarioPapel TipoUsuario?
+
+  status   String?
+  criadoEm DateTime @default(now())
+
+  destinatario Usuario @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
+  remetente    Usuario @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+
+  @@index([remetenteId, destinatarioId, status])
+}
+
+model SolicitacaoColaboracaoOlheiro {
+  id               String    @id @default(uuid())
+  olheiroId        String
+  olheiroUsuarioId String
+  destinoTipo      String
+  destinoId        String
+  destinoUsuarioId String
+  status           String    @default("PENDENTE")
+  notificacaoId    String?
+  criadaEm         DateTime  @default(now())
+  respondidaEm     DateTime?
+
+  @@index([olheiroId, status])
+  @@index([destinoUsuarioId, status])
+  @@index([notificacaoId])
+}
+
+model SubmissaoDesafio {
+  id                 String                    @id @default(uuid())
+  atletaId           String
+  desafioId          String
+  videoUrl           String
+  aprovado           Boolean?
+  createdAt          DateTime                  @default(now())
+  usuarioId          String?
+  observacao         String?
+  conteudo           Json?
+  resultado          Float?
+  resultadoDeclarado Float?
+  tempoMs            Int?
+  unidadeResultado   String?
+  repeticoes         Int?
+  comentarios        Comentario[]
+  curtidas           Curtida[]
+  midias             Midia[]                   @relation("Midias_SubmissaoDesafio")
+  atleta             Atleta                    @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  desafio            DesafioOficial            @relation(fields: [desafioId], references: [id])
+  Usuario            Usuario?                  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  submissaoEmGrupo   SubmissaoDesafioEmGrupo[]
+}
+
+model SubmissaoTreino {
+  id                   String            @id @default(uuid())
+  atletaId             String
+  treinoAgendadoId     String
+  aprovado             Boolean?
+  observacao           String?
+  criadoEm             DateTime          @default(now())
+  atualizadoEm         DateTime          @updatedAt
+  usuarioId            String?
+  duracaoMinutos       Int?
+  pontosCreditados     Int?
+  pontuacaoSnapshot    Int?
+  tipoTreinoSnapshot   TipoTreino?
+  treinoTituloSnapshot String?
+  midiaUrl             String?
+  midiaTipo            TipoMidia?
+  duracaoSegundos      Int?
+  repeticoes           Int?
+  avaliacaoTreino      AvaliacaoTreino[]
+  curtidas             Curtida[]         @relation("Curtidas_SubmissaoTreino")
+  midias               Midia[]           @relation("Midias_SubmissaoTreino")
+  atleta               Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoAgendado       TreinoAgendado    @relation(fields: [treinoAgendadoId], references: [id])
+  Usuario              Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@unique([atletaId, treinoAgendadoId])
+}
+
+model AvaliacaoTreino {
+  id                String                      @id @default(uuid())
+  atletaId          String
+  treinoAgendadoId  String
+  submissaoTreinoId String
+  autorTipo         AvaliacaoAutorTipo
+  autorId           String
+  autorUsuarioId    String?
+  nota              Int                         @default(0)
+  concluiu          Boolean                     @default(true)
+  teveDificuldade   Boolean                     @default(false)
+  dificuldadeMotivo String?
+  motivoNaoConcluiu String?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  sentimento        SentimentoAvaliacao?
+  atleta            Atleta                      @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  autorUsuario      Usuario?                    @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
+  submissaoTreino   SubmissaoTreino             @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  treinoAgendado    TreinoAgendado              @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
+  comentarios       AvaliacaoTreinoComentario[]
+
+  @@unique([submissaoTreinoId, autorTipo, autorId])
+  @@index([submissaoTreinoId])
+  @@index([treinoAgendadoId])
+  @@index([atletaId])
+  @@index([autorTipo, autorId])
+  @@index([createdAt])
+}
+
+model AvaliacaoMetodologia {
+  id                  String               @id @default(uuid())
+  metodologiaId       String?
+  usuarioId           String
+  nota                Int
+  comentario          String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  metodologiaAvulsaId String?
+  sentimento          SentimentoAvaliacao?
+  metodologiaAvulsa   MetodologiaAvulsa?   @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: Cascade)
+  metodologia         Metodologia?         @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario             Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([metodologiaId, usuarioId])
+  @@unique([metodologiaAvulsaId, usuarioId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
+  @@index([usuarioId])
+  @@index([createdAt])
+}
+
+model AvaliacaoTreinoComentario {
+  id                String          @id @default(uuid())
+  avaliacaoTreinoId String
+  texto             String
+  ordem             Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  avaliacaoTreino   AvaliacaoTreino @relation(fields: [avaliacaoTreinoId], references: [id], onDelete: Cascade)
+
+  @@unique([avaliacaoTreinoId, ordem])
+  @@index([avaliacaoTreinoId])
+  @@index([createdAt])
+}
+
+model Grupo {
+  id        String           @id @default(uuid())
+  nome      String
+  descricao String?
+  createdAt DateTime         @default(now())
+  foto      String?
+  ownerId   String
+  updatedAt DateTime         @updatedAt
+  desafios  DesafioEmGrupo[]
+  owner     Usuario          @relation("GruposQuePossuo", fields: [ownerId], references: [id], onDelete: Cascade)
+  membros   MembroGrupo[]
+  mensagens MensagemGrupo[]
+
+  @@index([ownerId])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model MembroGrupo {
+  id        String     @id @default(uuid())
+  grupoId   String
+  criadoEm  DateTime   @default(now())
+  tipo      TipoMembro @default(MEMBRO)
+  updatedAt DateTime   @updatedAt
+  usuarioId String
+  grupo     Grupo      @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  usuario   Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([grupoId, usuarioId])
+  @@index([usuarioId])
+  @@index([grupoId, tipo])
+}
+
+model MensagemGrupo {
+  id               String          @id @default(uuid())
+  grupoId          String
+  usuarioId        String
+  conteudo         String
+  tipo             TipoMensagem    @default(NORMAL)
+  criadaEm         DateTime        @default(now())
+  excluida         Boolean         @default(false)
+  excluidaEm       DateTime?
+  excluidaPor      String?
+  conteudoJson     Json?
+  desafioEmGrupoId String?
+  desafioEmGrupo   DesafioEmGrupo? @relation(fields: [desafioEmGrupoId], references: [id])
+  grupo            Grupo           @relation(fields: [grupoId], references: [id])
+  usuario          Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([grupoId])
+  @@index([usuarioId])
+  @@index([criadaEm])
+  @@index([desafioEmGrupoId])
+}
+
+model Administrador {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  cargo     String
+  nivel     Nivel
+  fotoUrl   String?
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model LogAuditoria {
+  id         String   @id @default(uuid())
+  usuarioId  String
+  acao       String
+  entidade   String?
+  entidadeId String?
+  descricao  String?
+  ip         String?
+  userAgent  String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, acao, createdAt])
+}
+
+model LogErro {
+  id           String   @id @default(uuid())
+  errorMessage String
+  requestId    String
+  timestamp    DateTime
+  path         String
+  clientIp     String
+  postagemId   String
+  usuarioId    String
+  postagem     Postagem @relation(fields: [postagemId], references: [id], onDelete: Cascade)
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Feedback {
+  id        String    @id @default(uuid())
+  usuarioId String
+  tipo      String
+  mensagem  String
+  createdAt DateTime  @default(now())
+  lidoEm    DateTime?
+  meta      Json?
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, createdAt])
+}
+
+model Curtida {
+  id                String            @id @default(uuid())
+  usuarioId         String
+  postagemId        String?
+  createdAt         DateTime          @default(now())
+  submissaoId       String?
+  submissaoTreinoId String?
+  postagem          Postagem?         @relation(fields: [postagemId], references: [id], onDelete: Cascade)
+  submissao         SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+  submissaoTreino   SubmissaoTreino?  @relation("Curtidas_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  usuario           Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, postagemId], name: "usuario_postagem_unique")
+  @@unique([usuarioId, submissaoId], name: "usuario_submissao_unique")
+  @@unique([usuarioId, submissaoTreinoId], name: "usuario_submissaoTreino_unique")
+  @@index([submissaoId])
+  @@index([submissaoTreinoId])
+}
+
+model TreinoAgendado {
+  id                       String                  @id @default(uuid())
+  titulo                   String
+  local                    String?
+  atletaId                 String?
+  treinoProgramadoId       String?
+  dataTreino               DateTime?
+  dataExpiracao            DateTime?
+  status                   TreinoAgendadoStatus    @default(AGENDADO)
+  dataOriginal             DateTime?
+  reagendamentos           Int                     @default(0)
+  treinoRotinaAtribuicaoId String?
+  reagendadoDeId           String?
+  criadoPorProfessorId     String?
+  execucaoStatus           TreinoStatus            @default(PENDING)
+  startedAt                DateTime?
+  finishedAt               DateTime?
+  duracaoSegundos          Int?
+  turmaId                  String?
+  avaliacaoTreino          AvaliacaoTreino[]
+  submissaoTreinos         SubmissaoTreino[]
+  atleta                   Atleta?                 @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  criadoPorProfessor       Professor?              @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+  reagendadoDe             TreinoAgendado?         @relation("Reagendamento", fields: [reagendadoDeId], references: [id], onDelete: SetNull)
+  reagendamentosGerados    TreinoAgendado[]        @relation("Reagendamento")
+  treinoProgramado         TreinoProgramado?       @relation(fields: [treinoProgramadoId], references: [id])
+  treinoRotinaAtribuicao   TreinoRotinaAtribuicao? @relation(fields: [treinoRotinaAtribuicaoId], references: [id], onDelete: SetNull)
+  turma                    Turma?                  @relation(fields: [turmaId], references: [id], onDelete: SetNull)
+
+  @@unique([atletaId, treinoProgramadoId, dataTreino])
+  @@index([criadoPorProfessorId])
+  @@index([status])
+  @@index([dataTreino])
+  @@index([treinoRotinaAtribuicaoId])
+}
+
+model TreinoLivre {
+  id             String           @id @default(cuid())
+  atletaId       String
+  data           DateTime
+  descricao      String
+  duracaoMin     Int
+  tipoAtividade  String?
+  categoria      String?
+  urlEvidencia   String?
+  createdAt      DateTime         @default(now())
+  RegistroTreino RegistroTreino[]
+  atleta         Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model RegistroTreino {
+  id         String      @id @default(uuid())
+  treinoId   String
+  notas      String?
+  completado Boolean     @default(false)
+  treino     TreinoLivre @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+}
+
+model PontuacaoAtleta {
+  atletaId                  String   @id
+  pontuacaoTotal            Int      @default(0)
+  pontuacaoPerformance      Int      @default(0)
+  pontuacaoDisciplina       Int      @default(0)
+  pontuacaoResponsabilidade Int      @default(0)
+  ultimaAtualizacao         DateTime @default(now())
+  atleta                    Atleta   @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model Video {
+  id        String      @id @default(uuid())
+  titulo    String
+  url       String      @unique
+  thumbnail String?
+  atletaId  String
+  createdAt DateTime    @default(now())
+  categoria Categoria[]
+  nivel     Nivel
+  atleta    Atleta      @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model Ranking {
+  id        String   @id @default(uuid())
+  atletaId  String   @unique
+  total     Int      @default(0)
+  posicao   Int
+  createdAt DateTime @default(now())
+  atleta    Atleta   @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model ConfiguracaoSistema {
+  id                     String    @id @default(uuid())
+  registrationEnabled    Boolean   @default(true)
+  maintenanceMode        Boolean   @default(false)
+  maintenanceScheduledAt DateTime?
+  allowAthleteChallenges Boolean   @default(true)
+  allowProfileEditing    Boolean   @default(true)
+  maxDailyPosts          Int       @default(5)
+}
+
+model AtividadeRecente {
+  id        String   @id @default(uuid())
+  usuarioId String
+  tipo      String
+  imagemUrl String?
+  createdAt DateTime @default(now())
+  link      String?
+  titulo    String?
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model TreinoRealizado {
+  id            String           @id @default(uuid())
+  usuarioId     String
+  treinoId      String
+  local         String?
+  dataExpiracao DateTime?
+  createdAt     DateTime         @default(now())
+  treino        TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+  usuario       Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([treinoId])
+  @@index([usuarioId])
+  @@index([createdAt])
+}
+
+model TreinoProgramadoRecebido {
+  id       String           @id @default(uuid())
+  atletaId String
+  treinoId String
+  atleta   Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treino   TreinoProgramado @relation(fields: [treinoId], references: [id])
+}
+
+model DesafioEmGrupo {
+  id               String                    @id @default(uuid())
+  desafioOficialId String
+  grupoId          String
+  status           StatusDesafioGrupo        @default(ativo)
+  dataCriacao      DateTime                  @default(now())
+  dataExpiracao    DateTime?
+  pontosAcumulados Int?                      @default(0)
+  bonus            Int                       @default(0)
+  bonusDado        Boolean                   @default(false)
+  criadoPorId      String
+  pontosSnapshot   Int?
+  criadoPor        Usuario                   @relation("CriadorDesafioEmGrupo", fields: [criadoPorId], references: [id], onDelete: Cascade)
+  desafioOficial   DesafioOficial            @relation("DesafioOficial_EmGrupo", fields: [desafioOficialId], references: [id])
+  grupo            Grupo                     @relation(fields: [grupoId], references: [id])
+  MensagemGrupo    MensagemGrupo[]
+  submissaoEmGrupo SubmissaoDesafioEmGrupo[]
+  membros          Usuario[]                 @relation("MembrosDesafioEmGrupo")
+
+  @@index([grupoId])
+  @@index([desafioOficialId])
+  @@index([criadoPorId])
+}
+
+model SubmissaoDesafioEmGrupo {
+  id                 String           @id @default(uuid())
+  submissaoDesafioId String
+  desafioEmGrupoId   String
+  usuarioId          String
+  dataEnvio          DateTime         @default(now())
+  aprovado           Boolean?
+  pontosGanhos       Int?
+  dentroDoPrazo      Boolean          @default(false)
+  desafioEmGrupo     DesafioEmGrupo   @relation(fields: [desafioEmGrupoId], references: [id])
+  submissaoDesafio   SubmissaoDesafio @relation(fields: [submissaoDesafioId], references: [id])
+  usuario            Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([desafioEmGrupoId, usuarioId])
+  @@index([desafioEmGrupoId])
+  @@index([usuarioId])
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  usuarioId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+model EstatisticaAtleta {
+  atletaId       String   @id
+  totalTreinos   Int      @default(0)
+  totalDesafios  Int      @default(0)
+  totalPontos    Int      @default(0)
+  horasTreinadas Float    @default(0)
+  fisico         Int      @default(0)
+  tecnico        Int      @default(0)
+  tatico         Int      @default(0)
+  mental         Int      @default(0)
+  updatedAt      DateTime @updatedAt
+  atleta         Atleta   @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model FavoritoUsuario {
+  id                String   @id @default(uuid())
+  usuarioId         String
+  favoritoUsuarioId String
+  createdAt         DateTime @default(now())
+  favorito          Usuario  @relation("UsuarioFavorito", fields: [favoritoUsuarioId], references: [id], onDelete: Cascade)
+  usuario           Usuario  @relation("UsuarioFavoritador", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, favoritoUsuarioId], name: "usuarioId_favoritoUsuarioId")
+  @@index([usuarioId])
+  @@index([favoritoUsuarioId])
+}
+
+model Elenco {
+  id            String         @id @default(uuid())
+  nome          String
+  professorId   String?
+  clubeId       String?
+  escolinhaId   String?
+  atletasIds    String[]
+  escala        Json?
+  formacao      Json?
+  maxJogadores  Int            @default(11)
+  ativo         Boolean        @default(true)
+  dataCriacao   DateTime       @default(now())
+  turmaId       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  atletasElenco AtletaElenco[]
+  turma         Turma?         @relation(fields: [turmaId], references: [id])
+
+  @@index([turmaId])
+}
+
+model AtletaElenco {
+  id           String       @id @default(uuid())
+  elencoId     String
+  atletaId     String
+  posicao      PosicaoCampo
+  numeroCamisa Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  atleta       Atleta       @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  elenco       Elenco       @relation(fields: [elencoId], references: [id], onDelete: Cascade)
+
+  @@unique([elencoId, posicao])
+  @@unique([elencoId, atletaId])
+  @@index([atletaId])
+}
+
+model Evento {
+  id               String             @id @default(uuid())
+  clubeId          String?
+  escolinhaId      String?
+  titulo           String
+  tipo             EventoTipo         @default(PENEIRA)
+  descricao        String?
+  dataEvento       DateTime
+  inscricaoInicio  DateTime?
+  inscricaoFim     DateTime?
+  local            String?
+  cidade           String?
+  estado           String?
+  pais             String?
+  endereco         String?
+  vagas            Int?
+  valorInscricao   Decimal?           @db.Decimal(10, 2)
+  linkInscricao    String?
+  requisitos       String[]
+  status           EventoStatus       @default(ABERTO)
+  criadoEm         DateTime           @default(now())
+  atualizadoEm     DateTime           @updatedAt
+  creatorTipo      String?
+  creatorUsuarioId String?
+  federacaoId      String?
+  marcaId          String?
+  clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  federacao        Federacao?         @relation(fields: [federacaoId], references: [id])
+  marca            Marca?             @relation(fields: [marcaId], references: [id])
+  EventoConvocacao EventoConvocacao[]
+  EventoConvocado  EventoConvocado[]
+  inscricoes       InscricaoEvento[]
+}
+
+model InscricaoEvento {
+  id             String                @id @default(uuid())
+  eventoId       String
+  usuarioId      String
+  status         InscricaoEventoStatus @default(PENDENTE)
+  convidadoPorId String?
+  criadoEm       DateTime              @default(now())
+  atualizadoEm   DateTime              @updatedAt
+  convidadoPor   Usuario?              @relation("ConvitesEvento", fields: [convidadoPorId], references: [id])
+  evento         Evento                @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  usuario        Usuario               @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, usuarioId])
+}
+
+model Indicacao {
+  id           String          @id @default(uuid())
+  olheiroId    String
+  atletaId     String
+  clubeId      String?
+  status       IndicacaoStatus @default(PENDENTE)
+  criadoEm     DateTime        @default(now())
+  atualizadoEm DateTime        @updatedAt
+  escolinhaId  String?
+  atleta       Atleta          @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  clube        Clube?          @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha    Escolinha?      @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  olheiro      Olheiro         @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
+
+  @@unique([olheiroId, atletaId, clubeId])
+  @@unique([olheiroId, atletaId, escolinhaId])
+  @@index([olheiroId])
+  @@index([atletaId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+}
+
+model ListaOlheiro {
+  id        String             @id @default(uuid())
+  olheiroId String
+  nome      String
+  descricao String?
+  publico   Boolean            @default(false)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  olheiro   Olheiro            @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
+  itens     ListaOlheiroItem[]
+
+  @@unique([olheiroId, nome])
+  @@index([olheiroId, createdAt])
+}
+
+model ListaOlheiroItem {
+  id         String       @id @default(uuid())
+  listaId    String
+  atletaId   String
+  observacao String?
+  criadoEm   DateTime     @default(now())
+  atleta     Atleta       @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  lista      ListaOlheiro @relation(fields: [listaId], references: [id], onDelete: Cascade)
+
+  @@unique([listaId, atletaId])
+  @@index([atletaId])
+}
+
+model VinculoFormacao {
+  id                String              @id @default(uuid())
+  atletaId          String
+  origem            OrigemFormador
+  origemId          String
+  inicio            DateTime?
+  fim               DateTime?
+  documentos        String[]
+  observacoes       String?
+  createdAt         DateTime            @default(now())
+  DocumentoFormador DocumentoFormador[]
+  atleta            Atleta              @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model TransferenciaFormador {
+  id                 String    @id @default(uuid())
+  atletaId           String
+  deClubeId          String?
+  paraClubeId        String?
+  data               DateTime?
+  valorTransferencia Decimal   @default(0)
+  gerouSolidariedade Boolean   @default(false)
+  valorSolidariedade Decimal   @default(0)
+  createdAt          DateTime  @default(now())
+  atleta             Atleta    @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model BadgeFormador {
+  id            String    @id @default(uuid())
+  nome          String
+  descricao     String?
+  icon          String?
+  iconUrl       String?
+  conquistadoEm DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+model DocumentoFormador {
+  id                String           @id @default(uuid())
+  atletaId          String
+  descricao         String?
+  fileName          String
+  originalName      String
+  mimeType          String
+  size              Int
+  path              String
+  createdAt         DateTime         @default(now())
+  vinculoFormacaoId String?
+  atleta            Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  vinculoFormacao   VinculoFormacao? @relation(fields: [vinculoFormacaoId], references: [id])
+}
+
+model ScoutNote {
+  id            String   @id @default(uuid())
+  olheiroId     String
+  atletaId      String
+  texto         String   @default("")
+  lastScoreSeen Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([olheiroId, atletaId], name: "olheiroId_atletaId")
+}
+
+model TreinoUsuario {
+  id          String       @id @default(uuid())
+  treinoId    String
+  usuarioId   String
+  status      TreinoStatus @default(PENDING)
+  startedAt   DateTime?
+  completedAt DateTime?
+  tempoSeg    Int?
+  repeticoes  Int?
+  observacao  String?
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([treinoId, usuarioId])
+  @@index([usuarioId])
+}
+
+model ChecklistTemplate {
+  id          String           @id @default(uuid())
+  context     ChecklistContext
+  nome        String
+  ativo       Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  professorId String?
+  clubeId     String?
+  escolinhaId String?
+  items       ChecklistItem[]
+}
+
+model ChecklistItem {
+  id         String            @id @default(uuid())
+  templateId String
+  ordem      Int               @default(0)
+  label      String
+  key        String
+  type       ChecklistItemType
+  required   Boolean           @default(false)
+  weight     Int               @default(1)
+  options    String[]
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id])
+}
+
+model SubmissionChecklist {
+  id                 String            @id @default(uuid())
+  templateId         String
+  context            ChecklistContext
+  submissaoTreinoId  String?
+  submissaoDesafioId String?
+  postagemId         String?
+  totalScore         Int?
+  aprovado           Boolean?
+  finalizedByUserId  String?
+  finalizedAt        DateTime?
+  createdAt          DateTime          @default(now())
+  answers            ChecklistAnswer[]
+  finalizedByUser    Usuario?          @relation(fields: [finalizedByUserId], references: [id], onDelete: SetNull)
+}
+
+model ChecklistAnswer {
+  id                  String              @id @default(uuid())
+  checklistId         String
+  itemId              String
+  value               Json?
+  comment             String?
+  SubmissionChecklist SubmissionChecklist @relation(fields: [checklistId], references: [id])
+}
+
+model RankingSnapshot {
+  id          String       @id @default(uuid())
+  kind        String
+  ref         String?
+  generatedAt DateTime     @default(now())
+  rows        RankingRow[]
+}
+
+model RankingRow {
+  id                String           @id @default(uuid())
+  snapshotId        String
+  atletaId          String
+  posicao           Int
+  pontuacao         Int
+  estado            String?
+  categoria         String?
+  rankingSnapshotId String?
+  RankingSnapshot   RankingSnapshot? @relation(fields: [rankingSnapshotId], references: [id])
+}
+
+model Consentimento {
+  id           String   @id @default(uuid())
+  usuarioId    String
+  tipo         String
+  doc          String
+  versaoTermos String
+  versaoPriv   String
+  hashTermos   String?
+  hashPriv     String?
+  metodo       String
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Turma {
+  id                String              @id @default(uuid())
+  nome              String
+  descricao         String?
+  ativo             Boolean             @default(true)
+  escolinhaId       String?
+  clubeId           String?
+  vagas             Int?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  categoria         Categoria[]         @default([])
+  Elenco            Elenco[]
+  EventoConvocacao  EventoConvocacao[]
+  EventoConvocado   EventoConvocado[]
+  SessaoTreinoTurma SessaoTreinoTurma[]
+  TreinoAgendado    TreinoAgendado[]
+  clube             Clube?              @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha         Escolinha?          @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professores       TurmaProfessor[]
+  membros           TurmaUsuario[]
+  convites          Convite[]
+}
+
+model TurmaProfessor {
+  id          String    @id @default(uuid())
+  turmaId     String
+  professorId String
+  papel       String?
+  createdAt   DateTime  @default(now())
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  turma       Turma     @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@unique([turmaId, professorId])
+  @@index([turmaId])
+  @@index([professorId])
+}
+
+model TurmaUsuario {
+  id        String  @id @default(uuid())
+  turmaId   String
+  usuarioId String
+  turma     Turma   @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([turmaId, usuarioId])
+  @@index([turmaId])
+  @@index([usuarioId])
+}
+
+model TreinoSalvo {
+  id                       String             @id @default(uuid())
+  titulo                   String
+  descricao                String?
+  nivel                    Nivel?
+  tipoTreino               TipoTreino?
+  categoria                Categoria[]
+  duracao                  Int?
+  dicas                    String[]
+  usuarioId                String
+  treinoProgramadoId       String
+  createdAt                DateTime           @default(now())
+  conteudo                 Json
+  professorId              String?
+  escolinhaId              String?
+  clubeId                  String?
+  criadoPorUsuarioId       String?
+  publico                  Boolean            @default(false)
+  parceiro                 Boolean            @default(false)
+  expiraEm                 DateTime?
+  naoExpira                Boolean            @default(false)
+  reutilizacoesProfessores Int                @default(0)
+  criadoEm                 DateTime           @default(now())
+  atualizadoEm             DateTime           @updatedAt
+  clube                    Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  criadoPorUsuario         Usuario?           @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
+  escolinha                Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  professor                Professor?         @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  reutilizadoPor           TreinoSalvoReuso[]
+
+  @@unique([usuarioId, treinoProgramadoId])
+  @@index([professorId])
+  @@index([escolinhaId])
+  @@index([clubeId])
+  @@index([publico, parceiro])
+  @@index([expiraEm])
+}
+
+model TreinoSalvoReuso {
+  id            String      @id @default(uuid())
+  treinoSalvoId String
+  professorId   String
+  criadoEm      DateTime    @default(now())
+  professor     Professor   @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  treino        TreinoSalvo @relation(fields: [treinoSalvoId], references: [id], onDelete: Cascade)
+
+  @@unique([treinoSalvoId, professorId])
+  @@index([treinoSalvoId])
+  @@index([professorId])
+}
+
+model EstatisticaTreino {
+  treinoId          String           @id
+  realizacoes       Int              @default(0)
+  ultimoRealizadoEm DateTime?
+  treino            TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+}
+
+model TreinoProfessorUso {
+  id          String           @id @default(uuid())
+  treinoId    String
+  professorId String
+  usos        Int              @default(0)
+  ultimoUsoEm DateTime         @default(now())
+  professor   Professor        @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  treino      TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+
+  @@unique([treinoId, professorId])
+  @@index([professorId])
+  @@index([treinoId])
+}
+
+model EstatisticaExercicio {
+  exercicioId               String     @id
+  inclusoesEmTreinos        Int        @default(0)
+  ultimoIncluidoEm          DateTime?
+  recomendadoPorProfessorId String?
+  ultimoProfessorId         String?
+  exercicio                 Exercicio  @relation(fields: [exercicioId], references: [id], onDelete: Cascade)
+  recomendadoPorProfessor   Professor? @relation("ExEstRec_Rec", fields: [recomendadoPorProfessorId], references: [id], onDelete: SetNull)
+  ultimoProfessor           Professor? @relation("ExEstRec_Ult", fields: [ultimoProfessorId], references: [id], onDelete: SetNull)
+
+  @@index([recomendadoPorProfessorId])
+  @@index([ultimoProfessorId])
+}
+
+model TreinoRotina {
+  id                 String                   @id @default(uuid())
+  nome               String
+  ownerTipo          String
+  ownerId            String
+  inicio             DateTime
+  fim                DateTime
+  criadoPorUsuarioId String?
+  professorId        String?
+  escolinhaId        String?
+  clubeId            String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  clube              Clube?                   @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  criadoPorUsuario   Usuario?                 @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
+  escolinha          Escolinha?               @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor          Professor?               @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  atribuicoes        TreinoRotinaAtribuicao[]
+  itens              TreinoRotinaItem[]
+
+  @@index([inicio])
+  @@index([fim])
+}
+
+model TreinoRotinaItem {
+  id                 String           @id @default(uuid())
+  rotinaId           String
+  treinoProgramadoId String
+  data               DateTime?
+  diaDaSemana        Int?
+  rotina             TreinoRotina     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+  treino             TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+
+  @@index([rotinaId])
+  @@index([treinoProgramadoId])
+  @@index([diaDaSemana])
+}
+
+model TreinoRotinaAtribuicao {
+  id                String           @id @default(uuid())
+  rotinaId          String
+  atletaId          String
+  atletaObservadoId String?
+  ativo             Boolean          @default(true)
+  criadoEm          DateTime         @default(now())
+  ocorrencias       TreinoAgendado[]
+  atleta            Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  observado         AtletaObservado? @relation(fields: [atletaObservadoId], references: [id], onDelete: SetNull)
+  rotina            TreinoRotina     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+
+  @@unique([rotinaId, atletaId])
+  @@index([atletaId])
+  @@index([atletaObservadoId])
+}
+
+model Pagamento {
+  id                   String          @id @default(uuid())
+  usuarioId            String
+  plano                String
+  periodicidade        Periodicidade
+  metodo               MetodoPagamento
+  status               PagamentoStatus @default(PENDENTE)
+  valor                Decimal         @db.Decimal(10, 2)
+  moeda                String          @default("BRL")
+  cupomId              String?
+  provider             String?
+  providerRef          String?
+  criadoEm             DateTime        @default(now())
+  pagoEm               DateTime?
+  canceladoEm          DateTime?
+  reembolsadoEm        DateTime?
+  updatedAt            DateTime        @updatedAt
+  pagadorNome          String?
+  pagadorEmail         String?
+  pagadorCpf           String?
+  pagadorTelefone      String?
+  cardBrand            String?
+  cardLast4            String?
+  cardExpMes           Int?
+  cardExpAno           Int?
+  pixCopiaECola        String?
+  boletoLinhaDigitavel String?
+  meta                 Json?
+  CupomResgate         CupomResgate[]
+  cupom                Cupom?          @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+  usuario              Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerRef])
+  @@index([usuarioId, criadoEm])
+  @@index([status])
+  @@index([status, criadoEm])
+}
+
+model Cupom {
+  id                     String         @id @default(uuid())
+  codigo                 String         @unique
+  tipo                   TipoCupom
+  descontoPerc           Int?
+  descontoFixo           Decimal?       @db.Decimal(10, 2)
+  plano                  String?
+  periodicidade          Periodicidade?
+  ativo                  Boolean        @default(true)
+  usosMax                Int?
+  usosAtuais             Int            @default(0)
+  expiraEm               DateTime?
+  concedidoParaUsuarioId String?
+  transferivel           Boolean        @default(false)
+  criadoEm               DateTime       @default(now())
+  criadoPorUsuarioId     String?
+  criadoPor              Usuario?       @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
+  resgates               CupomResgate[]
+  Pagamento              Pagamento[]
+
+  @@index([ativo])
+  @@index([codigo])
+}
+
+model CupomResgate {
+  id          String     @id @default(uuid())
+  cupomId     String
+  usuarioId   String
+  resgatadoEm DateTime   @default(now())
+  pagamentoId String?
+  cupom       Cupom      @relation(fields: [cupomId], references: [id], onDelete: Cascade)
+  pagamento   Pagamento? @relation(fields: [pagamentoId], references: [id], onDelete: SetNull)
+  usuario     Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([cupomId, usuarioId])
+  @@index([usuarioId])
+}
+
+model EventoElenco {
+  id            String          @id @default(uuid())
+  titulo        String
+  tipo          EventoChaveTipo @default(MATA_MATA)
+  status        String          @default("ABERTO")
+  participantes String[]
+  ownerTipo     String
+  ownerId       String
+  criadoEm      DateTime        @default(now())
+  atualizadoEm  DateTime        @updatedAt
+  Partida       PartidaElenco[]
+}
+
+model PartidaElenco {
+  id                 String       @id @default(uuid())
+  eventoId           String
+  fase               Int
+  ordem              Int
+  elencoAId          String?
+  elencoBId          String?
+  placarA            Int          @default(0)
+  placarB            Int          @default(0)
+  faltasA            Int          @default(0)
+  faltasB            Int          @default(0)
+  status             JogoStatus   @default(PENDENTE)
+  iniciadoEm         DateTime?
+  finalizadoEm       DateTime?
+  vencedorElencoId   String?
+  proximaPartidaId   String?
+  proximaPartidaSlot String?
+  evento             EventoElenco @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+
+  @@index([eventoId, fase])
+  @@index([proximaPartidaId])
+}
+
+model UsageCounter {
+  id          String   @id @default(cuid())
+  userId      String
+  key         String
+  periodRef   String
+  windowKind  String
+  windowStart DateTime
+  windowEnd   DateTime
+  count       Int      @default(0)
+  value       Int      @default(0)
+  meta        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, key, windowKind, windowStart])
+  @@index([key, windowKind, windowStart])
+}
+
+model EventoPagamento {
+  id              String   @id @default(cuid())
+  providerEventId String   @unique
+  tipo            String
+  recebidoEm      DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  usuarioId  String?
+  ip         String?
+  userAgent  String?
+  acao       String
+  entidade   String?
+  entidadeId String?
+  descricao  String?
+  meta       Json?
+  criadoEm   DateTime @default(now())
+}
+
+model AtletaHistoricoVinculo {
+  id            String        @id @default(uuid())
+  atletaId      String?
+  professorId   String?
+  escolinhaId   String?
+  clubeId       String?
+  nome          String?
+  sobrenome     String?
+  email         String?
+  cpf           String?
+  foto          String?
+  idade         Int?
+  posicao       PosicaoCampo?
+  nacionalidade String?
+  naturalidade  String?
+  altura        Decimal?
+  peso          Decimal?
+  categoria     Categoria[]
+  seloQualidade String?
+  inicioVinculo DateTime?
+  fimVinculo    DateTime?
+  criadoEm      DateTime      @default(now())
+  expiraEm      DateTime
+  atleta        Atleta?       @relation(fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?        @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha?    @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor?    @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([escolinhaId])
+  @@index([clubeId])
+  @@index([expiraEm])
+}
+
+model SessaoTreinoTurma {
+  id                 String                       @id @default(uuid())
+  treinoProgramadoId String
+  turmaId            String
+  criadorId          String
+  data               DateTime
+  status             StatusSessaoTreinoTurma      @default(AGENDADO)
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  observacoes        String?
+  duracaoMinutosReal Int?
+  penalidadeAtraso   Boolean                      @default(false)
+  presencas          PresencaSessaoTreino[]
+  criador            Usuario                      @relation(fields: [criadorId], references: [id], onDelete: Cascade)
+  treino             TreinoProgramado             @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  turma              Turma                        @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  exercicios         SessaoTreinoTurmaExercicio[]
+}
+
+model PresencaSessaoTreino {
+  id        String            @id @default(uuid())
+  sessaoId  String
+  atletaId  String
+  presente  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  atleta    Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  sessao    SessaoTreinoTurma @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+
+  @@unique([sessaoId, atletaId])
+}
+
+model SessaoTreinoTurmaExercicio {
+  id                       String                  @id @default(uuid())
+  sessaoId                 String
+  ordem                    Int?
+  concluido                Boolean                 @default(false)
+  concluidoEm              DateTime?
+  exercicioId              String?
+  exercicioTemporarioId    String?
+  exercicioPersonalizadoId String?
+  exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
+  exercicioPersonalizado   ExercicioPersonalizado? @relation(fields: [exercicioPersonalizadoId], references: [id])
+  exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
+  sessao                   SessaoTreinoTurma       @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+
+  @@index([sessaoId])
+}
+
+model EventoConvocacao {
+  id          String   @id @default(uuid())
+  eventoId    String
+  turmaId     String
+  nome        String   @default("Convoca├º├úo")
+  formacao    String?
+  escala      Json?
+  reservasIds String[] @default([])
+  criadoEm    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  professorId String?
+  clubeId     String?
+  escolinhaId String?
+  evento      Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  turma       Turma    @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, turmaId])
+}
+
+model EventoConvocado {
+  id        String           @id @default(uuid())
+  eventoId  String
+  turmaId   String
+  atletaId  String
+  posicao   String?
+  tipo      String
+  status    ConvocacaoStatus @default(PENDENTE)
+  createdAt DateTime         @default(now())
+  evento    Evento           @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  turma     Turma            @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, turmaId, atletaId])
+}
+
+model Notificacao {
+  id        String          @id @default(uuid())
+  usuarioId String
+  titulo    String
+  mensagem  String
+  link      String?
+  lida      Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  actorId   String?
+  tipo      NotificacaoTipo @default(GENERICA)
+  actor     Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id], onDelete: SetNull)
+  usuario   Usuario         @relation("NotificacaoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, createdAt])
+  @@index([actorId])
+}
+
+model Conquista {
+  id        String               @id @default(uuid())
+  codigo    String               @unique
+  titulo    String
+  descricao String?
+  tipo      ConquistaTipo        @default(GERAL)
+  publico   ConquistaOwnerTipo[] @default([Atleta])
+  icon      String?
+  iconUrl   String?
+  pontos    Int?                 @default(0)
+  meta      Int?
+  ativo     Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  vinculos  ConquistaVinculo[]
+
+  @@index([tipo])
+  @@index([ativo])
+}
+
+model ConquistaVinculo {
+  id                String             @id @default(uuid())
+  conquistaId       String
+  ownerTipo         ConquistaOwnerTipo
+  ownerId           String
+  atletaId          String?
+  professorId       String?
+  clubeId           String?
+  escolinhaId       String?
+  conquistadoEm     DateTime?
+  progresso         Int                @default(0)
+  concluida         Boolean            @default(false)
+  refTipo           String?
+  refId             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  federacaoId       String?
+  learningProfileId String?
+  marcaId           String?
+  atleta            Atleta?            @relation("ConquistaAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
+  clube             Clube?             @relation("ConquistaClube", fields: [clubeId], references: [id], onDelete: Cascade)
+  conquista         Conquista          @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
+  escolinha         Escolinha?         @relation("ConquistaEscolinha", fields: [escolinhaId], references: [id], onDelete: Cascade)
+  federacao         Federacao?         @relation(fields: [federacaoId], references: [id], onDelete: SetNull)
+  learningProfile   LearningProfile?   @relation(fields: [learningProfileId], references: [id], onDelete: SetNull)
+  marca             Marca?             @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+  professor         Professor?         @relation("ConquistaProfessor", fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerTipo, ownerId, conquistaId])
+  @@index([ownerTipo, ownerId])
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+  @@index([concluida, conquistadoEm])
+}
+
+model LoginEvent {
+  id        String   @id @default(uuid())
+  usuarioId String
+  createdAt DateTime @default(now())
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, createdAt])
+  @@index([createdAt])
+}
+
+model Creator {
+  id                 String         @id @default(uuid())
+  usuarioId          String         @unique
+  nomePublico        String?
+  headline           String?
+  bio                String?
+  nicho              String?
+  avatarUrl          String?
+  bannerUrl          String?
+  siteUrl            String?
+  instagramUrl       String?
+  youtubeUrl         String?
+  tipo               CreatorTipo    @default(PESSOA_FISICA)
+  ativo              Boolean        @default(true)
+  verificado         Boolean        @default(false)
+  instituicaoOficial Boolean        @default(false)
+  comissaoFootera    Decimal        @default(0.15) @db.Decimal(5, 4)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  views              Int            @default(0)
+  usuario            Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  vendas             CreatorVenda[]
+
+  @@index([usuarioId])
+  @@index([ativo])
+  @@index([tipo])
+}
+
+model CreatorVenda {
+  id                  String             @id @default(uuid())
+  creatorId           String
+  compradorId         String?
+  metodologiaId       String?
+  metodologiaAvulsaId String?
+  valorBruto          Decimal            @db.Decimal(10, 2)
+  percentualFootera   Decimal            @default(0.15) @db.Decimal(5, 4)
+  valorFootera        Decimal            @db.Decimal(10, 2)
+  valorCreator        Decimal            @db.Decimal(10, 2)
+  status              CreatorVendaStatus @default(PENDENTE)
+  provider            String?
+  providerRef         String?
+  meta                Json?
+  criadoEm            DateTime           @default(now())
+  pagoEm              DateTime?
+  updatedAt           DateTime           @updatedAt
+  comprador           Usuario?           @relation("CreatorVendaComprador", fields: [compradorId], references: [id], onDelete: SetNull)
+  creator             Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: SetNull)
+  metodologia         Metodologia?       @relation(fields: [metodologiaId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerRef])
+  @@index([creatorId])
+  @@index([compradorId])
+  @@index([metodologiaId])
+  @@index([metodologiaAvulsaId])
+  @@index([status])
+}
+
+model CreatorUsoLearning {
+  id            String   @id @default(uuid())
+  creatorId     String
+  usuarioId     String?
+  metodologiaId String?
+  itemId        String?
+  pontosUso     Decimal  @default(1.0)
+  tipoUso       String
+  createdAt     DateTime @default(now())
+}
+
+model LearningProfile {
+  id         String             @id @default(uuid())
+  usuarioId  String             @unique
+  criadoEm   DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  bio        String?
+  interesses String[]           @default([])
+  objetivo   String?
+  conquistas ConquistaVinculo[]
+  usuario    Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Federacao {
+  id                String              @id @default(uuid())
+  usuarioId         String              @unique
+  nome              String
+  cnpj              String?
+  email             String?
+  telefone1         String?
+  telefone2         String?
+  siteOficial       String?
+  sede              String?
+  cidade            String?
+  estado            String?
+  pais              String?
+  cep               String?
+  logo              String?
+  descricao         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  conquistas        ConquistaVinculo[]
+  eventos           Evento[]
+  usuario           Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
+model Marca {
+  id                String              @id @default(uuid())
+  usuarioId         String              @unique
+  nome              String
+  cnpj              String?
+  email             String?
+  telefone1         String?
+  telefone2         String?
+  siteOficial       String?
+  cidade            String?
+  estado            String?
+  pais              String?
+  cep               String?
+  logo              String?
+  descricao         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  sede              String?
+  conquistas        ConquistaVinculo[]
+  eventos           Evento[]
+  usuario           Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  Metodologia       Metodologia[]
+  MetodologiaAvulsa MetodologiaAvulsa[]
+}
+
+model LearningFavorito {
+  id        String               @id @default(uuid())
+  usuarioId String
+  tipo      LearningFavoritoTipo
+  alvoId    String
+  criadoEm  DateTime             @default(now())
+  usuario   Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, tipo, alvoId])
+  @@index([usuarioId])
+  @@index([tipo, alvoId])
+}
+
+model TreinoFavorito {
+  id                 String           @id @default(uuid())
+  usuarioId          String
+  treinoProgramadoId String
+  criadoEm           DateTime         @default(now())
+  treinoProgramado   TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  usuario            Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, treinoProgramadoId])
+  @@index([usuarioId])
+  @@index([treinoProgramadoId])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  usuarioId String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+model LembreteNotificacaoEnviado {
+  id        String   @id @default(uuid())
+  usuarioId String
+  tipo      String
+  alvoId    String
+  janela    String
+  criadoEm  DateTime @default(now())
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, tipo, alvoId, janela])
+  @@index([usuarioId])
+  @@index([tipo, alvoId])
+  @@index([criadoEm])
+}
+
+model PushDeviceToken {
+  id        String   @id @default(cuid())
+  usuarioId String
+  token     String   @unique
+  platform  String   @default("android")
+  ativo     Boolean  @default(true)
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+enum StatusUsuarioPapel {
+  PENDENTE
+  ATIVO
+  INATIVO
+}
+
+enum VisibilidadePostagem {
+  PUBLICO
+  LOGADO
+  SEGUIDORES
+  PRIVADO
+}
+
+enum LearningFavoritoTipo {
+  METODOLOGIA
+  METODOLOGIA_AVULSA
+  AULA_AO_VIVO
+}
+
+enum CreatorTipo {
+  PESSOA_FISICA
+  INSTITUCIONAL
+}
+
+enum CreatorVendaStatus {
+  PENDENTE
+  CONFIRMADA
+  CANCELADA
+  REEMBOLSADA
+}
+
+enum SentimentoAvaliacao {
+  ruim
+  medio
+  otimo
+}
+
+enum AccountStatus {
+  ATIVO
+  BLOQUEADO
+}
+
+enum ConvocacaoStatus {
+  PENDENTE
+  CONFIRMADO
+  RECUSADO
+}
+
+enum StatusSessaoTreinoTurma {
+  AGENDADO
+  EM_ANDAMENTO
+  FINALIZADO
+  CANCELADO
+}
+
+enum StorageClass {
+  HOT
+  COLD
+}
+
+enum Periodicidade {
+  Mensal
+  Anual
+}
+
+enum PagamentoStatus {
+  PENDENTE
+  APROVADO
+  FALHOU
+  CANCELADO
+  REEMBOLSADO
+}
+
+enum MetodoPagamento {
+  PIX
+  CREDITO
+  DEBITO
+  BOLETO
+}
+
+enum AssinaturaStatus {
+  TRIAL
+  ATIVA
+  BLOQUEADA
+  CANCELADA
+  SEM_ASSINATURA
+}
+
+enum TipoCupom {
+  PERCENTUAL
+  VALOR
+  PRESENTE
+}
+
+enum TreinoStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+enum ChecklistContext {
+  SUBMISSAO_TREINO
+  SUBMISSAO_DESAFIO
+  POSTAGEM
+  PENEIRA
+}
+
+enum ChecklistItemType {
+  BOOLEAN
+  SELECT
+  SCORE
+}
+
+enum OrigemFormador {
+  Escolinha
+  Clube
+}
+
+enum IndicacaoStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
+enum PosicaoCampo {
+  GOL
+  LD
+  LE
+  ZD
+  ZC
+  ZE
+  ALA_D
+  ALA_E
+  VOL1
+  VOL2
+  MC1
+  MC2
+  MEI
+  MEI_D
+  MEI_E
+  MD
+  ME
+  PD
+  PE
+  SA
+  CA
+}
+
+enum StatusDesafioGrupo {
+  ativo
+  concluido
+  expirado
+}
+
+enum Nivel {
+  Base
+  Avancado
+  Performance
+}
+
+enum Categoria {
+  Sub3
+  Sub5
+  Sub7
+  Sub9
+  Sub11
+  Sub13
+  Sub15
+  Sub16
+  Livre
+  Sub17
+  Sub20
+}
+
+enum TipoUsuario {
+  Atleta
+  Professor
+  Clube
+  Escolinha
+  Admin
+  Olheiro
+  Learning
+  Escola
+  Federacao
+  Marca
+  Creator
+}
+
+enum TipoMidia {
+  Imagem
+  Video
+  Documento
+}
+
+enum StatusConexao {
+  Pendente
+  Aprovado
+  Recusado
+}
+
+enum StatusCref {
+  Ativo
+  Desativo
+  Pendente
+}
+
+enum TipoTreino {
+  Tecnico
+  Fisico  @map("F├¡sico")
+  Tatico
+  Mental
+}
+
+enum TipoMensagem {
+  NORMAL
+  DESAFIO
+  POST
+  USUARIO
+  CONQUISTA
+  GRUPO_DESAFIO
+  GRUPO_DESAFIO_BONUS
+  CARD
+}
+
+enum NotificacaoTipo {
+  GENERICA
+  FOLLOW
+  FOLLOW_BACK
+  FOLLOW_REMOVED
+  MENSAGEM
+  MENSAGEM_GRUPO
+  TREINO
+  DESAFIO
+  EVENTO
+  CONVOCACAO
+  BILLING_WARNING
+  BILLING_BLOCKED
+  INDICACAO_OLHEIRO
+  INDICACAO_RESPONDIDA
+  COLABORACAO_OLHEIRO
+  COLABORACAO_RESPONDIDA
+}
+
+enum TipoMembro {
+  DONO
+  ADMIN
+  MEMBRO
+}
+
+enum EventoTipo {
+  PENEIRA
+  EVENTO
+  TORNEIO
+  COPA
+  LIGA
+  AMISTOSO
+  TREINO_ABERTO
+  CAMP
+  CLINICA
+  SHOWCASE
+  WORKSHOP
+  PALESTRA
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  LOCAL_GOOGLE
+}
+
+enum EventoStatus {
+  ABERTO
+  ENCERRADO
+  CANCELADO
+}
+
+enum InscricaoEventoStatus {
+  PENDENTE
+  CONFIRMADA
+  CANCELADA
+  PRESENCA_OK
+  FALTOU
+}
+
+enum TreinoAgendadoStatus {
+  AGENDADO
+  CONCLUIDO
+  FALTOU
+  CANCELADO
+  EM_ANDAMENTO
+}
+
+enum EventoChaveTipo {
+  MATA_MATA
+}
+
+enum JogoStatus {
+  PENDENTE
+  EM_ANDAMENTO
+  ENCERRADO
+}
+
+enum AvaliacaoAutorTipo {
+  Professor
+  Clube
+  Escolinha
+  Atleta
+}
+
+enum ConquistaOwnerTipo {
+  Atleta
+  Professor
+  Clube
+  Escolinha
+  Learning
+  Marca
+  Federacao
+}
+
+enum ConquistaTipo {
+  GERAL
+  TREINO
+  DESAFIO
+  SOCIAL
+  PERFIL
+  ORGANIZACAO
+  METODOLOGIA
+}
+
+enum MetodologiaConteudoTipo {
+  TREINO
+  VIDEO
+  AULA_AO_VIVO
+}
+
+enum MetodologiaAssinaturaStatus {
+  ATIVA
+  CANCELADA
+  CONCLUIDA
+}
+
+enum MetodologiaProgressoStatus {
+  NAO_INICIADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  ATRASADA
+}
+
+enum MetodologiaPublicoAlvo {
+  ATLETAS
+  PROFISSIONAIS
+  AMBOS
+}
+
+enum MetodologiaAssinaturaOrigem {
+  LEARNING
+  AVULSA
+}
+
+enum MetodologiaItemTipo {
+  TREINO
+  VIDEO
+  AULA
+  MATERIAL
+  DESAFIO
+  AULA_AO_VIVO
+}
+
+enum MetodologiaModoExecucao {
+  LIVRE
+  PRAZO_SUGERIDO
+  DESAFIO_FECHADO
+}
+
+enum MetodologiaTipo {
+  TRILHAS_TREINO
+  CURSO_FORMACAO
+}
+
+enum MetodologiaEstruturaTipo {
+  TRILHA
+  MODULO
+}
+
+enum MetodologiaArea {
+  TECNICO
+  FISICO
+  TATICO
+  MENTAL
+  GOLEIROS
+  PSICOLOGIA
+  INOVACAO
+  ANALISE_DESEMPENHO
+  OUTRO
+}
+
+enum OrganizacaoTipo {
+  CLUBE
+  ESCOLINHA
+}
+
+enum ConviteTipo {
+  ORGANIZACAO
+  TURMA
+  PROFESSOR
+  ATLETA_VINCULO
+}
+
+enum ConviteStatus {
+  ATIVO
+  UTILIZADO
+  CANCELADO
+}
+
+enum TipoExercicio {
+  Tecnico
+  Fisico
+  Tatico
+  Mental
+}
+
+enum ModoExecucaoExercicio {
+  Tempo
+  SeriesRepeticoes
+  LivreOrientativo
+}
+
+enum EspacoExercicio {
+  Pequeno
+  Medio
+  Grande
+}
+
+enum FaixaEtariaExercicio {
+  Sub3
+  Sub5
+  Sub7
+  Sub9
+  Sub11
+  Sub13
+  Sub15
+  Sub16
+  Livre
+  Sub17
+  Sub20
+}
+
+enum AulaAoVivoStatus {
+  AGENDADA
+  AO_VIVO
+  FINALIZADA
+  CANCELADA
+}
+
+enum TipoMensagemLive {
+  TEXTO
+  SISTEMA
+  ALERTA
+}
