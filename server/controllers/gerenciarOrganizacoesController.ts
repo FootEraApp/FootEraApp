@@ -1,13 +1,15 @@
 // server/controllers/gerenciarOrganizacoesController.ts
 import type { Response } from "express";
-import { Prisma, TipoUsuario } from "@prisma/client";
+import { Prisma, TipoUsuario, FuncaoMembroOrganizacao } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { sendError } from "../utils/httpError.js";
 import {
   hasActiveRole,
 } from "../services/roles.js";
-
+import {
+  sincronizarMembroOrganizacaoLegada,
+} from "../services/organizacoes.js";
 import {
   canPermission,
 } from "../services/permissions.js";
@@ -320,10 +322,18 @@ export async function criarVinculoGestor(
       if (!esc) return res.status(404).json({ error: "Escolinha não encontrada." });
     }
 
-    const prof = await prisma.professor.findUnique({
-      where: { id: professorId },
-      select: { id: true },
-    });
+    const prof =
+      await prisma.professor.findUnique({
+        where: {
+          id:
+            professorId,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+        },
+      });
     if (!prof) return res.status(404).json({ error: "Professor não encontrado." });
 
     const created = await prisma.organizacaoGestor.upsert({
@@ -393,6 +403,27 @@ export async function criarVinculoGestor(
           : { escolinhaId: ownerId },
     });
 
+    if (
+      prof.usuarioId
+    ) {
+      await sincronizarMembroOrganizacaoLegada({
+        tipo:
+          tipo === "CLUBE"
+            ? "CLUBE"
+            : "ESCOLINHA",
+
+        ownerId,
+
+        usuarioId:
+          prof.usuarioId,
+
+        funcao:
+          FuncaoMembroOrganizacao.ADMINISTRADOR,
+
+        permissoes,
+      });
+    }
+
     return res.status(201).json({ item: created });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Erro ao criar vínculo." });
@@ -441,10 +472,54 @@ export async function desativarVinculoGestor(
         where: {
           id,
         },
+
         data: {
           ativo: false,
         },
       });
+
+    const professor =
+      await prisma.professor.findUnique({
+        where: {
+          id:
+            updated.professorId,
+        },
+
+        select: {
+          usuarioId: true,
+        },
+      });
+
+    if (
+      professor?.usuarioId
+    ) {
+      await sincronizarMembroOrganizacaoLegada({
+        tipo:
+          String(
+            updated.tipo
+          ) === "CLUBE"
+            ? "CLUBE"
+            : "ESCOLINHA",
+
+        ownerId:
+          updated.ownerId,
+
+        usuarioId:
+          professor.usuarioId,
+
+        funcao:
+          FuncaoMembroOrganizacao.PROFESSOR,
+
+        permissoes:
+          null,
+
+        ativo:
+          true,
+
+        preservarMaiorFuncao:
+          false,
+      });
+    }
 
     return res.json({
       item: updated,
@@ -1007,7 +1082,18 @@ export async function criarGestor(req: AuthenticatedRequest, res: Response) {
       if (!esc) return res.status(404).json({ error: "Escolinha não encontrada." });
     }
 
-    const prof = await prisma.professor.findUnique({ where: { id: professorId }, select: { id: true } });
+    const prof =
+      await prisma.professor.findUnique({
+        where: {
+          id:
+            professorId,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+        },
+      });
     if (!prof) return res.status(404).json({ error: "Professor não encontrado." });
 
     const professorIdsVinculados =
@@ -1032,14 +1118,57 @@ export async function criarGestor(req: AuthenticatedRequest, res: Response) {
 
     const item = existente
       ? await prisma.organizacaoGestor.update({
-          where: { id: existente.id },
-          data: { ativo: true, papel, permissoes },
+          where: {
+            id: existente.id,
+          },
+
+          data: {
+            ativo: true,
+            papel,
+            permissoes,
+          },
         })
       : await prisma.organizacaoGestor.create({
-          data: { tipo: tipo as any, ownerId, professorId, papel, permissoes, ativo: true },
+          data: {
+            tipo:
+              tipo as any,
+
+            ownerId,
+            professorId,
+            papel,
+            permissoes,
+            ativo: true,
+          },
         });
 
-    return res.status(201).json({ item });
+    if (
+      prof.usuarioId
+    ) {
+      await sincronizarMembroOrganizacaoLegada({
+        tipo:
+          tipo === "CLUBE"
+            ? "CLUBE"
+            : "ESCOLINHA",
+
+        ownerId,
+
+        usuarioId:
+          prof.usuarioId,
+
+        funcao:
+          FuncaoMembroOrganizacao.ADMINISTRADOR,
+
+        permissoes,
+
+        ativo: true,
+      });
+    }
+
+    return res
+      .status(201)
+      .json({
+        item,
+      });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Erro ao adicionar responsável." });
   }
@@ -1052,7 +1181,7 @@ export async function atualizarGestor(req: AuthenticatedRequest, res: Response) 
 
     const found = await prisma.organizacaoGestor.findUnique({
       where: { id },
-      select: { id: true, tipo: true, ownerId: true },
+      select: { id: true, tipo: true, ownerId: true, professorId: true },
     });
     if (!found) return res.status(404).json({ error: "Vínculo não encontrado." });
 
@@ -1084,28 +1213,104 @@ export async function atualizarGestor(req: AuthenticatedRequest, res: Response) 
       },
     });
 
+    const professor =
+      await prisma.professor.findUnique({
+        where: {
+          id:
+            found.professorId,
+        },
+
+        select: {
+          usuarioId: true,
+        },
+      });
+
+    if (
+      professor?.usuarioId
+    ) {
+      await sincronizarMembroOrganizacaoLegada({
+        tipo:
+          String(
+            found.tipo
+          ) === "CLUBE"
+            ? "CLUBE"
+            : "ESCOLINHA",
+
+        ownerId:
+          found.ownerId,
+
+        usuarioId:
+          professor.usuarioId,
+
+        funcao:
+          item.ativo
+            ? FuncaoMembroOrganizacao.ADMINISTRADOR
+            : FuncaoMembroOrganizacao.PROFESSOR,
+
+        permissoes:
+          item.ativo
+            ? item.permissoes
+            : null,
+
+        ativo:
+          true,
+
+        preservarMaiorFuncao:
+          item.ativo,
+      });
+    }
+
     return res.json({ item });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Erro ao salvar responsável." });
   }
 }
 
-export async function removerGestor(req: AuthenticatedRequest, res: Response) {
+export async function removerGestor(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
   try {
-    const id = String(req.params?.id || "");
-    if (!id) return res.status(400).json({ error: "id obrigatório." });
+    const id =
+      String(
+        req.params?.id || "",
+      );
 
-    const found = await prisma.organizacaoGestor.findUnique({
-      where: { id },
-      select: { id: true, tipo: true, ownerId: true },
-    });
-    if (!found) return res.status(404).json({ error: "Vínculo não encontrado." });
+    if (!id) {
+      return res.status(400).json({
+        error:
+          "id obrigatório.",
+      });
+    }
+
+    const found =
+      await prisma.organizacaoGestor.findUnique({
+        where: {
+          id,
+        },
+
+        select: {
+          id: true,
+          tipo: true,
+          ownerId: true,
+          professorId: true,
+        },
+      });
+
+    if (!found) {
+      return res.status(404).json({
+        error:
+          "Vínculo não encontrado.",
+      });
+    }
 
     if (
       !(
         await canManageOwnerOrAdmin(
           req,
-          String(found.tipo),
+          String(
+            found.tipo
+          ),
           found.ownerId,
         )
       )
@@ -1116,9 +1321,67 @@ export async function removerGestor(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    await prisma.organizacaoGestor.update({ where: { id }, data: { ativo: false } });
-    return res.json({ ok: true });
+    const professor =
+      await prisma.professor.findUnique({
+        where: {
+          id:
+            found.professorId,
+        },
+
+        select: {
+          usuarioId: true,
+        },
+      });
+
+    await prisma.organizacaoGestor.update({
+      where: {
+        id,
+      },
+
+      data: {
+        ativo: false,
+      },
+    });
+
+    if (
+      professor?.usuarioId
+    ) {
+      await sincronizarMembroOrganizacaoLegada({
+        tipo:
+          String(
+            found.tipo
+          ) === "CLUBE"
+            ? "CLUBE"
+            : "ESCOLINHA",
+
+        ownerId:
+          found.ownerId,
+
+        usuarioId:
+          professor.usuarioId,
+
+        funcao:
+          FuncaoMembroOrganizacao.PROFESSOR,
+
+        permissoes:
+          null,
+
+        ativo:
+          true,
+
+        preservarMaiorFuncao:
+          false,
+      });
+    }
+
+    return res.json({
+      ok: true,
+    });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "Erro ao remover responsável." });
+    return res.status(500).json({
+      error:
+        e?.message ||
+        "Erro ao remover responsável.",
+    });
   }
 }
