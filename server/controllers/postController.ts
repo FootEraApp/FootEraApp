@@ -15,6 +15,7 @@ import {
 import {
   criarNotificacaoEEnviarPush,
 } from "./notificacoesController.js";
+import { obterOrganizacaoAtivaDoUsuario } from "../services/organizacoes.js";
 
 type AuthedReq = Request & { userId?: string };
 
@@ -65,10 +66,16 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
 
     const tipoDetectado = finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
 
+    const organizacaoId =
+      await obterOrganizacaoAtivaDoUsuario(
+        req.userId!
+      );
+
     const post = await prisma.postagem.create({
       data: {
         usuarioId: req.userId!,
         conteudo: descricao || "",
+        organizacaoId,
         tipoMidia: tipoDetectado as any,
         imagemUrl: finalImagemUrl,
         videoUrl: finalVideoUrl,

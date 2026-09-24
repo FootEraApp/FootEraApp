@@ -7,7 +7,10 @@ import { prisma } from "../prisma.js";
 import {
   resolveUserContext,
 } from "../services/planResolver.js";
-
+import {
+  obterOrganizacaoAtivaDoUsuario,
+  obterOrganizacaoIdPorLegado,
+} from "../services/organizacoes.js";
 import {
   canPermission,
 } from "../services/permissions.js";
@@ -528,6 +531,29 @@ export async function criar(req: any, res: Response) {
     const ownerClubeId = clubeId || null;
     const ownerEscolinhaId = escolinhaId || escolaId || null;
 
+    const organizacaoId =
+      ownerClubeId
+        ? await obterOrganizacaoIdPorLegado({
+            tipo:
+              "CLUBE",
+
+            ownerId:
+              String(
+                ownerClubeId
+              ),
+          })
+        : ownerEscolinhaId
+          ? await obterOrganizacaoIdPorLegado({
+              tipo:
+                "ESCOLINHA",
+
+              ownerId:
+                String(
+                  ownerEscolinhaId
+                ),
+            })
+          : null;
+
     if (!ownerClubeId && !ownerEscolinhaId) {
       return res
         .status(400)
@@ -582,6 +608,7 @@ export async function criar(req: any, res: Response) {
 
     const evento = await prisma.evento.create({
       data: {
+        organizacaoId,
         ...(ownerClubeId ? { clubeId: ownerClubeId } : {}),
         ...(ownerEscolinhaId ? { escolinhaId: ownerEscolinhaId } : {}),
         titulo: String(titulo),
@@ -1796,6 +1823,18 @@ export async function criarEventoCreator(req: any, res: Response) {
 
     if (tipoUsuario === "marca" && req.user?.tipoUsuarioId) {
       data.marcaId = String(req.user.tipoUsuarioId);
+    }
+
+    const organizacaoId =
+      await obterOrganizacaoAtivaDoUsuario(
+        usuarioId
+      );
+
+    if (
+      organizacaoId
+    ) {
+      data.organizacaoId =
+        organizacaoId;
     }
 
     const evento = await prisma.evento.create({ data });

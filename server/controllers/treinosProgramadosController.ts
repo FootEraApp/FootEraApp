@@ -8,6 +8,22 @@ import { prisma } from "../prisma.js";
 
 type Dono = "Professor" | "Clube" | "Escolinha" | "Admin";
 
+type OwnerResolved = {
+  dono: Dono;
+
+  professorId:
+    string | null;
+
+  clubeId:
+    string | null;
+
+  escolinhaId:
+    string | null;
+
+  criadorUsuarioId:
+    string | null;
+};
+
 function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
   const dono = normalizarTipoUsuario(tipoUsuario);
   const id = String(tipoUsuarioId ?? "").trim();
@@ -19,7 +35,9 @@ function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
   return { criadorUsuarioId: id };
 }
 
-function assertOwnerIdsFromBodyOrReq(body: any) {
+function assertOwnerIdsFromBodyOrReq(
+  body: any
+): OwnerResolved | null {
   const dono = normalizarTipoUsuario(body?.tipoUsuario);
   const donoId = String(body?.tipoUsuarioId ?? "").trim();
   const professorId = String(body?.professorId ?? "").trim();
@@ -41,10 +59,214 @@ function assertOwnerIdsFromBodyOrReq(body: any) {
   }
 
   if (professorId) {
-    return { dono: "Professor" as const, professorId, clubeId: null, escolinhaId: null };
+    return {
+      dono:
+        "Professor",
+
+      professorId,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        null,
+    };
   }
 
   return null;
+}
+
+function ownerFromActiveContext(
+  req: Request
+): OwnerResolved | null {
+  const user =
+    (req as any).user ??
+    (req as any).authUser ??
+    null;
+
+  if (!user) {
+    return null;
+  }
+
+  const context =
+    user.activeContext ??
+    null;
+
+  if (
+    context?.kind ===
+    "ORGANIZATION"
+  ) {
+    const legacyId =
+      String(
+        context
+          .legacyOrganizationId ??
+        ""
+      ).trim();
+
+    if (!legacyId) {
+      return null;
+    }
+
+    const organizationType =
+      String(
+        context
+          .organizationType ??
+        ""
+      ).toUpperCase();
+
+    if (
+      organizationType ===
+      "CLUBE"
+    ) {
+      return {
+        dono:
+          "Clube" as const,
+
+        professorId:
+          null,
+
+        clubeId:
+          legacyId,
+
+        escolinhaId:
+          null,
+
+        criadorUsuarioId:
+          null,
+      };
+    }
+
+    if (
+      organizationType ===
+      "ESCOLA"
+    ) {
+      return {
+        dono:
+          "Escolinha" as const,
+
+        professorId:
+          null,
+
+        clubeId:
+          null,
+
+        escolinhaId:
+          legacyId,
+
+        criadorUsuarioId:
+          null,
+      };
+    }
+
+    return null;
+  }
+
+  const dono =
+    normalizarTipoUsuario(
+      String(
+        user.tipo ??
+        ""
+      )
+    );
+
+  if (!dono) {
+    return null;
+  }
+
+  if (
+    dono ===
+    "Admin"
+  ) {
+    return {
+      dono,
+
+      professorId:
+        null,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        String(
+          user.id
+        ),
+    };
+  }
+
+  const id =
+    String(
+      user.tipoUsuarioId ??
+      ""
+    ).trim();
+
+  if (!id) {
+    return null;
+  }
+
+  if (
+    dono ===
+    "Professor"
+  ) {
+    return {
+      dono,
+
+      professorId:
+        id,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        null,
+    };
+  }
+
+  if (
+    dono ===
+    "Clube"
+  ) {
+    return {
+      dono,
+
+      professorId:
+        null,
+
+      clubeId:
+        id,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        null,
+    };
+  }
+
+  return {
+    dono:
+      "Escolinha" as const,
+
+    professorId:
+      null,
+
+    clubeId:
+      null,
+
+    escolinhaId:
+      id,
+
+    criadorUsuarioId:
+      null,
+  };
 }
 
 async function mustBeOwner(req: Request, treinoId: string) {
@@ -302,14 +524,70 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       });
     }
 
-    const owner = assertOwnerIdsFromBodyOrReq(req.body);
+    const user =
+      (req as any).user ??
+      null;
+
+    let owner:
+      OwnerResolved | null =
+        ownerFromActiveContext(
+          req
+        );
+
+    if (
+      String(
+        user?.tipo ??
+        ""
+      ).toLowerCase() ===
+      "admin"
+    ) {
+      owner =
+        assertOwnerIdsFromBodyOrReq(
+          req.body
+        ) ??
+        owner;
+    }
+
     if (!owner) {
       return res.status(400).json({
         message: "Informe o dono do treino: (tipoUsuario + tipoUsuarioId) ou (professorId).",
       });
     }
 
-    const criadorProfessorIdNorm = String(criadorProfessorId ?? "").trim();
+    const activeContext =
+      (req as any)
+        .user
+        ?.activeContext ??
+      null;
+
+    const professorContextoId =
+      activeContext?.kind ===
+        "ORGANIZATION" &&
+      activeContext
+        ?.organizationRole ===
+        "PROFESSOR"
+        ? String(
+            activeContext
+              ?.tipoUsuarioId ??
+            ""
+          ).trim()
+        : "";
+
+    const criadorProfessorIdNorm =
+      professorContextoId ||
+      (
+        owner.dono ===
+        "Professor"
+          ? String(
+              owner
+                .professorId ??
+              ""
+            )
+          : String(
+              criadorProfessorId ??
+              ""
+            ).trim()
+      );
 
     if (criadorProfessorIdNorm) {
       const profOk = await prisma.professor.findUnique({

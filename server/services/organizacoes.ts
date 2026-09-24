@@ -7,7 +7,7 @@ import {
 import {
   prisma,
 } from "../prisma.js";
-
+import { getActiveContext } from "./activeContext.js";
 
 export type TipoOrganizacaoLegada =
   | "CLUBE"
@@ -377,7 +377,6 @@ export async function garantirOrganizacaoLegada(
   return organizacao;
 }
 
-
 export async function sincronizarMembroOrganizacaoLegada(
   params: {
     tipo:
@@ -439,5 +438,71 @@ export async function sincronizarMembroOrganizacaoLegada(
       preservarMaiorFuncao:
         params.preservarMaiorFuncao,
     }
+  );
+}
+
+export async function obterOrganizacaoIdPorLegado(
+  params: {
+    tipo: TipoOrganizacaoLegada;
+    ownerId: string;
+    tx?: Prisma.TransactionClient;
+  }
+): Promise<string | null> {
+  const db: any =
+    params.tx ??
+    prisma;
+
+  const legado =
+    await buscarLegado(
+      db,
+      params.tipo,
+      params.ownerId,
+    );
+
+  if (!legado) {
+    return null;
+  }
+
+  if (
+    legado.organizacaoId
+  ) {
+    return String(
+      legado.organizacaoId
+    );
+  }
+
+  const organizacao =
+    await garantirOrganizacaoLegada({
+      tipo:
+        params.tipo,
+
+      ownerId:
+        params.ownerId,
+
+      tx:
+        params.tx,
+    });
+
+  return organizacao.id;
+}
+
+export async function obterOrganizacaoAtivaDoUsuario(
+  usuarioId: string,
+): Promise<string | null> {
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (
+    contexto?.kind !==
+    "ORGANIZATION"
+  ) {
+    return null;
+  }
+
+  return (
+    contexto.organizationId ??
+    null
   );
 }

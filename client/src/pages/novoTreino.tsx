@@ -308,16 +308,37 @@ const ASSETS_CDN_BASE =
   import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
 
 function isNativeApp() {
-  if (typeof window === "undefined") return false;
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return false;
+  }
 
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
+  const capacitor =
+    (window as any)
+      .Capacitor;
+
+  if (
+    typeof capacitor
+      ?.isNativePlatform ===
+    "function"
+  ) {
+    return Boolean(
+      capacitor
+        .isNativePlatform()
+    );
+  }
+
+  const protocol =
+    window.location
+      .protocol;
 
   return (
-    protocol === "capacitor:" ||
-    protocol === "ionic:" ||
-    hostname === "localhost" ||
-    hostname === "10.0.2.2"
+    protocol ===
+      "capacitor:" ||
+    protocol ===
+      "ionic:"
   );
 }
 
@@ -325,7 +346,10 @@ function resolveMediaUrl(raw?: string | null) {
   if (!raw) return "";
 
   const p = String(raw).trim().replace(/\\/g, "/");
-  if (!p) return "";
+
+  if (!p || p === "null" || p === "undefined") {
+    return "";
+  }
 
   if (
     p.startsWith("blob:") ||
@@ -431,6 +455,8 @@ interface Exercicio {
   duracao?: string | null;
   descanso?: string | null;
   videoDemonstrativoUrl?: string;
+  videoPosterUrl?:
+  string | null;
   objetivo?: string | null;
   descricao?: string | null;
   nivel?: string;
@@ -878,26 +904,59 @@ function StepCard({
   );
 }
 
-const VideoThumb = memo(function VideoThumb({
-  src,
-  onClick,
-}: {
-  src: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="relative w-full h-44 sm:h-28 rounded overflow-hidden bg-black"
-      title="Ver vídeo"
-    >
-      <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-        <Play className="w-10 h-10 text-white opacity-90" />
-      </div>
-    </button>
-  );
-});
+const VideoThumb =
+  memo(function VideoThumb({
+    src,
+    poster,
+    onClick,
+  }: {
+    src: string;
+    poster?:
+      string | null;
+    onClick?:
+      () => void;
+  }) {
+    const videoSrc =
+      resolveVideoUrl(
+        src
+      );
+
+    const posterSrc =
+      resolveMediaUrl(
+        poster
+      );
+
+    return (
+      <button
+        type="button"
+        onClick={
+          onClick
+        }
+        className="relative w-full h-44 sm:h-28 rounded overflow-hidden bg-black"
+        title="Ver vídeo"
+      >
+        <video
+          className="absolute inset-0 w-full h-full object-cover"
+          src={
+            videoSrc
+          }
+          poster={
+            posterSrc ||
+            undefined
+          }
+          preload="metadata"
+          muted
+          playsInline
+        />
+
+        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+          <span className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+            <Play className="w-5 h-5 text-white" />
+          </span>
+        </div>
+      </button>
+    );
+  });
 
 export default function NovoTreino() {
   const [route, navigate] = useLocation();
@@ -4519,7 +4578,22 @@ export default function NovoTreino() {
                         (e) => e.id === ex.idCatalogo,
                       )
                     : undefined;
-                  const videoSrc = resolveVideoUrl(ex.videoUrl || base?.videoDemonstrativoUrl);
+                  const videoSrc =
+                    resolveVideoUrl(
+                      ex.videoDemonstrativoUrl ??
+                        ex.videoUrl ??
+                        base
+                          ?.videoDemonstrativoUrl ??
+                        null
+                    );
+
+                  const posterSrc =
+                    resolveMediaUrl(
+                      ex.videoPosterUrl ??
+                        base
+                          ?.videoPosterUrl ??
+                        null
+                    );
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
                   const descFinal = base?.objetivo ?? base?.descricao ?? ex.descricao ?? "";
@@ -4548,7 +4622,13 @@ export default function NovoTreino() {
                             >
                               <video
                                 className="w-full h-full object-cover"
-                                src={videoSrc}
+                                src={
+                                  videoSrc
+                                }
+                                poster={
+                                  posterSrc ||
+                                  undefined
+                                }
                                 preload="metadata"
                                 muted
                                 playsInline
@@ -4859,7 +4939,15 @@ export default function NovoTreino() {
                           ? treinoTemPersonalizado(p.id)
                           : treinoTemExercicio(p.id);
 
-                      const videoSrc = p.videoDemonstrativoUrl || null;
+                      const videoSrc =
+                        resolveVideoUrl(
+                          p.videoDemonstrativoUrl
+                        );
+
+                      const posterSrc =
+                        resolveMediaUrl(
+                          p.videoPosterUrl
+                        );
 
                       return (
                         <li key={`${p.origem}-${p.id}`} className="py-3">
@@ -4868,7 +4956,14 @@ export default function NovoTreino() {
                               {videoSrc ? (
                                 <VideoThumb
                                   src={videoSrc}
-                                  onClick={() => setVideoModalSrc(videoSrc)}
+                                  poster={
+                                    posterSrc
+                                  }
+                                  onClick={() =>
+                                    setVideoModalSrc(
+                                      videoSrc
+                                    )
+                                  }
                                 />
                               ) : (
                                 <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
@@ -4984,6 +5079,11 @@ export default function NovoTreino() {
                   >
                     {exerciciosFiltrados.map((exercicio) => {
                       const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
+                      const posterSrc =
+                        resolveMediaUrl(
+                          exercicio
+                            .videoPosterUrl
+                        );
                       const jaAdicionado = jaEstaNoTreinoPorIdOuNome(
                         exerciciosSelecionados,
                         exercicio.id,
@@ -4997,7 +5097,14 @@ export default function NovoTreino() {
                               {videoSrc ? (
                                 <VideoThumb
                                   src={videoSrc}
-                                  onClick={() => setVideoModalSrc(videoSrc)}
+                                  poster={
+                                    posterSrc
+                                  }
+                                  onClick={() =>
+                                    setVideoModalSrc(
+                                      videoSrc
+                                    )
+                                  }
                                 />
                               ) : (
                                 <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
@@ -5127,7 +5234,15 @@ export default function NovoTreino() {
                     <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
                       {exerciciosPersonalizadosFiltrados.map((p) => {
                           const jaAdicionado = treinoTemPersonalizado(p.id);
-                          const videoSrc = p.videoDemonstrativoUrl || null;
+                          const videoSrc =
+                            resolveVideoUrl(
+                              p.videoDemonstrativoUrl
+                            );
+
+                          const posterSrc =
+                            resolveMediaUrl(
+                              p.videoPosterUrl
+                            );
 
                           return (
                             <li key={p.id} className="py-3">
@@ -5136,7 +5251,14 @@ export default function NovoTreino() {
                                   {videoSrc ? (
                                     <VideoThumb
                                       src={videoSrc}
-                                      onClick={() => setVideoModalSrc(videoSrc)}
+                                      poster={
+                                        posterSrc
+                                      }
+                                      onClick={() =>
+                                        setVideoModalSrc(
+                                          videoSrc
+                                        )
+                                      }
                                     />
                                   ) : (
                                     <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">

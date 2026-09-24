@@ -10,6 +10,7 @@ import {
   TipoMensagem,
   PagamentoStatus,
   PosicaoCampo,
+  TipoOrganizacao,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { sanitizeMediaPath } from '../utils/mediaSanitizer.js';
@@ -1825,12 +1826,123 @@ main()
     await prisma.$disconnect();
   });
 
+  async function garantirOrganizacaoSeed(
+    tipo:
+      "CLUBE" |
+      "ESCOLINHA",
+    ownerId: string,
+  ) {
+    const legado =
+      tipo === "CLUBE"
+        ? await prisma.clube.findUnique({
+            where: {
+              id: ownerId,
+            },
+
+            select: {
+              id: true,
+              nome: true,
+              organizacaoId: true,
+            },
+          })
+        : await prisma.escolinha.findUnique({
+            where: {
+              id: ownerId,
+            },
+
+            select: {
+              id: true,
+              nome: true,
+              organizacaoId: true,
+            },
+          });
+
+    if (!legado) {
+      throw new Error(
+        `Organização seed não encontrada: ${tipo}:${ownerId}`
+      );
+    }
+
+    if (
+      legado.organizacaoId
+    ) {
+      return legado.organizacaoId;
+    }
+
+    const legacyKey =
+      `${tipo}:${ownerId}`;
+
+    const organizacao =
+      await prisma.organizacao.upsert({
+        where: {
+          legacyKey,
+        },
+
+        update: {
+          nome:
+            legado.nome,
+
+          ativo:
+            true,
+        },
+
+        create: {
+          legacyKey,
+
+          nome:
+            legado.nome,
+
+          tipo:
+            tipo === "CLUBE"
+              ? TipoOrganizacao.CLUBE
+              : TipoOrganizacao.ESCOLA,
+
+          ativo:
+            true,
+        },
+      });
+
+    if (
+      tipo === "CLUBE"
+    ) {
+      await prisma.clube.update({
+        where: {
+          id: ownerId,
+        },
+
+        data: {
+          organizacaoId:
+            organizacao.id,
+        },
+      });
+    } else {
+      await prisma.escolinha.update({
+        where: {
+          id: ownerId,
+        },
+
+        data: {
+          organizacaoId:
+            organizacao.id,
+        },
+      });
+    }
+
+    return organizacao.id;
+  }
+
   async function garantirVinculoProfessorOrganizacaoSeed(params: {
       professorId: string;
       tipo: "CLUBE" | "ESCOLINHA";
       ownerId: string;
     }) {
       const { professorId, tipo, ownerId } = params;
+
+      const organizacaoId =
+        await garantirOrganizacaoSeed(
+          tipo,
+          ownerId
+        );
 
       const rel = await prisma.relacaoTreinamento.findFirst({
         where: {
@@ -1841,13 +1953,37 @@ main()
         select: { id: true },
       });
 
-      if (!rel) {
+      if (rel) {
+        await prisma.relacaoTreinamento.update({
+          where: {
+            id:
+              rel.id,
+          },
+
+          data: {
+            organizacaoId,
+            ativo: true,
+            encerradoEm: null,
+          },
+        });
+      } else {
         await prisma.relacaoTreinamento.create({
           data: {
             professorId,
             atletaId: null,
-            clubeId: tipo === "CLUBE" ? ownerId : null,
-            escolinhaId: tipo === "ESCOLINHA" ? ownerId : null,
+
+            clubeId:
+              tipo === "CLUBE"
+                ? ownerId
+                : null,
+
+            escolinhaId:
+              tipo === "ESCOLINHA"
+                ? ownerId
+                : null,
+
+            organizacaoId,
+
             ativo: true,
           },
         });

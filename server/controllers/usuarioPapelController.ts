@@ -1,7 +1,12 @@
 // server/controllers/usuarioPapelController.ts
 import { Response } from "express";
 import { StatusUsuarioPapel, TipoUsuario } from "@prisma/client";
-
+import {
+  ActiveContextError,
+  definirActiveContext,
+  getActiveContext,
+  listarActiveContexts,
+} from "../services/activeContext.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
@@ -306,14 +311,148 @@ export async function listarMeusPapeis(
       });
     }
 
+    const activeContext =
+      await getActiveContext(
+        usuarioId
+      );
+
     return res.json({
-      papelAtivo: usuario.tipo,
+      papelAtivo:
+        activeContext
+          ?.tipoUsuario ??
+        usuario.tipo,
+
+      activeContext,
+
       papeis,
     });
   } catch (error) {
     console.error("[UsuarioPapel] Erro ao listar papéis:", error);
     return res.status(500).json({
       error: "Não foi possível carregar os perfis da conta.",
+    });
+  }
+}
+
+export async function listarMeusContextos(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId =
+    obterUsuarioId(
+      req,
+      res
+    );
+
+  if (!usuarioId) return;
+
+  try {
+    const [
+      activeContext,
+      contexts,
+    ] =
+      await Promise.all([
+        getActiveContext(
+          usuarioId
+        ),
+
+        listarActiveContexts(
+          usuarioId
+        ),
+      ]);
+
+    return res.json({
+      activeContext,
+      contexts,
+    });
+  } catch (error) {
+    console.error(
+      "[ActiveContext] Erro ao listar contextos:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível carregar os contextos.",
+    });
+  }
+}
+
+
+export async function alterarContextoAtivo(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId =
+    obterUsuarioId(
+      req,
+      res
+    );
+
+  if (!usuarioId) return;
+
+  try {
+    const contextKey =
+      String(
+        req.body
+          ?.contextKey ??
+        ""
+      ).trim();
+
+    if (!contextKey) {
+      return res.status(400).json({
+        error:
+          "contextKey obrigatório.",
+        code:
+          "CONTEXT_REQUIRED",
+      });
+    }
+
+    const activeContext =
+      await definirActiveContext(
+        usuarioId,
+        contextKey,
+      );
+
+    return res.json({
+      ok: true,
+
+      activeContext,
+
+      tipoUsuario:
+        activeContext
+          .tipoUsuario,
+
+      tipoUsuarioId:
+        activeContext
+          .tipoUsuarioId,
+    });
+  } catch (error) {
+    if (
+      error instanceof
+      ActiveContextError
+    ) {
+      return res
+        .status(
+          error.status
+        )
+        .json({
+          error:
+            error.message,
+
+          code:
+            error.code,
+        });
+    }
+
+    console.error(
+      "[ActiveContext] Erro ao trocar contexto:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível alterar o contexto.",
     });
   }
 }
@@ -484,7 +623,11 @@ export async function alterarPapelAtivo(
     const [usuario, registro] = await Promise.all([
       prisma.usuario.findUnique({
         where: { id: usuarioId },
-        select: { tipo: true },
+        select: {
+          tipo: true,
+          contextoOrganizacaoId:
+            true,
+        },
       }),
       buscarRegistroPapel(usuarioId, papel),
     ]);
@@ -525,12 +668,23 @@ export async function alterarPapelAtivo(
       });
     }
 
-    const jaEstavaEmUso = papeisEquivalentes(usuario.tipo, papel);
+    const jaEstavaEmUso =
+      !usuario
+        .contextoOrganizacaoId &&
+      papeisEquivalentes(
+        usuario.tipo,
+        papel
+      );
 
     if (!jaEstavaEmUso) {
       await prisma.usuario.update({
         where: { id: usuarioId },
-        data: { tipo: papel },
+        data: {
+          tipo:
+            papel,
+          contextoOrganizacaoId:
+            null,
+        },
       });
     }
 

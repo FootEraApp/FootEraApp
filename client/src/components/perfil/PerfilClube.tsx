@@ -1321,11 +1321,25 @@ export default function PerfilClube({
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     undefined;
 
-  const time = data.clube.cidade
-    ? `${data.clube.cidade}${
-        data.clube.estado ? " - " + data.clube.estado : ""
-      }${data.clube.pais ? " - " + data.clube.pais : ""}`
-    : undefined;
+  const localizacaoClube =
+    data.clube.cidade
+      ? `${data.clube.cidade}${
+          data.clube.estado
+            ? " - " +
+              data.clube.estado
+            : ""
+        }${
+          data.clube.pais
+            ? " - " +
+              data.clube.pais
+            : ""
+        }`
+      : "";
+
+  const time =
+    localizacaoClube
+      ? `Clube • ${localizacaoClube}`
+      : "Clube";
 
   const athletesCount = vinculados?.length ?? data.metrics?.atletas ?? 0;
   const kpis = [

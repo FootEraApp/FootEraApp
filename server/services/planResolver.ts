@@ -1,8 +1,12 @@
 // server/services/planResolve
-import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { PrismaClient, TipoUsuario, FuncaoMembroOrganizacao } from "@prisma/client";
 import {
   getProfileIdForRole,
 } from "./roles.js";
+import {
+  getActiveContext,
+  type ActiveContext,
+} from "./activeContext.js";
 
 const prisma = new PrismaClient();
 
@@ -15,6 +19,7 @@ export interface UserPayload {
   plano?: PlanoName | null;  
   isAdmin?: boolean;
   parceiro: boolean;
+  activeContext?: ActiveContext | null;
 }
 
 function asPlano(p?: string | null): PlanoName {
@@ -23,14 +28,77 @@ function asPlano(p?: string | null): PlanoName {
 }
 
 export async function getPlano(usuarioId: string): Promise<PlanoName> {
-  const [escolinha, clube, prof] = await Promise.all([
-    prisma.escolinha.findFirst({ where: { usuarioId }, select: { id: true } }),
-    prisma.clube.findFirst({ where: { usuarioId }, select: { id: true } }),
-    prisma.professor.findFirst({ where: { usuarioId }, select: { id: true, escolinhaId: true, clubeId: true } }),
-  ]);
+  const [
+    membroOrganizacao,
+    escolinha,
+    clube,
+    prof,
+  ] =
+    await Promise.all([
+      prisma.membroOrganizacao.findFirst({
+        where: {
+          usuarioId,
 
-  if (escolinha || clube || prof?.escolinhaId || prof?.clubeId) return "ORG";
+          ativo:
+            true,
 
+          funcao: {
+            in: [
+              FuncaoMembroOrganizacao.PROPRIETARIO,
+              FuncaoMembroOrganizacao.ADMINISTRADOR,
+              FuncaoMembroOrganizacao.PROFESSOR,
+            ],
+          },
+        },
+
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.escolinha.findFirst({
+        where: {
+          usuarioId,
+        },
+
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.clube.findFirst({
+        where: {
+          usuarioId,
+        },
+
+        select: {
+          id: true,
+        },
+      }),
+
+      prisma.professor.findFirst({
+        where: {
+          usuarioId,
+        },
+
+        select: {
+          id: true,
+          escolinhaId: true,
+          clubeId: true,
+        },
+      }),
+    ]);
+
+  if (
+    membroOrganizacao ||
+    escolinha ||
+    clube ||
+    prof?.escolinhaId ||
+    prof?.clubeId
+  ) {
+    return "ORG";
+  }
+  
   const assinatura = await prisma.assinatura.findFirst({
     where: { usuarioId, ativo: true, canceledAt: null },
     select: { plano: true },
@@ -80,7 +148,19 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
       ? asPlano(assinaturaAtual.plano)
     : "FREE";
 
+  const activeContext =
+    await getActiveContext(
+      usuario.id
+    );
+
+  const tipo =
+    activeContext
+      ?.tipoUsuario ??
+    usuario.tipo;
+
   const tipoUsuarioId =
+    activeContext
+      ?.tipoUsuarioId ??
     await getProfileIdForRole(
       usuario.id,
       usuario.tipo,
@@ -88,9 +168,10 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
 
   return {
     id: usuario.id,
-    tipo: usuario.tipo,
+    tipo,
     tipoUsuarioId,
     plano,
+    activeContext,
     isAdmin: !!usuario.administrador,
     parceiro: usuario.parceiro,
   };

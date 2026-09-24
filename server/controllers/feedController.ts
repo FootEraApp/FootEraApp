@@ -16,6 +16,9 @@ import {
 import {
   sanitizePublicPost,
 } from "../utils/publicSanitizers.js";
+import {
+  obterOrganizacaoAtivaDoUsuario,
+} from "../services/organizacoes.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -479,6 +482,35 @@ export const seguirUsuario: RequestHandler = async (req, res) => {
   if (jaSegue) return res.status(409).json({ message: "Você já segue este usuário." });
 
   await prisma.seguidor.create({ data: { seguidorUsuarioId, seguidoUsuarioId } });
+  
+  const organizacaoId =
+    await obterOrganizacaoAtivaDoUsuario(
+      seguidoUsuarioId
+    );
+
+  if (
+    organizacaoId
+  ) {
+    await prisma.organizacaoSeguidor.upsert({
+      where: {
+        organizacaoId_usuarioId: {
+          organizacaoId,
+
+          usuarioId:
+            seguidorUsuarioId,
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizacaoId,
+
+        usuarioId:
+          seguidorUsuarioId,
+      },
+    });
+  }
   res.sendStatus(201);
 };
 
@@ -525,10 +557,16 @@ export const postar: RequestHandler = async (req, res) => {
         VisibilidadePostagem.LOGADO
       );
 
+    const organizacaoId =
+      await obterOrganizacaoAtivaDoUsuario(
+        usuarioId
+      );
+
     const postagem = await prisma.postagem.create({
       data: {
         conteudo: texto,
         usuarioId,
+        organizacaoId,
         dataCriacao: new Date(),
         tipoMidia,
         imagemUrl,
@@ -796,11 +834,19 @@ export async function repostPost(req: Request, res: Response) {
       return res.json({ ok: true, action: "unrepost", id: existente.id });
     }
 
+    const organizacaoRepostId =
+      await obterOrganizacaoAtivaDoUsuario(
+        userId
+      );
+
     const novoBase =
       await prisma.postagem.create({
         data: {
           usuarioId:
             userId,
+
+          organizacaoId:
+            organizacaoRepostId,
 
           conteudo:
             conteudoRepost,
