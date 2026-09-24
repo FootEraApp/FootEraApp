@@ -26,6 +26,7 @@ import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import {
   canPermission,
 } from "../services/permissions.js";
+import { getActiveContext } from "../services/activeContext.js";
 
 function calcularDatasExecucao(estrutura: any, assinatura: any) {
   const modo = estrutura?.modoExecucao;
@@ -72,6 +73,99 @@ function calcularDatasExecucao(estrutura: any, assinatura: any) {
   }
 
   return { inicio: null, fim: null };
+}
+
+async function resolverAutorContextoMetodologia(
+  userId:
+    string,
+) {
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  const autor = {
+    professorId:
+      null as string | null,
+
+    clubeId:
+      null as string | null,
+
+    escolinhaId:
+      null as string | null,
+
+    federacaoId:
+      null as string | null,
+
+    marcaId:
+      null as string | null,
+  };
+
+  if (!contexto) {
+    return autor;
+  }
+
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    if (
+      String(
+        contexto.tipoUsuario
+      ) ===
+      "Professor"
+    ) {
+      autor.professorId =
+        contexto.tipoUsuarioId ??
+        null;
+    }
+
+    return autor;
+  }
+
+  if (
+    contexto.organizationRole ===
+      "PROFESSOR" &&
+    String(
+      contexto.tipoUsuario
+    ) ===
+      "Professor"
+  ) {
+    autor.professorId =
+      contexto.tipoUsuarioId ??
+      null;
+  }
+
+  const legacyId =
+    contexto
+      .legacyOrganizationId ??
+    null;
+
+  switch (
+    contexto.organizationType
+  ) {
+    case "CLUBE":
+      autor.clubeId =
+        legacyId;
+      break;
+
+    case "ESCOLA":
+      autor.escolinhaId =
+        legacyId;
+      break;
+
+    case "FEDERACAO":
+      autor.federacaoId =
+        legacyId;
+      break;
+
+    case "MARCA":
+      autor.marcaId =
+        legacyId;
+      break;
+  }
+
+  return autor;
 }
 
 function getUserId(req: Request): string | null {
@@ -1164,24 +1258,10 @@ export async function createMetodologia(req: Request, res: Response) {
       });
     }
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: userId },
-      select: {
-        tipo: true,
-        professor: { select: { id: true } },
-        clube: { select: { id: true } },
-        escolinha: { select: { id: true } },
-      },
-    });
-
-    const professorId =
-      usuario?.tipo === "Professor" ? usuario?.professor?.id ?? null : null;
-
-    const clubeId =
-      usuario?.tipo === "Clube" ? usuario?.clube?.id ?? null : null;
-
-    const escolinhaId =
-      usuario?.tipo === "Escolinha" ? usuario?.escolinha?.id ?? null : null;
+    const autorContexto =
+      await resolverAutorContextoMetodologia(
+        userId
+      );
 
     let publicoAlvoFinal: MetodologiaPublicoAlvo = MetodologiaPublicoAlvo.AMBOS;
 
@@ -1207,9 +1287,21 @@ export async function createMetodologia(req: Request, res: Response) {
         categorias: Array.isArray(categorias) ? categorias : undefined,
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
-        professorId: professorId ?? undefined,
-        clubeId: clubeId ?? undefined,
-        escolinhaId: escolinhaId ?? undefined,
+        professorId:
+          autorContexto.professorId ??
+          undefined,
+        clubeId:
+          autorContexto.clubeId ??
+          undefined,
+        escolinhaId:
+          autorContexto.escolinhaId ??
+          undefined,
+        federacaoId:
+          autorContexto.federacaoId ??
+          undefined,
+        marcaId:
+          autorContexto.marcaId ??
+          undefined,
         ativo: false,
         tipo,
         estruturaTipo,
@@ -5553,6 +5645,11 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
       publicoAlvoFinal = raw as MetodologiaPublicoAlvo;
     }
 
+    const autorContexto =
+      await resolverAutorContextoMetodologia(
+        userId
+      );
+
     const created = await prisma.metodologiaAvulsa.create({
       data: {
         titulo: tituloTrim,
@@ -5560,6 +5657,21 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
         capaUrl: asNullableString(capaUrl),
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
+        professorId:
+          autorContexto.professorId ??
+          undefined,
+        clubeId:
+          autorContexto.clubeId ??
+          undefined,
+        escolinhaId:
+          autorContexto.escolinhaId ??
+          undefined,
+        federacaoId:
+          autorContexto.federacaoId ??
+          undefined,
+        marcaId:
+          autorContexto.marcaId ??
+          undefined,
         ativo: false,
         tipo,
         estruturaTipo,

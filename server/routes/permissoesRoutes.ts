@@ -1,16 +1,16 @@
 import {
   Router,
 } from "express";
-
 import {
   authenticateToken,
 } from "../middlewares/auth.js";
-
 import {
   canPermission,
   getPermissionSnapshot,
 } from "../services/permissions.js";
-
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
 const router =
   Router();
@@ -48,13 +48,23 @@ router.get(
           });
       }
 
-      const permissions =
-        await getPermissionSnapshot(
-          userId,
-        );
+      const [
+        permissions,
+        activeContext,
+      ] =
+        await Promise.all([
+          getPermissionSnapshot(
+            userId
+          ),
+
+          getActiveContext(
+            userId
+          ),
+        ]);
 
       return res.json({
         permissions,
+        activeContext
       });
     } catch (error) {
       console.error(

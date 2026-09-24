@@ -1,7 +1,7 @@
 // server/middlewares/auth
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
-import { Prisma, PrismaClient, TipoUsuario } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { resolveUserContext } from "../services/planResolver.js";
 import type { PlanoName, UserPayload } from "../services/planResolver.js"
 
@@ -18,42 +18,6 @@ export type AuthenticatedRequest = Request & {
   userId?: string;
   authUser?: UserPayload;
 };
-
-function toTipoUsuario(s: string): TipoUsuario {
-  switch (s.toLowerCase()) {
-    case "admin":
-      return TipoUsuario.Admin;
-
-    case "professor":
-      return TipoUsuario.Professor;
-
-    case "clube":
-      return TipoUsuario.Clube;
-
-    case "escola":
-    case "escolinha":
-      return TipoUsuario.Escolinha;
-
-    case "olheiro":
-      return TipoUsuario.Olheiro;
-
-    case "learning":
-      return TipoUsuario.Learning;
-
-    case "federacao":
-      return TipoUsuario.Federacao;
-
-    case "marca":
-      return TipoUsuario.Marca;
-
-    case "creator":
-      return TipoUsuario.Creator;
-
-    case "atleta":
-    default:
-      return TipoUsuario.Atleta;
-  }
-}
 
 type DbUser = Prisma.UsuarioGetPayload<{
   select: {
@@ -325,51 +289,39 @@ const parceiro = Boolean(dbUser?.parceiro);
       }
 
       const user: UserPayload = {
-        id: userId,
-        tipo: ctx.tipo,
-        tipoUsuarioId: tipoUsuarioIdFinal,
-        plano: ((ctx.plano as PlanoName) ?? "FREE") as PlanoName,
-        isAdmin: !!ctx.isAdmin,
+        id:
+          userId,
+        tipo:
+          ctx.tipo,
+        tipoUsuarioId:
+          tipoUsuarioIdFinal,
+        activeContext:
+          ctx.activeContext ??
+          null,
+        plano:
+          ((ctx.plano as PlanoName) ??
+            "FREE") as PlanoName,
+        isAdmin:
+          !!ctx.isAdmin,
         parceiro,
       };
 
     reqAuthed.authUser = user;
     (reqAuthed as any).user = user;
   } catch (e: any) {
-    console.error("[AUTH] resolveUserContext failed em", req.originalUrl, "->", e);
+    console.error(
+      "[AUTH] resolveUserContext failed em",
+      req.originalUrl,
+      "->",
+      e
+    );
 
-    const tipoRaw = String(payload.tipo || "").toLowerCase();
-    const tiposConhecidos = new Set([
-      "admin",
-      "professor",
-      "clube",
-      "escola",
-      "escolinha",
-      "olheiro",
-      "learning",
-      "federacao",
-      "marca",
-      "atleta",
-      "creator",
-    ]);
-
-    const tipo =
-      tiposConhecidos.has(tipoRaw)
-        ? (toTipoUsuario(tipoRaw) as any)
-        : (TipoUsuario.Atleta as any);
-
-    const user: UserPayload = {
-      id: userId,
-      tipo,
-      tipoUsuarioId: null,
-      plano: "FREE" as PlanoName,
-      isAdmin: tipoRaw === "admin",
-      parceiro,
-    };
-
-
-    reqAuthed.authUser = user;
-    (reqAuthed as any).user = user;
+    return res.status(500).json({
+      message:
+        "Não foi possível resolver o contexto ativo do usuário.",
+      code:
+        "ACTIVE_CONTEXT_RESOLUTION_FAILED",
+    });
   }
 
   try {

@@ -48,16 +48,37 @@ const ASSETS_CDN_BASE =
   import.meta.env.VITE_ASSETS_CDN_BASE_URL || "https://footera.app.br";
 
 function isNativeApp() {
-  if (typeof window === "undefined") return false;
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return false;
+  }
 
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
+  const capacitor =
+    (window as any)
+      .Capacitor;
+
+  if (
+    typeof capacitor
+      ?.isNativePlatform ===
+    "function"
+  ) {
+    return Boolean(
+      capacitor
+        .isNativePlatform()
+    );
+  }
+
+  const protocol =
+    window.location
+      .protocol;
 
   return (
-    protocol === "capacitor:" ||
-    protocol === "ionic:" ||
-    hostname === "localhost" ||
-    hostname === "10.0.2.2"
+    protocol ===
+      "capacitor:" ||
+    protocol ===
+      "ionic:"
   );
 }
 

@@ -10,6 +10,7 @@ import {
 import { prisma } from "../prisma.js";
 import {
   sincronizarMembroOrganizacaoLegada,
+  obterOrganizacaoIdPorLegado
 } from "../services/organizacoes.js";
 
 type PermissaoOrganizacao = "professores" | "atletasTurmas";
@@ -795,6 +796,21 @@ async function reativarRelacaoTreinamento(
     escolinhaId: data.escolinhaId ?? null,
   };
 
+  const organizacaoId =
+    data.clubeId
+      ? await obterOrganizacaoIdPorLegado({
+          tipo: "CLUBE",
+          ownerId: data.clubeId,
+          tx,
+        })
+      : data.escolinhaId
+        ? await obterOrganizacaoIdPorLegado({
+            tipo: "ESCOLINHA",
+            ownerId: data.escolinhaId,
+            tx,
+          })
+        : null;
+
   const existente = await tx.relacaoTreinamento.findFirst({
     where: shape,
     select: { id: true },
@@ -806,6 +822,7 @@ async function reativarRelacaoTreinamento(
       data: {
         ativo: true,
         encerradoEm: null,
+        organizacaoId,
       },
     });
     return;
@@ -814,6 +831,7 @@ async function reativarRelacaoTreinamento(
   await tx.relacaoTreinamento.create({
     data: {
       ...shape,
+      organizacaoId,
       ativo: true,
       encerradoEm: null,
     },

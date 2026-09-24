@@ -3563,9 +3563,12 @@ export async function getExercicios(req: AuthenticatedRequest, res: Response) {
         nome: true,
         objetivo: true,
         nivel: true,
-        faixaEtaria: true,
-        videoDemonstrativoUrl: true,
-        criadoPorId: true,
+        faixaEtaria:
+          true,
+        videoDemonstrativoUrl:
+          true,
+        criadoPorId:
+          true,
         series: true,
         repeticoes: true,
         duracao: true,
@@ -3573,12 +3576,18 @@ export async function getExercicios(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    const out = deduplicarExerciciosPorNome(
-      exercicios.map((e) => ({
-        ...e,
-        origem: "catalogo" as const,
-      })),
-    );
+    const out =
+      deduplicarExerciciosPorNome(
+        exercicios.map((e) => ({
+          ...e,
+
+          videoPosterUrl:
+            null,
+
+          origem:
+            "catalogo" as const,
+        })),
+      );
 
     return res.json(out);
   } catch (err) {
@@ -4531,9 +4540,34 @@ export async function criarTreinoProgramado(
       sessaoTreinoId,
     } = bodyValidado;
 
-    const tokenUser = (req as any).user as
-      | { tipo?: string; tipoUsuarioId?: string }
-      | undefined;
+    const tokenUser =
+      (req as any).user as
+        | {
+            id?: string;
+
+            tipo?: string;
+
+            tipoUsuarioId?:
+              string;
+
+            activeContext?: {
+              kind?:
+                string;
+
+              tipoUsuarioId?:
+                string | null;
+
+              organizationType?:
+                string | null;
+
+              organizationRole?:
+                string | null;
+
+              legacyOrganizationId?:
+                string | null;
+            };
+          }
+        | undefined;
 
     const tipoNormHeaderBody = String(
       tokenUser?.tipo || (req.headers["x-tipo"] as string) || tipoUsuario || "",
@@ -4541,14 +4575,104 @@ export async function criarTreinoProgramado(
       .toLowerCase()
       .trim();
 
-    const tipoNorm = (tipoStr || tipoNormHeaderBody).toLowerCase().trim();
+    const activeContext =
+      tokenUser
+        ?.activeContext ??
+      null;
 
-    const tipoUsuarioIdFinal = String(
-      tokenUser?.tipoUsuarioId ||
-        (req.headers["x-tipousuarioid"] as string) ||
-        tipoUsuarioId ||
-        "",
-    ).trim();
+    const contextoOrganizacao =
+      activeContext?.kind ===
+      "ORGANIZATION";
+
+    let tipoNorm =
+      (tipoStr ||
+        tipoNormHeaderBody)
+        .toLowerCase()
+        .trim();
+
+    let tipoUsuarioIdFinal =
+      String(
+        tokenUser
+          ?.tipoUsuarioId ||
+          (
+            req.headers[
+              "x-tipousuarioid"
+            ] as string
+          ) ||
+          tipoUsuarioId ||
+          ""
+      ).trim();
+
+    let professorCriadorContextoId =
+      "";
+
+    if (
+      contextoOrganizacao
+    ) {
+      const organizationType =
+        String(
+          activeContext
+            ?.organizationType ??
+          ""
+        ).toUpperCase();
+
+      const legacyOrganizationId =
+        String(
+          activeContext
+            ?.legacyOrganizationId ??
+          ""
+        ).trim();
+
+      if (
+        !legacyOrganizationId
+      ) {
+        return res.status(409).json({
+          code:
+            "ORGANIZATION_LEGACY_ID_MISSING",
+
+          message:
+            "A organização ativa ainda não possui vínculo com o perfil legado.",
+        });
+      }
+
+      if (
+        organizationType ===
+        "CLUBE"
+      ) {
+        tipoNorm =
+          "clube";
+      } else if (
+        organizationType ===
+        "ESCOLA"
+      ) {
+        tipoNorm =
+          "escolinha";
+      } else {
+        return res.status(403).json({
+          code:
+            "CONTEXT_CANNOT_CREATE_TRAINING",
+
+          message:
+            "Este contexto não pode criar treinos.",
+        });
+      }
+
+      tipoUsuarioIdFinal =
+        legacyOrganizationId;
+
+      if (
+        activeContext
+          ?.organizationRole ===
+        "PROFESSOR"
+      ) {
+        professorCriadorContextoId =
+          String(
+            activeContext
+              ?.tipoUsuarioId ??
+            ""
+          ).trim();
+      }
+    }
 
     const nivelEnum = nivel as Nivel;
     const usuarioIdToken =
@@ -4564,7 +4688,7 @@ export async function criarTreinoProgramado(
 
     const usuarioEhParceiro = Boolean(usuarioDb?.parceiro);
     const bypassLimitesTreinoParceiro =
-      tipoStr === "professor" && usuarioEhParceiro;
+      tipoNorm === "professor" && usuarioEhParceiro;
     const parceiroSolicitado = Boolean(parceiro);
 
     if (parceiroSolicitado && !usuarioEhParceiro) {
@@ -4619,7 +4743,7 @@ export async function criarTreinoProgramado(
       : null;
 
     if (
-      tipoStr === "professor" &&
+      tipoNorm === "professor" &&
       !bypassLimitesTreinoParceiro &&
       !can(userCtx, FEAT.TREINOS_ILIMITADOS)
     ) {
@@ -4649,7 +4773,7 @@ export async function criarTreinoProgramado(
     }
 
     if (
-      tipoStr === "professor" &&
+      tipoNorm === "professor" &&
       !bypassLimitesTreinoParceiro &&
       !can(userCtx, FEAT.ROTINAS_ILIMITADAS)
     ) {
@@ -4784,7 +4908,16 @@ export async function criarTreinoProgramado(
     }
 
     const professorCriadorId =
-      tipoStr === "professor" ? (professorIdToConnect ?? "") : "";
+      professorCriadorContextoId ||
+      (
+        tipoNorm === "professor"
+          ? (
+              professorIdToConnect ??
+              ""
+            )
+          : ""
+      );
+      
     const colaboradoresEntradaRaw =
       body.colaboradoresProfessorIds ??
       body.professoresIds ??

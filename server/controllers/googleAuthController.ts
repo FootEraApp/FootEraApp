@@ -10,6 +10,7 @@ import { calcularIdadePorNascimento, categoriaAtletaPorIdade } from "../utils/ca
 import {
   getProfileIdForRole,
 } from "../services/roles.js";
+import { resolveUserContext } from "../services/planResolver.js";
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
@@ -160,10 +161,9 @@ async function montarRespostaAuth(usuarioId: string) {
     throw new Error("Usuário não encontrado após autenticação.");
   }
 
-  const tipoUsuarioId =
-    await getProfileIdForRole(
-      usuario.id,
-      usuario.tipo,
+  const contexto =
+    await resolveUserContext(
+      usuario.id
     );
 
   const token = gerarJwt(usuario);
@@ -181,14 +181,23 @@ async function montarRespostaAuth(usuarioId: string) {
     ok: true,
     message: "Login bem-sucedido",
     token,
-    tipo: usuario.tipo,
     nomeDeUsuario: usuario.nomeDeUsuario,
     id: usuario.id,
-    tipoUsuarioId,
+    tipo:
+      contexto.tipo,
+    tipoUsuarioId:
+      contexto.tipoUsuarioId,
+    activeContext:
+      contexto.activeContext,
+    isAdmin:
+      contexto.isAdmin === true,
     usuario: {
       id: usuario.id,
       nomeDeUsuario: usuario.nomeDeUsuario,
-      tipo: usuario.tipo,
+      tipo:
+        contexto.tipo,
+      activeContext:
+        contexto.activeContext,
       email: usuario.email,
       verified: usuario.verified,
     },

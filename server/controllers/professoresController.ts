@@ -1,8 +1,12 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
-import { StatusCref } from "@prisma/client"; 
+import { StatusCref, FuncaoMembroOrganizacao } from "@prisma/client"; 
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 import { sendError } from "../utils/httpError.js";
+import {
+  obterOrganizacaoIdPorLegado,
+  sincronizarMembroOrganizacaoLegada,
+} from "../services/organizacoes.js";
 
 function normalizeStatusCref(v: any): StatusCref {
   const raw = String(v ?? "").trim();
@@ -931,6 +935,7 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
         id: true,
         clubeId: true,
         escolinhaId: true,
+        usuarioId: true,
       },
     });
 
@@ -1052,6 +1057,19 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
     const professor = await prisma.$transaction(async (tx) => {
       const agora = new Date();
 
+      const organizacaoNovaId =
+        await obterOrganizacaoIdPorLegado({
+          tipo:
+            tipo === "Clube"
+              ? "CLUBE"
+              : "ESCOLINHA",
+
+          ownerId:
+            id,
+
+          tx,
+        });
+
       await limparTurmasIncompativeisDoProfessor(
         tx,
         professorId,
@@ -1072,6 +1090,31 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
           encerradoEm: agora,
         },
       });
+
+      const professorUsuarioId =
+        professorExistente.usuarioId;
+
+      if (
+        professorUsuarioId
+      ) {
+        await sincronizarMembroOrganizacaoLegada({
+          tx,
+
+          tipo:
+            tipo === "Clube"
+              ? "CLUBE"
+              : "ESCOLINHA",
+
+          ownerId:
+            id,
+
+          usuarioId:
+            professorUsuarioId,
+
+          funcao:
+            FuncaoMembroOrganizacao.PROFESSOR,
+        });
+      }
 
       const relacaoAnterior =
         await tx.relacaoTreinamento.findFirst({
@@ -1107,6 +1150,7 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
             clubeId: tipo === "Clube" ? id : null,
             escolinhaId:
               tipo === "Escolinha" ? id : null,
+            organizacaoId: organizacaoNovaId,
           },
         });
       } else {
@@ -1117,6 +1161,7 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
             clubeId: tipo === "Clube" ? id : null,
             escolinhaId:
               tipo === "Escolinha" ? id : null,
+            organizacaoId: organizacaoNovaId,
             ativo: true,
             encerradoEm: null,
           },

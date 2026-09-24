@@ -3,18 +3,16 @@ import {
   Prisma,
   TipoOrganizacao,
 } from "@prisma/client";
-
+import { getActiveContext } from "./activeContext.js";
 import {
   prisma,
 } from "../prisma.js";
-
 
 export type TipoOrganizacaoLegada =
   | "CLUBE"
   | "ESCOLINHA"
   | "MARCA"
   | "FEDERACAO";
-
 
 const prioridadeFuncao:
   Record<
@@ -26,7 +24,6 @@ const prioridadeFuncao:
     ADMINISTRADOR: 3,
     PROPRIETARIO: 4,
   };
-
 
 function tipoOrganizacaoNova(
   tipo:
@@ -46,7 +43,6 @@ function tipoOrganizacaoNova(
       return TipoOrganizacao.FEDERACAO;
   }
 }
-
 
 async function buscarLegado(
   db: any,
@@ -113,7 +109,6 @@ async function buscarLegado(
   }
 }
 
-
 async function atualizarLegadoOrganizacaoId(
   db: any,
   tipo:
@@ -159,7 +154,6 @@ async function atualizarLegadoOrganizacaoId(
       });
   }
 }
-
 
 async function salvarMembro(
   db: any,
@@ -267,7 +261,6 @@ async function salvarMembro(
     },
   });
 }
-
 
 export async function garantirOrganizacaoLegada(
   params: {
@@ -377,7 +370,6 @@ export async function garantirOrganizacaoLegada(
   return organizacao;
 }
 
-
 export async function sincronizarMembroOrganizacaoLegada(
   params: {
     tipo:
@@ -439,5 +431,71 @@ export async function sincronizarMembroOrganizacaoLegada(
       preservarMaiorFuncao:
         params.preservarMaiorFuncao,
     }
+  );
+}
+
+export async function obterOrganizacaoIdPorLegado(
+  params: {
+    tipo: TipoOrganizacaoLegada;
+    ownerId: string;
+    tx?: Prisma.TransactionClient;
+  }
+): Promise<string | null> {
+  const db: any =
+    params.tx ??
+    prisma;
+
+  const legado =
+    await buscarLegado(
+      db,
+      params.tipo,
+      params.ownerId,
+    );
+
+  if (!legado) {
+    return null;
+  }
+
+  if (
+    legado.organizacaoId
+  ) {
+    return String(
+      legado.organizacaoId
+    );
+  }
+
+  const organizacao =
+    await garantirOrganizacaoLegada({
+      tipo:
+        params.tipo,
+
+      ownerId:
+        params.ownerId,
+
+      tx:
+        params.tx,
+    });
+
+  return organizacao.id;
+}
+
+export async function obterOrganizacaoAtivaDoUsuario(
+  usuarioId: string,
+): Promise<string | null> {
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (
+    contexto?.kind !==
+    "ORGANIZATION"
+  ) {
+    return null;
+  }
+
+  return (
+    contexto.organizationId ??
+    null
   );
 }

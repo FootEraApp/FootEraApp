@@ -6,10 +6,12 @@ import React, {
   useState,
 } from "react";
 import axios from "axios";
-import Storage from "../utils/storage.js";
 import { API } from "../config.js";
 import {
+  applyActiveContextSession,
   applyAuthSession,
+  clearAuthSession,
+  type ActiveContextSession,
 } from "../utils/authSession.js";
 
 export interface User {
@@ -75,6 +77,23 @@ export interface UserContextType {
 
   refreshPermissions:
     () => Promise<void>;
+
+  activeContext:
+    ActiveContextSession | null;
+
+  contexts:
+    ActiveContextSession[];
+
+  contextsLoading:
+    boolean;
+
+  refreshActiveContexts:
+    () => Promise<void>;
+
+  switchActiveContext:
+    (
+      contextKey: string
+    ) => Promise<void>;
 }
 
 export const UserContext =
@@ -141,6 +160,28 @@ export function UserProvider({
     setPermissionsLoading,
   ] = useState(false);
 
+  const [
+    activeContext,
+    setActiveContext,
+  ] =
+    useState<
+      ActiveContextSession |
+      null
+    >(null);
+
+  const [
+    contexts,
+    setContexts,
+  ] =
+    useState<
+      ActiveContextSession[]
+    >([]);
+
+  const [
+    contextsLoading,
+    setContextsLoading,
+  ] =
+    useState(false);
 
   const refreshPermissions =
     useCallback(
@@ -225,16 +266,199 @@ export function UserProvider({
       );
     }, []);
 
+  const refreshActiveContexts =
+    useCallback(
+      async () => {
+        const token =
+          localStorage.getItem(
+            "token"
+          ) ||
+          sessionStorage.getItem(
+            "token"
+          ) ||
+          "";
+
+        if (!token) {
+          setActiveContext(
+            null
+          );
+
+          setContexts([]);
+
+          setContextsLoading(
+            false
+          );
+
+          return;
+        }
+
+        try {
+          setContextsLoading(
+            true
+          );
+
+          const {
+            data,
+          } =
+            await axios.get(
+              `${API.BASE_URL}/api/usuarios/me/contextos`,
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          const items =
+            Array.isArray(
+              data?.contexts
+            )
+              ? data.contexts
+              : [];
+
+          const active =
+            data?.activeContext ??
+            null;
+
+          setContexts(
+            items
+          );
+
+          setActiveContext(
+            active
+          );
+
+          if (active) {
+            applyActiveContextSession(
+              active,
+              {
+                notify:
+                  false,
+              }
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[UserContext] Erro ao carregar contextos:",
+            error
+          );
+
+          setActiveContext(
+            null
+          );
+
+          setContexts([]);
+        } finally {
+          setContextsLoading(
+            false
+          );
+        }
+      },
+      []
+    );
+  
+  const switchActiveContext =
+    useCallback(
+      async (
+        contextKey:
+          string
+      ) => {
+        const token =
+          localStorage.getItem(
+            "token"
+          ) ||
+          sessionStorage.getItem(
+            "token"
+          ) ||
+          "";
+
+        if (!token) {
+          throw new Error(
+            "Usuário não autenticado."
+          );
+        }
+
+        const {
+          data,
+        } =
+          await axios.patch(
+            `${API.BASE_URL}/api/usuarios/me/contexto-ativo`,
+            {
+              contextKey,
+            },
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        const active =
+          data?.activeContext ??
+          null;
+
+        if (!active) {
+          throw new Error(
+            "O servidor não retornou o contexto ativo."
+          );
+        }
+
+        setActiveContext(
+          active
+        );
+
+        applyActiveContextSession(
+          active,
+          {
+            notify:
+              false,
+          }
+        );
+
+        await Promise.all([
+          refreshPermissions(),
+          refreshActiveContexts(),
+        ]);
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "footera:auth-changed",
+            {
+              detail: {
+                authenticated:
+                  true,
+
+                contextChanged:
+                  true,
+              },
+            }
+          )
+        );
+      },
+      [
+        refreshPermissions,
+        refreshActiveContexts,
+      ]
+    );
+
   useEffect(() => {
     syncSession();
 
-    void refreshPermissions();
+    void Promise.all([
+      refreshPermissions(),
+      refreshActiveContexts(),
+    ]);
 
     const onAuthChanged =
       () => {
         syncSession();
 
-        void refreshPermissions();
+        void Promise.all([
+          refreshPermissions(),
+          refreshActiveContexts(),
+        ]);
       };
 
     window.addEventListener(
@@ -251,6 +475,7 @@ export function UserProvider({
   }, [
     syncSession,
     refreshPermissions,
+    refreshActiveContexts,
   ]);
 
   const login = async (
@@ -276,7 +501,10 @@ export function UserProvider({
       );
 
       syncSession();
-      await refreshPermissions();
+      await Promise.all([
+        refreshPermissions(),
+        refreshActiveContexts(),
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -284,7 +512,15 @@ export function UserProvider({
 
   const logout =
     useCallback(() => {
-      Storage.clearAuth();
+      clearAuthSession();
+      setActiveContext(
+        null
+      );
+
+      setContexts([]);
+      setContextsLoading(
+        false
+      );
       setUser(null);
       setScore(null);
 
@@ -324,7 +560,11 @@ export function UserProvider({
         logout,
         setUser,
         setIsLoading,
-
+        activeContext,
+        contexts,
+        contextsLoading,
+        refreshActiveContexts,
+        switchActiveContext,
         permissions,
         permissionsLoading,
         can,

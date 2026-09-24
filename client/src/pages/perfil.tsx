@@ -1,10 +1,9 @@
 //client/src/pages/perfil
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
 
-// perfis tipo:
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
@@ -18,9 +17,9 @@ import HealthBanner from "../components/legal/HealthBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
 import BottomNav from "@/components/layout/BottomNav.js";
-
-
-
+import {
+  UserContext,
+} from "../context/UserContext.js";
 import { API } from "../config.js";
 
 type TipoPerfil =
@@ -48,6 +47,97 @@ type AssinaturaLite = {
   ativo: boolean;
 };
 
+function tipoPerfilDoActiveContext(
+  contexto: any
+): TipoPerfil | null {
+  if (!contexto) {
+    return null;
+  }
+
+  const kind =
+    String(
+      contexto.kind ?? ""
+    ).toUpperCase();
+
+  /*
+   * Contexto organizacional representa
+   * a organização, independentemente
+   * da função exercida nela.
+   */
+  if (
+    kind ===
+    "ORGANIZATION"
+  ) {
+    const tipoOrganizacao =
+      String(
+        contexto.organizationType ??
+          ""
+      ).toUpperCase();
+
+    switch (
+      tipoOrganizacao
+    ) {
+      case "CLUBE":
+        return "Clube";
+
+      case "ESCOLA":
+      case "ESCOLINHA":
+        return "Escolinha";
+
+      case "MARCA":
+        return "Marca";
+
+      case "FEDERACAO":
+        return "Federacao";
+
+      default:
+        return null;
+    }
+  }
+
+  const papel =
+    String(
+      contexto.tipoUsuario ??
+        contexto.role ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+  switch (papel) {
+    case "atleta":
+      return "Atleta";
+
+    case "professor":
+      return "Professor";
+
+    case "olheiro":
+      return "Olheiro";
+
+    case "learning":
+      return "Learning";
+
+    case "clube":
+      return "Clube";
+
+    case "escola":
+    case "escolinha":
+      return "Escolinha";
+
+    case "marca":
+      return "Marca";
+
+    case "federacao":
+      return "Federacao";
+
+    case "admin":
+      return "Admin";
+
+    default:
+      return null;
+  }
+}
+
 export default function ProfilePage() {
   const { id: idDaUrl } = useParams<{ id?: string }>();
   const [, navigate] = useLocation();
@@ -58,10 +148,41 @@ export default function ProfilePage() {
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [hasCreator, setHasCreator] = useState(false);
 
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    userContext
+      ?.activeContext ??
+    null;
+
   const token = Storage.token;
 
   const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
+  const tipoContextoAtivo =
+    isOwnProfile
+      ? tipoPerfilDoActiveContext(
+          activeContext
+        )
+      : null;
+
+  const tipoRender =
+    tipoContextoAtivo ??
+    tipo;
+
+  const activeProfileKey =
+    isOwnProfile
+      ? (
+          activeContext?.key ??
+          `${tipoRender ?? "perfil"}:me`
+        )
+      : `${
+          tipoRender ??
+          "perfil"
+        }:${idDaUrl ?? ""}`;
 
   function handleLogoutAndLogin() {
     try {
@@ -75,7 +196,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!usuarioId || !token) return;
 
-    const tipoNorm = String(tipo || "").toLowerCase();
+    const tipoNorm =
+      String(
+        tipoRender || ""
+      ).toLowerCase();
 
     if (tipoNorm === "atleta" || tipoNorm === "learning") {
       setHasCreator(false);
@@ -97,7 +221,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [usuarioId, token, tipo]);
+  }, [usuarioId, token, tipoRender]);
 
   useEffect(() => {
     if (!token) {
@@ -168,7 +292,14 @@ export default function ProfilePage() {
     );
   }
 
-  if (!tipo || !usuarioId || String(tipo).toLowerCase() === "admin") {
+  if (
+    !tipoRender ||
+    !usuarioId ||
+    String(
+      tipoRender
+    ).toLowerCase() ===
+      "admin"
+  ) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-[#f7f4ea] px-5">
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-lg border border-red-100">
@@ -210,35 +341,137 @@ export default function ProfilePage() {
         {isOwnProfile && <SubscriptionBanner />}
       </div>
 
-      {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
-      {tipo === "Professor" && (
-        <PerfilProfessor idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
-      )}
-      {tipo === "Clube" && (
-        <PerfilClube idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
-      )}
-      {tipo === "Escolinha" && (
-        <PerfilEscola idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
-      )}
-      {tipo === "Olheiro" && (
-        <PerfilOlheiro idDaUrl={idDaUrl} hasCreator={hasCreator} creatorUsuarioId={usuarioId} />
-      )}
-      {tipo === "Federacao" && (
-        <PerfilFederacao
-          idDaUrl={idDaUrl}
-          hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+      {tipoRender ===
+        "Atleta" && (
+        <PerfilAtleta
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
         />
       )}
 
-      {tipo === "Marca" && (
-        <PerfilMarca
-          idDaUrl={idDaUrl}
-          hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+      {tipoRender ===
+        "Professor" && (
+        <PerfilProfessor
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+          hasCreator={
+            hasCreator
+          }
+          creatorUsuarioId={
+            usuarioId
+          }
         />
       )}
-      {tipo === "Learning" && <PerfilLearning idDaUrl={idDaUrl} />}
+
+      {tipoRender ===
+        "Clube" && (
+        <PerfilClube
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+          hasCreator={
+            hasCreator
+          }
+          creatorUsuarioId={
+            usuarioId
+          }
+        />
+      )}
+
+      {tipoRender ===
+        "Escolinha" && (
+        <PerfilEscola
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+          hasCreator={
+            hasCreator
+          }
+          creatorUsuarioId={
+            usuarioId
+          }
+        />
+      )}
+
+      {tipoRender ===
+        "Olheiro" && (
+        <PerfilOlheiro
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+          hasCreator={
+            hasCreator
+          }
+          creatorUsuarioId={
+            usuarioId
+          }
+        />
+      )}
+
+      {tipoRender ===
+        "Federacao" && (
+        <PerfilFederacao
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+          hasCreator={
+            hasCreator
+          }
+          creatorUsuarioId={
+            usuarioId
+          }
+        />
+      )}
+
+      {tipoRender ===
+        "Marca" && (
+        <PerfilMarca
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+          hasCreator={
+            hasCreator
+          }
+          creatorUsuarioId={
+            usuarioId
+          }
+        />
+      )}
+
+      {tipoRender ===
+        "Learning" && (
+        <PerfilLearning
+          key={
+            activeProfileKey
+          }
+          idDaUrl={
+            idDaUrl
+          }
+        />
+      )}
 
       <BottomNav active="perfil" />
     </div>

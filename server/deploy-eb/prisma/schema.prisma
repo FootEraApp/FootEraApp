@@ -19,6 +19,9 @@ model Usuario {
 
   papeis                          UsuarioPapel[]
   membrosOrganizacao              MembroOrganizacao[]
+  contextoOrganizacaoId           String?
+  contextoOrganizacao             Organizacao?                  @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
+  organizacoesSeguidas            OrganizacaoSeguidor[]
   convitesCriados                 Convite[]                     @relation("ConviteCriador")
   convitesRecebidos               Convite[]                     @relation("ConviteDestinatario")
   convitesUsados                  ConviteUso[]
@@ -139,6 +142,7 @@ model Usuario {
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
+  @@index([contextoOrganizacaoId])
 }
 
 model UsuarioPapel {
@@ -355,7 +359,14 @@ model Organizacao {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  membros MembroOrganizacao[]
+  membros                  MembroOrganizacao[]
+  usuariosComContextoAtivo Usuario[]           @relation("ContextoOrganizacaoAtivo")
+
+  seguidores          OrganizacaoSeguidor[]
+  postagens           Postagem[]
+  eventos             Evento[]
+  turmas              Turma[]
+  relacoesTreinamento RelacaoTreinamento[]
 
   clube     Clube?
   escolinha Escolinha?
@@ -383,6 +394,21 @@ model MembroOrganizacao {
   @@unique([organizacaoId, usuarioId])
   @@index([usuarioId, ativo])
   @@index([organizacaoId, funcao, ativo])
+}
+
+model OrganizacaoSeguidor {
+  id            String @id @default(uuid())
+  organizacaoId String
+  usuarioId     String
+
+  criadoEm DateTime @default(now())
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, usuarioId])
+  @@index([usuarioId])
+  @@index([organizacaoId])
 }
 
 model Convite {
@@ -1256,20 +1282,22 @@ model Seguidor {
 }
 
 model RelacaoTreinamento {
-  id            String     @id @default(uuid())
+  id            String       @id @default(uuid())
   professorId   String?
   atletaId      String?
   escolinhaId   String?
   clubeId       String?
   organizacaoId String?
-  ativo         Boolean    @default(true)
-  criadoEm      DateTime   @default(now())
+  ativo         Boolean      @default(true)
+  criadoEm      DateTime     @default(now())
   encerradoEm   DateTime?
-  atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
-  clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
-  professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+  atleta        Atleta?      @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?       @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha?   @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor?   @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
 
+  @@index([organizacaoId])
   @@index([atletaId])
   @@index([professorId])
   @@index([clubeId])
@@ -1315,6 +1343,7 @@ model Postagem {
   atletaId          String?
   clubeId           String?
   escolinhaId       String?
+  organizacaoId     String?
   compartilhamentos Int?                 @default(0)
   repostOfId        String?
   reposts           Int                  @default(0)
@@ -1323,6 +1352,7 @@ model Postagem {
   comentarios       Comentario[]
   curtidas          Curtida[]
   logsErro          LogErro[]
+  organizacao       Organizacao?         @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
   mensagens         Mensagem[]           @relation("PostMensagemReferencia")
   atleta            Atleta?              @relation(fields: [atletaId], references: [id], onDelete: SetNull)
   clube             Clube?               @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -1332,6 +1362,7 @@ model Postagem {
   usuario           Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, conteudo, repostOfId])
+  @@index([organizacaoId])
   @@index([visibilidade, dataCriacao])
   @@index([repostOfId])
 }
@@ -2042,6 +2073,8 @@ model Evento {
   creatorUsuarioId String?
   federacaoId      String?
   marcaId          String?
+  organizacaoId    String?
+  organizacao      Organizacao?       @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   federacao        Federacao?         @relation(fields: [federacaoId], references: [id])
@@ -2049,6 +2082,8 @@ model Evento {
   EventoConvocacao EventoConvocacao[]
   EventoConvocado  EventoConvocado[]
   inscricoes       InscricaoEvento[]
+
+  @@index([organizacaoId])
 }
 
 model InscricaoEvento {
@@ -2299,11 +2334,16 @@ model Turma {
   EventoConvocado   EventoConvocado[]
   SessaoTreinoTurma SessaoTreinoTurma[]
   TreinoAgendado    TreinoAgendado[]
-  clube             Clube?              @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha         Escolinha?          @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  professores       TurmaProfessor[]
-  membros           TurmaUsuario[]
-  convites          Convite[]
+  organizacaoId     String?
+  organizacao       Organizacao?        @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+
+  clube       Clube?           @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha   Escolinha?       @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professores TurmaProfessor[]
+  membros     TurmaUsuario[]
+  convites    Convite[]
+
+  @@index([organizacaoId])
 }
 
 model TurmaProfessor {

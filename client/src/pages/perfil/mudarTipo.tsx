@@ -12,6 +12,7 @@ import {
   User,
 } from "lucide-react";
 import { API } from "../../config.js";
+import { applyActiveContextSession } from "../../utils/authSession.js";
 
 type TipoDestino =
   | "ATLETA"
@@ -448,14 +449,25 @@ export default function MudarTipoPerfilPage() {
         throw new Error(data?.message || "Erro ao mudar tipo de perfil.");
       }
 
-      const tipoLower =
-        String(
-          data?.usuario?.tipo ??
-            data?.tipo ??
-            tipoSelecionado
-        )
-          .trim()
-          .toLowerCase();
+      const activeContext =
+        data?.activeContext ??
+        data?.usuario
+          ?.activeContext ??
+        null;
+
+      if (!activeContext) {
+        throw new Error(
+          "O servidor não retornou o novo contexto ativo."
+        );
+      }
+
+      applyActiveContextSession(
+        activeContext,
+        {
+          notify:
+            false,
+        }
+      );
 
       const nomeSalvo =
         String(
@@ -469,18 +481,6 @@ export default function MudarTipoPerfilPage() {
             ?.nomeDeUsuario ??
             usernameFinal
         ).trim();
-
-      const tipoUsuarioId =
-        String(
-          data?.tipoUsuarioId ??
-            data?.perfilId ??
-            ""
-        ).trim();
-
-      localStorage.setItem("tipoUsuario", tipoLower);
-      sessionStorage.setItem("tipoUsuario", tipoLower);
-      localStorage.setItem("usuarioTipoRaw", tipoLower);
-      sessionStorage.setItem("usuarioTipoRaw", tipoLower);
 
       if (nomeSalvo) {
         localStorage.setItem(
@@ -503,18 +503,6 @@ export default function MudarTipoPerfilPage() {
         sessionStorage.setItem(
           "nomeDeUsuario",
           usernameSalvo
-        );
-      }
-
-      if (tipoUsuarioId) {
-        localStorage.setItem(
-          "tipoUsuarioId",
-          tipoUsuarioId
-        );
-
-        sessionStorage.setItem(
-          "tipoUsuarioId",
-          tipoUsuarioId
         );
       }
 

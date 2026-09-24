@@ -1,4 +1,6 @@
 import {
+  FuncaoMembroOrganizacao,
+  TipoOrganizacao,
   TipoUsuario,
 } from "@prisma/client";
 
@@ -10,6 +12,10 @@ import {
   hasRole,
   papelCanonico,
 } from "./roles.js";
+
+import {
+  getActiveContext,
+} from "./activeContext.js";
 
 
 export type AppPermission =
@@ -33,11 +39,12 @@ export const APP_PERMISSIONS:
 
 
 function permissoesDoPapel(
-  papelRecebido: TipoUsuario,
+  papelRecebido:
+    TipoUsuario,
 ): readonly AppPermission[] {
   const papel =
     papelCanonico(
-      papelRecebido,
+      papelRecebido
     );
 
   switch (papel) {
@@ -49,29 +56,12 @@ function permissoesDoPapel(
         "PUBLICAR_METODOLOGIA",
       ];
 
-    case TipoUsuario.Clube:
-    case TipoUsuario.Escolinha:
-      return [
-        "CRIAR_TREINO",
-        "GERENCIAR_TURMA",
-        "GERENCIAR_ORGANIZACAO",
-        "CRIAR_EVENTO",
-        "PUBLICAR_METODOLOGIA",
-      ];
-
     case TipoUsuario.Olheiro:
       return [
         "CRIAR_EVENTO",
       ];
 
     case TipoUsuario.Creator:
-      return [
-        "CRIAR_EVENTO",
-        "PUBLICAR_METODOLOGIA",
-      ];
-
-    case TipoUsuario.Federacao:
-    case TipoUsuario.Marca:
       return [
         "CRIAR_EVENTO",
         "PUBLICAR_METODOLOGIA",
@@ -88,23 +78,76 @@ function permissoesDoPapel(
 }
 
 
-export async function canPermission(
-  usuarioId: string,
-  permission: AppPermission,
-): Promise<boolean> {
-  if (!usuarioId) {
-    return false;
+function permissoesOrganizacao(
+  tipo:
+    TipoOrganizacao,
+
+  funcao:
+    FuncaoMembroOrganizacao,
+): readonly AppPermission[] {
+  if (
+    funcao ===
+      FuncaoMembroOrganizacao.MEMBRO
+  ) {
+    return [];
   }
 
+  const clubeOuEscola =
+    tipo ===
+      TipoOrganizacao.CLUBE ||
+    tipo ===
+      TipoOrganizacao.ESCOLA;
+
+  if (
+    funcao ===
+      FuncaoMembroOrganizacao.PROFESSOR
+  ) {
+    return clubeOuEscola
+      ? [
+          "CRIAR_TREINO",
+          "GERENCIAR_TURMA",
+          "CRIAR_EVENTO",
+          "PUBLICAR_METODOLOGIA",
+        ]
+      : [
+          "CRIAR_EVENTO",
+          "PUBLICAR_METODOLOGIA",
+        ];
+  }
+
+  /*
+   * Proprietário e Administrador.
+   */
+  return clubeOuEscola
+    ? [
+        "CRIAR_TREINO",
+        "GERENCIAR_TURMA",
+        "GERENCIAR_ORGANIZACAO",
+        "CRIAR_EVENTO",
+        "PUBLICAR_METODOLOGIA",
+      ]
+    : [
+        "GERENCIAR_ORGANIZACAO",
+        "CRIAR_EVENTO",
+        "PUBLICAR_METODOLOGIA",
+      ];
+}
+
+
+async function permissoesAtivas(
+  usuarioId:
+    string,
+): Promise<
+  readonly AppPermission[]
+> {
   const usuario =
     await prisma.usuario.findUnique({
       where: {
-        id: usuarioId,
+        id:
+          usuarioId,
       },
 
       select: {
-        tipo: true,
-
         administrador: {
           select: {
             id: true,
@@ -114,63 +157,112 @@ export async function canPermission(
     });
 
   if (!usuario) {
-    return false;
+    return [];
   }
 
-  const papelAtivo =
-    papelCanonico(
-      usuario.tipo,
+  /*
+   * Admin global FootEra continua sendo
+   * admin global independentemente do
+   * contexto selecionado.
+   */
+  if (
+    usuario.administrador
+  ) {
+    return APP_PERMISSIONS;
+  }
+
+  const contexto =
+    await getActiveContext(
+      usuarioId
     );
 
-  const isAdmin =
-    Boolean(
-      usuario.administrador,
-    ) ||
-    papelAtivo ===
-      TipoUsuario.Admin;
-
-  if (isAdmin) {
-    return true;
+  if (!contexto) {
+    return [];
   }
 
-  const possuiPapelAtivo =
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    if (
+      !contexto.organizationType ||
+      !contexto.organizationRole
+    ) {
+      return [];
+    }
+
+    return permissoesOrganizacao(
+      contexto.organizationType,
+      contexto.organizationRole,
+    );
+  }
+
+  const papel =
+    contexto.role ??
+    contexto.tipoUsuario;
+
+  const possuiPapel =
     await hasRole(
       usuarioId,
-      papelAtivo,
+      papel,
     );
 
-  if (!possuiPapelAtivo) {
-    return false;
+  if (!possuiPapel) {
+    return [];
   }
 
   return permissoesDoPapel(
-    papelAtivo,
-  ).includes(
-    permission,
+    papel
   );
 }
 
-export async function getPermissionSnapshot(
+
+export async function canPermission(
   usuarioId: string,
+  permission:
+    AppPermission,
+): Promise<boolean> {
+  if (!usuarioId) {
+    return false;
+  }
+
+  const permissoes =
+    await permissoesAtivas(
+      usuarioId
+    );
+
+  return permissoes.includes(
+    permission
+  );
+}
+
+
+export async function getPermissionSnapshot(
+  usuarioId:
+    string,
 ): Promise<
-  Record<AppPermission, boolean>
+  Record<
+    AppPermission,
+    boolean
+  >
 > {
-  const entries =
-    await Promise.all(
-      APP_PERMISSIONS.map(
-        async (permission) =>
-          [
-            permission,
-            await canPermission(
-              usuarioId,
-              permission,
-            ),
-          ] as const,
-      ),
+  const ativas =
+    await permissoesAtivas(
+      usuarioId
+    );
+
+  const set =
+    new Set(
+      ativas
     );
 
   return Object.fromEntries(
-    entries,
+    APP_PERMISSIONS.map(
+      (permission) => [
+        permission,
+        set.has(permission),
+      ]
+    )
   ) as Record<
     AppPermission,
     boolean

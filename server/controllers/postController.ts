@@ -12,7 +12,7 @@ import {
   normalizarVisibilidadePostagem,
   podeVisualizarPostagem,
 } from "../utils/postVisibility.js";
-
+import { obterOrganizacaoAtivaDoUsuario } from "../services/organizacoes.js";
 import {
   sanitizePublicPost,
 } from "../utils/publicSanitizers.js";
@@ -66,9 +66,15 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
 
     const tipoDetectado = finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
 
+    const organizacaoId =
+      await obterOrganizacaoAtivaDoUsuario(
+        req.userId!
+      );
+
     const post = await prisma.postagem.create({
       data: {
         usuarioId: req.userId!,
+        organizacaoId,
         conteudo: descricao || "",
         tipoMidia: tipoDetectado as any,
         imagemUrl: finalImagemUrl,

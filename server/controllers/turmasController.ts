@@ -6,7 +6,9 @@ import { sendError } from "../utils/httpError.js";
 import {
   TipoUsuario,
 } from "@prisma/client";
-
+import {
+  obterOrganizacaoIdPorLegado,
+} from "../services/organizacoes.js";
 import {
   getActiveRole,
   getProfileIdForRole,
@@ -1254,14 +1256,52 @@ export async function criarTurma(
       data.descricao = String(descricao || "").trim() || null;
     }
 
-    if (ownerTipo && ownerId) {
-      if (ownerTipo === "Clube") {
-        data.clubeId = String(ownerId);
-      } else if (ownerTipo === "Escolinha") {
-        data.escolinhaId = String(ownerId);
+    if (
+      ownerTipo &&
+      ownerId
+    ) {
+      if (
+        ownerTipo ===
+        "Clube"
+      ) {
+        data.clubeId =
+          String(
+            ownerId
+          );
+
+        data.organizacaoId =
+          await obterOrganizacaoIdPorLegado({
+            tipo:
+              "CLUBE",
+
+            ownerId:
+              String(
+                ownerId
+              ),
+          });
+      } else if (
+        ownerTipo ===
+        "Escolinha"
+      ) {
+        data.escolinhaId =
+          String(
+            ownerId
+          );
+
+        data.organizacaoId =
+          await obterOrganizacaoIdPorLegado({
+            tipo:
+              "ESCOLINHA",
+
+            ownerId:
+              String(
+                ownerId
+              ),
+          });
       } else {
         return res.status(400).json({
-          message: "ownerTipo deve ser Clube ou Escolinha",
+          message:
+            "ownerTipo deve ser Clube ou Escolinha",
         });
       }
     }

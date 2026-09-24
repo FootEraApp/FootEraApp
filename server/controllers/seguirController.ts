@@ -2,6 +2,9 @@ import { Request, Response, RequestHandler } from "express";
 import {  NotificacaoTipo } from "@prisma/client";
 import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js"; 
 import { prisma } from "../prisma.js";
+import {
+  obterOrganizacaoAtivaDoUsuario,
+} from "../services/organizacoes.js";
 
 async function criarNotifEAtualizarBadge(params: {
   usuarioId: string;
@@ -52,6 +55,33 @@ export const deixarDeSeguir: RequestHandler = async (req: any, res) => {
     where: { seguidorUsuarioId, seguidoUsuarioId },
   });
 
+  if (
+    del.count === 0
+  ) {
+    return res.status(404).json({
+      message:
+        "Relação de follow não encontrada.",
+    });
+  }
+
+  const organizacaoId =
+    await obterOrganizacaoAtivaDoUsuario(
+      seguidoUsuarioId
+    );
+
+  if (
+    organizacaoId
+  ) {
+    await prisma.organizacaoSeguidor.deleteMany({
+      where: {
+        organizacaoId,
+
+        usuarioId:
+          seguidorUsuarioId,
+      },
+    });
+  }
+
   if (del.count === 0) {
     return res.status(404).json({ message: "Relação de follow não encontrada." });
   }
@@ -83,6 +113,32 @@ export const removerSeguidor: RequestHandler = async (req: any, res) => {
   const del = await prisma.seguidor.deleteMany({
     where: { seguidorUsuarioId, seguidoUsuarioId: meuUsuarioId },
   });
+
+  if (
+    !del.count
+  ) {
+    return res.status(404).json({
+      message:
+        "Esse usuário não te segue.",
+    });
+  }
+  const organizacaoId =
+    await obterOrganizacaoAtivaDoUsuario(
+      meuUsuarioId
+    );
+
+  if (
+    organizacaoId
+  ) {
+    await prisma.organizacaoSeguidor.deleteMany({
+      where: {
+        organizacaoId,
+
+        usuarioId:
+          seguidorUsuarioId,
+      },
+    });
+  }
 
   if (!del.count) {
     return res.status(404).json({ message: "Esse usuário não te segue." });
@@ -252,17 +308,51 @@ export const seguirUsuario: RequestHandler = async (req: any, res) => {
       },
     });
 
-    const criado = await prisma.seguidor.createMany({
-      data: [
-        {
-          seguidorUsuarioId,
-          seguidoUsuarioId,
-        },
-      ],
-      skipDuplicates: true,
-    });
+    const criado =
+      await prisma.seguidor.createMany({
+        data: [
+          {
+            seguidorUsuarioId,
+            seguidoUsuarioId,
+          },
+        ],
 
-    if (criado.count === 0) {
+        skipDuplicates:
+          true,
+      });
+
+    const organizacaoId =
+      await obterOrganizacaoAtivaDoUsuario(
+        seguidoUsuarioId
+      );
+
+    if (
+      organizacaoId
+    ) {
+      await prisma.organizacaoSeguidor.upsert({
+        where: {
+          organizacaoId_usuarioId: {
+            organizacaoId,
+
+            usuarioId:
+              seguidorUsuarioId,
+          },
+        },
+
+        update: {},
+
+        create: {
+          organizacaoId,
+
+          usuarioId:
+            seguidorUsuarioId,
+        },
+      });
+    }
+
+    if (
+      criado.count === 0
+    ) {
       return res.status(200).json({
         ok: true,
         seguindo: true,

@@ -2,10 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getUserFlags } from "../services/flags.js";
-import {
-  getProfileIdForRole,
-} from "../services/roles.js";
-
+import { resolveUserContext } from "../services/planResolver.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -51,13 +48,33 @@ export async function me(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
 
+    const contexto =
+      await resolveUserContext(
+        req.userId
+      );
+
     const flags = await getUserFlags(req.userId);
 
     return res.json({
       ...usuario,
-      plano: flags.plano,
-      adsEnabled: flags.adsEnabled,
-      capabilities: flags.capabilities,
+
+      tipo:
+        contexto.tipo,
+
+      tipoUsuarioId:
+        contexto.tipoUsuarioId,
+
+      activeContext:
+        contexto.activeContext,
+
+      plano:
+        flags.plano,
+
+      adsEnabled:
+        flags.adsEnabled,
+
+      capabilities:
+        flags.capabilities,
     });
   } catch (err) {
     console.error("me error:", err);
@@ -163,10 +180,9 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    const tipoUsuarioId =
-      await getProfileIdForRole(
-        usuario.id,
-        usuario.tipo,
+    const contexto =
+      await resolveUserContext(
+        usuario.id
       );
 
     await prisma.loginEvent.create({
@@ -190,18 +206,48 @@ export async function login(req: Request, res: Response) {
 
     return res.json({
       ok: true,
-      message: "Login bem-sucedido",
+
+      message:
+        "Login bem-sucedido",
+
       token,
-      tipo: usuario.tipo,
-      nomeDeUsuario: usuario.nomeDeUsuario,
-      id: usuario.id,
-      tipoUsuarioId,
+
+      tipo:
+        contexto.tipo,
+
+      tipoUsuarioId:
+        contexto.tipoUsuarioId,
+
+      activeContext:
+        contexto.activeContext,
+
+      isAdmin:
+        contexto.isAdmin === true,
+
+      nomeDeUsuario:
+        usuario.nomeDeUsuario,
+
+      id:
+        usuario.id,
+
       usuario: {
-        id: usuario.id,
-        nomeDeUsuario: usuario.nomeDeUsuario,
-        tipo: usuario.tipo,
-        email: usuario.email,
-        verified: usuario.verified,
+        id:
+          usuario.id,
+
+        nomeDeUsuario:
+          usuario.nomeDeUsuario,
+
+        tipo:
+          contexto.tipo,
+
+        activeContext:
+          contexto.activeContext,
+
+        email:
+          usuario.email,
+
+        verified:
+          usuario.verified,
       },
     });
   } catch (error) {

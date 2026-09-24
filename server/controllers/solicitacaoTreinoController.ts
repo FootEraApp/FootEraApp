@@ -2,6 +2,7 @@ import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
 import { NotificacaoTipo } from "@prisma/client";
 import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+import { obterOrganizacaoIdPorLegado } from "../services/organizacoes.js";
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -659,6 +660,19 @@ export async function criarSolicitacao(
           },
         });
 
+      const organizacaoRelacaoId =
+        ids.clubeId
+          ? await obterOrganizacaoIdPorLegado({
+              tipo: "CLUBE",
+              ownerId: ids.clubeId,
+            })
+          : ids.escolinhaId
+            ? await obterOrganizacaoIdPorLegado({
+                tipo: "ESCOLINHA",
+                ownerId: ids.escolinhaId,
+              })
+            : null;
+
       jaVinculados =
         Boolean(
           existente?.ativo &&
@@ -680,6 +694,7 @@ export async function criarSolicitacao(
                   ativo: true,
                   encerradoEm:
                     null,
+                  organizacaoId: organizacaoRelacaoId,
                 },
               });
             } else {
@@ -699,7 +714,7 @@ export async function criarSolicitacao(
                   escolinhaId:
                     ids.escolinhaId ??
                     null,
-
+                  organizacaoId: organizacaoRelacaoId,
                   ativo: true,
                   encerradoEm:
                     null,
@@ -1200,11 +1215,25 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       });
     }
 
+    const organizacaoRelacaoId =
+      ids.clubeId
+        ? await obterOrganizacaoIdPorLegado({
+            tipo: "CLUBE",
+            ownerId: ids.clubeId,
+          })
+        : ids.escolinhaId
+          ? await obterOrganizacaoIdPorLegado({
+              tipo: "ESCOLINHA",
+              ownerId: ids.escolinhaId,
+            })
+          : null;
+
     const relacaoShape = {
       atletaId: ids.atletaId,
       professorId: ids.professorId ?? null,
       clubeId: ids.clubeId ?? null,
       escolinhaId: ids.escolinhaId ?? null,
+      organizacaoId: organizacaoRelacaoId,
       ativo: true,
       encerradoEm: null,
     };
@@ -1225,6 +1254,7 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
           data: {
             ativo: true,
             encerradoEm: null,
+            organizacaoId: organizacaoRelacaoId,
           },
         });
       } else {

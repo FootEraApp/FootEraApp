@@ -5,6 +5,8 @@ import {
   PosicaoCampo,
   MetodologiaAssinaturaStatus,
   PagamentoStatus,
+  StatusUsuarioPapel,
+  TipoUsuario,
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
@@ -23,6 +25,12 @@ import {
   categoriaAtletaPorIdade,
   sincronizarCategoriaAtleta,
 } from "../utils/categoriaAtleta.js";
+import {
+  garantirOrganizacaoLegada,
+} from "../services/organizacoes.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
 type AtividadeUI = {
   id: string;
@@ -4485,7 +4493,53 @@ export const upgradeLearningProfile = async (
       });
     }
 
-    const tipoUsuarioId = await prisma.$transaction(async (tx) => {
+    const resultadoUpgrade =
+      await prisma.$transaction(
+        async (tx) => {
+
+      const agora =
+        new Date();
+
+      const ativarPapelPessoal =
+        async (
+          papel: TipoUsuario
+        ) => {
+          await tx.usuarioPapel.upsert({
+            where: {
+              usuarioId_papel: {
+                usuarioId,
+                papel,
+              },
+            },
+
+            update: {
+              status:
+                StatusUsuarioPapel.ATIVO,
+
+              ativadoEm:
+                agora,
+
+              desativadoEm:
+                null,
+
+              perfilCompletoEm:
+                agora,
+            },
+
+            create: {
+              usuarioId,
+              papel,
+              status:
+                StatusUsuarioPapel.ATIVO,
+
+              ativadoEm:
+                agora,
+
+              perfilCompletoEm:
+                agora,
+            },
+          });
+        };
       await tx.usuario.update({
         where: {
           id: usuarioId,
@@ -4493,10 +4547,9 @@ export const upgradeLearningProfile = async (
 
         data: {
           tipo: tipoUsuarioFinal as any,
-
           nome: nomeFinal,
-
           nomeDeUsuario: nomeDeUsuarioFinal,
+          contextoOrganizacaoId: null
         },
       });
 
@@ -4573,7 +4626,17 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return atleta.id;
+          await ativarPapelPessoal(
+            TipoUsuario.Atleta
+          );
+
+          return {
+            tipoUsuarioId:
+              atleta.id,
+
+            organizacaoId:
+              null,
+          };
         }
 
         case "PROFESSOR": {
@@ -4599,7 +4662,17 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return professor.id;
+          await ativarPapelPessoal(
+            TipoUsuario.Professor
+          );
+
+          return {
+            tipoUsuarioId:
+              professor.id,
+
+            organizacaoId:
+              null,
+          };
         }
 
         case "OLHEIRO": {
@@ -4629,7 +4702,17 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return olheiro.id;
+          await ativarPapelPessoal(
+            TipoUsuario.Olheiro
+          );
+
+          return {
+            tipoUsuarioId:
+              olheiro.id,
+
+            organizacaoId:
+              null,
+          };
         }
 
         case "CLUBE": {
@@ -4649,7 +4732,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return clube.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "CLUBE",
+
+              ownerId:
+                clube.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              clube.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         case "ESCOLINHA": {
@@ -4669,7 +4784,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return escolinha.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "ESCOLINHA",
+
+              ownerId:
+                escolinha.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              escolinha.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         case "FEDERACAO": {
@@ -4689,7 +4836,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return federacao.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "FEDERACAO",
+
+              ownerId:
+                federacao.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              federacao.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         case "MARCA": {
@@ -4709,7 +4888,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return marca.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "MARCA",
+
+              ownerId:
+                marca.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              marca.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         default: {
@@ -4718,16 +4929,41 @@ export const upgradeLearningProfile = async (
       }
     });
 
+    const activeContext =
+      await getActiveContext(
+        usuarioId
+      );
+
+    if (!activeContext) {
+      throw new Error(
+        "Não foi possível resolver o contexto ativo após a atualização do perfil."
+      );
+    }
+
     return res.json({
       ok: true,
-      message: "Tipo de perfil atualizado com sucesso.",
-      tipo: tipoValidado,
-      tipoUsuarioId,
+      message:
+        "Tipo de perfil atualizado com sucesso.",
+      tipo:
+        activeContext
+          .tipoUsuario,
+      tipoUsuarioId:
+        activeContext
+          .tipoUsuarioId ??
+        resultadoUpgrade
+          .tipoUsuarioId,
+      activeContext,
       usuario: {
-        id: usuarioId,
-        nome: nomeFinal,
-        nomeDeUsuario: nomeDeUsuarioFinal,
-        tipo: tipoUsuarioFinal,
+        id:
+          usuarioId,
+        nome:
+          nomeFinal,
+        nomeDeUsuario:
+          nomeDeUsuarioFinal,
+        tipo:
+          activeContext
+            .tipoUsuario,
+        activeContext,
       },
     });
   } catch (error: any) {
