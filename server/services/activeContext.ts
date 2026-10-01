@@ -95,6 +95,7 @@ function ehPapelPessoalSelecionavel(
     canonico === TipoUsuario.Professor ||
     canonico === TipoUsuario.Olheiro ||
     canonico === TipoUsuario.Creator ||
+    canonico === TipoUsuario.Learning ||
     canonico === TipoUsuario.Admin
   );
 }
@@ -516,13 +517,16 @@ export async function listarActiveContexts(
       usuario.tipo
     );
 
+  // usuario.tipo só serve como fallback para
+  // contas antigas que ainda não possuem UsuarioPapel.
   if (
+    papeis.length === 0 &&
     ehPapelPessoalSelecionavel(
-        papelAtual
+      papelAtual
     )
   ) {
     papeisPessoais.add(
-        papelAtual
+      papelAtual
     );
   }
 

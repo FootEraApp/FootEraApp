@@ -3,15 +3,15 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import ProfilePostsSection from "./ProfilePostsSection.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 import { API } from "../../config.js";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import { Link } from "wouter";
 import {
   CalendarClock,
   ChevronRight,
   Plus,
 } from "lucide-react";
-import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 type Props = {
   idDaUrl?: string;
@@ -194,22 +194,22 @@ export default function PerfilMarca({
     isOwnPelaRota
       ? "me"
     : idDaUrl;
-
-  const usuarioCreatorDoPerfil =
+  
+  const entidadeEventoId =
     String(
-      creatorUsuarioId ||
-        data?.usuario?.id ||
-        data?.marca?.usuarioId ||
-        data?.federacao
-          ?.usuarioId ||
-        (
-          isOwnPelaRota
-            ? usuarioLogadoId
-            : ""
-        ) ||
-        ""
+      tipoPerfil === "federacao"
+        ? (
+            data?.federacao?.id ||
+            data?.id ||
+            ""
+          )
+        : (
+            data?.marca?.id ||
+            data?.id ||
+            ""
+          )
     ).trim();
-      
+
   useEffect(() => {
     if (!token || !id) return;
 
@@ -308,37 +308,63 @@ export default function PerfilMarca({
   useEffect(() => {
     if (
       aba !== "eventos" ||
-      !usuarioCreatorDoPerfil
+      !entidadeEventoId
     ) {
       return;
     }
 
-    let cancelado = false;
+    let cancelado =
+      false;
 
     async function carregarEventos() {
       try {
-        setEventosLoading(true);
-        setEventosErro("");
+        setEventosLoading(
+          true
+        );
+
+        setEventosErro(
+          ""
+        );
 
         const [
           eventosResultado,
-          livesResultado,
+          aulasAoVivoResultado,
         ] =
           await Promise.allSettled([
             axios.get(
               `${API.BASE_URL}/api/eventos`,
               {
-                params: {
-                  creatorUsuarioId:
-                    usuarioCreatorDoPerfil,
-                },
+                params:
+                  tipoPerfil ===
+                    "federacao"
+                    ? {
+                        federacaoId:
+                          entidadeEventoId,
+                      }
+                    : {
+                        marcaId:
+                          entidadeEventoId,
+                      },
               }
             ),
 
             axios.get(
-              `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-                usuarioCreatorDoPerfil
-              )}`
+              `${API.BASE_URL}/api/aulas-ao-vivo/publicas/contexto`,
+              {
+                params: {
+                  contextoKind:
+                    "ORGANIZATION",
+
+                  contextoTipo:
+                    tipoPerfil ===
+                    "federacao"
+                      ? "FEDERACAO"
+                      : "MARCA",
+
+                  contextoLegacyOrganizationId:
+                    entidadeEventoId,
+                },
+              }
             ),
           ]);
 
@@ -346,93 +372,64 @@ export default function PerfilMarca({
           return;
         }
 
-        const eventosNormais =
+        const eventosPayload =
           eventosResultado.status ===
-            "fulfilled" &&
-          Array.isArray(
-            eventosResultado.value.data
-          )
-            ? eventosResultado.value.data
+          "fulfilled"
+            ? eventosResultado
+                .value.data
             : [];
+
+        const eventosNormais =
+          Array.isArray(
+            eventosPayload
+          )
+            ? eventosPayload
+            : Array.isArray(
+                  eventosPayload?.items
+                )
+              ? eventosPayload.items
+              : Array.isArray(
+                    eventosPayload?.eventos
+                  )
+                ? eventosPayload.eventos
+                : Array.isArray(
+                      eventosPayload?.data
+                    )
+                  ? eventosPayload.data
+                  : [];
+
+        const aulasPayload =
+          aulasAoVivoResultado.status ===
+          "fulfilled"
+            ? aulasAoVivoResultado
+                .value.data
+            : {
+                items: [],
+              };
 
         const aulasAoVivo =
-          livesResultado.status ===
-            "fulfilled" &&
           Array.isArray(
-            livesResultado.value
-              .data?.eventosAoVivo
+            aulasPayload
           )
-            ? livesResultado.value
-                .data.eventosAoVivo
-            : [];
-
-        const aulasAoVivoComDetalhes =
-          await Promise.all(
-            aulasAoVivo.map(
-              async (aula: any) => {
-                const aulaId =
-                  String(
-                    aula?.id ?? ""
-                  ).trim();
-
-                if (!aulaId) {
-                  return aula;
-                }
-
-                try {
-                  const detalheResposta =
-                    await axios.get(
-                      `${API.BASE_URL}/api/learning/eventos/aulas/${encodeURIComponent(
-                        aulaId
-                      )}`,
-                      {
-                        headers: token
-                          ? {
-                              Authorization:
-                                `Bearer ${token}`,
-                            }
-                          : undefined,
-                      }
-                    );
-
-                  const detalhe =
-                    detalheResposta
-                      .data?.item ??
-                    detalheResposta
-                      .data?.evento ??
-                    null;
-
-                  if (!detalhe) {
-                    return aula;
-                  }
-
-                  return {
-                    ...aula,
-                    ...detalhe,
-
-                    acesso:
-                      detalhe.acesso ??
-                      aula.acesso ??
-                      null,
-                  };
-                } catch (error) {
-                  console.warn(
-                    `[PerfilMarca] Não foi possível carregar os detalhes da aula ${aulaId}:`,
-                    error
-                  );
-
-                  return aula;
-                }
-              }
-            )
-          );
+            ? aulasPayload
+            : Array.isArray(
+                  aulasPayload?.items
+                )
+              ? aulasPayload.items
+              : Array.isArray(
+                    aulasPayload?.data
+                  )
+                ? aulasPayload.data
+                : [];
 
         const normaisNormalizados:
           EventoPerfilItem[] =
           eventosNormais.map(
             (evento: any) => ({
               id:
-                String(evento.id),
+                String(
+                  evento.id
+                ),
 
               origem:
                 "EVENTO",
@@ -440,6 +437,7 @@ export default function PerfilMarca({
               titulo:
                 String(
                   evento.titulo ||
+                    evento.nome ||
                     "Evento"
                 ),
 
@@ -450,6 +448,8 @@ export default function PerfilMarca({
               data:
                 String(
                   evento.dataEvento ||
+                    evento.data ||
+                    evento.inicio ||
                     ""
                 ),
 
@@ -479,148 +479,140 @@ export default function PerfilMarca({
             })
           );
 
-        const livesNormalizadas:
+        const aulasNormalizadas:
           EventoPerfilItem[] =
-          aulasAoVivoComDetalhes.map(
-            (aula: any) => {
-              const precoNumerico =
-                Number(
-                  aula?.precoAcesso ??
-                    aula?.acesso
-                      ?.preco ??
-                    0
-                );
+          aulasAoVivo.map(
+            (aula: any) => ({
+              id:
+                String(
+                  aula.id
+                ),
 
-              const possuiPreco =
-                Number.isFinite(
-                  precoNumerico
-                ) &&
-                precoNumerico > 0;
+              origem:
+                "AULA_AO_VIVO",
 
-              const eventoPago =
-                aula?.acessoPago ===
-                  true ||
-                possuiPreco;
+              acessoPago:
+                aula.acessoPago ===
+                true,
 
-              return {
-                id:
-                  String(aula.id),
+              precoAcesso:
+                aula.precoAcesso ??
+                null,
 
-                origem:
-                  "AULA_AO_VIVO",
+              titulo:
+                String(
+                  aula.titulo ??
+                    "Aula ao vivo"
+                ),
 
-                titulo:
-                  String(
-                    aula.titulo ||
-                      "Aula ao vivo"
-                  ),
+              descricao:
+                aula.descricao ??
+                null,
 
-                descricao:
-                  aula.descricao ??
-                  null,
+              data:
+                String(
+                  aula.dataInicio ??
+                    ""
+                ),
 
-                data:
-                  String(
-                    aula.dataInicio ||
-                      ""
-                  ),
+              tipoLabel:
+                "Aula ao vivo",
 
-                tipoLabel:
-                  aula.metodologia
-                    ?.titulo
-                    ? "Aula ao vivo"
-                    : aula
-                        .metodologiaAvulsa
-                        ?.titulo
-                    ? "Aula ao vivo avulsa"
-                    : "Evento ao vivo",
+              status:
+                String(
+                  aula.status ??
+                    "AGENDADA"
+                ),
 
-                status:
-                  String(
-                    aula.status ||
-                      "AGENDADA"
-                  ),
+              cidade:
+                null,
 
-                cidade: null,
-                estado: null,
+              estado:
+                null,
 
-                totalParticipantes:
-                  typeof aula
-                    .totalParticipantes ===
-                  "number"
-                    ? aula
-                        .totalParticipantes
-                    : 0,
-
-                acessoPago:
-                  eventoPago,
-
-                precoAcesso:
-                  possuiPreco
-                    ? precoNumerico
-                    : null,
-              };
-            }
+              totalParticipantes:
+                typeof aula.totalParticipantes ===
+                "number"
+                  ? aula.totalParticipantes
+                  : null,
+            })
           );
 
         const agora =
           Date.now();
 
-        const proximos = [
-          ...normaisNormalizados,
-          ...livesNormalizadas,
-        ]
-          .filter((evento) => {
-            const status =
-              evento.status
-                .toUpperCase();
+        const proximos =
+          [
+            ...normaisNormalizados,
+            ...aulasNormalizadas,
+          ]
+            .filter((evento) => {
+              const status =
+                String(
+                  evento.status ||
+                    ""
+                ).toUpperCase();
 
-            if (
-              status ===
-              "AO_VIVO"
-            ) {
-              return true;
-            }
+              if (
+                status ===
+                "AO_VIVO"
+              ) {
+                return true;
+              }
 
-            if (
-              [
-                "FINALIZADA",
-                "FINALIZADO",
-                "ENCERRADO",
-                "CANCELADA",
-                "CANCELADO",
-              ].includes(status)
-            ) {
-              return false;
-            }
+              if (
+                [
+                  "FINALIZADA",
+                  "FINALIZADO",
+                  "ENCERRADO",
+                  "ENCERRADA",
+                  "CANCELADA",
+                  "CANCELADO",
+                ].includes(status)
+              ) {
+                return false;
+              }
 
-            const timestamp =
-              new Date(
-                evento.data
-              ).getTime();
+              const timestamp =
+                new Date(
+                  evento.data
+                ).getTime();
 
-            return (
-              Number.isFinite(
-                timestamp
-              ) &&
-              timestamp >= agora
+              return (
+                Number.isFinite(
+                  timestamp
+                ) &&
+                timestamp >= agora
+              );
+            })
+            .sort(
+              (
+                eventoA,
+                eventoB
+              ) =>
+                new Date(
+                  eventoA.data
+                ).getTime() -
+                new Date(
+                  eventoB.data
+                ).getTime()
             );
-          })
-          .sort((eventoA, eventoB) => {
-            const dataA =
-              new Date(
-                eventoA.data
-              ).getTime();
 
-            const dataB =
-              new Date(
-                eventoB.data
-              ).getTime();
+        const unicos =
+          Array.from(
+            new Map(
+              proximos.map(
+                (evento) => [
+                  `${evento.origem}:${evento.id}`,
+                  evento,
+                ]
+              )
+            ).values()
+          );
 
-            return dataA - dataB;
-          });
-
-        setEventos(proximos);
+        setEventos(
+          unicos
+        );
       } catch (error) {
         console.error(
           "Erro ao carregar eventos do perfil:",
@@ -629,13 +621,16 @@ export default function PerfilMarca({
 
         if (!cancelado) {
           setEventos([]);
+
           setEventosErro(
-            "Não foi possível carregar os eventos."
+            "Não foi possível carregar os eventos e aulas ao vivo."
           );
         }
       } finally {
         if (!cancelado) {
-          setEventosLoading(false);
+          setEventosLoading(
+            false
+          );
         }
       }
     }
@@ -643,18 +638,19 @@ export default function PerfilMarca({
     void carregarEventos();
 
     return () => {
-      cancelado = true;
+      cancelado =
+        true;
     };
   }, [
     aba,
-    usuarioCreatorDoPerfil,
-    token,
+    entidadeEventoId,
+    tipoPerfil,
   ]);
 
   useEffect(() => {
     setMostrarTodosEventos(false);
   }, [
-    usuarioCreatorDoPerfil,
+    entidadeEventoId,
   ]);
 
   if (!data) {
@@ -852,41 +848,6 @@ export default function PerfilMarca({
                         : "Confira os próximos eventos, webinars e campanhas patrocinadas da marca."}
                     </p>
                   </div>
-
-                  {isOwn && (
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href="/creator/eventos"
-                        className="
-                          inline-flex items-center
-                          justify-center rounded-lg
-                          border border-green-200
-                          bg-white px-3 py-2
-                          text-xs font-semibold
-                          text-green-900
-                          hover:bg-green-50
-                        "
-                      >
-                        Ver todos os eventos
-                      </Link>
-
-                      <Link
-                        href="/creator/eventos/novo"
-                        className="
-                          inline-flex items-center
-                          justify-center gap-1
-                          rounded-lg bg-green-800
-                          px-3 py-2
-                          text-xs font-semibold
-                          text-white
-                          hover:bg-green-900
-                        "
-                      >
-                        <Plus className="h-4 w-4" />
-                        Criar evento
-                      </Link>
-                    </div>
-                  )}
                 </div>
 
                 <div className="mt-5">
@@ -922,7 +883,9 @@ export default function PerfilMarca({
                           const href =
                             evento.origem ===
                             "AULA_AO_VIVO"
-                              ? `/learning/evento/${evento.id}`
+                              ? `/learning/live?aulaId=${encodeURIComponent(
+                                  evento.id
+                                )}`
                               : `/eventos/${evento.id}`;
 
                           return (
@@ -1043,59 +1006,51 @@ export default function PerfilMarca({
                         text-green-900/70
                       "
                     >
-                      Nenhum evento futuro cadastrado.
+                      Nenhum evento ou aula ao vivo futura cadastrada.
                     </div>
                   )}
                 </div>
 
                 {eventos.length > 5 && (
                   <div className="mt-4 flex justify-center">
-                    {isOwn ? (
-                      <Link
-                        href="/creator/eventos"
-                        className="
-                          rounded-lg
-                          border border-green-200
-                          px-4 py-2
-                          text-sm font-semibold
-                          text-green-900
-                          hover:bg-green-50
-                        "
-                      >
-                        Ver todos ({eventos.length})
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setMostrarTodosEventos(
-                            (anterior) =>
-                              !anterior
-                          )
-                        }
-                        className="
-                          rounded-lg
-                          border border-green-200
-                          px-4 py-2
-                          text-sm font-semibold
-                          text-green-900
-                          hover:bg-green-50
-                        "
-                      >
-                        {mostrarTodosEventos
-                          ? "Mostrar menos"
-                          : `Ver todos (${eventos.length})`}
-                      </button>
-                    )}
+                   <button
+                    type="button"
+                    onClick={() =>
+                      setMostrarTodosEventos(
+                        (anterior) =>
+                          !anterior
+                      )
+                    }
+                    className="
+                      rounded-lg
+                      border border-green-200
+                      px-4 py-2
+                      text-sm font-semibold
+                      text-green-900
+                      hover:bg-green-50
+                    "
+                  >
+                    {mostrarTodosEventos
+                      ? "Mostrar menos"
+                      : `Ver todos (${eventos.length})`}
+                  </button>
                   </div>
                 )}
               </section>
 
-              <ProfileReplaysSection
-                  creatorUsuarioId={
-                    usuarioCreatorDoPerfil
-                  }
-              />
+                {entidadeEventoId ? (
+                  <ProfileReplaysSection
+                    contextoKind="ORGANIZATION"
+                    contextoTipo={
+                      tipoPerfil === "federacao"
+                        ? "FEDERACAO"
+                        : "MARCA"
+                    }
+                    contextoLegacyOrganizationId={
+                      entidadeEventoId
+                    }
+                  />
+                ) : null}
             </div>
           )}
 

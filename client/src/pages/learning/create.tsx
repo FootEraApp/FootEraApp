@@ -648,7 +648,7 @@ export default function LearningCreatePage() {
             localId: uid("convidado"),
             usuarioId: String(usuario.id),
             nome: String(usuario.nome || usuario.nomeDeUsuario || ""),
-            descricao: String(usuario.tipo || "Convidado FootEra"),
+            descricao: "Convidado FootEra",
           },
         ],
       },
@@ -968,7 +968,7 @@ export default function LearningCreatePage() {
                                   localId: String(c.id || uid("convidado")),
                                   usuarioId: c.usuarioId ? String(c.usuarioId) : "",
                                   nome: String(c.nome || c.usuario?.nome || ""),
-                                  descricao: String(c.descricao || (c.usuario ? "Convidado FootEra" : "")),
+                                  descricao: "Convidado FootEra",
                                 }))
                               : it.aulaAoVivo?.convidadoNome
                                 ? [

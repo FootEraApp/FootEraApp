@@ -9,7 +9,7 @@ import {
   Trophy,
   Pencil,
 } from "lucide-react";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
@@ -301,8 +301,15 @@ export default function PerfilProfessor({
 
   const [orgsDisponiveis, setOrgsDisponiveis] = useState<Organizacao[]>([]);
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
-  const [escolinhaSelecionada, setEscolinhaSelecionada] = useState<string>("");
-  const [clubeSelecionado, setClubeSelecionado] = useState<string>("");
+  const [
+    escolinhasSelecionadas,
+    setEscolinhasSelecionadas,
+  ] = useState<string[]>([]);
+
+  const [
+    clubesSelecionados,
+    setClubesSelecionados,
+  ] = useState<string[]>([]);
 
   const [buscaEscolinha, setBuscaEscolinha] = useState("");
   const [buscaClube, setBuscaClube] = useState("");
@@ -318,22 +325,57 @@ export default function PerfilProfessor({
   );
 
   const professorId = data?.professor?.id;
-  const escolinhasDisponiveis = orgsDisponiveis.filter(
-    (o) =>
-      o.tipo === "Escolinha" &&
-      o.nome.toLowerCase().includes(buscaEscolinha.toLowerCase()),
-  );
+  const todasOrganizacoes =
+    useMemo(() => {
+      const mapa =
+        new Map<
+          string,
+          Organizacao
+        >();
 
-  const clubesDisponiveis = orgsDisponiveis.filter(
-    (o) =>
-      o.tipo === "Clube" &&
-      o.nome.toLowerCase().includes(buscaClube.toLowerCase()),
-  );
+      for (
+        const org of [
+          ...orgsVinculadas,
+          ...orgsDisponiveis,
+        ]
+      ) {
+        mapa.set(
+          `${org.tipo}:${org.id}`,
+          org
+        );
+      }
 
-  const escolinhaAtual = orgsDisponiveis.find(
-    (o) => o.id === escolinhaSelecionada,
-  );
-  const clubeAtual = orgsDisponiveis.find((o) => o.id === clubeSelecionado);
+      return Array.from(
+        mapa.values()
+      );
+    }, [
+      orgsVinculadas,
+      orgsDisponiveis,
+    ]);
+
+  const escolinhasDisponiveis =
+    todasOrganizacoes.filter(
+      (o) =>
+        o.tipo ===
+          "Escolinha" &&
+        o.nome
+          .toLowerCase()
+          .includes(
+            buscaEscolinha.toLowerCase()
+          )
+    );
+
+  const clubesDisponiveis =
+    todasOrganizacoes.filter(
+      (o) =>
+        o.tipo ===
+          "Clube" &&
+        o.nome
+          .toLowerCase()
+          .includes(
+            buscaClube.toLowerCase()
+          )
+    );
 
   const abas: Array<{
     id: Aba;
@@ -383,25 +425,14 @@ export default function PerfilProfessor({
     "";
 
   const isOwn = !idDaUrl || idDaUrl === usuarioIdStorage;
-  // Para o próprio perfil, o backend resolve "me" usando o papel atualmente
-  // salvo em Usuario.tipo. Não reutilize tipoUsuarioId, pois ele pode ser o ID
-  // do papel que estava em uso antes da troca.
   const targetId = isOwn ? "me" : (idDaUrl as string);
 
-  const usuarioCreatorDoPerfil = String(
-    creatorUsuarioId ||
-      data?.usuario?.id ||
-      data?.professor?.usuarioId ||
-      (isOwn ? usuarioIdStorage : "") ||
-      "",
-  ).trim();
-
-  const mostrarCreator = Boolean(hasCreator && usuarioCreatorDoPerfil);
-
   useEffect(() => {
-    if (aba !== "eventos") return;
+    if (aba !== "eventos") {
+      return;
+    }
 
-    if (!usuarioCreatorDoPerfil) {
+    if (!professorId) {
       setEventos([]);
       setEventosErro("");
       setEventosLoading(false);
@@ -415,134 +446,118 @@ export default function PerfilProfessor({
       setEventosErro("");
 
       try {
-        const requestHeaders = rawToken
-          ? { Authorization: `Bearer ${rawToken}` }
-          : undefined;
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/aulas-ao-vivo/publicas/contexto`,
+            {
+              params: {
+                contextoKind:
+                  "PERSONAL",
 
-        const [eventosResultado, livesResultado] = await Promise.allSettled([
-          axios.get(`${API.BASE_URL}/api/eventos`, {
-            params: {
-              creatorUsuarioId: usuarioCreatorDoPerfil,
-            },
-            headers: requestHeaders,
-          }),
-          axios.get(
-            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-              usuarioCreatorDoPerfil,
-            )}`,
-            { headers: requestHeaders },
-          ),
-        ]);
+                contextoTipo:
+                  "Professor",
 
-        if (cancelado) return;
-
-        const eventosPayload =
-          eventosResultado.status === "fulfilled"
-            ? eventosResultado.value.data
-            : [];
-
-        const eventosArray = Array.isArray(eventosPayload)
-          ? eventosPayload
-          : Array.isArray(eventosPayload?.items)
-            ? eventosPayload.items
-            : Array.isArray(eventosPayload?.eventos)
-              ? eventosPayload.eventos
-              : Array.isArray(eventosPayload?.data)
-                ? eventosPayload.data
-                : [];
-
-        const creatorPayload =
-          livesResultado.status === "fulfilled"
-            ? livesResultado.value.data
-            : null;
-
-        const eventosNormais: EventoPerfilItem[] = eventosArray.map(
-          (evento: any) => ({
-            id: String(evento.id),
-            origem: "EVENTO",
-            titulo: String(evento.titulo ?? evento.nome ?? "Evento"),
-            descricao: evento.descricao ?? null,
-            data: String(
-              evento.dataEvento ?? evento.data ?? evento.inicio ?? "",
-            ),
-            tipoLabel: String(evento.tipoLabel ?? evento.tipo ?? "Evento"),
-            status: String(evento.status ?? "ABERTO"),
-            cidade: evento.cidade ?? null,
-            estado: evento.estado ?? null,
-            totalParticipantes: null,
-          }),
-        );
-
-        const aulasAoVivo: EventoPerfilItem[] = Array.isArray(
-          creatorPayload?.eventosAoVivo,
-        )
-          ? creatorPayload.eventosAoVivo.map((aula: any) => ({
-              id: String(aula.id),
-              origem: "AULA_AO_VIVO",
-              titulo: String(aula.titulo ?? "Aula ao vivo"),
-              descricao: aula.descricao ?? null,
-              data: String(aula.dataInicio ?? aula.inicio ?? ""),
-              tipoLabel: "Aula ao vivo",
-              status: String(aula.status ?? "AGENDADA"),
-              cidade: null,
-              estado: null,
-              totalParticipantes:
-                typeof aula.totalParticipantes === "number"
-                  ? aula.totalParticipantes
-                  : null,
-            }))
-          : [];
-
-        const agora = Date.now();
-
-        const proximos = [...eventosNormais, ...aulasAoVivo]
-          .filter((evento) => {
-            const status = String(evento.status || "").toUpperCase();
-
-            if (status === "AO_VIVO") return true;
-
-            if (
-              [
-                "FINALIZADA",
-                "FINALIZADO",
-                "ENCERRADO",
-                "CANCELADA",
-                "CANCELADO",
-              ].includes(status)
-            ) {
-              return false;
+                contextoPerfilId:
+                  professorId,
+              },
             }
-
-            const timestamp = new Date(evento.data).getTime();
-            return Number.isFinite(timestamp) && timestamp >= agora;
-          })
-          .sort(
-            (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime(),
           );
 
-        const unicos = Array.from(
-          new Map(
-            proximos.map((evento) => [`${evento.origem}:${evento.id}`, evento]),
-          ).values(),
+        if (cancelado) {
+          return;
+        }
+
+        const payload =
+          resposta.data;
+
+        const aulasArray =
+          Array.isArray(payload)
+            ? payload
+            : Array.isArray(
+                  payload?.items
+                )
+              ? payload.items
+              : Array.isArray(
+                    payload?.data
+                  )
+                ? payload.data
+                : [];
+
+        const aulasAoVivo:
+          EventoPerfilItem[] =
+          aulasArray.map(
+            (aula: any) => ({
+              id:
+                String(aula.id),
+
+              origem:
+                "AULA_AO_VIVO",
+
+              titulo:
+                String(
+                  aula.titulo ??
+                    "Aula ao vivo"
+                ),
+
+              descricao:
+                aula.descricao ??
+                null,
+
+              data:
+                String(
+                  aula.dataInicio ??
+                    ""
+                ),
+
+              tipoLabel:
+                "Aula ao vivo",
+
+              status:
+                String(
+                  aula.status ??
+                    "AGENDADA"
+                ),
+
+              cidade:
+                null,
+
+              estado:
+                null,
+
+              totalParticipantes:
+                typeof aula.totalParticipantes ===
+                "number"
+                  ? aula.totalParticipantes
+                  : null,
+            })
+          );
+
+        setEventos(
+          aulasAoVivo
+        );
+      } catch (erro: any) {
+        if (cancelado) {
+          return;
+        }
+
+        console.error(
+          "Erro ao carregar aulas ao vivo do professor:",
+          erro
         );
 
-        setEventos(unicos);
+        setEventos([]);
 
-        if (
-          eventosResultado.status === "rejected" &&
-          livesResultado.status === "rejected"
-        ) {
-          setEventosErro("Não foi possível carregar os eventos agora.");
-        }
-      } catch (error) {
-        console.error("Erro ao carregar eventos do professor:", error);
-
-        if (!cancelado) {
-          setEventos([]);
-          setEventosErro("Não foi possível carregar os eventos agora.");
-        }
+        setEventosErro(
+          erro?.response?.data
+            ?.message ||
+            "Não foi possível carregar as aulas ao vivo."
+        );
       } finally {
-        if (!cancelado) setEventosLoading(false);
+        if (!cancelado) {
+          setEventosLoading(
+            false
+          );
+        }
       }
     }
 
@@ -551,11 +566,14 @@ export default function PerfilProfessor({
     return () => {
       cancelado = true;
     };
-  }, [aba, usuarioCreatorDoPerfil, rawToken]);
+  }, [
+    aba,
+    professorId,
+  ]);
 
   useEffect(() => {
     setMostrarTodosEventos(false);
-  }, [usuarioCreatorDoPerfil]);
+  }, [professorId]);
 
   const eventosVisiveis = mostrarTodosEventos ? eventos : eventos.slice(0, 5);
 
@@ -858,7 +876,8 @@ export default function PerfilProfessor({
     const h = { Authorization: `Bearer ${rawToken}` };
 
     const tipoId =
-      data?.professor?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+      data?.professor?.id ??
+      null
     const usuarioTarget =
       data?.usuario?.id ?? (isOwn ? Storage.usuarioId : null);
 
@@ -949,7 +968,8 @@ export default function PerfilProfessor({
       const usuarioTarget =
         data?.usuario?.id ?? (isOwn ? Storage.usuarioId : null);
       const tipoId =
-        data?.professor?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+        data?.professor?.id ??
+        null
       const params: any = { incluirPontuacao: 1, incluirNotas: 1 };
       if (usuarioTarget) params.usuarioId = usuarioTarget;
       if (tipoId) params.tipoUsuarioId = tipoId;
@@ -1082,11 +1102,6 @@ export default function PerfilProfessor({
   }, [rawToken, aba, headers, isOwn, idDaUrl]);
 
   useEffect(() => {
-    setEscolinhaSelecionada(data?.professor?.escolinhaId ?? "");
-    setClubeSelecionado(data?.professor?.clubeId ?? "");
-  }, [data?.professor?.escolinhaId, data?.professor?.clubeId]);
-
-  useEffect(() => {
     if (!rawToken || !professorId) return;
 
     const parseOrg = (
@@ -1159,8 +1174,49 @@ export default function PerfilProfessor({
         const v1 = Array.isArray(vinc.data)
           ? vinc.data
           : (vinc.data?.items ?? vinc.data?.data ?? []);
-        setOrgsDisponiveis(d1.map((o: any) => parseOrg(o)));
-        setOrgsVinculadas(v1.map((o: any) => parseOrg(o)));
+        const disponiveis: Organizacao[] =
+          d1.map(
+            (o: any) =>
+              parseOrg(o)
+          );
+
+        const vinculadas: Organizacao[] =
+          v1.map(
+            (o: any) =>
+              parseOrg(o)
+          );
+
+        setOrgsDisponiveis(
+          disponiveis
+        );
+
+        setOrgsVinculadas(
+          vinculadas
+        );
+
+        setClubesSelecionados(
+          vinculadas
+            .filter(
+              (o: Organizacao) =>
+                o.tipo === "Clube"
+            )
+            .map(
+              (o: Organizacao) =>
+                o.id
+            )
+        );
+
+        setEscolinhasSelecionadas(
+          vinculadas
+            .filter(
+              (o: Organizacao) =>
+                o.tipo === "Escolinha"
+            )
+            .map(
+              (o: Organizacao) =>
+                o.id
+            )
+        );
       } catch {
         try {
           const [es, cl] = await Promise.all([
@@ -1242,15 +1298,10 @@ export default function PerfilProfessor({
       String(item?.atletaId ?? "").trim() ||
       key;
     const ownerId =
-      professorId ||
-      Storage.tipoUsuarioId ||
-      localStorage.getItem("tipoUsuarioId") ||
-      sessionStorage.getItem("tipoUsuarioId") ||
+      professorId ??
       "";
 
     const tipo =
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario") ||
       "professor";
 
     try {
@@ -1286,10 +1337,54 @@ export default function PerfilProfessor({
     }
   }
 
+  function toggleClube(
+    clubeId: string
+  ) {
+    setClubesSelecionados(
+      (atuais) =>
+        atuais.includes(
+          clubeId
+        )
+          ? atuais.filter(
+              (id) =>
+                id !==
+                clubeId
+            )
+          : [
+              ...atuais,
+              clubeId,
+            ]
+    );
+  }
+
+  function toggleEscolinha(
+    escolinhaId: string
+  ) {
+    setEscolinhasSelecionadas(
+      (atuais) =>
+        atuais.includes(
+          escolinhaId
+        )
+          ? atuais.filter(
+              (id) =>
+                id !==
+                escolinhaId
+            )
+          : [
+              ...atuais,
+              escolinhaId,
+            ]
+    );
+  }
+
   async function enviarSolicitacaoOrganizacao(
-    org: Organizacao | undefined,
-    vinculoAtualId: string | null | undefined,
-    tipo: "escolinha" | "clube",
+    org:
+      | Organizacao
+      | undefined,
+
+    tipo:
+      | "escolinha"
+      | "clube",
   ) {
     if (!rawToken || !professorId) return;
 
@@ -1301,10 +1396,18 @@ export default function PerfilProfessor({
         return;
       }
 
-      if (org.id === vinculoAtualId) {
-        toast.info(
-          `Você já está vinculado a esse ${tipo === "escolinha" ? "escolinha" : "clube"}.`,
+      const jaEstaVinculado =
+        orgsVinculadas.some(
+          (vinculo) =>
+            vinculo.id === org.id &&
+            vinculo.tipo === org.tipo
         );
+
+      if (jaEstaVinculado) {
+        toast.info(
+          `Você já está vinculado a ${org.nome}.`
+        );
+
         return;
       }
 
@@ -1331,6 +1434,74 @@ export default function PerfilProfessor({
       );
       toast.error(
         e?.response?.data?.message || "Erro ao enviar solicitação de vínculo.",
+      );
+    }
+  }
+
+  async function enviarSolicitacoesSelecionadas(
+    tipo:
+      | "clube"
+      | "escolinha"
+  ) {
+    const idsSelecionados =
+      tipo === "clube"
+        ? clubesSelecionados
+        : escolinhasSelecionadas;
+
+    const tipoOrg =
+      tipo === "clube"
+        ? "Clube"
+        : "Escolinha";
+
+    const jaVinculados =
+      new Set(
+        orgsVinculadas
+          .filter(
+            (o) =>
+              o.tipo ===
+              tipoOrg
+          )
+          .map(
+            (o) =>
+              o.id
+          )
+      );
+
+    const novosIds =
+      idsSelecionados.filter(
+        (id) =>
+          !jaVinculados.has(id)
+      );
+
+    if (
+      novosIds.length === 0
+    ) {
+      toast.info(
+        `Nenhum novo vínculo com ${
+          tipo === "clube"
+            ? "clube"
+            : "escolinha"
+        } foi selecionado.`
+      );
+
+      return;
+    }
+
+    const novasOrgs =
+      todasOrganizacoes.filter(
+        (o) =>
+          o.tipo === tipoOrg &&
+          novosIds.includes(
+            o.id
+          )
+      );
+
+    for (
+      const org of novasOrgs
+    ) {
+      await enviarSolicitacaoOrganizacao(
+        org,
+        tipo
       );
     }
   }
@@ -1459,18 +1630,6 @@ export default function PerfilProfessor({
                   <label className="text-sm font-medium text-green-900">
                     Escolinha
                   </label>
-
-                  {escolinhaAtual && (
-                    <button
-                      type="button"
-                      onClick={() => setEscolinhaSelecionada("")}
-                      className="w-fit text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
-                    >
-                      {escolinhaAtual.nome}{" "}
-                      <span className="ml-1 text-gray-500">×</span>
-                    </button>
-                  )}
-
                   <input
                     className="border rounded px-3 py-2"
                     placeholder="Pesquisar escolinha pelo nome..."
@@ -1479,48 +1638,68 @@ export default function PerfilProfessor({
                   />
 
                   <div className="border rounded p-2 bg-white max-h-44 overflow-auto">
-                    <label className="flex items-center gap-2 py-1 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="escolinhaVinculoProfessor"
-                        checked={!escolinhaSelecionada}
-                        onChange={() => setEscolinhaSelecionada("")}
-                      />
-                      <span className="text-sm">Nenhuma</span>
-                    </label>
+                    {escolinhasDisponiveis.map(
+                      (o) => {
+                        const jaVinculada =
+                          orgsVinculadas.some(
+                            (v) =>
+                              v.tipo ===
+                                "Escolinha" &&
+                              v.id === o.id
+                          );
 
-                    {escolinhasDisponiveis.map((o) => (
-                      <label
-                        key={o.id}
-                        className="flex items-center gap-2 py-1 cursor-pointer"
-                      >
-                        <input
-                          type="radio"
-                          name="escolinhaVinculoProfessor"
-                          checked={escolinhaSelecionada === o.id}
-                          onChange={() => setEscolinhaSelecionada(o.id)}
-                        />
-                        <Avatar
-                          foto={getOrgFoto(o)}
-                          alt={o.nome}
-                          className="w-7 h-7"
-                        />
-                        <span className="text-sm">{o.nome}</span>
-                      </label>
-                    ))}
+                        return (
+                          <label
+                            key={o.id}
+                            className="flex items-center gap-2 py-1 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                escolinhasSelecionadas.includes(
+                                  o.id
+                                )
+                              }
+                              disabled={
+                                jaVinculada
+                              }
+                              onChange={() =>
+                                toggleEscolinha(
+                                  o.id
+                                )
+                              }
+                            />
+
+                            <Avatar
+                              foto={getOrgFoto(o)}
+                              alt={o.nome}
+                              className="w-7 h-7"
+                            />
+
+                            <span className="text-sm">
+                              {o.nome}
+
+                              {jaVinculada && (
+                                <span className="ml-2 text-green-700">
+                                  Vinculado
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      }
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() =>
-                      enviarSolicitacaoOrganizacao(
-                        escolinhaAtual,
-                        data?.professor?.escolinhaId,
+                      enviarSolicitacoesSelecionadas(
                         "escolinha",
                       )
                     }
                     className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
                   >
-                    Solicitar vínculo com escolinha
+                    Solicitar novos Vínculos com escolinhas
                   </button>
                 </div>
 
@@ -1528,17 +1707,6 @@ export default function PerfilProfessor({
                   <label className="text-sm font-medium text-green-900">
                     Clube
                   </label>
-
-                  {clubeAtual && (
-                    <button
-                      type="button"
-                      onClick={() => setClubeSelecionado("")}
-                      className="w-fit text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
-                    >
-                      {clubeAtual.nome}{" "}
-                      <span className="ml-1 text-gray-500">×</span>
-                    </button>
-                  )}
 
                   <input
                     className="border rounded px-3 py-2"
@@ -1548,50 +1716,68 @@ export default function PerfilProfessor({
                   />
 
                   <div className="border rounded p-2 bg-white max-h-44 overflow-auto">
-                    <label className="flex items-center gap-2 py-1 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="clubeVinculoProfessor"
-                        checked={!clubeSelecionado}
-                        onChange={() => setClubeSelecionado("")}
-                      />
-                      <span className="text-sm">Nenhum</span>
-                    </label>
+                    {clubesDisponiveis.map(
+                      (o) => {
+                        const jaVinculado =
+                          orgsVinculadas.some(
+                            (v) =>
+                              v.tipo ===
+                                "Clube" &&
+                              v.id === o.id
+                          );
 
-                    {clubesDisponiveis.map((o) => (
-                      <label
-                        key={o.id}
-                        className="flex items-center gap-2 py-1 cursor-pointer"
-                      >
-                        <input
-                          type="radio"
-                          name="clubeVinculoProfessor"
-                          checked={clubeSelecionado === o.id}
-                          onChange={() => setClubeSelecionado(o.id)}
-                        />
+                        return (
+                          <label
+                            key={o.id}
+                            className="flex items-center gap-2 py-1 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                clubesSelecionados.includes(
+                                  o.id
+                                )
+                              }
+                              disabled={
+                                jaVinculado
+                              }
+                              onChange={() =>
+                                toggleClube(
+                                  o.id
+                                )
+                              }
+                            />
 
-                        <Avatar
-                          foto={getOrgFoto(o)}
-                          alt={o.nome}
-                          className="w-7 h-7"
-                        />
+                            <Avatar
+                              foto={getOrgFoto(o)}
+                              alt={o.nome}
+                              className="w-7 h-7"
+                            />
 
-                        <span className="text-sm">{o.nome}</span>
-                      </label>
-                    ))}
+                            <span className="text-sm">
+                              {o.nome}
+
+                              {jaVinculado && (
+                                <span className="ml-2 text-green-700">
+                                  Vinculado
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      }
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() =>
-                      enviarSolicitacaoOrganizacao(
-                        clubeAtual,
-                        data?.professor?.clubeId,
+                      enviarSolicitacoesSelecionadas(
                         "clube",
                       )
                     }
                     className="text-sm px-3 py-2 rounded-md bg-green-600 text-white"
                   >
-                    Solicitar vínculo com clube
+                    Solicitar novos vínculos com clubes
                   </button>
                 </div>
 
@@ -2201,39 +2387,25 @@ export default function PerfilProfessor({
       {aba === "eventos" && (
         <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
-            title="Eventos"
+            title="Aulas ao vivo"
             right={
               <div className="flex flex-wrap gap-2">
-                {isOwn ? (
-                  <Link
-                    href="/creator/eventos"
-                    className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
-                  >
-                    Ver todos os eventos
-                  </Link>
-                ) : (
+                {eventos.length > 5 ? (
                   <button
                     type="button"
                     onClick={() =>
-                      setMostrarTodosEventos((anterior) => !anterior)
+                      setMostrarTodosEventos(
+                        (anterior) =>
+                          !anterior
+                      )
                     }
                     className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
                   >
                     {mostrarTodosEventos
                       ? "Mostrar menos"
-                      : "Ver todos os eventos"}
+                      : "Ver todas as aulas"}
                   </button>
-                )}
-
-                {isOwn && (
-                  <Link
-                    href="/creator/eventos/novo"
-                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Criar novo evento
-                  </Link>
-                )}
+                ) : null}
               </div>
             }
           >
@@ -2261,15 +2433,15 @@ export default function PerfilProfessor({
                     .join(" - ");
 
                   const participantes =
-                    evento.origem === "AULA_AO_VIVO" &&
-                    typeof evento.totalParticipantes === "number"
+                    typeof evento.totalParticipantes ===
+                    "number"
                       ? `${evento.totalParticipantes} participantes`
                       : "";
 
                   const href =
-                    evento.origem === "AULA_AO_VIVO"
-                      ? `/learning/evento/${evento.id}`
-                      : `/eventos/${evento.id}`;
+                    `/learning/live?aulaId=${encodeURIComponent(
+                      evento.id
+                    )}`;
 
                   return (
                     <li key={`${evento.origem}:${evento.id}`}>
@@ -2317,12 +2489,15 @@ export default function PerfilProfessor({
                 })}
               </ul>
             ) : (
-              <EmptyState text="Nenhum evento futuro cadastrado." />
+              <EmptyState text="Nenhuma aula ao vivo futura cadastrada." />
             )}
           </SectionCard>
-
-          {usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
+          {professorId ? (
+            <ProfileReplaysSection
+              contextoKind="PERSONAL"
+              contextoTipo="Professor"
+              contextoPerfilId={professorId}
+            />
           ) : null}
         </div>
       )}

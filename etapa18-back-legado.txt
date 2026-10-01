@@ -1,0 +1,382 @@
+﻿C:\dev\FootEraApp-app\server\controllers\adminController.ts:175: if (usuario.tipo !== "Admin") {
+C:\dev\FootEraApp-app\server\controllers\adminController.ts:199: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:55: (q.tipoUsuarioId as string) ||
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:56: (user.tipoUsuarioId as string) ||
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:85: (q.tipoUsuarioId as string) ||
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:90: (user.tipoUsuarioId as string) ||
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:206: q.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:207: user.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:295: b.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:297: q.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:298: user.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\atletaObservadoController.ts:313: return res.status(400).json({ message: "ownerId/tipoUsuarioId é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\authController.ts:64: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\authController.ts:65: contexto.tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\authController.ts:200: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\authController.ts:218: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\authController.ts:219: contexto.tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\avaliacoesTreinoController.ts:35: if (usuario.tipo === TipoUsuario.Atleta) {
+C:\dev\FootEraApp-app\server\controllers\avaliacoesTreinoController.ts:47: } else if (usuario.tipo === TipoUsuario.Professor) {
+C:\dev\FootEraApp-app\server\controllers\avaliacoesTreinoController.ts:57: } else if (usuario.tipo === TipoUsuario.Clube) {
+C:\dev\FootEraApp-app\server\controllers\avaliacoesTreinoController.ts:67: } else if (usuario.tipo === TipoUsuario.Escolinha) {
+C:\dev\FootEraApp-app\server\controllers\avaliacoesTreinoController.ts:87: if (usuario.tipo === TipoUsuario.Atleta) {
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:882: let tipoUsuarioId: string | null = null;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:961: tipoUsuarioId = atleta.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:991: tipoUsuarioId = professor.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1030: tipoUsuarioId = clube.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1069: tipoUsuarioId = escolinha.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1146: tipoUsuarioId = olheiro.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1157: tipoUsuarioId = learning.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1209: tipoUsuarioId = federacao.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1259: tipoUsuarioId = marca.id;
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1322: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1361: tipo: String(usuario.tipo),
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1372: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1373: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1374: papelAtivo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1460: const tipoUsuarioId =
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1463: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1470: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1512: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1516: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1523: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\cadastroController.ts:1685: tipo: String(usuario.tipo),
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:88: usuario.tipo
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:106: : resolverTipoCreator(usuario.tipo);
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:204: usuario.tipo
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:208: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:240: usuario.tipo
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:256: : resolverTipoCreator(usuario.tipo);
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:322: if (!podeSerCreator(creator.usuario.tipo)) {
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:521: const tipoCorrigido = resolverTipoCreator(creator.usuario.tipo);
+C:\dev\FootEraApp-app\server\controllers\creatorController.ts:756: if (!podeSerCreator(creator.usuario.tipo)) {
+C:\dev\FootEraApp-app\server\controllers\dashboardOrganizacaoController.ts:40: req.user?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\dashboardOrganizacaoController.ts:41: req.user?.tipoUsuarioID ??
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:416: const fromQuery = (req.query.tipoUsuarioId ?? "") as string;
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:422: const tipoUsuarioId = String(fromQuery || fromParams || "").trim();
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:423: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:424: return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:431: { professorId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:432: { escolinhaId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:433: { clubeId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:450: const tipoUsuarioId = String(req.query.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:453: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:454: return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:459: { professorId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:460: { escolinhaId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:461: { clubeId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:835: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:844: typeof tipoUsuarioId === "string" &&
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:845: tipoUsuarioId.trim()
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:846: ? tipoUsuarioId.trim()
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:977: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:986: typeof tipoUsuarioId === "string" &&
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:987: tipoUsuarioId.trim()
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:988: ? tipoUsuarioId.trim()
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1131: (typeof req.query.tipoUsuarioId === "string" && req.query.tipoUsuarioId.trim()) ||
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1202: const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1205: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1206: return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1214: professorId: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1220: { clubeId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\elencosController.ts:1221: { escolinhaId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:93: const tipoUsuarioId =
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:94: contexto.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:105: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1247: } else if (req.user?.tipo === "clube" && req.user.tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1248: where.clubeId = String(req.user.tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1805: if (tipoUsuario === "clube" && req.user?.tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1806: data.clubeId = String(req.user.tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1814: req.user?.tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1817: String(req.user.tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1820: if (tipoUsuario === "federacao" && req.user?.tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1821: data.federacaoId = String(req.user.tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1824: if (tipoUsuario === "marca" && req.user?.tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts:1825: data.marcaId = String(req.user.tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:179: const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:180: const entidadeUsuarioId = tipoUsuarioId || idOrUser;
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:693: const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:699: if (!idOrUser && !tipoUsuarioId && userIdFromToken) {
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:709: if (!idOrUser && !tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:715: if (tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:716: entidadeId = tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\gerenciarAtletasController.ts:735: const adminUserId = String(tipoUsuarioId || idOrUser || userIdFromToken).trim();
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:85: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:188: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:189: contexto.tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:862: let tipoUsuarioId: string | null = null;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:909: tipoUsuarioId = atleta.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:954: tipoUsuarioId = professor.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:983: tipoUsuarioId = clube.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:1012: tipoUsuarioId = escolinha.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:1038: tipoUsuarioId = olheiro.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:1050: tipoUsuarioId = learning.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:1092: tipoUsuarioId = federacao.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:1133: tipoUsuarioId = marca.id;
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts:1196: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\homeController.ts:60: const token = jwt.sign({ id: usuario.id, tipo: usuario.tipo }, process.env.JWT_SECRET || "defaultsecret", {
+C:\dev\FootEraApp-app\server\controllers\jogosElencoController.ts:10: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\server\controllers\jogosElencoController.ts:19: tipoUsuarioId: u.tipoUsuarioId || null,
+C:\dev\FootEraApp-app\server\controllers\jogosElencoController.ts:51: if (ev.ownerTipo === "Professor" && user.tipo === "Professor" && user.tipoUsuarioId === ev.ownerId) return true;
+C:\dev\FootEraApp-app\server\controllers\jogosElencoController.ts:79: ownerId: user.tipoUsuarioId || user.id,
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:153: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:161: function getTipoUsuarioId(usuario: any) {
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:1557: const tipoUsuarioId = getTipoUsuarioId(usuario);
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:1574: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:1576: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:1863: const tipoUsuarioId = getTipoUsuarioId(usuario);
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:1874: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\learningEventosController.ts:1876: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:119: contexto.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:135: contexto.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\olheirosController.ts:109: const meTipoUsuarioId = (req as any).user?.tipoUsuarioId as string | undefined;
+C:\dev\FootEraApp-app\server\controllers\olheirosController.ts:111: if (id === "me" && meTipoUsuarioId) id = meTipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:1741: (papel) => papel === String(usuario.tipo),
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:1755: const tipoAtivoNormalizado = String(usuario.tipo)
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4374: if (usuario.tipo !== "Learning") {
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4634: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4670: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4710: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4762: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4814: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4866: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4918: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4950: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4952: .tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts:4954: .tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\professoresController.ts:1443: const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\server\controllers\professoresController.ts:1445: if (!tipoUsuarioId || (tipo !== "clube" && tipo !== "escolinha")) {
+C:\dev\FootEraApp-app\server\controllers\professoresController.ts:1447: message: "Informe tipo=clube|escolinha e tipoUsuarioId",
+C:\dev\FootEraApp-app\server\controllers\professoresController.ts:1456: tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:60: export async function getAtletasVinculadosPorTipoUsuarioId(req: Request, res: Response) {
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:62: const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:63: if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId ausente" });
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:66: prisma.clube.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } }),
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:67: prisma.escolinha.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } }),
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:68: prisma.professor.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } }),
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:79: (req.query as any).id = tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\relacoescontroller.ts:82: console.error("[getAtletasVinculadosPorTipoUsuarioId] erro:", e);
+C:\dev\FootEraApp-app\server\controllers\seguidorMutuoController.ts:954: usuario.tipo
+C:\dev\FootEraApp-app\server\controllers\seguidorMutuoController.ts:977: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\submissoesController.ts:399: const atletaId = atletaIdBody || (user?.tipoUsuarioId as string | undefined);
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:15: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:23: owner.professorId = user.tipoUsuarioId ?? undefined;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:32: owner.escolinhaId = user.tipoUsuarioId ?? undefined;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:41: owner.clubeId = user.tipoUsuarioId ?? undefined;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:117: const user = (req as any).user as { id: string; tipo: TipoUsuario; tipoUsuarioId?: string | null };
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:126: where: { id: user.tipoUsuarioId ?? "" },
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:131: } else if (user.tipo === "Escolinha") where.escolinhaId = user.tipoUsuarioId ?? undefined;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:132: else if (user.tipo === "Clube") where.clubeId = user.tipoUsuarioId ?? undefined;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:153: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:163: (!!tpl.professorId && tpl.professorId === user.tipoUsuarioId) ||
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:164: (!!tpl.escolinhaId && tpl.escolinhaId === user.tipoUsuarioId) ||
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts:165: (!!tpl.clubeId && tpl.clubeId === user.tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:357: // Não usamos req.user.tipo aqui de propósito.
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:1641: tipoStr === "atleta" ? user.tipoUsuarioId : undefined;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:2125: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:2141: const atletaRef = String(atletaIdBody ?? tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3740: const raw = (req.query.tipoUsuarioId ?? "") as string;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3741: const tipoUsuarioId = String(raw).trim();
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3742: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3743: return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3750: { professorId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3751: { escolinhaId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3752: { clubeId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3772: const tipoUsuarioId = String(
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3773: (req.query.tipoUsuarioId ?? "") as string,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3779: const resolved = await resolveEntidade(tipoUsuarioId || req.userId!);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3913: const raw = (req.query.tipoUsuarioId ?? "") as string;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3914: const tipoUsuarioId = String(raw).trim();
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3915: if (!tipoUsuarioId)
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3916: return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3921: { professorId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3922: { escolinhaId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3923: { clubeId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3964: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3973: tipoUsuarioId?: string;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3981: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:3982: return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4003: if (tipoUsuario === "professor") dataCreate.professorId = tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4004: if (tipoUsuario === "escolinha") dataCreate.escolinhaId = tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4005: if (tipoUsuario === "clube") dataCreate.clubeId = tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4189: let tipoUsuarioId =
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4190: (typeof req.query.tipoUsuarioId === "string" &&
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4191: req.query.tipoUsuarioId.trim()) ||
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4203: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4209: where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4213: where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4217: where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4225: const anyId = tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4533: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4550: tipoUsuarioId?:
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4557: tipoUsuarioId?:
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4593: let tipoUsuarioIdFinal =
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4596: ?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4599: "x-tipousuarioid"
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4602: tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4660: tipoUsuarioIdFinal =
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4671: ?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4704: if (!tipoUsuarioIdFinal || !usuarioIdToken) {
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4706: tipoUsuarioIdFinal,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4750: const profId = String(tipoUsuarioIdFinal);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4780: const profId = String(tipoUsuarioIdFinal);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4807: OR: [{ id: tipoUsuarioIdFinal }, { usuarioId: tipoUsuarioIdFinal }],
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4816: "Não encontrei o professor do usuário logado (tipoUsuarioId inválido).",
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4817: recebida: tipoUsuarioIdFinal,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4839: ? { clubeId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4841: ? { escolinhaId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4893: OR: [{ id: tipoUsuarioIdFinal }, { usuarioId: tipoUsuarioIdFinal }],
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4902: "Não encontrei o professor do usuário logado (tipoUsuarioId inválido).",
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4903: recebida: tipoUsuarioIdFinal,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4979: ? { clubeId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4981: ? { escolinhaId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:4983: ? { criadorUsuarioId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5036: ? { clubeId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5039: ? { escolinhaId: String(tipoUsuarioIdFinal) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5793: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5813: { professorId: String(tipoUsuarioId) },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5814: { criadorProfessorId: String(tipoUsuarioId) },
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5818: ? { clubeId: String(tipoUsuarioId) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5821: ? { escolinhaId: String(tipoUsuarioId) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5823: ? { criadorUsuarioId: String(tipoUsuarioId) }
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5878: if ((!tipoUsuario || !tipoUsuarioId) && criadorProfessorId) {
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5884: if (tipoUsuario || tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5890: if (s === "professor") donoUpdate.professorId = String(tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5891: if (s === "clube") donoUpdate.clubeId = String(tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:5893: donoUpdate.escolinhaId = String(tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:6126: ? String(tipoUsuarioId)
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:6683: const tipoUsuarioId = String(
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:6684: (req.query.tipoUsuarioId ?? "") as string,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:6716: const resolved = await resolveEntidade(tipoUsuarioId || req.userId!);
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:6957: (req.query.atletaId ?? req.query.tipoUsuarioId ?? "") as string,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:7020: (req.query.tipoUsuarioId ?? req.query.atletaId ?? "") as string,
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:7034: .json({ error: "tipoUsuarioId (atletaId) é obrigatório" });
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:7567: const atletaId = req.user?.tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:7568: ? String(req.user.tipoUsuarioId)
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:7667: const atletaId = req.user?.tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts:7668: ? String(req.user.tipoUsuarioId)
+C:\dev\FootEraApp-app\server\controllers\treinosLivresController.ts:11: const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\treinosLivresController.ts:12: const atletaId = tipo === "atleta" ? tipoUsuarioId : atletaIdQuery;
+C:\dev\FootEraApp-app\server\controllers\treinosLivresController.ts:66: const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\treinosLivresController.ts:68: if (tipo === "atleta" && tipoUsuarioId !== atletaId) {
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:27: function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:29: const id = String(tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:42: const donoId = String(body?.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:204: user.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:283: const tipoUsuarioId = String(
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:284: (req as any).user?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:285: req.headers["x-tipousuarioid"] ??
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:286: req.query.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:287: (req as any).body?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:311: professores: tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:313: where: { professorId: tipoUsuarioId },
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:328: !!tipoUsuarioId && !!donoId && tipoUsuarioId === donoId && tipoRaw === donoTipo;
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:332: !!tipoUsuarioId &&
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:475: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:488: tipoUsuario?: string; tipoUsuarioId?: string;
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:553: message: "Informe o dono do treino: (tipoUsuario + tipoUsuarioId) ou (professorId).",
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:571: ?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1053: const professorIdForStats = normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1159: tipoUsuario, tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1203: if (tipoUsuario || tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1205: if (!dono || !tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1206: return res.status(400).json({ message: "Para trocar o dono, informe tipoUsuario e tipoUsuarioId." });
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1213: if (dono === "Professor") dataDono.Professor = { connect: { id: tipoUsuarioId } };
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1214: if (dono === "Clube") dataDono.clube = { connect: { id: tipoUsuarioId } };
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1215: if (dono === "Escolinha") dataDono.escolinha = { connect: { id: tipoUsuarioId } };
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1216: if (dono === "Admin") dataDono.criadorUsuario = { connect: { id: tipoUsuarioId } };
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1610: const professorIdForStats = dono === "Professor" ? String(tipoUsuarioId) : undefined;
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1656: const viewerId = String((req as any).user?.tipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1668: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts:1696: const ownerWhere = ownerWhereFrom(tipoUsuario, tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:14: function ownerWhere(tipoUsuario?: string, tipoUsuarioId?: string) {
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:15: if (!tipoUsuario || !tipoUsuarioId) return {};
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:17: if (t === "professor") return { professorId: tipoUsuarioId };
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:18: if (t === "clube")     return { clubeId: tipoUsuarioId };
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:19: if (t === "escolinha" || t === "escola") return { escolinhaId: tipoUsuarioId };
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:49: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:55: const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:60: "Informe exatamente um dono: professorId OU escolinhaId OU clubeId (via tipoUsuario + tipoUsuarioId).",
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:186: const { tipoUsuario, tipoUsuarioId, includePublic } = req.query as any;
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts:188: const owner = ownerWhere(String(tipoUsuario || ""), String(tipoUsuarioId || ""));
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:84: const tipoUsuarioId =
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:101: ? tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:107: ? tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:113: ? tipoUsuarioId
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:722: const tipoUsuarioId =
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:728: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:741: clubeId: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:744: escolinhaId: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts:750: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:323: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:426: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:428: .tipoUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:495: const ehPapelEmUso = papeisEquivalentes(usuario.tipo, papel);
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:662: const tipoUsuarioId = await obterPerfilEspecificoId(usuarioId, papel);
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:664: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:675: usuario.tipo,
+C:\dev\FootEraApp-app\server\controllers\usuarioPapelController.ts:694: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\lib\usage.ts:185: String((req as any)?.body?.tipoUsuarioId || "").trim() || null;
+C:\dev\FootEraApp-app\server\lib\usage.ts:190: (req.user as any)?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\lib\usage.ts:191: (req.user as any)?.tipoUsuarioIdRaw ||
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:191: let tipoUsuarioIdFinal = ctx.tipoUsuarioId ?? null;
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:193: if (!tipoUsuarioIdFinal) {
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:201: tipoUsuarioIdFinal = olheiro?.id ?? null;
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:209: tipoUsuarioIdFinal = clube?.id ?? null;
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:220: tipoUsuarioIdFinal = escolinha?.id ?? null;
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:228: tipoUsuarioIdFinal = professor?.id ?? null;
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:236: tipoUsuarioIdFinal = atleta?.id ?? null;
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:252: tipoUsuarioIdFinal =
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:269: tipoUsuarioIdFinal =
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:286: tipoUsuarioIdFinal =
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:296: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\middlewares\auth.ts:297: tipoUsuarioIdFinal,
+C:\dev\FootEraApp-app\server\routes\desafios.ts:40: : (req as any).tipoUsuarioId;
+C:\dev\FootEraApp-app\server\routes\desafios.ts:169: const tipoUsuarioId = (req as any).tipoUsuarioId;
+C:\dev\FootEraApp-app\server\routes\desafios.ts:180: data: { atletaId: tipoUsuarioId, usuarioId: userId, desafioId, videoUrl, observacao, aprovado: false },
+C:\dev\FootEraApp-app\server\routes\desafios.ts:380: : typeof req.query.tipoUsuarioId === "string"
+C:\dev\FootEraApp-app\server\routes\desafios.ts:381: ? (req.query.tipoUsuarioId as string)
+C:\dev\FootEraApp-app\server\routes\indicacoes.ts:55: req?.authUser?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\routes\indicacoes.ts:56: req?.user?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\routes\indicacoes.ts:57: req?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\routes\indicacoes.ts:58: req?.userCtx?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\server\routes\indicacoes.ts:59: req?.userCtx?.tipoUsuarioIdRaw ||
+C:\dev\FootEraApp-app\server\routes\relacoes.ts:3: import { getAtletasPorVinculo, getAtletasVinculadosPorTipoUsuarioId } from "../controllers/relacoescontroller.js";
+C:\dev\FootEraApp-app\server\routes\relacoes.ts:7: router.get("/atletas-por-tipo", authenticateToken, getAtletasVinculadosPorTipoUsuarioId);
+C:\dev\FootEraApp-app\server\routes\treinosElencos.ts:9: const { nome, atletasIds, tipoUsuarioId, organizacaoId, ownerTipo } = req.body || {};
+C:\dev\FootEraApp-app\server\routes\treinosElencos.ts:10: const ownerId = tipoUsuarioId || organizacaoId;
+C:\dev\FootEraApp-app\server\routes\treinosElencos.ts:13: return res.status(400).json({ error: "nome, atletasIds[] e tipoUsuarioId/organizacaoId são obrigatórios." });
+C:\dev\FootEraApp-app\server\routes\treinosElencos.ts:35: return res.status(404).json({ error: "Organização/Professor não encontrado para o tipoUsuarioId/organizacaoId fornecido." });
+C:\dev\FootEraApp-app\server\routes\treinosElencos.ts:59: const ownerId = (req.query.tipoUsuarioId as string) || (req.query.organizacaoId as string);
+C:\dev\FootEraApp-app\server\routes\treinosElencos.ts:60: if (!ownerId) return res.status(400).json({ error: "tipoUsuarioId/organizacaoId é obrigatório." });
+C:\dev\FootEraApp-app\server\scripts\backfillActiveContext.ts:77: usuario.tipo
+C:\dev\FootEraApp-app\server\scripts\backfillRelacionamentosOrganizacao.ts:359: usuario.tipo
+C:\dev\FootEraApp-app\server\services\activeContext.ts:28: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:286: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:308: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:319: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:341: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:352: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:391: tipoUsuarioId:
+C:\dev\FootEraApp-app\server\services\activeContext.ts:392: compat.tipoUsuarioId,
+C:\dev\FootEraApp-app\server\services\activeContext.ts:516: usuario.tipo
+C:\dev\FootEraApp-app\server\services\activeContext.ts:552: contexto.tipoUsuarioId
+C:\dev\FootEraApp-app\server\services\activeContext.ts:635: usuario.tipo
+C:\dev\FootEraApp-app\server\services\activeContext.ts:685: usuario.tipo,
+C:\dev\FootEraApp-app\server\services\planResolver.ts:18: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\server\services\planResolver.ts:159: usuario.tipo;
+C:\dev\FootEraApp-app\server\services\planResolver.ts:161: const tipoUsuarioId =
+C:\dev\FootEraApp-app\server\services\planResolver.ts:163: ?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\server\services\planResolver.ts:166: usuario.tipo,
+C:\dev\FootEraApp-app\server\services\planResolver.ts:172: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\services\roles.ts:144: papelCanonico(usuario.tipo) ===
+C:\dev\FootEraApp-app\server\services\roles.ts:167: usuario.tipo,
+C:\dev\FootEraApp-app\server\types\auth.ts:9: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\server\types\express.d.ts:11: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\server\utils\authResponse.ts:24: const tipoUsuarioId =
+C:\dev\FootEraApp-app\server\utils\authResponse.ts:36: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\utils\authResponse.ts:47: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\utils\authResponse.ts:50: tipoUsuarioId,
+C:\dev\FootEraApp-app\server\utils\authResponse.ts:54: tipo: usuario.tipo,
+C:\dev\FootEraApp-app\server\utils\storage.ts:23: get tipoUsuarioId() {
+C:\dev\FootEraApp-app\server\utils\storage.ts:24: return getFromStorage("tipoUsuarioId");

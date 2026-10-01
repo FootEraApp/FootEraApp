@@ -10,6 +10,7 @@ export const PAPEIS_PESSOAIS = [
   TipoUsuario.Professor,
   TipoUsuario.Olheiro,
   TipoUsuario.Creator,
+  TipoUsuario.Learning,
 ] as const;
 
 export const PAPEIS_ORGANIZACAO = [
@@ -18,10 +19,6 @@ export const PAPEIS_ORGANIZACAO = [
   TipoUsuario.Escola,
   TipoUsuario.Marca,
   TipoUsuario.Federacao,
-] as const;
-
-export const PAPEIS_LEGADOS_CAPABILITY = [
-  TipoUsuario.Learning,
 ] as const;
 
 export function papelCanonico(
@@ -80,6 +77,81 @@ export function normalizarPapel(
   }
 }
 
+export async function getRoles(
+  usuarioId: string,
+  statuses: StatusUsuarioPapel[] = [
+    StatusUsuarioPapel.ATIVO,
+  ],
+): Promise<TipoUsuario[]> {
+  const registros =
+    await prisma.usuarioPapel.findMany({
+      where: {
+        usuarioId,
+      },
+
+      select: {
+        papel: true,
+        status: true,
+      },
+
+      orderBy: {
+        criadoEm: "asc",
+      },
+    });
+
+  // A partir do momento em que o usuário já possui
+  // registros em UsuarioPapel, essa tabela vira
+  // a fonte de verdade.
+  if (registros.length > 0) {
+    return Array.from(
+      new Set(
+        registros
+          .filter((registro) =>
+            statuses.includes(
+              registro.status
+            )
+          )
+          .map((registro) =>
+            papelCanonico(
+              registro.papel
+            )
+          )
+      )
+    );
+  }
+
+  // Compatibilidade SOMENTE para usuário antigo
+  // que ainda não possui nenhuma linha em UsuarioPapel.
+  if (
+    !statuses.includes(
+      StatusUsuarioPapel.ATIVO
+    )
+  ) {
+    return [];
+  }
+
+  const usuario =
+    await prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
+      },
+
+      select: {
+        tipo: true,
+      },
+    });
+
+  if (!usuario) {
+    return [];
+  }
+
+  return [
+    papelCanonico(
+      usuario.tipo
+    ),
+  ];
+}
+
 export async function hasRole(
   usuarioId: string,
   papelRecebido: TipoUsuario,
@@ -88,60 +160,17 @@ export async function hasRole(
   ],
 ): Promise<boolean> {
   const papel =
-    papelCanonico(papelRecebido);
+    papelCanonico(
+      papelRecebido
+    );
 
-  const papeisConsulta =
-    papel === TipoUsuario.Escolinha
-      ? [
-          TipoUsuario.Escolinha,
-          TipoUsuario.Escola,
-        ]
-      : [papel];
+  const papeis =
+    await getRoles(
+      usuarioId,
+      statuses
+    );
 
-  const registro =
-    await prisma.usuarioPapel.findFirst({
-      where: {
-        usuarioId,
-        papel: {
-          in: papeisConsulta,
-        },
-        status: {
-          in: statuses,
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
-  if (registro) {
-    return true;
-  }
-
-  if (
-    !statuses.includes(
-      StatusUsuarioPapel.ATIVO,
-    )
-  ) {
-    return false;
-  }
-
-  const usuario =
-    await prisma.usuario.findUnique({
-      where: {
-        id: usuarioId,
-      },
-      select: {
-        tipo: true,
-      },
-    });
-
-  if (!usuario) {
-    return false;
-  }
-
-  return (
-    papelCanonico(usuario.tipo) ===
+  return papeis.includes(
     papel
   );
 }

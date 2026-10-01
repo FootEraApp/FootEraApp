@@ -12,7 +12,7 @@ import {
   FileText,
   CameraIcon,
 } from "lucide-react";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import { API, FLAGS } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
@@ -20,7 +20,7 @@ import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js"; 
-import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 type Props = {
   idDaUrl?: string;
@@ -135,7 +135,9 @@ type EventoItem = {
   descricao?: string | null;
   status?: string | null;
 
-  origem?: "EVENTO_ESCOLINHA" | "EVENTO_CREATOR" | "AULA_AO_VIVO_CREATOR";
+  origem?:
+    | "EVENTO_ESCOLINHA"
+    | "AULA_AO_VIVO_ESCOLINHA";
   thumbUrl?: string | null;
   totalParticipantes?: number | null;
 
@@ -253,7 +255,6 @@ export default function PerfilEscola({
   const [eventos, setEventos] = useState<EventoItem[] | null>(null);
   const [eventosLoading, setEventosLoading] = useState(false);
   const [mostrarTodosEventos, setMostrarTodosEventos] = useState(false);
-  const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
   const [conquistasReal, setConquistasReal] = useState<number>(0);
   const [privacidade, setPrivacidade] = useState<{
     perfilVisivel: boolean;
@@ -273,11 +274,13 @@ export default function PerfilEscola({
     : vinculadosParaExibir.slice(0, 5);
 
   const escolinhaId =
-    data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+    data?.escolinha?.id ??
+    null
+
   const entidadeUsuarioId =
     data?.usuario?.id ??
-    data?.escolinha?.usuarioId ??
-    (isOwn ? Storage.usuarioId : null);
+    data?.escolinha?.id ??
+    null
 
   useEffect(() => {
     setMostrarTodosVinculados(false);
@@ -403,8 +406,13 @@ export default function PerfilEscola({
 
   useEffect(() => {
     setEventos(null);
-    setMostrarTodosEventos(false);
-  }, [targetId, hasCreator, creatorUsuarioId, entidadeUsuarioId]);
+    setMostrarTodosEventos(
+      false
+    );
+  }, [
+    targetId,
+    escolinhaId,
+  ]);
 
   useEffect(() => {
     if (!token || !escolinhaId || !canEdit) return;
@@ -652,7 +660,8 @@ export default function PerfilEscola({
 
     async function fetchVinculados() {
       const entidadeId =
-        data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+        data?.escolinha?.id ??
+        null
       if (!entidadeId) return;
 
       try {
@@ -931,206 +940,325 @@ export default function PerfilEscola({
 
   async function loadEventosEscolinha() {
     const escolaId =
-      data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+      data?.escolinha?.id ??
+      null;
 
-    const usuarioCreatorId = String(
-      creatorUsuarioId ||
-        data?.escolinha?.usuarioId ||
-        entidadeUsuarioId ||
-        (isOwn ? Storage.usuarioId : "") ||
-        "",
-    ).trim();
-
-    if (!escolaId && !usuarioCreatorId) {
+    if (!escolaId) {
       setEventos([]);
-      setCreatorAtivoLocal(false);
       return;
     }
 
     setEventosLoading(true);
 
     try {
-      const eventosEscolaPromise = escolaId
-        ? axios.get(`${API.BASE_URL}/api/eventos/escolas/${escolaId}`, {
+      const [
+        escolaResult,
+        aulasAoVivoResult,
+      ] = await Promise.allSettled([
+        axios.get(
+          `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
+          {
             headers,
             params: {
-              ownerTipo: "Escolinha",
-              ownerId: escolaId,
+              ownerTipo:
+                "Escolinha",
+              ownerId:
+                escolaId,
             },
-          })
-        : Promise.resolve({ data: [] });
+          }
+        ),
 
-      const eventosCreatorPromise = usuarioCreatorId
-        ? axios.get(`${API.BASE_URL}/api/eventos`, {
-            headers,
-            params: { creatorUsuarioId: usuarioCreatorId },
-          })
-        : Promise.resolve({ data: [] });
+        axios.get(
+          `${API.BASE_URL}/api/aulas-ao-vivo/publicas/contexto`,
+          {
+            params: {
+              contextoKind:
+                "ORGANIZATION",
 
-      const perfilCreatorPromise = usuarioCreatorId
-        ? axios.get(
-            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-              usuarioCreatorId,
-            )}`,
-            { headers },
-          )
-        : Promise.resolve({ data: null });
+              contextoTipo:
+                "ESCOLA",
 
-      const [escolaResult, creatorEventosResult, creatorPerfilResult] =
-        await Promise.allSettled([
-          eventosEscolaPromise,
-          eventosCreatorPromise,
-          perfilCreatorPromise,
-        ]);
+              contextoLegacyOrganizationId:
+                escolaId,
+            },
+          }
+        ),
+      ]);
 
       const eventosEscolaResp =
-        escolaResult.status === "fulfilled" ? escolaResult.value.data : [];
-
-      const eventosCreatorResp =
-        creatorEventosResult.status === "fulfilled"
-          ? creatorEventosResult.value.data
+        escolaResult.status ===
+        "fulfilled"
+          ? escolaResult.value.data
           : [];
 
-      const creatorResp =
-        creatorPerfilResult.status === "fulfilled"
-          ? creatorPerfilResult.value.data
-          : null;
+      const aulasAoVivoResp =
+        aulasAoVivoResult.status ===
+        "fulfilled"
+          ? aulasAoVivoResult.value.data
+          : { items: [] };
 
-      setCreatorAtivoLocal(Boolean(creatorResp));
-
-      const extrairEventos = (payload: any): any[] =>
+      const extrairEventos = (
+        payload: any
+      ): any[] =>
         Array.isArray(payload)
           ? payload
-          : Array.isArray(payload?.items)
+          : Array.isArray(
+                payload?.items
+              )
             ? payload.items
-            : Array.isArray(payload?.eventos)
+            : Array.isArray(
+                  payload?.eventos
+                )
               ? payload.eventos
-              : Array.isArray(payload?.data)
+              : Array.isArray(
+                    payload?.data
+                  )
                 ? payload.data
                 : [];
 
-      const eventosDaEscola: EventoItem[] = extrairEventos(
-        eventosEscolaResp,
-      ).map((e: any) => {
-        const dt = e.dataEvento ?? e.data ?? e.inicio ?? null;
+      const eventosDaEscola:
+        EventoItem[] =
+        extrairEventos(
+          eventosEscolaResp
+        ).map((e: any) => {
+          const dt =
+            e.dataEvento ??
+            e.data ??
+            e.inicio ??
+            null;
 
-        return {
-          id: String(e.id),
-          titulo: String(e.titulo ?? e.nome ?? "Evento"),
-          tipo: e.tipoLabel ?? e.tipo ?? null,
-          dataEvento: dt,
-          inicio: e.inicio ?? null,
-          cidade: e.cidade ?? null,
-          estado: e.estado ?? null,
-          endereco: e.endereco ?? null,
-          descricao: e.descricao ?? null,
-          status: e.status ?? null,
-          origem: "EVENTO_ESCOLINHA",
-          criadorLabel: data?.escolinha?.nome || data?.usuario?.nome || null,
-          convidadosLabel: null,
-        };
-      });
+          return {
+            id:
+              String(e.id),
 
-      const criadorCreatorLabel =
-        getCriadorLabelFromCreator(creatorResp) ||
-        data?.escolinha?.nome ||
-        data?.usuario?.nome ||
-        "";
+            titulo:
+              String(
+                e.titulo ??
+                  e.nome ??
+                  "Evento"
+              ),
 
-      const eventosGeraisDoCreator: EventoItem[] = extrairEventos(
-        eventosCreatorResp,
-      ).map((e: any) => ({
-        id: String(e.id),
-        titulo: String(e.titulo ?? e.nome ?? "Evento"),
-        tipo: e.tipoLabel ?? e.tipo ?? "Evento",
-        dataEvento: String(e.dataEvento ?? e.data ?? e.inicio ?? ""),
-        inicio: String(e.inicio ?? e.dataEvento ?? e.data ?? ""),
-        cidade: e.cidade ?? null,
-        estado: e.estado ?? null,
-        endereco: e.endereco ?? null,
-        descricao: e.descricao ?? null,
-        status: e.status ?? null,
-        origem: "EVENTO_CREATOR",
-        criadorLabel: criadorCreatorLabel || null,
-        convidadosLabel: null,
-      }));
+            tipo:
+              e.tipoLabel ??
+              e.tipo ??
+              null,
 
-      const aulasAoVivoCreator: EventoItem[] = Array.isArray(
-        creatorResp?.eventosAoVivo,
-      )
-        ? creatorResp.eventosAoVivo.map((aula: any) => ({
-            id: String(aula.id),
-            titulo: String(aula.titulo ?? "Aula ao vivo"),
-            tipo: "Aula ao vivo",
-            dataEvento: String(aula.dataInicio ?? ""),
-            inicio: String(aula.dataInicio ?? ""),
-            cidade: null,
-            estado: null,
-            endereco: null,
-            descricao: aula.descricao ?? null,
-            status: aula.status ?? null,
-            origem: "AULA_AO_VIVO_CREATOR",
-            thumbUrl: aula.thumbUrl ?? null,
-            totalParticipantes: aula.totalParticipantes ?? null,
-            criadorLabel: criadorCreatorLabel,
-            convidadosLabel: getConvidadosLabelFromAula(aula),
-          }))
-        : [];
+            dataEvento:
+              dt,
 
-      const porChave = new Map<string, EventoItem>();
+            inicio:
+              e.inicio ??
+              null,
+
+            cidade:
+              e.cidade ??
+              null,
+
+            estado:
+              e.estado ??
+              null,
+
+            endereco:
+              e.endereco ??
+              null,
+
+            descricao:
+              e.descricao ??
+              null,
+
+            status:
+              e.status ??
+              null,
+
+            origem:
+              "EVENTO_ESCOLINHA",
+
+            criadorLabel:
+              data?.escolinha?.nome ||
+              data?.usuario?.nome ||
+              null,
+
+            convidadosLabel:
+              null,
+          };
+        });
+
+      const aulasAoVivoDaEscola:
+        EventoItem[] =
+        extrairEventos(
+          aulasAoVivoResp
+        ).map((aula: any) => ({
+          id:
+            String(aula.id),
+
+          titulo:
+            String(
+              aula.titulo ??
+                "Aula ao vivo"
+            ),
+
+          tipo:
+            "Aula ao vivo",
+
+          dataEvento:
+            String(
+              aula.dataInicio ??
+                ""
+            ),
+
+          inicio:
+            String(
+              aula.dataInicio ??
+                ""
+            ),
+
+          cidade:
+            null,
+
+          estado:
+            null,
+
+          endereco:
+            null,
+
+          descricao:
+            aula.descricao ??
+            null,
+
+          status:
+            aula.status ??
+            null,
+
+          origem:
+            "AULA_AO_VIVO_ESCOLINHA",
+
+          thumbUrl:
+            aula.thumbUrl ??
+            null,
+
+          totalParticipantes:
+            aula.totalParticipantes ??
+            null,
+
+          criadorLabel:
+            data?.escolinha?.nome ||
+            data?.usuario?.nome ||
+            null,
+
+          convidadosLabel:
+            getConvidadosLabelFromAula(
+              aula
+            ),
+        }));
+
+      const porChave =
+        new Map<
+          string,
+          EventoItem
+        >();
 
       for (const evento of [
         ...eventosDaEscola,
-        ...eventosGeraisDoCreator,
-        ...aulasAoVivoCreator,
+        ...aulasAoVivoDaEscola,
       ]) {
         const chave =
-          evento.origem === "AULA_AO_VIVO_CREATOR"
+          evento.origem ===
+          "AULA_AO_VIVO_ESCOLINHA"
             ? `AULA:${evento.id}`
             : `EVENTO:${evento.id}`;
 
-        if (!porChave.has(chave)) {
-          porChave.set(chave, evento);
+        if (
+          !porChave.has(
+            chave
+          )
+        ) {
+          porChave.set(
+            chave,
+            evento
+          );
         }
       }
 
-      const hojeBR = getDiaBR(new Date().toISOString());
+      const hojeBR =
+        getDiaBR(
+          new Date().toISOString()
+        );
 
-      const filtradosOrdenados = Array.from(porChave.values())
-        .filter((evento) => {
-          const status = String(evento.status || "").toUpperCase();
+      const filtradosOrdenados =
+        Array.from(
+          porChave.values()
+        )
+          .filter((evento) => {
+            const status =
+              String(
+                evento.status ||
+                  ""
+              ).toUpperCase();
 
-          if (status === "AO_VIVO") return true;
+            if (
+              status ===
+              "AO_VIVO"
+            ) {
+              return true;
+            }
 
-          if (
-            [
-              "FINALIZADA",
-              "FINALIZADO",
-              "ENCERRADA",
-              "ENCERRADO",
-              "CANCELADA",
-              "CANCELADO",
-            ].includes(status)
-          ) {
-            return false;
-          }
+            if (
+              [
+                "FINALIZADA",
+                "FINALIZADO",
+                "ENCERRADA",
+                "ENCERRADO",
+                "CANCELADA",
+                "CANCELADO",
+              ].includes(status)
+            ) {
+              return false;
+            }
 
-          const diaEventoBR = getDiaBR(evento.dataEvento || evento.inicio);
-          return Boolean(diaEventoBR && diaEventoBR >= hojeBR);
-        })
-        .sort((a, b) => {
-          const da = new Date(a.dataEvento || a.inicio || 0).getTime();
-          const db = new Date(b.dataEvento || b.inicio || 0).getTime();
-          return da - db;
-        });
+            const diaEventoBR =
+              getDiaBR(
+                evento.dataEvento ||
+                  evento.inicio
+              );
 
-      setEventos(filtradosOrdenados);
+            return Boolean(
+              diaEventoBR &&
+                diaEventoBR >=
+                  hojeBR
+            );
+          })
+          .sort((a, b) => {
+            const da =
+              new Date(
+                a.dataEvento ||
+                  a.inicio ||
+                  0
+              ).getTime();
+
+            const db =
+              new Date(
+                b.dataEvento ||
+                  b.inicio ||
+                  0
+              ).getTime();
+
+            return da - db;
+          });
+
+      setEventos(
+        filtradosOrdenados
+      );
     } catch (err) {
-      console.error("Erro ao carregar eventos da escolinha:", err);
+      console.error(
+        "Erro ao carregar eventos da escolinha:",
+        err
+      );
+
       setEventos([]);
-      setCreatorAtivoLocal(false);
     } finally {
-      setEventosLoading(false);
+      setEventosLoading(
+        false
+      );
     }
   }
 
@@ -1194,7 +1322,8 @@ export default function PerfilEscola({
     if (!token) return;
 
     const ownerId =
-      data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+      data?.escolinha?.id ??
+      null
 
     if (!ownerId) {
       setConquistasReal(0);
@@ -1255,21 +1384,12 @@ export default function PerfilEscola({
 
   const escolinhaIdStr = data.escolinha.id;
 
-  const usuarioCreatorDoPerfil = String(
-    creatorUsuarioId ||
-      data.escolinha.usuarioId ||
-      data.usuario?.id ||
-      (isOwn ? Storage.usuarioId : "") ||
-      "",
-  ).trim();
-
-  const mostrarCreator = Boolean(hasCreator || creatorAtivoLocal);
   const eventosVisiveis = mostrarTodosEventos
     ? (eventos ?? [])
     : (eventos ?? []).slice(0, 5);
 
   const ownerIdDashboard =
-    data.escolinha.id || (isOwn ? Storage.tipoUsuarioId : "");
+    data.escolinha.id;
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -1289,8 +1409,10 @@ export default function PerfilEscola({
         perfilTipoIdProp={data.escolinha.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
-        hasCreator={mostrarCreator}
-        creatorUsuarioId={usuarioCreatorDoPerfil || null}
+        hasCreator={hasCreator}
+        creatorUsuarioId={
+          creatorUsuarioId
+        }
       />
 
       <div className="mt-4 px-3 sm:px-4">
@@ -1674,11 +1796,7 @@ export default function PerfilEscola({
             right={
               isOwn ? (
                 <Link
-                  href={
-                    mostrarCreator
-                      ? "/creator/eventos"
-                      : `/eventos/escolas/${escolinhaIdStr}`
-                  }
+                  href={`/eventos/escolas/${escolinhaIdStr}`}
                   className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
                 >
                   Ver todos os eventos
@@ -1704,11 +1822,7 @@ export default function PerfilEscola({
             {isOwn && (
               <div className="mt-4">
                 <Link
-                  href={
-                    mostrarCreator
-                      ? "/creator/eventos/novo"
-                      : `/eventos/escolas/${escolinhaIdStr}/novo`
-                  }
+                  href={`/eventos/escolas/${escolinhaIdStr}/novo`}
                   className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white font-semibold px-3 sm:px-4 py-2 hover:bg-green-700"
                 >
                   <PlusCircle className="w-4 h-4" />
@@ -1733,19 +1847,23 @@ export default function PerfilEscola({
                       .filter(Boolean)
                       .join(" • ");
                     const tipoLabel =
-                      e.origem === "AULA_AO_VIVO_CREATOR"
+                      e.origem ===
+                      "AULA_AO_VIVO_ESCOLINHA"
                         ? "Aula ao vivo"
                         : e.tipo || "Evento";
 
                     const participantes =
-                      e.origem === "AULA_AO_VIVO_CREATOR" &&
+                      e.origem === "AULA_AO_VIVO_ESCOLINHA" &&
                       typeof e.totalParticipantes === "number"
                         ? `${e.totalParticipantes} participantes`
                         : "";
 
                     const href =
-                      e.origem === "AULA_AO_VIVO_CREATOR"
-                        ? `/learning/evento/${e.id}`
+                      e.origem ===
+                      "AULA_AO_VIVO_ESCOLINHA"
+                        ? `/learning/live?aulaId=${encodeURIComponent(
+                            e.id
+                          )}`
                         : `/eventos/${e.id}`;
 
                     return (
@@ -1807,13 +1925,17 @@ export default function PerfilEscola({
                   })}
                 </ul>
               ) : (
-                <EmptyState text="Nenhum evento futuro cadastrado." />
+                <EmptyState text="Nenhum evento ou aula ao vivo futura cadastrada." />
               )}
             </div>
           </SectionCard>
 
-          {mostrarCreator && usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
+          {escolinhaId ? (
+            <ProfileReplaysSection
+              contextoKind="ORGANIZATION"
+              contextoTipo="ESCOLA"
+              contextoLegacyOrganizationId={escolinhaId}
+            />
           ) : null}
         </div>
       )}

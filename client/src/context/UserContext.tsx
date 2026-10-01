@@ -12,6 +12,7 @@ import {
   applyAuthSession,
   clearAuthSession,
   type ActiveContextSession,
+  readAuthSessionSnapshot,
 } from "../utils/authSession.js";
 
 export interface User {
@@ -36,6 +37,7 @@ export type AppPermission =
   | "GERENCIAR_TURMA"
   | "GERENCIAR_ORGANIZACAO"
   | "CRIAR_EVENTO"
+  | "CRIAR_AULA_AO_VIVO"
   | "PUBLICAR_METODOLOGIA"
   | "VER_ADMIN";
 
@@ -49,6 +51,7 @@ const EMPTY_PERMISSIONS: PermissionMap = {
   CRIAR_EVENTO: false,
   PUBLICAR_METODOLOGIA: false,
   VER_ADMIN: false,
+  CRIAR_AULA_AO_VIVO: false,
 };
 
 export interface UserContextType {
@@ -81,6 +84,18 @@ export interface UserContextType {
   activeContext:
     ActiveContextSession | null;
 
+  activeTipoUsuario:
+    string | null;
+
+  activeTipoUsuarioId:
+    string | null;
+
+  activeOrganizationId:
+    string | null;
+
+  isOrganizationContext:
+    boolean;
+    
   contexts:
     ActiveContextSession[];
 
@@ -101,34 +116,28 @@ export const UserContext =
     undefined
   );
 
-function readStoredSessionUser(): User | null {
-  if (typeof window === "undefined") {
+function readStoredSessionUser():
+  User | null {
+  const session =
+    readAuthSessionSnapshot();
+
+  if (
+    !session.token ||
+    !session.usuarioId
+  ) {
     return null;
   }
-
-  const token =
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    "";
-
-  const usuarioId =
-    localStorage.getItem("usuarioId") ||
-    sessionStorage.getItem("usuarioId") ||
-    "";
-
-  if (!token || !usuarioId) {
-    return null;
-  }
-
-  const username =
-    localStorage.getItem("nomeUsuario") ||
-    sessionStorage.getItem("nomeUsuario") ||
-    "";
 
   return {
-    id: usuarioId,
-    name: username || "Usuário FootEra",
-    username,
+    id:
+      session.usuarioId,
+
+    name:
+      session.nomeUsuario ||
+      "Usuário FootEra",
+
+    username:
+      session.nomeUsuario,
   };
 }
 
@@ -167,7 +176,11 @@ export function UserProvider({
     useState<
       ActiveContextSession |
       null
-    >(null);
+    >(
+      () =>
+        readAuthSessionSnapshot()
+          .activeContext
+    );
 
   const [
     contexts,
@@ -187,13 +200,8 @@ export function UserProvider({
     useCallback(
       async () => {
         const token =
-          localStorage.getItem(
-            "token"
-          ) ||
-          sessionStorage.getItem(
-            "token"
-          ) ||
-          "";
+          readAuthSessionSnapshot()
+            .token;
 
         if (!token) {
           setPermissions({
@@ -270,13 +278,8 @@ export function UserProvider({
     useCallback(
       async () => {
         const token =
-          localStorage.getItem(
-            "token"
-          ) ||
-          sessionStorage.getItem(
-            "token"
-          ) ||
-          "";
+          readAuthSessionSnapshot()
+            .token;
 
         if (!token) {
           setActiveContext(
@@ -365,13 +368,8 @@ export function UserProvider({
           string
       ) => {
         const token =
-          localStorage.getItem(
-            "token"
-          ) ||
-          sessionStorage.getItem(
-            "token"
-          ) ||
-          "";
+          readAuthSessionSnapshot()
+            .token;
 
         if (!token) {
           throw new Error(
@@ -549,6 +547,26 @@ export function UserProvider({
       }
     }, []);
 
+  const activeTipoUsuario =
+    activeContext
+      ?.tipoUsuario ??
+    null;
+
+  const activeTipoUsuarioId =
+    activeContext
+      ?.tipoUsuarioId ??
+    null;
+
+  const activeOrganizationId =
+    activeContext
+      ?.organizationId ??
+    null;
+
+  const isOrganizationContext =
+    activeContext
+      ?.kind ===
+    "ORGANIZATION";
+
   return (
     <UserContext.Provider
       value={{
@@ -569,6 +587,10 @@ export function UserProvider({
         permissionsLoading,
         can,
         refreshPermissions,
+        activeTipoUsuario,
+        activeTipoUsuarioId,
+        activeOrganizationId,
+        isOrganizationContext,
       }}
     >
       {children}

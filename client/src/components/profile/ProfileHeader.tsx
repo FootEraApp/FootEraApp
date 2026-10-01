@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { Link } from "wouter";
 import {
   Users,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
 import Avatar from "../shared/Avatar.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
@@ -25,7 +25,9 @@ import {
   limparAcaoPendenteAuth,
 } from "../../utils/authSession.js";
 import PublicShareModal from "../share/PublicShareModal.js";
-
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
@@ -183,6 +185,21 @@ export default function ProfileHeader({
     handleAuthError,
   } = useAuthGate();
 
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeTipoUsuario =
+    userContext
+      ?.activeTipoUsuario ??
+    null;
+
+  const activeTipoUsuarioId =
+    userContext
+      ?.activeTipoUsuarioId ??
+    null;
+
   const authToken =
     Storage.token ||
     localStorage.getItem("token") ||
@@ -193,9 +210,14 @@ export default function ProfileHeader({
     Boolean(authToken);
 
   const viewerTipo =
+    activeTipoUsuario ??
     (Storage as any).tipoSalvo ??
-    localStorage.getItem("tipoUsuario") ??
-    sessionStorage.getItem("tipoUsuario") ??
+    localStorage.getItem(
+      "tipoUsuario"
+    ) ??
+    sessionStorage.getItem(
+      "tipoUsuario"
+    ) ??
     "";
 
   const viewerTipoNorm = normalizeTipo(viewerTipo);
@@ -735,7 +757,10 @@ useEffect(() => {
     if (isOwnProfile) return;
 
     const token = Storage.token;
-    const ownerId = Storage.tipoUsuarioId;
+    const ownerId =
+      activeTipoUsuarioId ??
+      Storage.tipoUsuarioId;
+
     const tipo =
       (Storage as any).tipoSalvo ??
       localStorage.getItem("tipoUsuario") ??
@@ -1748,8 +1773,10 @@ useEffect(() => {
   ): Promise<"ok" | "dup" | "auth" | "err"> => {
     try {
       const token = Storage.token;
-      const ownerId = Storage.tipoUsuarioId;
-      
+      const ownerId =
+        activeTipoUsuarioId ??
+        Storage.tipoUsuarioId;
+            
       const tipo =
         (Storage as any).tipoSalvo ??
         localStorage.getItem("tipoUsuario") ??
@@ -1797,7 +1824,10 @@ useEffect(() => {
       if (observando) {
         const prev = observando;
         setObservando(false);
-        const ownerId = Storage.tipoUsuarioId;
+        const ownerId =
+          activeTipoUsuarioId ??
+          Storage.tipoUsuarioId;
+
         const tipo =
           (Storage as any).tipoSalvo ??
           localStorage.getItem("tipoUsuario") ??

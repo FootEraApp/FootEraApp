@@ -11,13 +11,13 @@ import {
   X,
   Pencil,
 } from "lucide-react";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import { API, APP } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
-import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -226,30 +226,16 @@ export default function PerfilOlheiro({
   } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
-  const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
-  const [creatorUsuarioIdLocal, setCreatorUsuarioIdLocal] = useState<
-    string | null
-  >(null);
   const [eventos, setEventos] = useState<EventoPerfilItem[]>([]);
+
+  const olheiroId =
+    data?.olheiro?.id ??
+    null;
 
   const perfilUsuarioId = String(
     data?.usuario?.id || data?.olheiro?.usuarioId || "",
   ).trim();
 
-  const usuarioCreatorDoPerfil = String(
-    creatorUsuarioId ||
-      creatorUsuarioIdLocal ||
-      perfilUsuarioId ||
-      (isOwn ? Storage.usuarioId : "") ||
-      "",
-  ).trim();
-
-  const mostrarCreator = Boolean(
-    (hasCreator && usuarioCreatorDoPerfil) ||
-      (creatorAtivoLocal && creatorUsuarioIdLocal),
-  );
-
-  const creatorLinkUsuarioId = usuarioCreatorDoPerfil;
   const [eventosLoading, setEventosLoading] = useState(false);
   const [eventosErro, setEventosErro] = useState("");
   const [mostrarTodosEventos, setMostrarTodosEventos] = useState(false);
@@ -286,8 +272,8 @@ export default function PerfilOlheiro({
     const cancel = { v: false };
     const targetUserForActivities =
       data?.usuario?.id ??
-      data?.olheiro?.usuarioId ??
-      (isOwn ? Storage.usuarioId : idDaUrl);
+      data?.olheiro?.id ??
+      null
 
     async function fetchAtividades() {
       if (!targetUserForActivities) {
@@ -308,7 +294,8 @@ export default function PerfilOlheiro({
 
     async function fetchObservados() {
       const ownerId =
-        data?.olheiro?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+        data?.olheiro?.id ??
+        null
 
       if (!ownerId) {
         if (!cancel.v) setObservados([]);
@@ -336,7 +323,9 @@ export default function PerfilOlheiro({
 
     async function fetchIndicacoes() {
       const tipoId =
-        data?.olheiro?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+        data?.olheiro?.id ??
+        null
+        
       if (!tipoId) {
         if (!cancel.v) setIndicacoes([]);
         return;
@@ -497,43 +486,11 @@ export default function PerfilOlheiro({
   }, [clubeQuery]);
 
   useEffect(() => {
-    if (!token) return;
+    if (aba !== "eventos") {
+      return;
+    }
 
-    const usuarioIdParaChecar =
-      data?.usuario?.id ||
-      data?.olheiro?.usuarioId ||
-      (!isOwn ? idDaUrl : Storage.usuarioId) ||
-      "";
-
-    if (!usuarioIdParaChecar) return;
-
-    let cancel = false;
-
-    fetch(`${API.BASE_URL}/api/creator/profile/${usuarioIdParaChecar}`, {
-      headers,
-    })
-      .then((r) => {
-        if (!cancel) {
-          setCreatorAtivoLocal(r.ok);
-          setCreatorUsuarioIdLocal(r.ok ? usuarioIdParaChecar : null);
-        }
-      })
-      .catch(() => {
-        if (!cancel) {
-          setCreatorAtivoLocal(false);
-          setCreatorUsuarioIdLocal(null);
-        }
-      });
-
-    return () => {
-      cancel = true;
-    };
-  }, [token, data?.usuario?.id, data?.olheiro?.usuarioId, idDaUrl, isOwn]);
-
-  useEffect(() => {
-    if (aba !== "eventos") return;
-
-    if (!usuarioCreatorDoPerfil) {
+    if (!olheiroId) {
       setEventos([]);
       setEventosErro("");
       setEventosLoading(false);
@@ -547,134 +504,118 @@ export default function PerfilOlheiro({
       setEventosErro("");
 
       try {
-        const requestHeaders = token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined;
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/aulas-ao-vivo/publicas/contexto`,
+            {
+              params: {
+                contextoKind:
+                  "PERSONAL",
 
-        const [eventosResultado, livesResultado] = await Promise.allSettled([
-          axios.get(`${API.BASE_URL}/api/eventos`, {
-            params: {
-              creatorUsuarioId: usuarioCreatorDoPerfil,
-            },
-            headers: requestHeaders,
-          }),
-          axios.get(
-            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-              usuarioCreatorDoPerfil,
-            )}`,
-            { headers: requestHeaders },
-          ),
-        ]);
+                contextoTipo:
+                  "Olheiro",
 
-        if (cancelado) return;
-
-        const eventosPayload =
-          eventosResultado.status === "fulfilled"
-            ? eventosResultado.value.data
-            : [];
-
-        const eventosArray = Array.isArray(eventosPayload)
-          ? eventosPayload
-          : Array.isArray(eventosPayload?.items)
-            ? eventosPayload.items
-            : Array.isArray(eventosPayload?.eventos)
-              ? eventosPayload.eventos
-              : Array.isArray(eventosPayload?.data)
-                ? eventosPayload.data
-                : [];
-
-        const creatorPayload =
-          livesResultado.status === "fulfilled"
-            ? livesResultado.value.data
-            : null;
-
-        const eventosNormais: EventoPerfilItem[] = eventosArray.map(
-          (evento: any) => ({
-            id: String(evento.id),
-            origem: "EVENTO",
-            titulo: String(evento.titulo ?? evento.nome ?? "Evento"),
-            descricao: evento.descricao ?? null,
-            data: String(
-              evento.dataEvento ?? evento.data ?? evento.inicio ?? "",
-            ),
-            tipoLabel: String(evento.tipoLabel ?? evento.tipo ?? "Evento"),
-            status: String(evento.status ?? "ABERTO"),
-            cidade: evento.cidade ?? null,
-            estado: evento.estado ?? null,
-            totalParticipantes: null,
-          }),
-        );
-
-        const aulasAoVivo: EventoPerfilItem[] = Array.isArray(
-          creatorPayload?.eventosAoVivo,
-        )
-          ? creatorPayload.eventosAoVivo.map((aula: any) => ({
-              id: String(aula.id),
-              origem: "AULA_AO_VIVO",
-              titulo: String(aula.titulo ?? "Aula ao vivo"),
-              descricao: aula.descricao ?? null,
-              data: String(aula.dataInicio ?? aula.inicio ?? ""),
-              tipoLabel: "Aula ao vivo",
-              status: String(aula.status ?? "AGENDADA"),
-              cidade: null,
-              estado: null,
-              totalParticipantes:
-                typeof aula.totalParticipantes === "number"
-                  ? aula.totalParticipantes
-                  : null,
-            }))
-          : [];
-
-        const agora = Date.now();
-
-        const proximos = [...eventosNormais, ...aulasAoVivo]
-          .filter((evento) => {
-            const status = String(evento.status || "").toUpperCase();
-
-            if (status === "AO_VIVO") return true;
-
-            if (
-              [
-                "FINALIZADA",
-                "FINALIZADO",
-                "ENCERRADO",
-                "CANCELADA",
-                "CANCELADO",
-              ].includes(status)
-            ) {
-              return false;
+                contextoPerfilId:
+                  olheiroId,
+              },
             }
-
-            const timestamp = new Date(evento.data).getTime();
-            return Number.isFinite(timestamp) && timestamp >= agora;
-          })
-          .sort(
-            (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime(),
           );
 
-        const unicos = Array.from(
-          new Map(
-            proximos.map((evento) => [`${evento.origem}:${evento.id}`, evento]),
-          ).values(),
+        if (cancelado) {
+          return;
+        }
+
+        const payload =
+          resposta.data;
+
+        const aulasArray =
+          Array.isArray(payload)
+            ? payload
+            : Array.isArray(
+                  payload?.items
+                )
+              ? payload.items
+              : Array.isArray(
+                    payload?.data
+                  )
+                ? payload.data
+                : [];
+
+        const aulasAoVivo:
+          EventoPerfilItem[] =
+          aulasArray.map(
+            (aula: any) => ({
+              id:
+                String(aula.id),
+
+              origem:
+                "AULA_AO_VIVO",
+
+              titulo:
+                String(
+                  aula.titulo ??
+                    "Aula ao vivo"
+                ),
+
+              descricao:
+                aula.descricao ??
+                null,
+
+              data:
+                String(
+                  aula.dataInicio ??
+                    ""
+                ),
+
+              tipoLabel:
+                "Aula ao vivo",
+
+              status:
+                String(
+                  aula.status ??
+                    "AGENDADA"
+                ),
+
+              cidade:
+                null,
+
+              estado:
+                null,
+
+              totalParticipantes:
+                typeof aula.totalParticipantes ===
+                "number"
+                  ? aula.totalParticipantes
+                  : null,
+            })
+          );
+
+        setEventos(
+          aulasAoVivo
+        );
+      } catch (erro: any) {
+        if (cancelado) {
+          return;
+        }
+
+        console.error(
+          "Erro ao carregar aulas ao vivo do olheiro:",
+          erro
         );
 
-        setEventos(unicos);
+        setEventos([]);
 
-        if (
-          eventosResultado.status === "rejected" &&
-          livesResultado.status === "rejected"
-        ) {
-          setEventosErro("Não foi possível carregar os eventos agora.");
-        }
-      } catch (error) {
-        console.error("Erro ao carregar eventos do olheiro:", error);
-
-        if (!cancelado) {
-          setEventos([]);
-          setEventosErro("Não foi possível carregar os eventos agora.");
-        }
+        setEventosErro(
+          erro?.response?.data
+            ?.message ||
+            "Não foi possível carregar as aulas ao vivo."
+        );
       } finally {
-        if (!cancelado) setEventosLoading(false);
+        if (!cancelado) {
+          setEventosLoading(
+            false
+          );
+        }
       }
     }
 
@@ -683,11 +624,14 @@ export default function PerfilOlheiro({
     return () => {
       cancelado = true;
     };
-  }, [aba, usuarioCreatorDoPerfil, token]);
+  }, [
+    aba,
+    olheiroId,
+  ]);
 
   useEffect(() => {
     setMostrarTodosEventos(false);
-  }, [usuarioCreatorDoPerfil]);
+  }, [olheiroId]);
 
   const eventosVisiveis = mostrarTodosEventos ? eventos : eventos.slice(0, 5);
 
@@ -809,8 +753,8 @@ export default function PerfilOlheiro({
         perfilTipoIdProp={data.olheiro.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
-        hasCreator={mostrarCreator}
-        creatorUsuarioId={creatorLinkUsuarioId}
+        hasCreator={hasCreator}
+        creatorUsuarioId={creatorUsuarioId}
       />
       {colaboracaoAtual && (
         <div className="px-4 mt-2">
@@ -1403,40 +1347,24 @@ export default function PerfilOlheiro({
       {aba === "eventos" && (
         <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
-            title="Eventos"
+            title="Aulas ao vivo"
             right={
-              <div className="flex flex-wrap gap-2">
-                {isOwn ? (
-                  <Link
-                    href="/creator/eventos"
-                    className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
-                  >
-                    Ver todos os eventos
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setMostrarTodosEventos((anterior) => !anterior)
-                    }
-                    className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
-                  >
-                    {mostrarTodosEventos
-                      ? "Mostrar menos"
-                      : "Ver todos os eventos"}
-                  </button>
-                )}
-
-                {isOwn && (
-                  <Link
-                    href="/creator/eventos/novo"
-                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Criar novo evento
-                  </Link>
-                )}
-              </div>
+              eventos.length > 5 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMostrarTodosEventos(
+                      (anterior) =>
+                        !anterior
+                    )
+                  }
+                  className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-900 hover:bg-green-50"
+                >
+                  {mostrarTodosEventos
+                    ? "Mostrar menos"
+                    : "Ver todas as aulas"}
+                </button>
+              ) : null
             }
           >
             {eventosLoading ? (
@@ -1469,9 +1397,9 @@ export default function PerfilOlheiro({
                       : "";
 
                   const href =
-                    evento.origem === "AULA_AO_VIVO"
-                      ? `/learning/evento/${evento.id}`
-                      : `/eventos/${evento.id}`;
+                    `/learning/live?aulaId=${encodeURIComponent(
+                      evento.id
+                    )}`;
 
                   return (
                     <li key={`${evento.origem}:${evento.id}`}>
@@ -1519,12 +1447,15 @@ export default function PerfilOlheiro({
                 })}
               </ul>
             ) : (
-              <EmptyState text="Nenhum evento futuro cadastrado." />
+              <EmptyState text="Nenhuma aula ao vivo futura cadastrada." />
             )}
           </SectionCard>
-
-          {usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
+          {olheiroId ? (
+            <ProfileReplaysSection
+              contextoKind="PERSONAL"
+              contextoTipo="Olheiro"
+              contextoPerfilId={olheiroId}
+            />
           ) : null}
         </div>
       )}

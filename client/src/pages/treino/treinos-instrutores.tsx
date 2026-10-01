@@ -456,35 +456,6 @@ function getOwnerIdsFromTreino(tr: any) {
   return { clubeId, escolinhaId, professorId };
 }
 
-function getTipoUsuarioIdFromMe(tipo: string, me: any): string {
-  const t = String(tipo || "").toLowerCase();
-
-  const clubeId =
-    pickId(me?.clube?.id) || pickId(me?.Clube?.id) || pickId(me?.clubeId) || pickId(me?.ClubeId);
-
-  const escolinhaId =
-    pickId(me?.escolinha?.id) || pickId(me?.Escolinha?.id) || pickId(me?.escolinhaId) || pickId(me?.EscolinhaId);
-
-  const professorId =
-    pickId(me?.professor?.id) || pickId(me?.Professor?.id) || pickId(me?.professorId) || pickId(me?.ProfessorId);
-
-  const atletaId =
-    pickId(me?.atleta?.id) || pickId(me?.Atleta?.id) || pickId(me?.atletaId) || pickId(me?.AtletaId);
-
-  const adminId =
-    pickId(me?.admin?.id) || pickId(me?.Administrador?.id) || pickId(me?.adminId) || pickId(me?.administradorId);
-
-  const tipoUsuarioId = pickId(me?.tipoUsuarioId) || pickId(me?.tipoUsuario?.id);
-
-  if (t === "clube") return clubeId || tipoUsuarioId;
-  if (t === "escolinha" || t === "escola") return escolinhaId || tipoUsuarioId;
-  if (t === "professor") return professorId || tipoUsuarioId;
-  if (t === "atleta") return atletaId || tipoUsuarioId;
-  if (t === "admin") return adminId || tipoUsuarioId;
-
-  return tipoUsuarioId;
-}
-
 const getToken = () =>
   (Storage as any).token ??
   localStorage.getItem("token") ??
@@ -552,6 +523,72 @@ export default function TreinosInstrutores({
     useContext(
       UserContext
     );
+
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
+  const activeOwnerTipo =
+    useMemo(() => {
+      if (
+        activeContext?.kind ===
+        "ORGANIZATION"
+      ) {
+        return String(
+          activeContext
+            .organizationType ??
+          ""
+        ).toUpperCase() ===
+          "CLUBE"
+          ? "clube"
+          : "escolinha";
+      }
+
+      return String(
+        authContext
+          ?.activeTipoUsuario ??
+        tipo ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
+    }, [
+      activeContext?.key,
+      activeContext?.kind,
+      activeContext
+        ?.organizationType,
+      authContext
+        ?.activeTipoUsuario,
+      tipo,
+    ]);
+
+  const activeOwnerId =
+    useMemo(() => {
+      if (
+        activeContext?.kind ===
+        "ORGANIZATION"
+      ) {
+        return String(
+          activeContext
+            .legacyOrganizationId ??
+          ""
+        ).trim();
+      }
+
+      return String(
+        authContext
+          ?.activeTipoUsuarioId ??
+        ""
+      ).trim();
+    }, [
+      activeContext?.key,
+      activeContext?.kind,
+      activeContext
+        ?.legacyOrganizationId,
+      authContext
+        ?.activeTipoUsuarioId,
+    ]);
 
   const podeCriarTreino =
     authContext?.can(
@@ -1785,74 +1822,100 @@ export default function TreinosInstrutores({
   }, [cameraModal.open, cameraModal.previewUrl, cameraModal.mediaStream]);
 
   useEffect(() => {
-    const tipoSalvo =
-      (Storage as any).tipoSalvo ??
-      (Storage as any).tipoUsuario ??
-      (Storage as any).tipo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario");
-
     const usuarioId =
-      (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
-    const tipoUsuarioId =
-      (Storage as any).tipoUsuarioId ??
-      localStorage.getItem("tipoUsuarioId") ??
-      "";
+      authContext
+        ?.user?.id
+        ? String(
+            authContext
+              .user.id
+          )
+        : "";
 
-    const t = String(tipoSalvo || "").toLowerCase() as UsuarioLogado["tipo"];
     if (
-      [
-        "admin",
-        "atleta",
-        "escola",
-        "escolinha",
-        "clube",
-        "professor",
-        "olheiro",
-      ].includes(t) &&
-      usuarioId
+      !usuarioId ||
+      !activeOwnerTipo ||
+      !activeOwnerId
     ) {
-      setUsuario({ tipo: t, usuarioId, tipoUsuarioId });
-      (async () => {
-        const token = getToken();
-        if (!token) return;
+      setUsuario(
+        null
+      );
 
-        try {
-          const r = await fetch(`${API.BASE_URL}/api/perfil/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!r.ok) return;
+      return;
+    }
 
-          const me = await r.json().catch(() => ({}));
+    setUsuario({
+      tipo:
+        activeOwnerTipo as
+          UsuarioLogado["tipo"],
 
-          const nome =
-            me?.usuario?.nome ||
-            me?.nome ||
-            me?.professor?.usuario?.nome ||
-            me?.professor?.nome ||
-            me?.clube?.nome ||
-            me?.escolinha?.nome ||
-            "";
+      usuarioId,
 
-          setMeuNome(String(nome || "").trim());
+      tipoUsuarioId:
+        activeOwnerId,
+    });
 
-          const tipoIdReal = getTipoUsuarioIdFromMe(t, me);
+    /*
+    * /perfil/me continua sendo usado
+    * somente para obter o nome.
+    *
+    * NÃO usamos mais a resposta para
+    * descobrir o contexto/ID ativo.
+    */
+    (async () => {
+      const token =
+        getToken();
 
-          if (tipoIdReal) {
-            setUsuario((prev) =>
-              prev ? { ...prev, tipoUsuarioId: tipoIdReal } : { tipo: t, usuarioId, tipoUsuarioId: tipoIdReal },
+      if (!token) {
+        return;
+      }
+
+      try {
+        const r =
+          await fetch(
+            `${API.BASE_URL}/api/perfil/me`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        if (!r.ok) {
+          return;
+        }
+
+        const me =
+          await r
+            .json()
+            .catch(
+              () => ({})
             );
 
-            localStorage.setItem("tipoUsuarioId", tipoIdReal);
-            sessionStorage.setItem("tipoUsuarioId", tipoIdReal);
-          }
-        } catch {}
-      })();
+        const nome =
+          me?.usuario?.nome ||
+          me?.nome ||
+          me?.professor
+            ?.usuario?.nome ||
+          me?.professor?.nome ||
+          me?.clube?.nome ||
+          me?.escolinha?.nome ||
+          "";
 
-    } else {
-      console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
-    }
-  }, []);
+        setMeuNome(
+          String(
+            nome ||
+            ""
+          ).trim()
+        );
+      } catch {}
+    })();
+  }, [
+    authContext?.user?.id,
+    activeContext?.key,
+    activeOwnerTipo,
+    activeOwnerId,
+  ]);
 
   const listaParaExibir =
     usuario?.tipo === "admin"
@@ -1923,42 +1986,28 @@ export default function TreinosInstrutores({
 
     if (!usuarioReady.ready) return;
 
-    const tipoTela = String(usuarioReady.tipoOk || "").toLowerCase();
-    const vinculo =
-      tipoTela === "escolinha" || tipoTela === "escola" ? "escolinha" :
-      tipoTela === "clube" ? "clube" :
-      tipoTela === "professor" ? "professor" :
-      "";
+    const url =
+      `${API.BASE_URL}/api/treinosprogramados` +
+      `?onlyMine=true` +
+      `&incluirColabs=1` +
+      `&order=desc` +
+      `&limit=200`;
 
-    const entidadeIdReal = String(usuarioReady.idOk || "").trim();
-    const entidadeFallback = String(usuario?.usuarioId || "").trim();
-    const idParaEnviar = entidadeIdReal || entidadeFallback;
+    const headers = {
+      Authorization:
+        `Bearer ${token}`,
+    };
 
-    if (!vinculo || !idParaEnviar) return;
-
-    const headers = { Authorization: `Bearer ${token}` };
-
-    const run = async () => {
-      try {
-        const isProfessor = vinculo === "professor";
-
-        const url = isProfessor
-          ? `${API.BASE_URL}/api/treinosprogramados` +
-            `?professorId=${encodeURIComponent(idParaEnviar)}` +
-            `&incluirColabs=1` +
-            `&order=desc` +
-            `&limit=200`
-          : `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis` +
-            `?vinculo=${encodeURIComponent(vinculo)}` +
-            `&id=${encodeURIComponent(idParaEnviar)}` +
-            (entidadeIdReal ? `&tipoUsuarioId=${encodeURIComponent(entidadeIdReal)}` : "") +
-            `&debug=1`;
-
+    const run =
+      async () => {
+        try {
         const r = await fetch(url, { headers });
 
         if (!r.ok) {
           const txt = await r.text().catch(() => "");
-          throw new Error(`/gerenciar/treinosprogramados/visiveis: ${r.status} ${txt}`);
+          throw new Error(
+            `/api/treinosprogramados: ${r.status} ${txt}`
+          );
         }
 
         const jsonTreinos = await r.json().catch(() => ({}));
@@ -2199,6 +2248,9 @@ export default function TreinosInstrutores({
     meuNome,
     profNomeById,
     professoresVinculadosIds,
+    activeContext?.key,
+    activeOwnerId,
+    activeOwnerTipo,
   ]);
 
   useEffect(() => {
@@ -2222,9 +2274,7 @@ export default function TreinosInstrutores({
     if (!token) return;
 
     const tipoUsuarioIdRaw =
-      String(usuario?.tipoUsuarioId ?? "").trim() ||
-      String((Storage as any).tipoUsuarioId ?? "").trim() ||
-      String((Storage as any).professorId ?? "").trim();
+      activeOwnerId;
 
     if (!tipoUsuarioIdRaw) {
       console.warn("[treinos] sem tipoUsuarioId para carregar atletas vinculados");
@@ -2267,9 +2317,7 @@ export default function TreinosInstrutores({
     if (!token) return;
 
     const tipoUsuarioIdRaw =
-      String(usuario?.tipoUsuarioId ?? "").trim() ||
-      String((Storage as any).tipoUsuarioId ?? "").trim() ||
-      String((Storage as any).professorId ?? "").trim();
+      activeOwnerId;
 
     if (!tipoUsuarioIdRaw) {
       console.warn("[treinos] sem tipoUsuarioId para carregar turmas");
@@ -2420,18 +2468,21 @@ export default function TreinosInstrutores({
 
     if (!window.confirm("Tem certeza que deseja excluir este treino?")) return;
 
-    const tipo = String(usuario?.tipo ?? "").toLowerCase();
-    const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
+    const res =
+      await fetch(
+        `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(
+          treinoId
+        )}`,
+        {
+          method:
+            "DELETE",
 
-    const res = await fetch(
-      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(treinoId)}` +
-      `?tipo=${encodeURIComponent(tipo)}` +
-      `&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
 
     const js = await res.json().catch(() => ({}));
 

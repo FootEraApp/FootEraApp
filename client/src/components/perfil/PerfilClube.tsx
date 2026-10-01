@@ -2,7 +2,7 @@ import { toast } from "@/lib/toast";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import { API, APP, FLAGS } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
@@ -18,9 +18,9 @@ import {
 } from "lucide-react";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
-import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js";
-import ProfileReplaysSection from "../perfil/ProfileReplaysSection.js";
+import ProfilePostsSection from "./ProfilePostsSection.js";
+import ProfileReplaysSection from "./ProfileReplaysSection.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -124,11 +124,9 @@ type EventoPreview = {
   cidade?: string | null;
   estado?: string | null;
   descricao?: string | null;
-
-  origem?: "EVENTO_CLUBE" | "EVENTO_CREATOR" | "AULA_AO_VIVO_CREATOR";
+  origem?: "EVENTO_CLUBE" | "AULA_AO_VIVO_CLUBE";
   thumbUrl?: string | null;
   totalParticipantes?: number | null;
-
   criadorLabel?: string | null;
   convidadosLabel?: string | null;
 };
@@ -274,7 +272,6 @@ export default function PerfilClube({
   const [eventosLoading, setEventosLoading] = useState(false);
   const [eventosErro, setEventosErro] = useState<string>("");
   const [mostrarTodosEventos, setMostrarTodosEventos] = useState(false);
-  const [creatorAtivoLocal, setCreatorAtivoLocal] = useState(false);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
   const [conquistasCount, setConquistasCount] = useState<number | null>(null);
   const [eventosCount, setEventosCount] = useState<number | null>(null);
@@ -294,7 +291,9 @@ export default function PerfilClube({
     ? vinculadosParaExibir
     : vinculadosParaExibir.slice(0, 5);
 
-  const clubeId = data?.clube?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+  const clubeId =
+    data?.clube?.id ??
+    null;
   const entidadeUsuarioId =
     data?.usuario?.id ??
     data?.clube?.usuarioId ??
@@ -898,17 +897,6 @@ export default function PerfilClube({
     ).trim();
   }
 
-  function getCriadorLabelFromCreator(resp?: any) {
-    if (!resp) return "";
-
-    return (
-      getNomePessoa(resp.creator) ||
-      getNomePessoa(resp.creator?.usuario) ||
-      getNomePessoa(resp.usuario) ||
-      getNomePessoa(resp)
-    );
-  }
-
   function getConvidadosLabelFromAula(aula?: any) {
     if (!aula) return "";
 
@@ -947,18 +935,9 @@ export default function PerfilClube({
   async function loadEventosPreview() {
     const id = clubeId;
 
-    const usuarioCreatorId = String(
-      creatorUsuarioId ||
-        data?.clube?.usuarioId ||
-        entidadeUsuarioId ||
-        (isOwn ? Storage.usuarioId : "") ||
-        "",
-    ).trim();
-
-    if (!id && !usuarioCreatorId) {
+    if (!id) {
       setEventosPreview([]);
       setEventosCount(0);
-      setCreatorAtivoLocal(false);
       return;
     }
 
@@ -966,174 +945,246 @@ export default function PerfilClube({
     setEventosLoading(true);
 
     try {
-      const eventosClubePromise = id
-        ? axios.get(`${API.BASE_URL}/api/eventos/clubes/${id}`, { headers })
-        : Promise.resolve({ data: [] });
-
-      const eventosCreatorPromise = usuarioCreatorId
-        ? axios.get(`${API.BASE_URL}/api/eventos`, {
+      const [
+        eventosClubeResult,
+        aulasAoVivoResult,
+      ] = await Promise.allSettled([
+        axios.get(
+          `${API.BASE_URL}/api/eventos/clubes/${id}`,
+          {
             headers,
-            params: { creatorUsuarioId: usuarioCreatorId },
-          })
-        : Promise.resolve({ data: [] });
+          }
+        ),
 
-      const perfilCreatorPromise = usuarioCreatorId
-        ? axios.get(
-            `${API.BASE_URL}/api/creator/profile/${encodeURIComponent(
-              usuarioCreatorId,
-            )}`,
-            { headers },
-          )
-        : Promise.resolve({ data: null });
+        axios.get(
+          `${API.BASE_URL}/api/aulas-ao-vivo/publicas/contexto`,
+          {
+            params: {
+              contextoKind:
+                "ORGANIZATION",
 
-      const [clubeResult, creatorEventosResult, creatorPerfilResult] =
-        await Promise.allSettled([
-          eventosClubePromise,
-          eventosCreatorPromise,
-          perfilCreatorPromise,
-        ]);
+              contextoTipo:
+                "CLUBE",
+
+              contextoLegacyOrganizationId:
+                id,
+            },
+          }
+        ),
+      ]);
 
       const eventosClubeResp =
-        clubeResult.status === "fulfilled" ? clubeResult.value.data : [];
-
-      const eventosCreatorResp =
-        creatorEventosResult.status === "fulfilled"
-          ? creatorEventosResult.value.data
+        eventosClubeResult.status ===
+        "fulfilled"
+          ? eventosClubeResult.value.data
           : [];
 
-      const creatorResp =
-        creatorPerfilResult.status === "fulfilled"
-          ? creatorPerfilResult.value.data
-          : null;
+      const aulasAoVivoResp =
+        aulasAoVivoResult.status ===
+        "fulfilled"
+          ? aulasAoVivoResult.value.data
+          : { items: [] };
 
-      setCreatorAtivoLocal(Boolean(creatorResp));
-
-      const extrairEventos = (payload: any): any[] =>
+      const extrairEventos = (
+        payload: any
+      ): any[] =>
         Array.isArray(payload)
           ? payload
-          : Array.isArray(payload?.items)
+          : Array.isArray(
+                payload?.items
+              )
             ? payload.items
-            : Array.isArray(payload?.eventos)
+            : Array.isArray(
+                  payload?.eventos
+                )
               ? payload.eventos
-              : Array.isArray(payload?.data)
+              : Array.isArray(
+                    payload?.data
+                  )
                 ? payload.data
                 : [];
 
-      const eventosDoClube: EventoPreview[] = extrairEventos(
-        eventosClubeResp,
-      ).map((ev: any) => ({
-        id: String(ev.id),
-        titulo: String(ev.titulo ?? ev.nome ?? "Evento"),
-        tipo: ev.tipoLabel ?? ev.tipo ?? null,
-        status: ev.status ?? null,
-        dataEvento: String(ev.dataEvento ?? ev.data ?? ev.inicio ?? ""),
-        cidade: ev.cidade ?? null,
-        estado: ev.estado ?? null,
-        descricao: ev.descricao ?? null,
-        origem: "EVENTO_CLUBE",
-        criadorLabel: data?.clube?.nome || data?.usuario?.nome || null,
-        convidadosLabel: null,
-      }));
+      const eventosDoClube:
+        EventoPreview[] =
+        extrairEventos(
+          eventosClubeResp
+        ).map((ev: any) => ({
+          id: String(ev.id),
 
-      const criadorCreatorLabel =
-        getCriadorLabelFromCreator(creatorResp) ||
-        data?.clube?.nome ||
-        data?.usuario?.nome ||
-        "";
+          titulo: String(
+            ev.titulo ??
+              ev.nome ??
+              "Evento"
+          ),
 
-      const eventosGeraisDoCreator: EventoPreview[] = extrairEventos(
-        eventosCreatorResp,
-      ).map((ev: any) => ({
-        id: String(ev.id),
-        titulo: String(ev.titulo ?? ev.nome ?? "Evento"),
-        tipo: ev.tipoLabel ?? ev.tipo ?? "Evento",
-        status: ev.status ?? null,
-        dataEvento: String(ev.dataEvento ?? ev.data ?? ev.inicio ?? ""),
-        cidade: ev.cidade ?? null,
-        estado: ev.estado ?? null,
-        descricao: ev.descricao ?? null,
-        origem: "EVENTO_CREATOR",
-        criadorLabel: criadorCreatorLabel || null,
-        convidadosLabel: null,
-      }));
+          tipo:
+            ev.tipoLabel ??
+            ev.tipo ??
+            null,
 
-      const aulasAoVivoCreator: EventoPreview[] = Array.isArray(
-        creatorResp?.eventosAoVivo,
-      )
-        ? creatorResp.eventosAoVivo.map((aula: any) => ({
-            id: String(aula.id),
-            titulo: String(aula.titulo ?? "Aula ao vivo"),
-            tipo: "Aula ao vivo",
-            status: aula.status ?? null,
-            dataEvento: String(aula.dataInicio ?? ""),
-            cidade: null,
-            estado: null,
-            descricao: aula.descricao ?? null,
-            origem: "AULA_AO_VIVO_CREATOR",
-            thumbUrl: aula.thumbUrl ?? null,
-            totalParticipantes: aula.totalParticipantes ?? null,
-            criadorLabel: criadorCreatorLabel,
-            convidadosLabel: getConvidadosLabelFromAula(aula),
-          }))
-        : [];
+          status:
+            ev.status ??
+            null,
 
-      const porChave = new Map<string, EventoPreview>();
+          dataEvento:
+            String(
+              ev.dataEvento ??
+                ev.data ??
+                ev.inicio ??
+                ""
+            ),
 
-      for (const evento of [
-        ...eventosDoClube,
-        ...eventosGeraisDoCreator,
-        ...aulasAoVivoCreator,
-      ]) {
-        const chave =
-          evento.origem === "AULA_AO_VIVO_CREATOR"
-            ? `AULA:${evento.id}`
-            : `EVENTO:${evento.id}`;
+          cidade:
+            ev.cidade ??
+            null,
 
-        if (!porChave.has(chave)) {
-          porChave.set(chave, evento);
-        }
-      }
+          estado:
+            ev.estado ??
+            null,
 
-      const hojeBR = getDiaBR(new Date().toISOString());
+          descricao:
+            ev.descricao ??
+            null,
 
-      const todos = Array.from(porChave.values())
-        .filter((evento) => {
-          const status = String(evento.status || "").toUpperCase();
+          origem:
+            "EVENTO_CLUBE",
 
-          if (status === "AO_VIVO") return true;
+          criadorLabel:
+            data?.clube?.nome ||
+            data?.usuario?.nome ||
+            null,
 
-          if (
-            [
-              "FINALIZADA",
-              "FINALIZADO",
-              "ENCERRADA",
-              "ENCERRADO",
-              "CANCELADA",
-              "CANCELADO",
-            ].includes(status)
-          ) {
-            return false;
-          }
+          convidadosLabel:
+            null,
+        }));
 
-          const diaEventoBR = getDiaBR(evento.dataEvento);
-          return Boolean(diaEventoBR && diaEventoBR >= hojeBR);
-        })
-        .sort(
-          (a, b) =>
-            new Date(a.dataEvento || 0).getTime() -
-            new Date(b.dataEvento || 0).getTime(),
+      const aulasAoVivoDoClube:
+        EventoPreview[] =
+        extrairEventos(
+          aulasAoVivoResp
+        ).map((aula: any) => ({
+          id:
+            String(aula.id),
+
+          titulo:
+            String(
+              aula.titulo ??
+                "Aula ao vivo"
+            ),
+
+          tipo:
+            "Aula ao vivo",
+
+          status:
+            aula.status ??
+            null,
+
+          dataEvento:
+            String(
+              aula.dataInicio ??
+                ""
+            ),
+
+          cidade:
+            null,
+
+          estado:
+            null,
+
+          descricao:
+            aula.descricao ??
+            null,
+
+          origem:
+            "AULA_AO_VIVO_CLUBE",
+
+          thumbUrl:
+            aula.thumbUrl ??
+            null,
+
+          totalParticipantes:
+            aula.totalParticipantes ??
+            null,
+
+          criadorLabel:
+            data?.clube?.nome ||
+            data?.usuario?.nome ||
+            null,
+
+          convidadosLabel:
+            getConvidadosLabelFromAula(
+              aula
+            ),
+        }));
+
+      const hojeBR =
+        getDiaBR(
+          new Date().toISOString()
         );
 
+      const todos =
+        [
+          ...eventosDoClube,
+          ...aulasAoVivoDoClube,
+        ]
+          .filter((evento) => {
+            const status =
+              String(
+                evento.status || ""
+              ).toUpperCase();
+
+            if (
+              status ===
+              "AO_VIVO"
+            ) {
+              return true;
+            }
+
+            if (
+              [
+                "FINALIZADA",
+                "FINALIZADO",
+                "ENCERRADA",
+                "ENCERRADO",
+                "CANCELADA",
+                "CANCELADO",
+              ].includes(status)
+            ) {
+              return false;
+            }
+
+            const diaEventoBR =
+              getDiaBR(
+                evento.dataEvento
+              );
+
+            return Boolean(
+              diaEventoBR &&
+                diaEventoBR >= hojeBR
+            );
+          })
+          .sort(
+            (a, b) =>
+              new Date(
+                a.dataEvento || 0
+              ).getTime() -
+              new Date(
+                b.dataEvento || 0
+              ).getTime()
+          );
+
       setEventosPreview(todos);
-      setEventosCount(todos.length);
+      setEventosCount(
+        todos.length
+      );
     } catch (e: any) {
       setEventosPreview([]);
       setEventosCount(0);
-      setCreatorAtivoLocal(false);
+
       setEventosErro(
         e?.response?.data?.error ||
           e?.response?.data?.message ||
-          "Não foi possível carregar os eventos agora.",
+          "Não foi possível carregar os eventos agora."
       );
     } finally {
       setEventosLoading(false);
@@ -1201,7 +1252,7 @@ export default function PerfilClube({
       loadEventosPreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, token, clubeId, hasCreator, creatorUsuarioId, entidadeUsuarioId]);
+  }, [aba, token, clubeId]);
 
   useEffect(() => {
     if (!token || !clubeId || !canEdit) return;
@@ -1346,15 +1397,6 @@ export default function PerfilClube({
   ];
   const clubeIdStr = data.clube.id;
 
-  const usuarioCreatorDoPerfil = String(
-    creatorUsuarioId ||
-      data.clube.usuarioId ||
-      data.usuario?.id ||
-      (isOwn ? Storage.usuarioId : "") ||
-      "",
-  ).trim();
-
-  const mostrarCreator = Boolean(hasCreator || creatorAtivoLocal);
   const eventosVisiveis = mostrarTodosEventos
     ? eventosPreview
     : eventosPreview.slice(0, 5);
@@ -1372,8 +1414,10 @@ export default function PerfilClube({
         perfilTipoIdProp={data.clube.id}
         isVerified={(data as any)?.perfilVerificado}
         isPro={(data as any)?.isPro}
-        hasCreator={mostrarCreator}
-        creatorUsuarioId={usuarioCreatorDoPerfil || null}
+        hasCreator={hasCreator}
+        creatorUsuarioId={
+          creatorUsuarioId
+        }
       />
 
       <div className="mt-4 px-3 sm:px-4">
@@ -1792,161 +1836,153 @@ export default function PerfilClube({
       )}
 
       {aba === "eventos" && (
-        <section className="mt-4 px-3 sm:px-4 grid gap-4">
-          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="font-semibold text-green-900">Eventos</h3>
+        <>
+          <section className="mt-4 px-3 sm:px-4 grid gap-4">
+            <div className="bg-white/70 rounded-xl p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="font-semibold text-green-900">Eventos</h3>
 
-              {isOwn ? (
-                <Link
-                  href={
-                    mostrarCreator
-                      ? "/creator/eventos"
-                      : `/eventos/clubes/${clubeIdStr}`
-                  }
-                  className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
-                >
-                  Ver todos os eventos
-                </Link>
-              ) : eventosPreview.length > 5 ? (
-                <button
-                  type="button"
-                  onClick={() => setMostrarTodosEventos((valor) => !valor)}
-                  className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
-                >
-                  {mostrarTodosEventos
-                    ? "Mostrar menos"
-                    : `Ver todos (${eventosPreview.length})`}
-                </button>
-              ) : null}
-            </div>
+                {isOwn ? (
+                  <Link
+                    href={`/eventos/clubes/${clubeIdStr}`}
+                    className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+                  >
+                    Ver todos os eventos
+                  </Link>
+                ) : eventosPreview.length > 5 ? (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarTodosEventos((valor) => !valor)}
+                    className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+                  >
+                    {mostrarTodosEventos
+                      ? "Mostrar menos"
+                      : `Ver todos (${eventosPreview.length})`}
+                  </button>
+                ) : null}
+              </div>
 
-            <p className="text-sm text-green-900/80 mt-1">
-              Confira os próximos eventos e aulas ao vivo deste perfil.
-            </p>
+              <p className="text-sm text-green-900/80 mt-1">
+                Confira os próximos eventos e aulas ao vivo deste clube.
+              </p>
 
+              <div className="mt-3">
+                {eventosLoading ? (
+                  <div className="text-sm text-green-900/70">
+                    Carregando eventos…
+                  </div>
+                ) : eventosErro ? (
+                  <div className="text-sm text-red-600">{eventosErro}</div>
+                ) : eventosVisiveis.length > 0 ? (
+                  <div className="grid gap-2">
+                    {eventosVisiveis.map((ev) => {
+                      const when = ev.dataEvento
+                        ? new Date(ev.dataEvento).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "Data não informada";
 
-            <div className="mt-3">
-              {eventosLoading ? (
-                <div className="text-sm text-green-900/70">
-                  Carregando eventos…
-                </div>
-              ) : eventosErro ? (
-                <div className="text-sm text-red-600">{eventosErro}</div>
-              ) : eventosVisiveis.length > 0 ? (
-                <div className="grid gap-2">
-                  {eventosVisiveis.map((ev) => {
-                    const when = ev.dataEvento
-                      ? new Date(ev.dataEvento).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "Data não informada";
+                      const where = [ev.cidade, ev.estado]
+                        .filter(Boolean)
+                        .join(" - ");
 
-                    const where = [ev.cidade, ev.estado]
-                      .filter(Boolean)
-                      .join(" - ");
+                      const tipoLabel =
+                        ev.tipo ||
+                        "Evento";
 
-                    const tipoLabel =
-                      ev.origem === "AULA_AO_VIVO_CREATOR"
-                        ? "Aula ao vivo"
-                        : ev.tipo || "Evento";
+                      const href =
+                        ev.origem ===
+                        "AULA_AO_VIVO_CLUBE"
+                          ? `/learning/live?aulaId=${encodeURIComponent(
+                              ev.id
+                            )}`
+                          : `/eventos/${ev.id}`;
 
-                    const participantes =
-                      ev.origem === "AULA_AO_VIVO_CREATOR" &&
-                      typeof ev.totalParticipantes === "number"
-                        ? `${ev.totalParticipantes} participantes`
-                        : "";
+                      return (
+                        <Link
+                          key={`${ev.origem || "EVENTO"}:${ev.id}`}
+                          href={href}
+                          className="block rounded-xl border border-green-100 bg-white/70 p-3 hover:bg-white"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-green-900 truncate">
+                                {ev.titulo}
+                              </div>
 
-                    const href =
-                      ev.origem === "AULA_AO_VIVO_CREATOR"
-                        ? `/learning/evento/${ev.id}`
-                        : ev.origem === "EVENTO_CREATOR"
-                          ? `/eventos/${ev.id}`
-                          : `/eventos/clubes/${clubeIdStr}`;
+                              <div className="text-xs text-green-900/70">
+                                {[tipoLabel, when, where]
+                                  .filter(Boolean)
+                                  .join(" • ")}
+                              </div>
 
-                    return (
-                      <Link
-                        key={`${ev.origem || "EVENTO"}:${ev.id}`}
-                        href={href}
-                        className="block rounded-xl border border-green-100 bg-white/70 p-3 hover:bg-white"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-green-900 truncate">
-                              {ev.titulo}
+                              {ev.criadorLabel ? (
+                                <div className="mt-1 text-xs text-green-900/80">
+                                  <b>Criador:</b> {ev.criadorLabel}
+                                </div>
+                              ) : null}
+
+                              {ev.convidadosLabel ? (
+                                <div className="mt-1 text-xs text-green-900/80">
+                                  <b>Convidados:</b> {ev.convidadosLabel}
+                                </div>
+                              ) : null}
+
+                              {ev.descricao?.trim() ? (
+                                <div className="text-xs text-green-900/80 mt-2 line-clamp-2">
+                                  {ev.descricao}
+                                </div>
+                              ) : null}
                             </div>
 
-                            <div className="text-xs text-green-900/70">
-                              {[tipoLabel, when, where, participantes]
-                                .filter(Boolean)
-                                .join(" • ")}
+                            <div className="flex items-center gap-2">
+                              {ev.status ? (
+                                <span className="text-[11px] px-2 py-1 rounded-full bg-green-50 text-green-900 border border-green-100">
+                                  {String(ev.status).toUpperCase()}
+                                </span>
+                              ) : null}
+
+                              <ChevronRight className="w-4 h-4 text-green-800" />
                             </div>
-
-                            {ev.criadorLabel ? (
-                              <div className="mt-1 text-xs text-green-900/80">
-                                <b>Criador:</b> {ev.criadorLabel}
-                              </div>
-                            ) : null}
-
-                            {ev.convidadosLabel ? (
-                              <div className="mt-1 text-xs text-green-900/80">
-                                <b>Convidados:</b> {ev.convidadosLabel}
-                              </div>
-                            ) : null}
-
-                            {ev.descricao?.trim() ? (
-                              <div className="text-xs text-green-900/80 mt-2 line-clamp-2">
-                                {ev.descricao}
-                              </div>
-                            ) : null}
                           </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-sm text-green-900/70">
+                    Nenhum evento ou aula ao vivo futura cadastrada.
+                  </div>
+                )}
+              </div>
 
-                          <div className="flex items-center gap-2">
-                            {ev.status ? (
-                              <span className="text-[11px] px-2 py-1 rounded-full bg-green-50 text-green-900 border border-green-100">
-                                {String(ev.status).toUpperCase()}
-                              </span>
-                            ) : null}
-
-                            <ChevronRight className="w-4 h-4 text-green-800" />
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-sm text-green-900/70">
-                  Nenhum evento futuro cadastrado.
+              {isOwn && (
+                <div className="mt-4">
+                  <Link
+                    href={`/eventos/clubes/${clubeIdStr}/novo`}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white font-semibold px-4 py-2 hover:bg-green-700"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    Criar novo evento
+                  </Link>
                 </div>
               )}
             </div>
-
-            {isOwn && (
-              <div className="mt-4">
-                <Link
-                  href={
-                    mostrarCreator
-                      ? "/creator/eventos/novo"
-                      : `/eventos/clubes/${clubeIdStr}/novo`
-                  }
-                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white font-semibold px-4 py-2 hover:bg-green-700"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  Criar novo evento
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {mostrarCreator && usuarioCreatorDoPerfil ? (
-            <ProfileReplaysSection creatorUsuarioId={usuarioCreatorDoPerfil} />
+          </section>
+          {clubeId ? (
+            <div className="mt-4 px-3 sm:px-4">
+              <ProfileReplaysSection
+                contextoKind="ORGANIZATION"
+                contextoTipo="CLUBE"
+                contextoLegacyOrganizationId={clubeId}
+              />
+            </div>
           ) : null}
-        </section>
+        </>
       )}
 
       {aba === "postagens" && (

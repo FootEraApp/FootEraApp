@@ -207,16 +207,83 @@ export function setupSocket(server: http.Server) {
       }
     );
 
-    socket.on("joinGroup", (grupoId: string) => {
-      if (grupoId) socket.join(`g:${grupoId}`);
-    });
+    socket.on(
+      "joinGroup",
+      async (
+        grupoId:
+          string
+      ) => {
+        try {
+          const uid =
+            String(
+              (
+                socket.data as any
+              )?.userId ??
+              ""
+            ).trim();
+
+          const gid =
+            String(
+              grupoId ??
+              ""
+            ).trim();
+
+          if (
+            !uid ||
+            !gid
+          ) {
+            return;
+          }
+
+          const membro =
+            await prisma
+              .membroGrupo
+              .findUnique({
+                where: {
+                  grupoId_usuarioId: {
+                    grupoId:
+                      gid,
+
+                    usuarioId:
+                      uid,
+                  },
+                },
+
+                select: {
+                  usuarioId:
+                    true,
+                },
+              });
+
+          if (!membro) {
+            console.warn(
+              "[SOCKET] joinGroup negado",
+              {
+                userId:
+                  uid,
+
+                grupoId:
+                  gid,
+              }
+            );
+
+            return;
+          }
+
+          socket.join(
+            `g:${gid}`
+          );
+        } catch (error) {
+          console.error(
+            "[SOCKET] joinGroup:",
+            error
+          );
+        }
+      }
+    );
 
     socket.on("leaveGroup", (grupoId: string) => {
       if (grupoId) socket.leave(`g:${grupoId}`);
-    });
-
-    socket.on("sendGroupMessage", (mensagem) => {
-      io.to(`g:${mensagem.grupoId}`).emit("novaMensagemGrupo", mensagem);
     });
 
     socket.on(

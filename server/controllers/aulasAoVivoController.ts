@@ -12,7 +12,14 @@ import {
 } from "@aws-sdk/client-s3";
 import { prisma } from "../lib/prisma.js";
 import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
-import { NotificacaoTipo } from "@prisma/client";
+import { NotificacaoTipo, type Prisma } from "@prisma/client";
+import {
+  getActiveContext,
+  type ActiveContext,
+} from "../services/activeContext.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
 
 type AuthRequest = Request & {
   user?: {
@@ -30,6 +37,151 @@ function getAuthUserId(req: AuthRequest) {
       req.user?.usuarioId ||
       ""
   ).trim();
+}
+
+function getContextoAulaData(
+  contexto: ActiveContext,
+) {
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    return {
+      contextoKind:
+        "PERSONAL",
+
+      contextoTipo:
+        String(
+          contexto.tipoUsuario
+        ),
+
+      contextoPerfilId:
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        null,
+
+      contextoOrganizacaoId:
+        null,
+
+      contextoLegacyOrganizationId:
+        null,
+    };
+  }
+
+  return {
+    contextoKind:
+      "ORGANIZATION",
+
+    contextoTipo:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    contextoPerfilId:
+      null,
+
+    contextoOrganizacaoId:
+      contexto.organizationId ??
+      null,
+
+    contextoLegacyOrganizationId:
+      contexto
+        .legacyOrganizationId ??
+      null,
+  };
+}
+
+function getContextoAulaWhere(
+  contexto: ActiveContext,
+): Prisma.AulaAoVivoWhereInput {
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    return {
+      contextoKind:
+        "PERSONAL",
+
+      contextoTipo:
+        String(
+          contexto.tipoUsuario
+        ),
+
+      contextoPerfilId:
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        null,
+    };
+  }
+
+  return {
+    contextoKind:
+      "ORGANIZATION",
+
+    contextoTipo:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    contextoOrganizacaoId:
+      contexto.organizationId ??
+      null,
+
+    contextoLegacyOrganizationId:
+      contexto
+        .legacyOrganizationId ??
+      null,
+  };
+}
+
+async function getContextoCriacaoAula(
+  userId: string,
+) {
+  const podeCriar =
+    await canPermission(
+      userId,
+      "CRIAR_AULA_AO_VIVO"
+    );
+
+  if (!podeCriar) {
+    return {
+      erro: {
+        status: 403,
+        code:
+          "CRIAR_AULA_AO_VIVO_NEGADO",
+        message:
+          "Seu perfil ativo não possui permissão para criar aulas ao vivo.",
+      },
+      contexto: null,
+    };
+  }
+
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  if (!contexto) {
+    return {
+      erro: {
+        status: 403,
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+        message:
+          "Selecione um perfil ativo para criar a aula ao vivo.",
+      },
+      contexto: null,
+    };
+  }
+
+  return {
+    erro: null,
+    contexto,
+  };
 }
 
 function getAwsRegion() {
@@ -208,13 +360,142 @@ async function getAulaComOwner(aulaId: string) {
   });
 }
 
-function isDonoDaAula(aula: any, userId: string) {
-  if (!aula || !userId) return false;
+async function isDonoDaAula(
+  aula: any,
+  userId: string
+) {
+  if (!aula || !userId) {
+    return false;
+  }
+
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  if (!contexto) {
+    return false;
+  }
+
+  const podeGerenciar =
+    await canPermission(
+      userId,
+      "CRIAR_AULA_AO_VIVO"
+    );
+
+  if (!podeGerenciar) {
+    return false;
+  }
+
+  const aulaTemContexto =
+    Boolean(
+      aula.contextoKind ||
+        aula.contextoTipo ||
+        aula.contextoPerfilId ||
+        aula.contextoOrganizacaoId ||
+        aula.contextoLegacyOrganizationId
+    );
+
+  /*
+   * Compatibilidade com aulas antigas.
+   *
+   * Antes desta migração as aulas não
+   * possuíam contexto salvo. Nesse caso
+   * mantemos temporariamente a regra
+   * antiga.
+   */
+  if (!aulaTemContexto) {
+    return (
+      String(
+        aula.criadorUsuarioId ||
+          ""
+      ) ===
+        String(userId) ||
+      String(
+        aula.metodologia
+          ?.criadorUsuarioId ||
+          ""
+      ) ===
+        String(userId) ||
+      String(
+        aula.metodologiaAvulsa
+          ?.criadorUsuarioId ||
+          ""
+      ) ===
+        String(userId)
+    );
+  }
+
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    const perfilId =
+      contexto.profileId ??
+      contexto.tipoUsuarioId ??
+      null;
+
+    return (
+      aula.contextoKind ===
+        "PERSONAL" &&
+      String(
+        aula.contextoTipo ||
+          ""
+      ) ===
+        String(
+          contexto.tipoUsuario ||
+            ""
+        ) &&
+      String(
+        aula.contextoPerfilId ||
+          ""
+      ) ===
+        String(perfilId || "")
+    );
+  }
+
+  const mesmoOrganizationId =
+    Boolean(
+      contexto.organizationId &&
+        aula.contextoOrganizacaoId &&
+        String(
+          aula.contextoOrganizacaoId
+        ) ===
+          String(
+            contexto.organizationId
+          )
+    );
+
+  const mesmoLegacyId =
+    Boolean(
+      contexto.legacyOrganizationId &&
+        aula.contextoLegacyOrganizationId &&
+        String(
+          aula.contextoLegacyOrganizationId
+        ) ===
+          String(
+            contexto.legacyOrganizationId
+          )
+    );
+
+  const mesmoTipo =
+    String(
+      aula.contextoTipo ||
+        ""
+    ) ===
+    String(
+      contexto.organizationType ||
+        ""
+    );
 
   return (
-    String(aula.criadorUsuarioId || "") === String(userId) ||
-    String(aula.metodologia?.criadorUsuarioId || "") === String(userId) ||
-    String(aula.metodologiaAvulsa?.criadorUsuarioId || "") === String(userId)
+    aula.contextoKind ===
+      "ORGANIZATION" &&
+    mesmoTipo &&
+    (
+      mesmoOrganizationId ||
+      mesmoLegacyId
+    )
   );
 }
 
@@ -458,7 +739,7 @@ export async function getAulaAoVivo(req: AuthRequest, res: Response) {
       });
     }
 
-    const owner = isDonoDaAula(aula, userId);
+    const owner = await isDonoDaAula(aula, userId);
 
     if (!owner) {
       return res.status(403).json({
@@ -507,7 +788,7 @@ export async function getBroadcastConfig(req: AuthRequest, res: Response) {
       });
     }
 
-    if (!isDonoDaAula(aula, userId)) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({
         message: "Apenas o dono da metodologia pode acessar a configuração da transmissão.",
       });
@@ -828,9 +1109,28 @@ export async function atualizarAulaAoVivoAvulsa(req: AuthRequest, res: Response)
       return res.status(404).json({ message: "Aula ao vivo não encontrada." });
     }
 
-    if (!isDonoDaAula(aula, userId)) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({ message: "Sem permissão para editar esta aula." });
     }
+
+    const contexto =
+      await getActiveContext(
+        userId
+      );
+
+    if (!contexto) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+        message:
+          "Selecione um perfil ativo para editar esta aula ao vivo.",
+      });
+    }
+
+    const contextoWhere =
+      getContextoAulaWhere(
+        contexto
+      );
 
     if (aula.metodologiaId || aula.metodologiaAvulsaId || aula.itemId || aula.itemAvulsaId) {
       return res.status(400).json({
@@ -902,7 +1202,7 @@ export async function atualizarAulaAoVivoAvulsa(req: AuthRequest, res: Response)
 
     const aulaDuplicada = await prisma.aulaAoVivo.findFirst({
       where: {
-        criadorUsuarioId: userId,
+        ...contextoWhere,
         titulo: {
           equals: tituloFinal,
           mode: "insensitive",
@@ -1042,7 +1342,7 @@ export async function deletarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Aula ao vivo não encontrada." });
     }
 
-    if (!isDonoDaAula(aula, userId)) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({ message: "Sem permissão para apagar esta aula." });
     }
 
@@ -1085,7 +1385,7 @@ export async function iniciarAulaAoVivo(req: AuthRequest, res: Response) {
       });
     }
 
-    if (!isDonoDaAula(aula, userId)) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({
         message: "Apenas o dono da metodologia pode iniciar essa live.",
       });
@@ -1203,7 +1503,7 @@ export async function finalizarAulaAoVivo(req: AuthRequest, res: Response) {
       });
     }
 
-    if (!isDonoDaAula(aula, userId)) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({
         message: "Apenas o dono da metodologia pode finalizar essa live.",
       });
@@ -1325,7 +1625,7 @@ export async function cancelarAulaAoVivo(req: AuthRequest, res: Response) {
       });
     }
 
-    if (!isDonoDaAula(aula, userId)) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({
         message: "Apenas o dono da metodologia pode cancelar essa live.",
       });
@@ -1629,7 +1929,7 @@ export async function deletarMensagemAulaAoVivo(req: AuthRequest, res: Response)
       });
     }
 
-    const owner = isDonoDaAula(aula, userId);
+    const owner = await isDonoDaAula(aula, userId);
     const autor = String(mensagem.usuarioId) === String(userId);
 
     if (!owner && !autor) {
@@ -1743,22 +2043,375 @@ function calcularDuracaoReplaySegundos(
     : 0;
 }
 
-export async function listarReplaysPublicosCriador(
+export async function listarAulasPublicasPorContexto(
   req: Request,
   res: Response
 ) {
   try {
-    const usuarioId =
+    const contextoKind =
       String(
-        req.params.usuarioId ||
+        req.query.contextoKind ||
+          ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const contextoTipo =
+      String(
+        req.query.contextoTipo ||
           ""
       ).trim();
 
-    if (!usuarioId) {
+    const contextoPerfilId =
+      String(
+        req.query.contextoPerfilId ||
+          ""
+      ).trim();
+
+    const contextoOrganizacaoId =
+      String(
+        req.query.contextoOrganizacaoId ||
+          ""
+      ).trim();
+
+    const contextoLegacyOrganizationId =
+      String(
+        req.query
+          .contextoLegacyOrganizationId ||
+          ""
+      ).trim();
+
+    if (
+      contextoKind !==
+        "PERSONAL" &&
+      contextoKind !==
+        "ORGANIZATION"
+    ) {
       return res.status(400).json({
+        code:
+          "CONTEXTO_KIND_INVALIDO",
         message:
-          "Usuário criador não informado.",
+          "contextoKind deve ser PERSONAL ou ORGANIZATION.",
       });
+    }
+
+    if (!contextoTipo) {
+      return res.status(400).json({
+        code:
+          "CONTEXTO_TIPO_OBRIGATORIO",
+        message:
+          "contextoTipo é obrigatório.",
+      });
+    }
+
+    let contextoWhere:
+      Prisma.AulaAoVivoWhereInput;
+
+    if (
+      contextoKind ===
+      "PERSONAL"
+    ) {
+      if (!contextoPerfilId) {
+        return res.status(400).json({
+          code:
+            "CONTEXTO_PERFIL_ID_OBRIGATORIO",
+          message:
+            "contextoPerfilId é obrigatório para contexto PERSONAL.",
+        });
+      }
+
+      contextoWhere = {
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo,
+
+        contextoPerfilId,
+      };
+    } else {
+      if (
+        !contextoOrganizacaoId &&
+        !contextoLegacyOrganizationId
+      ) {
+        return res.status(400).json({
+          code:
+            "CONTEXTO_ORGANIZACAO_ID_OBRIGATORIO",
+          message:
+            "Informe contextoOrganizacaoId ou contextoLegacyOrganizationId.",
+        });
+      }
+
+      const organizacoes:
+        Prisma.AulaAoVivoWhereInput[] =
+        [];
+
+      if (
+        contextoOrganizacaoId
+      ) {
+        organizacoes.push({
+          contextoOrganizacaoId,
+        });
+      }
+
+      if (
+        contextoLegacyOrganizationId
+      ) {
+        organizacoes.push({
+          contextoLegacyOrganizationId,
+        });
+      }
+
+      contextoWhere = {
+        contextoKind:
+          "ORGANIZATION",
+
+        contextoTipo,
+
+        OR:
+          organizacoes,
+      };
+    }
+
+    const agora =
+      new Date();
+
+    const aulas =
+      await prisma.aulaAoVivo.findMany({
+        where: {
+          ...contextoWhere,
+
+          status: {
+            in: [
+              "AGENDADA",
+              "AO_VIVO",
+            ],
+          },
+
+          OR: [
+            {
+              status:
+                "AO_VIVO",
+            },
+            {
+              dataInicio: {
+                gte:
+                  agora,
+              },
+            },
+          ],
+        },
+
+        orderBy: {
+          dataInicio:
+            "asc",
+        },
+
+        take:
+          50,
+
+        select: {
+          id: true,
+          titulo: true,
+          descricao: true,
+          status: true,
+
+          dataInicio: true,
+          dataFim: true,
+
+          inscricaoInicio:
+            true,
+          inscricaoFim:
+            true,
+
+          thumbUrl: true,
+
+          acessoPago: true,
+          precoAcesso: true,
+
+          totalParticipantes:
+            true,
+
+          contextoKind: true,
+          contextoTipo: true,
+          contextoPerfilId: true,
+          contextoOrganizacaoId:
+            true,
+          contextoLegacyOrganizationId:
+            true,
+
+          convidados: {
+            orderBy: {
+              ordem:
+                "asc",
+            },
+
+            select: {
+              id: true,
+              nome: true,
+              descricao: true,
+
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  nomeDeUsuario:
+                    true,
+                  foto: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+    return res.json({
+      items:
+        aulas,
+    });
+  } catch (error) {
+    console.error(
+      "Erro em listarAulasPublicasPorContexto:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Erro ao carregar aulas ao vivo.",
+    });
+  }
+}
+
+export async function listarReplaysPublicosPorContexto(
+  req: Request,
+  res: Response
+) {
+  try {
+    const contextoKind =
+      String(
+        req.query.contextoKind ||
+          ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const contextoTipo =
+      String(
+        req.query.contextoTipo ||
+          ""
+      ).trim();
+
+    const contextoPerfilId =
+      String(
+        req.query.contextoPerfilId ||
+          ""
+      ).trim();
+
+    const contextoOrganizacaoId =
+      String(
+        req.query.contextoOrganizacaoId ||
+          ""
+      ).trim();
+
+    const contextoLegacyOrganizationId =
+      String(
+        req.query
+          .contextoLegacyOrganizationId ||
+          ""
+      ).trim();
+
+    if (
+      contextoKind !==
+        "PERSONAL" &&
+      contextoKind !==
+        "ORGANIZATION"
+    ) {
+      return res.status(400).json({
+        code:
+          "CONTEXTO_KIND_INVALIDO",
+
+        message:
+          "contextoKind deve ser PERSONAL ou ORGANIZATION.",
+      });
+    }
+
+    if (!contextoTipo) {
+      return res.status(400).json({
+        code:
+          "CONTEXTO_TIPO_OBRIGATORIO",
+
+        message:
+          "contextoTipo é obrigatório.",
+      });
+    }
+
+    let contextoWhere:
+      Prisma.AulaAoVivoWhereInput;
+
+    if (
+      contextoKind ===
+      "PERSONAL"
+    ) {
+      if (!contextoPerfilId) {
+        return res.status(400).json({
+          code:
+            "CONTEXTO_PERFIL_ID_OBRIGATORIO",
+
+          message:
+            "contextoPerfilId é obrigatório para contexto PERSONAL.",
+        });
+      }
+
+      contextoWhere = {
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo,
+
+        contextoPerfilId,
+      };
+    } else {
+      if (
+        !contextoOrganizacaoId &&
+        !contextoLegacyOrganizationId
+      ) {
+        return res.status(400).json({
+          code:
+            "CONTEXTO_ORGANIZACAO_ID_OBRIGATORIO",
+
+          message:
+            "Informe contextoOrganizacaoId ou contextoLegacyOrganizationId.",
+        });
+      }
+
+      const organizacoes:
+        Prisma.AulaAoVivoWhereInput[] =
+        [];
+
+      if (
+        contextoOrganizacaoId
+      ) {
+        organizacoes.push({
+          contextoOrganizacaoId,
+        });
+      }
+
+      if (
+        contextoLegacyOrganizationId
+      ) {
+        organizacoes.push({
+          contextoLegacyOrganizationId,
+        });
+      }
+
+      contextoWhere = {
+        contextoKind:
+          "ORGANIZATION",
+
+        contextoTipo,
+
+        OR:
+          organizacoes,
+      };
     }
 
     const agora =
@@ -1773,6 +2426,7 @@ export async function listarReplaysPublicosCriador(
     const aulas =
       await prisma.aulaAoVivo.findMany({
         where: {
+          ...contextoWhere,
           status:
             "FINALIZADA",
 
@@ -1782,31 +2436,7 @@ export async function listarReplaysPublicosCriador(
           videoGravadoUrl: {
             not: null,
           },
-
           AND: [
-            {
-              OR: [
-                {
-                  criadorUsuarioId:
-                    usuarioId,
-                },
-
-                {
-                  metodologia: {
-                    criadorUsuarioId:
-                      usuarioId,
-                  },
-                },
-
-                {
-                  metodologiaAvulsa: {
-                    criadorUsuarioId:
-                      usuarioId,
-                  },
-                },
-              ],
-            },
-
             {
               OR: [
                 {
@@ -1818,6 +2448,7 @@ export async function listarReplaysPublicosCriador(
                       agora,
                   },
                 },
+
                 {
                   finalizouEm:
                     null,
@@ -2058,22 +2689,27 @@ export async function listarMinhasAulasAoVivo(req: AuthRequest, res: Response) {
       });
     }
 
+    const contexto =
+      await getActiveContext(
+        userId
+      );
+
+    if (!contexto) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+        message:
+          "Selecione um perfil ativo para visualizar suas aulas ao vivo.",
+      });
+    }
+
+    const contextoWhere =
+      getContextoAulaWhere(
+        contexto
+      );
+
     const aulas = await prisma.aulaAoVivo.findMany({
-      where: {
-        OR: [
-          { criadorUsuarioId: userId },
-          {
-            metodologia: {
-              criadorUsuarioId: userId,
-            },
-          },
-          {
-            metodologiaAvulsa: {
-              criadorUsuarioId: userId,
-            },
-          },
-        ],
-      },
+      where: contextoWhere,
       orderBy: [
         {
           status: "asc",
@@ -2151,6 +2787,45 @@ export async function criarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
     }
 
     const {
+      erro:
+        erroContexto,
+      contexto,
+    } =
+      await getContextoCriacaoAula(
+        userId
+      );
+
+    if (
+      erroContexto ||
+      !contexto
+    ) {
+      return res
+        .status(
+          erroContexto?.status ??
+            403
+        )
+        .json({
+          code:
+            erroContexto?.code ??
+            "CRIAR_AULA_AO_VIVO_NEGADO",
+
+          message:
+            erroContexto?.message ??
+            "Sem permissão para criar aula ao vivo.",
+        });
+    }
+
+    const contextoData =
+      getContextoAulaData(
+        contexto
+      );
+
+    const contextoWhere =
+      getContextoAulaWhere(
+        contexto
+      );
+
+    const {
       titulo,
       descricao,
       dataInicio,
@@ -2219,7 +2894,7 @@ export async function criarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
 
     const aulaDuplicada = await prisma.aulaAoVivo.findFirst({
       where: {
-        criadorUsuarioId: userId,
+        ...contextoWhere,
         titulo: {
           equals: tituloTrim,
           mode: "insensitive",
@@ -2263,6 +2938,7 @@ export async function criarAulaAoVivoAvulsa(req: AuthRequest, res: Response) {
           gravacaoAtiva: gravacaoAtiva !== false,
           replayDisponivel: replayDisponivel === true,
           criadorUsuarioId: userId,
+          ...contextoData,
           precoAcesso:
             precoAcesso !== undefined && precoAcesso !== null && precoAcesso !== ""
               ? Number(precoAcesso)
@@ -2760,12 +3436,7 @@ export async function sincronizarReplayAulaAoVivo(
       });
     }
 
-    if (
-      !isDonoDaAula(
-        aula,
-        userId
-      )
-    ) {
+    if (! (await isDonoDaAula(aula, userId))) {
       return res.status(403).json({
         message:
           "Apenas o responsável pela transmissão pode sincronizar o replay.",

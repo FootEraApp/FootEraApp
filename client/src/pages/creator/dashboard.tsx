@@ -1,5 +1,11 @@
-import { toast } from "@/lib/toast";
-import { useEffect, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 import {
   BadgeCheck,
   BookOpen,
@@ -41,20 +47,31 @@ type DashboardData = {
 };
 
 export default function CreatorDashboard() {
+  const userContext =
+    useContext(UserContext);
+
+  if (!userContext) {
+    throw new Error(
+      "CreatorDashboard deve estar dentro de UserProvider."
+    );
+  }
+
+  const {
+    activeContext,
+    activeTipoUsuario,
+    contextsLoading,
+  } = userContext;
+
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ativando, setAtivando] = useState(false);
 
-  const tipoUsuario =
-    localStorage.getItem("tipoUsuario") ||
-    sessionStorage.getItem("tipoUsuario") ||
-    localStorage.getItem("usuarioTipoRaw") ||
-    sessionStorage.getItem("usuarioTipoRaw") ||
-    "";
+  const creatorAtivo =
+    activeContext?.kind === "PERSONAL" &&
+    String(
+      activeTipoUsuario ?? ""
+    ).toLowerCase() ===
+      "creator";
 
-  const tipoNorm = String(tipoUsuario).toLowerCase();
-  const bloqueiaCreator = tipoNorm === "atleta" || tipoNorm === "learning";
-  
   const carregar = async () => {
     setLoading(true);
 
@@ -68,10 +85,15 @@ export default function CreatorDashboard() {
         return;
       }
 
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401) {
         localStorage.clear();
         sessionStorage.clear();
         window.location.href = "/login";
+        return;
+      }
+
+      if (res.status === 403) {
+        window.location.href = "/perfil";
         return;
       }
 
@@ -89,58 +111,20 @@ export default function CreatorDashboard() {
     }
   };
 
-  const ativarCreator = async () => {
-    setAtivando(true);
-
-    try {
-      const tk = token();
-
-      if (!tk) {
-        throw new Error("Você não está logado no app. Saia e entre novamente.");
-      }
-
-      const res = await fetch(`${API.BASE_URL}/api/creator/ativar`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${tk}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          headline: "Creator FootEra",
-        }),
-      });
-
-      const txt = await res.text().catch(() => "");
-      let json: any = null;
-
-      try {
-        json = txt ? JSON.parse(txt) : null;
-      } catch {
-        json = null;
-      }
-
-      if (!res.ok) {
-        throw new Error(
-          json?.message ||
-            txt ||
-            `Erro ao ativar Creator. HTTP ${res.status}`
-        );
-      }
-
-      await carregar();
-    } catch (err: any) {
-      console.error("[creator/dashboard] erro ao ativar creator:", err);
-      toast.error(err?.message || "Não foi possível ativar o Creator.");
-    } finally {
-      setAtivando(false);
-    }
-  };
-
   useEffect(() => {
-    carregar();
-  }, []);
+    if (contextsLoading) return;
+    if (!creatorAtivo) return;
 
-  if (bloqueiaCreator) {
+    carregar();
+  }, [
+    contextsLoading,
+    creatorAtivo,
+  ]);
+
+  if (
+    !contextsLoading &&
+    !creatorAtivo
+  ) {
     return (
         <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
         <div className="max-w-lg bg-white rounded-2xl border shadow-sm p-6 text-center">
@@ -148,7 +132,7 @@ export default function CreatorDashboard() {
             Creator indisponível
             </h1>
             <p className="text-slate-500 mt-2">
-            Perfis de atleta não podem ativar ou acessar o painel Creator.
+              Selecione seu perfil Creator para acessar este painel.
             </p>
             <button
             type="button"
@@ -174,24 +158,25 @@ export default function CreatorDashboard() {
     return (
       <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
         <div className="max-w-lg bg-white rounded-2xl border shadow-sm p-6 text-center">
-          <div className="mx-auto w-14 h-14 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4">
-            <BadgeCheck />
-          </div>
+          <BadgeCheck className="mx-auto text-emerald-700" />
 
-          <h1 className="font-extrabold text-2xl text-emerald-950">
-            Ative seu perfil Creator
+          <h1 className="font-extrabold text-2xl text-emerald-950 mt-4">
+            Perfil Creator indisponível
           </h1>
 
           <p className="text-slate-500 mt-2">
-            O Creator libera página pública, painel de ganhos, métricas de vendas e conteúdos publicados no Learning.
+            Não foi possível localizar os dados do seu perfil Creator.
           </p>
 
           <button
-            onClick={ativarCreator}
-            disabled={ativando}
-            className="mt-5 bg-emerald-600 text-white font-bold rounded-xl px-5 py-3 disabled:opacity-60"
+            type="button"
+            onClick={() => {
+              window.location.href =
+                "/perfil/editar";
+            }}
+            className="mt-5 bg-emerald-600 text-white font-bold rounded-xl px-5 py-3"
           >
-            {ativando ? "Ativando..." : "Ativar Creator"}
+            Gerenciar meus perfis
           </button>
         </div>
       </div>

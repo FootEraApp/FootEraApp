@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {CirclePlus } from "lucide-react";
 import axios from "axios";
@@ -19,6 +19,9 @@ import { loadGestorContext, clearGestorContext } from "../utils/gestorSession";
 import Avatar from "../components/shared/Avatar";
 import PublicShareModal from "../components/share/PublicShareModal.js";
 import { PUBLIC_PATHS } from "../utils/publicRoutes.js";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 
 export type CategoriaBase =
   | "Sub3"
@@ -118,16 +121,8 @@ type AvaliacaoResp = {
   };
 };
 
-type AutorTipoApi = "Professor" | "Clube" | "Escolinha";
-
-
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
-}
-
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
 
 function toISODateOnly(d: Date) {
@@ -153,12 +148,6 @@ function dayKeyFromAny(x: any) {
   const d = parseAsDate(x);
   if (!d) return "";
   return toISODateOnly(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
-}
-
-function autorTipoFromTela(t: "Escola" | "Clube" | "Professor"): AutorTipoApi {
-  if (t === "Professor") return "Professor";
-  if (t === "Clube") return "Clube";
-  return "Escolinha";
 }
 
 function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
@@ -291,11 +280,20 @@ const GerenciarAtletas: React.FC = () => {
   const isAtletasPage = location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
   const isProfessoresPage = location === "/perfil/GerenciarProfessores" || location === "/perfil/gerenciarProfessores";
 
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
   const qs = location.includes("?") ? location.split("?")[1] : "";
   const params = new URLSearchParams(qs);
   const tab = params.get("tab");
   const isTurmasTab = tab === "turmas";
-  const isOrganizacoesTab = tab === "organizacoes";
   const isTurmasPage = isProfessoresPage && isTurmasTab;
 
   const token = Storage.token;
@@ -407,10 +405,6 @@ const GerenciarAtletas: React.FC = () => {
     setCarreiraOpen(false);
     setLocation(`/perfil/GerenciarProfessores?tab=organizacoes`);
   };
-
-  function getAutorId() {
-    return String(contextoTipoUsuarioId || "");
-  }
 
   function fecharModalAvaliacao() {
     setAvaliarOpen(false);
@@ -745,25 +739,27 @@ const GerenciarAtletas: React.FC = () => {
       try {
         setLoadingProgramados(true);
 
-        const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
-        const entidadeFallback = String(usuarioIdEntidade || "").trim();
-        const idParaEnviar = entidadeIdReal || entidadeFallback;
+        const res =
+        await axios.get(
+          `${API.BASE_URL}/api/treinosprogramados`,
+          {
+            headers,
 
-        if (!entidadeIdReal) {
-          console.warn(
-            "[GerenciarAtletas] tipoUsuarioIdEntidade está vazio — usando usuarioIdEntidade como fallback. Ideal: /perfil/me retornar o id da entidade."
-          );
-        }
+            params: {
+              onlyMine:
+                "true",
 
-        const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
-          headers,
-          params: {
-            vinculo: tipo ? tipoParaVinculo(tipo) : undefined,
-            id: idParaEnviar,
-            tipoUsuarioId: entidadeIdReal || undefined,
-            debug: "1",
-          },
-        });
+              incluirColabs:
+                "1",
+
+              order:
+                "desc",
+
+              limit:
+                200,
+            },
+          }
+        );
 
         const items = (res.data?.items ?? res.data ?? []) as any[];
 
@@ -786,7 +782,7 @@ const GerenciarAtletas: React.FC = () => {
         setLoadingProgramados(false);
       }
     })();
-  }, [carreiraOpen, focado?.id, tipo, usuarioIdEntidade,tipoUsuarioIdEntidade]);
+  }, [activeContext?.key, carreiraOpen, focado?.id, tipo, usuarioIdEntidade,tipoUsuarioIdEntidade]);
 
   useEffect(() => {
     if (!carreiraOpen || !focado?.id) return;
@@ -987,12 +983,6 @@ async function salvarAvaliacao() {
   if (!submissaoSelecionada) return;
   if (!tipo) return toast.error("Tipo de perfil inválido.");
 
-  const autorId = getAutorId();
-  if (!autorId) return toast.error("Não foi possível identificar o ID do autor (org).");
-
-  const autorTipo = contextoTipo ? autorTipoFromTela(contextoTipo) : undefined;
-  if (!autorTipo) return toast.error("Tipo do autor inválido.");
-
   const comentariosMarcadosArr = Object.entries(comentariosMarcados)
     .filter(([, v]) => v)
     .map(([texto]) => String(texto));
@@ -1008,8 +998,6 @@ async function salvarAvaliacao() {
       await axios.put(
         `${API.BASE_URL}/api/gerenciar/submissoes/treino/${submissaoSelecionada}/avaliacao`,
         {
-          autorTipo,
-          autorId,
           nota,
           concluiu,
           teveDificuldade,
@@ -1839,29 +1827,31 @@ async function salvarAvaliacao() {
                   return { items: Array.from(byId.values()) };
                 }}
                 fetchProgramados={async () => {
-                  const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
-                  if (!entidadeIdReal || !contextoTipo) {
-                    return { items: [] };
-                  }
+                  const res =
+                    await axios.get(
+                      `${API.BASE_URL}/api/treinosprogramados`,
+                      {
+                        headers,
 
-                  const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
-                    headers,
-                    params: {
-                      vinculo: tipoParaVinculo(contextoTipo),
-                      id: entidadeIdReal,                 
-                      tipoUsuarioId: entidadeIdReal,
-                      debug: "1",
-                    },
-                  });
+                        params: {
+                          onlyMine:
+                            "true",
+
+                          incluirColabs:
+                            "1",
+
+                          order:
+                            "desc",
+
+                          limit:
+                            200,
+                        },
+                      }
+                    );
 
                   return res.data;
                 }}
                 onAgendar={async ({ selectedDays, treinoProgramadoId, selectedTime }) => {
-                  const autorId = String(contextoTipoUsuarioId || "");
-                  const autorTipo = contextoTipo ? autorTipoFromTela(contextoTipo) : undefined;
-
-                  if (!autorId || !autorTipo) throw new Error("Autor inválido");
-
                   const time = String(selectedTime || "12:00");
 
                   await Promise.all(
@@ -1872,8 +1862,6 @@ async function salvarAvaliacao() {
                           atletaId: focado!.id,
                           treinoProgramadoId,
                           dataTreino: `${day}T${time}:00`,
-                          autorId,
-                          autorTipo,
                         },
                         { headers }
                       )

@@ -2,6 +2,8 @@ import {
   FuncaoMembroOrganizacao,
   Prisma,
   TipoOrganizacao,
+  TipoUsuario,
+  StatusUsuarioPapel,
 } from "@prisma/client";
 import { getActiveContext } from "./activeContext.js";
 import {
@@ -262,16 +264,161 @@ async function salvarMembro(
   });
 }
 
+export async function sincronizarProfessorProprio(
+  params: {
+    usuarioId: string;
+    tx?: Prisma.TransactionClient;
+  }
+) {
+  const db: any =
+    params.tx ??
+    prisma;
+
+  const usuarioId =
+    String(
+      params.usuarioId || ""
+    ).trim();
+
+  if (!usuarioId) {
+    return;
+  }
+
+  const papelProfessor =
+    await db.usuarioPapel.findFirst({
+      where: {
+        usuarioId,
+
+        papel:
+          TipoUsuario.Professor,
+
+        status:
+          StatusUsuarioPapel.ATIVO,
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  // Usuário migrado:
+  // só cria vínculo se Professor estiver ATIVO.
+  if (!papelProfessor) {
+    return;
+  }
+
+  const professor =
+    await db.professor.findUnique({
+      where: {
+        usuarioId,
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  if (!professor) {
+    return;
+  }
+
+  const [
+    clubes,
+    escolinhas,
+  ] = await Promise.all([
+    db.clube.findMany({
+      where: {
+        usuarioId,
+      },
+
+      select: {
+        id: true,
+      },
+    }),
+
+    db.escolinha.findMany({
+      where: {
+        usuarioId,
+      },
+
+      select: {
+        id: true,
+      },
+    }),
+  ]);
+
+  for (
+    const clube of clubes
+  ) {
+    await db.professorClube.upsert({
+      where: {
+        professorId_clubeId: {
+          professorId:
+            professor.id,
+
+          clubeId:
+            clube.id,
+        },
+      },
+
+      update: {
+        papel:
+          "Professor",
+      },
+
+      create: {
+        professorId:
+          professor.id,
+
+        clubeId:
+          clube.id,
+
+        papel:
+          "Professor",
+      },
+    });
+  }
+
+  for (
+    const escolinha of
+      escolinhas
+  ) {
+    await db.professorEscolinha.upsert({
+      where: {
+        professorId_escolinhaId: {
+          professorId:
+            professor.id,
+
+          escolinhaId:
+            escolinha.id,
+        },
+      },
+
+      update: {
+        papel:
+          "Professor",
+      },
+
+      create: {
+        professorId:
+          professor.id,
+
+        escolinhaId:
+          escolinha.id,
+
+        papel:
+          "Professor",
+      },
+    });
+  }
+}
+
 export async function garantirOrganizacaoLegada(
   params: {
     tipo:
       TipoOrganizacaoLegada;
-
     ownerId: string;
-
     proprietarioUsuarioId?:
       string | null;
-
     tx?:
       Prisma.TransactionClient;
   }
@@ -365,6 +512,18 @@ export async function garantirOrganizacaoLegada(
           true,
       }
     );
+  }
+
+  if (
+    proprietarioUsuarioId
+  ) {
+    await sincronizarProfessorProprio({
+      usuarioId:
+        proprietarioUsuarioId,
+
+      tx:
+        params.tx,
+    });
   }
 
   return organizacao;

@@ -435,20 +435,58 @@ export default function LearningEventoAoVivoPage() {
 
   function salvarSessao(json: any) {
     if (json?.token) {
-      localStorage.setItem("token", json.token);
+      localStorage.setItem(
+        "token",
+        json.token
+      );
     }
 
     if (json?.usuario?.id) {
-      localStorage.setItem("usuarioId", json.usuario.id);
-      localStorage.setItem("userId", json.usuario.id);
+      localStorage.setItem(
+        "usuarioId",
+        String(json.usuario.id)
+      );
+
+      localStorage.setItem(
+        "userId",
+        String(json.usuario.id)
+      );
     }
 
-    if (json?.usuario?.tipo) {
-      localStorage.setItem("tipoUsuario", json.usuario.tipo);
+    const activeContext =
+      json?.usuario?.activeContext ??
+      json?.activeContext ??
+      null;
+
+    if (activeContext) {
+      localStorage.setItem(
+        "activeContext",
+        JSON.stringify(activeContext)
+      );
     }
 
-    if (json?.usuario?.tipoUsuarioId) {
-      localStorage.setItem("tipoUsuarioId", json.usuario.tipoUsuarioId);
+    const tipoAtual =
+      activeContext?.tipoUsuario ??
+      json?.usuario?.tipo ??
+      null;
+
+    const tipoUsuarioIdAtual =
+      activeContext?.tipoUsuarioId ??
+      json?.usuario?.tipoUsuarioId ??
+      null;
+
+    if (tipoAtual) {
+      localStorage.setItem(
+        "tipoUsuario",
+        String(tipoAtual)
+      );
+    }
+
+    if (tipoUsuarioIdAtual) {
+      localStorage.setItem(
+        "tipoUsuarioId",
+        String(tipoUsuarioIdAtual)
+      );
     }
   }
 

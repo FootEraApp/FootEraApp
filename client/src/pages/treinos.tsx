@@ -1,5 +1,11 @@
 // client/src/pages/treinos
-import { useEffect, useState } from "react";
+import {
+  useContext,
+  useMemo,
+} from "react";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 import TreinosAtletas from "./treino/treinos-atletas.js";
 import TreinosInstrutores from "./treino/treinos-instrutores.js";
 
@@ -16,53 +22,111 @@ type Tipo =
   | "learning"
   ;
 
-interface UsuarioLogadoLegacy {
-  tipo: Tipo;
-  usuarioId: string;
-  tipoUsuarioId: string;
-}
-
-function detectarTipo(): Tipo | null {
-  try {
-    const fromStore =
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario");
-
-    if (fromStore) {
-      const raw = fromStore.toLowerCase();
-      const map: Record<string, Tipo> = {
-        admin: "admin",
-        atleta: "atleta",
-        professor: "professor",
-        clube: "clube",
-        escolinha: "escolinha",
-        escola: "escola",
-        olheiro: "olheiro",
-        federacao: "federacao",
-        marca: "marca",
-        learning: "learning",
-      };
-      if (map[raw]) return map[raw];
-    }
-
-    const rawLegacy = localStorage.getItem("usuarioLogado");
-    if (!rawLegacy) return null;
-
-    const usuario = JSON.parse(rawLegacy) as UsuarioLogadoLegacy | null;
-    return usuario?.tipo ?? null;
-  } catch (e) {
-    console.error("Erro ao detectar tipo do usuário em /treinos:", e);
-    return null;
-  }
-}
-
 export default function Treinos() {
-  const [tipo, setTipo] = useState<Tipo | null>(null);
+  const authContext =
+    useContext(
+      UserContext
+    );
 
-  useEffect(() => {
-    const t = detectarTipo();
-    setTipo(t);
-  }, []);
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
+  const tipo =
+    useMemo<Tipo | null>(
+      () => {
+        if (!activeContext) {
+          return null;
+        }
+
+        /*
+        * Em organização,
+        * a tela é de instrutor/gestão.
+        */
+        if (
+          activeContext.kind ===
+          "ORGANIZATION"
+        ) {
+          const orgTipo =
+            String(
+              activeContext
+                .organizationType ??
+              ""
+            ).toUpperCase();
+
+          if (
+            orgTipo === "CLUBE"
+          ) {
+            return "clube";
+          }
+
+          if (
+            orgTipo === "ESCOLA"
+          ) {
+            return "escolinha";
+          }
+
+          return null;
+        }
+
+        const raw =
+          String(
+            authContext
+              ?.activeTipoUsuario ??
+            ""
+          )
+            .trim()
+            .toLowerCase();
+
+        const map:
+          Record<string, Tipo> =
+          {
+            admin:
+              "admin",
+
+            atleta:
+              "atleta",
+
+            professor:
+              "professor",
+
+            clube:
+              "clube",
+
+            escolinha:
+              "escolinha",
+
+            escola:
+              "escola",
+
+            olheiro:
+              "olheiro",
+
+            federacao:
+              "federacao",
+
+            marca:
+              "marca",
+
+            learning:
+              "learning",
+          };
+
+        return (
+          map[raw] ??
+          null
+        );
+      },
+      [
+        activeContext?.key,
+        activeContext?.kind,
+        activeContext
+          ?.organizationType,
+        authContext
+          ?.activeTipoUsuario,
+      ]
+    );
 
     if (!tipo) {
     return (
@@ -141,8 +205,14 @@ export default function Treinos() {
     );
   }
 
-  if (tipo === "atleta") {
-    return <TreinosAtletas />;
+  if (
+    activeContext?.kind ===
+      "PERSONAL" &&
+    tipo === "atleta"
+  ) {
+    return (
+      <TreinosAtletas />
+    );
   }
 
   return <TreinosInstrutores tipo={tipo} />;

@@ -551,30 +551,17 @@ export function useAgendaTreinos({
     try {
       setLoadingProgramados(true);
 
-      const payload = await fetchProgramados();
-      const { meus } = normalizeProgramadosPayload(payload);
-      const tipoRaw = String((Storage as any)?.tipoSalvo ?? "").toLowerCase();
-      const ownerId = String((Storage as any)?.tipoUsuarioId ?? "");
+      const payload =
+        await fetchProgramados();
 
-      const tipoAutorEsperado =
-        tipoRaw === "clube"
-          ? "clube"
-          : tipoRaw === "escolinha"
-            ? "escolinha"
-            : tipoRaw === "professor"
-              ? "professor"
-              : "";
-
-      const filtrados = meus.filter((t) => {
-        if (!ownerId || !tipoAutorEsperado) return true; 
-        if (!t.autor?.id || !t.autor?.tipo) return true;
-        return (
-          String(t.autor.id) === ownerId &&
-          String(t.autor.tipo).toLowerCase() === tipoAutorEsperado
+      const { meus } =
+        normalizeProgramadosPayload(
+          payload
         );
-      });
 
-      setTreinosMeus(filtrados);
+      setTreinosMeus(
+        meus
+      );
     } catch {
       setTreinosMeus([]);
     } finally {

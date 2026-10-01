@@ -154,6 +154,99 @@ function getSessionStore():
   return sessionStorage;
 }
 
+export type AuthSessionSnapshot = {
+  token: string;
+  usuarioId: string;
+  nomeUsuario: string;
+  plano: string;
+  activeContext:
+    ActiveContextSession | null;
+};
+
+export function readAuthSessionSnapshot():
+  AuthSessionSnapshot {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return {
+      token: "",
+      usuarioId: "",
+      nomeUsuario: "",
+      plano: "FREE",
+      activeContext:
+        null,
+    };
+  }
+
+  const tokenLocal =
+    localStorage.getItem(
+      "token"
+    );
+
+  const store =
+    tokenLocal
+      ? localStorage
+      : sessionStorage;
+
+  const token =
+    String(
+      store.getItem(
+        "token"
+      ) ?? ""
+    ).trim();
+
+  const usuarioId =
+    String(
+      store.getItem(
+        "usuarioId"
+      ) ?? ""
+    ).trim();
+
+  const nomeUsuario =
+    String(
+      store.getItem(
+        "nomeUsuario"
+      ) ?? ""
+    ).trim();
+
+  const plano =
+    String(
+      store.getItem(
+        "plano"
+      ) ?? "FREE"
+    ).trim();
+
+  let activeContext:
+    ActiveContextSession |
+    null =
+    null;
+
+  const rawContext =
+    store.getItem(
+      "activeContext"
+    );
+
+  if (rawContext) {
+    try {
+      activeContext =
+        JSON.parse(
+          rawContext
+        );
+    } catch {
+      activeContext =
+        null;
+    }
+  }
+
+  return {
+    token,
+    usuarioId,
+    nomeUsuario,
+    plano,
+    activeContext,
+  };
+}
 
 function writeActiveContext(
   store: Storage,

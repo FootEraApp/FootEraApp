@@ -7,17 +7,19 @@ import path from "path";
 import { getDailyUsage } from "../services/usage.js";
 import { audit } from "../services/audit.js"; 
 import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js";
-import { NotificacaoTipo } from "@prisma/client";
+import { NotificacaoTipo, TipoOrganizacao, TipoUsuario } from "@prisma/client";
+import {
+  readPrivacyConfig,
+} from "../utils/privacy.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  hasRole,
+} from "../services/roles.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
-
-function readPrivacidade(raw: any) {
-  const c = raw && typeof raw === "object" ? raw : {};
-  return {
-    permitirMensagens: c.permitirMensagens !== false, 
-  };
-}
 
 function readNotificacoes(raw: any) {
   const c = raw && typeof raw === "object" ? raw : {};
@@ -158,14 +160,9 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
     };
 
     const deId = req.userId!;
-    const remetente = await prisma.usuario.findUnique({
-      where: { id: deId },
-      select: { id: true, tipo: true },
-    });
-
     const destinatario = await prisma.usuario.findUnique({
       where: { id: paraId },
-      select: { id: true, tipo: true, configuracoesPrivacidade: true, configuracoesNotificacoes: true },
+      select: { id: true, configuracoesPrivacidade: true, configuracoesNotificacoes: true },
     });
 
     if (!destinatario) {
@@ -174,7 +171,29 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const destPriv = readPrivacidade(
+    const contextoRemetente =
+      await getActiveContext(
+        deId
+      );
+
+    const papelRemetenteAtivo =
+      contextoRemetente?.role ??
+      contextoRemetente?.tipoUsuario ??
+      null;
+
+    const remetenteEhOlheiroAtivo =
+      contextoRemetente?.kind ===
+        "PERSONAL" &&
+      papelRemetenteAtivo ===
+        TipoUsuario.Olheiro;
+
+    const destinatarioEhAtleta =
+      await hasRole(
+        paraId,
+        TipoUsuario.Atleta
+      );
+      
+    const destPriv = readPrivacyConfig(
       destinatario.configuracoesPrivacidade
     );
 
@@ -189,7 +208,10 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    if (remetente?.tipo === "Olheiro" && destinatario?.tipo === "Atleta") {
+    if (
+      remetenteEhOlheiroAtivo &&
+      destinatarioEhAtleta
+    ) {
       const atleta: any = await prisma.atleta.findFirst({
         where: { usuarioId: destinatario.id },
       });
@@ -303,7 +325,7 @@ export const buscarMensagens =
       }
 
       const privDestinatario =
-        readPrivacidade(
+        readPrivacyConfig(
           destinatario
             .configuracoesPrivacidade
         );
@@ -464,104 +486,544 @@ export async function listarConversas(req: any, res: Response) {
   });
 }
 
-export async function listarContatosRelacionados(req: AuthenticatedRequest, res: Response) {
+export async function listarContatosRelacionados(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const userId = req.userId!;
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: userId },
-      include: {
-        atleta: true,
-        professor: true,
-        clube: true,
-        escolinha: true,
-      },
-    });
+    const userId =
+      req.userId!;
 
-    if (!usuario) {
+    const contexto =
+      await getActiveContext(
+        userId
+      );
+
+    if (!contexto) {
       return res.json([]);
     }
 
-    type ContatoLite = { id: string; nome: string; foto: string | null };
-    const contatos = new Map<string, ContatoLite>();
-
-    const pushUsuario = (u?: { id: string; nome: string | null; foto: string | null }) => {
-      if (!u) return;
-      if (contatos.has(u.id)) return;
-      contatos.set(u.id, {
-        id: u.id,
-        nome: u.nome ?? "Usuário FootEra",
-        foto: u.foto ?? null,
-      });
+    type ContatoLite = {
+      id: string;
+      nome: string;
+      foto: string | null;
     };
 
-    if (usuario.atleta) {
-      const rels = await prisma.relacaoTreinamento.findMany({
-        where: { atletaId: usuario.atleta.id },
-        include: {
-          professor: { include: { usuario: true } },
-          clube: { include: { usuario: true } },
-          escolinha: { include: { usuario: true } },
-        },
-      });
+    const contatos =
+      new Map<
+        string,
+        ContatoLite
+      >();
 
-      for (const r of rels) {
-        if (r.professor?.usuario) pushUsuario(r.professor.usuario as any);
-        if (r.clube?.usuario) pushUsuario(r.clube.usuario as any);
-        if (r.escolinha?.usuario) pushUsuario(r.escolinha.usuario as any);
+    const pushUsuario = (
+      u?: {
+        id: string;
+        nome: string | null;
+        foto: string | null;
+      } | null
+    ) => {
+      if (!u) {
+        return;
+      }
+
+      /*
+       * Não adiciona a própria conta.
+       */
+      if (
+        u.id === userId
+      ) {
+        return;
+      }
+
+      if (
+        contatos.has(
+          u.id
+        )
+      ) {
+        return;
+      }
+
+      contatos.set(
+        u.id,
+        {
+          id:
+            u.id,
+
+          nome:
+            u.nome ??
+            "Usuário FootEra",
+
+          foto:
+            u.foto ??
+            null,
+        }
+      );
+    };
+
+    if (
+      contexto.kind ===
+        "PERSONAL" &&
+      contexto.tipoUsuario ===
+        TipoUsuario.Atleta &&
+      contexto.tipoUsuarioId
+    ) {
+      const rels =
+        await prisma
+          .relacaoTreinamento
+          .findMany({
+            where: {
+              atletaId:
+                contexto.tipoUsuarioId,
+
+              ativo:
+                true,
+
+              encerradoEm:
+                null,
+            },
+
+            include: {
+              professor: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+
+              clube: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+
+              escolinha: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+            },
+          });
+
+      for (
+        const r of rels
+      ) {
+        pushUsuario(
+          r.professor
+            ?.usuario as any
+        );
+
+        pushUsuario(
+          r.clube
+            ?.usuario as any
+        );
+
+        pushUsuario(
+          r.escolinha
+            ?.usuario as any
+        );
       }
     }
 
-    if (usuario.professor) {
-      const rels = await prisma.relacaoTreinamento.findMany({
-        where: { professorId: usuario.professor.id },
-        include: {
-          atleta: { include: { usuario: true } },
-          clube: { include: { usuario: true } },
-          escolinha: { include: { usuario: true } },
-        },
-      });
+    if (
+      contexto.kind ===
+        "PERSONAL" &&
+      contexto.tipoUsuario ===
+        TipoUsuario.Professor &&
+      contexto.tipoUsuarioId
+    ) {
+      const rels =
+        await prisma
+          .relacaoTreinamento
+          .findMany({
+            where: {
+              professorId:
+                contexto.tipoUsuarioId,
 
-      for (const r of rels) {
-        if (r.atleta?.usuario) pushUsuario(r.atleta.usuario as any);
-        if (r.clube?.usuario) pushUsuario(r.clube.usuario as any);
-        if (r.escolinha?.usuario) pushUsuario(r.escolinha.usuario as any);
+              ativo:
+                true,
+
+              encerradoEm:
+                null,
+            },
+
+            include: {
+              atleta: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+
+              clube: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+
+              escolinha: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+            },
+          });
+
+      const [
+        clubesDoProfessor,
+        escolinhasDoProfessor,
+      ] =
+        await Promise.all([
+          prisma.professorClube.findMany({
+            where: {
+              professorId:
+                contexto.tipoUsuarioId,
+            },
+
+            select: {
+              clube: {
+                select: {
+                  usuario: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      foto: true,
+                    },
+                  },
+                },
+              },
+            },
+          }),
+
+          prisma.professorEscolinha.findMany({
+            where: {
+              professorId:
+                contexto.tipoUsuarioId,
+            },
+
+            select: {
+              escolinha: {
+                select: {
+                  usuario: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      foto: true,
+                    },
+                  },
+                },
+              },
+            },
+          }),
+        ]);
+
+      for (
+        const vinculo of clubesDoProfessor
+      ) {
+        pushUsuario(
+          vinculo.clube
+            ?.usuario ?? null
+        );
+      }
+
+      for (
+        const vinculo of escolinhasDoProfessor
+      ) {
+        pushUsuario(
+          vinculo.escolinha
+            ?.usuario ?? null
+        );
+      }
+
+      for (
+        const r of rels
+      ) {
+        pushUsuario(
+          r.atleta
+            ?.usuario as any
+        );
+
+        pushUsuario(
+          r.clube
+            ?.usuario as any
+        );
+
+        pushUsuario(
+          r.escolinha
+            ?.usuario as any
+        );
       }
     }
 
-    if (usuario.clube) {
-      const rels = await prisma.relacaoTreinamento.findMany({
-        where: { clubeId: usuario.clube.id },
-        include: {
-          atleta: { include: { usuario: true } },
-          professor: { include: { usuario: true } },
-        },
-      });
+    /*
+     * ===============================
+     * ORGANIZAÇÃO — CLUBE
+     * ===============================
+     *
+     * Inclusive:
+     * Clube X — Proprietário
+     * Clube X — Administrador
+     * Clube X — Professor
+     */
+    if (
+      contexto.kind ===
+        "ORGANIZATION" &&
+      contexto.organizationType ===
+        TipoOrganizacao.CLUBE &&
+      contexto.legacyOrganizationId
+    ) {
+      const rels =
+        await prisma
+          .relacaoTreinamento
+          .findMany({
+            where: {
+              clubeId:
+                contexto.legacyOrganizationId,
 
-      for (const r of rels) {
-        if (r.atleta?.usuario) pushUsuario(r.atleta.usuario as any);
-        if (r.professor?.usuario) pushUsuario(r.professor.usuario as any);
+              ativo:
+                true,
+
+              encerradoEm:
+                null,
+            },
+
+            include: {
+              atleta: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+
+              professor: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+            },
+          });
+
+      const [
+        atletasDiretos,
+        professoresDiretos,
+      ] =
+        await Promise.all([
+          prisma.atleta.findMany({
+            where: {
+              clubeId:
+                contexto
+                  .legacyOrganizationId,
+            },
+
+            select: {
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  foto: true,
+                },
+              },
+            },
+          }),
+
+          prisma.professorClube.findMany({
+            where: {
+              clubeId:
+                contexto
+                  .legacyOrganizationId,
+            },
+
+            select: {
+              professor: {
+                select: {
+                  usuario: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      foto: true,
+                    },
+                  },
+                },
+              },
+            },
+          }),
+        ]);
+
+      for (
+        const atleta of atletasDiretos
+      ) {
+        pushUsuario(
+          atleta.usuario
+        );
+      }
+
+      for (
+        const vinculo of professoresDiretos
+      ) {
+        pushUsuario(
+          vinculo.professor
+            ?.usuario ?? null
+        );
+      }
+
+      for (
+        const r of rels
+      ) {
+        pushUsuario(
+          r.atleta
+            ?.usuario as any
+        );
+
+        pushUsuario(
+          r.professor
+            ?.usuario as any
+        );
       }
     }
 
-    if (usuario.escolinha) {
-      const rels = await prisma.relacaoTreinamento.findMany({
-        where: { escolinhaId: usuario.escolinha.id },
-        include: {
-          atleta: { include: { usuario: true } },
-          professor: { include: { usuario: true } },
-        },
-      });
+    /*
+     * ===============================
+     * ORGANIZAÇÃO — ESCOLA
+     * ===============================
+     */
+    if (
+      contexto.kind ===
+        "ORGANIZATION" &&
+      contexto.organizationType ===
+        TipoOrganizacao.ESCOLA &&
+      contexto.legacyOrganizationId
+    ) {
+      const rels =
+        await prisma
+          .relacaoTreinamento
+          .findMany({
+            where: {
+              escolinhaId:
+                contexto.legacyOrganizationId,
 
-      for (const r of rels) {
-        if (r.atleta?.usuario) pushUsuario(r.atleta.usuario as any);
-        if (r.professor?.usuario) pushUsuario(r.professor.usuario as any);
+              ativo:
+                true,
+
+              encerradoEm:
+                null,
+            },
+
+            include: {
+              atleta: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+
+              professor: {
+                include: {
+                  usuario:
+                    true,
+                },
+              },
+            },
+          });
+
+      const [
+        atletasDiretos,
+        professoresDiretos,
+      ] =
+        await Promise.all([
+          prisma.atleta.findMany({
+            where: {
+              escolinhaId:
+                contexto
+                  .legacyOrganizationId,
+            },
+
+            select: {
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  foto: true,
+                },
+              },
+            },
+          }),
+
+          prisma.professorEscolinha.findMany({
+            where: {
+              escolinhaId:
+                contexto
+                  .legacyOrganizationId,
+            },
+
+            select: {
+              professor: {
+                select: {
+                  usuario: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      foto: true,
+                    },
+                  },
+                },
+              },
+            },
+          }),
+        ]);
+
+      for (
+        const atleta of atletasDiretos
+      ) {
+        pushUsuario(
+          atleta.usuario
+        );
+      }
+
+      for (
+        const vinculo of professoresDiretos
+      ) {
+        pushUsuario(
+          vinculo.professor
+            ?.usuario ?? null
+        );
+      }
+
+      for (
+        const r of rels
+      ) {
+        pushUsuario(
+          r.atleta
+            ?.usuario as any
+        );
+
+        pushUsuario(
+          r.professor
+            ?.usuario as any
+        );
       }
     }
 
-    return res.json(Array.from(contatos.values()));
+    return res.json(
+      Array.from(
+        contatos.values()
+      )
+    );
   } catch (err) {
-    console.error("listarContatosRelacionados error:", err);
-    return res.status(500).json({ error: "Erro ao carregar contatos relacionados." });
+    console.error(
+      "listarContatosRelacionados error:",
+      err
+    );
+
+    return res
+      .status(500)
+      .json({
+        error:
+          "Erro ao carregar contatos relacionados.",
+      });
   }
 }
 

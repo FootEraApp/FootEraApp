@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
@@ -6,6 +6,9 @@ import { ArrowLeft, X } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
 import { toast } from "@/lib/toast";
+import {
+  UserContext,
+} from "@/context/UserContext.js";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -101,6 +104,49 @@ function isConvocacao(n: { tipo?: string | null; titulo: string; mensagem: strin
 }
 
 export default function PaginaNotificacoes() {
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    userContext
+      ?.activeContext ??
+    null;
+
+  const activeOrganizationType =
+    String(
+      activeContext
+        ?.organizationType ??
+      ""
+    ).toUpperCase();
+
+  const estaEmOrganizacao =
+    activeContext?.kind ===
+      "ORGANIZATION" &&
+    (
+      activeOrganizationType ===
+        "CLUBE" ||
+      activeOrganizationType ===
+        "ESCOLA"
+    );
+
+  const activeOrganizationRole =
+    String(
+      activeContext
+        ?.organizationRole ??
+      ""
+    ).toUpperCase();
+
+  const podeGerenciarOrganizacao =
+    estaEmOrganizacao &&
+    (
+      activeOrganizationRole ===
+        "PROPRIETARIO" ||
+      activeOrganizationRole ===
+        "ADMINISTRADOR"
+    );
+
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [, setLocation] = useLocation();
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
@@ -127,6 +173,10 @@ export default function PaginaNotificacoes() {
     const token = Storage.token;
     if (!token) return;
 
+    setSolicitacoes(
+      []
+    );
+
     (async () => {
       try {
         const resp = await fetch(
@@ -147,7 +197,9 @@ export default function PaginaNotificacoes() {
         console.error("Erro ao buscar solicitações:", err);
       }
     })();
-  }, []);
+  }, [
+    activeContext?.key,
+  ]);
 
   useEffect(() => {
     if (
@@ -1148,49 +1200,53 @@ export default function PaginaNotificacoes() {
                           </button>
                         )}
 
-                        <button
-                          type="button"
-                          className="
-                            rounded-lg
-                            bg-green-600
-                            text-white
-                            text-sm
-                            px-4
-                            py-2
-                            hover:bg-green-700
-                          "
-                          onClick={() =>
-                            responderColaboracaoOlheiro(
-                              colaboracaoId,
-                              true,
-                              n.id
-                            )
-                          }
-                        >
-                          Aceitar
-                        </button>
+                        {podeGerenciarOrganizacao && (
+                          <>
+                            <button
+                              type="button"
+                              className="
+                                rounded-lg
+                                bg-green-600
+                                text-white
+                                text-sm
+                                px-4
+                                py-2
+                                hover:bg-green-700
+                              "
+                              onClick={() =>
+                                responderColaboracaoOlheiro(
+                                  colaboracaoId,
+                                  true,
+                                  n.id
+                                )
+                              }
+                            >
+                              Aceitar
+                            </button>
 
-                        <button
-                          type="button"
-                          className="
-                            rounded-lg
-                            bg-red-600
-                            text-white
-                            text-sm
-                            px-4
-                            py-2
-                            hover:bg-red-700
-                          "
-                          onClick={() =>
-                            responderColaboracaoOlheiro(
-                              colaboracaoId,
-                              false,
-                              n.id
-                            )
-                          }
-                        >
-                          Recusar
-                        </button>
+                            <button
+                              type="button"
+                              className="
+                                rounded-lg
+                                bg-red-600
+                                text-white
+                                text-sm
+                                px-4
+                                py-2
+                                hover:bg-red-700
+                              "
+                              onClick={() =>
+                                responderColaboracaoOlheiro(
+                                  colaboracaoId,
+                                  false,
+                                  n.id
+                                )
+                              }
+                            >
+                              Recusar
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1228,65 +1284,69 @@ export default function PaginaNotificacoes() {
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
-                        onClick={async () => {
-                          const token = Storage.token;
-                          if (!token) return;
+                      {podeGerenciarOrganizacao && (
+                        <>
+                        <button
+                          className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
+                          onClick={async () => {
+                            const token = Storage.token;
+                            if (!token) return;
 
-                          const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
-                            method: "PATCH",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${token}`,
-                            },
-                            body: JSON.stringify({ status: "APROVADA" }),
-                          });
+                            const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ status: "APROVADA" }),
+                            });
 
-                          if (!r.ok) {
-                            toast.error("Não foi possível aceitar a indicação.");
-                            return;
-                          }
+                            if (!r.ok) {
+                              toast.error("Não foi possível aceitar a indicação.");
+                              return;
+                            }
 
-                          await marcarComoLida(n.id);
-                          setNotificacoes((prev) =>
-                            prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
-                          );
-                          toast.success("Indicação aceita com sucesso.");
-                        }}
-                      >
-                        Aceitar
-                      </button>
+                            await marcarComoLida(n.id);
+                            setNotificacoes((prev) =>
+                              prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                            );
+                            toast.success("Indicação aceita com sucesso.");
+                          }}
+                        >
+                          Aceitar
+                        </button>
 
-                      <button
-                        className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
-                        onClick={async () => {
-                          const token = Storage.token;
-                          if (!token) return;
+                        <button
+                          className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
+                          onClick={async () => {
+                            const token = Storage.token;
+                            if (!token) return;
 
-                          const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
-                            method: "PATCH",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${token}`,
-                            },
-                            body: JSON.stringify({ status: "REJEITADA" }),
-                          });
+                            const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ status: "REJEITADA" }),
+                            });
 
-                          if (!r.ok) {
-                            toast.error("Não foi possível recusar a indicação.");
-                            return;
-                          }
+                            if (!r.ok) {
+                              toast.error("Não foi possível recusar a indicação.");
+                              return;
+                            }
 
-                          await marcarComoLida(n.id);
-                          setNotificacoes((prev) =>
-                            prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
-                          );
-                          toast.success("Indicação recusada.");
-                        }}
-                      >
-                        Recusar
-                      </button>
+                            await marcarComoLida(n.id);
+                            setNotificacoes((prev) =>
+                              prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                            );
+                            toast.success("Indicação recusada.");
+                          }}
+                        >
+                          Recusar
+                        </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -26,7 +26,7 @@ import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import {
   canPermission,
 } from "../services/permissions.js";
-import { getActiveContext } from "../services/activeContext.js";
+import { getActiveContext, type ActiveContext } from "../services/activeContext.js";
 
 function calcularDatasExecucao(estrutura: any, assinatura: any) {
   const modo = estrutura?.modoExecucao;
@@ -166,6 +166,89 @@ async function resolverAutorContextoMetodologia(
   }
 
   return autor;
+}
+
+function getContextoAulaAoVivoData(
+  contexto: ActiveContext,
+) {
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    return {
+      contextoKind:
+        "PERSONAL",
+
+      contextoTipo:
+        String(
+          contexto.tipoUsuario
+        ),
+
+      contextoPerfilId:
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        null,
+
+      contextoOrganizacaoId:
+        null,
+
+      contextoLegacyOrganizationId:
+        null,
+    };
+  }
+
+  return {
+    contextoKind:
+      "ORGANIZATION",
+
+    contextoTipo:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    contextoPerfilId:
+      null,
+
+    contextoOrganizacaoId:
+      contexto.organizationId ??
+      null,
+
+    contextoLegacyOrganizationId:
+      contexto
+        .legacyOrganizationId ??
+      null,
+  };
+}
+
+async function resolverContextoCriacaoAulaAoVivo(
+  userId: string,
+) {
+  const podeCriar =
+    await canPermission(
+      userId,
+      "CRIAR_AULA_AO_VIVO"
+    );
+
+  if (!podeCriar) {
+    throw new Error(
+      "Seu perfil ativo não possui permissão para criar aulas ao vivo."
+    );
+  }
+
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  if (!contexto) {
+    throw new Error(
+      "Selecione um perfil ativo para criar a aula ao vivo."
+    );
+  }
+
+  return contexto;
 }
 
 function getUserId(req: Request): string | null {
@@ -364,6 +447,16 @@ async function criarAulaAoVivoParaItem(params: {
     estruturaAvulsaId,
   } = params;
 
+  const contexto =
+    await resolverContextoCriacaoAulaAoVivo(
+      userId
+    );
+
+  const contextoData =
+    getContextoAulaAoVivoData(
+      contexto
+    );
+
   const aulaPayload = itemPayload?.aulaAoVivo || {};
 
   const dataInicio = parseDataAulaAoVivo(
@@ -431,9 +524,15 @@ async function criarAulaAoVivoParaItem(params: {
     duracaoMin,
     thumbUrl,
 
-    criadorUsuarioId: userId,
+    criadorUsuarioId:
+      userId,
 
-    convidadoUsuarioId: asNullableString(aulaPayload.convidadoUsuarioId),
+    ...contextoData,
+
+    convidadoUsuarioId:
+      asNullableString(
+        aulaPayload.convidadoUsuarioId
+      ),
     convidadoNome: asNullableString(aulaPayload.convidadoNome),
     convidadoDescricao: asNullableString(aulaPayload.convidadoDescricao),
   };
@@ -505,6 +604,16 @@ async function upsertAulaAoVivoParaItem(params: {
     metodologiaAvulsaId,
     estruturaAvulsaId,
   } = params;
+
+  const contexto =
+    await resolverContextoCriacaoAulaAoVivo(
+      userId
+    );
+
+  const contextoData =
+    getContextoAulaAoVivoData(
+      contexto
+    );
 
   const aulaPayload = itemPayload?.aulaAoVivo || {};
 
@@ -610,8 +719,6 @@ async function upsertAulaAoVivoParaItem(params: {
     replayDisponivel: aulaPayload.replayDisponivel === true,
     duracaoMin,
     thumbUrl,
-    criadorUsuarioId: userId,
-
     convidadoUsuarioId: asNullableString(aulaPayload.convidadoUsuarioId),
     convidadoNome: asNullableString(aulaPayload.convidadoNome),
     convidadoDescricao: asNullableString(aulaPayload.convidadoDescricao),
@@ -655,9 +762,17 @@ async function upsertAulaAoVivoParaItem(params: {
   }
 
   if (!aula) {
-    aula = await tx.aulaAoVivo.create({
-      data,
-    });
+    aula =
+      await tx.aulaAoVivo.create({
+        data: {
+          ...data,
+
+          criadorUsuarioId:
+            userId,
+
+          ...contextoData,
+        },
+      });
   }
 
   const convidadosPayload = Array.isArray(aulaPayload.convidados)

@@ -3,6 +3,13 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
 import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
+import {
+  StatusUsuarioPapel,
+  TipoUsuario,
+} from "@prisma/client";
+import {
+  papelCanonico,
+} from "../services/roles.js";
 
 const usuarioExplorarSelect = {
   id: true,
@@ -210,6 +217,144 @@ async function filtrarPerfisVisiveis<T>(
   return result.filter(Boolean) as T[];
 }
 
+async function filtrarPorPapelAtivo<T>(
+  items: T[],
+  papelEsperado: TipoUsuario,
+  getUsuarioId: (
+    item: T
+  ) => string | null | undefined
+): Promise<T[]> {
+  const ids =
+    Array.from(
+      new Set(
+        items
+          .map(getUsuarioId)
+          .filter(
+            (
+              id
+            ): id is string =>
+              Boolean(id)
+          )
+      )
+    );
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const [
+    registrosPapel,
+    usuarios,
+  ] = await Promise.all([
+    prisma.usuarioPapel.findMany({
+      where: {
+        usuarioId: {
+          in: ids,
+        },
+      },
+
+      select: {
+        usuarioId: true,
+        papel: true,
+        status: true,
+      },
+    }),
+
+    prisma.usuario.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+
+      select: {
+        id: true,
+        tipo: true,
+      },
+    }),
+  ]);
+
+  const registrosPorUsuario =
+    new Map<
+      string,
+      typeof registrosPapel
+    >();
+
+  for (
+    const registro of
+    registrosPapel
+  ) {
+    const atuais =
+      registrosPorUsuario.get(
+        registro.usuarioId
+      ) ?? [];
+
+    atuais.push(
+      registro
+    );
+
+    registrosPorUsuario.set(
+      registro.usuarioId,
+      atuais
+    );
+  }
+
+  const tipoLegado =
+    new Map(
+      usuarios.map(
+        (usuario) => [
+          usuario.id,
+          papelCanonico(
+            usuario.tipo
+          ),
+        ]
+      )
+    );
+
+  const esperado =
+    papelCanonico(
+      papelEsperado
+    );
+
+  return items.filter(
+    (item) => {
+      const usuarioId =
+        getUsuarioId(
+          item
+        );
+
+      if (!usuarioId) {
+        return false;
+      }
+
+      const registros =
+        registrosPorUsuario.get(
+          usuarioId
+        ) ?? [];
+
+      // Usuário já migrado:
+      // UsuarioPapel é fonte de verdade.
+      if (registros.length > 0) {
+        return registros.some(
+          (registro) =>
+            registro.status ===
+              StatusUsuarioPapel.ATIVO &&
+            papelCanonico(
+              registro.papel
+            ) === esperado
+        );
+      }
+
+      // Usuário legado ainda sem UsuarioPapel.
+      return (
+        tipoLegado.get(
+          usuarioId
+        ) === esperado
+      );
+    }
+  );
+}
+
 export async function listarAtletasExplorar(req: Request, res: Response) {
   try {
     const authUserId = (req as any).userId as string | undefined;
@@ -319,10 +464,19 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
       };
     });
 
+    const payloadComPapelAtivo =
+      await filtrarPorPapelAtivo(
+        payload,
+        TipoUsuario.Atleta,
+        (a: any) =>
+          a.usuarioId ??
+          a.usuario?.id
+      );
+
     const payloadVisivel =
       await filtrarPerfisVisiveis(
         authUserId,
-        payload,
+        payloadComPapelAtivo,
         (a: any) =>
           a.usuarioId ??
           a.usuario?.id
@@ -549,20 +703,46 @@ export async function explorar(req: Request, res: Response) {
           },
         },
       },
-      where: {
-        usuario: {
-          tipo: "Federacao" as any,
-        },
-        ...(termo
+      where:
+        termo
           ? {
               OR: [
-                { nome: { contains: termo, mode: "insensitive" } },
-                { usuario: { nome: { contains: termo, mode: "insensitive" } } },
-                { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
+                {
+                  nome: {
+                    contains:
+                      termo,
+
+                    mode:
+                      "insensitive",
+                  },
+                },
+
+                {
+                  usuario: {
+                    nome: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+                },
+
+                {
+                  usuario: {
+                    nomeDeUsuario: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+                },
               ],
             }
-          : {}),
-      },
+          : {},
       orderBy: { nome: "asc" },
       take: 100,
     });
@@ -624,20 +804,46 @@ export async function explorar(req: Request, res: Response) {
           },
         },
       },
-      where: {
-        usuario: {
-          tipo: "Marca" as any,
-        },
-        ...(termo
+      where:
+        termo
           ? {
               OR: [
-                { nome: { contains: termo, mode: "insensitive" } },
-                { usuario: { nome: { contains: termo, mode: "insensitive" } } },
-                { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
+                {
+                  nome: {
+                    contains:
+                      termo,
+
+                    mode:
+                      "insensitive",
+                  },
+                },
+
+                {
+                  usuario: {
+                    nome: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+                },
+
+                {
+                  usuario: {
+                    nomeDeUsuario: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+                },
               ],
             }
-          : {}),
-      },
+          : {},
       orderBy: { nome: "asc" },
       take: 100,
     });
@@ -892,20 +1098,44 @@ export async function explorar(req: Request, res: Response) {
           },
         },
       },
-      where: {
-        usuario: {
-          tipo: "Learning" as any,
-          ...(termo
-            ? {
+      where:
+        termo
+          ? {
+              usuario: {
                 OR: [
-                  { nome: { contains: termo, mode: "insensitive" } },
-                  { nomeDeUsuario: { contains: termo, mode: "insensitive" } },
-                  { email: { contains: termo, mode: "insensitive" } },
+                  {
+                    nome: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+
+                  {
+                    nomeDeUsuario: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+
+                  {
+                    email: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
                 ],
-              }
-            : {}),
-        },
-      },
+              },
+            }
+          : {},
       orderBy: { criadoEm: "desc" },
       take: 100,
     });
@@ -976,6 +1206,81 @@ export async function explorar(req: Request, res: Response) {
     }));
 
     const [
+      atletasAtivos,
+      clubesAtivos,
+      escolasAtivas,
+      professoresAtivos,
+      olheirosAtivos,
+      federacoesAtivas,
+      marcasAtivas,
+      learningAtivos,
+    ] = await Promise.all([
+      filtrarPorPapelAtivo(
+        atletas,
+        TipoUsuario.Atleta,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        clubes,
+        TipoUsuario.Clube,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        escolas,
+        TipoUsuario.Escolinha,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        professores,
+        TipoUsuario.Professor,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        olheiros,
+        TipoUsuario.Olheiro,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        federacoes,
+        TipoUsuario.Federacao,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        marcas,
+        TipoUsuario.Marca,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        learning,
+        TipoUsuario.Learning,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+    ]);
+
+    const [
       atletasVisiveis,
       clubesVisiveis,
       escolasVisiveis,
@@ -987,49 +1292,49 @@ export async function explorar(req: Request, res: Response) {
     ] = await Promise.all([
       filtrarPerfisVisiveis(
         userIdLogado,
-        atletas,
+        atletasAtivos,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        clubes,
+        clubesAtivos,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        escolas,
+        escolasAtivas,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        professores,
+        professoresAtivos,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        olheiros,
+        olheirosAtivos,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        federacoes,
+        federacoesAtivas,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        marcas,
+        marcasAtivas,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        learning,
+        learningAtivos,
         (x: any) => x.usuarioId ?? x.usuario?.id
       ),
     ]);
@@ -1305,20 +1610,44 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         take: 50,
       }),
       prisma.learningProfile.findMany({
-        where: {
-          usuario: {
-            tipo: "Learning" as any,
-            ...(termo
-              ? {
+        where:
+          termo
+            ? {
+                usuario: {
                   OR: [
-                    { nome: { contains: termo, mode: "insensitive" } },
-                    { nomeDeUsuario: { contains: termo, mode: "insensitive" } },
-                    { email: { contains: termo, mode: "insensitive" } },
+                    {
+                      nome: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+
+                    {
+                      nomeDeUsuario: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+
+                    {
+                      email: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
                   ],
-                }
-              : {}),
-          },
-        },
+                },
+              }
+            : {},
         include: {
           usuario: {
             select: {
@@ -1360,6 +1689,81 @@ export const buscarExplorar = async (req: Request, res: Response) => {
     }));
 
     const [
+      atletasAtivos,
+      clubesAtivos,
+      escolasAtivas,
+      professoresAtivos,
+      olheirosAtivos,
+      federacoesAtivas,
+      marcasAtivas,
+      learningAtivos,
+    ] = await Promise.all([
+      filtrarPorPapelAtivo(
+        atletasNormalizados,
+        TipoUsuario.Atleta,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        clubes,
+        TipoUsuario.Clube,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        escolas,
+        TipoUsuario.Escolinha,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        professores,
+        TipoUsuario.Professor,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        olheiros,
+        TipoUsuario.Olheiro,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        federacoes,
+        TipoUsuario.Federacao,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        marcas,
+        TipoUsuario.Marca,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        learning,
+        TipoUsuario.Learning,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+    ]);
+
+    const [
       atletasVisiveis,
       clubesVisiveis,
       escolasVisiveis,
@@ -1371,7 +1775,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
     ] = await Promise.all([
       filtrarPerfisVisiveis(
         userIdLogado,
-        atletasNormalizados,
+        atletasAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1379,7 +1783,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        clubes,
+        clubesAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1387,7 +1791,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        escolas,
+        escolasAtivas,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1395,7 +1799,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        professores,
+        professoresAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1403,7 +1807,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        olheiros,
+        olheirosAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1411,7 +1815,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        federacoes,
+        federacoesAtivas,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1419,7 +1823,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        marcas,
+        marcasAtivas,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1427,7 +1831,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        learning,
+        learningAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id

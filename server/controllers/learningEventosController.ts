@@ -7,9 +7,13 @@ import {
   MetodologiaAssinaturaOrigem,
   MetodologiaAssinaturaStatus,
   TipoUsuario,
+  StatusUsuarioPapel,
 } from "@prisma/client";
 import { sendLiveEventAccessEmail } from "../utils/mailer.js";
 import { sendError } from "../utils/httpError.js";
+import {
+  resolveUserContext,
+} from "../services/planResolver.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
 
@@ -144,31 +148,21 @@ async function gerarNomeDeUsuarioLearning(email: string) {
 
 function assinarToken(usuario: any) {
   if (!JWT_SECRET) {
-    throw new Error("JWT_SECRET não configurado.");
+    throw new Error(
+      "JWT_SECRET não configurado."
+    );
   }
 
   return jwt.sign(
     {
       id: usuario.id,
-      tipo: usuario.tipo,
-      tokenVersion: usuario.tokenVersion ?? 0,
+      tokenVersion:
+        usuario.tokenVersion ?? 0,
     },
     JWT_SECRET,
-    { expiresIn: "7d" }
-  );
-}
-
-function getTipoUsuarioId(usuario: any) {
-  return (
-    usuario?.learningProfile?.id ||
-    usuario?.atleta?.id ||
-    usuario?.professor?.id ||
-    usuario?.clube?.id ||
-    usuario?.escolinha?.id ||
-    usuario?.administrador?.id ||
-    usuario?.federacao?.id ||
-    usuario?.marca?.id ||
-    null
+    {
+      expiresIn: "7d",
+    }
   );
 }
 
@@ -242,6 +236,48 @@ async function criarOuBuscarUsuarioLearning(params: {
       );
     }
 
+    if (existente.learningProfile?.id) {
+      const agora =
+        new Date();
+
+      await prisma.usuarioPapel.upsert({
+        where: {
+          usuarioId_papel: {
+            usuarioId:
+              existente.id,
+
+            papel:
+              TipoUsuario.Learning,
+          },
+        },
+
+        update: {
+          status:
+            StatusUsuarioPapel.ATIVO,
+
+          ativadoEm:
+            agora,
+
+          desativadoEm:
+            null,
+        },
+
+        create: {
+          usuarioId:
+            existente.id,
+
+          papel:
+            TipoUsuario.Learning,
+
+          status:
+            StatusUsuarioPapel.ATIVO,
+
+          ativadoEm:
+            agora,
+        },
+      });
+    }
+
     return {
       usuario: existente,
       criadoAgora: false,
@@ -255,20 +291,41 @@ async function criarOuBuscarUsuarioLearning(params: {
   const senhaHash = await bcrypt.hash(String(params.senha), 10);
   const nomeDeUsuario = await gerarNomeDeUsuarioLearning(email);
 
-  const usuario = await prisma.usuario.create({
-    data: {
-      nome: params.nome.trim(),
-      nomeDeUsuario,
-      email,
-      senhaHash,
-      tipo: TipoUsuario.Learning,
-      verified: true,
-      learningProfile: {
-        create: {},
+  const usuario =
+    await prisma.usuario.create({
+      data: {
+        nome: params.nome.trim(),
+        nomeDeUsuario,
+        email,
+        senhaHash,
+        tipo: TipoUsuario.Learning,
+        verified: true,
+        learningProfile: {
+          create: {},
+        },
+        papeis: {
+          create: {
+            papel:
+              TipoUsuario.Learning,
+
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            perfilCompletoEm:
+              new Date(),
+          },
+        },
       },
-    },
-    include: {
-      learningProfile: { select: { id: true } },
+
+      include: {
+        learningProfile: {
+          select: {
+            id: true,
+          },
+        },
       atleta: { select: { id: true } },
       professor: { select: { id: true } },
       clube: { select: { id: true } },
@@ -1553,8 +1610,13 @@ export async function inscreverAulaEvento(req: Request, res: Response) {
       userId = usuario.id;
     }
 
-    const token = assinarToken(usuario);
-    const tipoUsuarioId = getTipoUsuarioId(usuario);
+    const token =
+      assinarToken(usuario);
+
+    const contexto =
+      await resolveUserContext(
+        usuario.id
+      );
 
     await enviarEmailEventoSeSolicitado({
         receberEmail: req.body?.receberEmail,
@@ -1568,12 +1630,26 @@ export async function inscreverAulaEvento(req: Request, res: Response) {
       criadoAgora,
       token,
       usuario: {
-        id: usuario.id,
-        nome: usuario.nome,
-        email: usuario.email,
-        tipo: usuario.tipo,
-        nomeDeUsuario: usuario.nomeDeUsuario,
-        tipoUsuarioId,
+        id:
+          usuario.id,
+
+        nome:
+          usuario.nome,
+
+        email:
+          usuario.email,
+
+        tipo:
+          contexto.tipo,
+
+        nomeDeUsuario:
+          usuario.nomeDeUsuario,
+
+        tipoUsuarioId:
+          contexto.tipoUsuarioId,
+
+        activeContext:
+          contexto.activeContext,
       },
       acesso: {
         aulaId: aula.id,
@@ -1859,8 +1935,13 @@ export async function inscreverSalaCopa(req: Request, res: Response) {
       userId = usuario.id;
     }
 
-    const token = assinarToken(usuario);
-    const tipoUsuarioId = getTipoUsuarioId(usuario);
+    const token =
+      assinarToken(usuario);
+
+    const contexto =
+      await resolveUserContext(
+        usuario.id
+      );
 
     return res.status(201).json({
       ok: true,
@@ -1868,12 +1949,26 @@ export async function inscreverSalaCopa(req: Request, res: Response) {
       criadoAgora,
       token,
       usuario: {
-        id: usuario.id,
-        nome: usuario.nome,
-        email: usuario.email,
-        tipo: usuario.tipo,
-        nomeDeUsuario: usuario.nomeDeUsuario,
-        tipoUsuarioId,
+        id:
+          usuario.id,
+
+        nome:
+          usuario.nome,
+
+        email:
+          usuario.email,
+
+        tipo:
+          contexto.tipo,
+
+        nomeDeUsuario:
+          usuario.nomeDeUsuario,
+
+        tipoUsuarioId:
+          contexto.tipoUsuarioId,
+
+        activeContext:
+          contexto.activeContext,
       },
       acesso: {
         aulaId: null,

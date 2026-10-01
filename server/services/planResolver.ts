@@ -163,7 +163,7 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
       ?.tipoUsuarioId ??
     await getProfileIdForRole(
       usuario.id,
-      usuario.tipo,
+      tipo,
     );
 
   return {

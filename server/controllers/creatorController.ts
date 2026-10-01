@@ -1,6 +1,19 @@
 import type { Request, Response } from "express";
-import { PrismaClient, CreatorTipo, CreatorVendaStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  CreatorTipo,
+  CreatorVendaStatus,
+  StatusUsuarioPapel,
+  TipoUsuario,
+} from "@prisma/client";
 import { avaliarPrivacidadePerfil } from "../utils/privacy.js";
+import {
+  definirActiveContext,
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  hasRole,
+} from "../services/roles.js";
 
 const prisma = new PrismaClient();
 
@@ -14,6 +27,57 @@ function getAuthUserId(req: Request): string | null {
     req.headers["x-user-id"]?.toString() ||
     null
   );
+}
+
+async function exigirContextoCreator(
+  req: Request,
+  res: Response
+): Promise<string | null> {
+  const usuarioId = getAuthUserId(req);
+
+  if (!usuarioId) {
+    res.status(401).json({
+      code: "UNAUTHENTICATED",
+      message: "Usuário não autenticado.",
+    });
+
+    return null;
+  }
+
+  const activeContext =
+    await getActiveContext(usuarioId);
+
+  const ehCreatorPessoal =
+    activeContext?.kind === "PERSONAL" &&
+    activeContext.tipoUsuario === TipoUsuario.Creator;
+
+  if (!ehCreatorPessoal) {
+    res.status(403).json({
+      code: "CREATOR_CONTEXT_REQUIRED",
+      message:
+        "Selecione seu perfil Creator para acessar esta área.",
+    });
+
+    return null;
+  }
+
+  const possuiCreator =
+    await hasRole(
+      usuarioId,
+      TipoUsuario.Creator
+    );
+
+  if (!possuiCreator) {
+    res.status(403).json({
+      code: "CREATOR_ROLE_REQUIRED",
+      message:
+        "O perfil Creator não está ativo nesta conta.",
+    });
+
+    return null;
+  }
+
+  return usuarioId;
 }
 
 function toNumber(value: any): number {
@@ -39,71 +103,31 @@ async function findCreatorByUsuarioId(usuarioId: string) {
   });
 }
 
-function resolverTipoCreator(tipoUsuario?: string | null) {
-  const tipo = normalizarTipoUsuario(tipoUsuario);
-
-  if (["clube", "escolinha", "escola", "federacao", "marca"].includes(tipo)) {
-    return CreatorTipo.INSTITUCIONAL;
-  }
-
-  return CreatorTipo.PESSOA_FISICA;
-}
-
-function normalizarTipoUsuario(tipoUsuario?: string | null) {
-  return String(tipoUsuario || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function podeSerCreator(
-  tipoUsuario?: string | null
-) {
-  const tipo =
-    normalizarTipoUsuario(
-      tipoUsuario
-    );
-
-  return [
-    "professor",
-    "olheiro",
-    "clube",
-    "escolinha",
-    "escola",
-    "federacao",
-    "marca",
-  ].includes(tipo);
-}
-
 export const ativarCreator = async (req: Request, res: Response) => {
   try {
     const usuarioId = getAuthUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
 
-    const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          id: usuarioId,
+        },
+        select: {
+          id: true,
+          nome: true,
+          foto: true,
+        },
+      });
+
     if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
 
-    if (
-      !podeSerCreator(
-        usuario.tipo
-      )
-    ) {
-      return res
-        .status(403)
-        .json({
-          code:
-            "CREATOR_NOT_ALLOWED",
-
-          message:
-            "Este tipo de perfil não pode ativar o Creator.",
-        });
-    }
     const body = req.body ?? {};
 
     const tipoCreatorFinal =
-        body.tipo === "INSTITUCIONAL" || body.tipo === "PESSOA_FISICA"
-            ? body.tipo
-            : resolverTipoCreator(usuario.tipo);
+      body.tipo === "INSTITUCIONAL"
+        ? CreatorTipo.INSTITUCIONAL
+        : CreatorTipo.PESSOA_FISICA;
 
     const creator = await prisma.creator.upsert({
       where: { usuarioId },
@@ -141,7 +165,52 @@ export const ativarCreator = async (req: Request, res: Response) => {
       include: { usuario: true },
     });
 
-    return res.json({ ok: true, creator });
+    const agora = new Date();
+
+    await prisma.usuarioPapel.upsert({
+      where: {
+        usuarioId_papel: {
+          usuarioId,
+          papel: TipoUsuario.Creator,
+        },
+      },
+
+      update: {
+        status:
+          StatusUsuarioPapel.ATIVO,
+        ativadoEm: agora,
+        desativadoEm: null,
+        perfilCompletoEm: agora,
+      },
+
+      create: {
+        usuarioId,
+        papel:
+          TipoUsuario.Creator,
+        status:
+          StatusUsuarioPapel.ATIVO,
+        ativadoEm:
+          agora,
+        perfilCompletoEm:
+          agora,
+      },
+    });
+
+    const activeContext =
+      await definirActiveContext(
+        usuarioId,
+        "personal:Creator"
+      );
+
+    return res.json({
+      ok: true,
+      creator,
+      activeContext,
+      tipoUsuario:
+        activeContext.tipoUsuario,
+      tipoUsuarioId:
+        activeContext.tipoUsuarioId,
+    });
   } catch (error) {
     console.error("[creatorController.ativarCreator]", error);
     return res.status(500).json({ message: "Erro ao ativar Creator." });
@@ -154,59 +223,33 @@ export const getMeuCreator = async (
 ) => {
   try {
     const usuarioId =
-      getAuthUserId(req);
+      await exigirContextoCreator(
+        req,
+        res
+      );
 
-    if (!usuarioId) {
-      return res
-        .status(401)
-        .json({
-          message:
-            "Usuário não autenticado.",
-        });
-    }
-
-    const usuario =
-      await prisma.usuario.findUnique({
-        where: {
-          id: usuarioId,
-        },
-
-        select: {
-          id: true,
-          tipo: true,
-        },
-      });
-
-    if (!usuario) {
-      return res
-        .status(404)
-        .json({
-          message:
-            "Usuário não encontrado.",
-        });
-    }
+    if (!usuarioId) return;
 
     const creator =
       await findCreatorByUsuarioId(
         usuarioId
       );
 
+    if (!creator || !creator.ativo) {
+      return res.status(404).json({
+        message:
+          "Creator ainda não ativado.",
+      });
+    }
+
     return res.json({
       ok: true,
-
       creator,
-
-      isCreator:
-        !!creator?.ativo,
-
-      podeAtivar:
-        podeSerCreator(
-          usuario.tipo
-        ),
-
+      isCreator: true,
       tipoUsuario:
-        usuario.tipo,
+        TipoUsuario.Creator,
     });
+
   } catch (error) {
     console.error(
       "[creatorController.getMeuCreator]",
@@ -224,37 +267,26 @@ export const getMeuCreator = async (
 
 export const atualizarCreator = async (req: Request, res: Response) => {
   try {
-    const usuarioId = getAuthUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
+    const usuarioId =
+      await exigirContextoCreator(
+        req,
+        res
+      );
+
+    if (!usuarioId) return;
 
     const creator = await prisma.creator.findUnique({ where: { usuarioId } });
     if (!creator) return res.status(404).json({ message: "Creator ainda não ativado." });
 
     const body = req.body ?? {};
 
-    const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
-    if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
-
-    if (
-      !podeSerCreator(
-        usuario.tipo
-      )
-    ) {
-      return res
-        .status(403)
-        .json({
-          code:
-            "CREATOR_NOT_ALLOWED",
-
-          message:
-            "Este tipo de perfil não pode usar o Creator.",
-        });
-    }
     const tipoCreatorFinal =
-        body.tipo === "INSTITUCIONAL" || body.tipo === "PESSOA_FISICA"
-            ? body.tipo
-            : resolverTipoCreator(usuario.tipo);
-            
+      body.tipo === "INSTITUCIONAL"
+        ? CreatorTipo.INSTITUCIONAL
+        : body.tipo === "PESSOA_FISICA"
+          ? CreatorTipo.PESSOA_FISICA
+          : creator.tipo;
+                
     const atualizado = await prisma.creator.update({
       where: { usuarioId },
       data: {
@@ -315,14 +347,21 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
       },
     });
 
-    if (!creator || !creator.ativo) {
-      return res.status(404).json({ message: "Creator não encontrado." });
-    }
+    const possuiPapelCreator =
+      await hasRole(
+        usuarioId,
+        TipoUsuario.Creator
+      );
 
-    if (!podeSerCreator(creator.usuario.tipo)) {
-        return res.status(404).json({
-            message: "Creator não encontrado.",
-        });
+    if (
+      !creator ||
+      !creator.ativo ||
+      !possuiPapelCreator
+    ) {
+      return res.status(404).json({
+        message:
+          "Creator não encontrado.",
+      });
     }
 
     const viewerId = getAuthUserId(req);
@@ -407,13 +446,21 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
       }),
       prisma.aulaAoVivo.findMany({
         where: {
-          OR: [
-            { criadorUsuarioId: usuarioId },
-            { metodologia: { criadorUsuarioId: usuarioId } },
-            { metodologiaAvulsa: { criadorUsuarioId: usuarioId } },
-          ],
+          contextoKind:
+            "PERSONAL",
+
+          contextoTipo:
+            "Creator",
+
+          contextoPerfilId:
+            creator.id,
+
           status: {
-            in: ["AGENDADA", "AO_VIVO", "FINALIZADA"],
+            in: [
+              "AGENDADA",
+              "AO_VIVO",
+              "FINALIZADA",
+            ],
           },
         },
         orderBy: {
@@ -517,51 +564,6 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
 
     const receitaBruta = vendasConfirmadas.reduce((acc, v) => acc + toNumber(v.valorBruto), 0);
     const ganhoCreator = vendasConfirmadas.reduce((acc, v) => acc + toNumber(v.valorCreator), 0);
-
-    const tipoCorrigido = resolverTipoCreator(creator.usuario.tipo);
-
-    if (creator.tipo !== tipoCorrigido) {
-        await prisma.creator.update({
-            where: { id: creator.id },
-            data: { tipo: tipoCorrigido },
-        });
-
-        creator.tipo = tipoCorrigido;
-    }
-
-    const ocultarEmailEntidade = (
-      entidade: any
-    ) => {
-      if (!entidade) return entidade;
-
-      return {
-        ...entidade,
-
-        ...(Object.prototype.hasOwnProperty.call(
-          entidade,
-          "email"
-        )
-          ? {
-              email:
-                acesso.podeMostrarEmail
-                  ? entidade.email
-                  : null,
-            }
-          : {}),
-
-        ...(Object.prototype.hasOwnProperty.call(
-          entidade,
-          "emailPublico"
-        )
-          ? {
-              emailPublico:
-                acesso.podeMostrarEmail
-                  ? entidade.emailPublico
-                  : null,
-            }
-          : {}),
-      };
-    };
 
     const {
       cpf: _cpf,
@@ -741,8 +743,13 @@ export const getPerfilPublicoCreator = async (req: Request, res: Response) => {
 
 export const getDashboardCreator = async (req: Request, res: Response) => {
   try {
-    const usuarioId = getAuthUserId(req);
-    if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
+    const usuarioId =
+      await exigirContextoCreator(
+        req,
+        res
+      );
+
+    if (!usuarioId) return;
 
     const creator = await prisma.creator.findUnique({
       where: { usuarioId },
@@ -751,12 +758,6 @@ export const getDashboardCreator = async (req: Request, res: Response) => {
 
     if (!creator) {
       return res.status(404).json({ message: "Creator ainda não ativado." });
-    }
-
-    if (!podeSerCreator(creator.usuario.tipo)) {
-    return res.status(403).json({
-        message: "Este tipo de usuário não pode acessar o painel Creator.",
-    });
     }
 
     const inicioMes = new Date();

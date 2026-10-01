@@ -1,59 +1,283 @@
-import { Request, Response } from "express";
-import { prisma } from "../prisma.js";
-import { recomputePontuacaoAtleta } from "../services/recomputePontuacao.js";
+import {
+  Request,
+  Response,
+} from "express";
+
+import {
+  TipoUsuario,
+} from "@prisma/client";
+
+import {
+  prisma,
+} from "../prisma.js";
+
+import {
+  recomputePontuacaoAtleta,
+} from "../services/recomputePontuacao.js";
+
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+
+type AtletaAtivo = {
+  usuarioId: string;
+  atletaId: string;
+};
+
+async function resolverAtletaAtivo(
+  req: Request
+): Promise<AtletaAtivo | null> {
+  const usuarioId =
+    String(
+      (req as any).userId ??
+      (req as any).usuarioId ??
+      (req as any).user?.id ??
+      ""
+    ).trim();
+
+  if (!usuarioId) {
+    return null;
+  }
+
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  /*
+   * Treino livre é uma ação
+   * pessoal do Atleta.
+   *
+   * Não usamos:
+   * req.user.tipo
+   * req.user.tipoUsuarioId
+   * atletaId enviado pelo cliente
+   */
+  if (
+    !contexto ||
+    contexto.kind !==
+      "PERSONAL" ||
+    contexto.tipoUsuario !==
+      TipoUsuario.Atleta ||
+    !contexto.tipoUsuarioId
+  ) {
+    return null;
+  }
+
+  return {
+    usuarioId,
+
+    atletaId:
+      String(
+        contexto.tipoUsuarioId
+      ),
+  };
+}
 
 export const treinosLivresController = {
-  async index(req: Request, res: Response) {
+  async index(
+    req: Request,
+    res: Response
+  ) {
     try {
-      const { atletaId: atletaIdQuery, tipoAtividade, categoria } = req.query as any;
+      const atletaAtivo =
+        await resolverAtletaAtivo(
+          req
+        );
 
-      const tipo = (req as any).user?.tipo;
-      const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
-      const atletaId = tipo === "atleta" ? tipoUsuarioId : atletaIdQuery;
+      if (!atletaAtivo) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
 
+          message:
+            "Use seu perfil de Atleta para acessar seus treinos livres.",
+        });
+      }
+
+      const {
+        tipoAtividade,
+        categoria,
+      } = req.query as any;
+
+      /*
+       * Não usamos mais atletaId
+       * vindo da query.
+       *
+       * O histórico sempre pertence
+       * ao Atleta do contexto ativo.
+       */
       const where: any = {
-        ...(atletaId ? { atletaId } : {}),
+        atletaId:
+          atletaAtivo.atletaId,
+
         ...(tipoAtividade
-          ? { tipoAtividade: { equals: String(tipoAtividade), mode: "insensitive" } }
+          ? {
+              tipoAtividade: {
+                equals:
+                  String(
+                    tipoAtividade
+                  ),
+
+                mode:
+                  "insensitive",
+              },
+            }
           : {}),
+
         ...(categoria
-          ? { categoria: { equals: String(categoria), mode: "insensitive" } }
+          ? {
+              categoria: {
+                equals:
+                  String(
+                    categoria
+                  ),
+
+                mode:
+                  "insensitive",
+              },
+            }
           : {}),
       };
 
-      const treinos = await prisma.treinoLivre.findMany({
-        where,
-        include: { atleta: true },
-        orderBy: { data: "desc" },
-      });
+      const treinos =
+        await prisma
+          .treinoLivre
+          .findMany({
+            where,
 
-      res.json(treinos);
+            include: {
+              atleta:
+                true,
+            },
+
+            orderBy: {
+              data:
+                "desc",
+            },
+          });
+
+      return res.json(
+        treinos
+      );
     } catch (err) {
-      res.status(500).json({ message: "Erro ao listar treinos livres", error: err });
+      console.error(
+        "[treinoLivre:index]",
+        err
+      );
+
+      return res.status(500).json({
+        message:
+          "Erro ao listar treinos livres",
+
+        error:
+          err,
+      });
     }
   },
 
-  async show(req: Request, res: Response) {
+  async show(
+    req: Request,
+    res: Response
+  ) {
     try {
-      const id = String(req.params.id);
+      const atletaAtivo =
+        await resolverAtletaAtivo(
+          req
+        );
 
-      const treino = await prisma.treinoLivre.findUnique({
-        where: { id },
-        include: { atleta: true },
-      });
+      if (!atletaAtivo) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
 
-      if (!treino) return res.status(404).json({ message: "Treino não encontrado" });
+          message:
+            "Use seu perfil de Atleta para acessar este treino livre.",
+        });
+      }
 
-      res.json(treino);
+      const id =
+        String(
+          req.params.id ??
+          ""
+        ).trim();
+
+      if (!id) {
+        return res.status(400).json({
+          message:
+            "Treino inválido.",
+        });
+      }
+
+      const treino =
+        await prisma
+          .treinoLivre
+          .findFirst({
+            where: {
+              id,
+
+              /*
+               * Segurança importante:
+               * o treino precisa pertencer
+               * ao Atleta ativo.
+               */
+              atletaId:
+                atletaAtivo.atletaId,
+            },
+
+            include: {
+              atleta:
+                true,
+            },
+          });
+
+      if (!treino) {
+        return res.status(404).json({
+          message:
+            "Treino não encontrado.",
+        });
+      }
+
+      return res.json(
+        treino
+      );
     } catch (err) {
-      res.status(500).json({ message: "Erro ao buscar treino", error: err });
+      console.error(
+        "[treinoLivre:show]",
+        err
+      );
+
+      return res.status(500).json({
+        message:
+          "Erro ao buscar treino",
+
+        error:
+          err,
+      });
     }
   },
 
-  async create(req: Request, res: Response) {
+  async create(
+    req: Request,
+    res: Response
+  ) {
     try {
+      const atletaAtivo =
+        await resolverAtletaAtivo(
+          req
+        );
+
+      if (!atletaAtivo) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          message:
+            "Use seu perfil de Atleta para registrar um treino livre.",
+        });
+      }
+
       const {
-        atletaId,
         data,
         descricao,
         duracaoMin,
@@ -61,47 +285,157 @@ export const treinosLivresController = {
         categoria,
       } = req.body as any;
 
-      const userId = (req as any).user?.id;
-      const tipo = (req as any).user?.tipo;
-      const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
+      /*
+       * IMPORTANTE:
+       *
+       * Mesmo se o front legado ainda
+       * enviar atletaId no body,
+       * ignoramos esse valor.
+       */
+      const atletaId =
+        atletaAtivo.atletaId;
 
-      if (tipo === "atleta" && tipoUsuarioId !== atletaId) {
-        return res
-          .status(403)
-          .json({ message: "Sem permissão para registrar treino para outro atleta." });
-      }
+      const atletaExiste =
+        await prisma
+          .atleta
+          .findUnique({
+            where: {
+              id:
+                atletaId,
+            },
 
-      const atletaExiste = await prisma.atleta.findUnique({
-        where: { id: String(atletaId) },
-      });
-      if (!atletaExiste)
-        return res.status(400).json({ message: "Atleta inválido" });
+            select: {
+              id:
+                true,
 
-      if (!data || !duracaoMin || !(tipoAtividade ?? descricao)?.trim()) {
+              usuarioId:
+                true,
+            },
+          });
+
+      if (!atletaExiste) {
         return res.status(400).json({
-          message: "Campos obrigatórios: data, duração e atividade/descrição.",
+          message:
+            "Atleta inválido.",
         });
       }
 
-      const file = (req as any).file as Express.Multer.File | undefined;
-      const urlEvidencia = file
-        ? `/uploads/treinos-livres/${file.filename}`
-        : null;
+      /*
+       * Defesa extra:
+       * o perfil do contexto precisa
+       * realmente pertencer à conta.
+       */
+      if (
+        atletaExiste.usuarioId !==
+        atletaAtivo.usuarioId
+      ) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
 
-      const novo = await prisma.treinoLivre.create({
-        data: {
-          atletaId: String(atletaId),
-          data: new Date(data),
-          descricao: (descricao ?? "").trim(),
-          duracaoMin: Number(duracaoMin) || 0,
-          tipoAtividade: tipoAtividade || null,
-          categoria: categoria || null,
-          urlEvidencia, 
-        },
-      });
+          message:
+            "O Atleta ativo não pertence ao usuário autenticado.",
+        });
+      }
+
+      if (
+        !data ||
+        !duracaoMin ||
+        !String(
+          tipoAtividade ??
+          descricao ??
+          ""
+        ).trim()
+      ) {
+        return res.status(400).json({
+          message:
+            "Campos obrigatórios: data, duração e atividade/descrição.",
+        });
+      }
+
+      const dataTreino =
+        new Date(data);
+
+      if (
+        Number.isNaN(
+          dataTreino.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          message:
+            "Data inválida.",
+        });
+      }
+
+      const duracao =
+        Number(
+          duracaoMin
+        );
+
+      if (
+        !Number.isFinite(
+          duracao
+        ) ||
+        duracao <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "A duração do treino deve ser maior que zero.",
+        });
+      }
+
+      const file =
+        (req as any)
+          .file as
+          | Express.Multer.File
+          | undefined;
+
+      const urlEvidencia =
+        file
+          ? `/uploads/treinos-livres/${file.filename}`
+          : null;
+
+      const novo =
+        await prisma
+          .treinoLivre
+          .create({
+            data: {
+              atletaId,
+
+              data:
+                dataTreino,
+
+              descricao:
+                String(
+                  descricao ??
+                  ""
+                ).trim(),
+
+              duracaoMin:
+                duracao,
+
+              tipoAtividade:
+                tipoAtividade
+                  ? String(
+                      tipoAtividade
+                    )
+                  : null,
+
+              categoria:
+                categoria
+                  ? String(
+                      categoria
+                    )
+                  : null,
+
+              urlEvidencia,
+            },
+          });
 
       try {
-        await recomputePontuacaoAtleta(String(atletaId));
+        await recomputePontuacaoAtleta(
+          atletaId
+        );
       } catch (e) {
         console.warn(
           "[treinoLivre] falha ao recalcular pontuação:",
@@ -109,37 +443,107 @@ export const treinosLivresController = {
         );
       }
 
-      return res.status(201).json(novo);
-    } catch (err) {
-      console.error("Erro ao criar treino livre:", err);
       return res
-        .status(500)
-        .json({ message: "Erro ao criar treino", error: err });
+        .status(201)
+        .json(
+          novo
+        );
+    } catch (err) {
+      console.error(
+        "Erro ao criar treino livre:",
+        err
+      );
+
+      return res.status(500).json({
+        message:
+          "Erro ao criar treino",
+
+        error:
+          err,
+      });
     }
   },
 
-  async delete(req: Request, res: Response) {
+  async delete(
+    req: Request,
+    res: Response
+  ) {
     try {
-      const id = String(req.params.id);
+      const atletaAtivo =
+        await resolverAtletaAtivo(
+          req
+        );
 
-      const treino = await prisma.treinoLivre.findUnique({
-        where: { id },
-      });
+      if (!atletaAtivo) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
 
-      if (!treino) {
-        return res
-          .status(404)
-          .json({ message: "Treino não encontrado" });
+          message:
+            "Use seu perfil de Atleta para excluir um treino livre.",
+        });
       }
 
-      const atletaId = treino.atletaId;
+      const id =
+        String(
+          req.params.id ??
+          ""
+        ).trim();
 
-      await prisma.treinoLivre.delete({
-        where: { id },
-      });
+      if (!id) {
+        return res.status(400).json({
+          message:
+            "Treino inválido.",
+        });
+      }
+
+      /*
+       * Não fazemos findUnique(id)
+       * seguido de delete sem autorização.
+       *
+       * Primeiro garantimos que pertence
+       * ao Atleta ativo.
+       */
+      const treino =
+        await prisma
+          .treinoLivre
+          .findFirst({
+            where: {
+              id,
+
+              atletaId:
+                atletaAtivo.atletaId,
+            },
+
+            select: {
+              id:
+                true,
+
+              atletaId:
+                true,
+            },
+          });
+
+      if (!treino) {
+        return res.status(404).json({
+          message:
+            "Treino não encontrado.",
+        });
+      }
+
+      await prisma
+        .treinoLivre
+        .delete({
+          where: {
+            id:
+              treino.id,
+          },
+        });
 
       try {
-        await recomputePontuacaoAtleta(atletaId);
+        await recomputePontuacaoAtleta(
+          treino.atletaId
+        );
       } catch (e) {
         console.warn(
           "[treinoLivre] falha ao recalcular pontuação após exclusão:",
@@ -147,9 +551,22 @@ export const treinosLivresController = {
         );
       }
 
-      return res.status(204).send();
+      return res
+        .status(204)
+        .send();
     } catch (err) {
-      res.status(500).json({ message: "Erro ao deletar treino", error: err });
+      console.error(
+        "[treinoLivre:delete]",
+        err
+      );
+
+      return res.status(500).json({
+        message:
+          "Erro ao deletar treino",
+
+        error:
+          err,
+      });
     }
   },
 };

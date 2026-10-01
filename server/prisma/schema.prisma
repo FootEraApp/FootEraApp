@@ -1134,6 +1134,11 @@ model AulaAoVivo {
   totalMensagens               Int                             @default(0)
   totalParticipantes           Int                             @default(0)
   criadorUsuarioId             String?
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
   metodologiaId                String?
   estruturaId                  String?
   itemId                       String?                         @unique
@@ -1178,6 +1183,11 @@ model AulaAoVivo {
   @@index([metodologiaAvulsaId])
   @@index([estruturaAvulsaId])
   @@index([ivsRecordingId])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model AulaAoVivoAcesso {

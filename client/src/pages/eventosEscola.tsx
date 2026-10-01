@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { EventoTipo, labelEventoTipo } from "@/utils/eventos.js";
+import { UserContext } from "../context/UserContext.js";
 
 type EventoListItem = {
   id: string;
@@ -18,16 +19,77 @@ type EventoListItem = {
 };
 
 export default function PaginaEventosEscola({ escolaId }: { escolaId: string }) {
-  const token = Storage.token;
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    authContext?.activeContext;
+
+  const isAdmin =
+    authContext?.can(
+      "VER_ADMIN"
+    ) ?? false;
+
+  const contextoEscolaCorreto =
+    activeContext?.kind ===
+      "ORGANIZATION" &&
+    String(
+      activeContext.organizationType ||
+        ""
+    ).toUpperCase() ===
+      "ESCOLA" &&
+    String(
+      activeContext.legacyOrganizationId ||
+        ""
+    ) === String(escolaId);
+
+  const podeCriarEvento =
+    isAdmin ||
+    (
+      contextoEscolaCorreto &&
+      (
+        authContext?.can(
+          "CRIAR_EVENTO"
+        ) ?? false
+      )
+    );
   const [lista, setLista] = useState<EventoListItem[]>([]);
 
+  const token =
+    Storage.token;
+
   useEffect(() => {
+    const headers =
+      token
+        ? {
+            Authorization:
+              `Bearer ${token}`,
+          }
+        : undefined;
+
     axios
-      .get(`${API.BASE_URL}/api/eventos/escolas/${escolaId}`, { headers })
-      .then(({ data }) => setLista(Array.isArray(data) ? data : []))
-      .catch(() => setLista([]));
-  }, [escolaId, headers]);
+      .get(
+        `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
+        {
+          headers,
+        }
+      )
+      .then(({ data }) =>
+        setLista(
+          Array.isArray(data)
+            ? data
+            : []
+        )
+      )
+      .catch(() =>
+        setLista([])
+      );
+  }, [
+    escolaId,
+    token,
+  ]);
 
   return (
     <div className="min-h-screen bg-cream text-green-900">
@@ -38,12 +100,14 @@ export default function PaginaEventosEscola({ escolaId }: { escolaId: string }) 
       <div className="p-4">
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-lg font-semibold">Próximos eventos</h2>
-          <Link
-            href={`/eventos/escolas/${escolaId}/novo`}
-            className="px-3 py-2 rounded bg-green-700 text-white"
-          >
-            + Criar novo
-          </Link>
+          {podeCriarEvento && (
+            <Link
+              href={`/eventos/escolas/${escolaId}/novo`}
+              className="px-3 py-2 rounded bg-green-700 text-white"
+            >
+              + Criar novo
+            </Link>
+          )}
         </div>
 
         {lista.length === 0 ? (

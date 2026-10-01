@@ -1,0 +1,373 @@
+﻿C:\dev\FootEraApp-app\client\src\components\agenda\AgendaTreinos.tsx:557: const ownerId = String((Storage as any)?.tipoUsuarioId ?? "");
+C:\dev\FootEraApp-app\client\src\components\dashboard\DashboardOrganizacao.tsx:49: "x-tipo-usuario-id": String(Storage.tipoUsuarioId || ""),
+C:\dev\FootEraApp-app\client\src\components\layout\BottomNav.tsx:334: * Storage.tipoUsuario na
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilAtleta.tsx:26: tipoUsuarioId?: string;
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilAtleta.tsx:246: perfil?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilAtleta.tsx:348: tipoUsuarioId={
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilAtleta.tsx:349: perfil.tipoUsuarioId ?? perfil.dadosEspecificos?.id ?? perfil.atleta?.id ?? null
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilClube.tsx:297: const clubeId = data?.clube?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilClube.tsx:338: tipoUsuarioId: clubeId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilClube.tsx:779: tipoUsuarioId: tipoId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilClube.tsx:1259: tipoUsuarioId: clubeId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:276: data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:316: tipoUsuarioId: escolinhaId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:655: data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:700: tipoUsuarioId: tipoId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:790: tipoUsuarioId: escolinhaId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:833: tipoUsuarioId: escolinhaId,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:934: data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:1197: data?.escolinha?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilEscola.tsx:1272: data.escolinha.id || (isOwn ? Storage.tipoUsuarioId : "");
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilOlheiro.tsx:311: data?.olheiro?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilOlheiro.tsx:339: data?.olheiro?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:387: // salvo em Usuario.tipo. Não reutilize tipoUsuarioId, pois ele pode ser o ID
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:578: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:579: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:861: data?.professor?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:867: { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:952: data?.professor?.id ?? (isOwn ? Storage.tipoUsuarioId : null);
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:955: if (tipoId) params.tipoUsuarioId = tipoId;
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:1246: Storage.tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:1247: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:1248: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:1252: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilProfessor.tsx:1253: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:67: payload?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:68: payload?.usuario?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:197: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:198: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:406: data?.tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:738: const ownerId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:741: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:742: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:1751: const ownerId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:1755: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:1756: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:1800: const ownerId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:1803: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\ProfileHeader.tsx:1804: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\components\profile\TrainingProgress.tsx:110: tipoUsuarioId?: string | null;
+C:\dev\FootEraApp-app\client\src\components\profile\TrainingProgress.tsx:213: export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
+C:\dev\FootEraApp-app\client\src\components\profile\TrainingProgress.tsx:296: enabled: Boolean(token && targetUserId && !tipoUsuarioId),
+C:\dev\FootEraApp-app\client\src\components\profile\TrainingProgress.tsx:304: const resolvedTipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\components\profile\TrainingProgress.tsx:305: tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\components\profile\TrainingProgress.tsx:385: const atletaId = resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:160: (Storage as any)?.user?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:161: (Storage as any)?.usuario?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:164: userObj?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:166: userObj?.usuario?.tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:168: readAnyKey("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:181: readAnyKey("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\components\turmas\TurmasManager.tsx:538: tipoUsuarioId: owner.id,
+C:\dev\FootEraApp-app\client\src\context\AuthGateContext.tsx:49: "usuarioTipoRaw",
+C:\dev\FootEraApp-app\client\src\context\AuthGateContext.tsx:50: "tipoUsuarioId",
+C:\dev\FootEraApp-app\client\src\pages\admin\treinos\create.tsx:551: localStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\admin\treinos\create.tsx:552: sessionStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\admin\treinos\create.tsx:556: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\admin\treinos\create.tsx:557: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\admin\treinos\create.tsx:1410: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\admin\treinos\create.tsx:1426: tipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:85: ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "usuarioTipoRaw", "tipoUsuarioId", "plano"].forEach(
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:106: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:107: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:166: store.setItem("usuarioTipoRaw", rawTipo);
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:168: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:169: data.tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\admin\login.tsx:172: if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+C:\dev\FootEraApp-app\client\src\pages\creator\dashboard.tsx:49: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\creator\dashboard.tsx:50: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\creator\dashboard.tsx:51: localStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\creator\dashboard.tsx:52: sessionStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\eventos\convocar.tsx:50: return Storage.tipoUsuarioId
+C:\dev\FootEraApp-app\client\src\pages\eventos\convocar.tsx:51: ? `/eventos/clubes/${Storage.tipoUsuarioId}`
+C:\dev\FootEraApp-app\client\src\pages\eventos\convocar.tsx:89: const tipoUsuarioId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\eventos\convocar.tsx:93: if (!tipoUsuarioId || !tipoUsuario) throw new Error("Sem tipoUsuarioId/tipoUsuario.");
+C:\dev\FootEraApp-app\client\src\pages\eventos\convocar.tsx:104: tipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\learning\evento\eventoAoVivo.tsx:450: if (json?.usuario?.tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\learning\evento\eventoAoVivo.tsx:451: localStorage.setItem("tipoUsuarioId", json.usuario.tipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\learning\evento\sala-copa.tsx:431: if (json?.usuario?.tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\learning\evento\sala-copa.tsx:432: localStorage.setItem("tipoUsuarioId", json.usuario.tipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:275: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:276: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:281: function getTipoUsuarioId() {
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:283: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:284: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:323: function autorEhDoLogado(autor: any, tipoSalvo: string, tipoUsuarioId: string) {
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:335: if (!tipoAutorEsperado || !tipoUsuarioId) return false;
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:339: String(autor.id) === String(tipoUsuarioId) &&
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1237: const tipoUsuarioIdSalvo = getTipoUsuarioId();
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1238: let tipoUsuarioId = tipoUsuarioIdSalvo;
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1240: if (!tipoUsuarioId && token && (tipoSalvo === "admin" || tipoSalvo === "Administrador")) {
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1243: tipoUsuarioId = String(payload?.id || payload?.userId || "").trim();
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1251: if (tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1252: url.searchParams.set("id", tipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\learning\create.tsx:1281: tipoUsuarioId
+C:\dev\FootEraApp-app\client\src\pages\learning\index.tsx:671: (localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\learning\index.tsx:672: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\olheiro\index.tsx:74: const tipoId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:30: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:31: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:33: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:34: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:35: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:36: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:41: ...(tipoUsuarioId ? { "x-tipo-usuario-id": tipoUsuarioId } : {}),
+C:\dev\FootEraApp-app\client\src\pages\pagamentos\index.tsx:976: "usuarioTipoRaw"
+C:\dev\FootEraApp-app\client\src\pages\pagamentos\index.tsx:979: "usuarioTipoRaw"
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:29: return localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "";
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:34: get tipoUsuarioId() {
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:35: return localStorage.getItem("tipoUsuarioId") || sessionStorage.getItem("tipoUsuarioId") || "";
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:115: tipoUsuarioId: string;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:459: function getTipoUsuarioIdFromMe(tipo: string, me: any): string {
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:477: const tipoUsuarioId = pickId(me?.tipoUsuarioId) || pickId(me?.tipoUsuario?.id);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:479: if (t === "clube") return clubeId || tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:480: if (t === "escolinha" || t === "escola") return escolinhaId || tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:481: if (t === "professor") return professorId || tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:482: if (t === "atleta") return atletaId || tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:483: if (t === "admin") return adminId || tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:485: return tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:775: const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:777: if (!tipoUsuarioId) return;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:788: `${API.BASE_URL}/api/professores/vinculados?tipo=${encodeURIComponent(tipoUser)}&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:837: }, [usuario?.tipo, usuario?.tipoUsuarioId]);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1792: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1793: sessionStorage.getItem("tipoUsuario");
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1797: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1798: (Storage as any).tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1799: localStorage.getItem("tipoUsuarioId") ??
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1815: setUsuario({ tipo: t, usuarioId, tipoUsuarioId });
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1839: const tipoIdReal = getTipoUsuarioIdFromMe(t, me);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1843: prev ? { ...prev, tipoUsuarioId: tipoIdReal } : { tipo: t, usuarioId, tipoUsuarioId: tipoIdReal },
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1846: localStorage.setItem("tipoUsuarioId", tipoIdReal);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1847: sessionStorage.setItem("tipoUsuarioId", tipoIdReal);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1853: console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1863: const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1903: }, [listaParaExibir, usuario?.tipoUsuarioId, profNomeById, professoresVinculadosNomeById]);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1916: const idOk = String(usuario?.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1918: }, [usuario?.tipo, usuario?.tipoUsuarioId, tipo]);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:1954: (entidadeIdReal ? `&tipoUsuarioId=${encodeURIComponent(entidadeIdReal)}` : "") +
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2061: const meuTipoUsuarioId = usuarioReady.idOk;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2063: String(ids.professorId ?? "") === meuTipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2064: String(ids.escolinhaId ?? "") === meuTipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2065: String(ids.clubeId ?? "") === meuTipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2067: const souColaborador = professoresIds.includes(meuTipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2224: const tipoUsuarioIdRaw =
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2225: String(usuario?.tipoUsuarioId ?? "").trim() ||
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2226: String((Storage as any).tipoUsuarioId ?? "").trim() ||
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2229: if (!tipoUsuarioIdRaw) {
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2230: console.warn("[treinos] sem tipoUsuarioId para carregar atletas vinculados");
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2235: const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2236: tipoUsuarioIdRaw,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2269: const tipoUsuarioIdRaw =
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2270: String(usuario?.tipoUsuarioId ?? "").trim() ||
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2271: String((Storage as any).tipoUsuarioId ?? "").trim() ||
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2274: if (!tipoUsuarioIdRaw) {
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2275: console.warn("[treinos] sem tipoUsuarioId para carregar turmas");
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2282: `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2283: tipoUsuarioIdRaw,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2285: `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2286: tipoUsuarioIdRaw,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2288: `${API.BASE_URL}/api/elencos?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2289: tipoUsuarioIdRaw,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2291: `${API.BASE_URL}/api/turmas?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2292: tipoUsuarioIdRaw,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2424: const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2429: `&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2449: const meuTipoUsuarioId = String(user?.tipoUsuarioId ?? "").trim();
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2454: const meusIds = Array.from(new Set([meuTipoUsuarioId, meuUsuarioId].filter(Boolean)));
+C:\dev\FootEraApp-app\client\src\pages\treino\treinos-instrutores.tsx:2583: const meuId = String(usuario?.tipoUsuarioId || usuario?.usuarioId || "").trim();
+C:\dev\FootEraApp-app\client\src\pages\configuracoesPerfil.tsx:93: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\configuracoesPerfil.tsx:94: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\configuracoesPerfil.tsx:95: localStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\configuracoesPerfil.tsx:96: sessionStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\conquistas.tsx:138: (Storage as any)?.usuarioTipoRaw,
+C:\dev\FootEraApp-app\client\src\pages\conquistas.tsx:140: localStorage.getItem("usuarioTipoRaw"),
+C:\dev\FootEraApp-app\client\src\pages\conquistas.tsx:141: localStorage.getItem("tipoUsuario"),
+C:\dev\FootEraApp-app\client\src\pages\conquistas.tsx:142: sessionStorage.getItem("usuarioTipoRaw"),
+C:\dev\FootEraApp-app\client\src\pages\conquistas.tsx:143: sessionStorage.getItem("tipoUsuario")
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:134: tipoUsuarioId: string | null,
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:147: storage.setItem("usuarioTipoRaw", papel);
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:149: if (tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:150: storage.setItem("tipoUsuarioId", tipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:152: storage.removeItem("tipoUsuarioId");
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:160: usuarioTipoRaw: papel,
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:161: tipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:360: if (!dadosEsp.id && res.data?.tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:361: dadosEsp.id = res.data.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:515: dadosEsp.id || Storage.tipoUsuarioId || "",
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:983: const tipoUsuarioId = resposta.data?.tipoUsuarioId
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:984: ? String(resposta.data.tipoUsuarioId)
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:987: atualizarContextoLocalDoPapel(papelAtivo, tipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:1046: dadosTipoSeguro?.id || Storage.tipoUsuarioId || "",
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:2495: dadosTipo?.id || Storage.tipoUsuarioId || "",
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:869: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:870: Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:872: if (!token || !tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:885: tipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1236: params: { tipoUsuarioId: Storage.tipoUsuarioId, turmaId },
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1805: const tipoUsuarioId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1813: if (!tipoUsuarioId || !tipoUsuario) {
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1820: ? { professorId: tipoUsuarioId }
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1822: ? { clubeId: tipoUsuarioId }
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1824: ? { escolinhaId: tipoUsuarioId }
+C:\dev\FootEraApp-app\client\src\pages\elenco.tsx:1836: tipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\feed.tsx:557: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\feed.tsx:558: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:306: const [tipoUsuarioIdEntidade, setTipoUsuarioIdEntidade] = useState<string | null>(null);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:395: const contextoTipoUsuarioId = useMemo<string | null>(() => {
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:396: if (!modoGestor) return tipoUsuarioIdEntidade;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:398: }, [modoGestor, orgIdEfetivo, tipoUsuarioIdEntidade]);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:412: return String(contextoTipoUsuarioId || "");
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:444: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:445: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:446: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:449: setTipoUsuarioIdEntidade(tipoId);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:455: setTipoUsuarioIdEntidade(tipoId);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:459: setTipoUsuarioIdEntidade(null);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:473: const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:485: tipoUsuarioId: entidadeIdReal,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:553: const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:563: tipoUsuarioId: entidadeIdReal,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:656: }, [tipo, usuarioIdEntidade, contextoTipo, contextoTipoUsuarioId]);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:748: const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:754: "[GerenciarAtletas] tipoUsuarioIdEntidade está vazio — usando usuarioIdEntidade como fallback. Ideal: /perfil/me retornar o id da entidade."
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:763: tipoUsuarioId: entidadeIdReal || undefined,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:789: }, [carreiraOpen, focado?.id, tipo, usuarioIdEntidade,tipoUsuarioIdEntidade]);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:826: contextoTipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1054: contextoTipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1136: {tipo === "Professor" && modoGestor && contextoTipoUsuarioId && gestorCtx?.org && (
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1752: contextoTipo && contextoTipo !== "Professor" && contextoTipoUsuarioId
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1753: ? { tipo: contextoTipo === "Escola" ? "Escolinha" : "Clube", id: contextoTipoUsuarioId }
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1758: ? (tipoUsuarioIdEntidade || undefined)
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1842: const entidadeIdReal = String(contextoTipoUsuarioId || "").trim();
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1852: tipoUsuarioId: entidadeIdReal,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarAtletas.tsx:1860: const autorId = String(contextoTipoUsuarioId || "");
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:134: const [tipoUsuarioIdEntidade, setTipoUsuarioIdEntidade] = useState<string | null>(null);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:259: const contextoTipoUsuarioId: string | null = useMemo(() => {
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:264: return tipoUsuarioIdEntidade;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:265: }, [tipo, orgSelecionada, professorIdLogado, tipoUsuarioIdEntidade]);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:281: contextoTipoUsuarioId &&
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:283: ? { tipo: contextoTipo === "Escola" ? "Escolinha" : "Clube", id: contextoTipoUsuarioId }
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:328: tipoId = (data?.clube && data.clube.id) || data?.clubeId || Storage.tipoUsuarioId || null;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:330: tipoId = (data?.escolinha && data.escolinha.id) || data?.escolinhaId || Storage.tipoUsuarioId || null;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:332: tipoId = (data?.professor && data.professor.id) || data?.professorId || Storage.tipoUsuarioId || null;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:334: tipoId = Storage.tipoUsuarioId ?? null;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:341: setTipoUsuarioIdEntidade(tipoId);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:350: setTipoUsuarioIdEntidade(null);
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:456: !contextoTipoUsuarioId
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:487: id: contextoTipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:550: if (!contextoTipoUsuarioId) return;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:604: contextoTipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:650: ownerId: contextoTipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:674: if (!contextoTipoUsuarioId) return;
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:679: params: { ownerTipo, ownerId: contextoTipoUsuarioId },
+C:\dev\FootEraApp-app\client\src\pages\GerenciarProfessores.tsx:732: }, [tipo, usuarioIdEntidade, tipoUsuarioIdEntidade, orgSelecionada, aba, subAbaTurmas]);
+C:\dev\FootEraApp-app\client\src\pages\jogos-elenco.tsx:69: const tipoUsuarioId = Storage.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\jogos-elenco.tsx:71: if (!tipoUsuarioId || !token) return;
+C:\dev\FootEraApp-app\client\src\pages\jogos-elenco.tsx:75: const res = await axios.get(ELENCOS_BASE, { params: { tipoUsuarioId }, headers: auth() });
+C:\dev\FootEraApp-app\client\src\pages\login.tsx:332: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\login.tsx:333: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:122: tipoUsuarioId?: string;
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:213: tipoUsuarioId: params.tipoUsuarioId ?? "",
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:676: `&tipoUsuarioId=${encodeURIComponent(ownerId)}` +
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:732: const ownerId = payload.tipoUsuarioId;
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:810: tipoUsuarioId: ownerId,
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1372: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1373: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1428: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1429: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1436: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1437: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1438: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1805: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1806: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1813: (Storage as any).tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1814: localStorage.getItem("tipoUsuarioId") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1815: sessionStorage.getItem("tipoUsuarioId") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1823: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1824: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1921: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1922: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1982: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:1983: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2035: const baseTipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2036: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2037: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2038: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2043: if (!baseTipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2044: console.warn("[NovoTreino] sem tipoUsuarioId; não dá para carregar turmas/elencos");
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2066: const ownerId = orgObj?.id ? String(orgObj.id) : String(baseTipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2067: const professorId = String(baseTipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2070: const urlMinhas = `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2071: baseTipoUsuarioId
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2144: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2145: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2260: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2261: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2281: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2282: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2283: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2372: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2374: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2375: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2376: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2381: if (!tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2383: "[NovoTreino] nenhum tipoUsuarioId/perfilId encontrado; não dá para chamar /api/treinos/atletas-vinculados",
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2389: const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2390: tipoUsuarioId,
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2721: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2723: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:2724: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3093: localStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3094: sessionStorage.getItem("tipoUsuario") ??
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3097: const tipoUsuarioIdLogged =
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3098: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3099: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3100: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3116: tipoUsuarioId: tipoUsuarioIdLogged,
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3132: tipoUsuarioId: tipoUsuarioIdLogged,
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3330: const { tipoUsuario, tipoUsuarioId } = getDono();
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3347: if (!tipoUsuario || !tipoUsuarioId) {
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3487: const tipoUsuarioIdProfessor =
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3488: (Storage as any).tipoUsuarioId ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3489: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3490: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\novoTreino.tsx:3498: (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor || tipoUsuarioId);
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:12: get tipoUsuarioId() {
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:14: localStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:15: sessionStorage.getItem("tipoUsuarioId") ||
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:21: localStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:22: sessionStorage.getItem("usuarioTipoRaw") ||
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:23: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:24: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:476: const tipoUsuarioRaw = String(Storage.tipoUsuarioRaw || "").toLowerCase();
+C:\dev\FootEraApp-app\client\src\pages\submissao.tsx:477: const tipoId = Storage.tipoUsuarioId || null;
+C:\dev\FootEraApp-app\client\src\pages\treinoLivreHistorico.tsx:73: (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+C:\dev\FootEraApp-app\client\src\pages\treinoLivreNovo.tsx:21: (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+C:\dev\FootEraApp-app\client\src\pages\treinos.tsx:22: tipoUsuarioId: string;
+C:\dev\FootEraApp-app\client\src\pages\treinos.tsx:28: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\pages\treinos.tsx:29: sessionStorage.getItem("tipoUsuario");
+C:\dev\FootEraApp-app\client\src\routes\RequireAdmin.tsx:10: localStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\routes\RequireAdmin.tsx:11: sessionStorage.getItem("tipoUsuario") ||
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:71: "usuarioTipoRaw",
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:72: "tipoUsuarioId",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:17: tipoUsuarioId?:
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:54: tipoUsuarioId?: string | number | null;
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:124: "usuarioTipoRaw",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:125: "tipoUsuarioId",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:187: "usuarioTipoRaw",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:193: .tipoUsuarioId
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:196: "tipoUsuarioId",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:199: .tipoUsuarioId
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:204: "tipoUsuarioId"
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:225: "usuarioTipoRaw",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:226: "tipoUsuarioId",
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:297: store.setItem("usuarioTipoRaw", rawTipo);
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:339: const tipoUsuarioId =
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:340: data.tipoUsuarioId ??
+C:\dev\FootEraApp-app\client\src\utils\authSession.ts:344: if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+C:\dev\FootEraApp-app\client\src\utils\session.ts:6: localStorage.removeItem("tipoUsuarioId");
+C:\dev\FootEraApp-app\client\src\utils\storage.ts:20: "tipoUsuarioId",
+C:\dev\FootEraApp-app\client\src\utils\storage.ts:32: get tipoUsuarioId() {
+C:\dev\FootEraApp-app\client\src\utils\storage.ts:33: return getFromStorage("tipoUsuarioId");
+C:\dev\FootEraApp-app\client\src\utils\treinos.types.ts:22: tipoUsuarioId: string;
