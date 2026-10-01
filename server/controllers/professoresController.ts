@@ -838,451 +838,469 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
   }
 };
 
-async function limparTurmasIncompativeisDoProfessor(
-  tx: any,
-  professorId: string,
-  novaOrganizacao:
-    | {
-        tipo: "Clube" | "Escolinha";
-        id: string;
-      }
-    | null
-) {
-  const vinculosTurma =
-    await tx.turmaProfessor.findMany({
-      where: {
-        professorId,
-      },
-
-      select: {
-        turmaId: true,
-
-        turma: {
-          select: {
-            clubeId: true,
-            escolinhaId: true,
-          },
-        },
-      },
-    });
-
-  const turmaIdsRemover = vinculosTurma
-    .filter((vinculo: any) => {
-      const turma = vinculo.turma;
-
-      if (!turma) {
-        return false;
-      }
-
-      const turmaDeOrganizacao =
-        Boolean(turma.clubeId) ||
-        Boolean(turma.escolinhaId);
-
-      if (!turmaDeOrganizacao) {
-        return false;
-      }
-
-      if (!novaOrganizacao) {
-        return true;
-      }
-
-      if (
-        novaOrganizacao.tipo === "Clube"
-      ) {
-        return (
-          turma.clubeId !==
-          novaOrganizacao.id
-        );
-      }
-
-      return (
-        turma.escolinhaId !==
-        novaOrganizacao.id
-      );
-    })
-    .map(
-      (vinculo: any) =>
-        String(vinculo.turmaId)
-    );
-
-  if (turmaIdsRemover.length === 0) {
-    return;
-  }
-
-  await tx.turmaProfessor.deleteMany({
-    where: {
-      professorId,
-
-      turmaId: {
-        in: turmaIdsRemover,
-      },
-    },
-  });
-}
-
-export const salvarVinculoProfessor = async (req: Request, res: Response) => {
+export const salvarVinculoProfessor = async (
+  req: Request,
+  res: Response
+) => {
   try {
-    const { id: professorId } = req.params;
-    const body = req.body || {};
-    const orgId: string | null =
-      body.organizacaoId ?? body.idOrganizacao ?? body.organizacao ?? null;
+    const {
+      id: professorId,
+    } = req.params;
 
-    const { tipo, id } = await resolveOrganizacao(orgId);
+    const body =
+      req.body || {};
 
-    const professorExistente = await prisma.professor.findUnique({
-      where: { id: professorId },
-      select: {
-        id: true,
-        clubeId: true,
-        escolinhaId: true,
-        usuarioId: true,
-      },
-    });
+    const orgId:
+      | string
+      | null =
+      body.organizacaoId ??
+      body.idOrganizacao ??
+      body.organizacao ??
+      null;
 
-    if (!professorExistente) {
-      return res.status(404).json({ message: "Professor não encontrado." });
-    }
-
-    if (!id || !tipo) {
-      await prisma.$transaction(async (tx) => {
-        const agora = new Date();
-        
-        await limparTurmasIncompativeisDoProfessor(
-          tx,
-          professorId,
-          null
-        );
-
-        await tx.relacaoTreinamento.updateMany({
-          where: {
-            professorId,
-            atletaId: null,
-            ativo: true,
-          },
-          data: {
-            ativo: false,
-            encerradoEm: agora,
-          },
-        });
-
-        await tx.professor.update({
-          where: { id: professorId },
-          data: {
-            escolinhaId: null,
-            clubeId: null,
-            organizacaoId: null,
-          },
-        });
-
-        await tx.organizacaoGestor.updateMany({
-          where: { professorId },
-          data: { ativo: false },
-        });
-
-        await tx.professorClube.deleteMany({
-          where: { professorId },
-        });
-
-        await tx.professorEscolinha.deleteMany({
-          where: { professorId },
-        });
-      });
-
-      const atualizado = await buscarProfessorPorIdInterno(professorId);
-
-      return res.status(200).json({
-        ok: true,
-        tipo: null,
-        organizacaoId: null,
-        professor: atualizado,
-        message: "Vínculo removido com sucesso.",
+    if (!orgId) {
+      return res.status(400).json({
+        message:
+          "organizacaoId é obrigatório.",
       });
     }
 
-    const relacaoAtivaExistente =
-      await prisma.relacaoTreinamento.findFirst({
-        where: {
-          professorId,
-          atletaId: null,
-          ativo: true,
-          encerradoEm: null,
-          ...(tipo === "Clube"
-            ? {
-                clubeId: id,
-                escolinhaId: null,
-              }
-            : {
-                escolinhaId: id,
-                clubeId: null,
-              }),
-        },
-        select: {
-          id: true,
-        },
-      });
-
-    const campoDiretoCorreto =
-      (tipo === "Clube" &&
-        professorExistente.clubeId === id) ||
-      (tipo === "Escolinha" &&
-        professorExistente.escolinhaId === id);
+    const {
+      tipo,
+      id,
+    } =
+      await resolveOrganizacao(
+        orgId
+      );
 
     if (
-      campoDiretoCorreto &&
-      relacaoAtivaExistente
+      !id ||
+      !tipo
     ) {
-      await prisma.$transaction(
-        async (tx) => {
-          await limparTurmasIncompativeisDoProfessor(
-            tx,
-            professorId,
-            {
-              tipo,
-              id,
-            }
-          );
-        }
-      );
+      return res.status(404).json({
+        message:
+          "Organização não encontrada.",
+      });
+    }
 
-    return res.status(200).json({
-      ok: true,
-      tipo,
-      organizacaoId: id,
-      jaVinculado: true,
-      message:
-        "Você já está vinculado a essa organização.",
-    });
-  }
-
-    const professor = await prisma.$transaction(async (tx) => {
-      const agora = new Date();
-
-      const organizacaoNovaId =
-        await obterOrganizacaoIdPorLegado({
-          tipo:
-            tipo === "Clube"
-              ? "CLUBE"
-              : "ESCOLINHA",
-
-          ownerId:
-            id,
-
-          tx,
-        });
-
-      await limparTurmasIncompativeisDoProfessor(
-        tx,
-        professorId,
-        {
-          tipo,
-          id,
-        }
-      );
-
-      await tx.relacaoTreinamento.updateMany({
+    const professorExistente =
+      await prisma.professor.findUnique({
         where: {
-          professorId,
-          atletaId: null,
-          ativo: true,
-        },
-        data: {
-          ativo: false,
-          encerradoEm: agora,
-        },
-      });
-
-      const professorUsuarioId =
-        professorExistente.usuarioId;
-
-      if (
-        professorUsuarioId
-      ) {
-        await sincronizarMembroOrganizacaoLegada({
-          tx,
-
-          tipo:
-            tipo === "Clube"
-              ? "CLUBE"
-              : "ESCOLINHA",
-
-          ownerId:
-            id,
-
-          usuarioId:
-            professorUsuarioId,
-
-          funcao:
-            FuncaoMembroOrganizacao.PROFESSOR,
-        });
-      }
-
-      const relacaoAnterior =
-        await tx.relacaoTreinamento.findFirst({
-          where: {
+          id:
             professorId,
-            atletaId: null,
-            ...(tipo === "Clube"
-              ? {
-                  clubeId: id,
-                  escolinhaId: null,
-                }
-              : {
-                  escolinhaId: id,
-                  clubeId: null,
-                }),
-          },
-          orderBy: {
-            criadoEm: "desc",
-          },
-          select: {
-            id: true,
-          },
-        });
+        },
 
-      if (relacaoAnterior) {
-        await tx.relacaoTreinamento.update({
-          where: {
-            id: relacaoAnterior.id,
-          },
-          data: {
-            ativo: true,
-            encerradoEm: null,
-            clubeId: tipo === "Clube" ? id : null,
-            escolinhaId:
-              tipo === "Escolinha" ? id : null,
-            organizacaoId: organizacaoNovaId,
-          },
-        });
-      } else {
-        await tx.relacaoTreinamento.create({
-          data: {
-            professorId,
-            atletaId: null,
-            clubeId: tipo === "Clube" ? id : null,
-            escolinhaId:
-              tipo === "Escolinha" ? id : null,
-            organizacaoId: organizacaoNovaId,
-            ativo: true,
-            encerradoEm: null,
-          },
-        });
-      }
-
-      await tx.organizacaoGestor.updateMany({
-        where: { professorId },
-        data: { ativo: false },
+        select: {
+          id: true,
+          usuarioId: true,
+          clubeId: true,
+          escolinhaId: true,
+          organizacaoId: true,
+        },
       });
 
-      await tx.professorClube.deleteMany({
-        where: { professorId },
+    if (!professorExistente) {
+      return res.status(404).json({
+        message:
+          "Professor não encontrado.",
       });
+    }
 
-      await tx.professorEscolinha.deleteMany({
-        where: { professorId },
-      });
+    await prisma.$transaction(
+      async (tx) => {
+        const organizacaoNovaId =
+          await obterOrganizacaoIdPorLegado({
+            tipo:
+              tipo === "Clube"
+                ? "CLUBE"
+                : "ESCOLINHA",
 
-      if (tipo === "Clube") {
-        await tx.professorClube.upsert({
-          where: {
-            professorId_clubeId: {
+            ownerId:
+              id,
+
+            tx,
+          });
+
+        /*
+         * NÃO encerra os outros vínculos.
+         * Agora Professor pode pertencer a
+         * vários Clubes e Escolinhas.
+         */
+
+        const relacaoAnterior =
+          await tx.relacaoTreinamento.findFirst({
+            where: {
               professorId,
-              clubeId: id,
+              atletaId:
+                null,
+
+              ...(tipo ===
+              "Clube"
+                ? {
+                    clubeId:
+                      id,
+
+                    escolinhaId:
+                      null,
+                  }
+                : {
+                    escolinhaId:
+                      id,
+
+                    clubeId:
+                      null,
+                  }),
             },
+
+            orderBy: {
+              criadoEm:
+                "desc",
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        if (
+          relacaoAnterior
+        ) {
+          await tx.relacaoTreinamento.update({
+            where: {
+              id:
+                relacaoAnterior.id,
+            },
+
+            data: {
+              ativo: true,
+              encerradoEm:
+                null,
+
+              clubeId:
+                tipo ===
+                "Clube"
+                  ? id
+                  : null,
+
+              escolinhaId:
+                tipo ===
+                "Escolinha"
+                  ? id
+                  : null,
+
+              organizacaoId:
+                organizacaoNovaId,
+            },
+          });
+        } else {
+          await tx.relacaoTreinamento.create({
+            data: {
+              professorId,
+
+              atletaId:
+                null,
+
+              clubeId:
+                tipo ===
+                "Clube"
+                  ? id
+                  : null,
+
+              escolinhaId:
+                tipo ===
+                "Escolinha"
+                  ? id
+                  : null,
+
+              organizacaoId:
+                organizacaoNovaId,
+
+              ativo:
+                true,
+
+              encerradoEm:
+                null,
+            },
+          });
+        }
+
+        /*
+         * Mantém sincronizado com
+         * MembroOrganizacao.
+         */
+        if (
+          professorExistente
+            .usuarioId
+        ) {
+          await sincronizarMembroOrganizacaoLegada({
+            tx,
+
+            tipo:
+              tipo ===
+              "Clube"
+                ? "CLUBE"
+                : "ESCOLINHA",
+
+            ownerId:
+              id,
+
+            usuarioId:
+              professorExistente
+                .usuarioId,
+
+            funcao:
+              FuncaoMembroOrganizacao
+                .PROFESSOR,
+          });
+        }
+
+        /*
+         * Salva somente o vínculo solicitado.
+         * NÃO apaga os demais.
+         */
+        if (
+          tipo ===
+          "Clube"
+        ) {
+          await tx.professorClube.upsert({
+            where: {
+              professorId_clubeId:
+                {
+                  professorId,
+
+                  clubeId:
+                    id,
+                },
+            },
+
+            update: {
+              papel:
+                "Professor",
+            },
+
+            create: {
+              professorId,
+
+              clubeId:
+                id,
+
+              papel:
+                "Professor",
+            },
+          });
+
+          await tx.organizacaoGestor.upsert({
+            where: {
+              tipo_ownerId_professorId:
+                {
+                  tipo:
+                    "CLUBE",
+
+                  ownerId:
+                    id,
+
+                  professorId,
+                },
+            },
+
+            update: {
+              ativo:
+                true,
+            },
+
+            create: {
+              tipo:
+                "CLUBE",
+
+              ownerId:
+                id,
+
+              professorId,
+
+              ativo:
+                true,
+            },
+          });
+
+          /*
+           * Campo legado:
+           * só preenche caso ainda não exista
+           * um Clube principal.
+           *
+           * Os vários vínculos reais ficam
+           * em ProfessorClube.
+           */
+          if (
+            !professorExistente
+              .clubeId
+          ) {
+            await tx.professor.update({
+              where: {
+                id:
+                  professorId,
+              },
+
+              data: {
+                clubeId:
+                  id,
+
+                organizacaoId:
+                  professorExistente
+                    .organizacaoId ??
+                  id,
+              },
+            });
+          }
+
+          return;
+        }
+
+        await tx.professorEscolinha.upsert({
+          where: {
+            professorId_escolinhaId:
+              {
+                professorId,
+
+                escolinhaId:
+                  id,
+              },
           },
+
           update: {
-            papel: "Professor",
+            papel:
+              "Professor",
           },
+
           create: {
             professorId,
-            clubeId: id,
-            papel: "Professor",
+
+            escolinhaId:
+              id,
+
+            papel:
+              "Professor",
           },
         });
 
         await tx.organizacaoGestor.upsert({
           where: {
-            tipo_ownerId_professorId: {
-              tipo: "CLUBE",
-              ownerId: id,
-              professorId,
-            },
+            tipo_ownerId_professorId:
+              {
+                tipo:
+                  "ESCOLINHA",
+
+                ownerId:
+                  id,
+
+                professorId,
+              },
           },
+
           update: {
-            ativo: true,
+            ativo:
+              true,
           },
+
           create: {
-            tipo: "CLUBE",
-            ownerId: id,
+            tipo:
+              "ESCOLINHA",
+
+            ownerId:
+              id,
+
             professorId,
-            ativo: true,
+
+            ativo:
+              true,
           },
         });
 
-        return tx.professor.update({
-          where: { id: professorId },
-          data: {
-            clubeId: id,
-            escolinhaId: null,
-            organizacaoId: id,
-          },
-        });
+        /*
+         * Mesmo princípio:
+         * escolinhaId fica como compatibilidade
+         * legada; todos os vínculos ficam
+         * em ProfessorEscolinha.
+         */
+        if (
+          !professorExistente
+            .escolinhaId
+        ) {
+          await tx.professor.update({
+            where: {
+              id:
+                professorId,
+            },
+
+            data: {
+              escolinhaId:
+                id,
+
+              organizacaoId:
+                professorExistente
+                  .organizacaoId ??
+                id,
+            },
+          });
+        }
       }
+    );
 
-      await tx.professorEscolinha.upsert({
-        where: {
-          professorId_escolinhaId: {
-            professorId,
-            escolinhaId: id,
-          },
-        },
-        update: {
-          papel: "Professor",
-        },
-        create: {
-          professorId,
-          escolinhaId: id,
-          papel: "Professor",
-        },
-      });
-
-      await tx.organizacaoGestor.upsert({
-        where: {
-          tipo_ownerId_professorId: {
-            tipo: "ESCOLINHA",
-            ownerId: id,
+    const vinculosAtuais =
+      await Promise.all([
+        prisma.professorClube.findMany({
+          where: {
             professorId,
           },
-        },
-        update: {
-          ativo: true,
-        },
-        create: {
-          tipo: "ESCOLINHA",
-          ownerId: id,
-          professorId,
-          ativo: true,
-        },
-      });
 
-      return tx.professor.update({
-        where: { id: professorId },
-        data: {
-          escolinhaId: id,
-          clubeId: null,
-          organizacaoId: id,
-        },
-      });
-    });
+          select: {
+            clubeId:
+              true,
+          },
+        }),
+
+        prisma.professorEscolinha.findMany({
+          where: {
+            professorId,
+          },
+
+          select: {
+            escolinhaId:
+              true,
+          },
+        }),
+      ]);
 
     return res.status(200).json({
       ok: true,
+
       tipo,
-      organizacaoId: id,
-      professor,
-      message: "Vínculo salvo com sucesso.",
+
+      organizacaoId:
+        id,
+
+      vinculos: {
+        clubes:
+          vinculosAtuais[0].map(
+            (vinculo) =>
+              vinculo.clubeId
+          ),
+
+        escolinhas:
+          vinculosAtuais[1].map(
+            (vinculo) =>
+              vinculo.escolinhaId
+          ),
+      },
+
+      message:
+        "Vínculo salvo com sucesso.",
     });
   } catch (err: any) {
-    return sendError(res, err, "Erro ao salvar vínculo.");
+    return sendError(
+      res,
+      err,
+      "Erro ao salvar vínculo."
+    );
   }
 };
 

@@ -3,6 +3,12 @@ import { NotificacaoTipo } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
 function ensureArray<T>(v: any): T[] {
   return Array.isArray(v) ? v : [];
@@ -56,15 +62,29 @@ async function podeGerenciarConvocacao(
 
   const isAdmin =
     req.user?.isAdmin ===
-      true ||
-    String(
-      req.user?.tipo ||
-      ""
-    ).toLowerCase() ===
-      "admin";
+    true;
 
   if (isAdmin) {
     return true;
+  }
+
+  const activeContext =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (!activeContext) {
+    return false;
+  }
+
+  const podeGerenciarTurma =
+    await canPermission(
+      usuarioId,
+      "GERENCIAR_TURMA"
+    );
+
+  if (!podeGerenciarTurma) {
+    return false;
   }
 
   const [
@@ -80,6 +100,17 @@ async function podeGerenciarConvocacao(
 
         select: {
           creatorUsuarioId:
+            true,
+          clubeId:
+            true,
+
+          escolinhaId:
+            true,
+
+          federacaoId:
+            true,
+
+          marcaId:
             true,
 
           clube: {
@@ -119,6 +150,11 @@ async function podeGerenciarConvocacao(
         },
 
         select: {
+          clubeId:
+            true,
+
+          escolinhaId:
+            true,
           clube: {
             select: {
               usuarioId:
@@ -154,35 +190,122 @@ async function podeGerenciarConvocacao(
     return false;
   }
 
-  const gerenciaEvento =
-    [
-      evento.creatorUsuarioId,
-      evento.clube
-        ?.usuarioId,
-      evento.escolinha
-        ?.usuarioId,
-      evento.federacao
-        ?.usuarioId,
-      evento.marca
-        ?.usuarioId,
-    ]
-      .filter(Boolean)
-      .includes(usuarioId);
+  let gerenciaEvento =
+    false;
 
-  const gerenciaTurma =
-    [
-      turma.clube
-        ?.usuarioId,
-      turma.escolinha
-        ?.usuarioId,
-      ...turma.professores.map(
-        (item) =>
-          item.professor
-            .usuarioId
-      ),
-    ]
-      .filter(Boolean)
-      .includes(usuarioId);
+  if (
+    activeContext.kind ===
+      "PERSONAL"
+  ) {
+    const tipoPessoal =
+      String(
+        activeContext.tipoUsuario ||
+          ""
+      ).toLowerCase();
+
+    if (
+      tipoPessoal === "creator"
+    ) {
+      gerenciaEvento =
+        evento.creatorUsuarioId ===
+        usuarioId;
+    }
+  }
+
+  if (
+    activeContext.kind ===
+      "ORGANIZATION"
+  ) {
+    const legacyId =
+      String(
+        activeContext
+          .legacyOrganizationId ||
+          ""
+      ).trim();
+
+    const organizationType =
+      String(
+        activeContext
+          .organizationType ||
+          ""
+      ).toUpperCase();
+
+    if (
+      organizationType ===
+        "CLUBE"
+    ) {
+      gerenciaEvento =
+        evento.clubeId ===
+        legacyId;
+    }
+
+    if (
+      organizationType ===
+        "ESCOLA"
+    ) {
+      gerenciaEvento =
+        evento.escolinhaId ===
+        legacyId;
+    }
+
+    if (
+      organizationType ===
+        "FEDERACAO"
+    ) {
+      gerenciaEvento =
+        evento.federacaoId ===
+        legacyId;
+    }
+
+    if (
+      organizationType ===
+        "MARCA"
+    ) {
+      gerenciaEvento =
+        evento.marcaId ===
+        legacyId;
+    }
+  }
+
+  let gerenciaTurma =
+  false;
+
+  if (
+    activeContext.kind ===
+      "ORGANIZATION"
+  ) {
+    const legacyId =
+      String(
+        activeContext
+          .legacyOrganizationId ||
+          ""
+      ).trim();
+
+    const organizationType =
+      String(
+        activeContext
+          .organizationType ||
+          ""
+      ).toUpperCase();
+
+    if (
+      organizationType ===
+        "CLUBE"
+    ) {
+      gerenciaTurma =
+        turma.clubeId ===
+        legacyId;
+    }
+
+    if (
+      organizationType ===
+        "ESCOLA"
+    ) {
+      gerenciaTurma =
+        turma.escolinhaId ===
+        legacyId;
+    }
+  }
 
   return (
     gerenciaEvento &&

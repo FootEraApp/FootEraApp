@@ -1,8 +1,14 @@
 import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
-import { NotificacaoTipo } from "@prisma/client";
+import { NotificacaoTipo, TipoUsuario } from "@prisma/client";
 import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 import { obterOrganizacaoIdPorLegado } from "../services/organizacoes.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  hasRole,
+} from "../services/roles.js";
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -19,6 +25,53 @@ type PapelTreino =
   | "Professor"
   | "Clube"
   | "Escolinha";
+
+function papelTreinoParaEnum(
+  papel: PapelTreino
+): TipoUsuario {
+  switch (papel) {
+    case "Atleta":
+      return TipoUsuario.Atleta;
+
+    case "Professor":
+      return TipoUsuario.Professor;
+
+    case "Clube":
+      return TipoUsuario.Clube;
+
+    case "Escolinha":
+      return TipoUsuario.Escolinha;
+  }
+}
+
+async function obterPapelAtivoTreino(
+  usuarioId: string
+): Promise<PapelTreino | null> {
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (!contexto) {
+    return null;
+  }
+
+  return normalizarPapelTreino(
+    contexto.tipoUsuario
+  );
+}
+
+async function possuiPapelTreinoAtivo(
+  usuarioId: string,
+  papel: PapelTreino
+) {
+  return hasRole(
+    usuarioId,
+    papelTreinoParaEnum(
+      papel
+    )
+  );
+}
 
 function normalizarPapelTreino(
   valor: unknown
@@ -204,9 +257,34 @@ export async function listarSolicitacoesMinhas(req: Request, res: Response) {
   const me: string | undefined = (req as any).user?.id || (req as any).userId;
   if (!me) return res.status(401).json({ error: "Não autenticado." });
 
+  const papelAtivo =
+    await obterPapelAtivoTreino(
+      me
+    );
+
+  if (!papelAtivo) {
+    return res.json([]);
+  }
+
   try {
     const rows = await prisma.solicitacaoTreino.findMany({
-      where: { remetenteId: me },             
+      where: {
+        remetenteId: me,
+
+        OR: [
+          {
+            remetentePapel:
+              papelAtivo,
+          },
+
+          // Compatibilidade com registros antigos
+          // criados antes de existir remetentePapel.
+          {
+            remetentePapel:
+              null,
+          },
+        ],
+      },       
       include: {
         destinatario: {
           select: { id: true, nomeDeUsuario: true, nome: true, foto: true },
@@ -246,9 +324,39 @@ export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
   const me: string | undefined = (req as any).user?.id || (req as any).userId;
   if (!me) return res.status(401).json({ error: "Usuário não autenticado." });
 
+  const papelAtivo =
+    await obterPapelAtivoTreino(
+      me
+    );
+
+  if (!papelAtivo) {
+    return res.json([]);
+  }
+
   try {
     const rows = await prisma.solicitacaoTreino.findMany({
-      where: { destinatarioId: me, status: { in: ["pendente", "ativa"] } }, 
+      where: {
+        destinatarioId: me,
+
+        status: {
+          in: [
+            "pendente",
+            "ativa",
+          ],
+        },
+
+        OR: [
+          {
+            destinatarioPapel:
+              papelAtivo,
+          },
+
+          {
+            destinatarioPapel:
+              null,
+          },
+        ],
+      },
       include: {
         remetente: {
           select: { id: true, nomeDeUsuario: true, nome: true, foto: true },
@@ -369,12 +477,29 @@ export async function criarSolicitacao(
     }
 
     const remetentePapel =
+      await obterPapelAtivoTreino(
+        remetenteId
+      );
+
+    const remetentePapelInformado =
       normalizarPapelTreino(
         remetentePapelRaw
-      ) ??
-      normalizarPapelTreino(
-        usuarioOrigem.tipo
       );
+
+    if (
+      remetentePapelInformado &&
+      remetentePapel &&
+      remetentePapelInformado !==
+        remetentePapel
+    ) {
+      return res.status(409).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "O papel informado não corresponde ao contexto ativo.",
+      });
+    }
 
     const destinatarioPapel =
       normalizarPapelTreino(
@@ -391,6 +516,22 @@ export async function criarSolicitacao(
       return res.status(400).json({
         message:
           "Não foi possível determinar os papéis usados neste vínculo.",
+      });
+    }
+
+    const destinatarioPossuiPapel =
+      await possuiPapelTreinoAtivo(
+        destinatarioId,
+        destinatarioPapel
+      );
+
+    if (!destinatarioPossuiPapel) {
+      return res.status(400).json({
+        code:
+          "TARGET_ROLE_INACTIVE",
+
+        message:
+          "O perfil selecionado não está ativo para este usuário.",
       });
     }
 
@@ -939,24 +1080,96 @@ async function acharPendente(
 }
 
 async function cancelarPorSolicitacaoId(
-  solicitacaoId: string,
-  userId?: string,
+  solicitacaoId:
+    string,
+  userId?:
+    string
 ): Promise<boolean> {
-  if (!solicitacaoId) return false;
+  if (
+    !solicitacaoId ||
+    !userId
+  ) {
+    return false;
+  }
 
-  const s = await prisma.solicitacaoTreino.findUnique({ where: { id: solicitacaoId } });
+  const s =
+    await prisma
+      .solicitacaoTreino
+      .findUnique({
+        where: {
+          id:
+            solicitacaoId,
+        },
+      });
 
-  if (!s) return false;
-  if (userId && s.remetenteId !== userId && s.destinatarioId !== userId) return false;
+  if (!s) {
+    return false;
+  }
+
+  /*
+   * Cancelamento pertence
+   * ao remetente.
+   */
+  if (
+    s.remetenteId !==
+    userId
+  ) {
+    return false;
+  }
+
+  const papelAtivo =
+    await obterPapelAtivoTreino(
+      userId
+    );
+
+  const papelSolicitacao =
+    normalizarPapelTreino(
+      s.remetentePapel
+    );
+
+  /*
+   * Registro novo:
+   * exige o mesmo papel.
+   *
+   * Registro antigo:
+   * mantém compatibilidade.
+   */
+  if (
+    papelSolicitacao &&
+    (
+      !papelAtivo ||
+      papelSolicitacao !==
+        papelAtivo
+    )
+  ) {
+    return false;
+  }
 
   try {
-    await prisma.solicitacaoTreino.delete({ where: { id: solicitacaoId } });
+    await prisma
+      .solicitacaoTreino
+      .delete({
+        where: {
+          id:
+            solicitacaoId,
+        },
+      });
   } catch {
-    await prisma.solicitacaoTreino.update({
-      where: { id: solicitacaoId },
-      data: { status: "cancelada" as any },
-    });
+    await prisma
+      .solicitacaoTreino
+      .update({
+        where: {
+          id:
+            solicitacaoId,
+        },
+
+        data: {
+          status:
+            "cancelada" as any,
+        },
+      });
   }
+
   return true;
 }
 
@@ -970,15 +1183,55 @@ export async function cancelarSolicitacao(req: Request, res: Response) {
                         || (req.body?.destinatarioId ?? req.query?.destinatarioId) || null;
 
     if (solicitacaoId) {
-      await cancelarPorSolicitacaoId(String(solicitacaoId), userId);
-      return res.sendStatus(204);
+      const cancelou =
+        await cancelarPorSolicitacaoId(
+          String(
+            solicitacaoId
+          ),
+          userId
+        );
+
+      if (!cancelou) {
+        return res
+          .status(409)
+          .json({
+            code:
+              "ACTIVE_CONTEXT_MISMATCH",
+
+            error:
+              "Troque para o perfil que enviou esta solicitação antes de cancelá-la.",
+          });
+      }
+
+      return res.sendStatus(
+        204
+      );
     }
 
     if (userId && destinatarioId) {
       const pend = await acharPendente(userId, String(destinatarioId));
       if (!pend) return res.sendStatus(204);
-      await cancelarPorSolicitacaoId(pend.id, userId);
-      return res.sendStatus(204);
+      const cancelou =
+        await cancelarPorSolicitacaoId(
+          pend.id,
+          userId
+        );
+
+      if (!cancelou) {
+        return res
+          .status(409)
+          .json({
+            code:
+              "ACTIVE_CONTEXT_MISMATCH",
+
+            error:
+              "Troque para o perfil que enviou esta solicitação antes de cancelá-la.",
+          });
+      }
+
+      return res.sendStatus(
+        204
+      );
     }
 
     return res.status(400).json({ error: "Informe id ou destinatarioId" });
@@ -1040,6 +1293,53 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
           error:
             "Os papéis da solicitação são inválidos.",
         });
+    }
+
+    const papelAtivoDestinatario =
+      await obterPapelAtivoTreino(
+        destinatarioId
+      );
+
+    if (
+      !papelAtivoDestinatario ||
+      papelAtivoDestinatario !==
+        destinatarioPapel
+    ) {
+      return res.status(409).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Troque para o perfil correspondente antes de responder esta solicitação.",
+      });
+    }
+
+    const [
+      remetenteAindaPossuiPapel,
+      destinatarioAindaPossuiPapel,
+    ] = await Promise.all([
+      possuiPapelTreinoAtivo(
+        solicitacao.remetenteId,
+        remetentePapel
+      ),
+
+      possuiPapelTreinoAtivo(
+        solicitacao.destinatarioId,
+        destinatarioPapel
+      ),
+    ]);
+
+    if (
+      !remetenteAindaPossuiPapel ||
+      !destinatarioAindaPossuiPapel
+    ) {
+      return res.status(409).json({
+        code:
+          "ROLE_NO_LONGER_ACTIVE",
+
+        error:
+          "Um dos papéis usados nesta solicitação não está mais ativo.",
+      });
     }
 
     const [
@@ -1339,32 +1639,154 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
   }
 }
 
-export async function recusarSolicitacao(req: Request, res: Response) {
-  const { id } = req.params as { id: string };
-  const me: string | undefined = (req as any).user?.id || (req as any).userId;
-  if (!me) return res.status(401).json({ error: "Não autenticado." });
+export async function recusarSolicitacao(
+  req: Request,
+  res: Response
+) {
+  const {
+    id,
+  } =
+    req.params as {
+      id: string;
+    };
+
+  const me:
+    | string
+    | undefined =
+    (req as any).user?.id ||
+    (req as any).userId;
+
+  if (!me) {
+    return res
+      .status(401)
+      .json({
+        error:
+          "Não autenticado.",
+      });
+  }
 
   try {
-    const solicitacao = await prisma.solicitacaoTreino.findUnique({ where: { id } });
-    if (!solicitacao || solicitacao.destinatarioId !== me) {
-      return res.status(404).json({ error: "Solicitação não encontrada" });
+    const solicitacao =
+      await prisma
+        .solicitacaoTreino
+        .findUnique({
+          where: {
+            id,
+          },
+        });
+
+    if (
+      !solicitacao ||
+      solicitacao
+        .destinatarioId !==
+        me
+    ) {
+      return res
+        .status(404)
+        .json({
+          error:
+            "Solicitação não encontrada",
+        });
     }
 
-    await prisma.solicitacaoTreino.delete({ where: { id } });
+    const papelAtivo =
+      await obterPapelAtivoTreino(
+        me
+      );
+
+    let papelSolicitacao =
+      normalizarPapelTreino(
+        solicitacao
+          .destinatarioPapel
+      );
+
+    /*
+     * Compatibilidade com
+     * solicitações antigas.
+     */
+    if (!papelSolicitacao) {
+      const usuario =
+        await prisma.usuario
+          .findUnique({
+            where: {
+              id:
+                me,
+            },
+
+            select: {
+              tipo:
+                true,
+            },
+          });
+
+      papelSolicitacao =
+        normalizarPapelTreino(
+          usuario?.tipo
+        );
+    }
+
+    if (
+      !papelAtivo ||
+      !papelSolicitacao ||
+      papelAtivo !==
+        papelSolicitacao
+    ) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Troque para o perfil correspondente antes de responder esta solicitação.",
+        });
+    }
+
+    await prisma
+      .solicitacaoTreino
+      .delete({
+        where: {
+          id,
+        },
+      });
 
     await criarNotificacaoEEnviarPush({
-      usuarioId: solicitacao.remetenteId,
-      actorId: me,
-      tipo: NotificacaoTipo.GENERICA,
-      titulo: "Vínculo recusado",
-      mensagem: "Sua solicitação de treino foi recusada.",
-      link: `/perfil/${me}`,
+      usuarioId:
+        solicitacao
+          .remetenteId,
+
+      actorId:
+        me,
+
+      tipo:
+        NotificacaoTipo.GENERICA,
+
+      titulo:
+        "Vínculo recusado",
+
+      mensagem:
+        "Sua solicitação de treino foi recusada.",
+
+      link:
+        `/perfil/${me}`,
     });
 
-    return res.json({ message: "Solicitação recusada com sucesso." });
+    return res.json({
+      message:
+        "Solicitação recusada com sucesso.",
+    });
   } catch (error) {
-    console.error("Erro ao recusar solicitação:", error);
-    return res.status(500).json({ error: "Erro interno do servidor" });
+    console.error(
+      "Erro ao recusar solicitação:",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        error:
+          "Erro interno do servidor",
+      });
   }
 }
 
@@ -1413,16 +1835,57 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
     }
 
     const meuPapel =
-      normalizarPapelTreino(meuPapelRaw) ??
-      normalizarPapelTreino(uMe.tipo);
+      await obterPapelAtivoTreino(
+        me
+      );
+
+    const meuPapelInformado =
+      normalizarPapelTreino(
+        meuPapelRaw
+      );
+
+    if (
+      meuPapelInformado &&
+      meuPapel &&
+      meuPapelInformado !==
+        meuPapel
+    ) {
+      return res.status(409).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "O papel informado não corresponde ao contexto ativo.",
+      });
+    }
 
     const alvoPapel =
-      normalizarPapelTreino(alvoPapelRaw) ??
-      normalizarPapelTreino(uAlvo.tipo);
+      normalizarPapelTreino(
+        alvoPapelRaw
+      ) ??
+      normalizarPapelTreino(
+        uAlvo.tipo
+      );
 
     if (!meuPapel || !alvoPapel) {
       return res.status(400).json({
         error: "Papéis inválidos.",
+      });
+    }
+
+    const alvoPossuiPapel =
+      await possuiPapelTreinoAtivo(
+        usuarioAlvoId,
+        alvoPapel
+      );
+
+    if (!alvoPossuiPapel) {
+      return res.json({
+        vinculo: false,
+        relacaoId: null,
+        relacao: null,
+        motivo:
+          "O papel do perfil alvo não está ativo.",
       });
     }
 
@@ -1657,12 +2120,29 @@ export async function desvincularTreino(
     }
 
     const meuPapel =
+      await obterPapelAtivoTreino(
+        me
+      );
+
+    const meuPapelInformado =
       normalizarPapelTreino(
         meuPapelRaw
-      ) ??
-      normalizarPapelTreino(
-        uMe.tipo
       );
+
+    if (
+      meuPapelInformado &&
+      meuPapel &&
+      meuPapelInformado !==
+        meuPapel
+    ) {
+      return res.status(409).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "O papel informado não corresponde ao contexto ativo.",
+      });
+    }
 
     const alvoPapel =
       normalizarPapelTreino(
@@ -1679,6 +2159,24 @@ export async function desvincularTreino(
       return res.status(400).json({
         message:
           "Papéis inválidos.",
+      });
+    }
+
+    const alvoPossuiPapel =
+      await possuiPapelTreinoAtivo(
+        String(
+          usuarioAlvoId
+        ),
+        alvoPapel
+      );
+
+    if (!alvoPossuiPapel) {
+      return res.status(400).json({
+        code:
+          "TARGET_ROLE_INACTIVE",
+
+        message:
+          "O papel do perfil alvo não está ativo.",
       });
     }
 

@@ -9,10 +9,7 @@ import {
   excluirTreinoAgendado,
   getTreinosAgendados,
   concluirTreino,
-  criarTreinoProgramado,
   restaurarTreinos,
-  atualizarTreinoProgramado,
-  deletarTreinoProgramado,
   getExercicios,
   getPontuacoes,
   getEscalaPorElencoId,
@@ -24,7 +21,6 @@ import {
   listarSubmissoesParaValidacao,
   validarSubmissaoTreino,
   listarMinhasSubmissoesTreino,
-  iniciarTreino,
   statusDesafiosSemanais,
   getTreinoStatus,
   agendarRotinaMensal,
@@ -58,6 +54,14 @@ import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
 import { uploadToS3 } from "server/middlewares/s3Upload.js";
+import {
+  createTreinoProgramado as criarTreinoProgramadoCompat,
+  updateTreino as atualizarTreinoProgramadoCompat,
+  deleteTreino as deletarTreinoProgramadoCompat,
+} from "../controllers/treinosProgramadosController.js";
+import {
+  requireAdminOrTreinoOwner,
+} from "../middlewares/treinoProgramadoGuards.js";
 
 const router = Router();
 router.use(authenticateToken);
@@ -84,7 +88,10 @@ router.post(
   "/agendados/:id/videos-execucao",
   salvarVideosExecucaoTreino
 );
-router.post("/agendados/:id/iniciar", iniciarTreino);
+router.post(
+  "/agendados/:id/iniciar",
+  iniciarTreinoAgendado
+);
 router.delete("/agendados/:id", excluirTreinoAgendado);
 router.post("/agendados/:id/complete", concluirTreino);
 
@@ -108,15 +115,15 @@ router.get(
 router.get("/programados/:id", obterTreinoProgramadoPorId);
 router.put(
   "/programados/:id",
-  requireOrgSeat(req =>
-    (req.body?.escolinhaId as string) ||
-    (req.body?.clubeId as string) ||
-    (req.body?.professorId as string)
-  ),
-  atualizarTreinoProgramado
+  requireAdminOrTreinoOwner,
+  atualizarTreinoProgramadoCompat
 );
 router.post("/programados/:id/iniciar-via-metodologia", iniciarTreinoViaMetodologia);
-router.delete("/programados/:id", deletarTreinoProgramado);
+router.delete(
+  "/programados/:id",
+  requireAdminOrTreinoOwner,
+  deletarTreinoProgramadoCompat
+);
 router.get("/programados", listarTodosTreinosProgramados);
 router.post(
   "/agendar-lote",
@@ -166,7 +173,11 @@ router.post(
   "/biblioteca",
   salvarTreinoNaBiblioteca
 );
-router.post("/", criarTreinoProgramado);
+router.post(
+  "/",
+  requireAdminOrTreinoOwner,
+  criarTreinoProgramadoCompat
+);
 router.get("/", listarTodosTreinosProgramados);
 
 export default router;

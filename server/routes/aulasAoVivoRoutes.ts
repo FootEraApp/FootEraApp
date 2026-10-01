@@ -16,15 +16,21 @@ import {
   sincronizarReplayAulaAoVivo,
   registrarPresencaAulaAoVivo,
   sairPresencaAulaAoVivo,
-  listarReplaysPublicosCriador,
+  listarReplaysPublicosPorContexto,
+  listarAulasPublicasPorContexto,
 } from "../controllers/aulasAoVivoController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
 router.get(
-  "/replays/criador/:usuarioId",
-  listarReplaysPublicosCriador
+  "/replays/contexto",
+  listarReplaysPublicosPorContexto
+);
+
+router.get(
+  "/publicas/contexto",
+  listarAulasPublicasPorContexto
 );
 
 router.use(authenticateToken);

@@ -1,15 +1,13 @@
 // client/src/pages/treino/treinos-atletas
 import { toast } from "@/lib/toast";
-import React, { useEffect, useRef, useState, type SVGProps } from "react";
+import React, { useContext, useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
   Volleyball,
   CircleX,
   CircleCheck,
-  Send,
   Share2,
-  Check,
   X,
   ChevronDown,
   ChevronUp,
@@ -25,10 +23,11 @@ import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "../../components/layout/BottomNav.js";
-import Avatar from "../../components/shared/Avatar.js";
 import { useAuthGate } from "../../context/AuthGateContext.js";
 import PublicShareModal from "../../components/share/PublicShareModal.js";
-
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
@@ -625,14 +624,38 @@ function getCriadorLabel(t: TreinoAgendado): string | null {
   return nome;
 }
 
-function clamp01(n: number) {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(5, n));
-}
-
 export default function TreinosAtletas() {
   const [location, navigate] = useLocation();
 
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
+  const activeTipoUsuario =
+    String(
+      authContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const atletaAtivo =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    activeTipoUsuario ===
+      "atleta" &&
+    Boolean(
+      authContext
+        ?.activeTipoUsuarioId
+    );
+  
   const {
     requireAuth,
   } = useAuthGate();
@@ -787,6 +810,19 @@ useEffect(() => {
     }
   };
 }, []);
+
+useEffect(() => {
+  if (atletaAtivo) {
+    return;
+  }
+
+  setTreinosAgendados(
+    []
+  );
+}, [
+  atletaAtivo,
+  activeContext?.key,
+]);
 
   async function carregarMetodologias() {
     try {
@@ -1686,25 +1722,48 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 });
 
   useEffect(() => {
+    if (!atletaAtivo) {
+      return;
+    }
+
     carregarTreinosAgendados();
     carregarEventosAtleta();
-  }, []);
+  }, [
+    atletaAtivo,
+    activeContext?.key,
+  ]);
 
   useEffect(() => {
     const onAgendado = () => {
+      if (!atletaAtivo) {
+        return;
+      }
       carregarTreinosAgendados();
     };
 
     window.addEventListener("treino:agendado", onAgendado);
 
-    const last = sessionStorage.getItem("lastAgendamento");
-    if (last) {
+    const last =
+      sessionStorage.getItem(
+        "lastAgendamento"
+      );
+
+    if (
+      last &&
+      atletaAtivo
+    ) {
       carregarTreinosAgendados();
-      sessionStorage.removeItem("lastAgendamento");
+
+      sessionStorage.removeItem(
+        "lastAgendamento"
+      );
     }
 
     return () => window.removeEventListener("treino:agendado", onAgendado);
-  }, []);
+  }, [
+    atletaAtivo,
+    activeContext?.key,
+  ]);
 
   useEffect(() => {
     if (!treinosAgendados.length) {
@@ -1776,11 +1835,14 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
     });
   }, [treinosAgendados]);
 
-  const tipo = String(
-    (Storage as any).tipoSalvo ?? localStorage.getItem("tipo") ?? ""
-  ).toLowerCase();
-  const canVerElenco = ["professor", "clube", "escolinha"].includes(tipo);
-  const isOlheiro = tipo === "olheiro";
+  const canVerElenco =
+  [
+    "professor",
+    "clube",
+    "escolinha",
+  ].includes(
+    activeTipoUsuario
+  );
 
   const bottomNavRef = useRef<HTMLElement | null>(null);
   const agendadosCardRef = useRef<HTMLDivElement | null>(null);
@@ -2016,6 +2078,14 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   async function iniciar(
     id: string
   ) {
+    if (!atletaAtivo) {
+      toast.error(
+        "Use seu perfil de Atleta para realizar esta ação."
+      );
+
+      return;
+    }
+
     if (
       !requireAuth({
         message:
@@ -2151,6 +2221,14 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }
 
   async function finalizarEEnviar(treino: TreinoAgendado) {
+    if (!atletaAtivo) {
+      toast.error(
+        "Use seu perfil de Atleta para realizar esta ação."
+      );
+
+      return;
+    }
+
     if (
       !requireAuth({
         message:
@@ -2201,6 +2279,15 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }
 
   async function remarcarTreino(t: TreinoAgendado) {
+
+    if (!atletaAtivo) {
+      toast.error(
+        "Use seu perfil de Atleta para realizar esta ação."
+      );
+
+      return;
+    }
+
     const dataAtual = getDataExibicaoTreino(t) || new Date();
 
     const agora = new Date();
@@ -2274,6 +2361,14 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }
 
   async function removerTreinoAgendado(id: string) {
+    if (!atletaAtivo) {
+      toast.error(
+        "Use seu perfil de Atleta para realizar esta ação."
+      );
+
+      return;
+    }
+
     if (!confirm("Deseja excluir este treino?")) return;
 
     try {

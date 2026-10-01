@@ -15,7 +15,7 @@ import {
   Eye,
   Bell,
 } from "lucide-react";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import {
   API,
 } from "../../config.js";
@@ -82,42 +82,9 @@ export default function BottomNav({
   ] =
     useState(false);
 
-  const [
-    authVersion,
-    setAuthVersion,
-  ] = useState(0);
-
-  useEffect(() => {
-    const onAuthChanged = () => {
-      setAuthVersion(
-        (v) => v + 1
-      );
-    };
-
-    window.addEventListener(
-      "footera:auth-changed",
-      onAuthChanged
-    );
-
-    return () => {
-      window.removeEventListener(
-        "footera:auth-changed",
-        onAuthChanged
-      );
-    };
-  }, []);
-
   const tipoUsuario =
     activeContext
       ?.tipoUsuario ??
-    (Storage as any)
-      .tipoUsuario ??
-    localStorage.getItem(
-      "tipoUsuario"
-    ) ??
-    sessionStorage.getItem(
-      "tipoUsuario"
-    ) ??
     "";
 
   const isOlheiro =
@@ -254,7 +221,9 @@ export default function BottomNav({
         onSocketBadge
       );
     };
-  }, [authVersion]);
+  }, [
+    userContext?.isLoggedIn,
+  ]);
 
   const baseItem =
     "inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors";
@@ -335,17 +304,6 @@ export default function BottomNav({
                     contextKey
                   );
 
-                  /*
-                  * Enquanto ainda existem
-                  * páginas legadas lendo
-                  * Storage.tipoUsuario na
-                  * montagem, ir ao Feed
-                  * garante um contexto novo
-                  * e limpo.
-                  */
-                  setLocation(
-                    "/feed"
-                  );
                 } catch (
                   error
                 ) {

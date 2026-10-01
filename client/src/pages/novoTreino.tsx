@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -21,6 +21,9 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import axios from "axios";
 import Avatar from "../components/shared/Avatar.js";
 import CoverImage from "../components/shared/CoverImage.js";
+import {
+  UserContext,
+} from "@/context/UserContext.js";
 
 type ExItemUILocal = {
   idLocal: string;
@@ -52,7 +55,6 @@ type ExItemUILocal = {
   tipoExecucao?: "repeticao" | "duracao";
   descricaoExecucao?: string | null;  
 };
-type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 type PontuacaoDetalhe = {
   total: number;
   nivel: number;
@@ -665,31 +667,50 @@ async function assertOk(res: Response, fallbackMsg: string): Promise<Response> {
   throw new Error(msg || fallbackMsg);
 }
 
-async function apiListarTreinosSalvos(
-  ownerTipo: "professor" | "clube" | "escolinha",
-  ownerId: string,
-) {
-  const headers = authHeaders();
-    const url =
+async function apiListarTreinosSalvos() {
+  const headers =
+    authHeaders();
+
+  const url =
     `${API.BASE_URL}/api/treinosSalvos` +
-    `?tipoUsuario=${encodeURIComponent(ownerTipo)}` +
-    `&tipoUsuarioId=${encodeURIComponent(ownerId)}` +
-    `&includePublic=0` +
+    `?includePublic=0` +
     `&_ts=${Date.now()}`;
 
-    const r = await fetch(url, {
-      headers,         
-      cache: "no-store" 
-    });
-  await assertOk(r, "Falha ao listar treinos salvos");
+  const r =
+    await fetch(
+      url,
+      {
+        headers,
+        cache:
+          "no-store",
+      }
+    );
 
-  const j = await r.json().catch(() => null);
-  const meus = Array.isArray(j?.meus) ? j.meus : [];
+  await assertOk(
+    r,
+    "Falha ao listar treinos salvos"
+  );
+
+  const j =
+    await r
+      .json()
+      .catch(
+        () => null
+      );
+
+  const meus =
+    Array.isArray(
+      j?.meus
+    )
+      ? j.meus
+      : [];
+
   return meus as Array<{
     id: string;
     titulo: string;
     atualizadoEm?: string;
-    expiraEm?: string | null;
+    expiraEm?:
+      string | null;
   }>;
 }
 
@@ -728,10 +749,6 @@ async function tentarSalvarComoTreinoSalvo(
   const token = getToken();
   if (!token) return { saved: false, reason: "sem-token" as const };
 
-  const ownerTipo = payload.tipoUsuario;
-  const ownerId = payload.tipoUsuarioId;
-  if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
-
   try {
     if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
       console.warn("[Gaveta] pulou: treino sem exercícios no payload");
@@ -742,7 +759,7 @@ async function tentarSalvarComoTreinoSalvo(
       ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
       : [];
 
-    let meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+    let meus = await apiListarTreinosSalvos();
 
     const formatarData = (iso?: string | null) => {
       if (!iso) return "";
@@ -777,12 +794,12 @@ async function tentarSalvarComoTreinoSalvo(
       try {
         await apiDeletarTreinoSalvo(apagar.id);
       } catch (err) {
-        meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+        meus = await apiListarTreinosSalvos();
         toast.error("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
         return { saved: false, reason: "falha-apagar" as const };
       }
 
-      meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+      meus = await apiListarTreinosSalvos();
 
       if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
         continue;
@@ -806,9 +823,6 @@ async function tentarSalvarComoTreinoSalvo(
       publico: false,
       parceiro: false,
       naoExpira: false,
-      tipoUsuario: ownerTipo,
-      tipoUsuarioId: ownerId,
-      criadoPorUsuarioId: payload.usuarioId ?? null,
     };
 
     await apiCriarTreinoSalvo(body);
@@ -960,6 +974,154 @@ const VideoThumb =
 
 export default function NovoTreino() {
   const [route, navigate] = useLocation();
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    authContext?.activeContext ??
+    null;
+
+  const activeTipoUsuario =
+    String(
+      authContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const activeTipoUsuarioId =
+    String(
+      authContext
+        ?.activeTipoUsuarioId ??
+      ""
+    ).trim();
+
+  const activeLegacyOrganizationId =
+    String(
+      activeContext
+        ?.legacyOrganizationId ??
+      ""
+    ).trim();
+
+  const activeOwner =
+    useMemo(() => {
+      /*
+      * Organização ativa:
+      *
+      * Clube X — Professor
+      * Clube X — Proprietário
+      *
+      * Nos dois casos o owner é
+      * Clube X.
+      */
+      if (
+        activeContext?.kind ===
+        "ORGANIZATION"
+      ) {
+        const organizationType =
+          String(
+            activeContext
+              .organizationType ??
+            ""
+          ).toUpperCase();
+
+        if (
+          organizationType ===
+            "CLUBE" &&
+          activeLegacyOrganizationId
+        ) {
+          return {
+            tipoUsuario:
+              "Clube" as const,
+
+            tipoUsuarioId:
+              activeLegacyOrganizationId,
+          };
+        }
+
+        if (
+          organizationType ===
+            "ESCOLA" &&
+          activeLegacyOrganizationId
+        ) {
+          return {
+            tipoUsuario:
+              "Escolinha" as const,
+
+            tipoUsuarioId:
+              activeLegacyOrganizationId,
+          };
+        }
+
+        return {
+          tipoUsuario:
+            null,
+
+          tipoUsuarioId:
+            null,
+        };
+      }
+
+      /*
+      * Professor pessoal.
+      */
+      if (
+        activeContext?.kind ===
+          "PERSONAL" &&
+        activeTipoUsuario ===
+          "professor" &&
+        activeTipoUsuarioId
+      ) {
+        return {
+          tipoUsuario:
+            "Professor" as const,
+
+          tipoUsuarioId:
+            activeTipoUsuarioId,
+        };
+      }
+
+      return {
+        tipoUsuario:
+          null,
+
+        tipoUsuarioId:
+          null,
+      };
+    }, [
+      activeContext?.key,
+      activeContext?.kind,
+      activeContext
+        ?.organizationType,
+      activeLegacyOrganizationId,
+      activeTipoUsuario,
+      activeTipoUsuarioId,
+    ]);
+
+  useEffect(() => {
+    if (
+      activeContext?.kind ===
+        "ORGANIZATION"
+    ) {
+      setOrgSelecionada(
+        activeLegacyOrganizationId
+      );
+
+      return;
+    }
+
+    setOrgSelecionada(
+      ""
+    );
+  }, [
+    activeContext?.key,
+    activeContext?.kind,
+    activeLegacyOrganizationId,
+  ]);
+
   const opcoesNiveis = ["Base", "Avancado", "Performance"] as const;
   type NivelTreino = (typeof opcoesNiveis)[number];
   const OPCOES_CATEGORIA = [
@@ -1059,7 +1221,6 @@ export default function NovoTreino() {
   const [datasAgendadasPorTreino, setDatasAgendadasPorTreino] = useState<
     Map<string, Set<string>>
   >(new Map());
-  const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
   const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
   const [datasAgendamento, setDatasAgendamento] = useState<string[]>([]);
@@ -1367,26 +1528,47 @@ export default function NovoTreino() {
   }
 
   async function checarAssinaturaAtletaPro() {
-    const tipo = String(
-      (Storage as any).tipoSalvo ??
-        localStorage.getItem("tipoUsuario") ??
-        sessionStorage.getItem("tipoUsuario") ??
-        ""
-    ).trim().toLowerCase();
+    const ehAtletaAtivo =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      activeTipoUsuario ===
+        "atleta";
 
-    if (tipo !== "atleta") {
-      setIsAtletaPro(true);
-      setAssinaturaChecada(true);
+    if (!ehAtletaAtivo) {
+      setIsAtletaPro(
+        true
+      );
+
+      setAssinaturaChecada(
+        true
+      );
+
       return true;
     }
 
-    const token = getToken();
+    const token =
+      getToken();
 
     const userId =
-      (Storage as any).usuarioId ||
-      localStorage.getItem("usuarioId") ||
-      sessionStorage.getItem("usuarioId") ||
-      "";
+      String(
+        authContext?.user?.id ??
+        ""
+      ).trim();
+
+    if (
+      !token ||
+      !userId
+    ) {
+      setIsAtletaPro(
+        false
+      );
+
+      setAssinaturaChecada(
+        true
+      );
+
+      return false;
+    }
 
     if (!token || !userId) {
       setIsAtletaPro(false);
@@ -1422,23 +1604,44 @@ export default function NovoTreino() {
     }
   }
 
-  const professorLogadoId = useMemo(() => {
-    const tipo = String(
-      (Storage as any).tipoSalvo ??
-        localStorage.getItem("tipoUsuario") ??
-        sessionStorage.getItem("tipoUsuario") ??
-        ""
-    ).trim().toLowerCase();
+  const professorLogadoId =
+    useMemo(() => {
+      /*
+      * Professor pessoal.
+      */
+      if (
+        activeContext?.kind ===
+          "PERSONAL" &&
+        activeTipoUsuario ===
+          "professor"
+      ) {
+        return activeTipoUsuarioId;
+      }
 
-    if (tipo !== "professor") return "";
+      if (
+        activeContext?.kind ===
+          "ORGANIZATION" &&
+        String(
+          activeContext
+            .organizationRole ??
+          ""
+        ).toUpperCase() ===
+          "PROFESSOR" &&
+        activeTipoUsuario ===
+          "professor"
+      ) {
+        return activeTipoUsuarioId;
+      }
 
-    return String(
-      (Storage as any).tipoUsuarioId ||
-        localStorage.getItem("tipoUsuarioId") ||
-        sessionStorage.getItem("tipoUsuarioId") ||
-        ""
-    ).trim();
-  }, []);
+      return "";
+    }, [
+      activeContext?.key,
+      activeContext?.kind,
+      activeContext
+        ?.organizationRole,
+      activeTipoUsuario,
+      activeTipoUsuarioId,
+    ]);
 
   useEffect(() => {
     const carregarSessoes = async () => {
@@ -1591,7 +1794,6 @@ export default function NovoTreino() {
       .filter((grupo) => grupo.professores.length > 0);
   }, [gruposProfessores, filtroProf]);
 
-  const MOSTRAR_TODOS = "__todos__";
   const score = useMemo(
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados),
     [nivel, tipoTreino, duracao, exerciciosSelecionados],
@@ -1799,31 +2001,34 @@ export default function NovoTreino() {
       .filter((x) => x.id && x.id !== "undefined" && x.id !== "null")
   }
 
-  const atletaIdLogado = useMemo(() => {
-    const tipo = String(
-      (Storage as any).tipoSalvo ??
-        localStorage.getItem("tipoUsuario") ??
-        sessionStorage.getItem("tipoUsuario") ??
-        ""
-    ).trim().toLowerCase();
+  const atletaIdLogado =
+    useMemo(() => {
+      if (
+        activeContext?.kind !==
+          "PERSONAL" ||
+        activeTipoUsuario !==
+          "atleta"
+      ) {
+        return "";
+      }
 
-    if (tipo !== "atleta") return "";
-
-    return String(
-      (Storage as any).tipoUsuarioId ??
-        localStorage.getItem("tipoUsuarioId") ??
-        sessionStorage.getItem("tipoUsuarioId") ??
-        ""
-    ).trim();
-  }, []);
+      return activeTipoUsuarioId;
+    }, [
+      activeContext?.key,
+      activeContext?.kind,
+      activeTipoUsuario,
+      activeTipoUsuarioId,
+    ]);
 
   useEffect(() => {
-    const tipo =
-      (Storage as any).tipoSalvo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      "";
-    if (String(tipo).toLowerCase() !== "atleta") return;
+    if (
+      activeContext?.kind !==
+        "PERSONAL" ||
+      activeTipoUsuario !==
+        "atleta"
+    ) {
+      return;
+    }
 
     let cancel = false;
 
@@ -1913,16 +2118,17 @@ export default function NovoTreino() {
     return () => {
       cancel = true;
     };
-  }, [atletaIdLogado]);
+  }, [atletaIdLogado, activeContext?.key, activeTipoUsuario]);
 
   useEffect(() => {
-    const tipo =
-      (Storage as any).tipoSalvo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      "";
-
-    if (String(tipo).toLowerCase() !== "atleta") return;
+    if (
+      activeContext?.kind !==
+        "PERSONAL" ||
+      activeTipoUsuario !==
+        "atleta"
+    ) {
+      return;
+    }
 
     let cancel = false;
 
@@ -1977,13 +2183,14 @@ export default function NovoTreino() {
   }, [atletaIdLogado]);
 
   useEffect(() => {
-    const tipo =
-      (Storage as any).tipoSalvo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      "";
-
-    if (String(tipo).toLowerCase() !== "atleta") return;
+    if (
+      activeContext?.kind !==
+        "PERSONAL" ||
+      activeTipoUsuario !==
+        "atleta"
+    ) {
+      return;
+    }
 
     let cancel = false;
 
@@ -2019,7 +2226,9 @@ export default function NovoTreino() {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [activeContext?.key,
+      activeTipoUsuario,
+      atletaIdLogado,]);
 
   useEffect(() => {
   (async () => {
@@ -2033,13 +2242,11 @@ export default function NovoTreino() {
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
       const baseTipoUsuarioId =
-        (Storage as any).tipoUsuarioId ||
-        localStorage.getItem("tipoUsuarioId") ||
-        sessionStorage.getItem("tipoUsuarioId") ||
-        localStorage.getItem("perfilId") ||
-        sessionStorage.getItem("perfilId") ||
-        "";
-
+        String(
+          activeOwner.tipoUsuarioId ??
+          ""
+        ).trim();
+        
       if (!baseTipoUsuarioId) {
         console.warn("[NovoTreino] sem tipoUsuarioId; não dá para carregar turmas/elencos");
         setElencos([]);
@@ -2047,24 +2254,37 @@ export default function NovoTreino() {
         return;
       }
 
-      const orgId =
-        orgSelecionada && orgSelecionada !== MOSTRAR_TODOS
-          ? orgSelecionada
-          : null;
-
-      const orgObj = orgId
-        ? orgsVinculadas.find((o) => String(o.id) === String(orgId))
-        : null;
-
       const ownerTipo =
-        orgObj?.tipo === "Clube"
-          ? "Clube"
-          : orgObj?.tipo === "Escolinha"
-          ? "Escolinha"
-          : "Professor";
+        activeOwner
+          .tipoUsuario;
 
-      const ownerId = orgObj?.id ? String(orgObj.id) : String(baseTipoUsuarioId);
-      const professorId = String(baseTipoUsuarioId);
+      const ownerId =
+        String(
+          activeOwner
+            .tipoUsuarioId ??
+          ""
+        ).trim();
+
+      const professorId =
+        ownerTipo ===
+          "Professor"
+          ? ownerId
+          : "";
+
+      if (
+        !ownerTipo ||
+        !ownerId
+      ) {
+        setElencos(
+          []
+        );
+
+        setTurmaSelecionada(
+          ""
+        );
+
+        return;
+      }
 
       {
         const urlMinhas = `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
@@ -2136,40 +2356,56 @@ export default function NovoTreino() {
       setTurmaSelecionada("");
     }
   })();
-}, [orgSelecionada, orgsVinculadas]);
+}, [
+  activeContext?.key,
+  activeOwner.tipoUsuario,
+  activeOwner.tipoUsuarioId,
+  orgSelecionada,
+]);
 
   useEffect(() => {
-    const tipoPersistido =
-      (
-        localStorage.getItem("tipoUsuario") ??
-        sessionStorage.getItem("tipoUsuario") ??
-        (Storage as any).tipoSalvo ??
-        ""
+    const tipoContexto =
+      activeContext?.kind === "ORGANIZATION"
+        ? String(
+            activeContext.organizationType ?? ""
+          ).toUpperCase() === "CLUBE"
+          ? "clube"
+          : "escolinha"
+        : activeTipoUsuario === "escolinha"
+        ? "escola"
+        : activeTipoUsuario;
+
+    const permitidos = [
+      "escola",
+      "clube",
+      "professor",
+      "atleta",
+    ] as const;
+
+    if (
+      permitidos.includes(
+        tipoContexto as any
       )
-        .toString()
-        .trim()
-        .toLowerCase();
-
-    const tipoNormalizado =
-      tipoPersistido === "escolinha" ? "escola" : tipoPersistido;
-    const permitidos = ["escola", "clube", "professor", "atleta"] as const;
-
-    if (permitidos.includes(tipoNormalizado as any)) {
-      setUsuario({ tipo: tipoNormalizado as (typeof permitidos)[number] });
-    } else {
-      console.warn("tipoUsuario inválido/inesperado:", {
-        tipoPersistido,
-        tipoNormalizado,
+    ) {
+      setUsuario({
+        tipo:
+          tipoContexto as
+            (typeof permitidos)[number],
       });
+    } else {
       setUsuario(null);
     }
 
-    const id =
-      localStorage.getItem("usuarioId") ??
-      sessionStorage.getItem("usuarioId") ??
-      (Storage as any).usuarioId ??
-      null;
-    setUsuarioId(id);
+    const usuarioIdContexto =
+      authContext?.user?.id
+        ? String(
+            authContext.user.id
+          )
+        : null;
+
+    setUsuarioId(
+      usuarioIdContexto
+    );
 
     if (!restoredRef.current) {
       const shouldRestore =
@@ -2234,7 +2470,9 @@ export default function NovoTreino() {
     }
 
     setIniciado(true);
-  }, []);
+  }, [activeContext?.key,
+      activeTipoUsuario,
+      authContext?.user?.id,]);
 
   useEffect(() => {
     if (!isEditing) return;
@@ -2255,87 +2493,6 @@ export default function NovoTreino() {
   }, [isEditing, iniciado, editId]);
 
   useEffect(() => {
-    const tipo = String(
-    (Storage as any).tipoSalvo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      ""
-  ).trim().toLowerCase();
-
-  if (tipo !== "professor") {
-    setOrgsVinculadas([]);
-    return;
-  }
-    (async () => {
-      try {
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-        const headers = token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined;
-
-        const professorTipoId =
-          (Storage as any).tipoUsuarioId ||
-          localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") ||
-          "";
-
-        if (!professorTipoId) {
-          setOrgsVinculadas([]);
-          return;
-        }
-
-        const tentativas = [
-          `${API.BASE_URL}/api/professores/${professorTipoId}/vinculos`,
-          `${API.BASE_URL}/api/organizacoes?vinculadasAoProfessorId=${professorTipoId}`,
-          `${API.BASE_URL}/api/vinculos?tipo=Professor&id=${professorTipoId}`,
-        ];
-
-        let arr: any[] = [];
-        for (const url of tentativas) {
-          const r = await fetch(url, { headers });
-          if (!r.ok) continue;
-          const j = await r.json();
-          const list = Array.isArray(j)
-            ? j
-            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-          if (Array.isArray(list) && list.length) {
-            arr = list;
-            break;
-          }
-        }
-
-        const normalizada: Organizacao[] = (arr || [])
-          .map((o: any) => {
-            const tipo: Organizacao["tipo"] = String(
-              o.tipo ?? o.kind ?? o.categoria ?? "",
-            )
-              .toLowerCase()
-              .includes("clube")
-              ? "Clube"
-              : "Escolinha";
-
-            return {
-              id: String(o.escolinhaId ?? o.clubeId ?? o.id ?? o.organizacaoId),
-              nome: String(o.nome ?? o.titulo ?? "Organização"),
-              tipo,
-            };
-          })
-          .filter((x) => x.id);
-
-        setOrgsVinculadas(normalizada);
-        if (!orgSelecionada && normalizada.length === 1)
-          setOrgSelecionada(normalizada[0].id);
-      } catch {
-        setOrgsVinculadas([]);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
     let cancel = false;
 
     (async () => {
@@ -2349,34 +2506,11 @@ export default function NovoTreino() {
           ? { Authorization: `Bearer ${token}` }
           : undefined;
 
-        if (orgSelecionada === MOSTRAR_TODOS) {
-          const urlsTodos = [
-            `${API.BASE_URL}/api/atletas`,
-            `${API.BASE_URL}/api/usuarios?perfil=atleta`,
-            `${API.BASE_URL}/api/relacoes/atletas?todos=1`,
-          ];
-          for (const url of urlsTodos) {
-            const r = await fetch(url, { headers });
-            if (!r.ok) continue;
-            const j = await r.json();
-            const arr = Array.isArray(j)
-              ? j
-              : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-            if (!cancel) setAtletasVinculados(mapAtletas(arr));
-            return;
-          }
-          if (!cancel) setAtletasVinculados([]);
-          return;
-        }
-
         const tipoUsuarioId =
-          orgSelecionada ||
-          (Storage as any).tipoUsuarioId ||
-          localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") ||
-          localStorage.getItem("perfilId") ||
-          sessionStorage.getItem("perfilId") ||
-          "";
+          String(
+            activeOwner.tipoUsuarioId ??
+            ""
+          ).trim();
 
         if (!tipoUsuarioId) {
           console.warn(
@@ -2429,7 +2563,8 @@ export default function NovoTreino() {
     return () => {
       cancel = true;
     };
-  }, [orgSelecionada]);
+  }, [orgSelecionada, activeContext?.key,
+      activeOwner.tipoUsuarioId,]);
 
   useEffect(() => {
     saveState({
@@ -2470,20 +2605,36 @@ export default function NovoTreino() {
     const token = getToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-    const tries = [
-      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(id)}`,
-      `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(id)}`,
-      `${API.BASE_URL}/api/treinos/${encodeURIComponent(id)}`,
-    ];
+    const r =
+      await fetch(
+        `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(
+          id
+        )}`,
+        {
+          headers,
+        }
+      );
 
-    let data: any = null;
+    if (!r.ok) {
+      const txt =
+        await r
+          .text()
+          .catch(
+            () => ""
+          );
 
-    for (const url of tries) {
-      const r = await fetch(url, { headers });
-      if (!r.ok) continue;
-      data = await r.json().catch(() => null);
-      if (data) break;
+      throw new Error(
+        txt ||
+        "Não foi possível carregar o treino para editar."
+      );
     }
+
+    const data =
+      await r
+        .json()
+        .catch(
+          () => null
+        );
 
     if (!data) throw new Error("Não foi possível carregar o treino para editar.");
 
@@ -2682,49 +2833,26 @@ export default function NovoTreino() {
       .map((a) => a.usuarioId)
       .filter((id): id is string => Boolean(id));
 
-    const orgId = orgSelecionada && orgSelecionada !== MOSTRAR_TODOS ? String(orgSelecionada) : "";
-
-    const orgObj = orgId
-      ? orgsVinculadas.find((o) => String(o.id) === String(orgId))
-      : null;
-
     const ownerTipoCapital =
-      orgObj?.tipo === "Clube"
-        ? "Clube"
-        : orgObj?.tipo === "Escolinha"
-        ? "Escolinha"
-        : String(
-            usuario?.tipo ??
-              (Storage as any).tipoSalvo ??
-              (Storage as any).tipo ??
-              ""
-          ).toLowerCase().startsWith("clube")
-        ? "Clube"
-        : String(
-            usuario?.tipo ??
-              (Storage as any).tipoSalvo ??
-              (Storage as any).tipo ??
-              ""
-          ).toLowerCase().startsWith("escolinha") ||
-          String(
-            usuario?.tipo ??
-              (Storage as any).tipoSalvo ??
-              (Storage as any).tipo ??
-              ""
-          ).toLowerCase().startsWith("escola")
-        ? "Escolinha"
-        : "Professor";
+      activeOwner.tipoUsuario;
 
-    const ownerIdFinal = orgObj?.id
-      ? String(orgObj.id)
-      : String(
-          (Storage as any).tipoUsuarioId ||
-            (Storage as any).professorId ||
-            localStorage.getItem("tipoUsuarioId") ||
-            sessionStorage.getItem("tipoUsuarioId") ||
-            ""
-        );
+    const ownerIdFinal =
+      String(
+        activeOwner.tipoUsuarioId ??
+        ""
+      ).trim();
 
+    if (
+      !ownerTipoCapital ||
+      !ownerIdFinal
+    ) {
+      showToast(
+        "Não foi possível identificar o contexto ativo.",
+        "error"
+      );
+
+      return;
+    }
     if (!ownerIdFinal) {
       showToast("Não foi possível identificar o dono da turma. Faça login novamente.", "error");
       return;
@@ -3088,48 +3216,14 @@ export default function NovoTreino() {
   }
 
   function getDono() {
-    const tipoRaw =
-      (Storage as any).tipoSalvo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      "";
-
-    const tipoUsuarioIdLogged =
-      (Storage as any).tipoUsuarioId ||
-      localStorage.getItem("tipoUsuarioId") ||
-      sessionStorage.getItem("tipoUsuarioId") ||
-      null;
-
-    const orgId =
-      orgSelecionada && orgSelecionada !== MOSTRAR_TODOS ? String(orgSelecionada) : "";
-
-    if (orgId) {
-      const org = orgsVinculadas.find((o) => String(o.id) === String(orgId));
-
-      const tipoUsuario =
-        org?.tipo === "Clube" ? ("Clube" as const) :
-        org?.tipo === "Escolinha" ? ("Escolinha" as const) :
-        ("Professor" as const);
-
-      return {
-        tipoUsuario,
-        tipoUsuarioId: tipoUsuarioIdLogged,
-      };
-    }
-
-    const normalized =
-      String(tipoRaw).trim().toLowerCase() === "escola" ||
-      String(tipoRaw).trim().toLowerCase() === "escolinha"
-        ? "Escolinha"
-        : String(tipoRaw).trim().toLowerCase() === "professor"
-        ? "Professor"
-        : String(tipoRaw).trim().toLowerCase() === "clube"
-        ? "Clube"
-        : null;
-
     return {
-      tipoUsuario: normalized as "Professor" | "Clube" | "Escolinha" | null,
-      tipoUsuarioId: tipoUsuarioIdLogged,
+      tipoUsuario:
+        activeOwner
+          .tipoUsuario,
+
+      tipoUsuarioId:
+        activeOwner
+          .tipoUsuarioId,
     };
   }
 
@@ -3484,18 +3578,18 @@ export default function NovoTreino() {
       payloadOriginal = payload;
       const pontuacaoTopo = Number.isFinite(Number(score?.total)) ? Math.max(0, Math.floor(Number(score.total))) : null;
       
-      const tipoUsuarioIdProfessor =
-        (Storage as any).tipoUsuarioId ||
-        localStorage.getItem("tipoUsuarioId") ||
-        sessionStorage.getItem("tipoUsuarioId") ||
-        "";
       (payload as any).nome = String(nome || "").trim();
       (payload as any).duracao = duracao != null ? Number(duracao) : null;    
       (payload as any).dataAgendada = dataAgendadaISO; 
       (payload as any).pontuacao = pontuacaoTopo;
       (payload as any).objetivo = (metas ?? "").trim() || null;
-      (payload as any).tipoUsuario = tipoUsuarioNorm;            
-      (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor || tipoUsuarioId);
+      (payload as any).tipoUsuario =
+        tipoUsuarioNorm;
+      (payload as any).tipoUsuarioId =
+        String(
+          tipoUsuarioId ??
+          ""
+      );
       (payload as any).sessaoTreino =
         sessaoTreino === "Outro"
           ? sessaoOutro.trim()
@@ -3673,12 +3767,17 @@ export default function NovoTreino() {
         try {
           const token = getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-          const rr = await fetch(
-            `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
-              String(treinoProgramadoId),
-            )}`,
-            { headers },
-          );
+          const rr =
+            await fetch(
+              `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(
+                String(
+                  treinoProgramadoId
+                )
+              )}`,
+              {
+                headers,
+              }
+            );
           const jj = await rr.json().catch(() => null);
         } catch (e) {
           console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
@@ -3738,9 +3837,8 @@ export default function NovoTreino() {
       } else if (resultadoSalvar.reason === "falha-apagar") {
         extra = " Não foi possível liberar espaço na Gaveta, então o treino não foi salvo lá.";
       } else if (resultadoSalvar.reason === "erro") {
-        extra = " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
-      } else if (resultadoSalvar.reason === "sem-dono") {
-        console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+        extra =
+          " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
       }
 
       showToast(msgPrincipal + extra, "success");
@@ -4239,22 +4337,32 @@ export default function NovoTreino() {
 
                   const headers = authHeaders();
 
-                  const tries = [
-                    `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(idParaApagar)}`,
-                    `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(idParaApagar)}`,
-                    `${API.BASE_URL}/api/treinos/${encodeURIComponent(idParaApagar)}`,
-                  ];
+                  const r =
+                    await fetch(
+                      `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(
+                        idParaApagar
+                      )}`,
+                      {
+                        method:
+                          "DELETE",
 
-                  let ok = false;
-                  let lastTxt = "";
+                        headers,
+                      }
+                    );
 
-                  for (const url of tries) {
-                    const r = await fetch(url, { method: "DELETE", headers });
-                    if (r.ok) { ok = true; break; }
-                    lastTxt = await r.text().catch(() => "");
+                  if (!r.ok) {
+                    const txt =
+                      await r
+                        .text()
+                        .catch(
+                          () => ""
+                        );
+
+                    throw new Error(
+                      txt ||
+                      "Falha ao apagar no backend."
+                    );
                   }
-
-                  if (!ok) throw new Error(lastTxt || "Falha ao apagar no backend.");
 
                   sessionStorage.removeItem(SAVE_KEY);
                   sessionStorage.removeItem(RESTORE_FLAG_KEY);
@@ -5321,33 +5429,17 @@ export default function NovoTreino() {
 
         {etapa === 3 && (
           <StepCard title="Selecionar Atletas Vinculados">
-            <div className="mb-4 grid gap-2">
-              <label className="block text-sm text-gray-700">
-                Organização (para montar turmas e listar alunos)
-              </label>
-              <select
-                className="border w-full p-2 rounded"
-                value={orgSelecionada}
-                onChange={(e) => {
-                  setOrgSelecionada(e.target.value);
-                  setAtletasSelecionados([]);
-                  setTurmaSelecionada("");
-                }}
-              >
-                <option value="">
-                  — Meus vinculados (professor/escola/clube) —
-                </option>
-                <option value={MOSTRAR_TODOS}>— Todos os atletas —</option>
-                {orgsVinculadas.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.nome} ({o.tipo})
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-600">
-                Se escolher uma organização, os alunos e as turmas listados
-                abaixo virão dela.
-              </p>
+            <div className="mb-4">
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <span className="block text-sm text-gray-500">
+                  Contexto do treino
+                </span>
+
+                <span className="font-medium text-gray-900">
+                  {activeContext?.label ??
+                    "Nenhum contexto ativo"}
+                </span>
+              </div>
             </div>
 
             {atletasVinculados.length === 0 ? (

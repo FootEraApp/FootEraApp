@@ -40,40 +40,38 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
 const router = Router();
 
 router.get("/professor/:id", authenticateToken, getPerfilProfessor);
-router.get("/clube/me", authenticateToken, (req, res) => {
-  (req as any).params = { id: req.userId };
-  getPerfilClube(req as any, res);
-});
+router.get(
+  "/clube/me",
+  authenticateToken,
+  getPerfilClube
+);
 router.get("/clube/:id", authenticateToken, getPerfilClube);
-
-router.get("/escola/me", authenticateToken, (req, res) => {
-  (req as any).params = { id: req.userId };
-  getPerfilEscola(req as any, res);
-});
 router.get("/escola/:id", authenticateToken, getPerfilEscola);
 router.get("/olheiro/me", authenticateToken, (req, res) => {
   (req as any).params = { id: req.userId };
   getPerfilOlheiro(req as any, res);
 });
 router.get("/olheiro/:id", authenticateToken, getPerfilOlheiro);
-router.get("/federacao/me", authenticateToken, (req, res) => {
-  (req as any).params = { id: req.userId };
-  getPerfilFederacao(req as any, res);
-});
-
 router.get("/federacao/:id", authenticateToken, getPerfilFederacao);
-
-router.get("/marca/me", authenticateToken, (req, res) => {
-  (req as any).params = { id: req.userId };
-  getPerfilMarca(req as any, res);
-});
-
+router.get(
+  "/escola/me",
+  authenticateToken,
+  getPerfilEscola
+);
+router.get(
+  "/federacao/me",
+  authenticateToken,
+  getPerfilFederacao
+);
+router.get(
+  "/marca/me",
+  authenticateToken,
+  getPerfilMarca
+);
 router.get("/marca/:id", authenticateToken, getPerfilMarca);
-
 router.get("/learning/me", authenticateToken, (req, res) => {
   (req as any).params = { id: req.userId };
   getPerfilLearning(req as any, res);

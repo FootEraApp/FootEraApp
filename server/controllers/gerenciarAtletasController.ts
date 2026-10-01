@@ -1,8 +1,11 @@
 // server/controlllers/gerenciarController
-import { Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
+import { StatusUsuarioPapel, TipoUsuario, Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { sendError } from "../utils/httpError.js";
+import {
+  papelCanonico,
+} from "../services/roles.js";
 
 const CATEGORIA_ORDER: Categoria[] = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
 
@@ -24,6 +27,154 @@ function parseOrder(order?: string) {
     default:
       return { pontuacao: "desc" as const };
   }
+}
+
+async function filtrarPorPapelAtivo<
+  T
+>(
+  items: T[],
+  papelEsperado:
+    TipoUsuario,
+  getUsuarioId:
+    (
+      item: T
+    ) =>
+      | string
+      | null
+      | undefined
+): Promise<T[]> {
+  const ids =
+    Array.from(
+      new Set(
+        items
+          .map(
+            getUsuarioId
+          )
+          .filter(
+            (
+              id
+            ): id is string =>
+              Boolean(id)
+          )
+      )
+    );
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const [
+    papeis,
+    usuarios,
+  ] =
+    await Promise.all([
+      prisma.usuarioPapel.findMany({
+        where: {
+          usuarioId: {
+            in: ids,
+          },
+        },
+
+        select: {
+          usuarioId: true,
+          papel: true,
+          status: true,
+        },
+      }),
+
+      prisma.usuario.findMany({
+        where: {
+          id: {
+            in: ids,
+          },
+        },
+
+        select: {
+          id: true,
+          tipo: true,
+        },
+      }),
+    ]);
+
+  const porUsuario =
+    new Map<
+      string,
+      typeof papeis
+    >();
+
+  for (
+    const registro of
+      papeis
+  ) {
+    const lista =
+      porUsuario.get(
+        registro.usuarioId
+      ) ?? [];
+
+    lista.push(
+      registro
+    );
+
+    porUsuario.set(
+      registro.usuarioId,
+      lista
+    );
+  }
+
+  const legado =
+    new Map(
+      usuarios.map(
+        (usuario) => [
+          usuario.id,
+          papelCanonico(
+            usuario.tipo
+          ),
+        ]
+      )
+    );
+
+  const esperado =
+    papelCanonico(
+      papelEsperado
+    );
+
+  return items.filter(
+    (item) => {
+      const usuarioId =
+        getUsuarioId(
+          item
+        );
+
+      if (!usuarioId) {
+        return false;
+      }
+
+      const registros =
+        porUsuario.get(
+          usuarioId
+        ) ?? [];
+
+      if (
+        registros.length >
+        0
+      ) {
+        return registros.some(
+          (registro) =>
+            registro.status ===
+              StatusUsuarioPapel.ATIVO &&
+            papelCanonico(
+              registro.papel
+            ) === esperado
+        );
+      }
+
+      return (
+        legado.get(
+          usuarioId
+        ) === esperado
+      );
+    }
+  );
 }
 
 async function resolveUsuarioId(input: string): Promise<string | null> {
@@ -139,22 +290,66 @@ async function buscarProfessorIdsDaOrganizacao(
     }),
   ]);
 
-  const ids = [
-    ...professoresDiretos.map(
+  const ids =
+    Array.from(
+      new Set<string>(
+        [
+          ...professoresDiretos.map(
+            (professor) =>
+              professor.id
+          ),
+
+          ...professoresPivot.map(
+            (vinculo) =>
+              vinculo.professorId
+          ),
+
+          ...relacoesAtivas.map(
+            (relacao) =>
+              relacao.professorId
+          ),
+        ].filter(
+          (
+            id
+          ): id is string =>
+            typeof id ===
+              "string" &&
+            id.trim().length >
+              0
+        )
+      )
+    );
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const professores =
+    await prisma.professor.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+
+      select: {
+        id: true,
+        usuarioId: true,
+      },
+    });
+
+  const professoresAtivos =
+    await filtrarPorPapelAtivo(
+      professores,
+      TipoUsuario.Professor,
       (professor) =>
-        professor.id
-    ),
+        professor.usuarioId
+    );
 
-    ...professoresPivot.map(
-      (vinculo) =>
-        vinculo.professorId
-    ),
-
-    ...relacoesAtivas.map(
-      (relacao) =>
-        relacao.professorId
-    ),
-  ];
+  return professoresAtivos.map(
+    (professor) =>
+      professor.id
+  );
 
   return Array.from(
     new Set<string>(
@@ -322,10 +517,18 @@ export const gerenciarAtletasController = {
         },
       });
 
+      const atletasAtivos =
+        await filtrarPorPapelAtivo(
+          atletas,
+          TipoUsuario.Atleta,
+          (atleta) =>
+            atleta.usuarioId
+        );
+
       const since = new Date();
       since.setDate(since.getDate() - 14);
 
-      const usuarioIds = atletas
+      const usuarioIds = atletasAtivos
         .map((a) => a.usuarioId)
         .filter((x): x is string => typeof x === "string" && x.length > 0);
 
@@ -372,7 +575,7 @@ export const gerenciarAtletasController = {
         }
       }
 
-      const enriched = atletas.map((a) => {
+      const enriched = atletasAtivos.map((a) => {
         const posicaoElenco = posicaoPorAtletaId.get(a.id) ?? null;
         const nomeUsuario = a.usuario?.nome?.trim() || "";
         const nomeCadastroAtleta = a.nome?.trim() || "";
@@ -557,7 +760,15 @@ export const gerenciarAtletasController = {
         orderBy: { nome: "asc" },
       });
 
-      const usuarioIds = professores
+      const professoresAtivos =
+        await filtrarPorPapelAtivo(
+          professores,
+          TipoUsuario.Professor,
+          (professor) =>
+            professor.usuarioId
+        );
+        
+      const usuarioIds = professoresAtivos
         .map((p) => p.usuarioId)
         .filter((id): id is string => typeof id === "string" && id.length > 0);
 
@@ -579,7 +790,7 @@ export const gerenciarAtletasController = {
         grupos.map((g) => [g.professorId, g._count._all])
       );
 
-      const payload = professores.map((p) => ({
+      const payload = professoresAtivos.map((p) => ({
         id: p.id,
         usuarioId: p.usuarioId,
         nome:

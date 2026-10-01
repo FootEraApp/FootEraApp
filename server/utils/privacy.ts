@@ -1,4 +1,12 @@
-import { prisma } from "../prisma.js";
+import {
+  TipoUsuario,
+} from "@prisma/client";
+import {
+  prisma,
+} from "../prisma.js";
+import {
+  getRoles,
+} from "../services/roles.js";
 
 export type VisibilidadePerfil =
   | "PUBLICO"
@@ -39,24 +47,31 @@ export function readPrivacyConfig(
       ? raw
       : {};
 
-  return {
-    // Mantém a configuração antiga
-    // durante a migração.
-    perfilVisivel:
-      c.perfilVisivel !== false,
+  const visibilidadeNova =
+    normalizarVisibilidadePerfil(
+      c.visibilidadePerfil
+    );
 
-    // NOVO.
-    //
-    // null é proposital.
-    // Significa que o usuário ainda
-    // está no modelo antigo.
-    //
-    // Usuários antigos NÃO ficam
-    // públicos automaticamente.
-    visibilidadePerfil:
-      normalizarVisibilidadePerfil(
-        c.visibilidadePerfil
-      ),
+  // Compatibilidade com o modelo antigo.
+  // Se ainda não existe visibilidadePerfil:
+  //
+  // perfilVisivel !== false -> PUBLICO
+  // perfilVisivel === false -> PRIVADO
+  const visibilidadePerfil:
+    VisibilidadePerfil =
+      visibilidadeNova ??
+      (
+        c.perfilVisivel === false
+          ? "PRIVADO"
+          : "PUBLICO"
+      );
+
+  return {
+    perfilVisivel:
+      visibilidadePerfil !==
+      "PRIVADO",
+
+    visibilidadePerfil,
 
     permitirMensagens:
       c.permitirMensagens !== false,
@@ -69,53 +84,116 @@ export function readPrivacyConfig(
   };
 }
 
-async function getEntidadesDoUsuario(usuarioId: string) {
-  return prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: {
-      id: true,
-      tipo: true,
-      configuracoesPrivacidade: true,
-
-      atleta: {
-        select: {
-          id: true,
-          clubeId: true,
-          escolinhaId: true,
-        },
+async function getEntidadesDoUsuario(
+  usuarioId: string
+) {
+  const [
+    usuario,
+    papeisAtivos,
+  ] = await Promise.all([
+    prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
       },
 
-      professor: {
-        select: {
-          id: true,
-          clubeId: true,
-          escolinhaId: true,
-        },
-      },
+      select: {
+        id: true,
+        tipo: true,
+        configuracoesPrivacidade:
+          true,
 
-      clube: {
-        select: {
-          id: true,
+        atleta: {
+          select: {
+            id: true,
+            clubeId: true,
+            escolinhaId: true,
+          },
         },
-      },
 
-      escolinha: {
-        select: {
-          id: true,
+        professor: {
+          select: {
+            id: true,
+            clubeId: true,
+            escolinhaId: true,
+          },
         },
-      },
 
-      olheiro: {
-        select: {
-          id: true,
-          clubeId: true,
-          colaboracaoClubeId: true,
-          colaboracaoProfessorId: true,
-          colaboracaoEscolinhaId: true,
+        clube: {
+          select: {
+            id: true,
+          },
+        },
+
+        escolinha: {
+          select: {
+            id: true,
+          },
+        },
+
+        olheiro: {
+          select: {
+            id: true,
+            clubeId: true,
+            colaboracaoClubeId: true,
+            colaboracaoProfessorId: true,
+            colaboracaoEscolinhaId: true,
+          },
         },
       },
-    },
-  });
+    }),
+
+    getRoles(
+      usuarioId
+    ),
+  ]);
+
+  if (!usuario) {
+    return null;
+  }
+
+  const ativos =
+    new Set(
+      papeisAtivos
+    );
+
+  return {
+    ...usuario,
+
+    atleta:
+      ativos.has(
+        TipoUsuario.Atleta
+      )
+        ? usuario.atleta
+        : null,
+
+    professor:
+      ativos.has(
+        TipoUsuario.Professor
+      )
+        ? usuario.professor
+        : null,
+
+    clube:
+      ativos.has(
+        TipoUsuario.Clube
+      )
+        ? usuario.clube
+        : null,
+
+    escolinha:
+      ativos.has(
+        TipoUsuario.Escolinha
+      )
+        ? usuario.escolinha
+        : null,
+
+    olheiro:
+      ativos.has(
+        TipoUsuario.Olheiro
+      )
+        ? usuario.olheiro
+        : null,
+  };
 }
 
 function relacaoClauses(usuario: any) {
@@ -465,12 +543,18 @@ export async function avaliarPrivacidadePerfil(
       viewerUsuarioId
         ? prisma.usuario.findUnique({
             where: {
-              id: viewerUsuarioId,
+              id:
+                viewerUsuarioId,
             },
 
             select: {
               id: true,
-              tipo: true,
+
+              administrador: {
+                select: {
+                  id: true,
+                },
+              },
             },
           })
         : null,
@@ -513,17 +597,12 @@ export async function avaliarPrivacidadePerfil(
       targetUsuarioId;
 
   const isAdmin =
-    String(
-      viewer?.tipo || ""
-    ).toLowerCase() === "admin";
+    Boolean(
+      viewer
+        ?.administrador
+        ?.id
+    );
 
-  /*
-   * VISITANTE
-   *
-   * Usuário antigo com
-   * visibilidadePerfil === null
-   * continua fechado para internet.
-   */
   if (isVisitor) {
     const podeVerPerfil =
       priv.visibilidadePerfil ===

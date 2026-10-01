@@ -3,7 +3,10 @@ import { Route, Switch } from "wouter";
 import { Private, PublicOnly, HomeRedirect } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";
 import { FLAGS } from "./config.js";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useContext } from "react";
+import {
+  UserContext,
+} from "./context/UserContext.js";
 
 const AdminDashboard = lazy(() => import("./pages/admin-page.js"));
 const AvaliarTreino = lazy(() => import("./pages/treino/avaliarTreino.js"));
@@ -102,6 +105,41 @@ function RouteLoading() {
       </div>
     </div>
   );
+}
+
+function RequireCreator({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const context =
+    useContext(UserContext);
+
+  if (
+    !context ||
+    context.contextsLoading
+  ) {
+    return <RouteLoading />;
+  }
+
+  const autorizado =
+    context.activeContext
+      ?.kind === "PERSONAL" &&
+    String(
+      context.activeTipoUsuario ??
+        ""
+    ).toLowerCase() ===
+      "creator";
+
+  if (!autorizado) {
+    window.location.replace(
+      "/perfil"
+    );
+
+    return null;
+  }
+
+  return <>{children}</>;
 }
 
 export function AppRoutes() {
@@ -314,16 +352,29 @@ export function AppRoutes() {
         <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
         
         <Route path="/creator/profile">
-          <Private><CreatorProfile /></Private>
+          <CreatorProfile />
         </Route>
         <Route path="/creator/dashboard">
-          <Private><CreatorDashboard /></Private>
+          <Private>
+            <RequireCreator>
+              <CreatorDashboard />
+            </RequireCreator>
+          </Private>
         </Route>
         <Route path="/creator/eventos/novo">
-          <Private><CreatorNovoEventoPage /></Private>
+          <Private>
+            <RequireCreator>
+              <CreatorNovoEventoPage />
+            </RequireCreator>
+          </Private>
         </Route>
+
         <Route path="/creator/eventos">
-          <Private><CreatorEventosPage /></Private>
+          <Private>
+            <RequireCreator>
+              <CreatorEventosPage />
+            </RequireCreator>
+          </Private>
         </Route>
 
         <Route path="/perfil/:id"><PaginaPerfilUnico /></Route>

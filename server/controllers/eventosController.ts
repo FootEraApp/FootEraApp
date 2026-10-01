@@ -106,6 +106,9 @@ export async function auth(
 
       isAdmin:
         contexto.isAdmin === true,
+
+      activeContext:
+        contexto.activeContext ?? null,
     };
 
     req.userId =
@@ -160,43 +163,61 @@ export async function ehDonoDoClubeOuAdmin(
     return next();
   }
 
-  const podeGerenciar =
+  const podeCriarEvento =
     await canPermission(
       userId,
-      "GERENCIAR_ORGANIZACAO",
+      "CRIAR_EVENTO",
     );
 
-  if (!podeGerenciar) {
+  if (!podeCriarEvento) {
     return res
       .status(403)
       .json({
         error:
-          "Sem permissão.",
+          "Sem permissão para criar eventos.",
       });
   }
 
-  const clube =
-    await prisma.clube.findFirst({
-      where: {
-        id: clubeId,
-        usuarioId: userId,
-      },
+  const activeContext =
+    req.user?.activeContext;
 
-      select: {
-        id: true,
-      },
+  if (
+    !activeContext ||
+    activeContext.kind !== "ORGANIZATION"
+  ) {
+    return res.status(403).json({
+      error:
+        "Selecione o contexto da organização para gerenciar este clube.",
+      code:
+        "ORGANIZATION_CONTEXT_REQUIRED",
     });
-
-  if (clube) {
-    return next();
   }
 
-  return res
-    .status(403)
-    .json({
+  const legacyOrganizationId =
+    String(
+      activeContext.legacyOrganizationId ||
+        ""
+    ).trim();
+
+  const tipoOrganizacao =
+    String(
+      activeContext.organizationType ||
+        ""
+    ).toUpperCase();
+
+  if (
+    tipoOrganizacao !== "CLUBE" ||
+    legacyOrganizationId !== clubeId
+  ) {
+    return res.status(403).json({
       error:
-        "Sem permissão.",
+        "O clube informado não corresponde à organização ativa.",
+      code:
+        "ORGANIZATION_CONTEXT_MISMATCH",
     });
+  }
+
+  return next();
 }
 
 export async function ehDonoDaEscolinhaOuAdmin(
@@ -236,43 +257,61 @@ export async function ehDonoDaEscolinhaOuAdmin(
     return next();
   }
 
-  const podeGerenciar =
+  const podeCriarEvento =
     await canPermission(
       userId,
-      "GERENCIAR_ORGANIZACAO",
+      "CRIAR_EVENTO",
     );
 
-  if (!podeGerenciar) {
+  if (!podeCriarEvento) {
     return res
       .status(403)
       .json({
         error:
-          "Você não tem permissão para gerenciar esta escolinha.",
+          "Sem permissão para criar eventos.",
       });
   }
 
-  const escolinha =
-    await prisma.escolinha.findFirst({
-      where: {
-        id: escolinhaId,
-        usuarioId: userId,
-      },
+  const activeContext =
+    req.user?.activeContext;
 
-      select: {
-        id: true,
-      },
+  if (
+    !activeContext ||
+    activeContext.kind !== "ORGANIZATION"
+  ) {
+    return res.status(403).json({
+      error:
+        "Selecione o contexto da organização para gerenciar esta escolinha.",
+      code:
+        "ORGANIZATION_CONTEXT_REQUIRED",
     });
-
-  if (escolinha) {
-    return next();
   }
 
-  return res
-    .status(403)
-    .json({
+  const legacyOrganizationId =
+    String(
+      activeContext.legacyOrganizationId ||
+        ""
+    ).trim();
+
+  const tipoOrganizacao =
+    String(
+      activeContext.organizationType ||
+        ""
+    ).toUpperCase();
+
+  if (
+    tipoOrganizacao !== "ESCOLA" ||
+    legacyOrganizationId !== escolinhaId
+  ) {
+    return res.status(403).json({
       error:
-        "Você não tem permissão para gerenciar esta escolinha.",
+        "A escolinha informada não corresponde à organização ativa.",
+      code:
+        "ORGANIZATION_CONTEXT_MISMATCH",
     });
+  }
+
+  return next();
 }
 
 function parseDate(v: any): Date | null {
@@ -352,7 +391,19 @@ export async function listarPublicos(
     const creatorUsuarioId =
       String(
         req.query.creatorUsuarioId ||
-        ""
+          ""
+      ).trim();
+
+    const marcaId =
+      String(
+        req.query.marcaId ||
+          ""
+      ).trim();
+
+    const federacaoId =
+      String(
+        req.query.federacaoId ||
+          ""
       ).trim();
 
     const agora =
@@ -373,6 +424,16 @@ export async function listarPublicos(
     ) {
       where.creatorUsuarioId =
         creatorUsuarioId;
+    }
+
+    if (marcaId) {
+      where.marcaId =
+        marcaId;
+    }
+
+    if (federacaoId) {
+      where.federacaoId =
+        federacaoId;
     }
 
     const eventos =
@@ -797,34 +858,103 @@ export async function obter(
               totalInscritos
           );
 
+    const activeContext =
+      req.user?.activeContext ??
+      null;
+
+    const isAdmin =
+      req.user?.isAdmin ===
+      true;
+
+    let gerenciaPeloContexto =
+      false;
+
+    if (
+      usuarioId &&
+      activeContext?.kind ===
+        "PERSONAL" &&
+      normalizarTipo(
+        activeContext.tipoUsuario
+      ) ===
+        "creator"
+    ) {
+      gerenciaPeloContexto =
+        ev.creatorUsuarioId ===
+          usuarioId;
+    }
+
+    if (
+      activeContext?.kind ===
+        "ORGANIZATION"
+    ) {
+      const legacyId =
+        String(
+          activeContext
+            .legacyOrganizationId ||
+            ""
+        ).trim();
+
+      const organizationType =
+        String(
+          activeContext
+            .organizationType ||
+            ""
+        ).toUpperCase();
+
+      if (
+        organizationType ===
+          "CLUBE"
+      ) {
+        gerenciaPeloContexto =
+          ev.clube?.id ===
+            legacyId;
+      }
+
+      if (
+        organizationType ===
+          "ESCOLA"
+      ) {
+        gerenciaPeloContexto =
+          ev.escolinha?.id ===
+            legacyId;
+      }
+
+      if (
+        organizationType ===
+          "FEDERACAO"
+      ) {
+        gerenciaPeloContexto =
+          ev.federacao?.id ===
+            legacyId;
+      }
+
+      if (
+        organizationType ===
+          "MARCA"
+      ) {
+        gerenciaPeloContexto =
+          ev.marca?.id ===
+            legacyId;
+      }
+    }
+
+    const temPermissaoGerenciarEvento =
+      usuarioId
+        ? await canPermission(
+            usuarioId,
+            "CRIAR_EVENTO",
+          )
+        : false;
+
     const podeGerenciar =
       Boolean(
         usuarioId &&
           (
-            ev.creatorUsuarioId ===
-              usuarioId ||
-
-            ev.clube?.usuarioId ===
-              usuarioId ||
-
-            ev.escolinha
-              ?.usuarioId ===
-              usuarioId ||
-
-            ev.federacao
-              ?.usuarioId ===
-              usuarioId ||
-
-            ev.marca?.usuarioId ===
-              usuarioId ||
-
-            req.user?.isAdmin ===
-              true ||
-
-            String(
-              req.user?.tipo || ""
-            ).toLowerCase() ===
-              "admin"
+            isAdmin ||
+            (
+              gerenciaPeloContexto &&
+              temPermissaoGerenciarEvento
+            )
           )
       );
 
@@ -978,6 +1108,27 @@ export async function participarEvento(
           ""
       ).trim();
 
+    const activeContext =
+      req.user?.activeContext ??
+      null;
+
+    const contextoAtletaAtivo =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      normalizarTipo(
+        activeContext?.tipoUsuario
+      ) ===
+        "atleta";
+
+    const atletaIdContexto =
+      contextoAtletaAtivo
+        ? String(
+            activeContext?.profileId ||
+              activeContext?.tipoUsuarioId ||
+              ""
+          ).trim()
+        : "";
+
     if (!usuarioId) {
       return res.status(401).json({
         code: "AUTH_REQUIRED",
@@ -986,24 +1137,29 @@ export async function participarEvento(
       });
     }
 
-    const [evento, atleta] =
-      await Promise.all([
-        prisma.evento.findUnique({
-          where: {
-            id: eventoId,
-          },
-        }),
+    const evento =
+      await prisma.evento.findUnique({
+        where: {
+          id: eventoId,
+        },
+      });
 
-        prisma.atleta.findUnique({
-          where: {
-            usuarioId,
-          },
+    const atleta =
+      contextoAtletaAtivo &&
+      atletaIdContexto
+        ? await prisma.atleta.findFirst({
+            where: {
+              id:
+                atletaIdContexto,
 
-          select: {
-            id: true,
-          },
-        }),
-      ]);
+              usuarioId,
+            },
+
+            select: {
+              id: true,
+            },
+          })
+        : null;
 
     if (!evento) {
       return res.status(404).json({
@@ -1014,9 +1170,11 @@ export async function participarEvento(
 
     if (!atleta) {
       return res.status(403).json({
-        code: "ATLETA_REQUIRED",
+        code:
+          "ATLETA_CONTEXT_REQUIRED",
+
         message:
-          "Você precisa possuir um perfil de Atleta para participar deste evento.",
+          "Selecione seu perfil de Atleta para participar deste evento.",
       });
     }
 
@@ -1225,6 +1383,42 @@ export async function minhaAgenda(req: any, res: Response) {
     const fromDate = parseDate(from) || agora;
     const toDate = parseDate(to) || null;
 
+    const usuarioId =
+      String(
+        req.user?.id || ""
+      ).trim();
+
+    const activeContext =
+      req.user?.activeContext ??
+      null;
+
+    const tipoContexto =
+      normalizarTipo(
+        activeContext?.tipoUsuario
+      );
+
+    const tipoUsuarioIdContexto =
+      activeContext?.tipoUsuarioId
+        ? String(
+            activeContext.tipoUsuarioId
+          )
+        : null;
+
+    const legacyOrganizationId =
+      activeContext
+        ?.legacyOrganizationId
+        ? String(
+            activeContext
+              .legacyOrganizationId
+          )
+        : null;
+
+    const organizationType =
+      String(
+        activeContext
+          ?.organizationType || ""
+      ).toUpperCase();
+
     const where: any = {
       dataEvento: {
         gte: fromDate,
@@ -1237,27 +1431,82 @@ export async function minhaAgenda(req: any, res: Response) {
     }
 
     if (alvoId) {
-      const clube = await prisma.clube.findUnique({
-        where: { id: String(alvoId) },
-        select: { id: true },
-      });
-      if (clube) {
-        where.clubeId = clube.id;
-      }
-    } else if (req.user?.tipo === "clube" && req.user.tipoUsuarioId) {
-      where.clubeId = String(req.user.tipoUsuarioId);
+  const clube =
+    await prisma.clube.findUnique({
+      where: {
+        id:
+          String(alvoId),
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  if (clube) {
+      where.clubeId =
+        clube.id;
+    }
+  } else if (
+    activeContext?.kind ===
+      "ORGANIZATION" &&
+    legacyOrganizationId
+  ) {
+    if (
+      organizationType ===
+      "CLUBE"
+    ) {
+      where.clubeId =
+        legacyOrganizationId;
     }
 
-    const tipo = String(req.user?.tipo || "").toLowerCase();
-    const usuarioId = String(req.user?.id || "").trim();
+    if (
+      organizationType ===
+      "ESCOLA"
+    ) {
+      where.escolinhaId =
+        legacyOrganizationId;
+    }
 
-    if (tipo === "atleta" && usuarioId) {
-      const atleta = await prisma.atleta.findFirst({
-        where: { usuarioId },
-        select: { id: true },
-      });
+    if (
+      organizationType ===
+      "FEDERACAO"
+    ) {
+      where.federacaoId =
+        legacyOrganizationId;
+    }
 
-      if (!atleta?.id) return res.json([]);
+    if (
+      organizationType ===
+      "MARCA"
+    ) {
+      where.marcaId =
+        legacyOrganizationId;
+    }
+  } else if (
+    activeContext?.kind ===
+      "PERSONAL" &&
+    tipoContexto ===
+      "creator" &&
+    usuarioId
+  ) {
+    where.creatorUsuarioId =
+      usuarioId;
+  }
+
+    if (
+      activeContext?.kind ===
+        "PERSONAL" &&
+      tipoContexto ===
+        "atleta" &&
+      usuarioId
+    ) {
+      const atletaId =
+        tipoUsuarioIdContexto;
+
+      if (!atletaId) {
+        return res.json([]);
+      }
 
       const eventoWhereAtleta:
         any = {
@@ -1300,9 +1549,7 @@ export async function minhaAgenda(req: any, res: Response) {
       ] = await Promise.all([
         prisma.eventoConvocado.findMany({
           where: {
-            atletaId:
-              atleta.id,
-
+            atletaId,
             evento: eventoWhereAtleta,
           },
 
@@ -1458,17 +1705,47 @@ export async function eventosDoAtleta(
     const usuarioId =
       String(
         req.user?.id ||
-        req.userId ||
-        ""
+          req.userId ||
+          ""
       ).trim();
 
     if (!usuarioId) {
       return res.json([]);
     }
 
+    const activeContext =
+      req.user?.activeContext ??
+      null;
+
+    const contextoAtletaAtivo =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      normalizarTipo(
+        activeContext?.tipoUsuario
+      ) ===
+        "atleta";
+
+    if (!contextoAtletaAtivo) {
+      return res.json([]);
+    }
+
+    const atletaId =
+      String(
+        activeContext?.profileId ||
+          activeContext?.tipoUsuarioId ||
+          ""
+      ).trim();
+
+    if (!atletaId) {
+      return res.json([]);
+    }
+
     const atleta =
       await prisma.atleta.findFirst({
         where: {
+          id:
+            atletaId,
+
           usuarioId,
         },
 
@@ -1649,12 +1926,38 @@ function normalizarTipo(tipo?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function contextoCreatorAtivo(req: any) {
+  const activeContext =
+    req.user?.activeContext;
+
+  return (
+    activeContext?.kind ===
+      "PERSONAL" &&
+    String(
+      activeContext.tipoUsuario ||
+        ""
+    ).toLowerCase() ===
+      "creator"
+  );
+}
+
 export async function listarMeusEventosCreator(req: any, res: Response) {
   try {
     const usuarioId = String(req.user?.id || "").trim();
 
     if (!usuarioId) {
       return res.status(401).json({ error: "Não autenticado." });
+    }
+
+    if (
+      !contextoCreatorAtivo(req)
+    ) {
+      return res.status(403).json({
+        error:
+          "Selecione seu perfil Creator para acessar estes eventos.",
+        code:
+          "CREATOR_CONTEXT_REQUIRED",
+      });
     }
 
     const eventos = await prisma.evento.findMany({
@@ -1679,7 +1982,6 @@ export async function listarMeusEventosCreator(req: any, res: Response) {
 export async function criarEventoCreator(req: any, res: Response) {
   try {
     const usuarioId = String(req.user?.id || "").trim();
-    const tipoUsuario = normalizarTipo(req.user?.tipo);
 
     if (!usuarioId) {
       return res.status(401).json({ error: "Não autenticado." });
@@ -1694,6 +1996,17 @@ export async function criarEventoCreator(req: any, res: Response) {
     if (!podeCriar) {
       return res.status(403).json({
         error: "Este tipo de usuário não pode criar eventos.",
+      });
+    }
+
+    if (
+      !contextoCreatorAtivo(req)
+    ) {
+      return res.status(403).json({
+        error:
+          "Selecione seu perfil Creator para criar eventos nesta área.",
+        code:
+          "CREATOR_CONTEXT_REQUIRED",
       });
     }
 
@@ -1779,7 +2092,7 @@ export async function criarEventoCreator(req: any, res: Response) {
 
     const data: any = {
       creatorUsuarioId: usuarioId,
-      creatorTipo: tipoUsuario,
+      creatorTipo: "creator",
 
       titulo: tituloNormalizado,
       tipo: (tipo as any) || "EVENTO",
@@ -1801,41 +2114,6 @@ export async function criarEventoCreator(req: any, res: Response) {
       linkInscricao: linkInscricao || null,
       requisitos: requisitosArr,
     };
-
-    if (tipoUsuario === "clube" && req.user?.tipoUsuarioId) {
-      data.clubeId = String(req.user.tipoUsuarioId);
-    }
-
-    if (
-      (
-        tipoUsuario === "escolinha" ||
-        tipoUsuario === "escola"
-      ) &&
-      req.user?.tipoUsuarioId
-    ) {
-      data.escolinhaId =
-        String(req.user.tipoUsuarioId);
-    }
-
-    if (tipoUsuario === "federacao" && req.user?.tipoUsuarioId) {
-      data.federacaoId = String(req.user.tipoUsuarioId);
-    }
-
-    if (tipoUsuario === "marca" && req.user?.tipoUsuarioId) {
-      data.marcaId = String(req.user.tipoUsuarioId);
-    }
-
-    const organizacaoId =
-      await obterOrganizacaoAtivaDoUsuario(
-        usuarioId
-      );
-
-    if (
-      organizacaoId
-    ) {
-      data.organizacaoId =
-        organizacaoId;
-    }
 
     const evento = await prisma.evento.create({ data });
 
@@ -1863,6 +2141,17 @@ export async function getEventoCreatorById(req: any, res: Response) {
       return res.status(401).json({ error: "Não autenticado." });
     }
 
+    if (
+      !contextoCreatorAtivo(req)
+    ) {
+      return res.status(403).json({
+        error:
+          "Selecione seu perfil Creator para acessar este evento.",
+        code:
+          "CREATOR_CONTEXT_REQUIRED",
+      });
+    }
+
     const evento = await prisma.evento.findFirst({
       where: {
         id: String(id),
@@ -1887,7 +2176,6 @@ export async function getEventoCreatorById(req: any, res: Response) {
 export async function atualizarEventoCreator(req: any, res: Response) {
   try {
     const usuarioId = String(req.user?.id || "").trim();
-    const tipoUsuario = normalizarTipo(req.user?.tipo);
     const { id } = req.params;
 
     if (!usuarioId) {
@@ -1899,6 +2187,17 @@ export async function atualizarEventoCreator(req: any, res: Response) {
         usuarioId,
         "CRIAR_EVENTO",
       );
+
+    if (
+      !contextoCreatorAtivo(req)
+    ) {
+      return res.status(403).json({
+        error:
+          "Selecione seu perfil Creator para editar eventos nesta área.",
+        code:
+          "CREATOR_CONTEXT_REQUIRED",
+      });
+    }
 
     if (!podeCriar) {
       return res.status(403).json({
@@ -2049,6 +2348,17 @@ export async function deletarEventoCreator(req: any, res: Response) {
 
     if (!usuarioId) {
       return res.status(401).json({ error: "Não autenticado." });
+    }
+
+    if (
+      !contextoCreatorAtivo(req)
+    ) {
+      return res.status(403).json({
+        error:
+          "Selecione seu perfil Creator para excluir eventos nesta área.",
+        code:
+          "CREATOR_CONTEXT_REQUIRED",
+      });
     }
 
     const evento = await prisma.evento.findFirst({

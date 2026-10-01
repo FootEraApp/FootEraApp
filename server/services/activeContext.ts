@@ -95,6 +95,7 @@ function ehPapelPessoalSelecionavel(
     canonico === TipoUsuario.Professor ||
     canonico === TipoUsuario.Olheiro ||
     canonico === TipoUsuario.Creator ||
+    canonico === TipoUsuario.Learning ||
     canonico === TipoUsuario.Admin
   );
 }
@@ -517,12 +518,13 @@ export async function listarActiveContexts(
     );
 
   if (
+    papeis.length === 0 &&
     ehPapelPessoalSelecionavel(
-        papelAtual
+      papelAtual
     )
   ) {
     papeisPessoais.add(
-        papelAtual
+      papelAtual
     );
   }
 

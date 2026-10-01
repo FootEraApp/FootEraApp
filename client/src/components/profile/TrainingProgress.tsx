@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState} from 'react';
+import { useContext, useMemo, useEffect, useState} from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format as formatDateFns, startOfDay } from "date-fns";
 import { ptBR } from 'date-fns/locale';
@@ -14,6 +14,9 @@ import { Link, useLocation} from 'wouter';
 import { API, APP } from '../../config.js';
 import { publicImgUrl } from "@/utils/publicUrl.js";
 import Storage from '../../../../server/utils/storage.js';
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type Training = {
   id: string;
@@ -211,10 +214,45 @@ function computeFromHistorico(wire?: any) {
 }
 
 export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
+  const activeAtletaId =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    String(
+      authContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase() ===
+      "atleta"
+      ? String(
+          authContext
+            ?.activeTipoUsuarioId ??
+          ""
+        ).trim()
+      : "";
   const qc = useQueryClient();
   const token = Storage.token || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  const targetUserId = userId ?? (Storage.usuarioId as string) ?? "";
+  const targetUserId =
+    userId ??
+    (
+      authContext?.user?.id
+        ? String(
+            authContext.user.id
+          )
+        : ""
+    );
   const debugLoggedIds = useState(() => new Set<string>())[0];
 
   const [, setLocation] = useLocation();
@@ -305,9 +343,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const resolvedTipoUsuarioId =
     tipoUsuarioId ||
     perfil?.atleta?.id ||
-    perfil?.professor?.id ||
-    perfil?.clube?.id ||
-    perfil?.escolinha?.id ||
     null;
 
   const normalizeTipoTreino = (v?: string | null) => {
@@ -383,7 +418,13 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     return chooseHardest(conquistasEarned, 4);
   }, [conquistasEarned]);
 
-  const atletaId = resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
+  const atletaId =
+    String(
+      resolvedTipoUsuarioId ||
+      activeAtletaId ||
+      ""
+    ).trim();
+
   const base = `${API.BASE_URL}/api/treinos/agendados`;
   const url = `${base}?atletaId=${encodeURIComponent(atletaId)}&apenasFuturos=1&apenasComSubmissao=0`;
 

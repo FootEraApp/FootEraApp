@@ -75,6 +75,16 @@ export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { requireAuth } = useAuthGate();
+
+  const papelSolicitado =
+   typeof window !== "undefined"
+     ? new URLSearchParams(
+         window.location.search
+       )
+         .get("papel")
+         ?.trim() || ""
+     : "";
+
   const rotaOrganizacao =
     window.location.pathname
       .toLowerCase()
@@ -145,12 +155,38 @@ export default function PerfilUnico() {
         let resposta;
 
         try {
-          resposta = await axios.get<PerfilMinimo>(url, { headers });
+          resposta =
+            await axios.get<PerfilMinimo>(
+              url,
+              {
+                headers,
+
+                params:
+                  papelSolicitado
+                    ? {
+                        papel:
+                          papelSolicitado,
+                      }
+                    : undefined,
+              }
+  );
         } catch (erro: any) {
           if (token && erro?.response?.status === 401) {
             clearAuthSession();
 
-            resposta = await axios.get<PerfilMinimo>(url);
+            resposta =
+              await axios.get<PerfilMinimo>(
+                url,
+                {
+                  params:
+                    papelSolicitado
+                      ? {
+                          papel:
+                            papelSolicitado,
+                        }
+                      : undefined,
+                }
+              );
 
             if (!cancelled) {
               setModoVisitante(true);
@@ -223,7 +259,7 @@ export default function PerfilUnico() {
     return () => {
       cancelled = true;
     };
-  }, [id, token, rotaOrganizacao]);
+  }, [id, token, rotaOrganizacao, papelSolicitado]);
 
   useEffect(() => {
     if (!usuarioId || !token || modoVisitante) return;
@@ -434,7 +470,7 @@ export default function PerfilUnico() {
         )
       );
 
-    const sharePath =
+    const sharePathBase =
       ehOrganizacao
         ? PUBLIC_PATHS.organizacao(
             slugPerfil
@@ -442,6 +478,13 @@ export default function PerfilUnico() {
         : PUBLIC_PATHS.profile(
             slugPerfil
           );
+
+    const sharePath =
+      papelSolicitado
+        ? `${sharePathBase}?papel=${encodeURIComponent(
+            papelSolicitado
+           )}`
+        : sharePathBase;
 
     const seguirComoVisitante =
       () => {

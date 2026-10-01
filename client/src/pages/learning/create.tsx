@@ -118,22 +118,6 @@ type LocalEstrutura = LearningEstruturaInput & {
   itens: LocalItem[];
 };
 type DestinoMetodologia = "LEARNING" | "AVULSA";
-type LearningDraft = {
-  step: 1 | 2;
-  tipoMetodologia: LearningMetodoTipo | null;
-  estruturaTipo: LearningEstruturaTipo | null;
-  titulo: string;
-  descricao: string;
-  publicoAlvo: PublicoOption;
-  area: AreaOption;
-  geraCertificado: boolean;
-  geraBadge: boolean;
-  capaUrl: string;
-  capaPreviewUrl: string | null;
-  estruturas: LocalEstrutura[];
-  destinoMetodologia: DestinoMetodologia;
-  precoAssinaturaMensal: string;
-};
 
 const LEARNING_DRAFT_KEY = "learning_create_draft_v1";
 const DURACOES = [2, 4, 6, 8];
@@ -650,7 +634,7 @@ export default function LearningCreatePage() {
             localId: uid("convidado"),
             usuarioId: String(usuario.id),
             nome: String(usuario.nome || usuario.nomeDeUsuario || ""),
-            descricao: String(usuario.tipo || "Convidado FootEra"),
+            descricao: "Convidado Footera",
           },
         ],
       },
@@ -970,7 +954,7 @@ export default function LearningCreatePage() {
                                   localId: String(c.id || uid("convidado")),
                                   usuarioId: c.usuarioId ? String(c.usuarioId) : "",
                                   nome: String(c.nome || c.usuario?.nome || ""),
-                                  descricao: String(c.descricao || (c.usuario ? "Convidado FootEra" : "")),
+                                  descricao:"Convidado FootEra",
                                 }))
                               : it.aulaAoVivo?.convidadoNome
                                 ? [

@@ -423,11 +423,36 @@ export default function CreatorEventosPage() {
       UserContext
     );
 
+  const contextoCreatorAtivo =
+    authContext?.activeContext
+      ?.kind ===
+      "PERSONAL" &&
+    String(
+      authContext?.activeContext
+        ?.tipoUsuario || ""
+    ).toLowerCase() ===
+      "creator";
+
   const podeCriarEvento =
-    authContext?.can(
-      "CRIAR_EVENTO"
-    ) ?? false;
+    contextoCreatorAtivo &&
+    (
+      authContext?.can(
+        "CRIAR_EVENTO"
+      ) ?? false
+    );
     
+  const podeCriarAulaAoVivo =
+    contextoCreatorAtivo &&
+    (
+      authContext?.can(
+        "CRIAR_AULA_AO_VIVO"
+      ) ?? false
+    );
+  
+  const podeCriarAlgo =
+    podeCriarEvento ||
+    podeCriarAulaAoVivo;
+
   const [lista, setLista] = useState<EventoListItem[]>([]);
   const [lives, setLives] = useState<AulaAoVivoResumo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -447,6 +472,15 @@ export default function CreatorEventosPage() {
 
   async function carregarTudo() {
     try {
+      if (
+        !contextoCreatorAtivo
+      ) {
+        setLista([]);
+        setLives([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
 
       const [eventosRes, livesRes] = await Promise.allSettled([
@@ -475,7 +509,7 @@ export default function CreatorEventosPage() {
   useEffect(() => {
     carregarTudo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [contextoCreatorAtivo]);
 
   function editarEventoNormal(id: string) {
     window.location.href = `/creator/eventos/novo?id=${encodeURIComponent(id)}`;
@@ -1246,6 +1280,24 @@ export default function CreatorEventosPage() {
     );
   };
 
+  if (
+    !contextoCreatorAtivo
+  ) {
+    return (
+      <div className="min-h-screen bg-cream p-6 text-green-900">
+        <div className="mx-auto max-w-xl rounded-2xl border bg-white p-6 text-center">
+          <h1 className="text-xl font-bold">
+            Perfil Creator necessário
+          </h1>
+
+          <p className="mt-2 text-sm text-green-900/70">
+            Selecione seu perfil Creator para acessar e gerenciar os eventos do Creator.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-cream text-green-900 pb-20">
       <div className="bg-green-900 text-white p-5">
@@ -1273,7 +1325,7 @@ export default function CreatorEventosPage() {
               </p>
             </div>
 
-            {podeCriarEvento ? (
+            {podeCriarAlgo ? (
               <Link
                 href="/creator/eventos/novo"
                 className="shrink-0 rounded-xl bg-green-700 px-4 py-2 text-white font-bold text-sm"

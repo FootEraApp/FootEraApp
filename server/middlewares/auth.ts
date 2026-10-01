@@ -185,128 +185,41 @@ const parceiro = Boolean(dbUser?.parceiro);
   reqAuthed.userId = userId;
 
   try {
-      const ctx = await resolveUserContext(userId);
+    const ctx =
+      await resolveUserContext(
+        userId
+      );
 
-      let tipoUsuarioIdFinal = ctx.tipoUsuarioId ?? null;
+    const user: UserPayload = {
+      id:
+        userId,
 
-      if (!tipoUsuarioIdFinal) {
-        const tipoCtx = String(ctx.tipo || "").toLowerCase();
+      tipo:
+        ctx.tipo,
 
-        if (tipoCtx === "olheiro") {
-          const olheiro = await prisma.olheiro.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = olheiro?.id ?? null;
-        }
+      tipoUsuarioId:
+        ctx.tipoUsuarioId ??
+        null,
 
-        if (tipoCtx === "clube") {
-          const clube = await prisma.clube.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = clube?.id ?? null;
-        }
+      activeContext:
+        ctx.activeContext ??
+        null,
 
-        if (
-          tipoCtx === "escolinha" ||
-          tipoCtx === "escola"
-        ) {
-          const escolinha = await prisma.escolinha.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = escolinha?.id ?? null;
-        }
+      plano:
+        ((ctx.plano as PlanoName) ??
+          "FREE") as PlanoName,
 
-        if (tipoCtx === "professor") {
-          const professor = await prisma.professor.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = professor?.id ?? null;
-        }
+      isAdmin:
+        !!ctx.isAdmin,
 
-        if (tipoCtx === "atleta") {
-          const atleta = await prisma.atleta.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = atleta?.id ?? null;
-        }
+      parceiro,
+    };
 
-        if (
-          tipoCtx === "learning"
-        ) {
-          const learning =
-            await prisma.learningProfile.findUnique({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
+    reqAuthed.authUser =
+      user;
 
-          tipoUsuarioIdFinal =
-            learning?.id ?? null;
-        }
-
-        if (
-          tipoCtx === "federacao"
-        ) {
-          const federacao =
-            await prisma.federacao.findUnique({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-
-          tipoUsuarioIdFinal =
-            federacao?.id ?? null;
-        }
-
-        if (
-          tipoCtx === "marca"
-        ) {
-          const marca =
-            await prisma.marca.findUnique({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-
-          tipoUsuarioIdFinal =
-            marca?.id ?? null;
-        }
-      }
-
-      const user: UserPayload = {
-        id:
-          userId,
-        tipo:
-          ctx.tipo,
-        tipoUsuarioId:
-          tipoUsuarioIdFinal,
-        activeContext:
-          ctx.activeContext ??
-          null,
-        plano:
-          ((ctx.plano as PlanoName) ??
-            "FREE") as PlanoName,
-        isAdmin:
-          !!ctx.isAdmin,
-        parceiro,
-      };
-
-    reqAuthed.authUser = user;
-    (reqAuthed as any).user = user;
+    (reqAuthed as any).user =
+      user;
   } catch (e: any) {
     console.error(
       "[AUTH] resolveUserContext failed em",

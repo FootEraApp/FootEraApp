@@ -543,10 +543,14 @@ export default function PaginaEventoDetalhe({
     ev.requisitos.length >
       0;
 
-  const mostrarConvocar =
+  const podeConvocar =
     Boolean(
       token &&
-      ev.podeGerenciar
+      ev.podeGerenciar &&
+      (
+        ev.clubeId ||
+        ev.escolinhaId
+      )
     );
 
   return (
@@ -570,18 +574,6 @@ export default function PaginaEventoDetalhe({
           <h2 className="font-semibold text-lg font-green">
             Informações
           </h2>
-
-          {mostrarConvocar && (
-            <button
-              type="button"
-              onClick={
-                abrirConvocacao
-              }
-              className="px-3 py-2 rounded bg-green-700 text-white text-sm hover:bg-green-800"
-            >
-              Convocar atletas
-            </button>
-          )}
         </div>
 
         {ev.status && (
@@ -737,15 +729,17 @@ export default function PaginaEventoDetalhe({
 
           {ev.podeGerenciar ? (
             <>
-              <button
-                type="button"
-                onClick={
-                  abrirConvocacao
-                }
-                className="px-4 py-3 rounded-xl bg-green-700 text-white font-semibold"
-              >
-                Convocar atletas
-              </button>
+              {podeConvocar && (
+                <button
+                  type="button"
+                  onClick={
+                    abrirConvocacao
+                  }
+                  className="px-4 py-3 rounded-xl bg-green-700 text-white font-semibold"
+                >
+                  Convocar atletas
+                </button>
+              )}
 
               <button
                 type="button"
@@ -754,17 +748,29 @@ export default function PaginaEventoDetalhe({
                     navigate(
                       `/eventos/clubes/${ev.clubeId}`
                     );
-                  } else if (
-                    ev.escolinhaId
-                  ) {
+
+                    return;
+                  }
+
+                  if (ev.escolinhaId) {
                     navigate(
                       `/eventos/escolas/${ev.escolinhaId}`
                     );
-                  } else {
+
+                    return;
+                  }
+
+                  if (ev.creatorUsuarioId) {
                     navigate(
                       "/creator/eventos"
                     );
+
+                    return;
                   }
+
+                  toast.error(
+                    "A área de gerenciamento deste evento não está disponível nesta tela."
+                  );
                 }}
                 className="px-4 py-3 rounded-xl border border-green-700 text-green-800 font-semibold"
               >

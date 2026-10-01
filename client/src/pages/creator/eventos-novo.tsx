@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useContext} from "react";
 import { toast } from "@/lib/toast";
 import axios from "axios";
 import { useLocation } from "wouter";
 import Storage from "../../utils/storage.js";
 import { API } from "../../config.js";
 import { EVENTO_TIPOS, EventoTipo } from "@/utils/eventos.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type EventoForm = {
   titulo: string;
@@ -101,6 +104,36 @@ function parseSaoPauloDateTimeLocal(value?: string | null) {
 
 export default function CreatorNovoEventoPage() {
   const [, setLocation] = useLocation();
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const contextoCreatorAtivo =
+    authContext?.activeContext
+      ?.kind ===
+      "PERSONAL" &&
+    String(
+      authContext?.activeContext
+        ?.tipoUsuario || ""
+    ).toLowerCase() ===
+      "creator";
+
+  const podeCriarEvento =
+    contextoCreatorAtivo &&
+    (
+      authContext?.can(
+        "CRIAR_EVENTO"
+      ) ?? false
+    );
+
+  const podeCriarAulaAoVivo =
+    contextoCreatorAtivo &&
+    (
+      authContext?.can(
+        "CRIAR_AULA_AO_VIVO"
+      ) ?? false
+    );
   const params = new URLSearchParams(window.location.search);
   const eventoId = params.get("id") || "";
   const aulaId = params.get("aulaId") || "";
@@ -408,7 +441,8 @@ export default function CreatorNovoEventoPage() {
           localId: uid("convidado"),
           usuarioId: String(usuario.id),
           nome: String(usuario.nome || usuario.nomeDeUsuario || ""),
-          descricao: String(usuario.tipo || "Convidado FootEra"),
+          descricao:
+            "Convidado FootEra",
         },
       ],
     }));
@@ -548,6 +582,64 @@ export default function CreatorNovoEventoPage() {
     }
 
     setErro("");
+
+    if (!contextoCreatorAtivo) {
+      const mensagem =
+        "Selecione o perfil Creator para continuar.";
+
+      setErro(
+        mensagem
+      );
+
+      toast.error(
+        mensagem
+      );
+
+      return;
+    }
+
+    const operacaoEhAulaAoVivo =
+      isEditandoAulaAvulsa ||
+      (
+        !isEditandoEventoNormal &&
+        isOnline
+      );
+
+    if (
+      operacaoEhAulaAoVivo &&
+      !podeCriarAulaAoVivo
+    ) {
+      const mensagem =
+        "Seu perfil Creator não possui permissão para criar ou editar aulas ao vivo.";
+
+      setErro(
+        mensagem
+      );
+
+      toast.error(
+        mensagem
+      );
+
+      return;
+    }
+
+    if (
+      !operacaoEhAulaAoVivo &&
+      !podeCriarEvento
+    ) {
+      const mensagem =
+        "Seu perfil Creator não possui permissão para criar ou editar eventos.";
+
+      setErro(
+        mensagem
+      );
+
+      toast.error(
+        mensagem
+      );
+
+      return;
+    }
 
     if (!form.titulo.trim()) {
       setErro("Título é obrigatório.");

@@ -50,17 +50,40 @@ function isUsuarioFree() {
 }
 
 export const TreinosApi = {
-  criar(payload: TreinoCreatePayload) {
-    return axios.post(`${API.BASE_URL}/api/treinos`, payload, {
-      headers: auth(),
-      validateStatus: (status) => status >= 200 && status < 500,
-    });
+  criar(
+    payload:
+      TreinoCreatePayload
+  ) {
+    return axios.post(
+      `${API.BASE_URL}/api/treinosprogramados`,
+      payload,
+      {
+        headers:
+          auth(),
+
+        validateStatus:
+          (status) =>
+            status >= 200 &&
+            status < 500,
+      },
+    );
   },
 
-  atualizar(id: string, payload: Partial<TreinoCreatePayload>) {
-    return axios.put(`${API.BASE_URL}/api/treinos/programados/${id}`, payload, {
-      headers: auth(),
-    });
+  atualizar(
+    id: string,
+    payload:
+      Partial<TreinoCreatePayload>
+  ) {
+    return axios.put(
+      `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(
+        id
+      )}`,
+      payload,
+      {
+        headers:
+          auth(),
+      },
+    );
   },
 
   listarExercicios() {

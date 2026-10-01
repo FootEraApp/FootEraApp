@@ -4,6 +4,92 @@ import {
   criarNotificacaoEEnviarPush,
   recomputeAndEmitBadge,
 } from "./notificacoesController.js";
+import {
+  TipoOrganizacao,
+  TipoUsuario,
+} from "@prisma/client";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
+import {
+  FuncaoMembroOrganizacao,
+} from "@prisma/client";
+import {
+  obterOrganizacaoIdPorLegado,
+} from "../services/organizacoes.js";
+
+async function listarGestoresDaOrganizacao(
+  tipo:
+    | "CLUBE"
+    | "ESCOLINHA",
+  legacyId:
+    string,
+  fallbackUsuarioId?:
+    string | null
+) {
+  const organizacaoId =
+    await obterOrganizacaoIdPorLegado({
+      tipo,
+      ownerId:
+        legacyId,
+    });
+
+  const ids =
+    new Set<string>();
+
+  if (
+    fallbackUsuarioId
+  ) {
+    ids.add(
+      fallbackUsuarioId
+    );
+  }
+
+  if (!organizacaoId) {
+    return Array.from(
+      ids
+    );
+  }
+
+  const membros =
+    await prisma
+      .membroOrganizacao
+      .findMany({
+        where: {
+          organizacaoId,
+
+          ativo:
+            true,
+
+          funcao: {
+            in: [
+              FuncaoMembroOrganizacao.PROPRIETARIO,
+              FuncaoMembroOrganizacao.ADMINISTRADOR,
+            ],
+          },
+        },
+
+        select: {
+          usuarioId:
+            true,
+        },
+      });
+
+  for (
+    const membro of membros
+  ) {
+    ids.add(
+      membro.usuarioId
+    );
+  }
+
+  return Array.from(
+    ids
+  );
+}
 
 export async function getIndicacoes(req: Request, res: Response) {
   try {
@@ -332,6 +418,101 @@ function getUsuarioAutenticadoId(
   ).trim();
 }
 
+async function validarOlheiroAtivo(
+  usuarioId:
+    string,
+  olheiroId?:
+    string
+) {
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (
+    !contexto ||
+    contexto.kind !==
+      "PERSONAL" ||
+    contexto.tipoUsuario !==
+      TipoUsuario.Olheiro ||
+    !contexto.tipoUsuarioId
+  ) {
+    return false;
+  }
+
+  if (
+    olheiroId &&
+    String(
+      contexto.tipoUsuarioId
+    ) !==
+      String(
+        olheiroId
+      )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+async function validarOrganizacaoAtiva(
+  usuarioId: string,
+  tipo:
+    DestinoColaboracaoTipo,
+  destinoId: string
+) {
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (
+    !contexto ||
+    contexto.kind !==
+      "ORGANIZATION" ||
+    !contexto
+      .legacyOrganizationId
+  ) {
+    return false;
+  }
+
+  if (
+    String(
+      contexto
+        .legacyOrganizationId
+    ) !==
+    String(destinoId)
+  ) {
+    return false;
+  }
+
+  const podeGerenciar =
+    await canPermission(
+      usuarioId,
+      "GERENCIAR_ORGANIZACAO"
+    );
+
+  if (!podeGerenciar) {
+    return false;
+  }
+
+  if (
+    tipo === "CLUBE"
+  ) {
+    return (
+      contexto
+        .organizationType ===
+      TipoOrganizacao.CLUBE
+    );
+  }
+
+  return (
+    contexto
+      .organizationType ===
+    TipoOrganizacao.ESCOLA
+  );
+}
+
 async function resolverDestinoColaboracao(
   tipo: DestinoColaboracaoTipo,
   destinoId: string
@@ -581,6 +762,24 @@ export async function solicitarColaboracao(
         id: string;
       };
 
+    const olheiroAtivo =
+      await validarOlheiroAtivo(
+        usuarioId,
+        id
+      );
+
+    if (!olheiroAtivo) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Use seu perfil de Olheiro para solicitar colaboração.",
+        });
+    }
+
     const tipoRaw =
       String(
         req.body?.tipo ||
@@ -734,72 +933,84 @@ export async function solicitarColaboracao(
       });
     }
 
-    const notificacoesAntigas =
-      pendentes
-        .map(
-          (s) =>
-            s.notificacaoId
-        )
-        .filter(
-          Boolean
-        ) as string[];
-
     if (
       pendentes.length >
       0
     ) {
-      await prisma.$transaction(
-        [
-          prisma
-            .solicitacaoColaboracaoOlheiro
-            .updateMany({
-              where: {
-                olheiroId:
-                  olheiro.id,
-                status:
-                  "PENDENTE",
-              },
-              data: {
-                status:
-                  "CANCELADA",
-                respondidaEm:
-                  new Date(),
-              },
-            }),
-
-          ...(notificacoesAntigas
-            .length
-            ? [
-                prisma
-                  .notificacao
-                  .deleteMany({
-                    where: {
-                      id: {
-                        in: notificacoesAntigas,
-                      },
-                    },
-                  }),
-              ]
-            : []),
-        ]
-      );
-
-      const usuariosAfetados =
-        Array.from(
-          new Set(
-            pendentes.map(
-              (p) =>
-                p.destinoUsuarioId
-            )
-          )
+      const linksAntigos =
+        pendentes.map(
+          (s) =>
+            `/notificacoes?colaboracaoId=${s.id}`
         );
 
+      await prisma.$transaction([
+        prisma
+          .solicitacaoColaboracaoOlheiro
+          .updateMany({
+            where: {
+              olheiroId:
+                olheiro.id,
+
+              status:
+                "PENDENTE",
+            },
+
+            data: {
+              status:
+                "CANCELADA",
+
+              respondidaEm:
+                new Date(),
+            },
+          }),
+
+        prisma.notificacao
+          .deleteMany({
+            where: {
+              link: {
+                in:
+                  linksAntigos,
+              },
+            },
+          }),
+      ]);
+
+      const usuariosAfetados =
+        new Set<string>();
+
       for (
-        const alvoUsuarioId of
-        usuariosAfetados
+        const pendente of
+          pendentes
+      ) {
+        const gestores =
+          await listarGestoresDaOrganizacao(
+            pendente
+              .destinoTipo as
+              DestinoColaboracaoTipo,
+
+            pendente
+              .destinoId,
+
+            pendente
+              .destinoUsuarioId
+          );
+
+        for (
+          const gestorUsuarioId of
+            gestores
+        ) {
+          usuariosAfetados.add(
+            gestorUsuarioId
+          );
+        }
+      }
+
+      for (
+        const gestorUsuarioId of
+          usuariosAfetados
       ) {
         await recomputeAndEmitBadge(
-          alvoUsuarioId
+          gestorUsuarioId
         );
       }
     }
@@ -829,33 +1040,63 @@ export async function solicitarColaboracao(
           },
         });
 
-    const notificacao =
-      await criarNotificacaoEEnviarPush({
-        usuarioId:
-          destino.usuarioId,
+    const gestores =
+  await listarGestoresDaOrganizacao(
+    tipo,
+    destino.id,
+    destino.usuarioId
+  );
 
-        actorId:
-          olheiro.usuarioId,
+let primeiraNotificacaoId:
+  string | null =
+  null;
 
-        tipo:
-          "COLABORACAO_OLHEIRO",
+for (
+  const gestorUsuarioId of
+    gestores
+) {
+  const notificacao =
+    await criarNotificacaoEEnviarPush({
+      usuarioId:
+        gestorUsuarioId,
 
-        titulo:
-          "Pedido de colaboração",
+      actorId:
+        olheiro.usuarioId,
 
-        mensagem:
-          `${olheiro.usuario.nome} quer colaborar com ${
-            tipo === "CLUBE"
-              ? "seu clube"
-              : "sua escola"
-          }.`,
+      tipo:
+        "COLABORACAO_OLHEIRO",
 
-        link:
-          `/notificacoes?colaboracaoId=${encodeURIComponent(
-            solicitacao.id
-          )}`,
-      });
+      titulo:
+        "Pedido de colaboração",
 
+      mensagem:
+        `${olheiro.usuario.nome} quer colaborar com ${
+          tipo === "CLUBE"
+            ? "seu clube"
+            : "sua escola"
+        }.`,
+
+      link:
+        `/notificacoes?colaboracaoId=${encodeURIComponent(
+          solicitacao.id
+        )}`,
+    });
+
+  if (
+    !primeiraNotificacaoId
+  ) {
+    primeiraNotificacaoId =
+      notificacao.id;
+  }
+
+  await recomputeAndEmitBadge(
+      gestorUsuarioId
+    );
+  }
+
+  if (
+    primeiraNotificacaoId
+  ) {
     await prisma
       .solicitacaoColaboracaoOlheiro
       .update({
@@ -863,11 +1104,13 @@ export async function solicitarColaboracao(
           id:
             solicitacao.id,
         },
+
         data: {
           notificacaoId:
-            notificacao.id,
+            primeiraNotificacaoId,
         },
       });
+  }
 
     return res
       .status(201)
@@ -912,6 +1155,24 @@ export async function removerColaboracao(
       req.params as {
         id: string;
       };
+
+    const olheiroAtivo =
+      await validarOlheiroAtivo(
+        usuarioId,
+        id
+      );
+
+    if (!olheiroAtivo) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Use seu perfil de Olheiro para remover esta colaboração.",
+        });
+    }
 
     const olheiro =
       await prisma.olheiro.findUnique({
@@ -991,6 +1252,24 @@ export async function cancelarSolicitacaoColaboracao(
         solicitacaoId: string;
       };
 
+    const olheiroAtivo =
+      await validarOlheiroAtivo(
+        usuarioId,
+        id
+      );
+
+    if (!olheiroAtivo) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Use seu perfil de Olheiro para cancelar esta solicitação.",
+        });
+    }
+
     const solicitacao =
       await prisma
         .solicitacaoColaboracaoOlheiro
@@ -1054,26 +1333,36 @@ export async function cancelarSolicitacaoColaboracao(
             },
           }),
 
-        ...(solicitacao
-          .notificacaoId
-          ? [
-              prisma
-                .notificacao
-                .deleteMany({
-                  where: {
-                    id:
-                      solicitacao
-                        .notificacaoId,
-                  },
-                }),
-            ]
-          : []),
+        prisma.notificacao.deleteMany({
+          where: {
+            link:
+              `/notificacoes?colaboracaoId=${solicitacao.id}`,
+          },
+        }),
       ]
     );
 
-    await recomputeAndEmitBadge(
-      solicitacao.destinoUsuarioId
-    );
+    const gestoresDestino =
+      await listarGestoresDaOrganizacao(
+        solicitacao
+          .destinoTipo as
+          DestinoColaboracaoTipo,
+
+        solicitacao
+          .destinoId,
+
+        solicitacao
+          .destinoUsuarioId
+      );
+
+    for (
+      const gestorUsuarioId of
+        gestoresDestino
+    ) {
+      await recomputeAndEmitBadge(
+        gestorUsuarioId
+      );
+    }
 
     return res.json({
       ok: true,
@@ -1128,19 +1417,6 @@ export async function aceitarSolicitacaoColaboracao(
     }
 
     if (
-      solicitacao
-        .destinoUsuarioId !==
-      usuarioId
-    ) {
-      return res
-        .status(403)
-        .json({
-          error:
-            "Esta solicitação não pertence ao seu perfil.",
-        });
-    }
-
-    if (
       solicitacao.status !==
       "PENDENTE"
     ) {
@@ -1156,17 +1432,33 @@ export async function aceitarSolicitacaoColaboracao(
       solicitacao
         .destinoTipo as DestinoColaboracaoTipo;
 
+    const organizacaoAtiva =
+      await validarOrganizacaoAtiva(
+        usuarioId,
+        tipo,
+        solicitacao
+          .destinoId
+      );
+
+    if (!organizacaoAtiva) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Troque para a organização correspondente antes de aceitar esta colaboração.",
+        });
+    }
+
     const destino =
       await resolverDestinoColaboracao(
         tipo,
         solicitacao.destinoId
       );
 
-    if (
-      !destino ||
-      destino.usuarioId !==
-        usuarioId
-    ) {
+    if (!destino) {
       return res
         .status(404)
         .json({
@@ -1192,17 +1484,6 @@ export async function aceitarSolicitacaoColaboracao(
             },
           },
         });
-
-    const notificacaoIds =
-      [
-        solicitacao.notificacaoId,
-        ...outrasPendentes.map(
-          (p) =>
-            p.notificacaoId
-        ),
-      ].filter(
-        Boolean
-      ) as string[];
 
     await prisma.$transaction(
       async (tx) => {
@@ -1265,42 +1546,65 @@ export async function aceitarSolicitacaoColaboracao(
             },
           });
 
-        if (
-          notificacaoIds.length
-        ) {
-          await tx
-            .notificacao
-            .deleteMany({
-              where: {
-                id: {
-                  in:
-                    notificacaoIds,
-                },
-              },
-            });
-        }
+        const linksNotificacoes =
+          [
+            solicitacao,
+            ...outrasPendentes,
+          ].map(
+            (s) =>
+              `/notificacoes?colaboracaoId=${s.id}`
+          );
+
+        await tx.notificacao.deleteMany({
+          where: {
+            link: {
+              in:
+                linksNotificacoes,
+            },
+          },
+        });
       }
     );
 
     const usuariosBadge =
-      Array.from(
-        new Set([
-          solicitacao
-            .destinoUsuarioId,
+      new Set<string>();
 
-          ...outrasPendentes.map(
-            (p) =>
-              p.destinoUsuarioId
-          ),
-        ])
-      );
+    const todasSolicitacoes =
+      [
+        solicitacao,
+        ...outrasPendentes,
+      ];
 
     for (
-      const alvoUsuarioId of
-      usuariosBadge
+      const s of
+        todasSolicitacoes
+    ) {
+      const gestores =
+        await listarGestoresDaOrganizacao(
+          s.destinoTipo as
+            DestinoColaboracaoTipo,
+
+          s.destinoId,
+
+          s.destinoUsuarioId
+        );
+
+      for (
+        const gestorUsuarioId of
+          gestores
+      ) {
+        usuariosBadge.add(
+          gestorUsuarioId
+        );
+      }
+    }
+
+    for (
+      const gestorUsuarioId of
+        usuariosBadge
     ) {
       await recomputeAndEmitBadge(
-        alvoUsuarioId
+        gestorUsuarioId
       );
     }
 
@@ -1322,9 +1626,11 @@ export async function aceitarSolicitacaoColaboracao(
         `${destino.nome} aceitou colaborar com você.`,
 
       link:
-        `/perfil/${encodeURIComponent(
-          destino.usuarioId
-        )}`,
+        destino.usuarioId
+          ? `/perfil/${encodeURIComponent(
+              destino.usuarioId
+            )}`
+          : "/notificacoes",
     });
 
     return res.json({
@@ -1382,19 +1688,6 @@ export async function recusarSolicitacaoColaboracao(
     }
 
     if (
-      solicitacao
-        .destinoUsuarioId !==
-      usuarioId
-    ) {
-      return res
-        .status(403)
-        .json({
-          error:
-            "Esta solicitação não pertence ao seu perfil.",
-        });
-    }
-
-    if (
       solicitacao.status !==
       "PENDENTE"
     ) {
@@ -1409,6 +1702,26 @@ export async function recusarSolicitacaoColaboracao(
     const tipo =
       solicitacao
         .destinoTipo as DestinoColaboracaoTipo;
+
+    const organizacaoAtiva =
+      await validarOrganizacaoAtiva(
+        usuarioId,
+        tipo,
+        solicitacao
+          .destinoId
+      );
+
+    if (!organizacaoAtiva) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Troque para a organização correspondente antes de recusar esta colaboração.",
+        });
+    }
 
     const destino =
       await resolverDestinoColaboracao(
@@ -1433,26 +1746,36 @@ export async function recusarSolicitacaoColaboracao(
             },
           }),
 
-        ...(solicitacao
-          .notificacaoId
-          ? [
-              prisma
-                .notificacao
-                .deleteMany({
-                  where: {
-                    id:
-                      solicitacao
-                        .notificacaoId,
-                  },
-                }),
-            ]
-          : []),
+        prisma.notificacao.deleteMany({
+          where: {
+            link:
+              `/notificacoes?colaboracaoId=${solicitacao.id}`,
+          },
+        }),
       ]
     );
 
-    await recomputeAndEmitBadge(
-      usuarioId
-    );
+    const gestoresDestino =
+      await listarGestoresDaOrganizacao(
+        solicitacao
+          .destinoTipo as
+          DestinoColaboracaoTipo,
+
+        solicitacao
+          .destinoId,
+
+        solicitacao
+          .destinoUsuarioId
+      );
+
+    for (
+      const gestorUsuarioId of
+        gestoresDestino
+    ) {
+      await recomputeAndEmitBadge(
+        gestorUsuarioId
+      );
+    }
 
     await criarNotificacaoEEnviarPush({
       usuarioId:

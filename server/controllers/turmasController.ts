@@ -4,18 +4,18 @@ import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { sendError } from "../utils/httpError.js";
 import {
+  TipoOrganizacao,
   TipoUsuario,
 } from "@prisma/client";
 import {
   obterOrganizacaoIdPorLegado,
 } from "../services/organizacoes.js";
 import {
-  getActiveRole,
-  getProfileIdForRole,
-  papelCanonico,
-  hasActiveRole,
+  hasRole,
 } from "../services/roles.js";
-
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 import {
   canPermission,
 } from "../services/permissions.js";
@@ -46,10 +46,8 @@ async function buscarContextoUsuarioLogado(
   const userId =
     String(
       req.userId ||
-        (req as any)
-          .userCtx?.id ||
-        (req as any)
-          .user?.id ||
+        (req as any).userCtx?.id ||
+        (req as any).user?.id ||
         "",
     ).trim();
 
@@ -58,60 +56,115 @@ async function buscarContextoUsuarioLogado(
   }
 
   const [
-    papelAtivo,
+    activeContext,
     isAdmin,
-  ] =
-    await Promise.all([
-      getActiveRole(
-        userId,
-      ),
+  ] = await Promise.all([
+    getActiveContext(
+      userId
+    ),
 
-      canPermission(
-        userId,
-        "VER_ADMIN",
-      ),
-    ]);
+    canPermission(
+      userId,
+      "VER_ADMIN"
+    ),
+  ]);
 
-  if (!papelAtivo) {
+  if (!activeContext) {
     return null;
   }
 
-  const papel =
-    papelCanonico(
-      papelAtivo,
-    );
+  let clubeId:
+    string | null = null;
 
-  const tipoUsuarioId =
-    await getProfileIdForRole(
-      userId,
-      papel,
-    );
+  let escolinhaId:
+    string | null = null;
+
+  let professorId:
+    string | null = null;
+
+  if (
+    activeContext.kind ===
+    "ORGANIZATION"
+  ) {
+    const legacyId =
+      activeContext
+        .legacyOrganizationId ??
+      null;
+
+    if (
+      activeContext.organizationType ===
+      TipoOrganizacao.CLUBE
+    ) {
+      clubeId =
+        legacyId;
+    }
+
+    if (
+      activeContext.organizationType ===
+      TipoOrganizacao.ESCOLA
+    ) {
+      escolinhaId =
+        legacyId;
+    }
+
+    /*
+     * Exemplo:
+     * Clube FootEra FC — Professor
+     *
+     * A turma pertence ao Clube,
+     * mas a pessoa também atua
+     * nela como aquele Professor.
+     */
+    if (
+      activeContext.tipoUsuario ===
+      TipoUsuario.Professor
+    ) {
+      professorId =
+        activeContext.tipoUsuarioId ??
+        null;
+    }
+  } else {
+    if (
+      activeContext.tipoUsuario ===
+      TipoUsuario.Professor
+    ) {
+      professorId =
+        activeContext.tipoUsuarioId ??
+        null;
+    }
+
+    if (
+      activeContext.tipoUsuario ===
+      TipoUsuario.Clube
+    ) {
+      clubeId =
+        activeContext.tipoUsuarioId ??
+        null;
+    }
+
+    if (
+      activeContext.tipoUsuario ===
+      TipoUsuario.Escolinha
+    ) {
+      escolinhaId =
+        activeContext.tipoUsuarioId ??
+        null;
+    }
+  }
 
   return {
     userId,
 
     isAdmin,
 
+    activeContext,
+
     papelAtivo:
-      papel,
+      activeContext.tipoUsuario,
 
-    clubeId:
-      papel ===
-      TipoUsuario.Clube
-        ? tipoUsuarioId
-        : null,
-
-    escolinhaId:
-      papel ===
-      TipoUsuario.Escolinha
-        ? tipoUsuarioId
-        : null,
-
-    professorId:
-      papel ===
-      TipoUsuario.Professor
-        ? tipoUsuarioId
-        : null,
+    clubeId,
+    escolinhaId,
+    professorId,
   };
 }
 
@@ -908,8 +961,19 @@ export async function listarMinhasTurmas(
   }
 }
 
-export async function listarTurmas(req: Request, res: Response) {
+export async function listarTurmas(req: AuthenticatedRequest, res: Response) {
   try {
+    const contexto =
+      await buscarContextoUsuarioLogado(
+        req
+      );
+
+    if (!contexto) {
+      return res.status(401).json({
+        message:
+          "Não autenticado.",
+      });
+    }
     const ownerTipoRaw = req.query.ownerTipo ? String(req.query.ownerTipo).trim() : "";
     const ownerIdRaw = req.query.ownerId ? String(req.query.ownerId).trim() : "";
     const professorId = req.query.professorId
@@ -926,6 +990,55 @@ export async function listarTurmas(req: Request, res: Response) {
       ativo: true,
     };
     const ownerTipoNorm = ownerTipoRaw.toLowerCase();
+
+    if (!contexto.isAdmin) {
+      if (
+        ownerTipoNorm ===
+          "clube" &&
+        ownerIdRaw &&
+        contexto.clubeId !==
+          ownerIdRaw
+      ) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          message:
+            "Troque para o contexto deste clube para acessar suas turmas.",
+        });
+      }
+
+      if (
+        ownerTipoNorm ===
+          "escolinha" &&
+        ownerIdRaw &&
+        contexto.escolinhaId !==
+          ownerIdRaw
+      ) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          message:
+            "Troque para o contexto desta escolinha para acessar suas turmas.",
+        });
+      }
+
+      if (
+        professorId &&
+        !ownerIdRaw &&
+        contexto.professorId !==
+          professorId
+      ) { 
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          message:
+            "Troque para o perfil Professor correspondente para acessar estas turmas.",
+        });
+      }
+    }
 
     if (ownerTipoRaw && ownerIdRaw) {
       if (ownerTipoNorm === "clube") where.clubeId = ownerIdRaw;
@@ -1162,33 +1275,50 @@ export async function criarTurma(
       vagas,
     } = req.body || {};
 
-    if (
-      ownerTipo &&
-      ownerId &&
-      !contexto.isAdmin
-    ) {
+    let ownerTipoEfetivo:
+      | "Clube"
+      | "Escolinha"
+      | null = null;
+
+    let ownerIdEfetivo:
+      string | null = null;
+
+    if (contexto.isAdmin) {
       if (
         ownerTipo === "Clube" &&
-        contexto.clubeId !==
-          String(ownerId)
+        ownerId
       ) {
-        return res.status(403).json({
-          message:
-            "Você não pode criar turma para este clube.",
-        });
+        ownerTipoEfetivo =
+          "Clube";
+
+        ownerIdEfetivo =
+          String(ownerId);
       }
 
       if (
-        ownerTipo ===
-          "Escolinha" &&
-        contexto.escolinhaId !==
-          String(ownerId)
+        ownerTipo === "Escolinha" &&
+        ownerId
       ) {
-        return res.status(403).json({
-          message:
-            "Você não pode criar turma para esta escolinha.",
-        });
+        ownerTipoEfetivo =
+          "Escolinha";
+
+        ownerIdEfetivo =
+          String(ownerId);
       }
+    } else if (contexto.clubeId) {
+      ownerTipoEfetivo =
+        "Clube";
+
+      ownerIdEfetivo =
+        contexto.clubeId;
+    } else if (
+      contexto.escolinhaId
+    ) {
+      ownerTipoEfetivo =
+        "Escolinha";
+
+      ownerIdEfetivo =
+        contexto.escolinhaId;
     }
 
     if (!nome) {
@@ -1231,8 +1361,8 @@ export async function criarTurma(
         : [];
 
     if (
-      !ownerTipo &&
-      !ownerId &&
+      !ownerTipoEfetivo &&
+      !ownerIdEfetivo &&
       !contexto.isAdmin
     ) {
       if (
@@ -1249,18 +1379,11 @@ export async function criarTurma(
       ];
     }
 
-    if (!ownerTipo && !ownerId && professorIds.length === 0 && usuarioLogadoId) {
-      const professorLogado = await prisma.professor.findFirst({
-        where: { usuarioId: usuarioLogadoId },
-        select: { id: true },
-      });
-
-      if (professorLogado?.id) {
-        professorIds = [String(professorLogado.id)];
-      }
-    }
-
-    if (!ownerTipo && !ownerId && professorIds.length === 0) {
+    if (
+      !ownerTipoEfetivo &&
+      !ownerIdEfetivo &&
+      professorIds.length === 0
+    ) {
       return res.status(400).json({
         message: "Não foi possível identificar o professor para criar a turma.",
       });
@@ -1277,17 +1400,15 @@ export async function criarTurma(
     }
 
     if (
-      ownerTipo &&
-      ownerId
+      ownerTipoEfetivo &&
+      ownerIdEfetivo
     ) {
       if (
-        ownerTipo ===
+        ownerTipoEfetivo ===
         "Clube"
       ) {
         data.clubeId =
-          String(
-            ownerId
-          );
+          ownerIdEfetivo;
 
         data.organizacaoId =
           await obterOrganizacaoIdPorLegado({
@@ -1295,18 +1416,11 @@ export async function criarTurma(
               "CLUBE",
 
             ownerId:
-              String(
-                ownerId
-              ),
+              ownerIdEfetivo,
           });
-      } else if (
-        ownerTipo ===
-        "Escolinha"
-      ) {
+      } else {
         data.escolinhaId =
-          String(
-            ownerId
-          );
+          ownerIdEfetivo;
 
         data.organizacaoId =
           await obterOrganizacaoIdPorLegado({
@@ -1314,15 +1428,8 @@ export async function criarTurma(
               "ESCOLINHA",
 
             ownerId:
-              String(
-                ownerId
-              ),
+              ownerIdEfetivo,
           });
-      } else {
-        return res.status(400).json({
-          message:
-            "ownerTipo deve ser Clube ou Escolinha",
-        });
       }
     }
 
@@ -1361,6 +1468,164 @@ export async function criarTurma(
           `A turma possui ${vagasNormalizadas} vagas, ` +
           `mas foram informados ${usuarioIdsFinal.length} participantes.`,
       });
+    }
+
+    if (
+      professorIds.length > 0
+    ) {
+      const professores =
+        await prisma.professor.findMany({
+          where: {
+            id: {
+              in:
+                professorIds,
+            },
+          },
+
+          select: {
+            id: true,
+            usuarioId: true,
+          },
+        });
+
+      if (
+        professores.length !==
+        professorIds.length
+      ) {
+        return res.status(400).json({
+          message:
+            "Existe professor inválido na seleção.",
+        });
+      }
+
+      const papeisValidos =
+        await Promise.all(
+          professores.map(
+            async (
+              professor
+            ) => {
+              if (
+                !professor.usuarioId
+              ) {
+                return false;
+              }
+
+              return hasRole(
+                professor.usuarioId,
+                TipoUsuario.Professor
+              );
+            }
+          )
+        );
+
+      if (
+        papeisValidos.some(
+          (ativo) =>
+            !ativo
+        )
+      ) {
+        return res.status(409).json({
+          code:
+            "PROFESSOR_ROLE_INACTIVE",
+
+          message:
+            "Um dos professores selecionados não possui o papel Professor ativo.",
+        });
+      }
+
+      if (
+        ownerTipoEfetivo ===
+          "Clube" &&
+        ownerIdEfetivo
+      ) {
+        const vinculados =
+          await prisma.professorClube.findMany({
+            where: {
+              clubeId:
+                ownerIdEfetivo,
+
+              professorId: {
+                in:
+                  professorIds,
+              },
+            },
+
+            select: {
+              professorId:
+                true,
+            },
+          });
+
+        const idsPermitidos =
+          new Set(
+            vinculados.map(
+              (vinculo) =>
+                vinculo.professorId
+            )
+          );
+
+        if (
+          professorIds.some(
+            (id) =>
+              !idsPermitidos.has(id)
+          )
+        ) {
+          return res.status(403).json({
+            code:
+              "PROFESSOR_NOT_LINKED",
+
+            message:
+              "Um dos professores não está vinculado a este clube.",
+          });
+        }
+      }
+
+      if (
+        ownerTipoEfetivo ===
+          "Escolinha" &&
+        ownerIdEfetivo
+      ) {
+        const vinculados =
+          await prisma.professorEscolinha.findMany({
+            where: {
+              escolinhaId:
+                ownerIdEfetivo,
+
+              professorId: {
+                in:
+                  professorIds,
+              },
+            },
+
+            select: {
+              professorId:
+                true,
+            },
+          });
+
+        const idsPermitidos =
+          new Set(
+            vinculados.map(
+              (vinculo) =>
+                vinculo.professorId
+            )
+          );
+
+        if (
+          professorIds.some(
+            (id) =>
+              !idsPermitidos.has(id)
+          )
+        ) {
+          return res.status(403).json({
+            code:
+              "PROFESSOR_NOT_LINKED",
+
+            message:
+              "Um dos professores não está vinculado a esta escolinha.",
+          });
+        }
+      }
     }
 
     const turma =
@@ -1520,6 +1785,161 @@ export async function setProfessoresTurma(req: AuthenticatedRequest, res: Respon
     const professorIds: string[] = Array.isArray(req.body?.professorIds)
       ? req.body.professorIds.map(String).filter(Boolean)
       : [];
+
+    if (
+      professorIds.length > 0
+    ) {
+      const professores =
+        await prisma.professor.findMany({
+          where: {
+            id: {
+              in:
+                professorIds,
+            },
+          },
+
+          select: {
+            id: true,
+            usuarioId: true,
+          },
+        });
+
+      if (
+        professores.length !==
+        professorIds.length
+      ) {
+        return res.status(400).json({
+          message:
+            "Existe professor inválido na seleção.",
+        });
+      }
+
+      const papeisValidos =
+        await Promise.all(
+          professores.map(
+            async (
+              professor
+            ) => {
+              if (
+                !professor.usuarioId
+              ) {
+                return false;
+              }
+
+              return hasRole(
+                professor.usuarioId,
+                TipoUsuario.Professor
+              );
+            }
+          )
+        );
+
+      const professorInativo =
+        papeisValidos.some(
+          (ativo) =>
+            !ativo
+        );
+
+      if (professorInativo) {
+        return res.status(409).json({
+          code:
+            "PROFESSOR_ROLE_INACTIVE",
+
+          message:
+            "Um dos professores selecionados não possui o papel Professor ativo.",
+        });
+      }
+
+      if (
+        acesso.turma.clubeId
+      ) {
+        const vinculados =
+          await prisma.professorClube.findMany({
+            where: {
+              clubeId:
+                acesso.turma.clubeId,
+
+              professorId: {
+                in:
+                  professorIds,
+              },
+            },
+
+            select: {
+              professorId:
+                true,
+            },
+          });
+
+        const permitidos =
+          new Set(
+            vinculados.map(
+              (item) =>
+                item.professorId
+            )
+          );
+
+        if (
+          professorIds.some(
+            (id) =>
+              !permitidos.has(id)
+          )
+        ) {
+          return res.status(403).json({
+            code:
+              "PROFESSOR_NOT_LINKED",
+
+            message:
+              "Um dos professores não está vinculado a este clube.",
+          });
+        }
+      }
+
+      if (
+        acesso.turma.escolinhaId
+      ) {
+        const vinculados =
+          await prisma.professorEscolinha.findMany({
+            where: {
+              escolinhaId:
+                acesso.turma.escolinhaId,
+
+              professorId: {
+                in:
+                  professorIds,
+              },
+            },
+
+            select: {
+              professorId:
+                true,
+            },
+          });
+
+        const permitidos =
+          new Set(
+            vinculados.map(
+              (item) =>
+                item.professorId
+            )
+          );
+
+        if (
+          professorIds.some(
+            (id) =>
+              !permitidos.has(id)
+          )
+        ) {
+          return res.status(403).json({
+            code:
+              "PROFESSOR_NOT_LINKED",
+
+            message:
+              "Um dos professores não está vinculado a esta escolinha.",
+          });
+        }
+      }
+    }
 
     await prisma.$transaction([
       prisma.turmaProfessor.deleteMany({ where: { turmaId } }),
@@ -1904,10 +2324,19 @@ export async function participarTurma(
       });
     }
 
+    const contextoAtivo =
+      await getActiveContext(
+        usuarioId
+      );
+
     const atletaAtivo =
-      await hasActiveRole(
+      contextoAtivo?.kind ===
+        "PERSONAL" &&
+      contextoAtivo.tipoUsuario ===
+        TipoUsuario.Atleta &&
+      await hasRole(
         usuarioId,
-        TipoUsuario.Atleta,
+        TipoUsuario.Atleta
       );
 
     if (!atletaAtivo) {

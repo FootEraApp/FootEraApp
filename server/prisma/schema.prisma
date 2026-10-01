@@ -1250,6 +1250,12 @@ model AulaAoVivo {
   metodologiaId      String?
   metodologia        Metodologia?          @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
 
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+
   estruturaId String?
   estrutura   MetodologiaEstrutura? @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
 
@@ -1283,6 +1289,11 @@ model AulaAoVivo {
   @@index([metodologiaAvulsaId])
   @@index([estruturaAvulsaId])
   @@index([ivsRecordingId])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model AulaAoVivoAcesso {

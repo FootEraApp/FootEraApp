@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import { toast } from "@/lib/toast";
 import { useLocation, Link } from "wouter";
 import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
@@ -12,9 +12,12 @@ import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
-import BottomNav from "@/components/layout/BottomNav.js";
+import BottomNav from "../components/layout/BottomNav.js";
 import { ModalAdicionarMembrosGrupo } from "../components/mensagens/ModalAdicionarMembrosGrupo.js";
 import SharedAvatar from "../components/shared/Avatar.js";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -107,15 +110,57 @@ type GrupoDetalhe = {
 
 export default function PaginaMensagens() {
   const [, navigate] = useLocation();
+
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    userContext
+      ?.activeContext ??
+    null;
+
+  const activeTipoUsuario =
+    String(
+      userContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const isAtleta =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    activeTipoUsuario ===
+      "atleta" &&
+    Boolean(
+      userContext
+        ?.activeTipoUsuarioId
+    );
+
+  const temSeletorContexto =
+    Boolean(
+      userContext?.isLoggedIn
+    ) &&
+    (
+      userContext?.contexts
+        ?.length ?? 0
+    ) > 1;
+    
   const [showSidebar, setShowSidebar] = useState(false);
-  const usuarioId: string | null = Storage.usuarioId;
+  const usuarioId:
+    string | null =
+    userContext?.user?.id
+      ? String(
+          userContext.user.id
+        )
+      : Storage.usuarioId;
   const token: string = Storage.token || "";
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
-  const [isAtleta, setIsAtleta] = useState(
-    String(Storage?.tipoSalvo ?? "").toLowerCase() === "atleta"
-  );
   const [searchTerm, setSearchTerm] = useState("");
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
@@ -211,23 +256,6 @@ export default function PaginaMensagens() {
     if (!token) return;
     fetchUnreadByUser();
   }, [token]);
-
-  useEffect(() => {
-    if (!Storage.token) return;
-    const tipo = (Storage.tipoSalvo || "").toLowerCase();
-    setIsAtleta(tipo === "atleta");
-  }, []);
-
-  useEffect(() => {
-    const tipo = String(Storage?.tipoSalvo ?? "").toLowerCase();
-    if (tipo !== "atleta" || !Storage.token) return;
-
-    fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
-      headers: { Authorization: `Bearer ${Storage.token}` },
-    })
-      .then(r => setIsAtleta(r.ok)) 
-      .catch(() => setIsAtleta(true));
-  }, []);
 
   function selecionarAlvo(novo: ChatTarget) {
     setAlvo(novo);
@@ -1091,18 +1119,31 @@ export default function PaginaMensagens() {
           ? await contatosRes.json()
           : [];
 
-        const recentes = loadRecentUsers();
+        const fromConversas:
+          Usuario[] =
+          conv.conversas.map(
+            (c) => ({
+              id:
+                c.id,
 
-        const fromConversas: Usuario[] = conv.conversas.map((c) => ({
-          id: c.id,
-          nome: c.nome,
-          foto: c.foto,
-        }));
+              nome:
+                c.nome,
 
-        let base = mergeUnique(
-          mergeUnique(recentes, fromConversas),
-          contatosRelacionados
-        );
+              foto:
+                c.foto,
+            })
+          );
+
+        /*
+        * Conversas pertencem à conta inteira.
+        * Contatos sem conversa dependem
+        * do contexto ativo.
+        */
+        let base =
+          mergeUnique(
+            fromConversas,
+            contatosRelacionados
+          );
 
         if (base.length === 0 && usuarioId) {
           base = [
@@ -1134,7 +1175,7 @@ export default function PaginaMensagens() {
         console.error("Erro ao carregar sidebar:", e);
       }
     })();
-  }, [token]);
+  }, [token, activeContext?.key]);
 
   const carregarPostPorId = async (postId: string) => {
     if (postsCache[postId]) return;
@@ -2614,7 +2655,20 @@ function stripConvocacaoTag(text: string) {
           </div>
           </div>
 
-          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100 mb-10">
+          <div
+            className={`
+              sticky
+              ${
+                temSeletorContexto
+                  ? "bottom-[94px]"
+                  : "bottom-[47px]"
+              }
+              z-40
+              bg-white
+              border-t
+              border-green-100
+            `}
+          >
             <div className="mx-auto w-full sm:max-w-3xl px-3 sm:px-4 py-3 flex items-center gap-2">
               <input
                 className="flex-1 bg-white border border-green-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-700"

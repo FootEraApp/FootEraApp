@@ -1,11 +1,96 @@
 import { Router } from "express";
-import { PrismaClient, IndicacaoStatus, NotificacaoTipo } from "@prisma/client";
+import {
+  PrismaClient,
+  IndicacaoStatus,
+  NotificacaoTipo,
+  TipoOrganizacao,
+  TipoUsuario,
+} from "@prisma/client";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 import { recomputeAndEmitBadge } from "../controllers/notificacoesController.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
+import {
+  FuncaoMembroOrganizacao,
+} from "@prisma/client";
+import {
+  obterOrganizacaoIdPorLegado,
+} from "../services/organizacoes.js";
 
 const prisma = new PrismaClient();
 const router = Router();
 
 const PONTOS_POR_INDICACAO_APROVADA = 10;
+
+async function listarGestoresDaOrganizacao(
+  tipo:
+    | "CLUBE"
+    | "ESCOLINHA",
+  legacyId: string,
+  fallbackUsuarioId?:
+    string | null
+) {
+  const organizacaoId =
+    await obterOrganizacaoIdPorLegado({
+      tipo:
+        tipo === "CLUBE"
+          ? "CLUBE"
+          : "ESCOLINHA",
+
+      ownerId:
+        legacyId,
+    });
+
+  const ids =
+    new Set<string>();
+
+  if (fallbackUsuarioId) {
+    ids.add(
+      fallbackUsuarioId
+    );
+  }
+
+  if (!organizacaoId) {
+    return Array.from(ids);
+  }
+
+  const membros =
+    await prisma
+      .membroOrganizacao
+      .findMany({
+        where: {
+          organizacaoId,
+
+          ativo:
+            true,
+
+          funcao: {
+            in: [
+              FuncaoMembroOrganizacao.PROPRIETARIO,
+              FuncaoMembroOrganizacao.ADMINISTRADOR,
+            ],
+          },
+        },
+
+        select: {
+          usuarioId:
+            true,
+        },
+      });
+
+  for (
+    const membro of membros
+  ) {
+    ids.add(
+      membro.usuarioId
+    );
+  }
+
+  return Array.from(ids);
+}
 
 async function recalcularMetricasOlheiro(
   olheiroId: string
@@ -50,62 +135,31 @@ async function recalcularMetricasOlheiro(
   };
 }
 
-function getOlheiroIdFromReq(req: any): string | null {
-  return (
-    req?.authUser?.tipoUsuarioId ||
-    req?.user?.tipoUsuarioId ||
-    req?.tipoUsuarioId ||
-    req?.userCtx?.tipoUsuarioId ||
-    req?.userCtx?.tipoUsuarioIdRaw ||
-    (req.headers["x-tipo-usuario-id"] as string) ||
-    null
-  );
-}
-
-function getTipoUsuarioFromReq(req: any): string | null {
-  const raw =
-    req?.authUser?.tipo ||
-    req?.user?.tipo ||
-    req?.user?.tipoUsuario ||
-    req?.tipoUsuario ||
-    req?.userCtx?.tipo ||
-    req?.userCtx?.tipoUsuario ||
-    (req.headers["x-tipo-usuario"] as string) ||
-    null;
-
-  return raw ? String(raw) : null;
-}
-
-async function resolveOlheiroId(req: any): Promise<string | null> {
-  const direto = getOlheiroIdFromReq(req);
-  if (direto) return String(direto);
-
-  const tipo = String(getTipoUsuarioFromReq(req) || "").toLowerCase();
-  const usuarioId = getUsuarioIdFromReq(req);
-
-  if (tipo !== "olheiro" || !usuarioId) {
-    return null;
-  }
-
-  const olheiro = await prisma.olheiro.findUnique({
-    where: { usuarioId: String(usuarioId) },
-    select: { id: true },
-  });
-
-  return olheiro?.id ?? null;
-}
-
 router.post("/", async (req, res) => {
   try {
-    const olheiroId = await resolveOlheiroId(req);
-    if (!olheiroId) {
-      return res.status(401).json({ error: "Não autenticado como olheiro." });
+    const contextoOlheiro =
+      await resolverOlheiroAtivo(
+        req
+      );
+
+    if (!contextoOlheiro) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Use seu perfil de Olheiro para criar uma indicação.",
+        });
     }
 
-    const tipo = getTipoUsuarioFromReq(req);
-    if (tipo && String(tipo).toLowerCase() !== "olheiro") {
-      return res.status(403).json({ error: "Apenas olheiro pode criar indicação." });
-    }
+    const {
+      usuarioId:
+        usuarioLogadoId,
+      olheiroId,
+    } =
+      contextoOlheiro;
 
     const { atletaId, clubeId, escolinhaId } = req.body || {};
 
@@ -121,8 +175,6 @@ router.post("/", async (req, res) => {
         .status(400)
         .json({ error: "Informe clubeId OU escolinhaId (apenas um)." });
     }
-
-    const usuarioLogadoId = getUsuarioIdFromReq(req);
 
     const [olheiro, atleta] = await Promise.all([
       prisma.olheiro.findUnique({
@@ -170,7 +222,17 @@ router.post("/", async (req, res) => {
         olheiroId
       );
 
-      if (clube.usuarioId) {
+       const gestores =
+        await listarGestoresDaOrganizacao(
+          "CLUBE",
+          clube.id,
+          clube.usuarioId
+        );
+
+      for (
+        const gestorUsuarioId of
+          gestores
+      ) {
         const nomeOlheiro =
           olheiro?.usuario?.nome ||
           olheiro?.usuario?.nomeDeUsuario ||
@@ -182,20 +244,32 @@ router.post("/", async (req, res) => {
           atleta?.usuario
             ?.nomeDeUsuario ||
           "um atleta";
-
+          
         await criarNotificacaoIndicacao({
-          usuarioId: clube.usuarioId,
-          actorId: usuarioLogadoId,
-          titulo: "Nova indicação de atleta",
-          mensagem: `${nomeOlheiro} indicou ${nomeAtleta} para ${clube.nome}.`,
-          link: `/notificacoes?indicacaoId=${created.id}`,
-          tipo: NotificacaoTipo.INDICACAO_OLHEIRO,
+          usuarioId:
+            gestorUsuarioId,
+
+          actorId:
+            usuarioLogadoId,
+
+          titulo:
+            "Nova indicação de atleta",
+
+          mensagem:
+            `${nomeOlheiro} indicou ${nomeAtleta} para ${clube.nome}.`,
+
+          link:
+            `/notificacoes?indicacaoId=${created.id}`,
+
+          tipo:
+            NotificacaoTipo.INDICACAO_OLHEIRO,
         });
+
+        await recomputeAndEmitBadge(
+          gestorUsuarioId
+        );
       }
 
-      if (clube.usuarioId) {
-        await recomputeAndEmitBadge(clube.usuarioId);
-      }
       return res.status(201).json(created);
     }
 
@@ -207,9 +281,17 @@ router.post("/", async (req, res) => {
         usuarioId: true,
       },
     });
+    
     if (!escolinha) {
       return res.status(404).json({ error: "Escolinha não encontrada." });
     }
+
+    const gestores =
+      await listarGestoresDaOrganizacao(
+        "ESCOLINHA",
+        escolinha.id,
+        escolinha.usuarioId
+      );
 
     const created = await prisma.indicacao.create({
       data: {
@@ -225,32 +307,47 @@ router.post("/", async (req, res) => {
       olheiroId
     );
 
-    if (escolinha.usuarioId) {
-      const nomeOlheiro =
-        olheiro?.usuario?.nome ||
-        olheiro?.usuario?.nomeDeUsuario ||
-        "Um olheiro";
+    const nomeOlheiro =
+      olheiro?.usuario?.nome ||
+      olheiro?.usuario?.nomeDeUsuario ||
+      "Um olheiro";
 
-      const nomeAtleta =
-        atleta?.usuario?.nome ||
-        atleta?.nome ||
-        atleta?.usuario
-          ?.nomeDeUsuario ||
-        "um atleta";
+    const nomeAtleta =
+      atleta?.usuario?.nome ||
+      atleta?.nome ||
+      atleta?.usuario
+        ?.nomeDeUsuario ||
+      "um atleta";
 
+    for (
+      const gestorUsuarioId of
+        gestores
+    ) {
       await criarNotificacaoIndicacao({
-        usuarioId: escolinha.usuarioId,
-        actorId: usuarioLogadoId,
-        titulo: "Nova indicação de atleta",
-        mensagem: `${nomeOlheiro} indicou ${nomeAtleta} para ${escolinha.nome}.`,
-        link: `/notificacoes?indicacaoId=${created.id}`,
-        tipo: NotificacaoTipo.INDICACAO_OLHEIRO,
+        usuarioId:
+          gestorUsuarioId,
+
+        actorId:
+          usuarioLogadoId,
+
+        titulo:
+          "Nova indicação de atleta",
+
+        mensagem:
+          `${nomeOlheiro} indicou ${nomeAtleta} para ${escolinha.nome}.`,
+
+        link:
+          `/notificacoes?indicacaoId=${created.id}`,
+
+        tipo:
+          NotificacaoTipo.INDICACAO_OLHEIRO,
       });
+
+      await recomputeAndEmitBadge(
+        gestorUsuarioId
+      );
     }
 
-    if (escolinha.usuarioId) {
-      await recomputeAndEmitBadge(escolinha.usuarioId);
-    }
     return res.status(201).json(created);
   } catch (e: any) {
     console.error("POST /api/indicacoes", e);
@@ -398,14 +495,91 @@ router.patch("/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Indicação não encontrada." });
     }
 
+    const contexto =
+      await getActiveContext(
+        usuarioId
+      );
+
+    const clubeId =
+      indicacao.clube?.id
+        ? String(
+            indicacao.clube.id
+          )
+        : null;
+
+    const escolinhaId =
+      indicacao.escolinha?.id
+        ? String(
+            indicacao.escolinha.id
+          )
+        : null;
+
+    const contextoCorreto =
+      Boolean(
+        contexto &&
+        contexto.kind ===
+          "ORGANIZATION" &&
+        contexto
+          .legacyOrganizationId &&
+        (
+          (
+            clubeId &&
+            contexto
+              .organizationType ===
+              TipoOrganizacao.CLUBE &&
+            String(
+              contexto
+                .legacyOrganizationId
+            ) === clubeId
+          ) ||
+          (
+            escolinhaId &&
+            contexto
+              .organizationType ===
+              TipoOrganizacao.ESCOLA &&
+            String(
+              contexto
+                .legacyOrganizationId
+            ) ===
+              escolinhaId
+          )
+        )
+      );
+
+    if (!contextoCorreto) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Troque para a organização correspondente antes de responder esta indicação.",
+        });
+    }
+
+    const podeGerenciar =
+      await canPermission(
+        usuarioId,
+        "GERENCIAR_ORGANIZACAO"
+      );
+
+    if (!podeGerenciar) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "PERMISSION_DENIED",
+
+          error:
+            "Você não possui permissão para responder indicações desta organização.",
+        });
+    }
+
     const destinoUsuarioId =
       indicacao.clube?.usuarioId ??
       indicacao.escolinha?.usuarioId ??
       null;
-
-    if (!destinoUsuarioId || destinoUsuarioId !== usuarioId) {
-      return res.status(403).json({ error: "Você não pode responder essa indicação." });
-    }
 
     const updated = await prisma.indicacao.update({
       where: { id: String(id) },
@@ -413,12 +587,37 @@ router.patch("/:id/status", async (req, res) => {
       select: { id: true, status: true, atualizadoEm: true, olheiroId: true },
     });
 
-    if (indicacao.clube?.usuarioId) {
-      await recomputeAndEmitBadge(indicacao.clube.usuarioId);
-    }
+    await prisma.notificacao.deleteMany({
+      where: {
+        link:
+          `/notificacoes?indicacaoId=${id}`,
+      },
+    });
 
-    if (indicacao.escolinha?.usuarioId) {
-      await recomputeAndEmitBadge(indicacao.escolinha.usuarioId);
+    const gestoresDestino =
+      indicacao.clube
+        ? await listarGestoresDaOrganizacao(
+            "CLUBE",
+            indicacao.clube.id,
+            indicacao.clube
+              .usuarioId
+          )
+        : indicacao.escolinha
+          ? await listarGestoresDaOrganizacao(
+              "ESCOLINHA",
+              indicacao.escolinha.id,
+              indicacao.escolinha
+                .usuarioId
+            )
+          : [];
+
+    for (
+      const gestorUsuarioId of
+        gestoresDestino
+    ) {
+      await recomputeAndEmitBadge(
+        gestorUsuarioId
+      );
     }
 
     await recalcularMetricasOlheiro(
@@ -449,7 +648,12 @@ router.patch("/:id/status", async (req, res) => {
           actorId: usuarioId,
           titulo: "Resposta da indicação",
           mensagem: `${nomeDestino} ${statusTexto} sua indicação de ${nomeAtleta}.`,
-          link: `/perfil/${destinoUsuarioId}`,
+          link:
+            destinoUsuarioId
+              ? `/perfil/${encodeURIComponent(
+                  destinoUsuarioId
+                )}`
+              : "/notificacoes",
           tipo: NotificacaoTipo.INDICACAO_RESPONDIDA,
           lida: false,
         },
@@ -465,18 +669,60 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-function getUsuarioIdFromReq(req: any): string | null {
-  return (
+function getUsuarioIdFromReq(
+  req: any
+): string | null {
+  const id =
     req?.userId ||
     req?.authUser?.id ||
     req?.user?.id ||
-    req?.user?.usuarioId ||
-    req?.usuarioId ||
-    req?.userCtx?.id ||
-    req?.userCtx?.usuarioId ||
-    (req.headers["x-user-id"] as string) ||
-    null
-  );
+    null;
+
+  return id
+    ? String(id)
+    : null;
+}
+
+async function resolverOlheiroAtivo(
+  req: any
+): Promise<{
+  usuarioId: string;
+  olheiroId: string;
+} | null> {
+  const usuarioId =
+    getUsuarioIdFromReq(
+      req
+    );
+
+  if (!usuarioId) {
+    return null;
+  }
+
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (
+    !contexto ||
+    contexto.kind !==
+      "PERSONAL" ||
+    contexto.tipoUsuario !==
+      TipoUsuario.Olheiro ||
+    !contexto.tipoUsuarioId
+  ) {
+    return null;
+  }
+
+  return {
+    usuarioId,
+
+    olheiroId:
+      String(
+        contexto
+          .tipoUsuarioId
+      ),
+  };
 }
 
 async function criarNotificacaoIndicacao(params: {
@@ -505,27 +751,51 @@ router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const olheiroId = await resolveOlheiroId(req);
-    const usuarioId = getUsuarioIdFromReq(req);
-    const tipoUsuario = String(getTipoUsuarioFromReq(req) || "").toLowerCase();
+    const contextoOlheiro =
+      await resolverOlheiroAtivo(
+        req
+      );
 
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuário não autenticado." });
+    if (!contextoOlheiro) {
+      return res
+        .status(409)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "Use seu perfil de Olheiro para apagar esta indicação.",
+        });
     }
 
-    if (tipoUsuario && tipoUsuario !== "olheiro") {
-      return res.status(403).json({ error: "Apenas olheiro pode apagar indicação." });
-    }
-
-    if (!olheiroId) {
-      return res.status(401).json({ error: "Olheiro não autenticado." });
-    }
+    const {
+      usuarioId,
+      olheiroId,
+    } =
+      contextoOlheiro;
 
     const indicacao = await prisma.indicacao.findUnique({
       where: { id: String(id) },
       include: {
-        clube: { select: { usuarioId: true } },
-        escolinha: { select: { usuarioId: true } },
+        clube: {
+          select: {
+            id:
+              true,
+
+            usuarioId:
+              true,
+          },
+        },
+
+        escolinha: {
+          select: {
+            id:
+              true,
+
+            usuarioId:
+              true,
+          },
+        },
         olheiro: {
           include: {
             usuario: { select: { id: true } },
@@ -559,12 +829,30 @@ router.delete("/:id", async (req, res) => {
       },
     }).catch(() => null);
 
-    if (indicacao.clube?.usuarioId) {
-      await recomputeAndEmitBadge(indicacao.clube.usuarioId);
-    }
+    const gestoresDestino =
+      indicacao.clube
+        ? await listarGestoresDaOrganizacao(
+            "CLUBE",
+            indicacao.clube.id,
+            indicacao.clube
+              .usuarioId
+          )
+        : indicacao.escolinha
+          ? await listarGestoresDaOrganizacao(
+              "ESCOLINHA",
+              indicacao.escolinha.id,
+              indicacao.escolinha
+                .usuarioId
+            )
+          : [];
 
-    if (indicacao.escolinha?.usuarioId) {
-      await recomputeAndEmitBadge(indicacao.escolinha.usuarioId);
+    for (
+      const gestorUsuarioId of
+        gestoresDestino
+    ) {
+      await recomputeAndEmitBadge(
+        gestorUsuarioId
+      );
     }
 
     return res.json({ ok: true });

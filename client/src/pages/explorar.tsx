@@ -2448,7 +2448,10 @@ function Explorar() {
                     const categoria = meta.categoria;
                     const uid = a?.usuario?.id ?? a?.usuarioId ?? a.id;
                     return (
-                      <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
+                      <Link
+                        href={`/perfil/${uid}?papel=Atleta`}
+                        key={`${a.id}-${uid}`}
+                      >
                         <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                           <div className="relative">
                             <Avatar
@@ -2510,7 +2513,10 @@ function Explorar() {
                     {topGeral.slice(0, 10).map((r, idx) => {
                       const foto = r.usuario?.foto;
                       return (
-                        <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
+                        <Link
+                          href={`/perfil/${r.usuario.id}?papel=Atleta`}
+                          key={r.atletaId}
+                        >
                           <div className="min-w-[130px] sm:min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
                             <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
                             <Avatar
@@ -2535,7 +2541,10 @@ function Explorar() {
                     const foto = top.usuario?.foto;
                     const rotulo = CAT_LABEL[cat] ?? cat;
                     return (
-                      <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
+                      <Link
+                        href={`/perfil/${top.usuario.id}?papel=Atleta`}
+                        key={`cat-${cat}`}
+                      >
                         <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
                           <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">{rotulo}</div>
                           <Avatar
@@ -2563,7 +2572,10 @@ function Explorar() {
             <div className="space-y-3">
               {escolasFiltradas.slice(0, showCountEscolas).map((e) => {
                 const rawLogo = e.logo;
-                const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
+                const href =
+                  e.usuarioId
+                    ? `/perfil/${e.usuarioId}?papel=Escolinha`
+                    : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
@@ -2643,7 +2655,10 @@ function Explorar() {
             <div className="space-y-3">
               {clubesFiltrados.slice(0, showCountClubes).map((c) => {
                 const rawLogo = c.logo;
-                const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
+                const href =
+                  c.usuarioId
+                    ? `/perfil/${c.usuarioId}?papel=Clube`
+                    : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
@@ -2722,7 +2737,10 @@ function Explorar() {
                 {profissionaisFiltrados.slice(0, showCountProfs).map((p) => {
                   const rawFoto = p.foto ?? p.usuario?.foto;
                   const uid = p.usuario.id;
-                  const href = p.role === "Olheiro" ? `/perfil-olheiro/${uid}` : `/perfil/${uid}`;
+                  const href =
+                    `/perfil/${uid}?papel=${encodeURIComponent(
+                      p.role
+                    )}`;
 
                   return (
                     <Link href={href} key={`${p.role}-${p.id}`}>
@@ -2826,7 +2844,12 @@ function Explorar() {
                       : "emerald";
 
                   return (
-                    <Link href={`/perfil/${uid}`} key={`${item.tipoOutro}-${item.id}`}>
+                    <Link
+                      href={`/perfil/${uid}?papel=${encodeURIComponent(
+                        item.tipoOutro
+                      )}`}
+                      key={`${item.tipoOutro}-${item.id}`}
+                    >
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <div className="relative">
                           <Avatar

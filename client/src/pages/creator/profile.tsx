@@ -1,6 +1,6 @@
 // client/src/pages/creator/profile.tsx
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useContext } from "react";
 import {
   BadgeCheck,
   Bell,
@@ -17,6 +17,7 @@ import CreatorCard from "../../components/CreatorCard";
 import ProfilePostsSection from "../../components/perfil/ProfilePostsSection";
 import CoverImage from "../../components/shared/CoverImage";
 import ProfileReplaysSection from "../../components/perfil/ProfileReplaysSection";
+import { UserContext } from "../../context/UserContext";
 
 const API = String(
   import.meta.env.VITE_API_URL ||
@@ -97,6 +98,7 @@ type AulaAoVivoCreator = {
 
 type PerfilResponse = {
   creator: {
+    id: string;
     usuarioId: string;
     nomePublico: string;
     headline?: string | null;
@@ -337,6 +339,13 @@ function isEventoAindaNaoOcorreu(dataInicio?: string | null, status?: string | n
 }
 
 export default function CreatorProfile() {
+  const userContext =
+    useContext(UserContext);
+
+  const usuarioLogadoId =
+    userContext?.user?.id
+      ? String(userContext.user.id)
+      : null;
   const [data, setData] = useState<PerfilResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [aba, setAba] = useState<"visao" | "conteudo" | "ganhos" | "eventos" | "postagens" | "sobre">("visao");
@@ -345,26 +354,14 @@ export default function CreatorProfile() {
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
   const [followPendente, setFollowPendente] = useState(false);
   const [eventos, setEventos] = useState<any[]>([]);
-  const [
-    ativandoCreator,
-    setAtivandoCreator,
-  ] = useState(false);
-
-  const [
-    podeAtivarCreator,
-    setPodeAtivarCreator,
-  ] = useState<
-    boolean | null
-  >(null);
-
-  const [
-    erroVerificacaoCreator,
-    setErroVerificacaoCreator,
-  ] = useState("");
 
   const usuarioId = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("id") || localStorage.getItem("usuarioId") || "";
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    return params.get("id") || "";
   }, []);
 
   const meuId = useMemo(() => {
@@ -381,142 +378,6 @@ export default function CreatorProfile() {
       usuarioId &&
       meuId === usuarioId
     );
-
-  useEffect(() => {
-    if (
-      !isMeuPerfilCreator
-    ) {
-      setPodeAtivarCreator(
-        false
-      );
-
-      return;
-    }
-
-    const token =
-      localStorage.getItem(
-        "token"
-      ) ||
-      sessionStorage.getItem(
-        "token"
-      ) ||
-      "";
-
-    if (!token) {
-      setPodeAtivarCreator(
-        null
-      );
-
-      setErroVerificacaoCreator(
-        "Sua sessão não foi encontrada. Faça login novamente."
-      );
-
-      return;
-    }
-
-    let cancelado = false;
-
-    setPodeAtivarCreator(
-      null
-    );
-
-    setErroVerificacaoCreator(
-      ""
-    );
-
-    fetch(
-      `${API}/api/creator/me`,
-      {
-        headers: {
-          Authorization:
-            `Bearer ${token}`,
-        },
-      }
-    )
-      .then(async (res) => {
-        const contentType =
-          res.headers.get(
-            "content-type"
-          ) || "";
-
-        const texto =
-          await res.text();
-
-        let json: any = null;
-
-        if (
-          texto &&
-          contentType.includes(
-            "application/json"
-          )
-        ) {
-          try {
-            json =
-              JSON.parse(
-                texto
-              );
-          } catch {
-            json = null;
-          }
-        }
-
-        if (!res.ok) {
-          throw new Error(
-            json?.message ||
-              `Erro ${res.status} ao verificar o Creator.`
-          );
-        }
-
-        if (
-          !json ||
-          typeof json !==
-            "object"
-        ) {
-          throw new Error(
-            "A API do Creator retornou uma resposta inválida."
-          );
-        }
-
-        return json;
-      })
-      .then((json) => {
-        if (cancelado) {
-          return;
-        }
-
-        setPodeAtivarCreator(
-          json?.podeAtivar ===
-            true
-        );
-
-        setErroVerificacaoCreator(
-          ""
-        )
-      })
-      .catch((error) => {
-        console.error(
-          "Erro ao verificar Creator:",
-          error
-        );
-
-        if (!cancelado) {
-          setPodeAtivarCreator(
-            null
-          );
-
-          setErroVerificacaoCreator(
-            error?.message ||
-              "Não foi possível verificar o Creator."
-          );
-        }
-      });
-
-    return () => {
-      cancelado = true;
-    };
-  }, [
-    isMeuPerfilCreator,
-  ]);
 
   useEffect(() => {
     const token =
@@ -571,10 +432,12 @@ export default function CreatorProfile() {
     fetch(
       `${API}/api/creator/profile/${usuarioId}`,
       {
-        headers: {
-          Authorization:
-            `Bearer ${token}`,
-        },
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : undefined,
       }
     )
       .then(async (res) => {
@@ -762,126 +625,6 @@ export default function CreatorProfile() {
     usuarioId,
   ]);
 
-  async function ativarMeuCreator() {
-    if (
-      !isMeuPerfilCreator
-    ) {
-      return;
-    }
-
-    const token =
-      localStorage.getItem(
-        "token"
-      ) ||
-      sessionStorage.getItem(
-        "token"
-      ) ||
-      "";
-
-    if (!token) {
-      toast.error(
-        "Faça login novamente para ativar o Creator."
-      );
-
-      return;
-    }
-
-    setAtivandoCreator(
-      true
-    );
-
-    try {
-      const resposta =
-        await fetch(
-          `${API}/api/creator/ativar`,
-          {
-            method:
-              "POST",
-
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-
-              "Content-Type":
-                "application/json",
-            },
-
-            /*
-            * NÃO envie tipo:
-            * "PESSOA_FISICA".
-            *
-            * O backend escolhe
-            * automaticamente:
-            *
-            * Marca/Federação/etc.
-            * => INSTITUCIONAL
-            *
-            * Professor/Olheiro
-            * => PESSOA_FISICA
-            */
-            body:
-              JSON.stringify(
-                {}
-              ),
-          }
-        );
-
-      const texto =
-        await resposta.text();
-
-      let json: any = {};
-
-      if (texto) {
-        try {
-          json =
-            JSON.parse(
-              texto
-            );
-        } catch {
-          json = {};
-        }
-      }
-
-      if (
-        !resposta.ok
-      ) {
-        throw new Error(
-          json?.message ||
-            "Não foi possível ativar o Creator."
-        );
-      }
-
-      toast.success(
-        "Perfil Creator ativado com sucesso!"
-      );
-
-      /*
-      * Reabre a própria página.
-      * Agora /profile/:id já
-      * encontrará o Creator.
-      */
-      window.location.replace(
-        `/creator/profile?id=${encodeURIComponent(
-          usuarioId
-        )}`
-      );
-    } catch (error: any) {
-      console.error(
-        "Erro ao ativar Creator:",
-        error
-      );
-
-      toast.error(
-        error?.message ||
-          "Não foi possível ativar o Creator."
-      );
-    } finally {
-      setAtivandoCreator(
-        false
-      );
-    }
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center">
@@ -892,198 +635,34 @@ export default function CreatorProfile() {
 
   if (!data) {
     return (
-      <div
-        className="
-          min-h-screen
-          bg-[#f5f7f3]
-          flex
-          items-center
-          justify-center
-          p-6
-        "
-      >
-        <div
-          className="
-            bg-white
-            border
-            rounded-2xl
-            p-6
-            w-full
-            max-w-md
-            text-center
-            shadow-sm
-          "
-        >
-          <div
-            className="
-              mx-auto
-              mb-4
-              flex
-              h-14
-              w-14
-              items-center
-              justify-center
-              rounded-full
-              bg-emerald-50
-              text-emerald-700
-            "
-          >
-            <BadgeCheck
-              size={28}
-            />
+      <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
+        <div className="bg-white border rounded-2xl p-6 w-full max-w-md text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+            <BadgeCheck size={28} />
           </div>
 
-          <h1
-            className="
-              font-bold
-              text-xl
-              text-emerald-950
-            "
-          >
+          <h1 className="font-bold text-xl text-emerald-950">
             Creator não encontrado
           </h1>
 
-          <p
-            className="
-              text-slate-500
-              mt-2
-            "
-          >
+          <p className="text-slate-500 mt-2">
             {isMeuPerfilCreator
-              ? "Você ainda não ativou o seu perfil Creator."
-              : "Esse usuário ainda não ativou o perfil Creator."}
+              ? "Você ainda não possui um perfil Creator ativo."
+              : "Esse usuário não possui um perfil Creator ativo."}
           </p>
 
-          {isMeuPerfilCreator &&
-            podeAtivarCreator ===
-              null && 
-              !erroVerificacaoCreator &&(
-              <p
-                className="
-                  mt-4
-                  text-sm
-                  text-slate-400
-                "
-              >
-                Verificando
-                disponibilidade...
-              </p>
-            )}
-
-          {isMeuPerfilCreator &&
-            podeAtivarCreator ===
-              true && (
-              <>
-                <p
-                  className="
-                    mt-4
-                    text-sm
-                    text-slate-600
-                  "
-                >
-                  Ative o Creator
-                  para publicar
-                  conteúdos,
-                  acompanhar
-                  métricas e acessar
-                  sua página pública.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={
-                    ativarMeuCreator
-                  }
-                  disabled={
-                    ativandoCreator
-                  }
-                  className="
-                    mt-5
-                    inline-flex
-                    w-full
-                    items-center
-                    justify-center
-                    gap-2
-                    rounded-xl
-                    bg-emerald-700
-                    px-5
-                    py-3
-                    font-bold
-                    text-white
-                    transition
-                    hover:bg-emerald-800
-                    disabled:cursor-not-allowed
-                    disabled:opacity-60
-                  "
-                >
-                  <BadgeCheck
-                    size={18}
-                  />
-
-                  {ativandoCreator
-                    ? "Ativando Creator..."
-                    : "Ativar Creator"}
-                </button>
-              </>
-            )}
-
-          {isMeuPerfilCreator &&
-            erroVerificacaoCreator && (
-              <div
-                className="
-                  mt-4
-                  rounded-xl
-                  border
-                  border-amber-200
-                  bg-amber-50
-                  p-3
-                  text-sm
-                  text-amber-800
-                "
-              >
-                Não foi possível
-                verificar seu perfil
-                Creator agora.
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    window.location.reload()
-                  }
-                  className="
-                    mt-3
-                    block
-                    w-full
-                    rounded-lg
-                    border
-                    border-amber-300
-                    bg-white
-                    px-3
-                    py-2
-                    font-semibold
-                    text-amber-900
-                  "
-                >
-                  Tentar novamente
-                </button>
-              </div>
-            )}
-            
-          {isMeuPerfilCreator &&
-            podeAtivarCreator ===
-              false && (
-              <p
-                className="
-                  mt-4
-                  text-sm
-                  text-slate-500
-                "
-              >
-                Este tipo de perfil
-                não possui acesso ao
-                Creator.
-              </p>
-            )}
+          {isMeuPerfilCreator && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href =
+                  "/perfil/editar";
+              }}
+              className="mt-5 w-full rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white hover:bg-emerald-800"
+            >
+              Gerenciar meus perfis
+            </button>
+          )}
 
           <button
             type="button"
@@ -1091,19 +670,7 @@ export default function CreatorProfile() {
               window.location.href =
                 "/perfil";
             }}
-            className="
-              mt-3
-              w-full
-              rounded-xl
-              border
-              border-slate-200
-              px-5
-              py-3
-              text-sm
-              font-semibold
-              text-slate-700
-              hover:bg-slate-50
-            "
+            className="mt-3 w-full rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Voltar ao perfil
           </button>
@@ -1113,6 +680,18 @@ export default function CreatorProfile() {
   }
 
   const { creator, metricas, conteudos } = data;
+  const souDono =
+    Boolean(
+      usuarioLogadoId &&
+      String(creator.usuarioId) === usuarioLogadoId
+    );
+
+  const contextoCreatorDoDono =
+    souDono &&
+    userContext?.activeContext?.kind === "PERSONAL" &&
+    String(
+      userContext?.activeTipoUsuario ?? ""
+    ).toLowerCase() === "creator";
   const eventosAoVivo = Array.isArray(data.eventosAoVivo) ? data.eventosAoVivo : [];
 
   const eventosDaAba = [
@@ -1156,7 +735,6 @@ export default function CreatorProfile() {
   });
 
   const tipoOriginal = String(creator.perfilOriginal?.tipo || "").toLowerCase();
-  const isAtletaCreator = tipoOriginal === "atleta";
   const institucional = creator.tipo === "INSTITUCIONAL";
   const avaliacaoMedia =
   conteudos.length > 0
@@ -1167,7 +745,7 @@ export default function CreatorProfile() {
   }, 0);
 
   const creatorReturnUrl = `/creator/profile?id=${creator.usuarioId}`;
-  const isOwnCreator = meuId === creator.usuarioId;
+  const isOwnCreator = souDono;
   const perfilOriginal = creator.perfilOriginal || {};
 
   const entidadeOriginal =
@@ -1381,48 +959,55 @@ export default function CreatorProfile() {
     }
   }
 
-  if (isAtletaCreator) {
-    return (
-        <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center p-6">
-        <div className="bg-white border rounded-2xl p-6 max-w-md text-center">
-            <h1 className="font-bold text-xl text-emerald-950">
-            Creator não encontrado
-            </h1>
-            <p className="text-slate-500 mt-2">
-            Este perfil não está disponível como Creator.
-            </p>
-        </div>
-        </div>
-    );
-    }
-
   return (
     <div className="min-h-screen bg-[#f5f7f3]">
       <header className="bg-[#163d29] text-white">
         <div className="max-w-5xl mx-auto px-4 py-5">
           <div className="flex justify-between items-start">
-            <button
-                onClick={() => (window.location.href = `/mensagens?returnTo=${encodeURIComponent(creatorReturnUrl)}`)}
+            {usuarioLogadoId && (
+              <button
+                onClick={() =>
+                  (window.location.href =
+                    `/mensagens?returnTo=${encodeURIComponent(
+                      creatorReturnUrl
+                    )}`)
+                }
                 className="relative w-10 h-10 rounded-xl border border-white/20 flex items-center justify-center"
-            >
+              >
                 <Mail size={18} />
                 <BadgeCount count={unreadDM} />
-            </button>
+              </button>
+            )}
 
             <div className="flex gap-2">
-              <button
-                onClick={() => (window.location.href = `/notificacoes?returnTo=${encodeURIComponent(creatorReturnUrl)}`)}
-                className="relative w-10 h-10 rounded-xl border border-white/20 flex items-center justify-center"
-              >
-                <Bell size={18} />
-                <BadgeCount count={badgeCount} />
-              </button>
-              <button
-                onClick={() => (window.location.href = `/perfil/editar?returnTo=${encodeURIComponent(creatorReturnUrl)}`)}
-                className="relative w-10 h-10 rounded-xl border border-white/20 flex items-center justify-center"
-              >
-                <Edit3 size={18} />
-              </button>
+              {contextoCreatorDoDono && (
+                <>
+                  <button
+                    onClick={() =>
+                      (window.location.href =
+                        `/notificacoes?returnTo=${encodeURIComponent(
+                          creatorReturnUrl
+                        )}`)
+                    }
+                    className="relative w-10 h-10 rounded-xl border border-white/20 flex items-center justify-center"
+                  >
+                    <Bell size={18} />
+                    <BadgeCount count={badgeCount} />
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      (window.location.href =
+                        `/perfil/editar?returnTo=${encodeURIComponent(
+                          creatorReturnUrl
+                        )}`)
+                    }
+                    className="relative w-10 h-10 rounded-xl border border-white/20 flex items-center justify-center"
+                  >
+                    <Edit3 size={18} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -1602,7 +1187,7 @@ export default function CreatorProfile() {
 
         {aba === "conteudo" && (
             <section className="space-y-5">
-                {isOwnCreator && (
+                {contextoCreatorDoDono && (
                 <section className="bg-white rounded-2xl border p-5 shadow-sm">
                     <h2 className="font-bold text-emerald-950 mb-2">
                     Criar novo conteúdo
@@ -1678,7 +1263,7 @@ export default function CreatorProfile() {
                 </p>
               </div>
 
-              {isOwnCreator && (
+              {contextoCreatorDoDono && (
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
                     type="button"
@@ -1790,7 +1375,7 @@ export default function CreatorProfile() {
 
                         {isLiveLearning && aula ? (
                           <div className="mt-4 grid gap-2">
-                            {isOwnCreator ? (
+                            {contextoCreatorDoDono ? (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1844,7 +1429,11 @@ export default function CreatorProfile() {
           </section>
 
           <ProfileReplaysSection
-            creatorUsuarioId={creator.usuarioId}
+            contextoKind="PERSONAL"
+            contextoTipo="Creator"
+            contextoPerfilId={
+              creator.id
+            }
           />
         </>
         )}
@@ -1867,7 +1456,7 @@ export default function CreatorProfile() {
                 </p>
               </div>
 
-              {isOwnCreator && (
+              {contextoCreatorDoDono && (
                 <button
                   type="button"
                   onClick={() => {

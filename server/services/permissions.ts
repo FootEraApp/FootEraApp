@@ -17,15 +17,14 @@ import {
   getActiveContext,
 } from "./activeContext.js";
 
-
 export type AppPermission =
   | "CRIAR_TREINO"
   | "GERENCIAR_TURMA"
   | "GERENCIAR_ORGANIZACAO"
   | "CRIAR_EVENTO"
+  | "CRIAR_AULA_AO_VIVO"
   | "PUBLICAR_METODOLOGIA"
   | "VER_ADMIN";
-
 
 export const APP_PERMISSIONS:
   AppPermission[] = [
@@ -33,10 +32,10 @@ export const APP_PERMISSIONS:
     "GERENCIAR_TURMA",
     "GERENCIAR_ORGANIZACAO",
     "CRIAR_EVENTO",
+    "CRIAR_AULA_AO_VIVO",
     "PUBLICAR_METODOLOGIA",
     "VER_ADMIN",
   ];
-
 
 function permissoesDoPapel(
   papelRecebido:
@@ -52,18 +51,19 @@ function permissoesDoPapel(
       return [
         "CRIAR_TREINO",
         "GERENCIAR_TURMA",
-        "CRIAR_EVENTO",
+        "CRIAR_AULA_AO_VIVO",
         "PUBLICAR_METODOLOGIA",
       ];
 
     case TipoUsuario.Olheiro:
       return [
-        "CRIAR_EVENTO",
+        "CRIAR_AULA_AO_VIVO",
       ];
 
     case TipoUsuario.Creator:
       return [
         "CRIAR_EVENTO",
+        "CRIAR_AULA_AO_VIVO",
         "PUBLICAR_METODOLOGIA",
       ];
 
@@ -107,28 +107,27 @@ function permissoesOrganizacao(
           "CRIAR_TREINO",
           "GERENCIAR_TURMA",
           "CRIAR_EVENTO",
+          "CRIAR_AULA_AO_VIVO",
           "PUBLICAR_METODOLOGIA",
         ]
       : [
-          "CRIAR_EVENTO",
+          "CRIAR_AULA_AO_VIVO",
           "PUBLICAR_METODOLOGIA",
         ];
   }
 
-  /*
-   * Proprietário e Administrador.
-   */
   return clubeOuEscola
     ? [
         "CRIAR_TREINO",
         "GERENCIAR_TURMA",
         "GERENCIAR_ORGANIZACAO",
         "CRIAR_EVENTO",
+        "CRIAR_AULA_AO_VIVO",
         "PUBLICAR_METODOLOGIA",
       ]
     : [
         "GERENCIAR_ORGANIZACAO",
-        "CRIAR_EVENTO",
+        "CRIAR_AULA_AO_VIVO",
         "PUBLICAR_METODOLOGIA",
       ];
 }

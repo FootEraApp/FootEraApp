@@ -2,7 +2,8 @@
 import { useEffect, useState, useContext } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
-import Storage from "../../../server/utils/storage.js";
+import Storage from "../utils/storage.js";
+import { clearAuthSession } from "../utils/authSession.js";
 
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
@@ -157,9 +158,17 @@ export default function ProfilePage() {
       ?.activeContext ??
     null;
 
+  const loggedUsuarioId =
+    String(
+      userContext
+        ?.user
+        ?.id ??
+      ""
+    );
+
   const token = Storage.token;
 
-  const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
+  const isOwnProfile = !idDaUrl || idDaUrl === loggedUsuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
   const tipoContextoAtivo =
     isOwnProfile
@@ -184,12 +193,11 @@ export default function ProfilePage() {
         }:${idDaUrl ?? ""}`;
 
   function handleLogoutAndLogin() {
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {}
+    clearAuthSession();
 
-    window.location.replace("/login");
+    window.location.replace(
+      "/login"
+    );
   }
 
   useEffect(() => {
@@ -255,7 +263,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [idDaUrl, token, basePerfil]);
+  }, [idDaUrl, token, basePerfil, activeContext?.key]);
 
   useEffect(() => {
     if (!token || !isOwnProfile) return;
