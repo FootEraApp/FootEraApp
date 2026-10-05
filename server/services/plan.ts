@@ -1,26 +1,50 @@
 import { PrismaClient } from '@prisma/client';
+import { getActiveContext } from './activeContext.js';
+
 const prisma = new PrismaClient();
 
 export type Plan = 'Free' | 'Pro' | string;
 
-export async function getUserPlan(userId: string): Promise<Plan> {
-  const a = await prisma.assinatura.findFirst({
-    where: { usuarioId: userId },
-    orderBy: [
-      { ativo: "desc" },
-      { renovaEm: "desc" },
-      { startsAt: "desc" },
-    ],
-    select: {
-      ativo: true,
-      canceledAt: true,
-      plano: true,
-      status: true,
-      trialEndsAt: true,
-    },
-  });
+export async function getUserPlan(
+  userId: string
+): Promise<Plan> {
+  const contexto =
+    await getActiveContext(
+      userId
+    );
 
-  if (!a) return "Free";
+  if (!contexto) {
+    return "Free";
+  }
+
+  const a =
+    await prisma.assinatura.findFirst({
+      where: {
+        usuarioId:
+          userId,
+
+        contextoKey:
+          contexto.key,
+      },
+
+      orderBy: [
+        { ativo: "desc" },
+        { renovaEm: "desc" },
+        { startsAt: "desc" },
+      ],
+
+      select: {
+        ativo: true,
+        canceledAt: true,
+        plano: true,
+        status: true,
+        trialEndsAt: true,
+      },
+    });
+
+  if (!a) {
+    return "Free";
+  }
 
   const now = new Date();
   const status = String(a.status || "").toUpperCase();

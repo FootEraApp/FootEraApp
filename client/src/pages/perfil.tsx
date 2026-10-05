@@ -289,7 +289,11 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [token, isOwnProfile]);
+  }, [
+    token,
+    isOwnProfile,
+    activeContext?.key,
+  ]);
 
   if (loading) {
     return (

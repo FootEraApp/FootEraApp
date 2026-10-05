@@ -1,25 +1,54 @@
-import type { Request, Response, NextFunction } from "express";
-import { PrismaClient, TipoUsuario } from "@prisma/client";
+import type {
+  Request,
+  Response,
+  NextFunction,
+} from "express";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma.js";
 
-type AuthedReq = Request & { user?: any; usuarioId?: string; userId?: string };
+import {
+  canPermission,
+} from "../services/permissions.js";
 
-async function loadCurrentUser(req: AuthedReq) {
-  const tokenUserId =
-    req.user?.id ??
-    req.user?.usuarioId ??
-    (req as any).usuarioId ??
-    (req as any).userId;
+type AuthedReq = Request & {
+  user?: any;
+  authUser?: any;
+  usuarioId?: string;
+  userId?: string;
+};
 
-  if (!tokenUserId) return null;
+function getUserId(
+  req: AuthedReq
+): string {
+  return String(
+    req.userId ??
+      req.usuarioId ??
+      req.user?.id ??
+      req.user?.usuarioId ??
+      req.authUser?.id ??
+      ""
+  ).trim();
+}
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: String(tokenUserId) },
-    include: { administrador: true },
+async function loadCurrentUser(
+  req: AuthedReq
+) {
+  const userId =
+    getUserId(req);
+
+  if (!userId) {
+    return null;
+  }
+
+  return prisma.usuario.findUnique({
+    where: {
+      id: userId,
+    },
+
+    include: {
+      administrador: true,
+    },
   });
-
-  return usuario;
 }
 
 export async function requireAdmin(
@@ -27,16 +56,64 @@ export async function requireAdmin(
   res: Response,
   next: NextFunction
 ) {
-  const me = await loadCurrentUser(req);
-  if (!me || me.tipo !== TipoUsuario.Admin) {
-    return res
-      .status(403)
-      .json({ error: "Acesso restrito a administradores." });
-  }
+  try {
+    const userId =
+      getUserId(req);
 
-  (req as any).me = me;
-  (req as any).isAdmin = true;
-  return next();
+    if (!userId) {
+      return res.status(401).json({
+        error:
+          "Não autenticado.",
+      });
+    }
+
+    const permitido =
+      await canPermission(
+        userId,
+        "VER_ADMIN"
+      );
+
+    if (!permitido) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "Acesso restrito a administradores.",
+        });
+    }
+
+    const me =
+      await loadCurrentUser(
+        req
+      );
+
+    if (!me) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Usuário não encontrado.",
+        });
+    }
+
+    (req as any).me =
+      me;
+
+    (req as any).isAdmin =
+      true;
+
+    return next();
+  } catch (error) {
+    console.error(
+      "[ADMIN_GUARD] requireAdmin:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Erro ao validar permissão administrativa.",
+    });
+  }
 }
 
 export async function requireSuperAdmin(
@@ -44,36 +121,131 @@ export async function requireSuperAdmin(
   res: Response,
   next: NextFunction
 ) {
-  await requireAdmin(req, res, async () => {
-    const me = (req as any).me as Awaited<ReturnType<typeof loadCurrentUser>>;
-    if (!me) {
-      return res
-        .status(403)
-        .json({ error: "Acesso restrito a administradores." });
+  try {
+    const userId =
+      getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        error:
+          "Não autenticado.",
+      });
     }
 
-    const cargoRaw = (me.administrador?.cargo ?? "").toLowerCase().trim();
-    const cargo = cargoRaw.replace(/\s+/g, " ");
+    const permitido =
+      await canPermission(
+        userId,
+        "VER_ADMIN"
+      );
 
-    const nivelRaw = (me.administrador as any)?.nivel ?? "";
-    const nivel = String(nivelRaw).toLowerCase().trim();
+    if (!permitido) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "Acesso restrito a administradores.",
+        });
+    }
+
+    const me =
+      await loadCurrentUser(
+        req
+      );
+
+    if (
+      !me ||
+      !me.administrador
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "Acesso restrito a administradores.",
+        });
+    }
+
+    const cargoRaw =
+      String(
+        me.administrador
+          ?.cargo ??
+          ""
+      )
+        .toLowerCase()
+        .trim();
+
+    const cargo =
+      cargoRaw.replace(
+        /\s+/g,
+        " "
+      );
+
+    const nivel =
+      String(
+        (me.administrador as any)
+          ?.nivel ??
+          ""
+      )
+        .toLowerCase()
+        .trim();
 
     const isByCargo =
-      cargo === "super admin" || cargo === "superadmin" || cargo === "owner";
+      cargo ===
+        "super admin" ||
+      cargo ===
+        "superadmin" ||
+      cargo ===
+        "owner";
 
-    const isByNivel = nivel === "performance";
+    const isByNivel =
+      nivel ===
+      "performance";
 
     const isByEnv =
-      !!process.env.SUPERADMIN_EMAIL &&
-      me.email?.toLowerCase() === process.env.SUPERADMIN_EMAIL.toLowerCase();
+      Boolean(
+        process.env
+          .SUPERADMIN_EMAIL
+      ) &&
+      me.email
+        ?.toLowerCase() ===
+        process.env
+          .SUPERADMIN_EMAIL!
+          .toLowerCase();
 
-    if (!(isByCargo || isByNivel || isByEnv)) {
+    if (
+      !(
+        isByCargo ||
+        isByNivel ||
+        isByEnv
+      )
+    ) {
       return res
         .status(403)
-        .json({ error: "Apenas o super admin pode executar esta ação." });
+        .json({
+          error:
+            "Apenas o super admin pode executar esta ação.",
+        });
     }
 
-    (req as any).isSuperAdmin = true;
+    (req as any).me =
+      me;
+
+    (req as any).isAdmin =
+      true;
+
+    (req as any)
+      .isSuperAdmin =
+      true;
+
     return next();
-  });
+  } catch (error) {
+    console.error(
+      "[ADMIN_GUARD] requireSuperAdmin:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Erro ao validar permissão de super administrador.",
+    });
+  }
 }

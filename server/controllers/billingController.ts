@@ -17,6 +17,9 @@ import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { getIO } from "../socket.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import type {
+  ActiveContext,
+} from "../services/activeContext.js";
 
 function isLegacyPlano(planoId: string | null | undefined) {
   return String(planoId || "").toUpperCase() === "ATLETA_METODO_1";
@@ -397,13 +400,172 @@ function getUserId(req: Request) {
   return r.userId ?? r.authUser?.id ?? r.user?.id;
 }
 
-async function getUserTipo(usuarioId: string) {
-  const u = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: { tipo: true },
-  });
+function getBillingActiveContext(
+  req: Request
+): ActiveContext | null {
+  const r =
+    req as AuthenticatedRequest as any;
 
-  return (u?.tipo as string) || "Atleta";
+  return (
+    r.authUser?.activeContext ??
+    r.user?.activeContext ??
+    null
+  );
+}
+
+function getBillingTipo(
+  req: Request
+) {
+  const contexto =
+    getBillingActiveContext(req);
+
+  if (!contexto) {
+    return null;
+  }
+
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    return contexto.organizationType
+      ? String(
+          contexto.organizationType
+        )
+      : null;
+  }
+
+  return contexto.tipoUsuario
+    ? String(
+        contexto.tipoUsuario
+      )
+    : null;
+}
+
+function getContextoPagamentoData(
+  req: Request
+) {
+  const contexto =
+    getBillingActiveContext(req);
+
+  if (!contexto) {
+    return null;
+  }
+
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    return {
+      contextoKind:
+        "PERSONAL",
+
+      contextoTipo:
+        String(
+          contexto.tipoUsuario
+        ),
+
+      contextoPerfilId:
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        null,
+
+      contextoOrganizacaoId:
+        null,
+
+      contextoLegacyOrganizationId:
+        null,
+    };
+  }
+
+  return {
+    contextoKind:
+      "ORGANIZATION",
+
+    contextoTipo:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    contextoPerfilId:
+      null,
+
+    contextoOrganizacaoId:
+      contexto.organizationId ??
+      null,
+
+    contextoLegacyOrganizationId:
+      contexto
+        .legacyOrganizationId ??
+      null,
+  };
+}
+
+function getContextoPagamentoWhere(
+  req: Request
+): Prisma.PagamentoWhereInput | null {
+  const contexto =
+    getBillingActiveContext(req);
+
+  if (!contexto) {
+    return null;
+  }
+
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    return {
+      contextoKind:
+        "PERSONAL",
+
+      contextoTipo:
+        String(
+          contexto.tipoUsuario
+        ),
+
+      contextoPerfilId:
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        null,
+    };
+  }
+
+  return {
+    contextoKind:
+      "ORGANIZATION",
+
+    contextoTipo:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    AND: [
+      {
+        OR: [
+          contexto.organizationId
+            ? {
+                contextoOrganizacaoId:
+                  contexto.organizationId,
+              }
+            : undefined,
+
+          contexto.legacyOrganizationId
+            ? {
+                contextoLegacyOrganizationId:
+                  contexto
+                    .legacyOrganizationId,
+              }
+            : undefined,
+        ].filter(
+          Boolean
+        ) as Prisma.PagamentoWhereInput[],
+      },
+    ],
+  };
 }
 
 function onlyDigits(s: string) {
@@ -457,7 +619,14 @@ async function criarNotificacaoBilling(args: {
   });
 
   try {
-    getIO()?.to(args.usuarioId).emit("notification:new", notif);
+    getIO()
+      ?.to(
+        `u:${args.usuarioId}`
+      )
+      .emit(
+        "notification:new",
+        notif
+      );
   } catch {}
 
   try {
@@ -1566,21 +1735,245 @@ async function resgatarCupom(cupomId: string, usuarioId: string, pagamentoId?: s
   ]);
 }
 
-async function upsertSubscriptionTx(
-  tx: PrismaClient | Prisma.TransactionClient,
-  usuarioId: string,
-  plano: string,
-  periodicidade: Periodicidade
+function getContextoAssinaturaData(
+  contexto: ActiveContext | null
 ) {
+  if (!contexto) {
+    return null;
+  }
+
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    const contextoKey =
+      contexto.organizationId
+        ? `organization:${contexto.organizationId}`
+        : contexto.legacyOrganizationId
+          ? `organization-legacy:${contexto.legacyOrganizationId}`
+          : null;
+
+    if (!contextoKey) {
+      return null;
+    }
+
+    return {
+      contextoKey,
+
+      contextoKind:
+        "ORGANIZATION",
+
+      contextoTipo:
+        contexto.organizationType
+          ? String(
+              contexto.organizationType
+            )
+          : null,
+
+      contextoPerfilId:
+        null,
+
+      contextoOrganizacaoId:
+        contexto.organizationId ??
+        null,
+
+      contextoLegacyOrganizationId:
+        contexto
+          .legacyOrganizationId ??
+        null,
+    };
+  }
+
+  const contextoTipo =
+    contexto.role
+      ? String(contexto.role)
+      : contexto.tipoUsuario
+        ? String(
+            contexto.tipoUsuario
+          )
+        : null;
+
+  const contextoPerfilId =
+    contexto.profileId ??
+    contexto.tipoUsuarioId ??
+    null;
+
+  const contextoKey =
+    contextoTipo
+      ? `personal:${contextoTipo}`
+      : null;
+
+  if (!contextoKey) {
+    return null;
+  }
+
+  return {
+    contextoKey,
+
+    contextoKind:
+      "PERSONAL",
+
+    contextoTipo,
+
+    contextoPerfilId,
+
+    contextoOrganizacaoId:
+      null,
+
+    contextoLegacyOrganizationId:
+      null,
+  };
+}
+
+function getContextoAssinaturaFromPagamento(
+  pagamento: {
+    contextoKind?: string | null;
+    contextoTipo?: string | null;
+    contextoPerfilId?: string | null;
+    contextoOrganizacaoId?: string | null;
+    contextoLegacyOrganizationId?: string | null;
+  }
+): ActiveContext | null {
+  if (
+    pagamento.contextoKind === "ORGANIZATION"
+  ) {
+    const organizationId =
+      pagamento.contextoOrganizacaoId ??
+      null;
+
+    const legacyOrganizationId =
+      pagamento
+        .contextoLegacyOrganizationId ??
+      null;
+
+    if (
+      !organizationId &&
+      !legacyOrganizationId
+    ) {
+      return null;
+    }
+
+    return {
+      key: organizationId
+        ? `organization:${organizationId}`
+        : `organization-legacy:${legacyOrganizationId}`,
+
+      kind:
+        "ORGANIZATION",
+
+      label:
+        pagamento.contextoTipo ??
+        "Organização",
+
+      tipoUsuario:
+        pagamento.contextoTipo as any,
+
+      tipoUsuarioId:
+        null,
+
+      organizationId,
+
+      organizationType:
+        pagamento.contextoTipo as any,
+
+      organizationRole:
+        null,
+
+      legacyOrganizationId,
+
+      role:
+        null,
+
+      profileId:
+        null,
+    };
+  }
+
+  if (
+    pagamento.contextoKind === "PERSONAL" &&
+    pagamento.contextoTipo
+  ) {
+    return {
+      key:
+        `personal:${pagamento.contextoTipo}`,
+
+      kind:
+        "PERSONAL",
+
+      label:
+        pagamento.contextoTipo,
+
+      tipoUsuario:
+        pagamento.contextoTipo as any,
+
+      tipoUsuarioId:
+        pagamento.contextoPerfilId ??
+        null,
+
+      role:
+        pagamento.contextoTipo as any,
+
+      profileId:
+        pagamento.contextoPerfilId ??
+        null,
+
+      organizationId:
+        null,
+
+      organizationType:
+        null,
+
+      organizationRole:
+        null,
+
+      legacyOrganizationId:
+        null,
+    };
+  }
+
+  return null;
+}
+
+async function upsertSubscriptionTx(
+  tx:
+    | PrismaClient
+    | Prisma.TransactionClient,
+  usuarioId: string,
+  contexto:
+    ActiveContext,
+  plano: string,
+  periodicidade:
+    Periodicidade
+) {
+  const contextoAssinatura =
+    getContextoAssinaturaData(
+      contexto
+    );
+
+  if (!contextoAssinatura) {
+    throw new Error(
+      "Contexto ativo inválido para assinatura."
+    );
+  }
   const planoNorm = normalizePlanoId(plano);
   const now = new Date();
   const months = periodicidade === "Mensal" ? 1 : 12;
   const renovaEm = addMonths(now, months);
 
   await (tx as any).assinatura.upsert({
-    where: { usuarioId_plano: { usuarioId, plano: planoNorm } },
+    where: {
+      usuarioId_plano_contextoKey: {
+        usuarioId,
+        plano:
+          planoNorm,
+        contextoKey:
+          contextoAssinatura
+            .contextoKey,
+      },
+    },
     update: {
       periodicidade,
+      ...contextoAssinatura,
       startsAt: now,
       renovaEm,
       ativo: true,
@@ -1593,6 +1986,7 @@ async function upsertSubscriptionTx(
     } as any,
     create: {
       usuarioId,
+      ...contextoAssinatura,
       plano: planoNorm,
       periodicidade,
       startsAt: now,
@@ -1604,17 +1998,55 @@ async function upsertSubscriptionTx(
   });
 }
 
-async function upsertSubscription(usuarioId: string, plano: string, periodicidade: Periodicidade) {
-  return upsertSubscriptionTx(prisma as any, usuarioId, plano, periodicidade);
+async function upsertSubscription(
+  usuarioId: string,
+  contexto: ActiveContext,
+  plano: string,
+  periodicidade: Periodicidade
+) {
+  return upsertSubscriptionTx(
+    prisma as any,
+    usuarioId,
+    contexto,
+    plano,
+    periodicidade
+  );
 }
 
-async function getAssinaturasReadOnly(usuarioId: string) {
+async function getAssinaturasReadOnly(
+  usuarioId: string,
+  contexto: ActiveContext
+) {
   const now = new Date();
 
-  const assinaturas = await (prisma as any).assinatura.findMany({
-    where: { usuarioId },
-    orderBy: { startsAt: "desc" },
-  });
+  const contextoAssinatura =
+    getContextoAssinaturaData(
+      contexto
+    );
+
+  if (!contextoAssinatura) {
+    throw new Error(
+      "Contexto ativo inválido para consultar assinaturas."
+    );
+  }
+
+  const assinaturas =
+    await (prisma as any)
+      .assinatura
+      .findMany({
+        where: {
+          usuarioId,
+
+          contextoKey:
+            contextoAssinatura
+              .contextoKey,
+        },
+
+        orderBy: {
+          startsAt:
+            "desc",
+        },
+      });
 
   const updates: any[] = [];
 
@@ -1676,9 +2108,21 @@ async function getAssinaturasReadOnly(usuarioId: string) {
   if (updates.length) await prisma.$transaction(updates);
 
   if (updates.length) {
-    return (prisma as any).assinatura.findMany({
-      where: { usuarioId },
-      orderBy: { startsAt: "desc" },
+      return (prisma as any)
+    .assinatura
+    .findMany({
+      where: {
+        usuarioId,
+
+        contextoKey:
+          contextoAssinatura
+            .contextoKey,
+      },
+
+      orderBy: {
+        startsAt:
+          "desc",
+      },
     });
   }
 
@@ -1768,11 +2212,31 @@ export async function getPlans(
       req.query.tipo ?? ""
     ).trim();
 
+    const tipoContexto =
+      usuarioId
+        ? getBillingTipo(req)
+        : null;
+
     const tipo = usuarioId
-      ? await getUserTipo(usuarioId)
+      ? normalizeTipoBilling(
+          tipoContexto || ""
+        )
       : normalizeTipoBilling(
           tipoQuery || "atleta"
         );
+
+    if (
+      usuarioId &&
+      !tipo
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para visualizar os planos disponíveis.",
+      });
+    }
 
     const permitidos =
       new Set(
@@ -1800,12 +2264,46 @@ export async function getPlans(
 export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    const activeContext =
+      getBillingActiveContext(req);
+
+    if (!activeContext) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para visualizar sua assinatura.",
+      });
+    }
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const pagamentos = await prisma.pagamento.findMany({
-      where: { usuarioId },
-      orderBy: { criadoEm: "desc" },
-    });
+    const contextoPagamentoWhere =
+      getContextoPagamentoWhere(req);
+
+    if (!contextoPagamentoWhere) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para visualizar seus pagamentos.",
+      });
+    }
+
+    const pagamentos =
+      await prisma.pagamento.findMany({
+        where: {
+          usuarioId,
+
+          ...contextoPagamentoWhere,
+        },
+
+        orderBy: {
+          criadoEm:
+            "desc",
+        },
+      });
 
     const cupons = await prisma.cupomResgate.findMany({
       where: { usuarioId },
@@ -1813,7 +2311,11 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       orderBy: { resgatadoEm: "desc" },
     });
 
-    const assinaturas = await getAssinaturasReadOnly(usuarioId);
+    const assinaturas =
+      await getAssinaturasReadOnly(
+        usuarioId,
+        activeContext
+      );
     const assinaturasFiltradas = (assinaturas as any[]).filter((a) => !isLegacyPlano(a.plano));
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasFiltradas);
     const limiteMetodologiasMes = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
@@ -1836,9 +2338,24 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
             })
         : 0;
 
-    const trialJaUsado = (assinaturas as any[]).some((a) =>
-      Boolean(a.trialStartsAt || a.trialEndsAt)
-    );
+    const trialJaUsado =
+      Boolean(
+        await (prisma as any)
+          .assinatura
+          .findFirst({
+            where: {
+              usuarioId,
+
+              trialStartsAt: {
+                not: null,
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          })
+      );
 
     const now = new Date();
     const status = String(assinaturaPrincipal?.status || "SEM_ASSINATURA");
@@ -1872,7 +2389,20 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     const cancelada = status === "CANCELADA";
 
     const metodoPreferido = assinaturaPrincipal?.metodoPreferido ?? null;
-    const tipo = await getUserTipo(usuarioId);
+    const tipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
 
     const metodologiasAtivasRaw = await prisma.metodologiaAssinante.findMany({
       where: { usuarioId, status: "ATIVA" },
@@ -1994,7 +2524,20 @@ export async function applyCoupon(req: Request, res: Response) {
     if (!codigo) return res.status(400).json({ message: "Informe o código do cupom" });
     if (!rawItems.length) return res.status(400).json({ message: "Informe items do carrinho" });
 
-    const usuarioTipo = await getUserTipo(usuarioId);
+    const usuarioTipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!usuarioTipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
 
     const items: CartItem[] = rawItems.map((it: any) => ({
       planoId: normalizePlanoId(it.planoId),
@@ -2089,6 +2632,31 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       return res.status(401).json({ message: "Não autenticado" });
     }
 
+    const contextoPagamento =
+      getContextoPagamentoData(req);
+
+    const activeContext =
+      getBillingActiveContext(req);
+
+    const contextoAssinatura =
+      getContextoAssinaturaData(
+        activeContext
+      );
+
+    if (
+      !contextoPagamento ||
+      !activeContext ||
+      !contextoAssinatura
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para iniciar o período grátis.",
+      });
+    }
+
     const now = new Date();
 
     const { planoId, periodicidade, metodoPreferido } = req.body as {
@@ -2121,7 +2689,20 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    const tipo = await getUserTipo(usuarioId);
+    const tipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
     assertPlanoPermitido(tipo, planoNorm);
 
     const isAvulsa = isMetodologiaAvulsa(planoNorm);
@@ -2157,33 +2738,57 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const jaUsouTrialNaConta = await (prisma as any).assinatura.findFirst({
-      where: {
-        usuarioId,
-        trialStartsAt: { not: null },
-      },
-      select: {
-        id: true,
-        plano: true,
-        trialStartsAt: true,
-      },
-    });
+    const jaUsouTrialNaConta =
+      await (prisma as any)
+        .assinatura
+        .findFirst({
+          where: {
+            usuarioId,
 
-    if (jaUsouTrialNaConta) {
-      return res.status(400).json({
-        code: "TRIAL_ALREADY_USED",
-        message: "Você já utilizou o mês grátis nesta conta.",
-      });
+            trialStartsAt: {
+              not: null,
+            },
+          },
+
+          select: {
+            id: true,
+            plano: true,
+            trialStartsAt: true,
+          },
+        });
+
+    if (
+      jaUsouTrialNaConta
+    ) {
+      return res
+        .status(400)
+        .json({
+          code:
+            "TRIAL_ALREADY_USED",
+
+          message:
+            "Você já utilizou o mês grátis nesta conta.",
+        });
     }
 
-    const existing = await (prisma as any).assinatura.findUnique({
-      where: {
-        usuarioId_plano: {
-          usuarioId,
-          plano: planoNorm,
-        },
-      },
-    });
+    const existing =
+      await (prisma as any)
+        .assinatura
+        .findUnique({
+          where: {
+            usuarioId_plano_contextoKey:
+              {
+                usuarioId,
+
+                plano:
+                  planoNorm,
+
+                contextoKey:
+                  contextoAssinatura
+                    .contextoKey,
+              },
+          },
+        });
 
     if (existing?.status === "ATIVA") {
       return res.status(400).json({
@@ -2214,14 +2819,25 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const metodoPreferidoFinal: MetodoPagamento | null = metodoPreferido ?? null;
 
     const result = await prisma.$transaction(async (tx) => {
-      const assinatura = await (tx as any).assinatura.upsert({
-        where: {
-          usuarioId_plano: {
-            usuarioId,
-            plano: planoNorm,
-          },
-        },
+      const assinatura =
+        await (tx as any)
+          .assinatura
+          .upsert({
+            where: {
+              usuarioId_plano_contextoKey:
+                {
+                  usuarioId,
+
+                  plano:
+                    planoNorm,
+
+                  contextoKey:
+                    contextoAssinatura
+                      .contextoKey,
+                },
+            },
         update: {
+          ...contextoAssinatura,
           periodicidade: periodicidadeFinal,
           ativo: true,
           startsAt: now,
@@ -2237,6 +2853,7 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
         } as any,
         create: {
           usuarioId,
+          ...contextoAssinatura,
           plano: planoNorm,
           periodicidade: periodicidadeFinal,
           ativo: true,
@@ -2256,6 +2873,7 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       await tx.pagamento.create({
         data: {
           usuarioId,
+          ...contextoPagamento,
           plano: planoNorm,
           periodicidade: periodicidadeFinal,
           metodo: "PIX",
@@ -2409,6 +3027,29 @@ export async function setPreferredPaymentMethod(req: AuthenticatedRequest, res: 
     const usuarioId = getUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
+    const activeContext =
+      getBillingActiveContext(req);
+
+    const contextoAssinatura =
+      getContextoAssinaturaData(
+        activeContext
+      );
+
+    if (
+      !activeContext ||
+      !contextoAssinatura
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_REQUIRED",
+
+          message:
+            "Selecione um perfil ativo para alterar o método de pagamento.",
+        });
+    }
+
     const { metodoFinal, planoId } = req.body as {
       metodoFinal: MetodoPagamento;
       planoId?: string | null;
@@ -2419,18 +3060,40 @@ export async function setPreferredPaymentMethod(req: AuthenticatedRequest, res: 
       return res.status(400).json({ message: "Método inválido" });
     }
 
-    const assinaturas = await getAssinaturasReadOnly(usuarioId);
+    const assinaturas =
+      await getAssinaturasReadOnly(
+        usuarioId,
+        activeContext
+      );
     const principal = pickPrincipalAssinatura(assinaturas as any[]);
     const alvoPlano = planoId ? normalizePlanoId(planoId) : principal?.plano;
     if (!alvoPlano) return res.status(400).json({ message: "Nenhuma assinatura encontrada para salvar método." });
 
-    await (prisma as any).assinatura.update({
-      where: { usuarioId_plano: { usuarioId, plano: alvoPlano } },
-      data: {
-        metodoPreferido: metodoFinal,
-        metodoPreferidoDefinidoEm: new Date(),
-      } as any,
-    });
+    await (prisma as any)
+      .assinatura
+      .update({
+        where: {
+          usuarioId_plano_contextoKey:
+            {
+              usuarioId,
+
+              plano:
+                alvoPlano,
+
+              contextoKey:
+                contextoAssinatura
+                  .contextoKey,
+            },
+        },
+
+        data: {
+          metodoPreferido:
+            metodoFinal,
+
+          metodoPreferidoDefinidoEm:
+            new Date(),
+        } as any,
+      });
 
     return res.json({ ok: true });
   } catch (err) {
@@ -2438,9 +3101,18 @@ export async function setPreferredPaymentMethod(req: AuthenticatedRequest, res: 
   }
 }
 
-async function guardTrialRule(usuarioId: string) {
-  const now = new Date();
-  const assinaturas = await getAssinaturasReadOnly(usuarioId);
+async function guardTrialRule(
+  usuarioId: string,
+  contexto: ActiveContext
+) {
+  const now =
+    new Date();
+
+  const assinaturas =
+    await getAssinaturasReadOnly(
+      usuarioId,
+      contexto
+    );
 
   const trialAtivoAss = (assinaturas as any[]).find((a) =>
     !isMetodologiaAvulsa(a.plano) &&
@@ -2642,6 +3314,17 @@ async function approvePaymentAndProvision(
             },
           });
 
+      const contextoAssinatura =
+        getContextoAssinaturaFromPagamento(
+          pg
+        );
+
+      if (!contextoAssinatura) {
+        throw new Error(
+          "Pagamento sem contexto válido para provisionar assinatura."
+        );
+      }
+
       for (
         const it of items
       ) {
@@ -2818,7 +3501,13 @@ async function approvePaymentAndProvision(
         continue;
       }
 
-      await upsertSubscriptionTx(tx as any, pg.usuarioId, pid, it.periodicidade);
+      await upsertSubscriptionTx(
+        tx as any,
+        pg.usuarioId,
+        contextoAssinatura,
+        pid,
+        it.periodicidade
+      );
     }
 
     return pg;
@@ -2828,6 +3517,18 @@ async function approvePaymentAndProvision(
 export async function startCheckout(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    const contextoPagamento =
+      getContextoPagamentoData(req);
+
+    if (!contextoPagamento) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para iniciar o pagamento.",
+      });
+    }
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
     const {
@@ -2858,6 +3559,21 @@ export async function startCheckout(req: Request, res: Response) {
         planoNorm
       );
 
+    const activeContext =
+      getBillingActiveContext(req);
+
+    if (!activeContext) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_REQUIRED",
+
+          message:
+            "Selecione um perfil ativo para continuar.",
+        });
+    }
+
     const trialInfo =
       compraAvulsa
         ? {
@@ -2865,13 +3581,24 @@ export async function startCheckout(req: Request, res: Response) {
               null,
           }
         : await guardTrialRule(
-            usuarioId
+            usuarioId,
+            activeContext
           );
 
     const tipo =
-      await getUserTipo(
-        usuarioId
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
       );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
 
     assertPlanoPermitido(
       tipo,
@@ -2968,6 +3695,7 @@ export async function startCheckout(req: Request, res: Response) {
     let pagamento = await prisma.pagamento.create({
       data: {
         usuarioId,
+        ...contextoPagamento,
         plano: planoNorm,
         periodicidade,
         metodo: metodoFinal,
@@ -3252,9 +3980,34 @@ export async function startCheckout(req: Request, res: Response) {
 export async function startCheckoutBundle(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    const contextoPagamento =
+      getContextoPagamentoData(req);
+
+    if (!contextoPagamento) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para iniciar o pagamento.",
+      });
+    }
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const tipo = await getUserTipo(usuarioId);
+    const tipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
 
     const { items, metodo, cupom, pagador, returnTo } = req.body as StartBundleBody;
 
@@ -3300,7 +4053,22 @@ export async function startCheckoutBundle(req: Request, res: Response) {
       });
     }
 
-    const { metodoPreferido } = await guardTrialRule(usuarioId);
+    const activeContext =
+      getBillingActiveContext(req);
+
+    if (!activeContext) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_REQUIRED",
+
+          message:
+            "Selecione um perfil ativo para continuar.",
+        });
+    }
+
+    const { metodoPreferido } = await guardTrialRule(usuarioId, activeContext);
 
     const metodoFinal = (metodo || metodoPreferido) as MetodoPagamento;
     if (!metodoFinal) return res.status(400).json({ message: "Escolha um método de pagamento" });
@@ -3358,7 +4126,7 @@ export async function startCheckoutBundle(req: Request, res: Response) {
     let pagamento = await prisma.pagamento.create({
       data: {
         usuarioId,
-
+        ...contextoPagamento,
         plano:
           "BUNDLE",
 
@@ -3594,31 +4362,89 @@ export async function cancelSubscription(req: Request, res: Response) {
     const usuarioId = getUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
+    const activeContext =
+      getBillingActiveContext(req);
+
+    const contextoAssinatura =
+      getContextoAssinaturaData(
+        activeContext
+      );
+
+    if (
+      !activeContext ||
+      !contextoAssinatura
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "ACTIVE_CONTEXT_REQUIRED",
+
+          message:
+            "Selecione um perfil ativo para cancelar a assinatura.",
+        });
+    }
+
     const { planoId } = req.body as { planoId?: string | null };
     const now = new Date();
 
     if (planoId) {
       const plano = normalizePlanoId(planoId);
-      await (prisma as any).assinatura.updateMany({
-        where: { usuarioId, plano, ativo: true },
-        data: {
-          ativo: false,
-          canceledAt: now,
-          status: "CANCELADA",
-          bloqueadoEm: null,
-        } as any,
+      await (prisma as any)
+      .assinatura
+      .updateMany({
+        where: {
+          usuarioId,
 
+          contextoKey:
+            contextoAssinatura
+              .contextoKey,
+
+          plano,
+
+          ativo:
+            true,
+        },
+
+        data: {
+          ativo:
+            false,
+
+          canceledAt:
+            now,
+
+          status:
+            "CANCELADA",
+
+          bloqueadoEm:
+            null,
+        } as any,
       });
       return res.json({ ok: true, message: "Assinatura cancelada." });
     }
 
     await (prisma as any).assinatura.updateMany({
-      where: { usuarioId, ativo: true },
+      where: {
+        usuarioId,
+
+        contextoKey:
+          contextoAssinatura
+            .contextoKey,
+
+        ativo: true,
+      },
+
       data: {
         ativo: false,
-        canceledAt: now,
-        status: "CANCELADA",
-        bloqueadoEm: null,
+
+        canceledAt:
+          now,
+
+        status:
+          "CANCELADA",
+
+        bloqueadoEm:
+          null,
       } as any,
     });
 
@@ -3914,7 +4740,20 @@ export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Res
       return res.status(401).json({ message: "Não autenticado" });
     }
 
-    const tipo = await getUserTipo(usuarioId);
+    const tipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
 
     if (
       !BILLING_SHOW_METODOLOGIAS_AVULSAS &&
@@ -3990,7 +4829,20 @@ export async function resetMetodologiasAvulsasDev(req: AuthenticatedRequest, res
     const usuarioId = getUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const tipo = await getUserTipo(usuarioId);
+    const tipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
     if (String(tipo).toLowerCase() !== "admin") {
       return res.status(403).json({ message: "Apenas admin pode resetar (dev)" });
     }
@@ -4010,6 +4862,24 @@ export async function resetMetodologiasAvulsasDev(req: AuthenticatedRequest, res
 export async function redeemGift(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    const contextoPagamento =
+      getContextoPagamentoData(req);
+
+    const activeContext =
+      getBillingActiveContext(req);
+
+    if (
+      !contextoPagamento ||
+      !activeContext
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para resgatar o presente.",
+      });
+    }
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
     const { codigo, planoId, periodicidade } = req.body as {
@@ -4018,7 +4888,20 @@ export async function redeemGift(req: Request, res: Response) {
       periodicidade: Periodicidade;
     };
 
-    const tipo = await getUserTipo(usuarioId);
+    const tipo =
+      normalizeTipoBilling(
+        getBillingTipo(req) || ""
+      );
+
+    if (!tipo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para continuar.",
+      });
+    }
     assertPlanoPermitido(tipo, planoId);
 
     const cupom = await prisma.cupom.findUnique({ where: { codigo } });
@@ -4040,6 +4923,7 @@ export async function redeemGift(req: Request, res: Response) {
     const pagamento = await prisma.pagamento.create({
       data: {
         usuarioId,
+        ...contextoPagamento,
         plano: planoNorm,
         periodicidade,
         metodo: "PIX",
@@ -4061,7 +4945,12 @@ export async function redeemGift(req: Request, res: Response) {
         create: { metodologiaId: mid, usuarioId, status: "ATIVA" },
       });
     } else {
-      await upsertSubscription(usuarioId, planoNorm, periodicidade);
+      await upsertSubscription(
+        usuarioId,
+        activeContext,
+        planoNorm,
+        periodicidade
+      );
     }
     await resgatarCupom(cupom.id, usuarioId, pagamento.id);
 

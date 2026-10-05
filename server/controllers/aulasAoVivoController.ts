@@ -2178,25 +2178,29 @@ export async function listarAulasPublicasPorContexto(
     const aulas =
       await prisma.aulaAoVivo.findMany({
         where: {
-          ...contextoWhere,
+          AND: [
+            contextoWhere,
 
-          status: {
-            in: [
-              "AGENDADA",
-              "AO_VIVO",
-            ],
-          },
-
-          OR: [
             {
-              status:
-                "AO_VIVO",
-            },
-            {
-              dataInicio: {
-                gte:
-                  agora,
+              status: {
+                in: [
+                  "AGENDADA",
+                  "AO_VIVO",
+                ],
               },
+
+              OR: [
+                {
+                  status:
+                    "AO_VIVO",
+                },
+                {
+                  dataInicio: {
+                    gte:
+                      agora,
+                  },
+                },
+              ],
             },
           ],
         },

@@ -224,31 +224,42 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                     String           @id @default(uuid())
-  usuarioId              String
-  plano                  String
-  periodicidade          Periodicidade
-  startsAt               DateTime
-  renovaEm               DateTime
-  canceledAt             DateTime?
-  ativo                  Boolean          @default(true)
-  lembreteEnviado        Boolean          @default(false)
-  usuario                Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?          @unique
-  status                 AssinaturaStatus @default(TRIAL)
-  trialStartsAt          DateTime?
-  trialEndsAt            DateTime?
+  id                           String           @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  contextoKey                  String           @default("legacy")
+  plano                        String
+  periodicidade                Periodicidade
+  startsAt                     DateTime
+  renovaEm                     DateTime
+  canceledAt                   DateTime?
+  ativo                        Boolean          @default(true)
+  lembreteEnviado              Boolean          @default(false)
+  usuario                      Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId       String?          @unique
+  status                       AssinaturaStatus @default(TRIAL)
+  trialStartsAt                DateTime?
+  trialEndsAt                  DateTime?
 
   metodoPreferido           MetodoPagamento?
   metodoPreferidoDefinidoEm DateTime?
 
   bloqueadoEm DateTime?
 
-  @@unique([usuarioId, plano])
+  @@unique([usuarioId, plano, contextoKey])
   @@index([startsAt])
   @@index([canceledAt])
   @@index([status])
   @@index([trialEndsAt])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Professor {
@@ -2709,22 +2720,27 @@ model TreinoRotinaAtribuicao {
 }
 
 model Pagamento {
-  id            String          @id @default(uuid())
-  usuarioId     String
-  plano         String
-  periodicidade Periodicidade
-  metodo        MetodoPagamento
-  status        PagamentoStatus @default(PENDENTE)
-  valor         Decimal         @db.Decimal(10, 2)
-  moeda         String          @default("BRL")
-  cupomId       String?
-  provider      String?
-  providerRef   String?
-  criadoEm      DateTime        @default(now())
-  pagoEm        DateTime?
-  canceladoEm   DateTime?
-  reembolsadoEm DateTime?
-  updatedAt     DateTime        @updatedAt
+  id                           String          @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  plano                        String
+  periodicidade                Periodicidade
+  metodo                       MetodoPagamento
+  status                       PagamentoStatus @default(PENDENTE)
+  valor                        Decimal         @db.Decimal(10, 2)
+  moeda                        String          @default("BRL")
+  cupomId                      String?
+  provider                     String?
+  providerRef                  String?
+  criadoEm                     DateTime        @default(now())
+  pagoEm                       DateTime?
+  canceladoEm                  DateTime?
+  reembolsadoEm                DateTime?
+  updatedAt                    DateTime        @updatedAt
 
   pagadorNome     String?
   pagadorEmail    String?
@@ -2749,6 +2765,11 @@ model Pagamento {
   @@index([usuarioId, criadoEm])
   @@index([status])
   @@index([status, criadoEm])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Cupom {

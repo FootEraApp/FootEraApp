@@ -19,6 +19,7 @@ import {
 import {
   obterOrganizacaoAtivaDoUsuario,
 } from "../services/organizacoes.js";
+import { getActiveContext } from "../services/activeContext.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -160,42 +161,90 @@ function ordenarPostsDestaquePrimeiro(posts: any[]) {
   });
 }
 
-async function isProUser(userId: string) {
-  const assinatura = await prisma.assinatura.findFirst({
-    where: { usuarioId: userId },
-    orderBy: [
-      { ativo: "desc" },
-      { renovaEm: "desc" },
-      { startsAt: "desc" },
-    ],
-    select: {
-      ativo: true,
-      plano: true,
-      status: true,
-      trialEndsAt: true,
-    },
-  });
+async function isProUser(
+  userId: string
+) {
+  const contexto =
+    await getActiveContext(
+      userId
+    );
 
-  if (!assinatura) return false;
-
-  const status = String(assinatura.status || "").toUpperCase();
-  const plano = String(assinatura.plano || "").toUpperCase();
-
-  if (!assinatura.ativo) return false;
-  if (status === "BLOQUEADA" || status === "CANCELADA" || status === "SEM_ASSINATURA") {
+  if (!contexto) {
     return false;
   }
 
-  if (status === "ATIVA") return true;
+  const assinatura =
+    await prisma.assinatura.findFirst({
+      where: {
+        usuarioId:
+          userId,
 
-  if (status === "TRIAL") {
-    if (assinatura.trialEndsAt) {
-      return new Date() <= new Date(assinatura.trialEndsAt);
-    }
+        contextoKey:
+          contexto.key,
+      },
+
+      orderBy: [
+        { ativo: "desc" },
+        { renovaEm: "desc" },
+        { startsAt: "desc" },
+      ],
+
+      select: {
+        ativo: true,
+        plano: true,
+        status: true,
+        trialEndsAt: true,
+      },
+    });
+
+  if (!assinatura) {
+    return false;
+  }
+
+  const status =
+    String(
+      assinatura.status || ""
+    ).toUpperCase();
+
+  const plano =
+    String(
+      assinatura.plano || ""
+    ).toUpperCase();
+
+  if (!assinatura.ativo) {
+    return false;
+  }
+
+  if (
+    status === "BLOQUEADA" ||
+    status === "CANCELADA" ||
+    status === "SEM_ASSINATURA"
+  ) {
+    return false;
+  }
+
+  if (status === "ATIVA") {
     return true;
   }
 
-  return plano.includes("PRO");
+  if (status === "TRIAL") {
+    if (
+      assinatura.trialEndsAt
+    ) {
+      return (
+        new Date() <=
+        new Date(
+          assinatura.trialEndsAt
+        )
+      );
+    }
+
+    return true;
+  }
+
+  return plano.includes(
+    "PRO"
+  );
 }
 
 async function getAdsConfigForUser(userId?: string) {

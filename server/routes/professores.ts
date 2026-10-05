@@ -16,7 +16,9 @@ import {
   toggleProfessorParceiro,
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
-import { requireAdmin } from "../middlewares/adminGuard.js";
+import {
+  requireAdmin,
+} from "../middlewares/guards.js";
 
 const router = express.Router();
 const upload = multer({ dest: "upload/" });

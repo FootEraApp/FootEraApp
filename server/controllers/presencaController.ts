@@ -26,11 +26,18 @@ export async function getPresenca(req: any, res: Response) {
     where: { id: alvoId },
     select: {
       id: true,
-      tipo: true,
-      lastSeenAt: true,
-      lastLoginAt: true,
-      lastLogoutAt: true,
-      configuracoesPrivacidade: true,
+
+      lastSeenAt:
+        true,
+
+      lastLoginAt:
+        true,
+
+      lastLogoutAt:
+        true,
+
+      configuracoesPrivacidade:
+        true,
     },
   });
 
@@ -46,7 +53,6 @@ export async function getPresenca(req: any, res: Response) {
   if (!mostrarOnline) {
     return res.json({
       usuarioId: u.id,
-      tipo: u.tipo,
       isOnline: false,
       lastSeenAt: null,
       lastLoginAt: null,
@@ -63,7 +69,6 @@ export async function getPresenca(req: any, res: Response) {
 
   return res.json({
     usuarioId: u.id,
-    tipo: u.tipo,
     isOnline,
     lastSeenAt: u.lastSeenAt,
     lastLoginAt: u.lastLoginAt,
