@@ -1,3 +1,4 @@
+// client/src/pages/novoTreino
 import { toast } from "@/lib/toast";
 import { useContext, useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
@@ -1174,11 +1175,14 @@ export default function NovoTreino() {
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
+  const [treinosSalvosAtleta, setTreinosSalvosAtleta] = useState<TreinoProgramado[]>([]);
+  const [carregandoSalvosAtleta, setCarregandoSalvosAtleta] = useState(false);
+  const [erroSalvosAtleta, setErroSalvosAtleta] = useState("");
   const [capaPreview, setCapaPreview] = useState<string>("");
   const [capaUrl, setCapaUrl] = useState<string>("");        
   const [editProgramadoId, setEditProgramadoId] = useState<string>("");
   const [categoriaSelecionada, setCategoriaSelecionada] = useState([]);
-  type AbaTreinosAtleta = "meu_professor" | "footera";
+  type AbaTreinosAtleta = "meu_professor" | "footera" | "salvos";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
   const [buscaTreinoAtleta, setBuscaTreinoAtleta] = useState("");
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
@@ -1925,6 +1929,7 @@ export default function NovoTreino() {
               ex.nome ??
               ex.titulo ??
               ex?.exercicio?.nome ??
+              ex?.exercicioPersonalizado?.nome ??
               ex?.exercicioTemporario?.nome ??
               "",
             repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
@@ -2112,14 +2117,64 @@ export default function NovoTreino() {
   }, [atletaIdLogado, activeContext?.key, activeTipoUsuario]);
 
   useEffect(() => {
-    if (
-      activeContext?.kind !==
-        "PERSONAL" ||
-      activeTipoUsuario !==
-        "atleta"
-    ) {
-      return;
-    }
+    if (usuario?.tipo !== "atleta" || abaTreinosAtleta !== "salvos") return;
+
+    const controller = new AbortController();
+    setCarregandoSalvosAtleta(true);
+    setErroSalvosAtleta("");
+
+    (async () => {
+      try {
+        const token = getToken();
+        if (!token) throw new Error("Entre na FootEra para ver seus treinos salvos.");
+
+        const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        await assertOk(r, "Falha ao carregar seus treinos salvos");
+        const data = await r.json();
+        const items = Array.isArray(data?.items) ? data.items : [];
+
+        // O agendamento utiliza o ID de TreinoProgramado, nunca o ID de TreinoSalvo.
+        const programados = items
+          .filter((item: any) =>
+            item?.treinoProgramado &&
+            String(item.treinoProgramado.id) === String(item.treinoProgramadoId)
+          )
+          .map((item: any) => ({
+            ...item.treinoProgramado,
+            treinoProgramadoId: item.treinoProgramadoId,
+            professor:
+              item.treinoProgramado.Professor ??
+              item.treinoProgramado.professores?.[0]?.professor ??
+              null,
+          }));
+
+        if (!controller.signal.aborted) {
+          setTreinosSalvosAtleta(normalizaTreinos(programados));
+        }
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setTreinosSalvosAtleta([]);
+        setErroSalvosAtleta(e instanceof Error ? e.message : "Falha ao carregar seus treinos salvos.");
+      } finally {
+        if (!controller.signal.aborted) setCarregandoSalvosAtleta(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [usuario?.tipo, abaTreinosAtleta]);
+
+  useEffect(() => {
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
+
+    if (String(tipo).toLowerCase() !== "atleta") return;
 
     let cancel = false;
 
@@ -3998,6 +4053,8 @@ export default function NovoTreino() {
     const listaBase =
       abaTreinosAtleta === "meu_professor"
         ? treinosMeuProfessor
+        : abaTreinosAtleta === "salvos"
+        ? treinosSalvosAtleta
         : treinosParceirosFootera;
 
     const listaAtiva = termoBusca
@@ -4033,7 +4090,7 @@ export default function NovoTreino() {
         </Link>
 
         <h2 className="text-lg font-bold mb-3">Treinos Disponíveis</h2>
-        <div className="flex gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-4">
           <button
             type="button"
             onClick={() => setAbaTreinosAtleta("meu_professor")}
@@ -4065,6 +4122,18 @@ export default function NovoTreino() {
           >
             Professores Footera
           </button>
+          <button
+            type="button"
+            onClick={() => setAbaTreinosAtleta("salvos")}
+            className={[
+              "px-3 py-2 rounded-xl border text-sm font-semibold transition",
+              abaTreinosAtleta === "salvos"
+                ? "bg-green-800 text-white border-green-800"
+                : "bg-white text-green-900 border-green-200 hover:bg-green-50",
+            ].join(" ")}
+          >
+            Treinos salvos
+          </button>
         </div>
           {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
             <div className="relative mb-4">
@@ -4076,6 +4145,8 @@ export default function NovoTreino() {
                 placeholder={
                   abaTreinosAtleta === "meu_professor"
                     ? "Pesquisar por treino, professor, clube ou escolinha..."
+                    : abaTreinosAtleta === "salvos"
+                    ? "Pesquisar meus treinos salvos..."
                     : "Pesquisar por treino ou professor Footera..."
                 }
                 className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
@@ -4083,7 +4154,15 @@ export default function NovoTreino() {
             </div>
           )}
 
-          {abaTreinosAtleta === "footera" && carregandoAssinatura ? (
+          {abaTreinosAtleta === "salvos" && carregandoSalvosAtleta ? (
+            <div className="bg-white border rounded-xl p-5 text-center text-gray-700">
+              Carregando seus treinos salvos...
+            </div>
+          ) : abaTreinosAtleta === "salvos" && erroSalvosAtleta ? (
+            <div role="alert" className="bg-white border border-red-200 rounded-xl p-5 text-center text-red-700">
+              {erroSalvosAtleta}
+            </div>
+          ) : abaTreinosAtleta === "footera" && carregandoAssinatura ? (
             <div className="bg-white border rounded-xl p-5 text-center text-gray-700">
               Verificando sua assinatura...
             </div>
@@ -4123,6 +4202,12 @@ export default function NovoTreino() {
                   </p>
                 )}
               </>
+            ) : abaTreinosAtleta === "salvos" ? (
+              <p>
+                {buscaTreinoAtleta.trim()
+                  ? "Nenhum treino salvo encontrado para essa busca."
+                  : "Você ainda não salvou nenhum treino disponível para agendar."}
+              </p>
             ) : (
               <p>Nenhum treino público de professores parceiros encontrado no momento.</p>
             )}

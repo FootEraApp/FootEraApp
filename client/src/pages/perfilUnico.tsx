@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// client/src/pages/perfilUnico
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
 import { ArrowLeft, Share2, CheckCircle2 } from "lucide-react";
@@ -17,9 +18,7 @@ import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import ProfilePostsSection from "../components/perfil/ProfilePostsSection.js";
 import { clearAuthSession, salvarRetornoAuth } from "../utils/authSession.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
-import {
-  PUBLIC_PATHS
-} from "../utils/publicRoutes.js";
+import { PUBLIC_PATHS } from "../utils/publicRoutes.js";
 import PublicShareModal from "../components/share/PublicShareModal.js";
 
 type TipoPerfil =
@@ -64,7 +63,11 @@ function readStoredToken() {
 
 function textoLista(valor: unknown) {
   if (Array.isArray(valor)) {
-    return valor.map(String).map((v) => v.trim()).filter(Boolean).join(", ");
+    return valor
+      .map(String)
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .join(", ");
   }
 
   const texto = String(valor ?? "").trim();
@@ -73,33 +76,31 @@ function textoLista(valor: unknown) {
 
 export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { requireAuth } = useAuthGate();
 
-  const papelSolicitado =
-   typeof window !== "undefined"
-     ? new URLSearchParams(
-         window.location.search
-       )
-         .get("papel")
-         ?.trim() || ""
-     : "";
+  // O papel presente no link define qual perfil do usuário será exibido.
+  // Ex.: /perfil/:id?papel=Professor ou /perfil/:id?papel=Atleta.
+  // O backend normaliza e valida o valor recebido.
+  const papelDaUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
 
-  const rotaOrganizacao =
-    window.location.pathname
-      .toLowerCase()
-      .startsWith(
-        "/organizacao/"
-      );
+    return String(
+      new URLSearchParams(window.location.search).get("papel") || "",
+    ).trim();
+  }, [location]);
 
-  const tiposOrganizacao =
-    new Set([
-      "Clube",
-      "Escolinha",
-      "Escola",
-      "Federacao",
-      "Marca",
-    ]);
+  const rotaOrganizacao = window.location.pathname
+    .toLowerCase()
+    .startsWith("/organizacao/");
+
+  const tiposOrganizacao = new Set([
+    "Clube",
+    "Escolinha",
+    "Escola",
+    "Federacao",
+    "Marca",
+  ]);
 
   const token = readStoredToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -111,12 +112,10 @@ export default function PerfilUnico() {
   const [perfilData, setPerfilData] = useState<PerfilMinimo | null>(null);
   const [erroPerfil, setErroPerfil] = useState<ErroPerfil | null>(null);
   const [modoVisitante, setModoVisitante] = useState(!token);
-  const [abaPublica, setAbaPublica] =
-    useState<"perfil" | "postagens">("perfil");
-  const [
-    shareVisitanteOpen,
-    setShareVisitanteOpen,
-  ] = useState(false);
+  const [abaPublica, setAbaPublica] = useState<"perfil" | "postagens">(
+    "perfil",
+  );
+  const [shareVisitanteOpen, setShareVisitanteOpen] = useState(false);
 
   function irParaLogin() {
     salvarRetornoAuth();
@@ -150,44 +149,29 @@ export default function PerfilUnico() {
       setErroPerfil(null);
       setPerfilData(null);
 
-      const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(id!)}`;
+      const query = new URLSearchParams();
+
+      if (papelDaUrl) {
+        query.set("papel", papelDaUrl);
+      }
+
+      const queryString = query.toString();
+      const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(id!)}${
+        queryString ? `?${queryString}` : ""
+      }`;
 
       try {
         let resposta;
 
         try {
-          resposta =
-            await axios.get<PerfilMinimo>(
-              url,
-              {
-                headers,
-
-                params:
-                  papelSolicitado
-                    ? {
-                        papel:
-                          papelSolicitado,
-                      }
-                    : undefined,
-              }
-            );
+          resposta = await axios.get<PerfilMinimo>(url, {
+            headers,
+          });
         } catch (erro: any) {
           if (token && erro?.response?.status === 401) {
             clearAuthSession();
 
-            resposta =
-              await axios.get<PerfilMinimo>(
-                url,
-                {
-                  params:
-                    papelSolicitado
-                      ? {
-                          papel:
-                            papelSolicitado,
-                        }
-                      : undefined,
-                }
-              );
+            resposta = await axios.get<PerfilMinimo>(url);
 
             if (!cancelled) {
               setModoVisitante(true);
@@ -204,16 +188,12 @@ export default function PerfilUnico() {
 
         if (
           rotaOrganizacao &&
-          !tiposOrganizacao.has(
-            String(data?.tipo || "")
-          )
+          !tiposOrganizacao.has(String(data?.tipo || ""))
         ) {
           setErroPerfil({
             status: 404,
-            code:
-              "ORGANIZATION_NOT_FOUND",
-            message:
-              "Organização não encontrada.",
+            code: "ORGANIZATION_NOT_FOUND",
+            message: "Organização não encontrada.",
           });
 
           setLoading(false);
@@ -226,7 +206,6 @@ export default function PerfilUnico() {
         if (!token) {
           setModoVisitante(true);
         }
-
       } catch (erro: any) {
         if (cancelled) return;
 
@@ -259,7 +238,7 @@ export default function PerfilUnico() {
     return () => {
       cancelled = true;
     };
-  }, [id, token, rotaOrganizacao, papelSolicitado]);
+  }, [id, token, rotaOrganizacao, papelDaUrl]);
 
   useEffect(() => {
     if (!usuarioId || !token || modoVisitante) return;
@@ -327,7 +306,9 @@ export default function PerfilUnico() {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-[#f7f4ea] px-5">
         <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-lg">
-          <h1 className="text-xl font-bold text-green-900">Perfil não encontrado</h1>
+          <h1 className="text-xl font-bold text-green-900">
+            Perfil não encontrado
+          </h1>
 
           <p className="mt-2 text-sm text-gray-600">
             O perfil pode ter sido removido ou o link está incorreto.
@@ -396,118 +377,74 @@ export default function PerfilUnico() {
   }
 
   if (modoVisitante && perfilData && usuarioId) {
-    const dados =
-      perfilData.dadosEspecificos ??
-      {};
+    const dados = perfilData.dadosEspecificos ?? {};
 
     const nome =
       String(
-        dados.nome ||
-          perfilData.usuario?.nome ||
-          "Perfil FootEra"
-      ).trim() ||
-      "Perfil FootEra";
+        dados.nome || perfilData.usuario?.nome || "Perfil FootEra",
+      ).trim() || "Perfil FootEra";
 
     const rawFoto =
-      dados.foto ||
-      dados.logo ||
-      perfilData.usuario?.foto ||
-      null;
+      dados.foto || dados.logo || perfilData.usuario?.foto || null;
 
-    const foto =
-      publicImgUrl(rawFoto) ||
-      null;
+    const foto = publicImgUrl(rawFoto) || null;
 
-    const categoria =
-      textoLista(
-        dados.categoria
-      );
+    const categoria = textoLista(dados.categoria);
 
-    const interesses =
-      textoLista(
-        dados.interesses
-      );
+    const interesses = textoLista(dados.interesses);
 
-    const qualificacoes =
-      textoLista(
-        dados.qualificacoes
-      );
+    const qualificacoes = textoLista(dados.qualificacoes);
 
-    const certificacoes =
-      textoLista(
-        dados.certificacoes
-      );
+    const certificacoes = textoLista(dados.certificacoes);
 
     const resumoPublico = [
       tipo,
-      dados.posicao
-        ? String(dados.posicao)
-        : "",
+      dados.posicao ? String(dados.posicao) : "",
       categoria,
     ]
       .filter(Boolean)
       .join(" • ");
 
     const tituloInformacoes =
-      String(tipo).toLowerCase() ===
-      "atleta"
+      String(tipo).toLowerCase() === "atleta"
         ? "Informações do Atleta"
         : `Informações do ${tipo}`;
 
-    const slugPerfil =
-      String(
-        perfilData.usuario
-          ?.nomeDeUsuario ||
-          usuarioId
-      )
-        .replace(/^@/, "")
-        .trim();
+    const slugPerfil = String(perfilData.usuario?.nomeDeUsuario || usuarioId)
+      .replace(/^@/, "")
+      .trim();
 
-    const ehOrganizacao =
-      tiposOrganizacao.has(
-        String(
-          tipo || ""
-        )
-      );
+    const ehOrganizacao = tiposOrganizacao.has(String(tipo || ""));
 
-      const sharePathBase =
-        ehOrganizacao
-          ? PUBLIC_PATHS.organizacao(
-              slugPerfil
-            )
-          : PUBLIC_PATHS.profile(
-              slugPerfil
-            );
+    const shareBasePath = ehOrganizacao
+      ? PUBLIC_PATHS.organizacao(slugPerfil)
+      : PUBLIC_PATHS.profile(slugPerfil);
 
-      const sharePath =
-        papelSolicitado
-          ? `${sharePathBase}?papel=${encodeURIComponent(
-              papelSolicitado
-             )}`
-          : sharePathBase;
+    // O compartilhamento precisa preservar o papel que está sendo visto.
+    // Sem isso, o destinatário cairia novamente no papel ativo de Usuario.tipo.
+    const papelCompartilhado = String(tipo || papelDaUrl || "").trim();
 
-    const seguirComoVisitante =
-      () => {
-        if (!usuarioId) {
-          return;
-        }
+    const sharePath = papelCompartilhado
+      ? `${shareBasePath}?papel=${encodeURIComponent(papelCompartilhado)}`
+      : shareBasePath;
+      
+    const seguirComoVisitante = () => {
+      if (!usuarioId) {
+        return;
+      }
 
-        requireAuth({
-          message:
-            "Entre na FootEra para seguir este perfil.",
+      requireAuth({
+        message: "Entre na FootEra para seguir este perfil.",
 
-          returnTo:
-            `${window.location.pathname}${window.location.search}${window.location.hash}`,
+        returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}`,
 
-          action: {
-            type:
-              "FOLLOW_PROFILE",
+        action: {
+          type: "FOLLOW_PROFILE",
 
-            perfilId:
-              String(usuarioId),
-          },
-        });
-      };
+          perfilId: String(usuarioId),
+        },
+      });
+    };
 
     return (
       <div className="min-h-[100dvh] bg-[#f7f4ea] pb-12">
@@ -528,10 +465,7 @@ export default function PerfilUnico() {
             <div className="footera-bg-green p-6 flex flex-col items-center relative">
               <div className="relative w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
                 <img
-                  src={
-                    foto ||
-                    "/assets/usuarios/footera-logo-fundo-verde.png"
-                  }
+                  src={foto || "/assets/usuarios/footera-logo-fundo-verde.png"}
                   alt={nome}
                   className="h-full w-full object-cover"
                 />
@@ -541,8 +475,7 @@ export default function PerfilUnico() {
                 {nome.toUpperCase()}
               </h1>
 
-              {perfilData.usuario
-                ?.verified && (
+              {perfilData.usuario?.verified && (
                 <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Verificado
@@ -555,9 +488,7 @@ export default function PerfilUnico() {
                 </p>
               )}
 
-              {String(tipo)
-                .toLowerCase() ===
-                "atleta" && (
+              {String(tipo).toLowerCase() === "atleta" && (
                 <div className="w-full mt-4">
                   <h2 className="footera-text-cream text-center mb-2">
                     Pontuação FootEra
@@ -565,12 +496,7 @@ export default function PerfilUnico() {
 
                   <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex items-center justify-center">
                     <span className="footera-text-cream text-3xl font-bold">
-                      {Number(
-                        perfilData
-                          .pontuacaoTotal ??
-                          0
-                      )}{" "}
-                      pts
+                      {Number(perfilData.pontuacaoTotal ?? 0)} pts
                     </span>
                   </div>
                 </div>
@@ -579,9 +505,7 @@ export default function PerfilUnico() {
               <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={
-                    seguirComoVisitante
-                  }
+                  onClick={seguirComoVisitante}
                   className="inline-flex items-center justify-center rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
                 >
                   Seguir
@@ -596,11 +520,7 @@ export default function PerfilUnico() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setShareVisitanteOpen(
-                      true
-                    )
-                  }
+                  onClick={() => setShareVisitanteOpen(true)}
                   className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-green-900 shadow-sm hover:bg-amber-200"
                 >
                   <Share2 size={16} />
@@ -618,23 +538,15 @@ export default function PerfilUnico() {
               },
               {
                 key: "postagens",
-                label:
-                  "Postagens",
+                label: "Postagens",
               },
             ].map((tab) => (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() =>
-                  setAbaPublica(
-                    tab.key as
-                      | "perfil"
-                      | "postagens"
-                  )
-                }
+                onClick={() => setAbaPublica(tab.key as "perfil" | "postagens")}
                 className={`py-2 rounded-lg text-sm font-medium ${
-                  abaPublica ===
-                  tab.key
+                  abaPublica === tab.key
                     ? "bg-green-100 text-green-900"
                     : "bg-white/70 text-green-900 hover:bg-white"
                 }`}
@@ -644,8 +556,7 @@ export default function PerfilUnico() {
             ))}
           </div>
 
-          {abaPublica ===
-            "perfil" && (
+          {abaPublica === "perfil" && (
             <section className="mt-4 rounded-xl border bg-white/70 p-4 shadow-sm">
               <h2 className="mb-3 text-xl font-semibold text-green-900">
                 {tituloInformacoes}
@@ -653,177 +564,107 @@ export default function PerfilUnico() {
 
               <div className="space-y-2 text-sm text-green-900/90">
                 <p>
-                  <b>Nome:</b>{" "}
-                  {nome}
+                  <b>Nome:</b> {nome}
                 </p>
 
                 {dados.posicao && (
                   <p>
-                    <b>Posição:</b>{" "}
-                    {String(
-                      dados.posicao
-                    )}
+                    <b>Posição:</b> {String(dados.posicao)}
                   </p>
                 )}
 
                 {categoria && (
                   <p>
-                    <b>Categoria:</b>{" "}
-                    {categoria}
+                    <b>Categoria:</b> {categoria}
                   </p>
                 )}
 
                 {dados.clube && (
                   <p>
-                    <b>Clube:</b>{" "}
-                    {String(
-                      dados.clube
-                    )}
+                    <b>Clube:</b> {String(dados.clube)}
                   </p>
                 )}
 
                 {dados.escola && (
                   <p>
-                    <b>Escola:</b>{" "}
-                    {String(
-                      dados.escola
-                    )}
+                    <b>Escola:</b> {String(dados.escola)}
                   </p>
                 )}
 
                 {dados.professor && (
                   <p>
-                    <b>Professor:</b>{" "}
-                    {String(
-                      dados.professor
-                    )}
+                    <b>Professor:</b> {String(dados.professor)}
                   </p>
                 )}
 
                 {dados.areaFormacao && (
                   <p>
-                    <b>Área de formação:</b>{" "}
-                    {String(
-                      dados.areaFormacao
-                    )}
+                    <b>Área de formação:</b> {String(dados.areaFormacao)}
                   </p>
                 )}
 
                 {qualificacoes && (
                   <p>
-                    <b>Qualificações:</b>{" "}
-                    {qualificacoes}
+                    <b>Qualificações:</b> {qualificacoes}
                   </p>
                 )}
 
                 {certificacoes && (
                   <p>
-                    <b>Certificações:</b>{" "}
-                    {certificacoes}
+                    <b>Certificações:</b> {certificacoes}
                   </p>
                 )}
 
                 {dados.areaAtuacao && (
                   <p>
-                    <b>Área de atuação:</b>{" "}
-                    {String(
-                      dados.areaAtuacao
-                    )}
+                    <b>Área de atuação:</b> {String(dados.areaAtuacao)}
                   </p>
                 )}
 
-                {dados.anosExperiencia !=
-                  null &&
-                  String(
-                    dados.anosExperiencia
-                  ).trim() && (
+                {dados.anosExperiencia != null &&
+                  String(dados.anosExperiencia).trim() && (
                     <p>
-                      <b>Experiência:</b>{" "}
-                      {String(
-                        dados.anosExperiencia
-                      )}{" "}
-                      ano(s)
+                      <b>Experiência:</b> {String(dados.anosExperiencia)} ano(s)
                     </p>
                   )}
 
                 {dados.headline && (
-                  <p className="font-medium">
-                    {String(
-                      dados.headline
-                    )}
-                  </p>
+                  <p className="font-medium">{String(dados.headline)}</p>
                 )}
 
-                {dados.descricao && (
-                  <p>
-                    {String(
-                      dados.descricao
-                    )}
-                  </p>
-                )}
+                {dados.descricao && <p>{String(dados.descricao)}</p>}
 
-                {dados.bio && (
-                  <p>
-                    {String(
-                      dados.bio
-                    )}
-                  </p>
-                )}
+                {dados.bio && <p>{String(dados.bio)}</p>}
 
                 {dados.objetivo && (
                   <p>
-                    <b>Objetivo:</b>{" "}
-                    {String(
-                      dados.objetivo
-                    )}
+                    <b>Objetivo:</b> {String(dados.objetivo)}
                   </p>
                 )}
 
                 {interesses && (
                   <p>
-                    <b>Interesses:</b>{" "}
-                    {interesses}
+                    <b>Interesses:</b> {interesses}
                   </p>
                 )}
 
-                {dados
-                  .colaboracaoClube
-                  ?.nome && (
+                {dados.colaboracaoClube?.nome && (
                   <p>
-                    <b>
-                      Clube
-                      colaborador:
-                    </b>{" "}
-                    {String(
-                      dados
-                        .colaboracaoClube
-                        .nome
-                    )}
+                    <b>Clube colaborador:</b>{" "}
+                    {String(dados.colaboracaoClube.nome)}
                   </p>
                 )}
 
-                {(dados.cidade ||
-                  dados.estado) && (
+                {(dados.cidade || dados.estado) && (
                   <p>
                     <b>Local:</b>{" "}
-                    {[
-                      dados.cidade,
-                      dados.estado,
-                    ]
-                      .filter(
-                        Boolean
-                      )
-                      .join(
-                        " - "
-                      )}
+                    {[dados.cidade, dados.estado].filter(Boolean).join(" - ")}
                   </p>
                 )}
 
                 {dados.siteOficial && (
                   <a
-                    href={String(
-                      dados.siteOficial
-                    )}
+                    href={String(dados.siteOficial)}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-block text-green-700 underline"
@@ -835,31 +676,18 @@ export default function PerfilUnico() {
             </section>
           )}
 
-          {abaPublica ===
-            "postagens" && (
-            <ProfilePostsSection
-              usuarioId={
-                usuarioId
-              }
-            />
+          {abaPublica === "postagens" && (
+            <ProfilePostsSection usuarioId={usuarioId} />
           )}
         </div>
 
         <PublicShareModal
-          open={
-            shareVisitanteOpen
-          }
-          onClose={() =>
-            setShareVisitanteOpen(
-              false
-            )
-          }
+          open={shareVisitanteOpen}
+          onClose={() => setShareVisitanteOpen(false)}
           titulo={`${nome} na FootEra`}
           path={sharePath}
           directTipo="USUARIO"
-          directConteudo={
-            usuarioId
-          }
+          directConteudo={usuarioId}
         />
       </div>
     );
@@ -937,14 +765,11 @@ export default function PerfilUnico() {
         />
       )}
 
-      {tipoNormalizado === "learning" && (
-        <PerfilLearning idDaUrl={usuarioId} />
-      )}
+      {tipoNormalizado === "learning" && <PerfilLearning idDaUrl={usuarioId} />}
 
       <div className="h-16" aria-hidden="true" />
 
       {!modoVisitante && <BottomNav />}
-      
     </div>
   );
 }

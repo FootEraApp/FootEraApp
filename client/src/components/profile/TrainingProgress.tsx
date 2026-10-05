@@ -1,4 +1,5 @@
-import { useContext, useMemo, useEffect, useState} from 'react';
+// client/src/components/profile/TrainingProgress
+import { useContext, useMemo, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format as formatDateFns, startOfDay } from "date-fns";
 import { ptBR } from 'date-fns/locale';
@@ -333,7 +334,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     queryKey: ["perfil-basico", targetUserId],
     enabled: Boolean(token && targetUserId && !tipoUsuarioId),
     queryFn: async () => {
-      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}`, { headers });
+      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}?papel=Atleta`, { headers });
       if (!r.ok) throw new Error("Erro ao buscar perfil");
       return r.json();
     },
@@ -341,6 +342,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
 
   const resolvedTipoUsuarioId =
     tipoUsuarioId ||
+    perfil?.dadosEspecificos?.atletaId ||
     perfil?.atleta?.id ||
     null;
 
@@ -417,14 +419,19 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     return chooseHardest(conquistasEarned, 4);
   }, [conquistasEarned]);
 
-  const atletaId =
-    String(
-      resolvedTipoUsuarioId ||
-      activeAtletaId ||
-      ""
-    ).trim();
+  const atletaId = String(
+    resolvedTipoUsuarioId ||
+    activeAtletaId ||
+    "",
+  ).trim();
+
+  const trainingsHref =
+    targetUserId && String(targetUserId) !== String(Storage.usuarioId || "")
+      ? `/trainings?usuarioId=${encodeURIComponent(targetUserId)}`
+      : "/trainings";
 
   const base = `${API.BASE_URL}/api/treinos/agendados`;
+  
   const url = `${base}?atletaId=${encodeURIComponent(atletaId)}&apenasFuturos=1&apenasComSubmissao=0`;
 
   const { data: treinosAgendados = [], isLoading: isLoadingTreinos } =
@@ -730,7 +737,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
           <TrendingUp className="mr-2 h-5 w-5" />
           Progresso de Treinamento
         </h3>
-        <Link href="/trainings">
+        <Link href={trainingsHref}>
           <Button variant="link" className="p-0 h-auto text-sm footera-text-green">
             Ver todos <ArrowUpRight className="ml-1 h-3 w-3" />
           </Button>

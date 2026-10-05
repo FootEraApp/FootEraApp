@@ -54,6 +54,7 @@ import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
 import { uploadToS3 } from "server/middlewares/s3Upload.js";
+import { listarMinhaBiblioteca } from "../controllers/treinosBibliotecaController.js";
 import {
   createTreinoProgramado as criarTreinoProgramadoCompat,
   updateTreino as atualizarTreinoProgramadoCompat,
@@ -174,6 +175,12 @@ router.post(
   "/biblioteca",
   salvarTreinoNaBiblioteca
 );
+
+router.get(
+  "/biblioteca",
+  listarMinhaBiblioteca
+);
+
 router.post(
   "/",
   requireAdminOrTreinoOwner,
