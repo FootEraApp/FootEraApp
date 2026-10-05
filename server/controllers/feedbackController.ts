@@ -3,25 +3,6 @@ import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest, AuthUser } from "../middlewares/auth.js";
 import { sendError } from "../utils/httpError.js";
 
-function assertAdmin(req: AuthenticatedRequest) {
-  const u: AuthUser | undefined = req.authUser;
-
-  if (!u) {
-    const err: any = new Error("Usuário não autenticado.");
-    err.status = 401;
-    throw err;
-  }
-
-  const tipoStr = String(u.tipo || "").toLowerCase();
-  const isAdmin = u.isAdmin === true || tipoStr === "admin";
-
-  if (!isAdmin) {
-    const err: any = new Error("Apenas administradores podem acessar esta rota.");
-    err.status = 403;
-    throw err;
-  }
-}
-
 export async function create(req: AuthenticatedRequest, res: Response) {
   try {
     const user = req.authUser;
@@ -85,8 +66,6 @@ export async function listMine(req: AuthenticatedRequest, res: Response) {
 
 export async function listAll(req: AuthenticatedRequest, res: Response) {
   try {
-    assertAdmin(req);
-
     const { tipo, from, to } = req.query;
     const where: any = {};
 
@@ -130,8 +109,6 @@ export async function listAll(req: AuthenticatedRequest, res: Response) {
 
 export async function marcarComoLido(req: AuthenticatedRequest, res: Response) {
   try {
-    assertAdmin(req);
-
     const { id } = req.params;
     if (!id) {
       return res.status(400).json({ message: "ID do feedback é obrigatório." });

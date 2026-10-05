@@ -1,6 +1,6 @@
 // client/src/pages/pagamentos/index.tsx
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useContext} from "react";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -16,6 +16,9 @@ import {
 import { API, FLAGS } from "../../config.js";
 import { Link } from "wouter";
 import { useAuthGate } from "../../context/AuthGateContext.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type Periodicidade = "Mensal" | "Anual";
 type MetodoPagamento = "PIX" | "CREDITO" | "DEBITO" | "BOLETO";
@@ -963,27 +966,27 @@ export default function PagamentosPage() {
     sessionStorage.getItem("token") ||
     "";
 
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContextKey =
+    userContext?.activeContext
+      ?.key ??
+    null;
+
   const isAuthenticated =
     Boolean(token);
-  const tipo =
-    localStorage.getItem(
-      "tipoUsuario"
-    ) ||
-    sessionStorage.getItem(
-      "tipoUsuario"
-    ) ||
-    localStorage.getItem(
-      "usuarioTipoRaw"
-    ) ||
-    sessionStorage.getItem(
-      "usuarioTipoRaw"
-    ) ||
-    "";
+  
   const [tipoBackend, setTipoBackend] = useState<string | null>(null);
 
   const tipoPagamentoAtual = useMemo(
-    () => normalizarTipoPagamento(tipoBackend ?? tipo),
-    [tipoBackend, tipo]
+    () =>
+      normalizarTipoPagamento(
+        tipoBackend ?? ""
+      ),
+    [tipoBackend]
   );
 
   const {
@@ -998,10 +1001,23 @@ export default function PagamentosPage() {
     tipoPagamentoAtual ===
       "learning";
 
-  const roleUI: RoleUI = useMemo(() => {
-    const key = normalizeTipo(tipoBackend ?? tipo);
-    return storageRoleToUIRole[key] ?? "Atleta";
-  }, [tipoBackend, tipo]);
+  const roleUI: RoleUI =
+    useMemo(
+      () => {
+        const key =
+          normalizeTipo(
+            tipoBackend ?? ""
+          );
+
+        return (
+          storageRoleToUIRole[
+            key
+          ] ??
+          "Atleta"
+        );
+      },
+      [tipoBackend]
+    );
 
   const [roleSelected, setRoleSelected] = useState<RoleUI>(roleUI);
   const contextoLearningEspecial =
@@ -1878,7 +1894,10 @@ export default function PagamentosPage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headers]);
+  }, [
+    headers,
+    activeContextKey,
+  ]);
 
   useEffect(() => {
     if (!hydrated) return;

@@ -462,12 +462,27 @@ export async function recomputeAndEmitBadge(userId: string) {
   const solicitacoesCount = prefs.notifTreinos ? pendSolic : 0;
   const mensagensCount = prefs.notifMensagens ? unreadMsgs : 0;
 
-  getIO()?.to(userId).emit("badge:update", {
-    totalNotificacoes: totalNotifs + solicitacoesCount,
-    notificacoes: totalNotifs,
-    solicitacoes: solicitacoesCount,
-    mensagens: mensagensCount,
-  });
+  getIO()
+    ?.to(
+      `u:${userId}`
+    )
+    .emit(
+      "badge:update",
+      {
+        totalNotificacoes:
+          totalNotifs +
+          solicitacoesCount,
+
+        notificacoes:
+          totalNotifs,
+
+        solicitacoes:
+          solicitacoesCount,
+
+        mensagens:
+          mensagensCount,
+      }
+    );
 }
 
 export async function deletarNotificacao(req: AuthenticatedRequest, res: Response) {

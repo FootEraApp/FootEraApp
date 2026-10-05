@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
-import { requireAdmin } from "../middlewares/requireAdmin.js";
+import {
+  requireAdmin,
+} from "../middlewares/guards.js";
 import {
   listModeracaoDesafios,
   aprovarSubmissaoDesafio,

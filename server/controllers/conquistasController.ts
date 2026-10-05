@@ -8,6 +8,11 @@ import {
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { syncConquistasMetodologias, syncTemplatesMetodologiasProfissionais } from "../services/conquistasMetodologia.js";
+import {
+  getActiveContext,
+  listarActiveContexts,
+  type ActiveContext,
+} from "../services/activeContext.js";
 
 const prismaAny = prisma as any;
 
@@ -60,64 +65,184 @@ function ownerTipoFromTipoUsuario(tipo: TipoUsuario): ConquistaOwnerTipo | null 
   return null;
 }
 
-async function resolveOwnerIdByUsuarioId(
+type ConquistaOwnerContext = {
+  ownerTipo: ConquistaOwnerTipo;
+  ownerId: string;
+  contexto: ActiveContext;
+};
+
+function conquistaOwnerFromContext(
+  contexto: ActiveContext | null | undefined
+): ConquistaOwnerContext | null {
+  if (!contexto) {
+    return null;
+  }
+
+  if (contexto.kind === "PERSONAL") {
+    const papel =
+      contexto.role ??
+      contexto.tipoUsuario;
+
+    const ownerTipo =
+      ownerTipoFromTipoUsuario(
+        papel
+      );
+
+    const ownerId = String(
+      contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        ""
+    ).trim();
+
+    if (!ownerTipo || !ownerId) {
+      return null;
+    }
+
+    return {
+      ownerTipo,
+      ownerId,
+      contexto,
+    };
+  }
+
+  if (contexto.kind === "ORGANIZATION") {
+    const tipo = String(
+      contexto.organizationType ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const ownerId = String(
+      contexto.legacyOrganizationId ??
+        ""
+    ).trim();
+
+    if (!ownerId) {
+      return null;
+    }
+
+    let ownerTipo:
+      | ConquistaOwnerTipo
+      | null = null;
+
+    if (tipo === "clube") {
+      ownerTipo =
+        ConquistaOwnerTipo.Clube;
+    }
+
+    else if (
+      tipo === "escola" ||
+      tipo === "escolinha"
+    ) {
+      ownerTipo =
+        ConquistaOwnerTipo.Escolinha;
+    }
+
+    else if (tipo === "marca") {
+      ownerTipo =
+        ConquistaOwnerTipo.Marca;
+    }
+
+    else if (
+      tipo === "federacao" ||
+      tipo === "federação"
+    ) {
+      ownerTipo =
+        ConquistaOwnerTipo.Federacao;
+    }
+
+    if (!ownerTipo) {
+      return null;
+    }
+
+    return {
+      ownerTipo,
+      ownerId,
+      contexto,
+    };
+  }
+
+  return null;
+}
+
+async function getConquistaOwnerPorTipo(
   usuarioId: string,
-  tipo: TipoUsuario
-): Promise<string | null> {
-  if (tipo === TipoUsuario.Atleta) {
-    const at = await prisma.atleta.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return at?.id ?? null;
+  tipoRaw?: string | null
+): Promise<ConquistaOwnerContext | null> {
+  const tipo =
+    String(tipoRaw ?? "")
+      .trim()
+      .toLowerCase();
+
+  if (!tipo) {
+    const contexto =
+      await getActiveContext(
+        usuarioId
+      );
+
+    return conquistaOwnerFromContext(
+      contexto
+    );
   }
 
-  if (tipo === TipoUsuario.Professor) {
-    const prof = await prisma.professor.findFirst({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return prof?.id ?? null;
-  }
+  const contextos =
+    await listarActiveContexts(
+      usuarioId
+    );
 
-  if (tipo === TipoUsuario.Clube) {
-    const clu = await prisma.clube.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return clu?.id ?? null;
-  }
+  for (const contexto of contextos) {
+    const owner =
+      conquistaOwnerFromContext(
+        contexto
+      );
 
-  if (tipo === TipoUsuario.Escolinha) {
-    const esc = await prisma.escolinha.findFirst({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return esc?.id ?? null;
-  }
+    if (!owner) {
+      continue;
+    }
 
-  if (tipo === TipoUsuario.Learning) {
-    const learning = await prisma.learningProfile.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return learning?.id ?? null;
-  }
+    const candidatos = [
+      String(
+        owner.ownerTipo
+      ).toLowerCase(),
 
-  if (tipo === TipoUsuario.Marca) {
-    const marca = await prisma.marca.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return marca?.id ?? null;
-  }
+      String(
+        contexto.tipoUsuario ??
+          ""
+      ).toLowerCase(),
 
-  if (tipo === TipoUsuario.Federacao) {
-    const federacao = await prisma.federacao.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    return federacao?.id ?? null;
+      String(
+        contexto.role ??
+          ""
+      ).toLowerCase(),
+
+      String(
+        contexto.organizationType ??
+          ""
+      ).toLowerCase(),
+    ];
+
+    /*
+     * Compatibilidade Escola <-> Escolinha
+     */
+    if (
+      tipo === "escola" &&
+      owner.ownerTipo ===
+        ConquistaOwnerTipo.Escolinha
+    ) {
+      return owner;
+    }
+
+    if (
+      tipo === "escolinha" &&
+      owner.ownerTipo ===
+        ConquistaOwnerTipo.Escolinha
+    ) {
+      return owner;
+    }
+
+    if (candidatos.includes(tipo)) {
+      return owner;
+    }
   }
 
   return null;
@@ -176,91 +301,29 @@ function whereAtletasVinculados(ownerTipo: ConquistaOwnerTipo, ownerId: string) 
   return {};
 }
 
-async function syncTemplatesMetodologiasComBadge() {
-  const publicoTodos = [
-    ConquistaOwnerTipo.Atleta,
-    ConquistaOwnerTipo.Professor,
-    ConquistaOwnerTipo.Escolinha,
-    ConquistaOwnerTipo.Clube,
-    ConquistaOwnerTipo.Learning,
-    ConquistaOwnerTipo.Marca,
-    ConquistaOwnerTipo.Federacao,
-  ];
+export async function syncConquistasDoUsuario(
+  usuarioId: string,
+  contextoOverride?: ActiveContext | null
+) {
+  const contexto =
+    contextoOverride ??
+    await getActiveContext(
+      usuarioId
+    );
 
-  const [learning, avulsas] = await Promise.all([
-    prisma.metodologia.findMany({
-      where: { geraBadge: true },
-      select: { id: true, titulo: true, descricao: true, ativo: true },
-    }),
-    prisma.metodologiaAvulsa.findMany({
-      where: { geraBadge: true },
-      select: { id: true, titulo: true, descricao: true, ativo: true },
-    }),
-  ]);
+  const owner =
+    conquistaOwnerFromContext(
+      contexto
+    );
 
-  for (const m of learning) {
-    await prisma.conquista.upsert({
-      where: { codigo: `metodologia_learning_${m.id}` },
-      update: {
-        titulo: `Metodologia: ${m.titulo}`,
-        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
-        tipo: "METODOLOGIA" as any,
-        icon: "🎓",
-        ativo: true,
-        publico: publicoTodos,
-      },
-      create: {
-        codigo: `metodologia_learning_${m.id}`,
-        titulo: `Metodologia: ${m.titulo}`,
-        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
-        tipo: "METODOLOGIA" as any,
-        icon: "🎓",
-        pontos: 0,
-        meta: 1,
-        ativo: true,
-        publico: publicoTodos,
-      },
-    });
+  if (!owner) {
+    return;
   }
 
-  for (const m of avulsas) {
-    await prisma.conquista.upsert({
-      where: { codigo: `metodologia_avulsa_${m.id}` },
-      update: {
-        titulo: `Metodologia: ${m.titulo}`,
-        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
-        tipo: "METODOLOGIA" as any,
-        icon: "🎓",
-        ativo: true,
-        publico: publicoTodos,
-      },
-      create: {
-        codigo: `metodologia_avulsa_${m.id}`,
-        titulo: `Metodologia: ${m.titulo}`,
-        descricao: m.descricao || "Conclua esta metodologia para desbloquear esta conquista.",
-        tipo: "METODOLOGIA" as any,
-        icon: "🎓",
-        pontos: 0,
-        meta: 1,
-        ativo: true,
-        publico: publicoTodos,
-      },
-    });
-  }
-}
-
-export async function syncConquistasDoUsuario(usuarioId: string) {
-  const user = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: { tipo: true },
-  });
-  if (!user) return;
-
-  const ownerTipo = ownerTipoFromTipoUsuario(user.tipo);
-  if (!ownerTipo) return;
-
-  const ownerId = await resolveOwnerIdByUsuarioId(usuarioId, user.tipo);
-  if (!ownerId) return;
+  const {
+    ownerTipo,
+    ownerId,
+  } = owner;
 
   let treinosConcluidos = 0;          
   let submissoesTreinoTotal = 0;      
@@ -723,26 +786,60 @@ export async function getEarnedByUsuarioId(req: AuthReq, res: Response) {
     const usuarioId = String(usuarioIdParam || req.userId || "").trim();
     if (!usuarioId) return res.status(401).json({ error: "Sem autenticação." });
 
-    const user = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { tipo: true },
-    });
-    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+    const usuarioExiste =
+      await prisma.usuario.findUnique({
+        where: {
+          id: usuarioId,
+        },
+        select: {
+          id: true,
+        },
+      });
 
-    const tipoOverride = String((req.query as any)?.tipo ?? "").trim();
-    const tipoFinal =
-      tipoOverride &&
-      (Object.values(TipoUsuario) as string[]).includes(tipoOverride)
-        ? (tipoOverride as TipoUsuario)
-        : user.tipo;
+    if (!usuarioExiste) {
+      return res.status(404).json({
+        error:
+          "Usuário não encontrado",
+      });
+    }
 
-    const sync = String((req.query as any)?.sync || "1") !== "0";
-    if (sync) await syncConquistasDoUsuario(usuarioId);
+    const tipoOverride =
+      String(
+        (req.query as any)?.tipo ?? ""
+      ).trim();
 
-    const ownerTipo = ownerTipoFromTipoUsuario(tipoFinal);
-    const ownerIdResolved = await resolveOwnerIdByUsuarioId(usuarioId, tipoFinal);
-    if (!ownerTipo) {
-      return res.json({ usuarioId, ownerTipo: null, totalAvailable: 0, earned: [] as EarnedDTO[] });
+    const owner =
+      await getConquistaOwnerPorTipo(
+        usuarioId,
+        tipoOverride || null
+      );
+
+    if (!owner) {
+      return res.json({
+        usuarioId,
+        ownerTipo: null,
+        totalAvailable: 0,
+        earned: [] as EarnedDTO[],
+      });
+    }
+
+    const {
+      ownerTipo,
+      ownerId:
+        ownerIdResolved,
+      contexto,
+    } = owner;
+
+    const sync =
+      String(
+        (req.query as any)?.sync || "1"
+      ) !== "0";
+
+    if (sync) {
+      await syncConquistasDoUsuario(
+        usuarioId,
+        contexto
+      );
     }
 
     const totalAvailable = await prisma.conquista.count({
@@ -1027,28 +1124,54 @@ export async function getAuditoria(req: Request, res: Response) {
     let whereOwnerId: string | null = null;
 
     if (usuarioId) {
-      const user = await prisma.usuario.findUnique({
-        where: { id: usuarioId },
-        select: { tipo: true },
-      });
-      if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+      const usuarioExiste =
+        await prisma.usuario.findUnique({
+          where: {
+            id: usuarioId,
+          },
+          select: {
+            id: true,
+          },
+        });
 
-      const tipoOwner = ownerTipoFromTipoUsuario(user.tipo);
-      if (!tipoOwner) return res.status(400).json({ error: "Tipo de usuário sem ownerTipo compatível" });
-
-      if (whereOwnerTipo && whereOwnerTipo !== tipoOwner) {
-        return res.status(400).json({ error: `ownerTipo não bate com o tipo do usuário (${tipoOwner}).` });
-      }
-
-      whereOwnerTipo = tipoOwner;
-
-      const ownerIdResolved = await resolveOwnerIdByUsuarioId(usuarioId, user.tipo);
-      if (!ownerIdResolved) {
+      if (!usuarioExiste) {
         return res.status(404).json({
-          error: "Owner (Atleta/Professor/Clube/Escolinha) não encontrado para esse usuário",
+          error:
+            "Usuário não encontrado",
         });
       }
-      whereOwnerId = ownerIdResolved;
+
+      const owner =
+        await getConquistaOwnerPorTipo(
+          usuarioId,
+          whereOwnerTipo
+            ? String(whereOwnerTipo)
+            : null
+        );
+
+      if (!owner) {
+        return res.status(404).json({
+          error:
+            "Contexto/owner não encontrado para esse usuário.",
+        });
+      }
+
+      if (
+        whereOwnerTipo &&
+        whereOwnerTipo !==
+          owner.ownerTipo
+      ) {
+        return res.status(400).json({
+          error:
+            `ownerTipo não bate com o contexto encontrado (${owner.ownerTipo}).`,
+        });
+      }
+
+      whereOwnerTipo =
+        owner.ownerTipo;
+
+      whereOwnerId =
+        owner.ownerId;
     }
 
     const where: any = {
@@ -1100,36 +1223,205 @@ export async function getAuditoria(req: Request, res: Response) {
   }
 }
 
-export async function syncAllUsuarios(req: Request, res: Response) {
+export async function syncAllUsuarios(
+  req: Request,
+  res: Response
+) {
   try {
-    const tipoFiltro = String((req.query as any)?.tipo ?? "").trim();
-    const users = await prisma.usuario.findMany({
-      where: tipoFiltro ? ({ tipo: tipoFiltro as any } as any) : undefined,
-      select: { id: true, tipo: true },
-    });
+    const tipoFiltro =
+      String(
+        (req.query as any)?.tipo ??
+          ""
+      )
+        .trim()
+        .toLowerCase();
+
+    const users =
+      await prisma.usuario.findMany({
+        select: {
+          id: true,
+        },
+      });
 
     const result = {
-      totalUsuarios: users.length,
+      totalUsuarios:
+        users.length,
+
+      totalContextos: 0,
+
       ok: 0,
+
+      ignorados: 0,
+
       falhas: 0,
-      detalhes: [] as Array<{ usuarioId: string; tipo: any; ok: boolean; erro?: string }>,
+
+      detalhes: [] as Array<{
+        usuarioId: string;
+        contexto?: string;
+        ownerTipo?: string;
+        ownerId?: string;
+        ok: boolean;
+        ignorado?: boolean;
+        erro?: string;
+      }>,
     };
 
-    for (const u of users) {
+    for (const user of users) {
       try {
-        await syncConquistasDoUsuario(u.id);
-        result.ok++;
-        result.detalhes.push({ usuarioId: u.id, tipo: u.tipo, ok: true });
+        const contextos =
+          await listarActiveContexts(
+            user.id
+          );
+
+        for (
+          const contexto of contextos
+        ) {
+          const owner =
+            conquistaOwnerFromContext(
+              contexto
+            );
+
+          if (!owner) {
+            result.ignorados++;
+
+            result.detalhes.push({
+              usuarioId:
+                user.id,
+
+              contexto:
+                contexto.key,
+
+              ok: true,
+
+              ignorado: true,
+            });
+
+            continue;
+          }
+
+          if (tipoFiltro) {
+            const tipos = [
+              String(
+                owner.ownerTipo
+              ).toLowerCase(),
+
+              String(
+                contexto.tipoUsuario ??
+                  ""
+              ).toLowerCase(),
+
+              String(
+                contexto.role ??
+                  ""
+              ).toLowerCase(),
+
+              String(
+                contexto.organizationType ??
+                  ""
+              ).toLowerCase(),
+            ];
+
+            const escolaCompativel =
+              (
+                tipoFiltro ===
+                  "escola" ||
+                tipoFiltro ===
+                  "escolinha"
+              ) &&
+              owner.ownerTipo ===
+                ConquistaOwnerTipo.Escolinha;
+
+            if (
+              !escolaCompativel &&
+              !tipos.includes(
+                tipoFiltro
+              )
+            ) {
+              continue;
+            }
+          }
+
+          result.totalContextos++;
+
+          try {
+            await syncConquistasDoUsuario(
+              user.id,
+              contexto
+            );
+
+            result.ok++;
+
+            result.detalhes.push({
+              usuarioId:
+                user.id,
+
+              contexto:
+                contexto.key,
+
+              ownerTipo:
+                String(
+                  owner.ownerTipo
+                ),
+
+              ownerId:
+                owner.ownerId,
+
+              ok: true,
+            });
+          } catch (e: any) {
+            result.falhas++;
+
+            result.detalhes.push({
+              usuarioId:
+                user.id,
+
+              contexto:
+                contexto.key,
+
+              ownerTipo:
+                String(
+                  owner.ownerTipo
+                ),
+
+              ownerId:
+                owner.ownerId,
+
+              ok: false,
+
+              erro:
+                e?.message ||
+                String(e),
+            });
+          }
+        }
       } catch (e: any) {
         result.falhas++;
-        result.detalhes.push({ usuarioId: u.id, tipo: u.tipo, ok: false, erro: e?.message || String(e) });
+
+        result.detalhes.push({
+          usuarioId:
+            user.id,
+
+          ok: false,
+
+          erro:
+            e?.message ||
+            String(e),
+        });
       }
     }
 
     return res.json(result);
   } catch (e: any) {
-    console.error("syncAllUsuarios error:", e);
-    return res.status(500).json({ error: e?.message || "Erro no syncAllUsuarios" });
+    console.error(
+      "syncAllUsuarios error:",
+      e
+    );
+
+    return res.status(500).json({
+      error:
+        e?.message ||
+        "Erro no syncAllUsuarios",
+    });
   }
 }
 

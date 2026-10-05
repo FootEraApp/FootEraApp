@@ -1,6 +1,7 @@
 import {
   PrismaClient,
   TipoUsuario,
+  StatusUsuarioPapel,
   TipoTreino,
   Nivel,
   Categoria,
@@ -17,6 +18,42 @@ import { sanitizeMediaPath } from '../utils/mediaSanitizer.js';
 
 const prisma = new PrismaClient();
 const m = (p?: string | null) => sanitizeMediaPath(p);
+
+async function garantirPapelSeed(
+  usuarioId: string,
+  papel: TipoUsuario
+) {
+  await prisma.usuarioPapel.upsert({
+    where: {
+      usuarioId_papel: {
+        usuarioId,
+        papel,
+      },
+    },
+
+    update: {
+      status:
+        StatusUsuarioPapel.ATIVO,
+
+      ativadoEm:
+        new Date(),
+
+      desativadoEm:
+        null,
+    },
+
+    create: {
+      usuarioId,
+      papel,
+
+      status:
+        StatusUsuarioPapel.ATIVO,
+
+      ativadoEm:
+        new Date(),
+    },
+  });
+}
 
 function daysAgo(n: number) {
   const d = new Date();
@@ -1235,65 +1272,256 @@ async function main() {
   });
 
   if (atletaFree) {
+    const atletaFreePerfil =
+      await prisma.atleta.findUnique({
+        where: {
+          usuarioId:
+            atletaFree.id,
+        },
+
+        select: {
+          id:
+            true,
+        },
+      });
+
     await prisma.assinatura.upsert({
       where: {
-        usuarioId_plano: {
-          usuarioId: atletaFree.id,
-          plano: "FREE",
+        usuarioId_plano_contextoKey: {
+          usuarioId:
+            atletaFree.id,
+
+          plano:
+            "FREE",
+
+          contextoKey:
+            "personal:Atleta",
         },
       },
-      update: {},
+
+      update: {
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaFreePerfil?.id ??
+          null,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+      },
+
       create: {
-        usuarioId: atletaFree.id,
-        plano: "FREE",
-        periodicidade: "Mensal",
-        startsAt: monthsAgo(3),
-        canceledAt: null,
-        ativo: true,
-        renovaEm: monthsAgo(-1),
+        usuarioId:
+          atletaFree.id,
+
+        plano:
+          "FREE",
+
+        contextoKey:
+          "personal:Atleta",
+
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaFreePerfil?.id ??
+          null,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+
+        periodicidade:
+          "Mensal",
+
+        startsAt:
+          monthsAgo(3),
+
+        canceledAt:
+          null,
+
+        ativo:
+          true,
+
+        renovaEm:
+          monthsAgo(-1),
       },
     });
   }
 
   if (atletaPro) {
+    const atletaProPerfilSeed =
+      await prisma.atleta.findUnique({
+        where: {
+          usuarioId:
+            atletaPro.id,
+        },
+
+        select: {
+          id:
+            true,
+        },
+      });
+
     await prisma.assinatura.upsert({
       where: {
-        usuarioId_plano: {
-          usuarioId: atletaPro.id,
-          plano: "PRO",
+        usuarioId_plano_contextoKey: {
+          usuarioId:
+            atletaPro.id,
+
+          plano:
+            "PRO",
+
+          contextoKey:
+            "personal:Atleta",
         },
       },
-      update: {},
+
+      update: {
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaProPerfilSeed?.id ??
+          null,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+      },
+
       create: {
-        usuarioId: atletaPro.id,
-        plano: "PRO",
-        periodicidade: "Mensal",
-        startsAt: monthsAgo(2),
-        canceledAt: null,
-        ativo: true,
-        renovaEm: monthsAgo(-1),
+        usuarioId:
+          atletaPro.id,
+
+        plano:
+          "PRO",
+
+        contextoKey:
+          "personal:Atleta",
+
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaProPerfilSeed?.id ??
+          null,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+
+        periodicidade:
+          "Mensal",
+
+        startsAt:
+          monthsAgo(2),
+
+        canceledAt:
+          null,
+
+        ativo:
+          true,
+
+        renovaEm:
+          monthsAgo(-1),
       },
     });
   }
 
   if (atletaTeste) {
-    
-     await prisma.assinatura.upsert({
+    await prisma.assinatura.upsert({
       where: {
-        usuarioId_plano: {
-          usuarioId: atletaTeste.usuarioId,
-          plano: "PRO",
+        usuarioId_plano_contextoKey: {
+          usuarioId:
+            atletaTeste.usuarioId,
+
+          plano:
+            "PRO",
+
+          contextoKey:
+            "personal:Atleta",
         },
       },
-      update: {},
+
+      update: {
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaTeste.id,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+      },
+
       create: {
-        usuarioId: atletaTeste.usuarioId,
-        plano: "PRO",
-        periodicidade: "Mensal",
-        startsAt: monthsAgo(2),
-        canceledAt: daysAgo(10),
-        ativo: false,
-        renovaEm: monthsAgo(-1),
+        usuarioId:
+          atletaTeste.usuarioId,
+
+        plano:
+          "PRO",
+
+        contextoKey:
+          "personal:Atleta",
+
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaTeste.id,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+
+        periodicidade:
+          "Mensal",
+
+        startsAt:
+          monthsAgo(2),
+
+        canceledAt:
+          daysAgo(10),
+
+        ativo:
+          false,
+
+        renovaEm:
+          monthsAgo(-1),
       },
     });
   }
@@ -1362,18 +1590,86 @@ async function main() {
   const agora = new Date();
   const renovaFutura = new Date(2099, 0, 1);
 
+  const usuarioAtletaFree = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'atleta_free' },
+  });
+
   const usuarioAtletaPro = await prisma.usuario.findUnique({
     where: { nomeDeUsuario: 'atleta_pro' },
   });
+
+  const usuarioProfFree = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'prof_free' },
+  });
+
   const usuarioProfPro = await prisma.usuario.findUnique({
     where: { nomeDeUsuario: 'prof_pro' },
   });
+
+  const usuarioScoutFree = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'scout_free' },
+  });
+
   const usuarioScoutPro = await prisma.usuario.findUnique({
     where: { nomeDeUsuario: 'scout_pro' },
   });
+
+  const usuarioTesteDb = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'teste' },
+  });
+
   const usuarioEscolinha01Db = await prisma.usuario.findUnique({
     where: { nomeDeUsuario: 'escolinha_01' },
   });
+
+  if (usuarioAtletaFree) {
+    await garantirPapelSeed(
+      usuarioAtletaFree.id,
+      TipoUsuario.Atleta
+    );
+  }
+
+  if (usuarioAtletaPro) {
+    await garantirPapelSeed(
+      usuarioAtletaPro.id,
+      TipoUsuario.Atleta
+    );
+  }
+
+  if (usuarioProfFree) {
+    await garantirPapelSeed(
+      usuarioProfFree.id,
+      TipoUsuario.Professor
+    );
+  }
+
+  if (usuarioProfPro) {
+    await garantirPapelSeed(
+      usuarioProfPro.id,
+      TipoUsuario.Professor
+    );
+  }
+
+  if (usuarioScoutFree) {
+    await garantirPapelSeed(
+      usuarioScoutFree.id,
+      TipoUsuario.Olheiro
+    );
+  }
+
+  if (usuarioScoutPro) {
+    await garantirPapelSeed(
+      usuarioScoutPro.id,
+      TipoUsuario.Olheiro
+    );
+  }
+
+  if (usuarioTesteDb) {
+    await garantirPapelSeed(
+      usuarioTesteDb.id,
+      TipoUsuario.Atleta
+    );
+  }
 
   const clubeFootera = await prisma.clube.findFirst({
     where: { usuario: { nomeDeUsuario: "clube_footera" } },
@@ -1431,40 +1727,125 @@ async function main() {
   async function garantirAssinaturaFixa(
     usuarioId: string,
     plano: string,
-    periodicidade: Periodicidade
+    periodicidade: Periodicidade,
+    contexto: {
+      contextoKey: string;
+      contextoKind: "PERSONAL" | "ORGANIZATION";
+      contextoTipo: string;
+      contextoPerfilId?: string | null;
+      contextoOrganizacaoId?: string | null;
+      contextoLegacyOrganizationId?: string | null;
+    }
   ) {
     await prisma.assinatura.upsert({
       where: {
-        usuarioId_plano: {
+        usuarioId_plano_contextoKey: {
           usuarioId,
           plano,
+          contextoKey:
+            contexto.contextoKey,
         },
       },
+
       update: {
         plano,
         periodicidade,
-        startsAt: agora,
-        renovaEm: renovaFutura,
-        ativo: true,
-        canceledAt: null,
+
+        contextoKey:
+          contexto.contextoKey,
+
+        contextoKind:
+          contexto.contextoKind,
+
+        contextoTipo:
+          contexto.contextoTipo,
+
+        contextoPerfilId:
+          contexto.contextoPerfilId ??
+          null,
+
+        contextoOrganizacaoId:
+          contexto.contextoOrganizacaoId ??
+          null,
+
+        contextoLegacyOrganizationId:
+          contexto.contextoLegacyOrganizationId ??
+          null,
+
+        startsAt:
+          agora,
+
+        renovaEm:
+          renovaFutura,
+
+        ativo:
+          true,
+
+        canceledAt:
+          null,
       },
+
       create: {
         usuarioId,
         plano,
         periodicidade,
-        startsAt: agora,
-        renovaEm: renovaFutura,
-        ativo: true,
+
+        contextoKey:
+          contexto.contextoKey,
+
+        contextoKind:
+          contexto.contextoKind,
+
+        contextoTipo:
+          contexto.contextoTipo,
+
+        contextoPerfilId:
+          contexto.contextoPerfilId ??
+          null,
+
+        contextoOrganizacaoId:
+          contexto.contextoOrganizacaoId ??
+          null,
+
+        contextoLegacyOrganizationId:
+          contexto.contextoLegacyOrganizationId ??
+          null,
+
+        startsAt:
+          agora,
+
+        renovaEm:
+          renovaFutura,
+
+        ativo:
+          true,
       },
     });
 
-    const jaTemPagamento = await prisma.pagamento.findFirst({
-      where: {
-        usuarioId,
-        plano,
-        status: PagamentoStatus.APROVADO,
-      },
-    });
+    const jaTemPagamento =
+      await prisma.pagamento.findFirst({
+        where: {
+          usuarioId,
+          plano,
+
+          status:
+            PagamentoStatus.APROVADO,
+
+          contextoKind:
+            contexto.contextoKind,
+
+          contextoTipo:
+            contexto.contextoTipo,
+
+          contextoPerfilId:
+            contexto.contextoPerfilId ??
+            null,
+
+          contextoOrganizacaoId:
+            contexto.contextoOrganizacaoId ??
+            null,
+        },
+      });
 
     if (!jaTemPagamento) {
       await prisma.pagamento.create({
@@ -1472,46 +1853,246 @@ async function main() {
           usuarioId,
           plano,
           periodicidade,
-          metodo: MetodoPagamento.PIX,
-          status: PagamentoStatus.APROVADO,
-          valor: 0,
-          moeda: 'BRL',
-          criadoEm: agora,
-          pagoEm: agora,
+
+          metodo:
+            MetodoPagamento.PIX,
+
+          status:
+            PagamentoStatus.APROVADO,
+
+          valor:
+            0,
+
+          moeda:
+            "BRL",
+
+          criadoEm:
+            agora,
+
+          pagoEm:
+            agora,
+
+          contextoKind:
+            contexto.contextoKind,
+
+          contextoTipo:
+            contexto.contextoTipo,
+
+          contextoPerfilId:
+            contexto.contextoPerfilId ??
+            null,
+
+          contextoOrganizacaoId:
+            contexto.contextoOrganizacaoId ??
+            null,
+
+          contextoLegacyOrganizationId:
+            contexto.contextoLegacyOrganizationId ??
+            null,
         },
       });
     }
   }
 
-  if (usuarioAtletaPro) {
+  const atletaProPerfil =
+    usuarioAtletaPro
+      ? await prisma.atleta.findUnique({
+          where: {
+            usuarioId:
+              usuarioAtletaPro.id,
+          },
+
+          select: {
+            id: true,
+          },
+        })
+      : null;
+
+  const profProPerfil =
+    usuarioProfPro
+      ? await prisma.professor.findUnique({
+          where: {
+            usuarioId:
+              usuarioProfPro.id,
+          },
+
+          select: {
+            id: true,
+          },
+        })
+      : null;
+
+  const scoutProPerfil =
+    usuarioScoutPro
+      ? await prisma.olheiro.findUnique({
+          where: {
+            usuarioId:
+              usuarioScoutPro.id,
+          },
+
+          select: {
+            id: true,
+          },
+        })
+      : null;
+
+  const escolinha01Organizacao =
+    usuarioEscolinha01Db
+      ? await prisma.membroOrganizacao.findFirst({
+          where: {
+            usuarioId:
+              usuarioEscolinha01Db.id,
+
+            ativo:
+              true,
+
+            organizacao: {
+              ativo:
+                true,
+
+              tipo:
+                TipoOrganizacao.ESCOLA,
+            },
+          },
+
+          select: {
+            organizacaoId:
+              true,
+
+            organizacao: {
+              select: {
+                id:
+                  true,
+
+                tipo:
+                  true,
+              },
+            },
+          },
+        })
+      : null;
+
+  if (
+    usuarioAtletaPro &&
+    atletaProPerfil
+  ) {
     await garantirAssinaturaFixa(
       usuarioAtletaPro.id,
-      'ATLETA_PRO',
-      Periodicidade.Mensal
+      "ATLETA_PRO",
+      Periodicidade.Mensal,
+      {
+        contextoKey:
+          "personal:Atleta",
+
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Atleta",
+
+        contextoPerfilId:
+          atletaProPerfil.id,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+      }
     );
   }
 
-  if (usuarioProfPro) {
+  if (
+    usuarioProfPro &&
+    profProPerfil
+  ) {
     await garantirAssinaturaFixa(
       usuarioProfPro.id,
-      'PROFESSOR_PRO',
-      Periodicidade.Mensal
+      "PROFESSOR_PRO",
+      Periodicidade.Mensal,
+      {
+        contextoKey:
+          "personal:Professor",
+
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Professor",
+
+        contextoPerfilId:
+          profProPerfil.id,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+      }
     );
   }
 
-  if (usuarioScoutPro) {
+  if (
+    usuarioScoutPro &&
+    scoutProPerfil
+  ) {
     await garantirAssinaturaFixa(
       usuarioScoutPro.id,
-      'OLHEIRO_PRO',
-      Periodicidade.Mensal
+      "OLHEIRO_PRO",
+      Periodicidade.Mensal,
+      {
+        contextoKey:
+          "personal:Olheiro",
+
+        contextoKind:
+          "PERSONAL",
+
+        contextoTipo:
+          "Olheiro",
+
+        contextoPerfilId:
+          scoutProPerfil.id,
+
+        contextoOrganizacaoId:
+          null,
+
+        contextoLegacyOrganizationId:
+          null,
+      }
     );
   }
 
-  if (usuarioEscolinha01Db) {
+  if (
+    usuarioEscolinha01Db &&
+    escolinha01Organizacao
+  ) {
     await garantirAssinaturaFixa(
       usuarioEscolinha01Db.id,
-      'ESCOLINHA_PRO',
-      Periodicidade.Mensal
+      "ESCOLINHA_PRO",
+      Periodicidade.Mensal,
+      {
+        contextoKey:
+          `organization:${escolinha01Organizacao.organizacaoId}`,
+
+        contextoKind:
+          "ORGANIZATION",
+
+        contextoTipo:
+          String(
+            escolinha01Organizacao
+              .organizacao.tipo
+          ),
+
+        contextoPerfilId:
+          null,
+
+        contextoOrganizacaoId:
+          escolinha01Organizacao
+            .organizacaoId,
+
+        contextoLegacyOrganizationId:
+          null,
+      }
     );
   }
 

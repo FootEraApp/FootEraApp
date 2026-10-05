@@ -219,29 +219,40 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                        String           @id @default(uuid())
-  usuarioId                 String
-  plano                     String
-  periodicidade             Periodicidade
-  startsAt                  DateTime
-  renovaEm                  DateTime
-  canceledAt                DateTime?
-  ativo                     Boolean          @default(true)
-  lembreteEnviado           Boolean          @default(false)
-  providerSubscriptionId    String?          @unique
-  bloqueadoEm               DateTime?
-  metodoPreferido           MetodoPagamento?
-  metodoPreferidoDefinidoEm DateTime?
-  status                    AssinaturaStatus @default(TRIAL)
-  trialEndsAt               DateTime?
-  trialStartsAt             DateTime?
-  usuario                   Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                           String           @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  contextoKey                  String           @default("legacy")
+  plano                        String
+  periodicidade                Periodicidade
+  startsAt                     DateTime
+  renovaEm                     DateTime
+  canceledAt                   DateTime?
+  ativo                        Boolean          @default(true)
+  lembreteEnviado              Boolean          @default(false)
+  providerSubscriptionId       String?          @unique
+  bloqueadoEm                  DateTime?
+  metodoPreferido              MetodoPagamento?
+  metodoPreferidoDefinidoEm    DateTime?
+  status                       AssinaturaStatus @default(TRIAL)
+  trialEndsAt                  DateTime?
+  trialStartsAt                DateTime?
+  usuario                      Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  @@unique([usuarioId, plano])
+  @@unique([usuarioId, plano, contextoKey])
   @@index([startsAt])
   @@index([canceledAt])
   @@index([status])
   @@index([trialEndsAt])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Professor {
@@ -2524,41 +2535,51 @@ model TreinoRotinaAtribuicao {
 }
 
 model Pagamento {
-  id                   String          @id @default(uuid())
-  usuarioId            String
-  plano                String
-  periodicidade        Periodicidade
-  metodo               MetodoPagamento
-  status               PagamentoStatus @default(PENDENTE)
-  valor                Decimal         @db.Decimal(10, 2)
-  moeda                String          @default("BRL")
-  cupomId              String?
-  provider             String?
-  providerRef          String?
-  criadoEm             DateTime        @default(now())
-  pagoEm               DateTime?
-  canceladoEm          DateTime?
-  reembolsadoEm        DateTime?
-  updatedAt            DateTime        @updatedAt
-  pagadorNome          String?
-  pagadorEmail         String?
-  pagadorCpf           String?
-  pagadorTelefone      String?
-  cardBrand            String?
-  cardLast4            String?
-  cardExpMes           Int?
-  cardExpAno           Int?
-  pixCopiaECola        String?
-  boletoLinhaDigitavel String?
-  meta                 Json?
-  CupomResgate         CupomResgate[]
-  cupom                Cupom?          @relation(fields: [cupomId], references: [id], onDelete: SetNull)
-  usuario              Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                           String          @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  plano                        String
+  periodicidade                Periodicidade
+  metodo                       MetodoPagamento
+  status                       PagamentoStatus @default(PENDENTE)
+  valor                        Decimal         @db.Decimal(10, 2)
+  moeda                        String          @default("BRL")
+  cupomId                      String?
+  provider                     String?
+  providerRef                  String?
+  criadoEm                     DateTime        @default(now())
+  pagoEm                       DateTime?
+  canceladoEm                  DateTime?
+  reembolsadoEm                DateTime?
+  updatedAt                    DateTime        @updatedAt
+  pagadorNome                  String?
+  pagadorEmail                 String?
+  pagadorCpf                   String?
+  pagadorTelefone              String?
+  cardBrand                    String?
+  cardLast4                    String?
+  cardExpMes                   Int?
+  cardExpAno                   Int?
+  pixCopiaECola                String?
+  boletoLinhaDigitavel         String?
+  meta                         Json?
+  CupomResgate                 CupomResgate[]
+  cupom                        Cupom?          @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+  usuario                      Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerRef])
   @@index([usuarioId, criadoEm])
   @@index([status])
   @@index([status, criadoEm])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Cupom {

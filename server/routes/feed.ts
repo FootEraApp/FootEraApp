@@ -1,10 +1,12 @@
 // server/routes/feed.ts 
-import express, { Router } from "express";
+import { Router } from "express";
 import {
   authenticateToken,
   optionalAuthenticateToken,
 } from "../middlewares/auth.js";
-import { adminAuth } from "../middlewares/admin-auth.js";
+import {
+  requireAdmin,
+} from "../middlewares/guards.js";
 import { uploadToS3 } from "../middlewares/s3Upload.js"; 
 import {
   getFeedPosts,
@@ -41,7 +43,7 @@ router.get(
 router.delete(
   "/usuario/:id",
   authenticateToken,
-  adminAuth,
+  requireAdmin,
   deletarUsuario
 );
 

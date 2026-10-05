@@ -26,13 +26,52 @@ interface Usuario {
 
 interface Mensagem {
   id: string;
+
   deId: string;
   paraId: string;
+
   conteudo: string;
-  tipo: "NORMAL" | "POST" | "DESAFIO" | "USUARIO" | "CARD";
+
+  tipo:
+    | "NORMAL"
+    | "POST"
+    | "DESAFIO"
+    | "USUARIO"
+    | "CARD";
+
   criadaEm: string;
+
   clientMsgId?: string;
   pending?: boolean;
+
+  contextoRemetente?: {
+    key: string;
+
+    kind:
+      | "PERSONAL"
+      | "ORGANIZATION";
+
+    tipoUsuario:
+      string;
+
+    role?:
+      string | null;
+
+    profileId?:
+      string | null;
+
+    organizationId?:
+      string | null;
+
+    organizationType?:
+      string | null;
+
+    organizationRole?:
+      string | null;
+
+    legacyOrganizationId?:
+      string | null;
+  } | null;
 }
 
 interface Grupo {
@@ -65,6 +104,35 @@ interface MensagemGrupo {
   desafioEmGrupoId?: string | null;
   clientMsgId?: string;
   pending?: boolean;
+  contextoRemetente?: {
+    key:
+      string;
+
+    kind:
+      | "PERSONAL"
+      | "ORGANIZATION";
+
+    tipoUsuario:
+      string;
+
+    role?:
+      string | null;
+
+    profileId?:
+      string | null;
+
+    organizationId?:
+      string | null;
+
+    organizationType?:
+      string | null;
+
+    organizationRole?:
+      string | null;
+
+    legacyOrganizationId?:
+      string | null;
+  } | null;
 }
 
 interface Postagem {
@@ -859,159 +927,439 @@ export default function PaginaMensagens() {
   useEffect(() => {
     socket.connect();
 
-    socket.on("connect", () => {
-      if (usuarioId) socket.emit("join", usuarioId);
-      const cur = alvoRef.current;
-      if (cur?.tipo === "grupo") socket.emit("joinGroup", cur.grupo.id);
-    });
+    const onConnect = () => {
+      if (usuarioId) {
+        socket.emit(
+          "join",
+          usuarioId
+        );
+      }
 
-    socket.on("novaMensagem", (mensagem: Mensagem) => {
-      const current = alvoRef.current;
+      const cur =
+        alvoRef.current;
 
-      if (mensagem.paraId === usuarioId) {
-        const abertoComEsse = current?.tipo === "usuario" && current.usuario.id === mensagem.deId;
+      if (
+        cur?.tipo ===
+        "grupo"
+      ) {
+        socket.emit(
+          "joinGroup",
+          cur.grupo.id
+        );
+      }
+    };
+
+    const onNovaMensagem = (
+      mensagem: Mensagem
+    ) => {
+      const current =
+        alvoRef.current;
+
+      if (
+        mensagem.paraId ===
+        usuarioId
+      ) {
+        const abertoComEsse =
+          current?.tipo ===
+            "usuario" &&
+          current.usuario.id ===
+            mensagem.deId;
 
         if (!abertoComEsse) {
-          setUnreadByUser(prev => ({
-            ...prev,
-            [mensagem.deId]: (prev[mensagem.deId] || 0) + 1,
-          }));
+          setUnreadByUser(
+            (prev) => ({
+              ...prev,
+
+              [mensagem.deId]:
+                (
+                  prev[
+                    mensagem.deId
+                  ] || 0
+                ) + 1,
+            })
+          );
         } else {
-          markReadFromUser(mensagem.deId);
+          markReadFromUser(
+            mensagem.deId
+          );
         }
       }
 
-      const otherId = mensagem.deId === usuarioId ? mensagem.paraId : mensagem.deId;
-      setLastMsgAtByUser(prev => ({
-        ...prev,
-        [otherId]: new Date(mensagem.criadaEm).getTime(),
-      }));
+      const otherId =
+        mensagem.deId ===
+        usuarioId
+          ? mensagem.paraId
+          : mensagem.deId;
 
-      setLastMsgByUser(prev => ({
-        ...prev,
-        [otherId]: formatPreviewFromMsg({ tipo: mensagem.tipo, conteudo: mensagem.conteudo })
-      }));
+      setLastMsgAtByUser(
+        (prev) => ({
+          ...prev,
 
-      if (String(mensagem.tipo).toUpperCase() === "USUARIO") {
-        const idCompartilhado = String(mensagem.conteudo || "");
-        ensureUsuarioNome(idCompartilhado).then((nome) => {
+          [otherId]:
+            new Date(
+              mensagem.criadaEm
+            ).getTime(),
+        })
+      );
+
+      setLastMsgByUser(
+        (prev) => ({
+          ...prev,
+
+          [otherId]:
+            formatPreviewFromMsg({
+              tipo:
+                mensagem.tipo,
+
+              conteudo:
+                mensagem.conteudo,
+            }),
+        })
+      );
+
+      if (
+        String(
+          mensagem.tipo
+        ).toUpperCase() ===
+        "USUARIO"
+      ) {
+        const idCompartilhado =
+          String(
+            mensagem.conteudo ||
+              ""
+          );
+
+        ensureUsuarioNome(
+          idCompartilhado
+        ).then((nome) => {
           if (nome) {
-            setLastMsgByUser(p => ({
-              ...p,
-              [otherId]: `👤 Perfil: ${nome}`
-            }));
+            setLastMsgByUser(
+              (prev) => ({
+                ...prev,
+
+                [otherId]:
+                  `👤 Perfil: ${nome}`,
+              })
+            );
           }
         });
       }
 
-      if (current?.tipo !== "usuario") return;
-      const curId = current.usuario.id;
+      if (
+        current?.tipo !==
+        "usuario"
+      ) {
+        return;
+      }
+
+      const curId =
+        current.usuario.id;
+
       const relevante =
-        (mensagem.deId === curId && mensagem.paraId === usuarioId) ||
-        (mensagem.deId === usuarioId && mensagem.paraId === curId);
-      if (!relevante) return;
-
-      const replaced = reconcilePrivadaByClientId(mensagem);
-      if (!replaced) {
-        setMensagensPrivadas(prev => {
-          const exists =
-            prev.some(m => m.id === mensagem.id) ||
-            (!!mensagem.clientMsgId && prev.some(m => m.clientMsgId === mensagem.clientMsgId));
-          if (exists) return prev;
-          return [...prev, { ...mensagem, pending: false }];
-        });
-      }
-    });
-
-    socket.on("novaMensagemGrupo", (mensagem: MensagemGrupo) => {
-
-      setLastMsgByGroup(prev => ({
-        ...prev,
-        [mensagem.grupoId]: formatPreviewFromMsg({
-          tipo: mensagem.tipo,
-          conteudo: mensagem.conteudo,
-        }),
-      }));
-
-      const current = alvoRef.current;
-      if (!(current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id)) return;
-
-      setLastMsgAtByGroup(prev => ({
-        ...prev,
-        [mensagem.grupoId]: new Date(mensagem.criadaEm).getTime(),
-      }));
-
-      setLastMsgByGroup((prev) => ({
-        ...prev,
-        [mensagem.grupoId]: formatPreviewFromMsg({
-          tipo: mensagem.tipo,
-          conteudo: mensagem.conteudo,
-        }),
-      }));
-
-      const replaced = reconcileGrupoByClientId(mensagem);
-      if (!replaced) {
-        setMensagensGrupo(prev => {
-          const exists =
-            prev.some(m => m.id === mensagem.id) ||
-            (!!mensagem.clientMsgId && prev.some(m => m.clientMsgId === mensagem.clientMsgId));
-          if (exists) return prev;
-          return [...prev, { ...mensagem, pending: false }];
-        });
-      }
-    });
-
-    socket.on("mensagemDeletada", ({ id }: { id: string }) => {
-      setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
-      setMensagensGrupo(prev => prev.filter(m => m.id !== id));
-    });
-
-    socket.on("grupoCriado", (novoGrupo: Grupo) => {
-      if (!novoGrupo?.id) return;
-
-      setGrupos((prev) => {
-        const grupoJaExiste = prev.some(
-          (grupo) => grupo.id === novoGrupo.id
+        (
+          mensagem.deId ===
+            curId &&
+          mensagem.paraId ===
+            usuarioId
+        ) ||
+        (
+          mensagem.deId ===
+            usuarioId &&
+          mensagem.paraId ===
+            curId
         );
 
-        if (grupoJaExiste) {
-          return prev.map((grupo) =>
-            grupo.id === novoGrupo.id
-              ? { ...grupo, ...novoGrupo }
-              : grupo
-          );
+      if (!relevante) {
+        return;
+      }
+
+      const replaced =
+        reconcilePrivadaByClientId(
+          mensagem
+        );
+
+      if (!replaced) {
+        setMensagensPrivadas(
+          (prev) => {
+            const exists =
+              prev.some(
+                (m) =>
+                  m.id ===
+                  mensagem.id
+              ) ||
+              (
+                !!mensagem.clientMsgId &&
+                prev.some(
+                  (m) =>
+                    m.clientMsgId ===
+                    mensagem.clientMsgId
+                )
+              );
+
+            if (exists) {
+              return prev;
+            }
+
+            return [
+              ...prev,
+              {
+                ...mensagem,
+                pending: false,
+              },
+            ];
+          }
+        );
+      }
+    };
+
+    const onNovaMensagemGrupo = (
+      mensagem: MensagemGrupo
+    ) => {
+      setLastMsgByGroup(
+        (prev) => ({
+          ...prev,
+
+          [mensagem.grupoId]:
+            formatPreviewFromMsg({
+              tipo:
+                mensagem.tipo,
+
+              conteudo:
+                mensagem.conteudo,
+            }),
+        })
+      );
+
+      const current =
+        alvoRef.current;
+
+      if (
+        !(
+          current?.tipo ===
+            "grupo" &&
+          mensagem.grupoId ===
+            current.grupo.id
+        )
+      ) {
+        return;
+      }
+
+      setLastMsgAtByGroup(
+        (prev) => ({
+          ...prev,
+
+          [mensagem.grupoId]:
+            new Date(
+              mensagem.criadaEm
+            ).getTime(),
+        })
+      );
+
+      setLastMsgByGroup(
+        (prev) => ({
+          ...prev,
+
+          [mensagem.grupoId]:
+            formatPreviewFromMsg({
+              tipo:
+                mensagem.tipo,
+
+              conteudo:
+                mensagem.conteudo,
+            }),
+        })
+      );
+
+      const replaced =
+        reconcileGrupoByClientId(
+          mensagem
+        );
+
+      if (!replaced) {
+        setMensagensGrupo(
+          (prev) => {
+            const exists =
+              prev.some(
+                (m) =>
+                  m.id ===
+                  mensagem.id
+              ) ||
+              (
+                !!mensagem.clientMsgId &&
+                prev.some(
+                  (m) =>
+                    m.clientMsgId ===
+                    mensagem.clientMsgId
+                )
+              );
+
+            if (exists) {
+              return prev;
+            }
+
+            return [
+              ...prev,
+              {
+                ...mensagem,
+                pending: false,
+              },
+            ];
+          }
+        );
+      }
+    };
+
+    const onMensagemDeletada = ({
+      id,
+    }: {
+      id: string;
+    }) => {
+      setMensagensPrivadas(
+        (prev) =>
+          prev.filter(
+            (m) =>
+              m.id !== id
+          )
+      );
+
+      setMensagensGrupo(
+        (prev) =>
+          prev.filter(
+            (m) =>
+              m.id !== id
+          )
+      );
+    };
+
+    const onGrupoCriado = (
+      novoGrupo: Grupo
+    ) => {
+      if (!novoGrupo?.id) {
+        return;
+      }
+
+      setGrupos(
+        (prev) => {
+          const grupoJaExiste =
+            prev.some(
+              (grupo) =>
+                grupo.id ===
+                novoGrupo.id
+            );
+
+          if (
+            grupoJaExiste
+          ) {
+            return prev.map(
+              (grupo) =>
+                grupo.id ===
+                novoGrupo.id
+                  ? {
+                      ...grupo,
+                      ...novoGrupo,
+                    }
+                  : grupo
+            );
+          }
+
+          return [
+            novoGrupo,
+            ...prev,
+          ];
         }
+      );
 
-        return [novoGrupo, ...prev];
-      });
+      setLastMsgByGroup(
+        (prev) => ({
+          ...prev,
+          [novoGrupo.id]:
+            "",
+        })
+      );
 
-      setLastMsgByGroup((prev) => ({
-        ...prev,
-        [novoGrupo.id]: "",
-      }));
+      setLastMsgAtByGroup(
+        (prev) => ({
+          ...prev,
+          [novoGrupo.id]:
+            Date.now(),
+        })
+      );
+    };
 
-      setLastMsgAtByGroup((prev) => ({
-        ...prev,
-        [novoGrupo.id]: Date.now(),
-      }));
-    });
+    const onGrupoRemovido = ({
+      grupoId,
+    }: {
+      grupoId: string;
+    }) => {
+      removerGrupoDaInterface(
+        grupoId
+      );
+    };
+
+    socket.on(
+      "connect",
+      onConnect
+    );
+
+    socket.on(
+      "novaMensagem",
+      onNovaMensagem
+    );
+
+    socket.on(
+      "novaMensagemGrupo",
+      onNovaMensagemGrupo
+    );
+
+    socket.on(
+      "mensagemDeletada",
+      onMensagemDeletada
+    );
+
+    socket.on(
+      "grupoCriado",
+      onGrupoCriado
+    );
 
     socket.on(
       "grupoRemovido",
-      ({ grupoId }: { grupoId: string }) => {
-        removerGrupoDaInterface(grupoId);
-      }
+      onGrupoRemovido
     );
 
     return () => {
-      socket.off("connect");
-      socket.off("novaMensagem");
-      socket.off("novaMensagemGrupo");
-      socket.off("mensagemDeletada");
-      socket.off("grupoCriado");
-      socket.off("grupoRemovido");
+      socket.off(
+        "connect",
+        onConnect
+      );
+
+      socket.off(
+        "novaMensagem",
+        onNovaMensagem
+      );
+
+      socket.off(
+        "novaMensagemGrupo",
+        onNovaMensagemGrupo
+      );
+
+      socket.off(
+        "mensagemDeletada",
+        onMensagemDeletada
+      );
+
+      socket.off(
+        "grupoCriado",
+        onGrupoCriado
+      );
+
+      socket.off(
+        "grupoRemovido",
+        onGrupoRemovido
+      );
     };
-  }, [usuarioId]);
+  }, [
+    usuarioId,
+  ]);
 
   useEffect(() => {
     if (!token) return;

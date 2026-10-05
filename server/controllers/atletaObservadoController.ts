@@ -1,5 +1,11 @@
-import { Request, Response } from "express";
+import { Response } from "express";
+import type {
+  AuthenticatedRequest,
+} from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
 type OwnerWhere = {
   professorId?: string;
@@ -9,25 +15,181 @@ type OwnerWhere = {
   OR?: OwnerWhere[];
 };
 
-function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhere {
-  const tipo = String(tipoRaw || "").toLowerCase();
+type ObservacaoOwner = {
+  tipo:
+    | "professor"
+    | "clube"
+    | "escolinha"
+    | "olheiro";
 
-  if (tipo === "professor") return { professorId: ownerId };
-  if (tipo === "clube") return { clubeId: ownerId };
-  if (tipo === "escola" || tipo === "escolinha") return { escolinhaId: ownerId };
-  if (tipo === "olheiro") return { olheiroId: ownerId };
+  ownerId: string;
 
-  return {
-    OR: [
-      { professorId: ownerId },
-      { escolinhaId: ownerId },
-      { clubeId: ownerId },
-      { olheiroId: ownerId },
-    ],
-  };
+  where: OwnerWhere;
+
+  data:
+    | { professorId: string }
+    | { clubeId: string }
+    | { escolinhaId: string }
+    | { olheiroId: string };
+};
+
+async function getObservacaoOwner(
+  req: AuthenticatedRequest
+): Promise<ObservacaoOwner | null> {
+  const usuarioId =
+    String(
+      req.userId ??
+      req.user?.id ??
+      ""
+    ).trim();
+
+  if (!usuarioId) {
+    return null;
+  }
+
+  const contexto =
+    req.authUser?.activeContext ??
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (!contexto) {
+    return null;
+  }
+
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    const papel =
+      String(
+        contexto.role ??
+        contexto.tipoUsuario ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+    const profileId =
+      String(
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        ""
+      ).trim();
+
+    if (!profileId) {
+      return null;
+    }
+
+    if (
+      papel ===
+      "professor"
+    ) {
+      return {
+        tipo: "professor",
+        ownerId: profileId,
+        where: {
+          professorId:
+            profileId,
+        },
+        data: {
+          professorId:
+            profileId,
+        },
+      };
+    }
+
+    if (
+      papel ===
+      "olheiro"
+    ) {
+      return {
+        tipo: "olheiro",
+        ownerId: profileId,
+        where: {
+          olheiroId:
+            profileId,
+        },
+        data: {
+          olheiroId:
+            profileId,
+        },
+      };
+    }
+
+    return null;
+  }
+
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    const organizationType =
+      String(
+        contexto.organizationType ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+    const legacyOrganizationId =
+      String(
+        contexto.legacyOrganizationId ??
+        ""
+      ).trim();
+
+    if (!legacyOrganizationId) {
+      return null;
+    }
+
+    if (
+      organizationType ===
+      "clube"
+    ) {
+      return {
+        tipo: "clube",
+        ownerId:
+          legacyOrganizationId,
+        where: {
+          clubeId:
+            legacyOrganizationId,
+        },
+        data: {
+          clubeId:
+            legacyOrganizationId,
+        },
+      };
+    }
+
+    if (
+      organizationType ===
+        "escolinha" ||
+      organizationType ===
+        "escola"
+    ) {
+      return {
+        tipo: "escolinha",
+        ownerId:
+          legacyOrganizationId,
+        where: {
+          escolinhaId:
+            legacyOrganizationId,
+        },
+        data: {
+          escolinhaId:
+            legacyOrganizationId,
+        },
+      };
+    }
+  }
+
+  return null;
 }
 
-export async function statusObservacao(req: Request, res: Response) {
+export async function statusObservacao(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   const { atletaId: rawId } = req.params as { atletaId?: string };
 
   if (!rawId) {
@@ -47,27 +209,19 @@ export async function statusObservacao(req: Request, res: Response) {
 
   const atletaId = atleta.id;
 
-  const q: any = req.query || {};
-  const user: any = (req as any).user || {};
+  const owner =
+    await getObservacaoOwner(
+      req
+    );
 
-  const ownerId: string =
-    (q.ownerId as string) ||
-    (q.tipoUsuarioId as string) ||
-    (user.tipoUsuarioId as string) ||
-    "";
-
-  const tipoRaw: string =
-    (q.tipo as string) ||
-    (q.tipoUsuario as string) ||
-    (user.tipo as string) ||
-    (user.tipoUsuario as string) ||
-    "";
-
-  if (!ownerId) {
-    return res.json({ observando: false });
+  if (!owner) {
+    return res.json({
+      observando: false,
+    });
   }
 
-  const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
+  const ownerWhere =
+    owner.where;
 
   const existe = await prisma.atletaObservado.findFirst({
     where: { atletaId, ...ownerWhere },
@@ -76,39 +230,43 @@ export async function statusObservacao(req: Request, res: Response) {
   return res.json({ observando: !!existe });
 }
 
-export async function listarObservados(req: Request, res: Response) {
-  const q: any = req.query || {};
-  const user: any = (req as any).user || {};
+export async function listarObservados(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  const q: any =
+    req.query || {};
 
-  const ownerId: string =
-    (q.ownerId as string) ||
-    (q.tipoUsuarioId as string) ||
-    (q.professorId as string) ||
-    (q.clubeId as string) ||
-    (q.escolinhaId as string) ||
-    (q.olheiroId as string) ||
-    (user.tipoUsuarioId as string) ||
-    "";
+  const owner =
+    await getObservacaoOwner(
+      req
+    );
 
-  if (!ownerId) {
+  if (!owner) {
     return res.json([]);
   }
 
-  const tipoRaw: string =
-    (q.tipo as string) ||
-    (q.tipoUsuario as string) ||
-    (q.tipoSalvo as string) ||
-    (user.tipo as string) ||
-    (user.tipoUsuario as string) ||
-    "";
+  const ownerWhere =
+    owner.where;
 
-  const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
+  const rows =
+    await prisma.atletaObservado.findMany({
+      where:
+        ownerWhere,
 
-  const rows = await prisma.atletaObservado.findMany({
-    where: ownerWhere,
-    include: { atleta: { include: { usuario: true } } },
-    orderBy: { criadoEm: "desc" },
-  });
+      include: {
+        atleta: {
+          include: {
+            usuario: true,
+          },
+        },
+      },
+
+      orderBy: {
+        criadoEm:
+          "desc",
+      },
+    });
 
   const incluirPontuacao = String(q.incluirPontuacao ?? "").trim() !== "";
   const incluirNotas = String(q.incluirNotas ?? "").trim() !== "";
@@ -145,40 +303,48 @@ export async function listarObservados(req: Request, res: Response) {
   return res.json(lista);
 }
 
-export async function observarAtleta(req: Request, res: Response) {
-  const { atletaId, ownerId, tipo } = req.body as {
+export async function observarAtleta(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  const {
+    atletaId,
+  } = req.body as {
     atletaId?: string;
-    ownerId?: string;
-    tipo?: string;
   };
 
-  if (!atletaId || !ownerId) {
-    return res.status(400).json({ message: "atletaId e ownerId são obrigatórios" });
+  if (!atletaId) {
+    return res.status(400).json({
+      message:
+        "atletaId é obrigatório",
+    });
   }
 
-  const t = String(tipo || "").toLowerCase();
+  const owner =
+    await getObservacaoOwner(
+      req
+    );
 
-  const ownerData: any = {};
-  if (t === "professor") ownerData.professorId = ownerId;
-  else if (t === "clube") ownerData.clubeId = ownerId;
-  else if (t === "escola" || t === "escolinha") ownerData.escolinhaId = ownerId;
-  else if (t === "olheiro") ownerData.olheiroId = ownerId;
-  else {
-    return res.status(400).json({ message: `tipo inválido: "${tipo}"` });
+  if (!owner) {
+    return res.status(403).json({
+      message:
+        "O contexto ativo não pode observar atletas.",
+    });
   }
 
   try {
     const row = await prisma.atletaObservado.create({
       data: {
         atletaId,
-        ...ownerData,
+        ...owner.data,
       },
     });
 
     return res.status(201).json({ ok: true, observando: true, id: row.id });
   } catch (e: any) {
     if (e?.code === "P2002") {
-      const ownerWhere = buildOwnerWhere(tipo, ownerId);
+      const ownerWhere =
+        owner.where;
       const ja = await prisma.atletaObservado.findFirst({
         where: { atletaId, ...ownerWhere },
       });
@@ -190,36 +356,29 @@ export async function observarAtleta(req: Request, res: Response) {
   }
 }
 
-export async function pararDeObservar(req: Request, res: Response) {
+export async function pararDeObservar(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   const { atletaId } = req.params;
   if (!atletaId) {
     return res.status(400).json({ message: "atletaId é obrigatório" });
   }
 
-  const q: any = req.query || {};
-  const b: any = req.body || {};
-  const user: any = (req as any).user || {};
+  const owner =
+    await getObservacaoOwner(
+      req
+    );
 
-  const ownerId: string =
-    b.ownerId ||
-    q.ownerId ||
-    q.tipoUsuarioId ||
-    user.tipoUsuarioId ||
-    "";
-
-  const tipoRaw: string =
-    b.tipo ||
-    q.tipo ||
-    q.tipoUsuario ||
-    user.tipo ||
-    user.tipoUsuario ||
-    "";
-
-  if (!ownerId) {
-    return res.sendStatus(204);
+  if (!owner) {
+    return res.status(403).json({
+      message:
+        "O contexto ativo não pode remover observações.",
+    });
   }
 
-  const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
+  const ownerWhere =
+    owner.where;
 
   await prisma.atletaObservado.deleteMany({
     where: { atletaId, ...ownerWhere },
@@ -228,15 +387,22 @@ export async function pararDeObservar(req: Request, res: Response) {
   return res.sendStatus(204);
 }
 
-export async function listarObservadosPorOlheiro(req: Request, res: Response) {
+export async function listarObservadosPorOlheiro(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
     let { olheiroId } = req.params as { olheiroId?: string };
+
     if (!olheiroId || olheiroId === "me") {
       const q: any = req.query || {};
       olheiroId = q.ownerId || null;
     }
+
     if (!olheiroId) {
-      return res.status(400).json({ error: "olheiroId é obrigatório" });
+      return res.status(400).json({
+        error: "olheiroId é obrigatório",
+      });
     }
 
     const rows = await prisma.atletaObservado.findMany({
@@ -248,11 +414,14 @@ export async function listarObservadosPorOlheiro(req: Request, res: Response) {
           },
         },
       },
-      orderBy: { criadoEm: "desc" },
+      orderBy: {
+        criadoEm: "desc",
+      },
     });
 
     const lista = rows.map((r) => {
       const rr: any = r;
+
       return {
         id: r.atleta?.usuario?.id ?? r.atletaId,
         atletaId: r.atletaId,
@@ -273,50 +442,45 @@ export async function listarObservadosPorOlheiro(req: Request, res: Response) {
     return res.json(lista);
   } catch (e) {
     console.error("listarObservadosPorOlheiro", e);
-    return res
-      .status(500)
-      .json({ error: "Falha ao listar observados do olheiro" });
+
+    return res.status(500).json({
+      error: "Falha ao listar observados do olheiro",
+    });
   }
 }
 
-export async function atualizarObservado(req: Request, res: Response) {
+export async function atualizarObservado(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
     const idParamRaw = String(
       (req.params as any).id ?? (req.params as any).atletaId ?? ""
     ).trim();
 
     const b: any = req.body || {};
-    const q: any = req.query || {};
-    const user: any = (req as any).user || {};
-
-    const ownerId: string =
-      String(
-        b.ownerId ??
-          b.tipoUsuarioId ??
-          q.ownerId ??
-          q.tipoUsuarioId ??
-          user.tipoUsuarioId ??
-          ""
-      ).trim();
-
-    const tipoRaw: string = String(
-      b.tipo ?? q.tipo ?? user.tipo ?? user.tipoUsuario ?? ""
-    ).trim();
-
     const notaInterna = b.notaInterna;
     const alertarMudancas = b.alertarMudancas;
 
     if (!idParamRaw) {
       return res.status(400).json({ message: "id é obrigatório" });
     }
-    if (!ownerId) {
-      return res.status(400).json({ message: "ownerId/tipoUsuarioId é obrigatório" });
-    }
-    if (!tipoRaw) {
-      return res.status(400).json({ message: "tipo é obrigatório" });
+    
+    const owner =
+      await getObservacaoOwner(
+        req
+      );
+
+    if (!owner) {
+      return res.status(403).json({
+        message:
+          "O contexto ativo não pode atualizar observações.",
+      });
     }
 
-    const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
+    const ownerWhere =
+      owner.where;
+
     const byId = await prisma.atletaObservado.findFirst({
       where: { id: idParamRaw, ...ownerWhere },
       select: { id: true },

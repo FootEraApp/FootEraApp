@@ -13,6 +13,7 @@ import {
 } from "../utils/privacy.js";
 import {
   getActiveContext,
+  type ActiveContext
 } from "../services/activeContext.js";
 import {
   hasRole,
@@ -28,42 +29,149 @@ function readNotificacoes(raw: any) {
   };
 }
 
-async function isProUser(userId: string) {
-  const assinatura = await prisma.assinatura.findFirst({
-    where: { usuarioId: userId },
-    orderBy: [
-      { ativo: "desc" },
-      { renovaEm: "desc" },
-      { startsAt: "desc" },
-    ],
-    select: {
-      ativo: true,
-      plano: true,
-      status: true,
-      trialEndsAt: true,
-    },
-  });
+function getMensagemContextSnapshot(
+  contexto:
+    ActiveContext |
+    null |
+    undefined
+) {
+  if (!contexto) {
+    return null;
+  }
 
-  if (!assinatura) return false;
+  return {
+    key:
+      contexto.key,
 
-  const status = String(assinatura.status || "").toUpperCase();
-  const plano = String(assinatura.plano || "").toUpperCase();
+    kind:
+      contexto.kind,
 
-  if (!assinatura.ativo) return false;
-  if (status === "BLOQUEADA" || status === "CANCELADA" || status === "SEM_ASSINATURA") {
+    tipoUsuario:
+      String(
+        contexto.tipoUsuario
+      ),
+
+    role:
+      contexto.role
+        ? String(
+            contexto.role
+          )
+        : null,
+
+    profileId:
+      contexto.profileId ??
+      contexto.tipoUsuarioId ??
+      null,
+
+    organizationId:
+      contexto.organizationId ??
+      null,
+
+    organizationType:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    organizationRole:
+      contexto.organizationRole
+        ? String(
+            contexto.organizationRole
+          )
+        : null,
+
+    legacyOrganizationId:
+      contexto
+        .legacyOrganizationId ??
+      null,
+  };
+}
+
+async function isProUser(
+  userId: string
+) {
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  if (!contexto) {
     return false;
   }
 
-  if (status === "ATIVA") return true;
+  const assinatura =
+    await prisma.assinatura.findFirst({
+      where: {
+        usuarioId:
+          userId,
 
-  if (status === "TRIAL") {
-    if (assinatura.trialEndsAt) {
-      return new Date() <= new Date(assinatura.trialEndsAt);
-    }
+        contextoKey:
+          contexto.key,
+      },
+
+      orderBy: [
+        { ativo: "desc" },
+        { renovaEm: "desc" },
+        { startsAt: "desc" },
+      ],
+
+      select: {
+        ativo: true,
+        plano: true,
+        status: true,
+        trialEndsAt: true,
+      },
+    });
+
+  if (!assinatura) {
+    return false;
+  }
+
+  const status =
+    String(
+      assinatura.status || ""
+    ).toUpperCase();
+
+  const plano =
+    String(
+      assinatura.plano || ""
+    ).toUpperCase();
+
+  if (!assinatura.ativo) {
+    return false;
+  }
+
+  if (
+    status === "BLOQUEADA" ||
+    status === "CANCELADA" ||
+    status === "SEM_ASSINATURA"
+  ) {
+    return false;
+  }
+
+  if (status === "ATIVA") {
     return true;
   }
 
-  return plano.includes("PRO");
+  if (status === "TRIAL") {
+    if (
+      assinatura.trialEndsAt
+    ) {
+      return (
+        new Date() <=
+        new Date(
+          assinatura.trialEndsAt
+        )
+      );
+    }
+
+    return true;
+  }
+
+  return plano.includes(
+    "PRO"
+  );
 }
 
 async function getAdsConfigForUser(userId?: string) {
@@ -172,8 +280,15 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
     }
 
     const contextoRemetente =
+      req.authUser
+        ?.activeContext ??
       await getActiveContext(
         deId
+      );
+
+    const contextoRemetenteSnapshot =
+      getMensagemContextSnapshot(
+        contextoRemetente
       );
 
     const papelRemetenteAtivo =
@@ -229,7 +344,32 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
           entidade: "Atleta",
           entidadeId: atletaId ?? destinatario.id,
           descricao: "Tentativa de contato de olheiro com atleta menor sem consentimento",
-          meta: { deId, paraId, tipoMensagem: tipo },
+          meta: {
+            deId,
+            paraId,
+            tipoMensagem:
+              tipo,
+
+            contextoKey:
+              contextoRemetente
+                ?.key ??
+              null,
+
+            contextoKind:
+              contextoRemetente
+                ?.kind ??
+              null,
+
+            contextoTipo:
+              contextoRemetente
+                ?.tipoUsuario ??
+              null,
+
+            contextoOrganizacaoId:
+              contextoRemetente
+                ?.organizationId ??
+              null,
+          },
         });
 
         return res.status(403).json({
@@ -269,7 +409,17 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    const payload = { ...saved, clientMsgId, pending: false };
+    const payload = {
+      ...saved,
+
+      clientMsgId,
+
+      pending:
+        false,
+
+      contextoRemetente:
+        contextoRemetenteSnapshot,
+    };
 
     const io = getIO();
     if (io) {
@@ -1094,6 +1244,18 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
     const { grupoId } = req.params as { grupoId: string };
     const { conteudo, clientMsgId } = req.body as { conteudo: string; clientMsgId?: string };
 
+    const contextoRemetente =
+      req.authUser
+        ?.activeContext ??
+      await getActiveContext(
+        usuarioId
+      );
+
+    const contextoRemetenteSnapshot =
+      getMensagemContextSnapshot(
+        contextoRemetente
+      );
+
     if (!conteudo?.trim()) return res.status(400).json({ error: "Conteúdo obrigatório." });
 
     const ehMembro = await prisma.membroGrupo.findUnique({
@@ -1106,7 +1268,17 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
       include: { usuario: { select: { id: true, nome: true, foto: true } } },
     });
 
-    const payload = { ...nova, clientMsgId, pending: false };
+    const payload = {
+      ...nova,
+
+      clientMsgId,
+
+      pending:
+        false,
+
+      contextoRemetente:
+        contextoRemetenteSnapshot,
+    };
 
     const io = getIO();
     if (io) {

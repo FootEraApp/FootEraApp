@@ -1244,18 +1244,28 @@ async function notificarNovoTreino(
     },
   });
 
-  const io = getIO();
+  const io =
+    getIO();
+
   if (io) {
-    io.to(atleta.usuarioId).emit("novaMensagem", { ...saved, pending: false });
-    io.to(`u:${atleta.usuarioId}`).emit("novaMensagem", {
+    const payload = {
       ...saved,
       pending: false,
-    });
-    io.to(deUsuarioId).emit("novaMensagem", { ...saved, pending: false });
-    io.to(`u:${deUsuarioId}`).emit("novaMensagem", {
-      ...saved,
-      pending: false,
-    });
+    };
+
+    io.to(
+      `u:${atleta.usuarioId}`
+    ).emit(
+      "novaMensagem",
+      payload
+    );
+
+    io.to(
+      `u:${deUsuarioId}`
+    ).emit(
+      "novaMensagem",
+      payload
+    );
   }
 
   try {
@@ -1272,18 +1282,32 @@ async function notificarNovoTreino(
   }
 }
 
-function syncAgendaAtleta(usuarioId: string, atletaId?: string) {
-  const io = getIO();
-  if (!io || !usuarioId) return;
+function syncAgendaAtleta(
+  usuarioId: string,
+  atletaId?: string
+) {
+  const io =
+    getIO();
 
-  io.to(`u:${usuarioId}`).emit("agenda:sync", {
-    usuarioId,
-    atletaId: atletaId ?? null,
-  });
-  io.to(usuarioId).emit("agenda:sync", {
-    usuarioId,
-    atletaId: atletaId ?? null,
-  });
+  if (
+    !io ||
+    !usuarioId
+  ) {
+    return;
+  }
+
+  io.to(
+    `u:${usuarioId}`
+  ).emit(
+    "agenda:sync",
+    {
+      usuarioId,
+
+      atletaId:
+        atletaId ??
+        null,
+    }
+  );
 }
 
 function syncTreinoProgramado(treinoProgramadoId: string) {

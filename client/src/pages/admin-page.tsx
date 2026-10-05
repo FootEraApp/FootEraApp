@@ -139,6 +139,7 @@ interface UsuarioAdmin {
   nomeDeUsuario?: string;
   email?: string;
   tipo?: UsuarioTipo | string;
+  papeis?: string[];
   foto?: string | null;
   criadoEm?: string;
   verificado?: boolean;
@@ -161,13 +162,127 @@ function normalizarTipoAssinatura(tipo?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function usuarioSomenteLearning(tipo?: string | null) {
-  const t = normalizarTipoAssinatura(tipo);
+function papeisDoUsuarioFront(
+  usuario?: {
+    tipo?: string | null;
+    papeis?: string[] | null;
+  } | null
+): string[] {
+  if (
+    Array.isArray(
+      usuario?.papeis
+    )
+  ) {
+    return Array.from(
+      new Set(
+        usuario.papeis
+          .map(
+            (papel) =>
+              String(
+                papel || ""
+              ).trim()
+          )
+          .filter(Boolean)
+      )
+    );
+  }
+
+  const legado =
+    String(
+      usuario?.tipo || ""
+    ).trim();
+
+  return legado
+    ? [legado]
+    : [];
+}
+
+function usuarioTemPapel(
+  usuario:
+    | {
+        tipo?: string | null;
+        papeis?: string[] | null;
+      }
+    | null
+    | undefined,
+  papel: string
+) {
+  const esperado =
+    normalizarTipoAssinatura(
+      papel
+    );
+
+  return papeisDoUsuarioFront(
+    usuario
+  ).some(
+    (item) =>
+      normalizarTipoAssinatura(
+        item
+      ) === esperado
+  );
+}
+
+function labelPapeisUsuario(
+  usuario:
+    | {
+        tipo?: string | null;
+        papeis?: string[] | null;
+      }
+    | null
+    | undefined
+) {
+  const papeis =
+    papeisDoUsuarioFront(
+      usuario
+    );
+
+  return papeis.length > 0
+    ? papeis.join(", ")
+    : "—";
+}
+
+function usuarioSomenteLearning(
+  usuario:
+    | {
+        tipo?: string | null;
+        papeis?: string[] | null;
+      }
+    | null
+    | undefined
+) {
+  const papeis =
+    papeisDoUsuarioFront(
+      usuario
+    ).map(
+      normalizarTipoAssinatura
+    );
+
+  if (
+    papeis.length === 0
+  ) {
+    return false;
+  }
+
+  return papeis.every(
+    (papel) =>
+      papel === "learning" ||
+      papel === "marca" ||
+      papel === "federacao"
+  );
+}
+
+function contextoSomenteLearning(
+  tipoContexto?: string | null
+) {
+  const tipo =
+    normalizarTipoAssinatura(
+      tipoContexto
+    );
 
   return (
-    t === "learning" ||
-    t === "marca" ||
-    t === "federacao"
+    tipo === "learning" ||
+    tipo === "marca" ||
+    tipo === "federacao"
   );
 }
 
@@ -177,7 +292,14 @@ interface AssinaturaDTO {
   startsAt: string;
   canceledAt?: string | null;
   ativo: boolean;
-  renovaEm?: string | null; 
+  renovaEm?: string | null;
+
+  contextoKey?: string | null;
+  contextoKind?: string | null;
+  contextoTipo?: string | null;
+  contextoPerfilId?: string | null;
+  contextoOrganizacaoId?: string | null;
+  contextoLegacyOrganizationId?: string | null;
 }
 
 interface UsuarioDetalhe extends UsuarioAdmin {
@@ -193,6 +315,19 @@ interface UsuarioDetalhe extends UsuarioAdmin {
   posicaoCampo?: string | null;
   totalVinculados?: number | null;
   assinatura?: AssinaturaDTO | null;
+  contextos?: Array<{
+    key: string;
+    kind: string;
+    label: string;
+    tipoUsuario?: string | null;
+    tipoUsuarioId?: string | null;
+    role?: string | null;
+    profileId?: string | null;
+    organizationId?: string | null;
+    organizationType?: string | null;
+    organizationRole?: string | null;
+    legacyOrganizationId?: string | null;
+  }>;
 }
 
 const USERS_ENDPOINT = `${API.BASE_URL}/api/admin/usuarios`;
@@ -211,6 +346,7 @@ const EMPTY_DASH = {
   totalLearning: 0,
   totalMarcas: 0,
   totalFederacoes: 0,
+  totalCreators: 0,
   totalOutros: 0,
   totalMidias: 0,
   totalVerificados: 0,
@@ -877,6 +1013,12 @@ type AssinanteListItem = {
   canceledAt?: string | null;
   ativo: boolean;
   renovaEm?: string | null;
+  contextoKey?: string | null;
+  contextoKind?: string | null;
+  contextoTipo?: string | null;
+  contextoPerfilId?: string | null;
+  contextoOrganizacaoId?: string | null;
+  contextoLegacyOrganizationId?: string | null;
   usuario: {
     id: string;
     nome: string | null;
@@ -2207,14 +2349,25 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
     }
   }
 
-  async function abrirDetalhes(id: string) {
+  async function abrirDetalhes(
+    id: string,
+    contextoKey?: string | null
+  ) {
     setLoadingDetalhe(true);
     setDetalheAberto(true);
     try {
       const res = await fetch(`${usersBase}/${id}`, { headers: authHeaders() });
       const data = (await res.json()) as UsuarioDetalhe;
       try {
-        if (!data.assinatura) {
+        if (
+          !data.assinatura ||
+          (
+            contextoKey &&
+            data.assinatura
+              .contextoKey !==
+              contextoKey
+          )
+        ) {
           const r2 = await fetch(
             `${API.BASE_URL}/api/assinaturas/${id}`,
             {
@@ -2229,8 +2382,28 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
               ? resposta.items
               : [];
 
+            const contextos = Array.isArray(
+              resposta?.contextos
+            )
+              ? resposta.contextos
+              : [];
+
+            data.contextos =
+              contextos;
+
             data.assinatura =
-              lista.find((a: any) => a.ativo) ??
+              (
+                contextoKey
+                  ? lista.find(
+                      (a: any) =>
+                        a.contextoKey ===
+                        contextoKey
+                    )
+                  : null
+              ) ??
+              lista.find(
+                (a: any) => a.ativo
+              ) ??
               lista[0] ??
               null;
           }
@@ -2318,11 +2491,14 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
 
   async function escolherEAlterarPlanoAssinatura(
     usuarioId: string,
-    tipoUsuario: string | null | undefined,
+    tipoContexto: string | null | undefined,
+    contextoKey: string | null | undefined,
     planoAtual?: string | null
   ) {
     const somenteLearning =
-      usuarioSomenteLearning(tipoUsuario);
+      contextoSomenteLearning(
+        tipoContexto
+      );
 
     const novoInformado = prompt(
       somenteLearning
@@ -2366,35 +2542,142 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
         ? "LEARNING"
         : novoInformado;
 
+    if (!contextoKey) {
+      notify.error(
+        "Contexto da assinatura não encontrado."
+      );
+      return;
+    }
+
     await alterarPlanoAssinatura(
       usuarioId,
-      novoPlano
+      novoPlano,
+      contextoKey
     );
   }
 
-  async function alterarPlanoAssinatura(usuarioId: string, novoPlano: PlanoAssinatura) {
-    if (!novoPlano) return;
-    const resp = await fetch(`${API.BASE_URL}/api/assinaturas/${usuarioId}`, {
-      method: "PATCH",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ plano: novoPlano }),
-    });
-    if (!resp.ok) return notify.error(await resp.text());
-    const upd = await resp.json();
-    setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
-    notify.success("Plano atualizado.");
+  async function alterarPlanoAssinatura(
+    usuarioId: string,
+    novoPlano: PlanoAssinatura,
+    contextoKey: string
+  ) {
+    if (
+      !novoPlano ||
+      !contextoKey
+    ) {
+      return;
+    }
+
+    const resp =
+      await fetch(
+        `${API.BASE_URL}/api/assinaturas/${usuarioId}`,
+        {
+          method:
+            "PATCH",
+
+          headers:
+            authHeaders({
+              "Content-Type":
+                "application/json",
+            }),
+
+          body:
+            JSON.stringify({
+              plano:
+                novoPlano,
+
+              contextoKey,
+            }),
+        }
+      );
+
+    if (!resp.ok) {
+      return notify.error(
+        await resp.text()
+      );
+    }
+
+    const upd =
+      await resp.json();
+
+    setUserSelecionado(
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              assinatura:
+                upd,
+            }
+          : prev
+    );
+
+    notify.success(
+      "Plano atualizado."
+    );
   }
 
-  async function cancelarAssinatura(usuarioId: string) {
-    if (!confirm("Cancelar assinatura deste usuário?")) return;
-    const resp = await fetch(`${API.BASE_URL}/api/assinaturas/${usuarioId}/cancelar`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-    if (!resp.ok) return notify.error(await resp.text());
-    const upd = await resp.json();
-    setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
-    notify.success("Assinatura cancelada.");
+  async function cancelarAssinatura(
+    usuarioId: string,
+    contextoKey: string | null | undefined
+  ) {
+    if (!contextoKey) {
+      notify.error(
+        "Contexto da assinatura não encontrado."
+      );
+      return;
+    }
+
+    if (
+      !confirm(
+        "Cancelar assinatura deste usuário?"
+      )
+    ) {
+      return;
+    }
+
+    const resp =
+      await fetch(
+        `${API.BASE_URL}/api/assinaturas/${usuarioId}/cancelar`,
+        {
+          method:
+            "POST",
+
+          headers:
+            authHeaders({
+              "Content-Type":
+                "application/json",
+            }),
+
+          body:
+            JSON.stringify({
+              contextoKey,
+            }),
+        }
+      );
+
+    if (!resp.ok) {
+      return notify.error(
+        await resp.text()
+      );
+    }
+
+    const upd =
+      await resp.json();
+
+    setUserSelecionado(
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              assinatura:
+                upd,
+            }
+          : prev
+    );
+
+    notify.success(
+      "Assinatura cancelada."
+    );
   }
 
   async function excluirAssinatura(
@@ -3457,6 +3740,13 @@ async function agendarManutencaoPersonalizada() {
                 },
 
                 {
+                  label: "Creators",
+                  value: Number(
+                    dados.totalCreators || 0
+                  ),
+                },
+
+                {
                   label: "Marcas",
                   value: Number(
                     dados.totalMarcas || 0
@@ -3603,7 +3893,7 @@ async function agendarManutencaoPersonalizada() {
 
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold capitalize text-green-800">
-                            {u.tipo ?? "sem tipo"}
+                            {labelPapeisUsuario(u)}
                           </span>
 
                           <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-700">
@@ -3637,7 +3927,11 @@ async function agendarManutencaoPersonalizada() {
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
-                        onClick={() => abrirDetalhes(u.id)}
+                        onClick={() =>
+                          abrirDetalhes(
+                            u.id,
+                          )
+                        }
                         className="rounded-xl bg-green-700 px-3 py-2 text-xs font-semibold text-white"
                       >
                         Detalhes
@@ -3680,7 +3974,9 @@ async function agendarManutencaoPersonalizada() {
                         Excluir
                       </button>
 
-                      {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
+                      {canManageAdmins &&
+                        usuarioTemPapel(u, "Admin") &&
+                        u.id !== meId && (
                         <button
                           onClick={() => deletarAdmin(u.id)}
                           className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600"
@@ -3800,11 +4096,17 @@ async function agendarManutencaoPersonalizada() {
                           </div>
                         </td>
                         <td className="px-3 py-2">{u.email ?? "-"}</td>
-                        <td className="px-3 py-2 capitalize">{u.tipo ?? "-"}</td>
+                        <td className="px-3 py-2">
+                          {labelPapeisUsuario(u)}
+                        </td>
                        <td className="px-3 py-2">{formatDate(u.criadoEm)}</td>
                           <td className="px-3 py-2 text-right">
                           <div className="flex items-center gap-3 justify-end">
-                            <button onClick={() => abrirDetalhes(u.id)} className="text-green-700 hover:underline">
+                            <button onClick={() =>
+                                abrirDetalhes(
+                                  u.id
+                                )
+                              } className="text-green-700 hover:underline">
                               Detalhes
                             </button>
 
@@ -3861,7 +4163,9 @@ async function agendarManutencaoPersonalizada() {
                                 Excluir conta
                             </button>
 
-                            {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
+                            {canManageAdmins &&
+                              usuarioTemPapel(u, "Admin") &&
+                              u.id !== meId && (
                               <button onClick={() => deletarAdmin(u.id)} className="text-red-600 hover:underline" title="Deletar este administrador">
                                 Remover admin
                               </button>
@@ -5157,9 +5461,13 @@ async function agendarManutencaoPersonalizada() {
                             {a.ativo ? "Ativa" : "Inativa"}
                           </span>
 
-                          {u.tipo && (
+                          {(
+                            a.contextoTipo ||
+                            u.tipo
+                          ) && (
                             <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-700">
-                              {u.tipo}
+                              {a.contextoTipo ||
+                                u.tipo}
                             </span>
                           )}
                         </div>
@@ -5188,7 +5496,12 @@ async function agendarManutencaoPersonalizada() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         className="rounded-xl bg-green-700 px-3 py-2 text-xs font-semibold text-white"
-                        onClick={() => abrirDetalhes(u.id)}
+                        onClick={() =>
+                          abrirDetalhes(
+                            u.id,
+                            a.contextoKey
+                          )
+                        }
                       >
                         Ver conta
                       </button>
@@ -5198,7 +5511,9 @@ async function agendarManutencaoPersonalizada() {
                         onClick={async () => {
                           await escolherEAlterarPlanoAssinatura(
                             u.id,
-                            u.tipo,
+                            a.contextoTipo ??
+                              u.tipo,
+                            a.contextoKey,
                             a.plano
                           );
                           await carregarAssinantes(assPage);
@@ -5212,7 +5527,7 @@ async function agendarManutencaoPersonalizada() {
                         <button
                           className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
                           onClick={async () => {
-                            await cancelarAssinatura(u.id);
+                            await cancelarAssinatura(u.id, a.contextoKey);
                             await carregarAssinantes(assPage);
                             await carregarAssOverview();
                           }}
@@ -5308,7 +5623,12 @@ async function agendarManutencaoPersonalizada() {
                           <div className="flex items-center gap-3 justify-end">
                             <button
                               className="text-green-700 hover:underline"
-                              onClick={() => abrirDetalhes(u.id)}
+                              onClick={() =>
+                                abrirDetalhes(
+                                  u.id,
+                                  a.contextoKey
+                                )
+                              }
                             >
                               Ver conta
                             </button>
@@ -5318,10 +5638,11 @@ async function agendarManutencaoPersonalizada() {
                               onClick={async () => {
                                 await escolherEAlterarPlanoAssinatura(
                                   u.id,
-                                  u.tipo,
+                                  a.contextoTipo ??
+                                    u.tipo,
+                                  a.contextoKey,
                                   a.plano
                                 );
-
                                 await carregarAssinantes(assPage);
                                 await carregarAssOverview();
                               }}
@@ -5333,7 +5654,7 @@ async function agendarManutencaoPersonalizada() {
                               <button
                                 className="text-red-600"
                                 onClick={async () => {
-                                  await cancelarAssinatura(u.id);
+                                  await cancelarAssinatura(u.id, a.contextoKey);
                                   await carregarAssinantes(assPage);
                                   await carregarAssOverview();
                                 }}
@@ -6287,7 +6608,9 @@ async function agendarManutencaoPersonalizada() {
                             {userSelecionado.nome ?? userSelecionado.nomeDeUsuario ?? "Usuário"}
                           </button>
                           <div className="text-sm text-gray-600">{u.email ?? "-"}</div>
-                          <div className="text-xs text-gray-500">Tipo: {u.tipo ?? "-"} • Criado: {formatDate(u.criadoEm)}</div>
+                          <div className="text-xs text-gray-500">
+                            Papéis: {labelPapeisUsuario(u)} • Criado: {formatDate(u.criadoEm)}
+                          </div>
                         </div>
                       </div>
 
@@ -6295,9 +6618,44 @@ async function agendarManutencaoPersonalizada() {
                         <Info label="Telefone" value={u.telefone || "-"} />
                         <Info label="Data de Nascimento" value={formatDate(u.dataNascimento)} />
                         <Info label="Endereço" value={u.endereco || "-"} />
-                        {u.tipo === "Atleta" && <Info label="Posição" value={u.posicaoCampo || "-"} />}
-                        {(u.tipo === "Professor" || u.tipo === "Clube" || u.tipo === "Escolinha") && (
-                          <Info label="Alunos vinculados" value={typeof u.totalVinculados === "number" ? String(u.totalVinculados) : "-"} />
+                        {usuarioTemPapel(
+                          u,
+                          "Atleta"
+                        ) && (
+                          <Info
+                            label="Posição"
+                            value={
+                              u.posicaoCampo ||
+                              "-"
+                            }
+                          />
+                        )}
+
+                        {(
+                          usuarioTemPapel(
+                            u,
+                            "Professor"
+                          ) ||
+                          usuarioTemPapel(
+                            u,
+                            "Clube"
+                          ) ||
+                          usuarioTemPapel(
+                            u,
+                            "Escolinha"
+                          )
+                        ) && (
+                          <Info
+                            label="Alunos vinculados"
+                            value={
+                              typeof u.totalVinculados ===
+                              "number"
+                                ? String(
+                                    u.totalVinculados
+                                  )
+                                : "-"
+                            }
+                          />
                         )}
                         <Info label="Posts" value={String(u.contagens?.posts ?? "-")} />
                         <Info label="Comentários" value={String(u.contagens?.comentarios ?? "-")} />
@@ -6327,13 +6685,98 @@ async function agendarManutencaoPersonalizada() {
                         })()}
 
                         <div className="flex flex-wrap gap-2 mt-3">
+                          {!u.assinatura &&
+                            Array.isArray(
+                              u.contextos
+                            ) &&
+                            u.contextos.length > 0 && (
+                              <div className="mb-3">
+                                <div className="text-sm font-medium mb-1">
+                                  Contexto da assinatura
+                                </div>
+
+                                <select
+                                  className="border rounded px-3 py-2 w-full"
+                                  value={
+                                    (u as any)
+                                      .contextoAssinaturaSelecionado ??
+                                    u.contextos[0]?.key ??
+                                    ""
+                                  }
+                                  onChange={(e) => {
+                                    const key =
+                                      e.target.value;
+
+                                    setUserSelecionado(
+                                      (prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              contextoAssinaturaSelecionado:
+                                                key,
+                                            } as any
+                                          : prev
+                                    );
+                                  }}
+                                >
+                                  {u.contextos.map(
+                                    (contexto) => (
+                                      <option
+                                        key={
+                                          contexto.key
+                                        }
+                                        value={
+                                          contexto.key
+                                        }
+                                      >
+                                        {contexto.label ||
+                                          contexto.tipoUsuario ||
+                                          contexto.organizationType ||
+                                          contexto.key}
+                                      </option>
+                                    )
+                                  )}
+                                </select>
+                              </div>
+                          )}
+
                           <button
                             className="px-3 py-2 bg-blue-600 text-white rounded"
                             onClick={async () => {
+                              const contextoKey =
+                                u.assinatura
+                                  ?.contextoKey ??
+                                (u as any)
+                                  .contextoAssinaturaSelecionado ??
+                                u.contextos?.[0]
+                                  ?.key ??
+                                null;
+
+                              const contextoSelecionado =
+                                u.contextos?.find(
+                                  (c) =>
+                                    c.key ===
+                                    contextoKey
+                                );
+
                               await escolherEAlterarPlanoAssinatura(
                                 u.id,
-                                u.tipo as string,
-                                u.assinatura?.plano
+
+                                u.assinatura
+                                  ?.contextoTipo ??
+                                  contextoSelecionado
+                                    ?.organizationType ??
+                                  contextoSelecionado
+                                    ?.role ??
+                                  contextoSelecionado
+                                    ?.tipoUsuario ??
+                                  u.tipo,
+
+                                contextoKey,
+
+                                u.assinatura
+                                  ?.plano ??
+                                  "FREE"
                               );
                             }}
                           >
@@ -6343,7 +6786,13 @@ async function agendarManutencaoPersonalizada() {
                           {u.assinatura?.ativo && (
                             <button
                               className="px-3 py-2 bg-red-600 text-white rounded"
-                              onClick={() => cancelarAssinatura(u.id)}
+                              onClick={() =>
+                                cancelarAssinatura(
+                                  u.id,
+                                  u.assinatura
+                                    ?.contextoKey
+                                )
+                              }
                             >
                               Cancelar assinatura
                             </button>

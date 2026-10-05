@@ -14,6 +14,9 @@ import {
   type ActiveContextSession,
   readAuthSessionSnapshot,
 } from "../utils/authSession.js";
+import socket, {
+  syncSocketContext,
+} from "../services/socket.js";
 
 export interface User {
   id: string | number;
@@ -415,6 +418,8 @@ export function UserProvider({
           }
         );
 
+        syncSocketContext();
+
         await Promise.all([
           refreshPermissions(),
           refreshActiveContexts(),
@@ -468,6 +473,65 @@ export function UserProvider({
       window.removeEventListener(
         "footera:auth-changed",
         onAuthChanged
+      );
+    };
+  }, [
+    syncSession,
+    refreshPermissions,
+    refreshActiveContexts,
+  ]);
+
+  useEffect(() => {
+    const onContextSynced =
+      (
+        payload?: {
+          activeContextKey?:
+            string;
+
+          activeContextKind?:
+            "PERSONAL" |
+            "ORGANIZATION";
+
+          organizationId?:
+            string | null;
+        }
+      ) => {
+        const nextContextKey =
+          String(
+            payload
+              ?.activeContextKey ??
+            ""
+          ).trim();
+
+        if (!nextContextKey) {
+          return;
+        }
+
+        /*
+        * O servidor já alterou o
+        * ActiveContext da conta.
+        *
+        * Esta aba apenas atualiza
+        * seu estado React/storage
+        * a partir do backend.
+        */
+        syncSession();
+
+        void Promise.all([
+          refreshPermissions(),
+          refreshActiveContexts(),
+        ]);
+      };
+
+    socket.on(
+      "context:synced",
+      onContextSynced
+    );
+
+    return () => {
+      socket.off(
+        "context:synced",
+        onContextSynced
       );
     };
   }, [

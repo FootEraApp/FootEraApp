@@ -112,4 +112,37 @@ export function syncSocketAuth(
   socket.connect();
 }
 
+export function syncSocketContext() {
+  /*
+   * Se estiver desconectado,
+   * não precisamos forçar conexão.
+   *
+   * Na próxima conexão o backend
+   * já resolverá o ActiveContext
+   * atual automaticamente.
+   */
+  if (!socket.connected) {
+    return;
+  }
+
+  socket.emit(
+    "context:sync",
+    (
+      resp?: {
+        ok?: boolean;
+        error?: string;
+      }
+    ) => {
+      if (
+        resp?.ok === false
+      ) {
+        console.warn(
+          "[SOCKET] falha ao sincronizar contexto:",
+          resp.error
+        );
+      }
+    }
+  );
+}
+
 export default socket;
