@@ -7,6 +7,7 @@ import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import {
   Prisma,
   VisibilidadePostagem,
+  NotificacaoTipo,
 } from "@prisma/client";
 import {
   getPostVisibilityWhere,
@@ -19,10 +20,138 @@ import {
 import {
   obterOrganizacaoAtivaDoUsuario,
 } from "../services/organizacoes.js";
-import { getActiveContext } from "../services/activeContext.js";
+import {
+  getActiveContext,
+  listarActiveContexts,
+  type ActiveContext,
+} from "../services/activeContext.js";
+import {
+  criarNotificacaoEEnviarPush,
+} from "./notificacoesController.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
+
+type AutorPostagemResolvido = {
+  contexto: ActiveContext;
+  organizacaoId: string | null;
+};
+
+async function resolverAutorPostagem(
+  usuarioId: string,
+  authorContextKeyRaw?: unknown
+): Promise<AutorPostagemResolvido> {
+  const authorContextKey =
+    String(
+      authorContextKeyRaw ?? ""
+    ).trim();
+
+  /*
+   * Compatibilidade enquanto o front
+   * ainda não envia authorContextKey.
+   *
+   * Assim a etapa 115 pode entrar antes
+   * do seletor da etapa 116 sem quebrar
+   * a criação de posts atual.
+   */
+  if (!authorContextKey) {
+    const contexto =
+      await getActiveContext(
+        usuarioId
+      );
+
+    if (!contexto) {
+      const erro: any =
+        new Error(
+          "Nenhum contexto ativo disponível para publicação."
+        );
+
+      erro.status = 403;
+      erro.code =
+        "POST_AUTHOR_CONTEXT_NOT_FOUND";
+
+      throw erro;
+    }
+
+    return {
+      contexto,
+
+      organizacaoId:
+        contexto.kind ===
+        "ORGANIZATION"
+          ? contexto.organizationId ??
+            null
+          : null,
+    };
+  }
+
+  /*
+   * Nunca confiamos diretamente no
+   * organizationId enviado pelo cliente.
+   *
+   * O contextKey precisa existir entre
+   * os contextos que realmente pertencem
+   * ao usuário autenticado.
+   */
+  const contextos =
+    await listarActiveContexts(
+      usuarioId
+    );
+
+  const contexto =
+    contextos.find(
+      (item) =>
+        item.key ===
+        authorContextKey
+    );
+
+  if (!contexto) {
+    const erro: any =
+      new Error(
+        "Você não pode publicar usando esse perfil ou organização."
+      );
+
+    erro.status = 403;
+    erro.code =
+      "POST_AUTHOR_CONTEXT_FORBIDDEN";
+
+    throw erro;
+  }
+
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    const organizacaoId =
+      String(
+        contexto.organizationId ??
+          ""
+      ).trim();
+
+    if (!organizacaoId) {
+      const erro: any =
+        new Error(
+          "O contexto da organização não possui uma organização válida."
+        );
+
+      erro.status = 409;
+      erro.code =
+        "POST_AUTHOR_ORGANIZATION_INVALID";
+
+      throw erro;
+    }
+
+    return {
+      contexto,
+      organizacaoId,
+    };
+  }
+
+  return {
+    contexto,
+    organizacaoId: null,
+  };
+}
 
 const postagemIncludeBase = {
   usuario: {
@@ -34,6 +163,13 @@ const postagemIncludeBase = {
       tipo: true,
       destaque: true,
       verified: true,
+    },
+  },
+  organizacao: {
+    select: {
+      id: true,
+      nome: true,
+      tipo: true,
     },
   },
   curtidas: { select: { usuarioId: true } },
@@ -457,8 +593,16 @@ export const curtirPostagem: RequestHandler = async (req, res) => {
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
+
+          organizacao: {
+            select: {
+              id: true,
+              nome: true,
+            },
+          },
         },
       });
 
@@ -504,11 +648,74 @@ export const curtirPostagem: RequestHandler = async (req, res) => {
     } else {
       await prisma.curtida.create({
         data: {
-          postagemId: postId,
+          postagemId:
+            postId,
+
           usuarioId,
         },
       });
-      return res.json({ message: "Curtida adicionada" });
+
+      /*
+      * Não notificamos quando o usuário
+      * curte a própria publicação.
+      *
+      * Mesmo que o post seja exibido como
+      * organização, usuarioId continua
+      * sendo quem efetivamente publicou.
+      */
+      if (
+        String(post.usuarioId) !==
+        String(usuarioId)
+      ) {
+        try {
+          const nomeOrganizacao =
+            String(
+              post.organizacao?.nome ??
+              ""
+            ).trim();
+
+          const mensagem =
+            nomeOrganizacao
+              ? `A publicação da ${nomeOrganizacao} recebeu uma nova curtida.`
+              : "Sua publicação recebeu uma nova curtida.";
+
+          await criarNotificacaoEEnviarPush({
+            usuarioId:
+              post.usuarioId,
+
+            actorId:
+              usuarioId,
+
+            tipo:
+              NotificacaoTipo.GENERICA,
+
+            titulo:
+              "Nova curtida",
+
+            mensagem,
+
+            link:
+              `/post/${encodeURIComponent(
+                postId
+              )}`,
+          });
+        } catch (error) {
+          /*
+          * A curtida já foi registrada.
+          * Uma falha de push/notificação
+          * não deve desfazer a curtida.
+          */
+          console.warn(
+            "[curtirPostagem] falha ao criar notificação:",
+            error
+          );
+        }
+      }
+
+      return res.json({
+        message:
+          "Curtida adicionada",
+      });
     }
   } catch (error) {
     console.error("Erro ao curtir post:", error);
@@ -606,10 +813,14 @@ export const postar: RequestHandler = async (req, res) => {
         VisibilidadePostagem.LOGADO
       );
 
-    const organizacaoId =
-      await obterOrganizacaoAtivaDoUsuario(
-        usuarioId
+    const autorResolvido =
+      await resolverAutorPostagem(
+        usuarioId,
+        req.body?.authorContextKey
       );
+
+    const organizacaoId =
+      autorResolvido.organizacaoId;
 
     const postagem = await prisma.postagem.create({
       data: {
@@ -624,35 +835,17 @@ export const postar: RequestHandler = async (req, res) => {
       },
     });
 
-    const postForEmit = await prisma.postagem.findUnique({
-      where: { id: postagem.id },
-      include: {
-        usuario: {
-          select: {
-            id: true,
-            nome: true,
-            nomeDeUsuario: true,
-            foto: true,
-            tipo: true,
-            destaque: true,
-            verified: true,
-          },
+    const postForEmit =
+      await prisma.postagem.findUnique({
+        where: {
+          id:
+            postagem.id,
         },
-        curtidas: true,
-        comentarios: {
-          include: {
-            usuario: {
-              select: {
-                id: true,
-                nome: true,
-                nomeDeUsuario: true,
-                foto: true,
-              },
-            },
-          },
+
+        include: {
+          ...postagemIncludeBase,
         },
-      },
-    });
+      });
 
     await emitirNovoPost(
       postForEmit,
@@ -661,10 +854,43 @@ export const postar: RequestHandler = async (req, res) => {
     );
 
     return res.status(201).json(postagem);
-  } catch (error) {
-    console.error("Erro ao postar:", error);
-    return res.status(500).json({ message: "Erro interno." });
-  }
+      } catch (error: any) {
+      console.error(
+        "Erro ao postar:",
+        error
+      );
+
+      const status =
+        Number(
+          error?.status ??
+            error?.statusCode ??
+            500
+        );
+
+      if (
+        Number.isFinite(status) &&
+        status >= 400 &&
+        status < 500
+      ) {
+        return res.status(status).json({
+          message:
+            error?.message ??
+            "Não foi possível publicar.",
+
+          code:
+            error?.code ??
+            "POST_CREATE_FAILED",
+        });
+      }
+
+      return res.status(500).json({
+        message:
+          "Erro interno.",
+
+        code:
+          "POST_CREATE_FAILED",
+      });
+    }
 };
 
 export const deletarPostagem: RequestHandler = async (req, res) => {
@@ -883,10 +1109,14 @@ export async function repostPost(req: Request, res: Response) {
       return res.json({ ok: true, action: "unrepost", id: existente.id });
     }
 
-    const organizacaoRepostId =
-      await obterOrganizacaoAtivaDoUsuario(
-        userId
+    const autorRepost =
+      await resolverAutorPostagem(
+        userId,
+        req.body?.authorContextKey
       );
+
+    const organizacaoRepostId =
+      autorRepost.organizacaoId;
 
     const novoBase =
       await prisma.postagem.create({

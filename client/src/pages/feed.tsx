@@ -471,6 +471,88 @@ function username(u?: any) {
   return h || u?.nome || "Usuário";
 }
 
+function getPostAutor(
+  post?: PostagemComUsuario | null
+) {
+  if (!post) {
+    return {
+      isOrganization:
+        false,
+
+      id:
+        "",
+
+      nome:
+        "Usuário",
+
+      foto:
+        null as string | null,
+
+      tipo:
+        null as string | null,
+    };
+  }
+
+  if (post.organizacao) {
+    return {
+      isOrganization:
+        true,
+
+      id:
+        post.organizacao.id,
+
+      nome:
+        post.organizacao.nome ||
+        "Organização",
+
+      /*
+       * Por enquanto usamos o
+       * fallback do Avatar.
+       *
+       * Depois podemos trazer o logo
+       * institucional real.
+       */
+      foto:
+        null,
+
+      tipo:
+        post.organizacao.tipo ??
+        null,
+    };
+  }
+
+  return {
+    isOrganization:
+      false,
+
+    id:
+      post.usuario?.id ??
+      "",
+
+    nome:
+      post.usuario?.nome ??
+      "Usuário",
+
+    foto:
+      post.usuario?.foto ??
+      null,
+
+    tipo:
+      post.usuario?.tipo ??
+      null,
+  };
+}
+
+function nomeAutorPost(
+  post?:
+    | PostagemComUsuario
+    | null
+) {
+  return getPostAutor(
+    post
+  ).nome;
+}
+
 function getRepostChain(p: PostagemComUsuario): PostagemComUsuario[] {
   const chain: PostagemComUsuario[] = [];
   let cur: any = p;
@@ -1208,7 +1290,11 @@ function PaginaFeed(): JSX.Element {
           const parsed = parseAchievement(post.conteudo);
           const isAchievement = !!parsed;
           const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
-
+          const autor =
+            getPostAutor(
+              post
+            );
+            
           return (
             <div
               key={post.id}
@@ -1216,21 +1302,46 @@ function PaginaFeed(): JSX.Element {
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Link
-                    href={`/perfil/${post.usuario.id}`}
-                    title={`Ver perfil de ${post.usuario.nome}`}
-                    className="shrink-0"
-                  >
+                  {autor.isOrganization ? (
                     <Avatar
-                      foto={post.usuario.foto}
-                      alt={post.usuario.nome}
-                      className="w-10 h-10 cursor-pointer"
+                      foto={autor.foto}
+                      alt={autor.nome}
+                      className="w-10 h-10"
                     />
-                  </Link>
+                  ) : (
+                    <Link
+                      href={`/perfil/${autor.id}`}
+                      title={`Ver perfil de ${autor.nome}`}
+                      className="shrink-0"
+                    >
+                      <Avatar
+                        foto={autor.foto}
+                        alt={autor.nome}
+                        className="w-10 h-10 cursor-pointer"
+                      />
+                    </Link>
+                  )}
+
                   <div>
-                    <p className="font-semibold">{post.usuario.nome}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">
+                        {autor.nome}
+                      </p>
+
+                      {autor.isOrganization && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          Organização
+                        </span>
+                      )}
+                    </div>
+
                     <p className="text-xs text-gray-500">
-                      {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
+                      {format(
+                        new Date(
+                          post.dataCriacao
+                        ),
+                        "dd/MM, HH:mm"
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1248,7 +1359,12 @@ function PaginaFeed(): JSX.Element {
 
               {post.repostOf && (
                 <div className="text-xs text-gray-500 -mt-1">
-                  Repostou de <strong>{username(post.repostOf.usuario)}</strong>
+                  Repostou de{" "}
+                  <strong>
+                    {nomeAutorPost(
+                      post.repostOf
+                    )}
+                  </strong>
                 </div>
               )}
 
@@ -1278,40 +1394,65 @@ function PaginaFeed(): JSX.Element {
 
                               return (
                                 <div key={`${item.id}-${idx}`} className="text-sm text-gray-700">
-                                  <span className="font-semibold">{username(item.usuario)}</span>{" "}
+                                  <span className="font-semibold">
+                                    {nomeAutorPost(
+                                      item
+                                    )}
+                                  </span>
                                   <span className="text-gray-600">repostou:</span>{" "}
                                   <span className="italic">“{texto}”</span>
                                 </div>
                               );
                             })}
 
-                            {root && (
-                              <div className="border rounded-xl p-3 bg-white">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Link
-                                    href={`/perfil/${root.usuario?.id ?? ""}`}
-                                    title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
-                                    className="shrink-0"
-                                  >
-                                    <Avatar
-                                      foto={root.usuario?.foto}
-                                      alt={root.usuario?.nome || "avatar original"}
-                                      className="w-7 h-7 cursor-pointer"
-                                    />
-                                  </Link>
+                            {root &&
+                              (() => {
+                                const rootAutor =
+                                  getPostAutor(
+                                    root
+                                  );
 
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-semibold truncate">
-                                      {root.usuario?.nome}{" "}
-                                      <span className="text-gray-500 font-normal">
-                                        ({username(root.usuario)})
+                                return (
+                                  <div className="border rounded-xl p-3 bg-white">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      {rootAutor.isOrganization ? (
+                                        <Avatar
+                                          foto={
+                                            rootAutor.foto
+                                          }
+                                          alt={
+                                            rootAutor.nome
+                                          }
+                                          className="w-7 h-7"
+                                        />
+                                      ) : (
+                                        <Link
+                                          href={`/perfil/${rootAutor.id}`}
+                                          title={`Ver perfil de ${rootAutor.nome}`}
+                                          className="shrink-0"
+                                        >
+                                          <Avatar
+                                            foto={
+                                              rootAutor.foto
+                                            }
+                                            alt={
+                                              rootAutor.nome
+                                            }
+                                            className="w-7 h-7 cursor-pointer"
+                                          />
+                                        </Link>
+                                      )}
+
+                                      <span className="font-semibold text-sm">
+                                        {rootAutor.nome}
                                       </span>
-                                    </p>
-                                    <p className="text-[11px] text-gray-500">
-                                      {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
-                                    </p>
-                                  </div>
-                                </div>
+
+                                      {rootAutor.isOrganization && (
+                                        <span className="text-[10px] font-semibold text-emerald-700">
+                                          Organização
+                                        </span>
+                                      )}
+                                    </div>
 
                                 {!!cleanText(root.conteudo) && (
                                   <p className="text-sm text-gray-800 whitespace-pre-line">
@@ -1332,8 +1473,9 @@ function PaginaFeed(): JSX.Element {
                                     <source src={publicImgUrl(root.videoUrl) ?? ""} type="video/mp4" />
                                   </video>
                                 )}
-                              </div>
-                            )}
+                                    </div>
+                                  );
+                              })()}
                           </div>
                         );
                       })()}
@@ -1502,9 +1644,9 @@ function PaginaFeed(): JSX.Element {
               )
             }
             titulo={`Post de ${
-              postCompartilhar
-                .usuario?.nome ||
-              "FootEra"
+              nomeAutorPost(
+                postCompartilhar
+              ) || "FootEra"
             }`}
             path={`/post/${encodeURIComponent(
               postCompartilhar.id

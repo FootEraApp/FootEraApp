@@ -144,6 +144,11 @@ interface Postagem {
   imagemUrl?: string;
   videoUrl?: string;
   usuario: Usuario;
+  organizacao?: {
+    id: string;
+    nome: string;
+    tipo?: string | null;
+  } | null;
 }
 
 interface Desafio {
@@ -2687,14 +2692,39 @@ function stripConvocacaoTag(text: string) {
         const post = postsCache[msg.conteudo];
         if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
 
+        const autorNome =
+          post.organizacao?.nome ||
+          post.usuario?.nome ||
+          "Usuário";
+
+        const autorFoto =
+          post.organizacao
+            ? null
+            : post.usuario?.foto;
+
         const img = post.imagemUrl ? publicImgUrl(post.imagemUrl) : null;
         const video = !img && post.videoUrl ? publicImgUrl(post.videoUrl) : null;
 
         return Shell(
           <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
             <div className="flex items-center gap-2 mb-2">
-              <Avatar src={post.usuario.foto} name={post.usuario.nome} className="w-8 h-8" />
-              <span className="text-sm font-semibold">{post.usuario.nome}</span>
+              <Avatar
+                src={autorFoto}
+                name={autorNome}
+                className="w-8 h-8"
+              />
+
+              <div>
+                <span className="text-sm font-semibold">
+                  {autorNome}
+                </span>
+
+                {post.organizacao && (
+                  <div className="text-[10px] font-semibold text-green-700">
+                    Organização
+                  </div>
+                )}
+              </div>
             </div>
             {img && <img src={img} className="w-60 max-h-48 object-cover rounded mb-2" />}
             {video && (
