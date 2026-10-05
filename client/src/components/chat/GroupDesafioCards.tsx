@@ -25,7 +25,18 @@ export type MsgGrupo = {
 };
 
 type Usuario = { id: string; nome: string; foto?: string | null };
-type Postagem = { id: string; conteudo: string; imagemUrl?: string; videoUrl?: string; usuario: Usuario };
+type Postagem = {
+  id: string;
+  conteudo: string;
+  imagemUrl?: string;
+  videoUrl?: string;
+  usuario: Usuario;
+  organizacao?: {
+    id: string;
+    nome: string;
+    tipo?: string | null;
+  } | null;
+};
 
 function formatarData(d?: string) {
   if (!d) return "—";
@@ -147,15 +158,44 @@ function PostPreview({ postId }: { postId: string }) {
 
   if (!post) return <div className="p-2 rounded max-w-sm bg-gray-200">Carregando post...</div>;
 
-  const avatar  = publicImgUrl(post.usuario.foto) || "https://via.placeholder.com/40";
+  const autorNome =
+    post.organizacao?.nome ||
+    post.usuario.nome ||
+    "Usuário";
+
+  const autorFoto =
+    post.organizacao
+      ? null
+      : post.usuario.foto;
+
+  const avatar =
+    publicImgUrl(
+      autorFoto
+    ) ||
+    "https://via.placeholder.com/40";
   const imgSrc  = publicImgUrl(post.imagemUrl);
   const videoSrc= publicImgUrl(post.videoUrl);
 
   return (
     <div onClick={() => navigate(`/post/${post.id}`)} className="p-4 rounded max-w-sm border shadow-sm cursor-pointer bg-white" title="Clique para abrir a postagem">
       <div className="flex items-center mb-3 gap-3">
-        <img src={avatar} alt={`Foto de ${post.usuario.nome}`} className="w-10 h-10 rounded-full object-cover border" />
-        <span className="font-semibold">{post.usuario.nome}</span>
+        <img
+          src={avatar}
+          alt={`Foto de ${autorNome}`}
+          className="w-10 h-10 rounded-full object-cover border"
+        />
+
+        <div>
+          <span className="font-semibold">
+            {autorNome}
+          </span>
+
+          {post.organizacao && (
+            <div className="text-[10px] font-semibold text-green-700">
+              Organização
+            </div>
+          )}
+        </div>
       </div>
       {imgSrc && <img src={imgSrc} className="w-full max-h-48 object-cover rounded mb-2" />}
       {!imgSrc && videoSrc && (

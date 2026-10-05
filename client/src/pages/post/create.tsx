@@ -1,5 +1,11 @@
 // client/src/pages/post/create
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLocation } from "wouter";
 import {
   Award,
@@ -14,6 +20,9 @@ import { criarPost, type VisibilidadePostagem } from "../../services/feedService
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import BottomNav from "../../components/layout/BottomNav.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type EarnedFromApi = {
   vinculoId?: string;        
@@ -110,6 +119,26 @@ function Chip({
 
 export default function PaginaPostagem() {
   const [, navigate] = useLocation();
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const contexts =
+    userContext?.contexts ??
+    [];
+
+  const activeContext =
+    userContext?.activeContext ??
+    null;
+
+  const contextsLoading =
+    userContext?.contextsLoading ??
+    false;
+
+  const usuarioNome =
+    userContext?.user?.name ||
+    "Meu perfil";
   const [descricao, setDescricao] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [earned, setEarned] = useState<EarnedFromApi[]>([]);
@@ -118,6 +147,11 @@ export default function PaginaPostagem() {
   const [mensagem, setMensagem] = useState("");
   const [achPickerOpen, setAchPickerOpen] = useState(false);
   const [visibilidade, setVisibilidade] = useState<VisibilidadePostagem>("LOGADO");
+  const [
+    authorContextKey,
+    setAuthorContextKey,
+  ] =
+    useState(""); 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedConquista = useMemo(() => {
     if (!selectedAchId) return null;
@@ -127,6 +161,138 @@ export default function PaginaPostagem() {
   const temArquivo = !!arquivo;
   const temConquista = !!selectedConquista;
   const temDescricao = !!descricao.trim();
+
+  const authorOptions =
+    useMemo(() => {
+      const personal =
+        contexts.find(
+          (item) =>
+            item.kind ===
+            "PERSONAL"
+        );
+
+      const organizations =
+        contexts.filter(
+          (item) =>
+            item.kind ===
+            "ORGANIZATION"
+        );
+
+      const options: Array<{
+        key: string;
+        label: string;
+        kind:
+          | "PERSONAL"
+          | "ORGANIZATION";
+      }> = [];
+
+      if (personal) {
+        options.push({
+          key:
+            personal.key,
+
+          label:
+            usuarioNome,
+
+          kind:
+            "PERSONAL",
+        });
+      }
+
+      for (
+        const organization of
+          organizations
+      ) {
+
+        const label =
+          String(
+            organization.label ??
+            "Organização"
+          )
+            .split(" — ")[0]
+            .trim();
+
+        options.push({
+          key:
+            organization.key,
+
+          label:
+            label ||
+            "Organização",
+
+          kind:
+            "ORGANIZATION",
+        });
+      }
+
+      return options;
+    }, [
+      contexts,
+      usuarioNome,
+    ]);
+
+  useEffect(() => {
+    if (
+      contextsLoading ||
+      authorOptions.length === 0
+    ) {
+      return;
+    }
+
+    /*
+    * Se a opção atualmente selecionada
+    * ainda existe, não mexemos nela.
+    */
+    if (
+      authorContextKey &&
+      authorOptions.some(
+        (item) =>
+          item.key ===
+          authorContextKey
+      )
+    ) {
+      return;
+    }
+
+    /*
+    * Por padrão mantemos o comportamento
+    * atual:
+    *
+    * se o contexto global puder publicar,
+    * ele começa selecionado.
+    */
+    const activeOption =
+      activeContext
+        ? authorOptions.find(
+            (item) => {
+              if (
+                activeContext.kind ===
+                "ORGANIZATION"
+              ) {
+                return (
+                  item.key ===
+                  activeContext.key
+                );
+              }
+
+              return (
+                item.kind ===
+                "PERSONAL"
+              );
+            }
+          )
+        : null;
+
+    setAuthorContextKey(
+      activeOption?.key ??
+        authorOptions[0].key
+    );
+  }, [
+    contextsLoading,
+    authorOptions,
+    activeContext,
+    authorContextKey,
+  ]);
 
   useEffect(() => {
     const usuarioId = getUsuarioId();
@@ -195,6 +361,14 @@ export default function PaginaPostagem() {
   async function handleEnviar() {
     setMensagem("");
 
+    if (!authorContextKey) {
+      setMensagem(
+        "Escolha quem está publicando."
+      );
+
+      return;
+    }
+
     if (!temDescricao && !temConquista && !temArquivo) {
       setMensagem(
         "Escreva algo, selecione uma conquista ou anexe uma mídia (arquivo)."
@@ -224,11 +398,22 @@ export default function PaginaPostagem() {
       const descricaoFinal = partes.join("\n\n");
 
       await criarPost({
-        descricao: descricaoFinal,
-        imagemUrl: undefined,
-        videoUrl: undefined,
-        arquivo: arquivo || undefined,
+        descricao:
+          descricaoFinal,
+
+        imagemUrl:
+          undefined,
+
+        videoUrl:
+          undefined,
+
+        arquivo:
+          arquivo ||
+          undefined,
+
         visibilidade,
+
+        authorContextKey,
       });
 
       setMensagem("Postagem enviada com sucesso!");
@@ -362,6 +547,56 @@ export default function PaginaPostagem() {
         {previewMidia}
 
         <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="font-semibold text-gray-900">
+              Publicar como
+            </div>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Escolha se esta publicação será sua
+              ou de uma organização que você representa.
+            </p>
+
+            <select
+              value={authorContextKey}
+              disabled={
+                contextsLoading ||
+                authorOptions.length === 0 ||
+                carregando
+              }
+              onChange={(e) =>
+                setAuthorContextKey(
+                  e.target.value
+                )
+              }
+              className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+            >
+              {contextsLoading ? (
+                <option value="">
+                  Carregando perfis...
+                </option>
+              ) : authorOptions.length ===
+                0 ? (
+                <option value="">
+                  Nenhum perfil disponível
+                </option>
+              ) : (
+                authorOptions.map(
+                  (item) => (
+                    <option
+                      key={item.key}
+                      value={item.key}
+                    >
+                      {item.kind ===
+                      "ORGANIZATION"
+                        ? `🏟️ ${item.label}`
+                        : `👤 ${item.label}`}
+                    </option>
+                  )
+                )
+              )}
+            </select>
+          </div>
           <div className="font-semibold text-gray-900">
             Quem pode ver esta publicação?
           </div>

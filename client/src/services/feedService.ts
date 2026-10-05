@@ -38,6 +38,11 @@ export type PostagemComUsuario = {
     destaque?: boolean | null;
     verified?: boolean | null;
   };
+  organizacao?: {
+    id: string;
+    nome: string;
+    tipo?: string | null;
+  } | null;
   imagemUrl?: string | null;
   videoUrl?: string | null;
   tipoMidia?: "Imagem" | "Video" | "Documento" | null;
@@ -59,6 +64,7 @@ export interface CriarPostInput {
   arquivo?: File | null;
   visibilidade?:
     VisibilidadePostagem;
+  authorContextKey?: string;
 }
 
 export type FiltroFeed = "todos" | "seguindo" | "favoritos" | "meus";
@@ -270,7 +276,8 @@ export type OrigemCompartilhamentoPost =
   | "email"
   | "nativo"
   | "footera"
-  | "direct";
+  | "direct"
+  | "qrcode";
 
 export async function registrarCompartilhamentoPost(
   postId: string,
@@ -399,6 +406,7 @@ export async function criarPost({
   videoUrl,
   arquivo,
   visibilidade = "LOGADO",
+  authorContextKey,
 }: CriarPostInput) {
   const POST_URL = `${API.BASE_URL}/api/feed/post`;
   const hasDescricao = !!descricao && descricao.trim().length > 0;
@@ -410,6 +418,14 @@ export async function criarPost({
     if (hasDescricao) fd.append("descricao", descricao.trim());
     fd.append("arquivo", arquivo);
     fd.append("visibilidade", visibilidade);
+    if (
+      authorContextKey?.trim()
+    ) {
+      fd.append(
+        "authorContextKey",
+        authorContextKey.trim()
+      );
+    }
     const res = await fetch(POST_URL, {
       method: "POST",
       headers: auth(),
@@ -424,6 +440,12 @@ export async function criarPost({
 
   if (hasDescricao || hasImagem || hasVideo) {
     const payload: any = { visibilidade, };
+    if (
+      authorContextKey?.trim()
+    ) {
+      payload.authorContextKey =
+        authorContextKey.trim();
+    }
     if (hasDescricao) payload.descricao = descricao.trim();
     if (hasImagem) payload.imagemUrl = imagemUrl;
     if (hasVideo) payload.videoUrl = videoUrl;

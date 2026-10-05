@@ -123,6 +123,23 @@ export function sanitizePublicPost(
         post.usuario
       ),
 
+    organizacao:
+      post.organizacao
+        ? {
+            id:
+              post.organizacao
+                .id ?? null,
+
+            nome:
+              post.organizacao
+                .nome ?? null,
+
+            tipo:
+              post.organizacao
+                .tipo ?? null,
+          }
+        : null,
+
     curtidas: [],
 
     totalCurtidas:

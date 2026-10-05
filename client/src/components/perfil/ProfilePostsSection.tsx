@@ -149,6 +149,49 @@ function username(u?: any) {
   return h || u?.nome || "Usuário";
 }
 
+function getPostAutor(
+  post?:
+    | PostagemComUsuario
+    | null
+) {
+  if (post?.organizacao) {
+    return {
+      nome:
+        post.organizacao.nome ||
+        "Organização",
+
+      foto:
+        null as string | null,
+
+      isOrganization:
+        true,
+    };
+  }
+
+  return {
+    nome:
+      post?.usuario?.nome ||
+      "Usuário",
+
+    foto:
+      post?.usuario?.foto ??
+      null,
+
+    isOrganization:
+      false,
+  };
+}
+
+function nomeAutorPost(
+  post?:
+    | PostagemComUsuario
+    | null
+) {
+  return getPostAutor(
+    post
+  ).nome;
+}
+
 function getRootPost(p: PostagemComUsuario): PostagemComUsuario {
   let cur: any = p;
   while (cur?.repostOf) cur = cur.repostOf;
@@ -609,6 +652,10 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             const imgSrc = midiaImg(post.imagemUrl);
             const videoSrc = midiaVideo(post.videoUrl);
             const ro = post.repostOf ?? null;
+            const autor =
+              getPostAutor(
+                post
+              );
 
             return (
               <div
@@ -617,17 +664,29 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
               >
                <div className="flex items-center gap-2">
                 <Avatar
-                  foto={post?.usuario?.foto}
-                  alt={post?.usuario?.nome || "Usuário"}
+                  foto={autor.foto}
+                  alt={autor.nome}
                   className="w-10 h-10"
                 />
 
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">
-                    {post?.usuario?.nome || "Usuário"}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold truncate">
+                      {autor.nome}
+                    </p>
+
+                    {autor.isOrganization && (
+                      <span className="text-[10px] font-semibold text-green-700">
+                        Organização
+                      </span>
+                    )}
+                  </div>
+
                   <p className="text-xs text-gray-500">
-                    {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
+                    {format(
+                      new Date(post.dataCriacao),
+                      "dd/MM, HH:mm"
+                    )}
                   </p>
                 </div>
 
@@ -658,19 +717,23 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                         const rootText = cleanText(root.conteudo);
                         const rootImg = midiaImg(root.imagemUrl);
                         const rootVideo = midiaVideo(root.videoUrl);
+                        const rootAutor =
+                          getPostAutor(
+                            root
+                          );
 
                         return (
                           <div className="border border-gray-200 rounded-2xl p-4 bg-white">
                             <p className="text-sm text-gray-500 mb-2">
                               Repostou de{" "}
                               <span className="text-green-900 font-medium">
-                                {username(ro.usuario)}
+                                {nomeAutorPost(ro)}
                               </span>
                             </p>
 
                             {!!parentComment && (
                               <div className="mb-3 text-sm text-gray-700">
-                                <span className="font-semibold">{username(parent?.usuario)}</span>{" "}
+                                <span className="font-semibold">{nomeAutorPost(parent)}</span>{" "}
                                 <span className="text-gray-600">comentou:</span>{" "}
                                 <span className="italic">“{parentComment}”</span>
                               </div>
@@ -679,17 +742,14 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                             <div className="border rounded-xl p-3 bg-gray-50">
                               <div className="flex items-center gap-2 mb-1">
                                 <Avatar
-                                  foto={root.usuario?.foto}
-                                  alt={root.usuario?.nome || "avatar"}
+                                  foto={rootAutor.foto}
+                                  alt={rootAutor.nome}
                                   className="w-7 h-7"
                                 />
 
                                 <div className="min-w-0">
                                   <p className="text-sm font-semibold truncate">
-                                    {root.usuario?.nome || "Usuário"}{" "}
-                                    <span className="text-gray-500 font-normal">
-                                      ({username(root.usuario)})
-                                    </span>
+                                    {rootAutor.nome}{" "}
                                   </p>
 
                                   <p className="text-[11px] text-gray-500">
@@ -825,9 +885,9 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                 )
               }
               titulo={`Post de ${
-                postCompartilhar
-                  .usuario?.nome ||
-                "FootEra"
+                nomeAutorPost(
+                  postCompartilhar
+                ) || "FootEra"
               }`}
               path={`/post/${encodeURIComponent(
                 postCompartilhar.id

@@ -1,8 +1,24 @@
-import { Response } from "express";
-import { z } from "zod";
-import { prisma } from "../prisma.js";
-import type { AuthenticatedRequest } from "../middlewares/auth.js";
-import { podeVisualizarPostagem } from "../utils/postVisibility.js";
+import {
+  Response,
+} from "express";
+import {
+  z,
+} from "zod";
+import {
+  NotificacaoTipo,
+} from "@prisma/client";
+import {
+  prisma,
+} from "../prisma.js";
+import type {
+  AuthenticatedRequest,
+} from "../middlewares/auth.js";
+import {
+  podeVisualizarPostagem,
+} from "../utils/postVisibility.js";
+import {
+  criarNotificacaoEEnviarPush,
+} from "./notificacoesController.js";
 
 const criarComentarioSchema = z.object({
   postagemId: z.string().trim().min(1, "postagemId é obrigatório"),
@@ -29,8 +45,16 @@ export async function criarComentario(req: AuthenticatedRequest, res: Response) 
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
+
+          organizacao: {
+            select: {
+              id: true,
+              nome: true,
+            },
+          },
         },
       });
 
@@ -71,6 +95,55 @@ export async function criarComentario(req: AuthenticatedRequest, res: Response) 
         usuario: { select: { id: true, nome: true, foto: true } },
       },
     });
+
+    if (
+      String(post.usuarioId) !==
+      String(userId)
+    ) {
+      try {
+        const nomeOrganizacao =
+          String(
+            post.organizacao?.nome ??
+            ""
+          ).trim();
+
+        const mensagem =
+          nomeOrganizacao
+            ? `A publicação da ${nomeOrganizacao} recebeu um novo comentário.`
+            : "Sua publicação recebeu um novo comentário.";
+
+        await criarNotificacaoEEnviarPush({
+          usuarioId:
+            post.usuarioId,
+
+          actorId:
+            String(userId),
+
+          tipo:
+            NotificacaoTipo.GENERICA,
+
+          titulo:
+            "Novo comentário",
+
+          mensagem,
+
+          link:
+            `/post/${encodeURIComponent(
+              postagemId
+            )}`,
+        });
+      } catch (error) {
+        /*
+        * O comentário já existe.
+        * Não transformamos falha de push
+        * em falha de comentário.
+        */
+        console.warn(
+          "[criarComentario] falha ao criar notificação:",
+          error
+        );
+      }
+    }
 
     return res.status(201).json(comentario);
   } catch (e: any) {

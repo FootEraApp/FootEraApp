@@ -676,44 +676,37 @@ function PostUnico(): JSX.Element {
       post.conteudo
     );
 
+  const autorEhOrganizacao =
+    Boolean(
+      post.organizacao
+    );
+
+  const nomeAutor =
+    post.organizacao?.nome ||
+    post.usuario?.nome ||
+    "Usuário";
+
   const avatarAutor =
-    publicImgUrl(
-      post.usuario?.foto
-    ) ||
-    `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`;
+    autorEhOrganizacao
+      ? `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+      : (
+          publicImgUrl(
+            post.usuario?.foto
+          ) ||
+          `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+        );
 
   const autorRef =
     String(
       post.usuario
         ?.nomeDeUsuario ||
-        post.usuario?.id ||
-        ""
-    );
-
-  const tipoAutor =
-    String(
-      post.usuario?.tipo ||
+      post.usuario?.id ||
       ""
-    )
-      .trim()
-      .toLowerCase();
-
-  const ehOrganizacao =
-    [
-      "clube",
-      "escolinha",
-      "escola",
-      "federacao",
-      "marca",
-    ].includes(
-      tipoAutor
     );
 
   const linkAutor =
-    ehOrganizacao
-      ? `/organizacao/${encodeURIComponent(
-          autorRef
-        )}`
+    autorEhOrganizacao
+      ? null
       : `/profile/${encodeURIComponent(
           autorRef
         )}`;
@@ -737,16 +730,28 @@ function PostUnico(): JSX.Element {
       >
         {/* CABEÇALHO */}
         <div className="flex items-center gap-3 px-5 pt-5">
-          <Link
-            href={linkAutor}
-            className="shrink-0"
-          >
+          {linkAutor ? (
+            <Link
+              href={linkAutor}
+              className="shrink-0"
+            >
+              <img
+                src={avatarAutor}
+                alt={nomeAutor}
+                className="
+                  h-12
+                  w-12
+                  rounded-full
+                  border
+                  border-gray-200
+                  object-cover
+                "
+              />
+            </Link>
+          ) : (
             <img
               src={avatarAutor}
-              alt={
-                post.usuario?.nome ||
-                "Perfil"
-              }
+              alt={nomeAutor}
               className="
                 h-12
                 w-12
@@ -756,21 +761,33 @@ function PostUnico(): JSX.Element {
                 object-cover
               "
             />
-          </Link>
+          )}
 
           <div className="min-w-0 flex-1">
-            <Link
-              href={linkAutor}
-              className="
-                block
-                truncate
-                font-bold
-                text-gray-950
-                hover:text-green-800
-              "
-            >
-              {post.usuario?.nome}
-            </Link>
+            {linkAutor ? (
+              <Link
+                href={linkAutor}
+                className="
+                  block
+                  truncate
+                  font-bold
+                  text-gray-950
+                  hover:text-green-800
+                "
+              >
+                {nomeAutor}
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-gray-950">
+                  {nomeAutor}
+                </span>
+
+                <span className="text-[10px] font-semibold text-green-700">
+                  Organização
+                </span>
+              </div>
+            )}
 
             <p className="text-sm text-gray-500">
               {format(
@@ -809,8 +826,10 @@ function PostUnico(): JSX.Element {
           <p className="px-5 pt-3 text-xs text-gray-500">
             Repostou de{" "}
             <strong>
-              {post.repostOf.usuario
+              {post.repostOf.organizacao
                 ?.nome ||
+                post.repostOf.usuario
+                  ?.nome ||
                 "Usuário"}
             </strong>
           </p>
@@ -830,11 +849,14 @@ function PostUnico(): JSX.Element {
                 <div className="mb-3 flex items-center gap-2">
                   <img
                     src={
-                      publicImgUrl(
-                        post.repostOf
-                          .usuario?.foto
-                      ) ||
-                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+                      post.repostOf.organizacao
+                        ? `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+                        : (
+                            publicImgUrl(
+                              post.repostOf.usuario?.foto
+                            ) ||
+                            `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
+                          )
                     }
                     alt="Perfil"
                     className="h-9 w-9 rounded-full object-cover"
@@ -844,7 +866,10 @@ function PostUnico(): JSX.Element {
                     <p className="text-sm font-semibold text-gray-900">
                       {
                         post.repostOf
-                          .usuario?.nome
+                          .organizacao?.nome ||
+                        post.repostOf
+                          .usuario?.nome ||
+                        "Usuário"
                       }
                     </p>
 
