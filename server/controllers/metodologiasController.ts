@@ -23,6 +23,10 @@ import {
   emitirCertificadoMetodologia,
 } from "../services/conquistasMetodologia.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
+import { getActiveContext, type ActiveContext } from "../services/activeContext.js";
 
 function calcularDatasExecucao(estrutura: any, assinatura: any) {
   const modo = estrutura?.modoExecucao;
@@ -71,6 +75,182 @@ function calcularDatasExecucao(estrutura: any, assinatura: any) {
   return { inicio: null, fim: null };
 }
 
+async function resolverAutorContextoMetodologia(
+  userId:
+    string,
+) {
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  const autor = {
+    professorId:
+      null as string | null,
+
+    clubeId:
+      null as string | null,
+
+    escolinhaId:
+      null as string | null,
+
+    federacaoId:
+      null as string | null,
+
+    marcaId:
+      null as string | null,
+  };
+
+  if (!contexto) {
+    return autor;
+  }
+
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    if (
+      String(
+        contexto.tipoUsuario
+      ) ===
+      "Professor"
+    ) {
+      autor.professorId =
+        contexto.tipoUsuarioId ??
+        null;
+    }
+
+    return autor;
+  }
+
+  if (
+    contexto.organizationRole ===
+      "PROFESSOR" &&
+    String(
+      contexto.tipoUsuario
+    ) ===
+      "Professor"
+  ) {
+    autor.professorId =
+      contexto.tipoUsuarioId ??
+      null;
+  }
+
+  const legacyId =
+    contexto
+      .legacyOrganizationId ??
+    null;
+
+  switch (
+    contexto.organizationType
+  ) {
+    case "CLUBE":
+      autor.clubeId =
+        legacyId;
+      break;
+
+    case "ESCOLA":
+      autor.escolinhaId =
+        legacyId;
+      break;
+
+    case "FEDERACAO":
+      autor.federacaoId =
+        legacyId;
+      break;
+
+    case "MARCA":
+      autor.marcaId =
+        legacyId;
+      break;
+  }
+
+  return autor;
+}
+
+function getContextoAulaAoVivoData(
+  contexto: ActiveContext,
+) {
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    return {
+      contextoKind:
+        "PERSONAL",
+
+      contextoTipo:
+        String(
+          contexto.tipoUsuario
+        ),
+
+      contextoPerfilId:
+        contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        null,
+
+      contextoOrganizacaoId:
+        null,
+
+      contextoLegacyOrganizationId:
+        null,
+    };
+  }
+
+  return {
+    contextoKind:
+      "ORGANIZATION",
+
+    contextoTipo:
+      contexto.organizationType
+        ? String(
+            contexto.organizationType
+          )
+        : null,
+
+    contextoPerfilId:
+      null,
+
+    contextoOrganizacaoId:
+      contexto.organizationId ??
+      null,
+
+    contextoLegacyOrganizationId:
+      contexto
+        .legacyOrganizationId ??
+      null,
+  };
+}
+
+async function resolverContextoCriacaoAulaAoVivo(
+  userId: string,
+) {
+  const podeCriar =
+    await canPermission(
+      userId,
+      "CRIAR_AULA_AO_VIVO"
+    );
+
+  if (!podeCriar) {
+    throw new Error(
+      "Seu perfil ativo não possui permissão para criar aulas ao vivo."
+    );
+  }
+
+  const contexto =
+    await getActiveContext(
+      userId
+    );
+
+  if (!contexto) {
+    throw new Error(
+      "Selecione um perfil ativo para criar a aula ao vivo."
+    );
+  }
+
+  return contexto;
+}
+
 function getUserId(req: Request): string | null {
   const r: any = req;
 
@@ -84,15 +264,28 @@ function getUserId(req: Request): string | null {
   );
 }
 
-async function isAdminUser(userId: string | null | undefined) {
-  if (!userId) return false;
+async function getContextoAssinaturaAtivo(
+  userId: string
+): Promise<ActiveContext | null> {
+  return getActiveContext(
+    userId
+  );
+}
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: userId },
-    select: { tipo: true },
-  });
+async function isAdminUser(
+  userId:
+    | string
+    | null
+    | undefined,
+) {
+  if (!userId) {
+    return false;
+  }
 
-  return String(usuario?.tipo || "").toLowerCase().trim() === "admin";
+  return canPermission(
+    userId,
+    "VER_ADMIN",
+  );
 }
 
 function asNullableString(v: any): string | null {
@@ -262,6 +455,16 @@ async function criarAulaAoVivoParaItem(params: {
     estruturaAvulsaId,
   } = params;
 
+  const contexto =
+    await resolverContextoCriacaoAulaAoVivo(
+      userId
+    );
+
+  const contextoData =
+    getContextoAulaAoVivoData(
+      contexto
+    );
+
   const aulaPayload = itemPayload?.aulaAoVivo || {};
 
   const dataInicio = parseDataAulaAoVivo(
@@ -329,10 +532,16 @@ async function criarAulaAoVivoParaItem(params: {
     duracaoMin,
     thumbUrl,
 
-    criadorUsuarioId: userId,
+    criadorUsuarioId:
+      userId,
 
-    convidadoUsuarioId: asNullableString(aulaPayload.convidadoUsuarioId),
-    convidadoNome: asNullableString(aulaPayload.convidadoNome),
+    ...contextoData,
+
+    convidadoUsuarioId:
+      asNullableString(
+        aulaPayload.convidadoUsuarioId
+      ),
+  convidadoNome: asNullableString(aulaPayload.convidadoNome),
     convidadoDescricao: asNullableString(aulaPayload.convidadoDescricao),
   };
 
@@ -404,20 +613,260 @@ async function upsertAulaAoVivoParaItem(params: {
     estruturaAvulsaId,
   } = params;
 
+  const contexto =
+    await resolverContextoCriacaoAulaAoVivo(
+      userId
+    );
+
+  const contextoData =
+    getContextoAulaAoVivoData(
+      contexto
+    );
+
   const aulaPayload = itemPayload?.aulaAoVivo || {};
 
-  const aulaExistentePorId = aulaPayload.id
-    ? await tx.aulaAoVivo.findUnique({
-        where: { id: String(aulaPayload.id) },
-        select: {
-          id: true,
-          dataInicio: true,
-          dataFim: true,
-          inscricaoInicio: true,
-          inscricaoFim: true,
-        },
-      })
-    : null;
+  const aulaIdRecebido =
+    asNullableString(
+      aulaPayload.id
+    );
+
+  const aulaExistentePorId =
+    aulaIdRecebido
+      ? await tx.aulaAoVivo.findUnique({
+          where: {
+            id:
+              aulaIdRecebido,
+          },
+
+          select: {
+            id: true,
+
+            criadorUsuarioId:
+              true,
+
+            metodologiaId:
+              true,
+
+            estruturaId:
+              true,
+
+            itemId:
+              true,
+
+            metodologiaAvulsaId:
+              true,
+
+            estruturaAvulsaId:
+              true,
+
+            itemAvulsaId:
+              true,
+
+            contextoKind:
+              true,
+
+            contextoTipo:
+              true,
+
+            contextoPerfilId:
+              true,
+
+            contextoOrganizacaoId:
+              true,
+
+            contextoLegacyOrganizationId:
+              true,
+
+            dataInicio:
+              true,
+
+            dataFim:
+              true,
+
+            inscricaoInicio:
+              true,
+
+            inscricaoFim:
+              true,
+          },
+        })
+      : null;
+
+  if (
+    aulaIdRecebido &&
+    !aulaExistentePorId
+  ) {
+    throw new Error(
+      "A aula ao vivo informada não foi encontrada."
+    );
+  }
+
+  if (aulaExistentePorId) {
+    const pertenceAoItem =
+      metodologiaAvulsaId
+        ? (
+            aulaExistentePorId
+              .metodologiaAvulsaId ===
+              metodologiaAvulsaId &&
+            aulaExistentePorId
+              .estruturaAvulsaId ===
+              estruturaAvulsaId &&
+            aulaExistentePorId
+              .itemAvulsaId ===
+              itemCriadoId
+          )
+        : (
+            aulaExistentePorId
+              .metodologiaId ===
+              metodologiaId &&
+            aulaExistentePorId
+              .estruturaId ===
+              estruturaId &&
+            aulaExistentePorId
+              .itemId ===
+              itemCriadoId
+          );
+
+    if (!pertenceAoItem) {
+      throw new Error(
+        "A aula ao vivo informada não pertence a este item da metodologia."
+      );
+    }
+  }
+
+  type AulaContextoExistente = {
+    contextoKind:
+      string | null;
+
+    contextoTipo:
+      unknown;
+
+    contextoPerfilId:
+      string | null;
+
+    contextoOrganizacaoId:
+      string | null;
+
+    contextoLegacyOrganizationId:
+      string | null;
+  };
+
+  const validarContextoDaAulaExistente = (
+    aula:
+      AulaContextoExistente |
+      null |
+      undefined
+  ) => {
+    if (!aula) {
+      return;
+    }
+
+    const aulaTemContextoSalvo =
+      Boolean(
+        aula.contextoKind ||
+        aula.contextoTipo ||
+        aula.contextoPerfilId ||
+        aula.contextoOrganizacaoId ||
+        aula.contextoLegacyOrganizationId
+      );
+
+    /*
+    * Compatibilidade com aulas antigas
+    * que ainda não possuem snapshot.
+    *
+    * Não mudamos o contexto delas aqui.
+    */
+    if (!aulaTemContextoSalvo) {
+      return;
+    }
+
+    let mesmoContexto =
+      false;
+
+    if (
+      contextoData.contextoKind ===
+      "PERSONAL"
+    ) {
+      mesmoContexto =
+        aula.contextoKind ===
+          "PERSONAL" &&
+        String(
+          aula.contextoTipo ??
+          ""
+        ) ===
+          String(
+            contextoData
+              .contextoTipo ??
+            ""
+          ) &&
+        String(
+          aula.contextoPerfilId ??
+          ""
+        ) ===
+          String(
+            contextoData
+              .contextoPerfilId ??
+            ""
+          );
+    } else {
+      const mesmoOrganizationId =
+        Boolean(
+          contextoData
+            .contextoOrganizacaoId &&
+          aula.contextoOrganizacaoId &&
+          String(
+            contextoData
+              .contextoOrganizacaoId
+          ) ===
+            String(
+              aula.contextoOrganizacaoId
+            )
+        );
+
+      const mesmoLegacyId =
+        Boolean(
+          contextoData
+            .contextoLegacyOrganizationId &&
+          aula
+            .contextoLegacyOrganizationId &&
+          String(
+            contextoData
+              .contextoLegacyOrganizationId
+          ) ===
+            String(
+              aula
+                .contextoLegacyOrganizationId
+            )
+        );
+
+      mesmoContexto =
+        aula.contextoKind ===
+          "ORGANIZATION" &&
+        String(
+          aula.contextoTipo ??
+          ""
+        ) ===
+          String(
+            contextoData
+              .contextoTipo ??
+            ""
+          ) &&
+        (
+          mesmoOrganizationId ||
+          mesmoLegacyId
+        );
+    }
+
+    if (!mesmoContexto) {
+      throw new Error(
+        "Altere para o perfil ou organização que criou esta aula ao vivo antes de editá-la."
+      );
+    }
+  };
+
+  validarContextoDaAulaExistente(
+    aulaExistentePorId
+  );
 
   const dataInicioRaw =
     aulaPayload.dataInicio ||
@@ -508,8 +957,6 @@ async function upsertAulaAoVivoParaItem(params: {
     replayDisponivel: aulaPayload.replayDisponivel === true,
     duracaoMin,
     thumbUrl,
-    criadorUsuarioId: userId,
-
     convidadoUsuarioId: asNullableString(aulaPayload.convidadoUsuarioId),
     convidadoNome: asNullableString(aulaPayload.convidadoNome),
     convidadoDescricao: asNullableString(aulaPayload.convidadoDescricao),
@@ -541,21 +988,56 @@ async function upsertAulaAoVivoParaItem(params: {
       where: metodologiaAvulsaId
         ? { itemAvulsaId: itemCriadoId }
         : { itemId: itemCriadoId },
-      select: { id: true },
+      select: {
+        id:
+          true,
+
+        contextoKind:
+          true,
+
+        contextoTipo:
+          true,
+
+        contextoPerfilId:
+          true,
+
+        contextoOrganizacaoId:
+          true,
+
+        contextoLegacyOrganizationId:
+          true,
+      },
     });
 
     if (aulaExistentePorItem?.id) {
-      aula = await tx.aulaAoVivo.update({
-        where: { id: aulaExistentePorItem.id },
-        data,
-      });
+      validarContextoDaAulaExistente(
+        aulaExistentePorItem
+      );
+
+      aula =
+        await tx.aulaAoVivo.update({
+          where: {
+            id:
+              aulaExistentePorItem.id,
+          },
+
+          data,
+        });
     }
   }
 
   if (!aula) {
-    aula = await tx.aulaAoVivo.create({
-      data,
-    });
+    aula =
+      await tx.aulaAoVivo.create({
+        data: {
+          ...data,
+
+          criadorUsuarioId:
+            userId,
+
+          ...contextoData,
+        },
+      });
   }
 
   const convidadosPayload = Array.isArray(aulaPayload.convidados)
@@ -823,46 +1305,70 @@ function pickPrincipalAssinatura(
   );
 }
 
-async function getPermissaoCriacaoMetodologia(userId: string) {
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      tipo: true,
-      parceiro: true,
-      creator: {
+async function getPermissaoCriacaoMetodologia(
+  userId: string,
+) {
+  const [
+    usuario,
+    podeCriar,
+  ] =
+    await Promise.all([
+      prisma.usuario.findUnique({
+        where: {
+          id: userId,
+        },
+
         select: {
           id: true,
-          ativo: true,
+          tipo: true,
+          parceiro: true,
+
+          creator: {
+            select: {
+              id: true,
+              ativo: true,
+            },
+          },
         },
-      },
-    },
-  });
+      }),
 
-  const tipo = String(usuario?.tipo || "").toLowerCase().trim();
+      canPermission(
+        userId,
+        "PUBLICAR_METODOLOGIA",
+      ),
+    ]);
 
-  const tiposPermitidos = [
-    "professor",
-    "clube",
-    "escolinha",
-    "admin",
-    "profissional",
-    "federação",
-    "federacao",
-    "marca",
-  ];
+  const tipo =
+    String(
+      usuario?.tipo || "",
+    )
+      .toLowerCase()
+      .trim();
 
-  const temCreatorAtivo = usuario?.creator?.ativo === true;
-  const podeCriar = tiposPermitidos.includes(tipo) || temCreatorAtivo;
-  
   return {
     podeCriar,
-    ehProfessorParceiro: tipo === "professor" ? usuario?.parceiro === true : false,
-    temPlanoElegivel: false,
-    planoPrincipal: null,
-    motivoBloqueio: podeCriar
-      ? null
-      : "Apenas perfis autorizados ou usuários com Creator ativo podem criar metodologias.",
+
+    ehProfessorParceiro:
+      tipo === "professor"
+        ? usuario?.parceiro ===
+          true
+        : false,
+
+    temCreatorAtivo:
+      usuario?.creator?.ativo ===
+      true,
+
+    temPlanoElegivel:
+      false,
+
+    planoPrincipal:
+      null,
+
+    motivoBloqueio:
+      podeCriar
+        ? null
+        : "Seu perfil ativo não possui permissão para publicar metodologias.",
+
     planosPermitidos: [],
   };
 }
@@ -1133,24 +1639,10 @@ export async function createMetodologia(req: Request, res: Response) {
       });
     }
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: userId },
-      select: {
-        tipo: true,
-        professor: { select: { id: true } },
-        clube: { select: { id: true } },
-        escolinha: { select: { id: true } },
-      },
-    });
-
-    const professorId =
-      usuario?.tipo === "Professor" ? usuario?.professor?.id ?? null : null;
-
-    const clubeId =
-      usuario?.tipo === "Clube" ? usuario?.clube?.id ?? null : null;
-
-    const escolinhaId =
-      usuario?.tipo === "Escolinha" ? usuario?.escolinha?.id ?? null : null;
+    const autorContexto =
+      await resolverAutorContextoMetodologia(
+        userId
+      );
 
     let publicoAlvoFinal: MetodologiaPublicoAlvo = MetodologiaPublicoAlvo.AMBOS;
 
@@ -1176,9 +1668,21 @@ export async function createMetodologia(req: Request, res: Response) {
         categorias: Array.isArray(categorias) ? categorias : undefined,
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
-        professorId: professorId ?? undefined,
-        clubeId: clubeId ?? undefined,
-        escolinhaId: escolinhaId ?? undefined,
+        professorId:
+          autorContexto.professorId ??
+          undefined,
+        clubeId:
+          autorContexto.clubeId ??
+          undefined,
+        escolinhaId:
+          autorContexto.escolinhaId ??
+          undefined,
+        federacaoId:
+          autorContexto.federacaoId ??
+          undefined,
+        marcaId:
+          autorContexto.marcaId ??
+          undefined,
         ativo: false,
         tipo,
         estruturaTipo,
@@ -1613,10 +2117,38 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
       return res.status(401).json({ message: "Não autenticado." });
     }
 
-    const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
-      where: { usuarioId: userId },
-      orderBy: { startsAt: "desc" },
-    });
+    const contextoAtivo =
+      await getContextoAssinaturaAtivo(
+        userId
+      );
+
+    if (!contextoAtivo) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione um perfil ativo para consultar suas metodologias.",
+      });
+    }
+
+    const assinaturasPrincipais =
+      await (prisma as any)
+        .assinatura
+        .findMany({
+          where: {
+            usuarioId:
+              userId,
+
+            contextoKey:
+              contextoAtivo.key,
+          },
+
+          orderBy: {
+            startsAt:
+              "desc",
+          },
+        });
 
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
     const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
@@ -2802,12 +3334,33 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         : "LEARNING"
       : null;
       
-    const assinaturasPrincipais = userId
-      ? await (prisma as any).assinatura.findMany({
-          where: { usuarioId: userId },
-          orderBy: { startsAt: "desc" },
-        })
-      : [];
+    const contextoAtivo =
+      userId
+        ? await getContextoAssinaturaAtivo(
+            userId
+          )
+        : null;
+
+    const assinaturasPrincipais =
+      userId &&
+      contextoAtivo
+        ? await (prisma as any)
+            .assinatura
+            .findMany({
+              where: {
+                usuarioId:
+                  userId,
+
+                contextoKey:
+                  contextoAtivo.key,
+              },
+
+              orderBy: {
+                startsAt:
+                  "desc",
+              },
+            })
+        : [];
 
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
     const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
@@ -3114,10 +3667,38 @@ export async function assinarMetodologia(req: Request, res: Response) {
     const expiraEm = addMonths(agora, 1);
 
     if (origem === MetodologiaAssinaturaOrigem.LEARNING) {
-      const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
-        where: { usuarioId: userId },
-        orderBy: { startsAt: "desc" },
-      });
+      const contextoAtivo =
+        await getContextoAssinaturaAtivo(
+          userId
+        );
+
+      if (!contextoAtivo) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_REQUIRED",
+
+          message:
+            "Selecione um perfil ativo para utilizar o Learning.",
+        });
+      }
+
+      const assinaturasPrincipais =
+        await (prisma as any)
+          .assinatura
+          .findMany({
+            where: {
+              usuarioId:
+                userId,
+
+              contextoKey:
+                contextoAtivo.key,
+            },
+
+            orderBy: {
+              startsAt:
+                "desc",
+            },
+          });
 
       const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
       const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
@@ -5522,6 +6103,11 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
       publicoAlvoFinal = raw as MetodologiaPublicoAlvo;
     }
 
+    const autorContexto =
+      await resolverAutorContextoMetodologia(
+        userId
+      );
+
     const created = await prisma.metodologiaAvulsa.create({
       data: {
         titulo: tituloTrim,
@@ -5529,6 +6115,21 @@ export async function createMetodologiaAvulsa(req: Request, res: Response) {
         capaUrl: asNullableString(capaUrl),
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
+        professorId:
+          autorContexto.professorId ??
+          undefined,
+        clubeId:
+          autorContexto.clubeId ??
+          undefined,
+        escolinhaId:
+          autorContexto.escolinhaId ??
+          undefined,
+        federacaoId:
+          autorContexto.federacaoId ??
+          undefined,
+        marcaId:
+          autorContexto.marcaId ??
+          undefined,
         ativo: false,
         tipo,
         estruturaTipo,

@@ -1,27 +1,397 @@
 import type { Response } from "express";
-import { StatusSessaoTreinoTurma, TipoMidia } from "@prisma/client";
+import { StatusSessaoTreinoTurma, TipoMidia, TipoOrganizacao, TipoUsuario } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
 
-function assertInstrutor(req: AuthenticatedRequest) {
-  const u: any = req.authUser || (req as any).user || {};
+type EscopoSessao = {
+  usuarioId: string;
 
-  const tipoRaw =
-    typeof u.tipo === "string"
-      ? u.tipo.toLowerCase()
-      : String(u.tipo || "").toLowerCase();
+  isAdmin: boolean;
 
-  const isInstrutor =
-    ["professor", "clube", "escolinha"].includes(tipoRaw) || u.isAdmin === true;
+  professorId:
+    string | null;
 
-  if (!isInstrutor) {
-    const err: any = new Error(
-      "Apenas professor / clube / escolinha podem controlar sessões de turma.",
-    );
-    err.status = 403;
+  clubeId:
+    string | null;
+
+  escolinhaId:
+    string | null;
+};
+
+async function resolverEscopoSessao(
+  req: AuthenticatedRequest
+): Promise<EscopoSessao> {
+  const usuarioId =
+    String(
+      req.userId ??
+      (req as any).user?.id ??
+      (req as any).authUser?.id ??
+      ""
+    ).trim();
+
+  if (!usuarioId) {
+    const err: any =
+      new Error(
+        "Usuário não autenticado."
+      );
+
+    err.status = 401;
+
     throw err;
   }
+
+  const isAdmin =
+    await canPermission(
+      usuarioId,
+      "VER_ADMIN"
+    );
+
+  if (isAdmin) {
+    return {
+      usuarioId,
+      isAdmin: true,
+
+      professorId:
+        null,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+    };
+  }
+
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (!contexto) {
+    const err: any =
+      new Error(
+        "Nenhum contexto ativo válido."
+      );
+
+    err.status = 403;
+
+    throw err;
+  }
+
+  const podeCriarTreino =
+    await canPermission(
+      usuarioId,
+      "CRIAR_TREINO"
+    );
+
+  if (!podeCriarTreino) {
+    const err: any =
+      new Error(
+        "O contexto ativo não pode controlar sessões de treino."
+      );
+
+    err.status = 403;
+
+    throw err;
+  }
+
+  /*
+   * Professor pessoal.
+   */
+  if (
+    contexto.kind ===
+      "PERSONAL" &&
+    contexto.tipoUsuario ===
+      TipoUsuario.Professor &&
+    contexto.tipoUsuarioId
+  ) {
+    return {
+      usuarioId,
+      isAdmin: false,
+
+      professorId:
+        String(
+          contexto.tipoUsuarioId
+        ),
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+    };
+  }
+
+  /*
+   * Contexto de organização.
+   */
+  if (
+    contexto.kind ===
+      "ORGANIZATION" &&
+    contexto
+      .legacyOrganizationId
+  ) {
+    if (
+      contexto.organizationType ===
+      TipoOrganizacao.CLUBE
+    ) {
+      return {
+        usuarioId,
+        isAdmin: false,
+
+        professorId:
+          null,
+
+        clubeId:
+          String(
+            contexto
+              .legacyOrganizationId
+          ),
+
+        escolinhaId:
+          null,
+      };
+    }
+
+    if (
+      contexto.organizationType ===
+      TipoOrganizacao.ESCOLA
+    ) {
+      return {
+        usuarioId,
+        isAdmin: false,
+
+        professorId:
+          null,
+
+        clubeId:
+          null,
+
+        escolinhaId:
+          String(
+            contexto
+              .legacyOrganizationId
+          ),
+      };
+    }
+  }
+
+  const err: any =
+    new Error(
+      "O contexto ativo não pode controlar sessões de turma."
+    );
+
+  err.status = 403;
+
+  throw err;
+}
+
+async function assertInstrutor(
+  req: AuthenticatedRequest
+) {
+  return resolverEscopoSessao(
+    req
+  );
+}
+
+async function turmaPertenceAoEscopo(
+  escopo: EscopoSessao,
+  turmaId: string
+) {
+  if (escopo.isAdmin) {
+    return true;
+  }
+
+  const turma =
+    await prisma.turma.findUnique({
+      where: {
+        id:
+          turmaId,
+      },
+
+      select: {
+        id: true,
+
+        clubeId:
+          true,
+
+        escolinhaId:
+          true,
+
+        professores: {
+          select: {
+            professorId:
+              true,
+          },
+        },
+      },
+    });
+
+  if (!turma) {
+    return false;
+  }
+
+  if (
+    escopo.clubeId
+  ) {
+    return (
+      turma.clubeId ===
+      escopo.clubeId
+    );
+  }
+
+  if (
+    escopo.escolinhaId
+  ) {
+    return (
+      turma.escolinhaId ===
+      escopo.escolinhaId
+    );
+  }
+
+  if (
+    escopo.professorId
+  ) {
+    return turma.professores.some(
+      (item) =>
+        item.professorId ===
+        escopo.professorId
+    );
+  }
+
+  return false;
+}
+
+async function treinoPertenceAoEscopo(
+  escopo: EscopoSessao,
+  treinoId: string
+) {
+  if (escopo.isAdmin) {
+    return true;
+  }
+
+  const treino =
+    await prisma
+      .treinoProgramado
+      .findUnique({
+        where: {
+          id:
+            treinoId,
+        },
+
+        select: {
+          id: true,
+
+          professorId:
+            true,
+
+          clubeId:
+            true,
+
+          escolinhaId:
+            true,
+
+          professores: {
+            select: {
+              professorId:
+                true,
+            },
+          },
+        },
+      });
+
+  if (!treino) {
+    return false;
+  }
+
+  if (
+    escopo.clubeId
+  ) {
+    return (
+      treino.clubeId ===
+      escopo.clubeId
+    );
+  }
+
+  if (
+    escopo.escolinhaId
+  ) {
+    return (
+      treino.escolinhaId ===
+      escopo.escolinhaId
+    );
+  }
+
+  if (
+    escopo.professorId
+  ) {
+    return (
+      treino.professorId ===
+        escopo.professorId ||
+      treino.professores.some(
+        (item) =>
+          item.professorId ===
+          escopo.professorId
+      )
+    );
+  }
+
+  return false;
+}
+
+async function podeGerenciarSessao(
+  params: {
+    escopo:
+      EscopoSessao;
+
+    sessaoId:
+      string;
+  }
+) {
+  const {
+    escopo,
+    sessaoId,
+  } = params;
+
+  if (
+    escopo.isAdmin
+  ) {
+    return true;
+  }
+
+  const sessao =
+    await prisma
+      .sessaoTreinoTurma
+      .findUnique({
+        where: {
+          id:
+            sessaoId,
+        },
+
+        select: {
+          id:
+            true,
+
+          turmaId:
+            true,
+        },
+      });
+
+  if (!sessao) {
+    return false;
+  }
+
+  return turmaPertenceAoEscopo(
+    escopo,
+    sessao.turmaId
+  );
 }
 
 function getTodayRangeBRT() {
@@ -36,127 +406,6 @@ function getTodayRangeBRT() {
   const end = new Date(`${String(y).padStart(4, "0")}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}T23:59:59.999-03:00`);
 
   return { start, end };
-}
-
-async function getDonoIdsPorUsuario(usuarioId: string) {
-  const [professor, clube, escolinha] = await Promise.all([
-    prisma.professor.findUnique({ where: { usuarioId }, select: { id: true } }),
-    prisma.clube.findUnique({ where: { usuarioId }, select: { id: true } }),
-    prisma.escolinha.findUnique({ where: { usuarioId }, select: { id: true } }),
-  ]);
-
-  return {
-    donoProfessorId: professor?.id ?? null,
-    donoClubeId: clube?.id ?? null,
-    donoEscolinhaId: escolinha?.id ?? null,
-  };
-}
-
-async function getOrgsDoProfessor(professorId: string) {
-  const [clubeRows, escolaRows] = await Promise.all([
-    prisma.professorClube.findMany({
-      where: { professorId },
-      select: { clubeId: true },
-    }),
-    prisma.professorEscolinha.findMany({
-      where: { professorId },
-      select: { escolinhaId: true },
-    }),
-  ]);
-
-  return {
-    clubeIds: Array.from(new Set(clubeRows.map((r) => String(r.clubeId)))),
-    escolinhaIds: Array.from(new Set(escolaRows.map((r) => String(r.escolinhaId)))),
-  };
-}
-
-async function podeGerenciarSessao(params: {
-  usuarioId: string;
-  tipoRaw: string;
-  isAdmin: boolean;
-  sessaoId: string;
-}) {
-  const { usuarioId, tipoRaw, isAdmin, sessaoId } = params;
-  if (isAdmin) return true;
-
-  const { donoProfessorId, donoClubeId, donoEscolinhaId } =
-    await getDonoIdsPorUsuario(usuarioId);
-
-  const sessao = await prisma.sessaoTreinoTurma.findUnique({
-    where: { id: sessaoId },
-    select: {
-      id: true,
-      criadorId: true,
-      turma: { select: { id: true, clubeId: true, escolinhaId: true } },
-      treino: { select: { id: true, professorId: true, clubeId: true, escolinhaId: true } },
-    },
-  });
-
-  if (!sessao) return false;
-  if (sessao.criadorId === usuarioId) return true;
-  if (tipoRaw === "professor" && donoProfessorId) {
-    const { clubeIds, escolinhaIds } = await getOrgsDoProfessor(donoProfessorId);
-
-    const turmaOk =
-      (sessao.turma?.clubeId && clubeIds.includes(String(sessao.turma.clubeId))) ||
-      (sessao.turma?.escolinhaId && escolinhaIds.includes(String(sessao.turma.escolinhaId)));
-
-    const treinoOk =
-      (sessao.treino?.clubeId && clubeIds.includes(String(sessao.treino.clubeId))) ||
-      (sessao.treino?.escolinhaId && escolinhaIds.includes(String(sessao.treino.escolinhaId)));
-
-    return Boolean(turmaOk || treinoOk);
-  }
-
-  if (tipoRaw === "clube" || tipoRaw === "escolinha") {
-    const professoresVinculadosIds = await getProfessoresVinculadosIds({
-      donoClubeId,
-      donoEscolinhaId,
-    });
-
-    const turmaDireta =
-      (donoClubeId && sessao.turma?.clubeId === donoClubeId) ||
-      (donoEscolinhaId && sessao.turma?.escolinhaId === donoEscolinhaId);
-
-    if (turmaDireta) return true;
-    if (professoresVinculadosIds.length && sessao.turma?.id) {
-      const tem = await prisma.turmaProfessor.findFirst({
-        where: { turmaId: sessao.turma.id, professorId: { in: professoresVinculadosIds } },
-        select: { id: true },
-      });
-      return !!tem;
-    }
-  }
-
-  return false;
-}
-
-async function getProfessoresVinculadosIds(params: {
-  donoClubeId?: string | null;
-  donoEscolinhaId?: string | null;
-}): Promise<string[]> {
-  const { donoClubeId, donoEscolinhaId } = params;
-
-  if (!donoClubeId && !donoEscolinhaId) return [];
-
-  const [rowsClube, rowsEscolinha] = await Promise.all([
-    donoClubeId
-      ? prisma.professorClube.findMany({
-          where: { clubeId: donoClubeId },
-          select: { professorId: true },
-        })
-      : Promise.resolve([] as { professorId: string }[]),
-
-    donoEscolinhaId
-      ? prisma.professorEscolinha.findMany({
-          where: { escolinhaId: donoEscolinhaId },
-          select: { professorId: true },
-        })
-      : Promise.resolve([] as { professorId: string }[]),
-  ]);
-
-  const ids = [...rowsClube.map((r) => r.professorId), ...rowsEscolinha.map((r) => r.professorId)];
-  return Array.from(new Set(ids.map(String)));
 }
 
 function parseDateInput(raw?: any): Date | null {
@@ -187,10 +436,13 @@ function parseDateInput(raw?: any): Date | null {
 
 export async function criarSessao(req: AuthenticatedRequest, res: Response) {
   try {
-    assertInstrutor(req);
+    const escopo =
+      await assertInstrutor(
+        req
+      );
 
-    const u: any = req.authUser || (req as any).user;
-    const usuarioId = String(u.id || "");
+    const usuarioId =
+      escopo.usuarioId;
 
     const { treinoProgramadoId, turmaId, dataISO, dataHoraISO } = req.body as {
       treinoProgramadoId: string;
@@ -212,60 +464,34 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     if (isNaN(dataBR.getTime())) {
       return res.status(400).json({ error: "dataHoraISO/dataISO inválida." });
     }
-    const [professor, clube, escolinha] = await Promise.all([
-      prisma.professor.findUnique({ where: { usuarioId } }),
-      prisma.clube.findUnique({ where: { usuarioId } }),
-      prisma.escolinha.findUnique({ where: { usuarioId } }),
-    ]);
+    const turma =
+      await prisma.turma.findUnique({
+        where: {
+          id:
+            turmaId,
+        },
+      });
 
-    const donoProfessorId = professor?.id ?? null;
-    const donoClubeId = clube?.id ?? null;
-    const donoEscolinhaId = escolinha?.id ?? null;
-
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-
-    let professoresVinculadosIds: string[] = [];
-
-    if (tipoRaw === "clube" || tipoRaw === "escolinha") {
-      professoresVinculadosIds = await getProfessoresVinculadosIds({ donoClubeId, donoEscolinhaId });
+    if (!turma) {
+      return res.status(404).json({
+        error:
+          "Turma não encontrada.",
+      });
     }
 
-    const orgsDoProfessor =
-      tipoRaw === "professor" && donoProfessorId
-        ? await getOrgsDoProfessor(donoProfessorId)
-        : { clubeIds: [] as string[], escolinhaIds: [] as string[] };
+    const turmaPermitida =
+      await turmaPertenceAoEscopo(
+        escopo,
+        turmaId
+      );
 
-    const turma = await prisma.turma.findUnique({ where: { id: turmaId } });
-    if (!turma) return res.status(404).json({ error: "Turma não encontrada." });
-
-    const turmaPertenceAoDonoDireto =
-      (donoClubeId && turma.clubeId === donoClubeId) ||
-      (donoEscolinhaId && turma.escolinhaId === donoEscolinhaId) ||
-      (donoProfessorId &&
-        (await prisma.turmaProfessor.findFirst({
-          where: { turmaId: turma.id, professorId: donoProfessorId },
-          select: { id: true },
-        })) != null) ||
-      (tipoRaw === "professor" &&
-      ((turma.clubeId && orgsDoProfessor.clubeIds.includes(String(turma.clubeId))) ||
-        (turma.escolinhaId && orgsDoProfessor.escolinhaIds.includes(String(turma.escolinhaId)))));
-
-    const turmaTemProfessorVinculado =
-      (tipoRaw === "clube" || tipoRaw === "escolinha") &&
-      professoresVinculadosIds.length > 0 &&
-      (await prisma.turmaProfessor.findFirst({
-        where: {
-          turmaId: turma.id,
-          professorId: { in: professoresVinculadosIds },
-        },
-        select: { id: true },
-      })) != null;
-
-    const turmaPertenceAoDono = turmaPertenceAoDonoDireto || turmaTemProfessorVinculado;
-
-    if (!turmaPertenceAoDono) {
+    if (!turmaPermitida) {
       return res.status(403).json({
-        error: "Você não pode agendar sessão para uma turma que não é sua.",
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Esta turma não pertence ao contexto ativo.",
       });
     }
 
@@ -286,24 +512,19 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
 
     const tituloTreino = String(treino.nome ?? "Treino");
 
-    const treinoPertenceAoDonoDireto =
-      (donoProfessorId && treino.professorId === donoProfessorId) ||
-      (donoClubeId && treino.clubeId === donoClubeId) ||
-      (donoEscolinhaId && treino.escolinhaId === donoEscolinhaId) ||
-      (tipoRaw === "professor" &&
-        ((treino.clubeId && orgsDoProfessor.clubeIds.includes(String(treino.clubeId))) ||
-          (treino.escolinhaId && orgsDoProfessor.escolinhaIds.includes(String(treino.escolinhaId)))));
+    const treinoPermitido =
+      await treinoPertenceAoEscopo(
+        escopo,
+        treinoProgramadoId
+      );
 
-    const treinoDoProfessorVinculado =
-      (tipoRaw === "clube" || tipoRaw === "escolinha") &&
-      !!treino.professorId &&
-      professoresVinculadosIds.includes(String(treino.professorId));
-
-    const treinoPertenceAoDono = treinoPertenceAoDonoDireto || treinoDoProfessorVinculado;
-
-    if (!treinoPertenceAoDono) {
+    if (!treinoPermitido) {
       return res.status(403).json({
-        error: "Você não pode agendar sessão com um treino que não é seu.",
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Este treino não pertence ao contexto ativo.",
       });
     }
 
@@ -471,19 +692,17 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
 
 export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Response) {
   try {
-    assertInstrutor(req);
+    const escopo =
+      await assertInstrutor(
+        req
+      );
 
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = String(u.id || "");
+    const usuarioId =
+      escopo.usuarioId;
     if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
     const onlyToday = String(req.query.onlyToday || "") === "1";
     const { start: inicio, end: fim } = getTodayRangeBRT();
-
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-
-    const { donoProfessorId, donoClubeId, donoEscolinhaId } =
-      await getDonoIdsPorUsuario(usuarioId);
 
     let whereBase: any = {};
 
@@ -491,33 +710,37 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
       whereBase.data = { gte: inicio, lte: fim };
     }
 
-    if (u.isAdmin) {
-    } else if (tipoRaw === "professor" && donoProfessorId) {
-      const orgs = await getOrgsDoProfessor(donoProfessorId);
-
-      whereBase.OR = [
-        { criadorId: usuarioId },
-        { turma: { clubeId: { in: orgs.clubeIds.length ? orgs.clubeIds : ["__none__"] } } },
-        { turma: { escolinhaId: { in: orgs.escolinhaIds.length ? orgs.escolinhaIds : ["__none__"] } } },
-        { treino: { clubeId: { in: orgs.clubeIds.length ? orgs.clubeIds : ["__none__"] } } },
-        { treino: { escolinhaId: { in: orgs.escolinhaIds.length ? orgs.escolinhaIds : ["__none__"] } } },
-      ];
-    } else if (tipoRaw === "clube" || tipoRaw === "escolinha") {
-      const professoresVinculadosIds = await getProfessoresVinculadosIds({
-        donoClubeId,
-        donoEscolinhaId,
-      });
-
-      whereBase.OR = [
-        { criadorId: usuarioId },
-        ...(donoClubeId ? [{ turma: { clubeId: donoClubeId } }, { treino: { clubeId: donoClubeId } }] : []),
-        ...(donoEscolinhaId ? [{ turma: { escolinhaId: donoEscolinhaId } }, { treino: { escolinhaId: donoEscolinhaId } }] : []),
-        ...(professoresVinculadosIds.length
-          ? [{ turma: { professores: { some: { professorId: { in: professoresVinculadosIds } } } } }]
-          : []),
-      ];
-    } else {
-      whereBase.criadorId = usuarioId;
+    if (
+      escopo.isAdmin
+    ) {
+      // Admin:
+      // mantém somente os filtros
+      // de data existentes.
+    } else if (
+      escopo.professorId
+    ) {
+      whereBase.turma = {
+        professores: {
+          some: {
+            professorId:
+              escopo.professorId,
+          },
+        },
+      };
+    } else if (
+      escopo.clubeId
+    ) {
+      whereBase.turma = {
+        clubeId:
+          escopo.clubeId,
+      };
+    } else if (
+      escopo.escolinhaId
+    ) {
+      whereBase.turma = {
+        escolinhaId:
+          escopo.escolinhaId,
+      };
     }
 
     const sessoes = await prisma.sessaoTreinoTurma.findMany({
@@ -805,7 +1028,6 @@ export async function iniciarSessao(
   res: Response,
 ) {
   try {
-    assertInstrutor(req);
     const { id } = req.params;
     const presentesRaw = (req.body as any)?.presentes;
     const presentes: string[] = Array.isArray(presentesRaw)
@@ -851,15 +1073,18 @@ export async function iniciarSessao(
       return res.status(400).json({ error: "Sessão já está em andamento." });
     }
 
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = u.id as string;
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-    const ok = await podeGerenciarSessao({
-      usuarioId: String(usuarioId),
-      tipoRaw,
-      isAdmin: Boolean(u.isAdmin),
-      sessaoId: String(id),
-    });
+    const escopo =
+      await assertInstrutor(
+        req
+      );
+
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -915,8 +1140,6 @@ export async function remarcarSessao(
   res: Response,
 ) {
   try {
-    assertInstrutor(req);
-
     const { id } = req.params;
     const { novaDataISO, novaDataHoraISO } = req.body as {
       novaDataISO?: string;
@@ -937,15 +1160,18 @@ export async function remarcarSessao(
       return res.status(404).json({ error: "Sessão não encontrada." });
     }
 
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = u.id as string;
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-    const ok = await podeGerenciarSessao({
-      usuarioId: String(usuarioId),
-      tipoRaw,
-      isAdmin: Boolean(u.isAdmin),
-      sessaoId: String(id),
-    });
+    const escopo =
+      await assertInstrutor(
+        req
+      );
+
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -997,7 +1223,6 @@ export async function remarcarSessao(
 
 export async function atualizarProgresso(req: AuthenticatedRequest, res: Response) {
   try {
-    assertInstrutor(req);
     const { id } = req.params;
 
     const { exerciciosConcluidosIds } = req.body as { exerciciosConcluidosIds: string[] };
@@ -1013,15 +1238,18 @@ export async function atualizarProgresso(req: AuthenticatedRequest, res: Respons
 
     if (!sessao) return res.status(404).json({ error: "Sessão não encontrada." });
 
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = u.id as string;
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-    const ok = await podeGerenciarSessao({
-      usuarioId: String(usuarioId),
-      tipoRaw,
-      isAdmin: Boolean(u.isAdmin),
-      sessaoId: String(id),
-    });
+    const escopo =
+      await assertInstrutor(
+        req
+      );
+
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -1059,7 +1287,6 @@ export async function finalizarSessao(
   res: Response,
 ) {
   try {
-    assertInstrutor(req);
     const { id } = req.params;
 
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
@@ -1082,16 +1309,18 @@ export async function finalizarSessao(
     if (!sessao)
       return res.status(404).json({ error: "Sessão não encontrada." });
 
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = u.id as string;
+    const escopo =
+      await assertInstrutor(
+        req
+      );
 
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-    const ok = await podeGerenciarSessao({
-      usuarioId: String(usuarioId),
-      tipoRaw,
-      isAdmin: Boolean(u.isAdmin),
-      sessaoId: String(id),
-    });
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -1202,11 +1431,7 @@ export async function excluirSessao(
   res: Response,
 ) {
   try {
-    assertInstrutor(req);
-
     const { id } = req.params;
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = u.id as string;
 
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
       where: { id },
@@ -1220,13 +1445,18 @@ export async function excluirSessao(
       return res.status(404).json({ error: "Sessão não encontrada." });
     }
 
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-    const ok = await podeGerenciarSessao({
-      usuarioId: String(usuarioId),
-      tipoRaw,
-      isAdmin: Boolean(u.isAdmin),
-      sessaoId: String(id),
-    });
+    const escopo =
+      await assertInstrutor(
+        req
+      );
+
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -1267,11 +1497,7 @@ export async function excluirSessao(
 
 export async function obterSessao(req: AuthenticatedRequest, res: Response) {
   try {
-    assertInstrutor(req);
-
     const { id } = req.params;
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = String(u.id || "");
 
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
       where: { id },
@@ -1293,13 +1519,18 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
 
     if (!sessao) return res.status(404).json({ error: "Sessão não encontrada." });
 
-    const tipoRaw = String(u.tipo || "").toLowerCase();
-    const ok = await podeGerenciarSessao({
-      usuarioId: String(usuarioId),
-      tipoRaw,
-      isAdmin: Boolean(u.isAdmin),
-      sessaoId: String(id),
-    });
+    const escopo =
+      await assertInstrutor(
+        req
+      );
+
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -1334,19 +1565,19 @@ export async function salvarVideosExecucaoSessao(
   res: Response,
 ) {
   try {
-    assertInstrutor(req);
-
     const { id } = req.params; 
-    const u: any = req.authUser || (req as any).user || {};
-    const usuarioId = String(u?.id || "");
-    const tipoRaw = String(u?.tipo || "").toLowerCase();
+    const escopo =
+      await assertInstrutor(
+        req
+      );
 
-    const ok = await podeGerenciarSessao({
-      usuarioId,
-      tipoRaw,
-      isAdmin: Boolean(u?.isAdmin),
-      sessaoId: String(id),
-    });
+    const ok =
+      await podeGerenciarSessao({
+        escopo,
+
+        sessaoId:
+          String(id),
+      });
 
     if (!ok) {
       return res.status(403).json({
@@ -1414,6 +1645,9 @@ export async function salvarVideosExecucaoSessao(
         }
 
         if (!entityId) continue;
+
+        const usuarioId =
+          escopo.usuarioId;
 
         if (item.saveMode === "SESSION_ONLY") {
           await tx.midia.create({

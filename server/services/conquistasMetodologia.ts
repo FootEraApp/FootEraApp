@@ -8,6 +8,9 @@ import {
   TipoUsuario,
   MetodologiaPublicoAlvo,
 } from "@prisma/client";
+import {
+  getActiveContext,
+} from "./activeContext.js";
 
 export async function ensureConquistaTemplateMetodologia(
   metodologiaId: string
@@ -215,152 +218,137 @@ function publicoConquistaFromPublicoAlvo(publicoAlvo: MetodologiaPublicoAlvo): C
   ];
 }
 
-async function resolveOwnerByUsuarioId(usuarioId: string): Promise<{
-  ownerTipo: ConquistaOwnerTipo;
-  ownerId: string;
-  atletaId?: string | null;
-  professorId?: string | null;
-  clubeId?: string | null;
-  escolinhaId?: string | null;
+async function resolveOwnerByUsuarioId(
+  usuarioId: string
+): Promise<{
+  ownerTipo:
+    ConquistaOwnerTipo;
+
+  ownerId:
+    string;
+
+  atletaId?:
+    string | null;
+
+  professorId?:
+    string | null;
+
+  clubeId?:
+    string | null;
+
+  escolinhaId?:
+    string | null;
+
+  learningProfileId?:
+    string | null;
+
+  marcaId?:
+    string | null;
+
+  federacaoId?:
+    string | null;
 } | null> {
-  const u = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: { tipo: true },
-  });
-  if (!u) return null;
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
 
-  if (u.tipo === TipoUsuario.Atleta) {
-    const atleta = await prisma.atleta.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    if (!atleta?.id) return null;
-
-    return {
-      ownerTipo: ConquistaOwnerTipo.Atleta,
-      ownerId: atleta.id,
-      atletaId: atleta.id,
-      professorId: null,
-      clubeId: null,
-      escolinhaId: null,
-    };
+  if (!contexto) {
+    return null;
   }
 
-  if (u.tipo === TipoUsuario.Professor) {
-    const prof = await prisma.professor.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    if (!prof?.id) return null;
+  const tipo =
+    contexto.tipoUsuario;
 
-    return {
-      ownerTipo: ConquistaOwnerTipo.Professor,
-      ownerId: prof.id,
-      atletaId: null,
-      professorId: prof.id,
-      clubeId: null,
-      escolinhaId: null,
-    };
+  const ownerId =
+    contexto.tipoUsuarioId;
+
+  if (!ownerId) {
+    return null;
   }
 
-  if (u.tipo === TipoUsuario.Clube) {
-    const clu = await prisma.clube.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    if (!clu?.id) return null;
+  switch (tipo) {
+    case TipoUsuario.Atleta:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Atleta,
 
-    return {
-      ownerTipo: ConquistaOwnerTipo.Clube,
-      ownerId: clu.id,
-      atletaId: null,
-      professorId: null,
-      clubeId: clu.id,
-      escolinhaId: null,
-    };
+        ownerId,
+
+        atletaId:
+          ownerId,
+      };
+
+    case TipoUsuario.Professor:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Professor,
+
+        ownerId,
+
+        professorId:
+          ownerId,
+      };
+
+    case TipoUsuario.Clube:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Clube,
+
+        ownerId,
+
+        clubeId:
+          ownerId,
+      };
+
+    case TipoUsuario.Escolinha:
+    case TipoUsuario.Escola:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Escolinha,
+
+        ownerId,
+
+        escolinhaId:
+          ownerId,
+      };
+
+    case TipoUsuario.Learning:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Learning,
+
+        ownerId,
+
+        learningProfileId:
+          ownerId,
+      };
+
+    case TipoUsuario.Marca:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Marca,
+
+        ownerId,
+
+        marcaId:
+          ownerId,
+      };
+
+    case TipoUsuario.Federacao:
+      return {
+        ownerTipo:
+          ConquistaOwnerTipo.Federacao,
+
+        ownerId,
+
+        federacaoId:
+          ownerId,
+      };
+
+    default:
+      return null;
   }
-
-  if (u.tipo === TipoUsuario.Escolinha) {
-    const esc = await prisma.escolinha.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-    if (!esc?.id) return null;
-
-    return {
-      ownerTipo: ConquistaOwnerTipo.Escolinha,
-      ownerId: esc.id,
-      atletaId: null,
-      professorId: null,
-      clubeId: null,
-      escolinhaId: esc.id,
-    };
-  }
-
-  if (u.tipo === TipoUsuario.Learning) {
-    const learning = await prisma.learningProfile.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-
-    if (!learning?.id) return null;
-
-    return {
-      ownerTipo: ConquistaOwnerTipo.Learning,
-      ownerId: learning.id,
-      atletaId: null,
-      professorId: null,
-      clubeId: null,
-      escolinhaId: null,
-      learningProfileId: learning.id,
-      marcaId: null,
-      federacaoId: null,
-    } as any;
-  }
-
-  if (u.tipo === TipoUsuario.Marca) {
-    const marca = await prisma.marca.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-
-    if (!marca?.id) return null;
-
-    return {
-      ownerTipo: ConquistaOwnerTipo.Marca,
-      ownerId: marca.id,
-      atletaId: null,
-      professorId: null,
-      clubeId: null,
-      escolinhaId: null,
-      learningProfileId: null,
-      marcaId: marca.id,
-      federacaoId: null,
-    } as any;
-  }
-
-  if (u.tipo === TipoUsuario.Federacao) {
-    const federacao = await prisma.federacao.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-
-    if (!federacao?.id) return null;
-
-    return {
-      ownerTipo: ConquistaOwnerTipo.Federacao,
-      ownerId: federacao.id,
-      atletaId: null,
-      professorId: null,
-      clubeId: null,
-      escolinhaId: null,
-      learningProfileId: null,
-      marcaId: null,
-      federacaoId: federacao.id,
-    } as any;
-  }
-
-  return null;
 }
 
 export async function unlockConquistaMetodologia(usuarioId: string, metodologiaId: string) {

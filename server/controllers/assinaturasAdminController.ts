@@ -4,28 +4,6 @@ import { sendError } from "../utils/httpError.js";
 
 type AdminReq = Request & { user?: any };
 
-function assertAdmin(req: AdminReq) {
-  const u: any = req.user || {};
-
-  if (!u || !u.id) {
-    const err: any = new Error("Acesso restrito ao administrador.");
-    err.status = 403;
-    throw err;
-  }
-
-  const tipo = String(u.tipo || u.tipoUsuario || "").toLowerCase();
-  const isAdmin =
-    (!!u.id && (tipo === "admin" || tipo === "administrador")) ||
-    u.isAdmin === true ||
-    String(u.role || "").toLowerCase() === "admin";
-
-  if (!isAdmin) {
-    const err: any = new Error("Acesso restrito ao administrador.");
-    err.status = 403;
-    throw err;
-  }
-}
-
 function parseBool(v?: string) {
   if (v === undefined || v === null || v === "") return undefined;
   if (v === "true") return true;
@@ -35,12 +13,12 @@ function parseBool(v?: string) {
 
 export async function listar(req: AdminReq, res: Response) {
   try {
-    assertAdmin(req);
-
     const {
       q = "",
       plano = "",
       tipo = "",
+      contextoTipo = "",
+      contextoKind = "",
       ativo = "",
       ordenarPor = "nome",
       ordem = "asc",
@@ -85,6 +63,41 @@ export async function listar(req: AdminReq, res: Response) {
       };
     }
 
+    const contextoTipoFinal =
+      String(
+        contextoTipo ||
+        tipo ||
+        ""
+      ).trim();
+
+    if (contextoTipoFinal) {
+      where.contextoTipo = {
+        equals:
+          contextoTipoFinal,
+
+        mode:
+          "insensitive",
+      };
+    }
+
+    if (
+      String(
+        contextoKind
+      ).trim()
+    ) {
+      where.contextoKind = {
+        equals:
+          String(
+            contextoKind
+          )
+            .trim()
+            .toUpperCase(),
+
+        mode:
+          "insensitive",
+      };
+    }
+
     const ativoBool = parseBool(ativo);
     if (typeof ativoBool === "boolean") where.ativo = ativoBool;
 
@@ -99,12 +112,6 @@ export async function listar(req: AdminReq, res: Response) {
           { nomeDeUsuario: { contains: q, mode: "insensitive" } },
           { email: { contains: q, mode: "insensitive" } },
         ],
-      });
-    }
-
-    if (tipo.trim() !== "") {
-      andUsuario.push({
-        tipo: String(tipo),
       });
     }
 
@@ -146,10 +153,24 @@ export async function listar(req: AdminReq, res: Response) {
 
 export async function overview(req: AdminReq, res: Response) {
   try {
-    assertAdmin(req);
 
     const all = await prisma.assinatura.findMany({
-      select: { plano: true, ativo: true, canceledAt: true },
+      select: {
+        plano:
+          true,
+
+        ativo:
+          true,
+
+        canceledAt:
+          true,
+
+        contextoKind:
+          true,
+
+        contextoTipo:
+          true,
+      },
     });
 
     const total = all.length;
@@ -159,14 +180,43 @@ export async function overview(req: AdminReq, res: Response) {
     ).length;
 
     const porPlano: Record<string, { total: number; ativos: number }> = {};
+    const porContextoTipo: Record<
+      string,
+      {
+        total: number;
+        ativos: number;
+      }
+    > = {};
+
     for (const a of all) {
       const k = a.plano || "FREE";
       porPlano[k] ??= { total: 0, ativos: 0 };
       porPlano[k].total++;
       if (a.ativo) porPlano[k].ativos++;
+      const contexto =
+        a.contextoTipo ||
+        a.contextoKind ||
+        "LEGACY";
+
+      porContextoTipo[
+        contexto
+      ] ??= {
+        total: 0,
+        ativos: 0,
+      };
+
+      porContextoTipo[
+        contexto
+      ].total++;
+
+      if (a.ativo) {
+        porContextoTipo[
+          contexto
+        ].ativos++;
+      }
     }
 
-    res.json({ total, ativos, cancelados, porPlano });
+    res.json({ total, ativos, cancelados, porPlano, porContextoTipo });
   } catch (e: any) {
     console.error("erro overview assinaturas:", e);
     sendError(res, e, "Erro ao calcular overview de assinaturas");
@@ -175,8 +225,6 @@ export async function overview(req: AdminReq, res: Response) {
 
 export async function excluir(req: AdminReq, res: Response) {
   try {
-    assertAdmin(req);
-
     const { id } = req.params;
 
     if (!id) {

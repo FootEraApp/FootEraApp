@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useContext } from "react";
 import { toast } from "@/lib/toast";
 import axios from "axios";
 import { Link } from "wouter";
@@ -20,7 +20,9 @@ import {
 } from "lucide-react";
 import CoverImage from "../../components/shared/CoverImage.js";
 import PublicShareModal from "../../components/share/PublicShareModal.js";
-
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
@@ -416,6 +418,41 @@ export default function CreatorEventosPage() {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const contextoCreatorAtivo =
+    authContext?.activeContext
+      ?.kind ===
+      "PERSONAL" &&
+    String(
+      authContext?.activeContext
+        ?.tipoUsuario || ""
+    ).toLowerCase() ===
+      "creator";
+
+  const podeCriarEvento =
+    contextoCreatorAtivo &&
+    (
+      authContext?.can(
+        "CRIAR_EVENTO"
+      ) ?? false
+    );
+    
+  const podeCriarAulaAoVivo =
+    contextoCreatorAtivo &&
+    (
+      authContext?.can(
+        "CRIAR_AULA_AO_VIVO"
+      ) ?? false
+    );
+  
+  const podeCriarAlgo =
+    podeCriarEvento ||
+    podeCriarAulaAoVivo;
+
   const [lista, setLista] = useState<EventoListItem[]>([]);
   const [lives, setLives] = useState<AulaAoVivoResumo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -435,6 +472,15 @@ export default function CreatorEventosPage() {
 
   async function carregarTudo() {
     try {
+      if (
+        !contextoCreatorAtivo
+      ) {
+        setLista([]);
+        setLives([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
 
       const [eventosRes, livesRes] = await Promise.allSettled([
@@ -463,7 +509,7 @@ export default function CreatorEventosPage() {
   useEffect(() => {
     carregarTudo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [contextoCreatorAtivo]);
 
   function editarEventoNormal(id: string) {
     window.location.href = `/creator/eventos/novo?id=${encodeURIComponent(id)}`;
@@ -1153,60 +1199,64 @@ export default function CreatorEventosPage() {
                 <Share2 className="h-4 w-4" />
               </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  editarEventoNormal(
-                    evento.id
-                  )
-                }
-                className="
-                  flex
-                  h-9
-                  w-9
-                  items-center
-                  justify-center
-                  rounded-full
-                  border
-                  border-emerald-200
-                  bg-white
-                  text-emerald-800
-                  hover:bg-emerald-50
-                "
-                title="Editar evento"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              {podeCriarEvento ? (
+                <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    editarEventoNormal(
+                      evento.id
+                    )
+                  }
+                  className="
+                    flex
+                    h-9
+                    w-9
+                    items-center
+                    justify-center
+                    rounded-full
+                    border
+                    border-emerald-200
+                    bg-white
+                    text-emerald-800
+                    hover:bg-emerald-50
+                  "
+                  title="Editar evento"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
 
-              <button
-                type="button"
-                disabled={
-                  apagandoId ===
-                  `evento_${evento.id}`
-                }
-                onClick={() =>
-                  apagarEventoNormal(
-                    evento.id
-                  )
-                }
-                className="
-                  flex
-                  h-9
-                  w-9
-                  items-center
-                  justify-center
-                  rounded-full
-                  border
-                  border-red-200
-                  bg-white
-                  text-red-600
-                  hover:bg-red-50
-                  disabled:opacity-50
-                "
-                title="Apagar evento"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+                <button
+                  type="button"
+                  disabled={
+                    apagandoId ===
+                    `evento_${evento.id}`
+                  }
+                  onClick={() =>
+                    apagarEventoNormal(
+                      evento.id
+                    )
+                  }
+                  className="
+                    flex
+                    h-9
+                    w-9
+                    items-center
+                    justify-center
+                    rounded-full
+                    border
+                    border-red-200
+                    bg-white
+                    text-red-600
+                    hover:bg-red-50
+                    disabled:opacity-50
+                  "
+                  title="Apagar evento"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1229,6 +1279,24 @@ export default function CreatorEventosPage() {
       </li>
     );
   };
+
+  if (
+    !contextoCreatorAtivo
+  ) {
+    return (
+      <div className="min-h-screen bg-cream p-6 text-green-900">
+        <div className="mx-auto max-w-xl rounded-2xl border bg-white p-6 text-center">
+          <h1 className="text-xl font-bold">
+            Perfil Creator necessário
+          </h1>
+
+          <p className="mt-2 text-sm text-green-900/70">
+            Selecione seu perfil Creator para acessar e gerenciar os eventos do Creator.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-cream text-green-900 pb-20">
@@ -1257,12 +1325,14 @@ export default function CreatorEventosPage() {
               </p>
             </div>
 
-            <Link
-              href="/creator/eventos/novo"
-              className="shrink-0 rounded-xl bg-green-700 px-4 py-2 text-white font-bold text-sm"
-            >
-              + Criar
-            </Link>
+            {podeCriarAlgo ? (
+              <Link
+                href="/creator/eventos/novo"
+                className="shrink-0 rounded-xl bg-green-700 px-4 py-2 text-white font-bold text-sm"
+              >
+                + Criar
+              </Link>
+            ) : null}
           </div>
         </div>
 

@@ -1,7 +1,12 @@
 // server/controllers/usuarioPapelController.ts
 import { Response } from "express";
 import { StatusUsuarioPapel, TipoUsuario } from "@prisma/client";
-
+import {
+  ActiveContextError,
+  definirActiveContext,
+  getActiveContext,
+  listarActiveContexts,
+} from "../services/activeContext.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
@@ -57,10 +62,6 @@ function obterUsuarioId(req: AuthenticatedRequest, res: Response) {
 
 function papelCanonico(papel: TipoUsuario) {
   return papel === TipoUsuario.Escola ? TipoUsuario.Escolinha : papel;
-}
-
-function papeisEquivalentes(a: TipoUsuario, b: TipoUsuario) {
-  return papelCanonico(a) === papelCanonico(b);
 }
 
 async function buscarRegistroPapel(usuarioId: string, papel: TipoUsuario) {
@@ -306,8 +307,19 @@ export async function listarMeusPapeis(
       });
     }
 
+    const activeContext =
+      await getActiveContext(
+        usuarioId
+      );
+
     return res.json({
-      papelAtivo: usuario.tipo,
+      papelAtivo:
+        activeContext
+          ?.tipoUsuario ??
+        usuario.tipo,
+
+      activeContext,
+
       papeis,
     });
   } catch (error) {
@@ -318,85 +330,322 @@ export async function listarMeusPapeis(
   }
 }
 
-export async function adicionarPapel(req: AuthenticatedRequest, res: Response) {
-  const usuarioId = obterUsuarioId(req, res);
+export async function listarMeusContextos(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId =
+    obterUsuarioId(
+      req,
+      res
+    );
+
   if (!usuarioId) return;
 
-  const papel = normalizarPapel(req.body?.papel);
+  try {
+    const [
+      activeContext,
+      contexts,
+    ] =
+      await Promise.all([
+        getActiveContext(
+          usuarioId
+        ),
 
-  if (!papel) {
+        listarActiveContexts(
+          usuarioId
+        ),
+      ]);
+
+    return res.json({
+      activeContext,
+      contexts,
+    });
+  } catch (error) {
+    console.error(
+      "[ActiveContext] Erro ao listar contextos:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível carregar os contextos.",
+    });
+  }
+}
+
+
+export async function alterarContextoAtivo(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId =
+    obterUsuarioId(
+      req,
+      res
+    );
+
+  if (!usuarioId) return;
+
+  try {
+    const contextKey =
+      String(
+        req.body
+          ?.contextKey ??
+        ""
+      ).trim();
+
+    if (!contextKey) {
+      return res.status(400).json({
+        error:
+          "contextKey obrigatório.",
+        code:
+          "CONTEXT_REQUIRED",
+      });
+    }
+
+    const activeContext =
+      await definirActiveContext(
+        usuarioId,
+        contextKey,
+      );
+
+    return res.json({
+      ok: true,
+
+      activeContext,
+
+      tipoUsuario:
+        activeContext
+          .tipoUsuario,
+
+      tipoUsuarioId:
+        activeContext
+          .tipoUsuarioId,
+    });
+  } catch (error) {
+    if (
+      error instanceof
+      ActiveContextError
+    ) {
+      return res
+        .status(
+          error.status
+        )
+        .json({
+          error:
+            error.message,
+
+          code:
+            error.code,
+        });
+    }
+
+    console.error(
+      "[ActiveContext] Erro ao trocar contexto:",
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        "Não foi possível alterar o contexto.",
+    });
+  }
+}
+
+export async function adicionarPapel(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId =
+    obterUsuarioId(
+      req,
+      res,
+    );
+
+  if (!usuarioId) return;
+
+  const papelRecebido =
+    normalizarPapel(
+      req.body?.papel,
+    );
+
+  if (!papelRecebido) {
     return res.status(400).json({
-      error: "Papel inválido.",
-      code: "INVALID_ROLE",
+      error:
+        "Papel inválido.",
+      code:
+        "INVALID_ROLE",
     });
   }
 
+  const papel =
+    papelCanonico(
+      papelRecebido,
+    );
+
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { tipo: true },
-    });
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          id:
+            usuarioId,
+        },
+
+        select: {
+          id:
+            true,
+        },
+      });
 
     if (!usuario) {
       return res.status(404).json({
-        error: "Usuário não encontrado.",
-        code: "USER_NOT_FOUND",
+        error:
+          "Usuário não encontrado.",
+        code:
+          "USER_NOT_FOUND",
       });
     }
 
-    const existente = await buscarRegistroPapel(usuarioId, papel);
+    const [
+      existente,
+      perfilExiste,
+    ] =
+      await Promise.all([
+        buscarRegistroPapel(
+          usuarioId,
+          papel,
+        ),
 
-    if (existente && existente.status !== StatusUsuarioPapel.INATIVO) {
-      return res.status(200).json({
-        papel: existente,
-        jaExistia: true,
-      });
-    }
+        perfilEspecificoExiste(
+          usuarioId,
+          papel,
+        ),
+      ]);
 
-    const ehPapelEmUso = papeisEquivalentes(usuario.tipo, papel);
+    const agora =
+      new Date();
 
-    const registro = existente
-      ? await prisma.usuarioPapel.update({
-          where: { id: existente.id },
-          data: {
-            status: ehPapelEmUso
-              ? StatusUsuarioPapel.ATIVO
-              : StatusUsuarioPapel.PENDENTE,
-            ativadoEm: ehPapelEmUso ? new Date() : null,
-            desativadoEm: null,
-            perfilCompletoEm: null,
+    /*
+     * Um papel só pode ficar ATIVO
+     * quando o perfil físico existe.
+     */
+    const statusDesejado =
+      perfilExiste
+        ? StatusUsuarioPapel.ATIVO
+        : StatusUsuarioPapel.PENDENTE;
+
+    if (existente) {
+      const registro =
+        await prisma.usuarioPapel.update({
+          where: {
+            id:
+              existente.id,
           },
-        })
-      : await prisma.usuarioPapel.create({
+
           data: {
-            usuarioId,
-            papel,
-            status: ehPapelEmUso
-              ? StatusUsuarioPapel.ATIVO
-              : StatusUsuarioPapel.PENDENTE,
-            ativadoEm: ehPapelEmUso ? new Date() : null,
+            status:
+              statusDesejado,
+
+            ativadoEm:
+              statusDesejado ===
+              StatusUsuarioPapel.ATIVO
+                ? (
+                    existente.ativadoEm ??
+                    agora
+                  )
+                : null,
+
+            desativadoEm:
+              null,
+
+            perfilCompletoEm:
+              statusDesejado ===
+              StatusUsuarioPapel.ATIVO
+                ? (
+                    existente.perfilCompletoEm ??
+                    agora
+                  )
+                : null,
           },
         });
 
-    return res.status(existente ? 200 : 201).json({
-      papel: registro,
-      jaExistia: Boolean(existente),
-    });
+      return res.json({
+        papel:
+          registro,
+
+        jaExistia:
+          true,
+
+        perfilExiste,
+      });
+    }
+
+    const registro =
+      await prisma.usuarioPapel.create({
+        data: {
+          usuarioId,
+
+          papel,
+
+          status:
+            statusDesejado,
+
+          ativadoEm:
+            statusDesejado ===
+            StatusUsuarioPapel.ATIVO
+              ? agora
+              : null,
+
+          perfilCompletoEm:
+            statusDesejado ===
+            StatusUsuarioPapel.ATIVO
+              ? agora
+              : null,
+        },
+      });
+
+    return res
+      .status(201)
+      .json({
+        papel:
+          registro,
+
+        jaExistia:
+          false,
+
+        perfilExiste,
+      });
   } catch (error: any) {
-    if (error?.code === "P2002") {
-      const existente = await buscarRegistroPapel(usuarioId, papel);
+    if (
+      error?.code ===
+      "P2002"
+    ) {
+      const existente =
+        await buscarRegistroPapel(
+          usuarioId,
+          papel,
+        );
 
       if (existente) {
-        return res.status(200).json({
-          papel: existente,
-          jaExistia: true,
+        return res.json({
+          papel:
+            existente,
+
+          jaExistia:
+            true,
         });
       }
     }
 
-    console.error("[UsuarioPapel] Erro ao adicionar papel:", error);
+    console.error(
+      "[UsuarioPapel] Erro ao adicionar papel:",
+      error,
+    );
+
     return res.status(500).json({
-      error: "Não foi possível liberar este perfil para configuração.",
+      error:
+        "Não foi possível liberar este perfil para configuração.",
     });
   }
 }
@@ -466,84 +715,148 @@ export async function alterarPapelAtivo(
   req: AuthenticatedRequest,
   res: Response,
 ) {
-  const usuarioId = obterUsuarioId(req, res);
+  const usuarioId =
+    obterUsuarioId(
+      req,
+      res
+    );
+
   if (!usuarioId) return;
 
-  const papelRecebido = normalizarPapel(req.body?.papel);
+  const papelRecebido =
+    normalizarPapel(
+      req.body?.papel
+    );
 
   if (!papelRecebido) {
     return res.status(400).json({
-      error: "Papel inválido.",
-      code: "INVALID_ROLE",
+      error:
+        "Papel inválido.",
+      code:
+        "INVALID_ROLE",
     });
   }
 
-  const papel = papelCanonico(papelRecebido);
+  const papel =
+    papelCanonico(
+      papelRecebido
+    );
 
   try {
-    const [usuario, registro] = await Promise.all([
-      prisma.usuario.findUnique({
-        where: { id: usuarioId },
-        select: { tipo: true },
-      }),
-      buscarRegistroPapel(usuarioId, papel),
-    ]);
+      const registro =
+        await buscarRegistroPapel(
+          usuarioId,
+          papel,
+        );
 
-    if (!usuario) {
-      return res.status(404).json({
-        error: "Usuário não encontrado.",
-        code: "USER_NOT_FOUND",
-      });
-    }
+      if (!registro) {
+        return res.status(404).json({
+          error:
+            "Este papel não foi adicionado à sua conta.",
+          code:
+            "ROLE_NOT_FOUND",
+        });
+      }
 
-    if (!registro) {
-      return res.status(404).json({
-        error: "Este papel não foi adicionado à sua conta.",
-        code: "ROLE_NOT_FOUND",
-      });
-    }
+      if (
+        registro.status !==
+        StatusUsuarioPapel.ATIVO
+      ) {
+        return res.status(409).json({
+          error:
+            registro.status ===
+            StatusUsuarioPapel.PENDENTE
+              ? "Conclua a configuração deste perfil antes de usá-lo."
+              : "Este perfil está inativo.",
 
-    if (registro.status !== StatusUsuarioPapel.ATIVO) {
-      return res.status(409).json({
-        error:
-          registro.status === StatusUsuarioPapel.PENDENTE
-            ? "Conclua a configuração deste perfil antes de usá-lo."
-            : "Este perfil está inativo.",
-        code:
-          registro.status === StatusUsuarioPapel.PENDENTE
-            ? "ROLE_PENDING"
-            : "ROLE_INACTIVE",
-      });
-    }
+          code:
+            registro.status ===
+            StatusUsuarioPapel.PENDENTE
+              ? "ROLE_PENDING"
+              : "ROLE_INACTIVE",
+        });
+      }
 
-    const tipoUsuarioId = await obterPerfilEspecificoId(usuarioId, papel);
+      const perfilExiste =
+        await perfilEspecificoExiste(
+          usuarioId,
+          papel,
+        );
 
-    if (!tipoUsuarioId) {
-      return res.status(409).json({
-        error: "Salve os dados deste perfil antes de colocá-lo em uso.",
-        code: "ROLE_PROFILE_MISSING",
-      });
-    }
+      if (!perfilExiste) {
+        return res.status(409).json({
+          error:
+            "Este papel está ativo, mas o perfil correspondente não existe. Configure o perfil novamente.",
+          code:
+            "ROLE_PROFILE_MISSING",
+        });
+      }
 
-    const jaEstavaEmUso = papeisEquivalentes(usuario.tipo, papel);
+    const contextoAntes =
+      await getActiveContext(
+        usuarioId
+      );
 
-    if (!jaEstavaEmUso) {
-      await prisma.usuario.update({
-        where: { id: usuarioId },
-        data: { tipo: papel },
-      });
-    }
+    const contextKey =
+      `personal:${papel}`;
+
+    const jaEstavaEmUso =
+      contextoAntes?.key ===
+      contextKey;
+
+    const activeContext =
+      jaEstavaEmUso &&
+      contextoAntes
+        ? contextoAntes
+        : await definirActiveContext(
+            usuarioId,
+            contextKey
+          );
 
     return res.json({
-      papelAtivo: papel,
-      tipoUsuario: normalizarTexto(papel),
-      tipoUsuarioId,
+      papelAtivo:
+        papel,
+
+      tipoUsuario:
+        normalizarTexto(
+          activeContext
+            .tipoUsuario
+        ),
+
+      tipoUsuarioId:
+        activeContext
+          .tipoUsuarioId,
+
+      activeContext,
+
       jaEstavaEmUso,
     });
   } catch (error) {
-    console.error("[UsuarioPapel] Erro ao alterar papel ativo:", error);
+    if (
+      error instanceof
+      ActiveContextError
+    ) {
+      return res
+        .status(
+          error.status
+        )
+        .json({
+          error:
+            error.message,
+
+          code:
+            error.code,
+        });
+    }
+
+    console.error(
+      "[UsuarioPapel] Erro ao alterar papel ativo:",
+      error
+    );
+
     return res.status(500).json({
-      error: "Não foi possível colocar este perfil em uso.",
+      error:
+        "Não foi possível colocar este perfil em uso.",
     });
   }
 }

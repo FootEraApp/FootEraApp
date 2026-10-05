@@ -49,7 +49,22 @@ type ReplayPerfil = {
 };
 
 type Props = {
-  creatorUsuarioId?:
+  contextoKind:
+    | "PERSONAL"
+    | "ORGANIZATION";
+
+  contextoTipo:
+    string;
+
+  contextoPerfilId?:
+    | string
+    | null;
+
+  contextoOrganizacaoId?:
+    | string
+    | null;
+
+  contextoLegacyOrganizationId?:
     | string
     | null;
 
@@ -221,7 +236,11 @@ function formatarDinheiro(
 }
 
 export default function ProfileReplaysSection({
-  creatorUsuarioId,
+  contextoKind,
+  contextoTipo,
+  contextoPerfilId = null,
+  contextoOrganizacaoId = null,
+  contextoLegacyOrganizationId = null,
   limiteInicial = 5,
 }: Props) {
   const [
@@ -272,11 +291,57 @@ export default function ProfileReplaysSection({
   }, []);
 
   useEffect(() => {
-    const usuarioId = String(
-      creatorUsuarioId || ""
-    ).trim();
+    const kind =
+      String(
+        contextoKind || ""
+      )
+        .trim()
+        .toUpperCase();
 
-    if (!usuarioId) {
+    const tipo =
+      String(
+        contextoTipo || ""
+      ).trim();
+
+    const perfilId =
+      String(
+        contextoPerfilId || ""
+      ).trim();
+
+    const organizacaoId =
+      String(
+        contextoOrganizacaoId ||
+          ""
+      ).trim();
+
+    const legacyOrganizationId =
+      String(
+        contextoLegacyOrganizationId ||
+          ""
+      ).trim();
+
+    const contextoValido =
+      (
+        kind ===
+          "PERSONAL" &&
+        Boolean(
+          tipo &&
+          perfilId
+        )
+      ) ||
+      (
+        kind ===
+          "ORGANIZATION" &&
+        Boolean(
+          tipo &&
+          (
+            organizacaoId ||
+            legacyOrganizationId
+          )
+        )
+      );
+
+    if (!contextoValido) {
       setReplays([]);
       setLoading(false);
       setError("");
@@ -300,11 +365,45 @@ export default function ProfileReplaysSection({
           setLoading(true);
         }
 
-        const resposta = await axios.get(
-          `${API.BASE_URL}/api/aulas-ao-vivo/replays/criador/${encodeURIComponent(
-            usuarioId
-          )}`
-        );
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/aulas-ao-vivo/replays/contexto`,
+            {
+              params: {
+                contextoKind:
+                  kind,
+
+                contextoTipo:
+                  tipo,
+
+                ...(kind ===
+                  "PERSONAL"
+                  ? {
+                      contextoPerfilId:
+                        perfilId,
+                    }
+                  : {}),
+
+                ...(kind ===
+                  "ORGANIZATION" &&
+                organizacaoId
+                  ? {
+                      contextoOrganizacaoId:
+                        organizacaoId,
+                    }
+                  : {}),
+
+                ...(kind ===
+                  "ORGANIZATION" &&
+                legacyOrganizationId
+                  ? {
+                      contextoLegacyOrganizationId:
+                        legacyOrganizationId,
+                    }
+                  : {}),
+              },
+            }
+          );
 
         const items = Array.isArray(resposta.data?.items)
           ? resposta.data.items
@@ -428,7 +527,13 @@ export default function ProfileReplaysSection({
         handleVisibilityChange
       );
     };
-  }, [creatorUsuarioId]);
+  }, [
+    contextoKind,
+    contextoTipo,
+    contextoPerfilId,
+    contextoOrganizacaoId,
+    contextoLegacyOrganizationId,
+  ]);
 
   const replaysValidos =
     useMemo(

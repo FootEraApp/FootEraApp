@@ -14,17 +14,6 @@ function endExclusiveOfDay(d: Date) {
   return addDays(startOfDay(d), 1);
 }
 
-function assertAdmin(req: Request) {
-  const me: any = (req as any).me;
-  const isSuperAdmin = (req as any).isSuperAdmin === true;
-
-  if (!me?.id || !isSuperAdmin) {
-    const err: any = new Error("Acesso restrito ao administrador.");
-    err.status = 403;
-    throw err;
-  }
-}
-
 function parseISODateLocal(v?: string, fallback?: Date) {
   if (!v) return fallback ?? new Date();
 
@@ -46,8 +35,6 @@ function monthBounds(isoYYYYMM: string) {
 
 export async function overview(req: Request, res: Response) {
   try {
-    assertAdmin(req);
-
     const to = parseISODateLocal(String(req.query.to) || undefined, new Date());
     const end = endExclusiveOfDay(to);
     const from30 = addDays(end, -30);
@@ -94,8 +81,6 @@ export async function overview(req: Request, res: Response) {
 
 export async function activeUsersSeries(req: Request, res: Response) {
   try {
-    assertAdmin(req);
-
     const fromIn = parseISODateLocal(String(req.query.from) || undefined, addDays(new Date(), -30));
     const toIn   = parseISODateLocal(String(req.query.to) || undefined, new Date());
     const from = startOfDay(fromIn);
@@ -122,9 +107,7 @@ export async function activeUsersSeries(req: Request, res: Response) {
 }
 
 export async function engagementSummary(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+  try {    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
     const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const [posts, comments, likes, msgs, subTreino, subDesafio, treinosAgendados, treinosRealizados] = await Promise.all([
@@ -146,8 +129,6 @@ export async function engagementSummary(req: Request, res: Response) {
 
 export async function loginsSummary(req: Request, res: Response) {
   try {
-    assertAdmin(req);
-
     const fromStr = String(req.query.from || "").trim();
     const toStr = String(req.query.to || "").trim();
     if (!fromStr || !toStr) return res.status(400).send("Informe from=YYYY-MM-DD&to=YYYY-MM-DD");
@@ -175,9 +156,7 @@ export async function loginsSummary(req: Request, res: Response) {
 }
 
 export async function engagementSeries(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const metric = String(req.query.metric || "posts");
+  try {    const metric = String(req.query.metric || "posts");
     const gran = String(req.query.granularity || "daily")
       .replace("daily", "day").replace("weekly","week").replace("monthly","month");
     const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
@@ -210,9 +189,7 @@ export async function engagementSeries(req: Request, res: Response) {
 }
 
 export async function convEscolinha(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
+  try {    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
     const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ bucket: Date; novosVinculos: number }[]>`
@@ -230,9 +207,7 @@ export async function convEscolinha(req: Request, res: Response) {
 }
 
 export async function convClube(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
+  try {    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
     const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ bucket: Date; novosVinculos: number }[]>`
@@ -250,9 +225,7 @@ export async function convClube(req: Request, res: Response) {
 }
 
 export async function invitesSummary(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
+  try {    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
     const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ status: string | null; total: number }[]>`
@@ -268,9 +241,7 @@ export async function invitesSummary(req: Request, res: Response) {
 }
 
 export async function activityByUf(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+  try {    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
     const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ uf: string | null; ativos: number }[]>`
@@ -287,9 +258,7 @@ export async function activityByUf(req: Request, res: Response) {
 }
 
 export async function newUsersSeries(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+  try {    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
     const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ bucket: Date; novos: number }[]>`
@@ -308,8 +277,6 @@ export async function newUsersSeries(req: Request, res: Response) {
 
 export async function activeByUserType(req: Request, res: Response) {
   try {
-    assertAdmin(req);
-
     const fromIn = parseISODateLocal(String(req.query.from) || undefined, addDays(new Date(), -30));
     const toIn   = parseISODateLocal(String(req.query.to) || undefined, new Date());
 
@@ -333,9 +300,7 @@ export async function activeByUserType(req: Request, res: Response) {
 }
 
 export async function subscriptionsActive(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const on = String(req.query.on || "").trim(); 
+  try {    const on = String(req.query.on || "").trim(); 
     const { start, end } = on ? monthBounds(on) : monthBounds(new Date().toISOString().slice(0,7));
 
     const ativos = await prisma.assinatura.count({
@@ -353,9 +318,7 @@ export async function subscriptionsActive(req: Request, res: Response) {
 }
 
 export async function subscriptionsChurn(req: Request, res: Response) {
-  try {
-    assertAdmin(req);
-    const fromStr = String(req.query.from || "").trim();
+  try {    const fromStr = String(req.query.from || "").trim();
     const toStr   = String(req.query.to   || "").trim(); 
     if (!fromStr || !toStr) return res.status(400).send("Informe from=YYYY-MM&to=YYYY-MM");
 

@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type Status = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 
@@ -11,6 +14,28 @@ type Props = {
 };
 
 export default function AcoesTreino({ treinoId, className }: Props) {
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const atletaAtivo =
+    authContext
+      ?.activeContext
+      ?.kind ===
+      "PERSONAL" &&
+    String(
+      authContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase() ===
+      "atleta" &&
+    Boolean(
+      authContext
+        ?.activeTipoUsuarioId
+    );
   const [status, setStatus] = useState<Status>("PENDING");
   const [loading, setLoading] = useState(false);
   const [openFinish, setOpenFinish] = useState(false);
@@ -42,6 +67,14 @@ export default function AcoesTreino({ treinoId, className }: Props) {
   }, [treinoId]);
 
   async function start() {
+    if (!atletaAtivo) {
+      toast.error(
+        "Use seu perfil de Atleta para iniciar este treino."
+      );
+
+      return;
+    }
+
     const token = Storage.token;
     if (!token) return toast.error("Sessão expirada.");
     try {
@@ -78,6 +111,13 @@ export default function AcoesTreino({ treinoId, className }: Props) {
   }
 
   async function complete() {
+    if (!atletaAtivo) {
+      toast.error(
+        "Use seu perfil de Atleta para concluir este treino."
+      );
+
+      return;
+    }
     const token = Storage.token;
     if (!token) return toast.error("Sessão expirada.");
     try {

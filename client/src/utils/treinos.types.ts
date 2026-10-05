@@ -17,9 +17,9 @@ export type TreinoCreatePayload = {
   nome: string;
   descricao?: string | null;
   nivel: string;          
-  usuarioId: string;
-  tipoUsuario: "professor" | "clube" | "escolinha";
-  tipoUsuarioId: string;
+  usuarioId?: string;
+  tipoUsuario?: "professor" | "clube" | "escolinha";
+  tipoUsuarioId?: string;
   categoria?: string[];
   tipoTreino?: string | null;
   objetivo?: string | null;

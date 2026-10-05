@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { API } from "../../config.js";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import ProfilePostsSection from "./ProfilePostsSection.js";
 

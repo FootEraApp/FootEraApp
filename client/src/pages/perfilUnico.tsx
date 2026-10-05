@@ -163,7 +163,9 @@ export default function PerfilUnico() {
         let resposta;
 
         try {
-          resposta = await axios.get<PerfilMinimo>(url, { headers });
+          resposta = await axios.get<PerfilMinimo>(url, {
+            headers,
+          });
         } catch (erro: any) {
           if (token && erro?.response?.status === 401) {
             clearAuthSession();

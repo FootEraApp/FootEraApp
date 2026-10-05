@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
+import {
+  applyActiveContextSession,
+} from "../utils/authSession.js";
 
 type TipoRender =
   | "atleta"
@@ -127,41 +130,6 @@ function normalizarTipoRender(valor: unknown): TipoRender | null {
 
 function obterPerfilDisponivel(tipo: TipoRender | null) {
   return PERFIS_DISPONIVEIS.find((perfil) => perfil.tipo === tipo) ?? null;
-}
-
-function atualizarContextoLocalDoPapel(
-  papel: PapelApi,
-  tipoUsuarioId: string | null,
-) {
-  const tipo = normalizarTipoRender(papel);
-  if (!tipo) return;
-
-  for (const storage of [window.localStorage, window.sessionStorage]) {
-    const possuiSessao =
-      Boolean(storage.getItem("token")) ||
-      Boolean(storage.getItem("usuarioId"));
-
-    if (!possuiSessao) continue;
-
-    storage.setItem("tipoUsuario", tipo);
-    storage.setItem("usuarioTipoRaw", papel);
-
-    if (tipoUsuarioId) {
-      storage.setItem("tipoUsuarioId", tipoUsuarioId);
-    } else {
-      storage.removeItem("tipoUsuarioId");
-    }
-  }
-
-  window.dispatchEvent(
-    new CustomEvent("footera:auth-changed", {
-      detail: {
-        tipoUsuario: tipo,
-        usuarioTipoRaw: papel,
-        tipoUsuarioId,
-      },
-    }),
-  );
 }
 
 function normalizarDataNascimentoParaInput(valor: unknown) {
@@ -819,7 +787,7 @@ const EditarPerfil = () => {
   const isOlheiro = tipoRender === "olheiro";
   const isProfessor = tipoRender === "professor";
   const isClube = tipoRender === "clube";
-  const isEscolinha = tipoRender === "escola" || tipoRender === "escolinha";
+  const isEscolinha = tipoRender === "escolinha";
   const isFederacao = tipoRender === "federacao";
   const isMarca = tipoRender === "marca";
   const isLearning = tipoRender === "learning";
@@ -972,20 +940,33 @@ const EditarPerfil = () => {
         },
       );
 
-      const papelAtivo =
-        (resposta.data?.papelAtivo as PapelApi | undefined) ?? perfil.papel;
-      const tipoAtivo = normalizarTipoRender(papelAtivo);
+      const activeContext =
+        resposta.data?.activeContext;
 
-      if (!tipoAtivo) {
-        throw new Error("O backend retornou um papel ativo inválido.");
+      if (!activeContext) {
+        throw new Error(
+          "O backend não retornou o contexto ativo."
+        );
       }
 
-      const tipoUsuarioId = resposta.data?.tipoUsuarioId
-        ? String(resposta.data.tipoUsuarioId)
-        : null;
+      const tipoAtivo =
+        normalizarTipoRender(
+          activeContext.tipoUsuario
+        );
 
-      atualizarContextoLocalDoPapel(papelAtivo, tipoUsuarioId);
-      setTipoEmUso(tipoAtivo);
+      if (!tipoAtivo) {
+        throw new Error(
+          "O backend retornou um contexto ativo inválido."
+        );
+      }
+
+      applyActiveContextSession(
+        activeContext
+      );
+
+      setTipoEmUso(
+        tipoAtivo
+      );
 
       toast.success(`Agora você está usando o perfil de ${perfil.titulo}.`);
 
@@ -1563,7 +1544,6 @@ const EditarPerfil = () => {
           </>
         );
 
-      case "escola":
       case "escolinha":
         return (
           <>

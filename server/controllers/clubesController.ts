@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
-
+import {
+  garantirOrganizacaoLegada,
+} from "../services/organizacoes.js";
 
 export const desvincularAtletaDoClube = async (req: Request, res: Response) => {
   const { clubeId } = req.params;
@@ -114,28 +116,46 @@ export const createClube = async (req: Request, res: Response) => {
       logo,
     } = req.body;
 
-    const clube = await prisma.clube.create({
-      data: {
-        usuarioId,
-        nome,
-        cnpj,
-        telefone1,
-        telefone2,
-        email,
-        siteOficial,
-        sede,
-        estadio,
-        logradouro,
-        numero,
-        complemento,
-        bairro,
-        cidade,
-        estado,
-        pais,
-        cep,
-        logo,
-      },
-    });
+    const clube =
+      await prisma.$transaction(
+        async (tx) => {
+          const criado =
+            await tx.clube.create({
+              data: {
+                usuarioId,
+                nome,
+                cnpj,
+                telefone1,
+                telefone2,
+                email,
+                siteOficial,
+                sede,
+                estadio,
+                logradouro,
+                numero,
+                complemento,
+                bairro,
+                cidade,
+                estado,
+                pais,
+                cep,
+                logo,
+              },
+            });
+
+          await garantirOrganizacaoLegada({
+            tipo: "CLUBE",
+            ownerId: criado.id,
+
+            proprietarioUsuarioId:
+              usuarioId,
+
+            tx,
+          });
+
+          return criado;
+        }
+      );
 
     res.status(201).json(clube);
   } catch (error) {

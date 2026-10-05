@@ -5,8 +5,96 @@ import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
 import { enforceTotalLimit } from '../services/usage.js';
 import { audit } from "../services/audit.js";
 import { prisma } from "../prisma.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
 
 type Dono = "Professor" | "Clube" | "Escolinha" | "Admin";
+
+type OwnerResolved = {
+  dono: Dono;
+
+  professorId:
+    string | null;
+
+  clubeId:
+    string | null;
+
+  escolinhaId:
+    string | null;
+
+  criadorUsuarioId:
+    string | null;
+};
+
+function getUsuarioId(
+  req: Request
+): string {
+  return String(
+    (req as any).userId ??
+    (req as any).user?.id ??
+    (req as any).authUser?.id ??
+    ""
+  ).trim();
+}
+
+function ownerWhereResolved(
+  owner:
+    OwnerResolved | null
+) {
+  if (!owner) {
+    return null;
+  }
+
+  if (
+    owner.dono ===
+      "Professor" &&
+    owner.professorId
+  ) {
+    return {
+      professorId:
+        owner.professorId,
+    };
+  }
+
+  if (
+    owner.dono ===
+      "Clube" &&
+    owner.clubeId
+  ) {
+    return {
+      clubeId:
+        owner.clubeId,
+    };
+  }
+
+  if (
+    owner.dono ===
+      "Escolinha" &&
+    owner.escolinhaId
+  ) {
+    return {
+      escolinhaId:
+        owner.escolinhaId,
+    };
+  }
+
+  if (
+    owner.dono ===
+      "Admin" &&
+    owner.criadorUsuarioId
+  ) {
+    return {
+      criadorUsuarioId:
+        owner.criadorUsuarioId,
+    };
+  }
+
+  return null;
+}
 
 function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
   const dono = normalizarTipoUsuario(tipoUsuario);
@@ -19,7 +107,9 @@ function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
   return { criadorUsuarioId: id };
 }
 
-function assertOwnerIdsFromBodyOrReq(body: any) {
+function assertOwnerIdsFromBodyOrReq(
+  body: any
+): OwnerResolved | null {
   const dono = normalizarTipoUsuario(body?.tipoUsuario);
   const donoId = String(body?.tipoUsuarioId ?? "").trim();
   const professorId = String(body?.professorId ?? "").trim();
@@ -41,83 +131,337 @@ function assertOwnerIdsFromBodyOrReq(body: any) {
   }
 
   if (professorId) {
-    return { dono: "Professor" as const, professorId, clubeId: null, escolinhaId: null };
+    return {
+      dono:
+        "Professor",
+
+      professorId,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        null,
+    };
   }
 
   return null;
 }
 
-async function mustBeOwner(req: Request, treinoId: string) {
-  const tipoRaw = String(
-    (req as any).user?.tipo ??
-      req.headers["x-tipo"] ??
-      req.query.tipoUsuario ??
-      (req as any).body?.tipoUsuario ??
-      ""
-  )
-    .trim()
-    .toLowerCase();
+async function ownerFromActiveContext(
+  req: Request
+): Promise<
+  OwnerResolved | null
+> {
+  const usuarioId =
+    getUsuarioId(req);
 
-  const tipoUsuarioId = String(
-    (req as any).user?.tipoUsuarioId ??
-      req.headers["x-tipousuarioid"] ??
-      req.query.tipoUsuarioId ??
-      (req as any).body?.tipoUsuarioId ??
-      ""
-  ).trim();
-
-  const isAdmin =
-    tipoRaw === "admin" || tipoRaw === "administrador" || tipoRaw === "adm";
-
-  if (isAdmin) {
-    const treino = await prisma.treinoProgramado.findUnique({
-      where: { id: treinoId },
-      select: { id: true },
-    });
-    if (!treino)
-      return { ok: false as const, status: 404, message: "Treino não encontrado." };
-    return { ok: true as const, treino, status: 200, message: "ok" };
+  if (!usuarioId) {
+    return null;
   }
 
-  const treino = await prisma.treinoProgramado.findUnique({
-    where: { id: treinoId },
-    select: {
-      id: true,
-      professorId: true,
-      clubeId: true,
-      escolinhaId: true,
-      professores: tipoUsuarioId
-        ? {
-            where: { professorId: tipoUsuarioId },
-            select: { professorId: true },
-          }
-        : { select: { professorId: true } },
-    },
-  });
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
 
-  if (!treino)
-    return { ok: false as const, status: 404, message: "Treino não encontrado." };
+  if (!contexto) {
+    return null;
+  }
 
-  const donoId = treino.professorId || treino.clubeId || treino.escolinhaId || "";
-  const donoTipo =
-    treino.professorId ? "professor" : treino.clubeId ? "clube" : treino.escolinhaId ? "escolinha" : "desconhecido";
+  /*
+   * CONTEXTO DE ORGANIZAÇÃO
+   *
+   * Clube FootEra — Proprietário
+   * Clube FootEra — Professor
+   * Escola X — Administrador
+   *
+   * O DONO do treino é a organização.
+   */
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    const legacyId =
+      String(
+        contexto
+          .legacyOrganizationId ??
+        ""
+      ).trim();
 
-  const isOwner =
-    !!tipoUsuarioId && !!donoId && tipoUsuarioId === donoId && tipoRaw === donoTipo;
+    if (!legacyId) {
+      return null;
+    }
 
-  const isColabProfessor =
-    tipoRaw === "professor" &&
-    !!tipoUsuarioId &&
-    Array.isArray(treino.professores) &&
-    treino.professores.length > 0;
+    const tipoOrganizacao =
+      String(
+        contexto
+          .organizationType ??
+        ""
+      )
+        .trim()
+        .toUpperCase();
 
-  const ok = isOwner || isColabProfessor;
+    if (
+      tipoOrganizacao ===
+      "CLUBE"
+    ) {
+      return {
+        dono:
+          "Clube",
+
+        professorId:
+          null,
+
+        clubeId:
+          legacyId,
+
+        escolinhaId:
+          null,
+
+        criadorUsuarioId:
+          null,
+      };
+    }
+
+    if (
+      tipoOrganizacao ===
+      "ESCOLA"
+    ) {
+      return {
+        dono:
+          "Escolinha",
+
+        professorId:
+          null,
+
+        clubeId:
+          null,
+
+        escolinhaId:
+          legacyId,
+
+        criadorUsuarioId:
+          null,
+      };
+    }
+
+    return null;
+  }
+
+  /*
+   * CONTEXTO PESSOAL PROFESSOR
+   */
+  if (
+    contexto.tipoUsuario ===
+      "Professor" &&
+    contexto.tipoUsuarioId
+  ) {
+    return {
+      dono:
+        "Professor",
+
+      professorId:
+        String(
+          contexto.tipoUsuarioId
+        ),
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        null,
+    };
+  }
+
+  /*
+   * ADMIN pessoal.
+   */
+  const isAdmin =
+    await canPermission(
+      usuarioId,
+      "VER_ADMIN"
+    );
+
+  if (isAdmin) {
+    return {
+      dono:
+        "Admin",
+
+      professorId:
+        null,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      criadorUsuarioId:
+        usuarioId,
+    };
+  }
+
+  return null;
+}
+
+async function mustBeOwner(
+  req: Request,
+  treinoId: string
+) {
+  const usuarioId =
+    getUsuarioId(req);
+
+  if (!usuarioId) {
+    return {
+      ok:
+        false as const,
+
+      status:
+        401,
+
+      message:
+        "Não autenticado.",
+    };
+  }
+
+  const isAdmin =
+    await canPermission(
+      usuarioId,
+      "VER_ADMIN"
+    );
+
+  const treino =
+    await prisma
+      .treinoProgramado
+      .findUnique({
+        where: {
+          id:
+            treinoId,
+        },
+
+        select: {
+          id: true,
+          professorId: true,
+          clubeId: true,
+          escolinhaId: true,
+
+          professores: {
+            select: {
+              professorId:
+                true,
+            },
+          },
+        },
+      });
+
+  if (!treino) {
+    return {
+      ok:
+        false as const,
+
+      status:
+        404,
+
+      message:
+        "Treino não encontrado.",
+    };
+  }
+
+  if (isAdmin) {
+    return {
+      ok:
+        true as const,
+
+      treino,
+
+      status:
+        200,
+
+      message:
+        "ok",
+    };
+  }
+
+  const owner =
+    await ownerFromActiveContext(
+      req
+    );
+
+  if (!owner) {
+    return {
+      ok:
+        false as const,
+
+      treino,
+
+      status:
+        403,
+
+      message:
+        "O contexto ativo não permite gerenciar este treino.",
+    };
+  }
+
+  let permitido =
+    false;
+
+  if (
+    owner.dono ===
+      "Professor" &&
+    owner.professorId
+  ) {
+    permitido =
+      treino.professorId ===
+        owner.professorId ||
+      treino.professores.some(
+        (item) =>
+          item.professorId ===
+          owner.professorId
+      );
+  }
+
+  if (
+    owner.dono ===
+      "Clube" &&
+    owner.clubeId
+  ) {
+    permitido =
+      treino.clubeId ===
+      owner.clubeId;
+  }
+
+  if (
+    owner.dono ===
+      "Escolinha" &&
+    owner.escolinhaId
+  ) {
+    permitido =
+      treino.escolinhaId ===
+      owner.escolinhaId;
+  }
 
   return {
-    ok,
+    ok:
+      permitido,
+
     treino,
-    status: ok ? 200 : 403,
-    message: ok ? "ok" : "Você não é dono nem colaborador deste treino.",
+
+    status:
+      permitido
+        ? 200
+        : 403,
+
+    message:
+      permitido
+        ? "ok"
+        : "Este treino não pertence ao contexto ativo.",
   };
 }
 
@@ -302,14 +646,92 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       });
     }
 
-    const owner = assertOwnerIdsFromBodyOrReq(req.body);
-    if (!owner) {
-      return res.status(400).json({
-        message: "Informe o dono do treino: (tipoUsuario + tipoUsuarioId) ou (professorId).",
+    const usuarioId =
+      getUsuarioId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({
+        message:
+          "Usuário não autenticado.",
       });
     }
 
-    const criadorProfessorIdNorm = String(criadorProfessorId ?? "").trim();
+    const isAdmin =
+      await canPermission(
+        usuarioId,
+        "VER_ADMIN"
+      );
+
+    let owner =
+      await ownerFromActiveContext(
+        req
+      );
+
+    /*
+    * Somente Admin pode escolher
+    * explicitamente outro dono
+    * através do body.
+    *
+    * Para todos os demais,
+    * tipoUsuario/tipoUsuarioId/professorId
+    * enviados pelo front são ignorados
+    * como fonte de ownership.
+    */
+    if (isAdmin) {
+      owner =
+        assertOwnerIdsFromBodyOrReq(
+          req.body
+        ) ??
+        owner;
+    }
+
+    if (!owner) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_REQUIRED",
+
+        message:
+          "O contexto ativo não permite criar treino programado.",
+      });
+    }
+
+    const activeContext =
+      await getActiveContext(
+        usuarioId
+      );
+
+    const professorContextoId =
+      activeContext?.kind ===
+        "ORGANIZATION" &&
+      activeContext
+        ?.organizationRole ===
+        "PROFESSOR"
+        ? String(
+            activeContext
+              ?.tipoUsuarioId ??
+            ""
+          ).trim()
+        : "";
+
+    const criadorProfessorIdNorm =
+      (
+        isAdmin &&
+        criadorProfessorId
+      )
+        ? String(
+            criadorProfessorId
+          ).trim()
+
+        : professorContextoId ||
+          (
+            owner.dono ===
+              "Professor"
+              ? String(
+                  owner.professorId ??
+                  ""
+                ).trim()
+              : ""
+          );
 
     if (criadorProfessorIdNorm) {
       const profOk = await prisma.professor.findUnique({
@@ -772,7 +1194,15 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
           meta: { nome, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
         });
 
-        const professorIdForStats = normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
+        const professorIdForStats =
+          criadorProfessorIdNorm ||
+          (
+            owner.dono ===
+              "Professor"
+              ? owner.professorId ??
+                undefined
+              : undefined
+          );
 
         const exerciciosOficiaisIds = (itens || [])
           .map((i: any) => i?.exercicioId)
@@ -921,25 +1351,127 @@ export async function updateTreino(req: Request, res: Response) {
       if (dup) return res.status(400).json({ message: "Já existe treino com esse nome.", duplicado: dup });
     }
 
-    const dataDono: any = {};
-    if (tipoUsuario || tipoUsuarioId) {
-      const dono = normalizarTipoUsuario(tipoUsuario);
-      if (!dono || !tipoUsuarioId) {
-        return res.status(400).json({ message: "Para trocar o dono, informe tipoUsuario e tipoUsuarioId." });
-      }
-      dataDono.Professor = { disconnect: true };
-      dataDono.clube = { disconnect: true };
-      dataDono.escolinha = { disconnect: true };
-      dataDono.criadorUsuario = { disconnect: true };
+    const usuarioId =
+      getUsuarioId(req);
 
-      if (dono === "Professor") dataDono.Professor = { connect: { id: tipoUsuarioId } };
-      if (dono === "Clube") dataDono.clube = { connect: { id: tipoUsuarioId } };
-      if (dono === "Escolinha") dataDono.escolinha = { connect: { id: tipoUsuarioId } };
-      if (dono === "Admin") dataDono.criadorUsuario = { connect: { id: tipoUsuarioId } };
-
+    if (!usuarioId) {
+      return res.status(401).json({
+        message:
+          "Usuário não autenticado.",
+      });
     }
 
-    const viewerUserId = String((req as any).user?.id || "").trim();
+    const isAdmin =
+      await canPermission(
+        usuarioId,
+        "VER_ADMIN"
+      );
+
+    const dataDono:
+      any = {};
+
+    /*
+    * Usuário comum:
+    * ignora tipoUsuario/tipoUsuarioId.
+    *
+    * Fazemos IGNORE em vez de erro
+    * porque o front legado ainda envia
+    * esses campos durante a migração.
+    */
+    if (
+      isAdmin &&
+      (
+        tipoUsuario ||
+        tipoUsuarioId
+      )
+    ) {
+      const novoOwner =
+        assertOwnerIdsFromBodyOrReq(
+          req.body
+        );
+
+      if (!novoOwner) {
+        return res.status(400).json({
+          message:
+            "Para trocar o dono, informe tipoUsuario e tipoUsuarioId válidos.",
+        });
+      }
+
+      dataDono.Professor = {
+        disconnect:
+          true,
+      };
+
+      dataDono.clube = {
+        disconnect:
+          true,
+      };
+
+      dataDono.escolinha = {
+        disconnect:
+          true,
+      };
+
+      dataDono.criadorUsuario = {
+        disconnect:
+          true,
+      };
+
+      if (
+        novoOwner.dono ===
+          "Professor" &&
+        novoOwner.professorId
+      ) {
+        dataDono.Professor = {
+          connect: {
+            id:
+              novoOwner.professorId,
+          },
+        };
+      }
+
+      if (
+        novoOwner.dono ===
+          "Clube" &&
+        novoOwner.clubeId
+      ) {
+        dataDono.clube = {
+          connect: {
+            id:
+              novoOwner.clubeId,
+          },
+        };
+      }
+
+      if (
+        novoOwner.dono ===
+          "Escolinha" &&
+        novoOwner.escolinhaId
+      ) {
+        dataDono.escolinha = {
+          connect: {
+            id:
+              novoOwner.escolinhaId,
+          },
+        };
+      }
+
+      if (
+        novoOwner.dono ===
+          "Admin" &&
+        novoOwner.criadorUsuarioId
+      ) {
+        dataDono.criadorUsuario = {
+          connect: {
+            id:
+              novoOwner
+                .criadorUsuarioId,
+          },
+        };
+      }
+    }
+
+    const viewerUserId = usuarioId;
     if (!viewerUserId) {
       return res.status(401).json({ message: "Usuário não autenticado." });
     }
@@ -1327,9 +1859,42 @@ export async function updateTreino(req: Request, res: Response) {
 
     const apenasNovos = novosOficiais.filter((id: string) => !antigosSet.has(id));
 
-    if (apenasNovos.length) {
-      const dono = normalizarTipoUsuario(tipoUsuario);
-      const professorIdForStats = dono === "Professor" ? String(tipoUsuarioId) : undefined;
+    if (
+      apenasNovos.length
+    ) {
+      const ownerAtivo =
+        await ownerFromActiveContext(
+          req
+        );
+
+      const contextoAtivo =
+        await getActiveContext(
+          usuarioId
+        );
+
+      const professorOrganizacaoId =
+        contextoAtivo?.kind ===
+          "ORGANIZATION" &&
+        contextoAtivo
+          .organizationRole ===
+          "PROFESSOR"
+          ? String(
+              contextoAtivo
+                .tipoUsuarioId ??
+              ""
+            ).trim()
+          : "";
+
+      const professorIdForStats =
+        professorOrganizacaoId ||
+        (
+          ownerAtivo?.dono ===
+            "Professor"
+            ? ownerAtivo
+                .professorId ??
+              undefined
+            : undefined
+        );
 
       await Promise.all(
         apenasNovos.map((exercicioId: string) =>
@@ -1374,11 +1939,44 @@ export const deleteTreino = async (req: Request, res: Response) => {
 };
 
 export const getAllTreinos = async (req: Request, res: Response) => {
-  const viewerTipo = String((req as any).user?.tipo || "").toLowerCase();
-  const viewerId = String((req as any).user?.tipoUsuarioId || "").trim();
   const scope = String((req.query as any).scope || "");
 
   try {
+    const usuarioId =
+      getUsuarioId(req);
+
+    if (!usuarioId) {
+      return res.status(401).json({
+        message:
+          "Não autenticado.",
+      });
+    }
+
+    const isAdmin =
+      await canPermission(
+        usuarioId,
+        "VER_ADMIN"
+      );
+
+    const viewerOwner =
+      await ownerFromActiveContext(
+        req
+      );
+
+    const viewerTipo =
+      viewerOwner
+        ? viewerOwner.dono
+            .toLowerCase()
+        : "";
+
+    const viewerId =
+      viewerOwner?.professorId ??
+      viewerOwner?.clubeId ??
+      viewerOwner?.escolinhaId ??
+      viewerOwner
+        ?.criadorUsuarioId ??
+      "";
+  
     const {
       professorId,
       ownerTipo,
@@ -1414,10 +2012,37 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       }
     }
 
-    const onlyMineBool = String(onlyMine ?? "").toLowerCase() === "true";
-    const ownerWhere = ownerWhereFrom(tipoUsuario, tipoUsuarioId);
-    if (onlyMineBool && ownerWhere) {
-      Object.assign(where, ownerWhere);
+    const onlyMineBool =
+      String(
+        onlyMine ?? ""
+      ).toLowerCase() ===
+      "true";
+
+    let ownerWhere =
+      ownerWhereResolved(
+        viewerOwner
+      );
+
+    if (
+      isAdmin &&
+      tipoUsuario &&
+      tipoUsuarioId
+    ) {
+      ownerWhere =
+        ownerWhereFrom(
+          tipoUsuario,
+          tipoUsuarioId
+        );
+    }
+
+    if (
+      onlyMineBool &&
+      ownerWhere
+    ) {
+      Object.assign(
+        where,
+        ownerWhere
+      );
     }
 
     const take =

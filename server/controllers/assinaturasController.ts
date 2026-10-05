@@ -3,21 +3,11 @@ import type { Periodicidade } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { sendError } from "../utils/httpError.js";
+import {
+  listarActiveContexts,
+  type ActiveContext,
+} from "../services/activeContext.js";
 
-function assertAdmin(req: AuthenticatedRequest) {
-  const u: any = req.user || {};
-  const tipo = String(u.tipo || u.tipoUsuario || "").toLowerCase();
-  const isAdmin =
-    (!!u.id && tipo === "admin") ||
-    u.isAdmin === true ||
-    String(u.role || "").toLowerCase() === "admin";
-
-  if (!isAdmin) {
-    const err: any = new Error("Acesso restrito ao administrador.");
-    err.status = 403;
-    throw err;
-  }
-}
 
 function normPlano(p: string) {
   return String(p || "").trim().toUpperCase();
@@ -47,8 +37,122 @@ function isTipoLearningEspecial(
   );
 }
 
-async function resolverPlanoAdmin(
+function getContextoAssinaturaData(
+  contexto: ActiveContext
+) {
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    return {
+      contextoKey:
+        contexto.key,
+
+      contextoKind:
+        "ORGANIZATION",
+
+      contextoTipo:
+        contexto.organizationType
+          ? String(
+              contexto.organizationType
+            )
+          : null,
+
+      contextoPerfilId:
+        null,
+
+      contextoOrganizacaoId:
+        contexto.organizationId ??
+        null,
+
+      contextoLegacyOrganizationId:
+        contexto
+          .legacyOrganizationId ??
+        null,
+    };
+  }
+
+  return {
+    contextoKey:
+      contexto.key,
+
+    contextoKind:
+      "PERSONAL",
+
+    contextoTipo:
+      String(
+        contexto.role ??
+        contexto.tipoUsuario
+      ),
+
+    contextoPerfilId:
+      contexto.profileId ??
+      contexto.tipoUsuarioId ??
+      null,
+
+    contextoOrganizacaoId:
+      null,
+
+    contextoLegacyOrganizationId:
+      null,
+  };
+}
+
+async function resolverContextoAdmin(
   usuarioId: string,
+  contextoKeyRaw: unknown
+) {
+  const contextoKey =
+    String(
+      contextoKeyRaw ?? ""
+    ).trim();
+
+  if (!contextoKey) {
+    const err: any =
+      new Error(
+        "contextoKey é obrigatório."
+      );
+
+    err.status = 400;
+    err.statusCode = 400;
+    err.code =
+      "CONTEXT_KEY_REQUIRED";
+
+    throw err;
+  }
+
+  const contextos =
+    await listarActiveContexts(
+      usuarioId
+    );
+
+  const contexto =
+    contextos.find(
+      (item) =>
+        item.key ===
+        contextoKey
+    );
+
+  if (!contexto) {
+    const err: any =
+      new Error(
+        "O contexto informado não pertence ao usuário."
+      );
+
+    err.status = 404;
+    err.statusCode = 404;
+    err.code =
+      "CONTEXT_NOT_FOUND";
+
+    throw err;
+  }
+
+  return contexto;
+}
+
+async function resolverPlanoAdmin(
+  tipoRaw:
+    string | null | undefined,
   planoRaw: string
 ) {
   const plano =
@@ -60,23 +164,9 @@ async function resolverPlanoAdmin(
     return "FREE";
   }
 
-  const usuario =
-    await prisma.usuario.findUnique({
-      where: {
-        id: usuarioId,
-      },
-
-      select: {
-        tipo: true,
-      },
-    });
-
   const tipo =
     normTipo(
-      usuario?.tipo as
-        | string
-        | null
-        | undefined
+      tipoRaw
     );
 
   if (
@@ -197,20 +287,76 @@ function toDTO(a: any) {
     trialEndsAt: a.trialEndsAt?.toISOString?.() ?? a.trialEndsAt ?? null,
     canceledAt: a.canceledAt ? (a.canceledAt?.toISOString?.() ?? a.canceledAt) : null,
     ativo: !!a.ativo,
+    contextoKey:
+      a.contextoKey ?? null,
+    contextoKind:
+      a.contextoKind ?? null,
+    contextoTipo:
+      a.contextoTipo ?? null,
+    contextoPerfilId:
+      a.contextoPerfilId ?? null,
+    contextoOrganizacaoId:
+      a.contextoOrganizacaoId ?? null,
+    contextoLegacyOrganizationId:
+      a.contextoLegacyOrganizationId ?? null,
   };
 }
 
 export async function getByUsuario(req: AuthenticatedRequest, res: Response) {
   try {
-    assertAdmin(req);
     const { usuarioId } = req.params;
 
-    const list = await (prisma as any).assinatura.findMany({
-      where: { usuarioId },
-      orderBy: { startsAt: "desc" },
-    });
+    const [
+      list,
+      contextos,
+    ] =
+      await Promise.all([
+        (prisma as any)
+          .assinatura
+          .findMany({
+            where: {
+              usuarioId,
+            },
 
-    res.json({ items: list.map(toDTO) });
+            orderBy: {
+              startsAt:
+                "desc",
+            },
+          }),
+
+        listarActiveContexts(
+          usuarioId
+        ),
+      ]);
+
+    return res.json({
+      items:
+        list.map(toDTO),
+
+      contextos:
+        contextos.map(
+          (contexto) => ({
+            key:
+              contexto.key,
+
+            kind:
+              contexto.kind,
+
+            label:
+              contexto.label,
+
+            tipo:
+              contexto.kind ===
+              "ORGANIZATION"
+                ? contexto
+                    .organizationType
+                : (
+                    contexto.role ??
+                    contexto.tipoUsuario
+                  ),
+          })
+        ),
+    });
   } catch (e: any) {
     console.error("erro getByUsuario:", e);
     sendError(res, e, "Erro ao buscar assinaturas");
@@ -219,16 +365,44 @@ export async function getByUsuario(req: AuthenticatedRequest, res: Response) {
 
 export async function updatePlano(req: AuthenticatedRequest, res: Response) {
   try {
-    assertAdmin(req);
-
-    const { usuarioId } = req.params;
-    const { plano, periodicidade } = req.body || {};
+     const { usuarioId } = req.params;
+    const {
+      plano,
+      periodicidade,
+      contextoKey,
+    } = req.body || {};
 
     if (!plano) {
       return res.status(400).send("Informe o plano: FREE, PRO ou LEARNING.");
     }
 
-    const planoFinal = await resolverPlanoAdmin(usuarioId, plano);
+    const contexto =
+      await resolverContextoAdmin(
+        usuarioId,
+        contextoKey
+      );
+
+    const contextoAssinatura =
+      getContextoAssinaturaData(
+        contexto
+      );
+
+    const tipoContexto =
+      contexto.kind ===
+      "ORGANIZATION"
+        ? (
+            contexto.organizationType
+              ? String(
+                  contexto.organizationType
+                )
+              : null
+          )
+        : String(
+            contexto.role ??
+            contexto.tipoUsuario
+          );
+
+    const planoFinal = await resolverPlanoAdmin(tipoContexto, plano);
     const per: Periodicidade = (periodicidade as Periodicidade) || "Mensal";
 
     const now = new Date();
@@ -236,7 +410,14 @@ export async function updatePlano(req: AuthenticatedRequest, res: Response) {
     const renovaEm = addMonths(now, months);
 
     await (prisma as any).assinatura.updateMany({
-      where: { usuarioId, ativo: true },
+      where: {
+        usuarioId,
+        contextoKey:
+          contextoAssinatura
+            .contextoKey,
+        ativo:
+          true,
+      },
       data: {
         ativo: false,
         canceledAt: now,
@@ -261,12 +442,20 @@ export async function updatePlano(req: AuthenticatedRequest, res: Response) {
 
     const updated = await (prisma as any).assinatura.upsert({
       where: {
-        usuarioId_plano: {
-          usuarioId,
-          plano: planoFinal,
-        },
+        usuarioId_plano_contextoKey:
+          {
+            usuarioId,
+
+            plano:
+              planoFinal,
+
+            contextoKey:
+              contextoAssinatura
+                .contextoKey,
+          },
       },
       update: {
+        ...contextoAssinatura,
         periodicidade: per,
         status: "ATIVA",
         ativo: true,
@@ -280,6 +469,7 @@ export async function updatePlano(req: AuthenticatedRequest, res: Response) {
       } as any,
       create: {
         usuarioId,
+        ...contextoAssinatura,
         plano: planoFinal,
         periodicidade: per,
         startsAt: now,
@@ -301,22 +491,50 @@ export async function updatePlano(req: AuthenticatedRequest, res: Response) {
 
 export async function cancelar(req: AuthenticatedRequest, res: Response) {
   try {
-    assertAdmin(req);
     const { usuarioId } = req.params;
-    const { planoId } = req.body || {};
+    const {
+      planoId,
+      contextoKey,
+    } = req.body || {};
+
+    const contexto =
+      await resolverContextoAdmin(
+        usuarioId,
+        contextoKey
+      );
+
+    const contextoAssinatura =
+      getContextoAssinaturaData(
+        contexto
+      );
     const now = new Date();
 
     if (planoId) {
       const plano = normPlano(planoId);
       await (prisma as any).assinatura.updateMany({
-        where: { usuarioId, plano, ativo: true },
+        where: {
+          usuarioId,
+          contextoKey:
+            contextoAssinatura
+              .contextoKey,
+          plano,
+          ativo:
+            true,
+        },
         data: { ativo: false, canceledAt: now, status: "BLOQUEADA", bloqueadoEm: now } as any,
       });
       return res.json({ ok: true });
     }
 
     await (prisma as any).assinatura.updateMany({
-      where: { usuarioId, ativo: true },
+      where: {
+        usuarioId,
+        contextoKey:
+          contextoAssinatura
+            .contextoKey,
+        ativo:
+          true,
+      },
       data: { ativo: false, canceledAt: now, status: "BLOQUEADA", bloqueadoEm: now } as any,
     });
 
@@ -329,12 +547,45 @@ export async function cancelar(req: AuthenticatedRequest, res: Response) {
 
 export async function reativar(req: AuthenticatedRequest, res: Response) {
   try {
-    assertAdmin(req);
     const { usuarioId } = req.params;
-    const { plano, periodicidade } = req.body || {};
+    const {
+      plano,
+      periodicidade,
+      contextoKey,
+    } = req.body || {};
     if (!plano) return res.status(400).send("Informe o plano para reativar.");
 
-    const planoNorm = await resolverPlanoAdmin(usuarioId, plano);
+    const contexto =
+      await resolverContextoAdmin(
+        usuarioId,
+        contextoKey
+      );
+
+    const contextoAssinatura =
+      getContextoAssinaturaData(
+        contexto
+      );
+
+    const tipoContexto =
+      contexto.kind ===
+      "ORGANIZATION"
+        ? (
+            contexto.organizationType
+              ? String(
+                  contexto.organizationType
+                )
+              : null
+          )
+        : String(
+            contexto.role ??
+            contexto.tipoUsuario
+          );
+      
+    const planoNorm =
+      await resolverPlanoAdmin(
+        tipoContexto,
+        plano
+      );
     if (planoNorm === "FREE") {
       return res.status(400).send("Plano FREE não precisa ser reativado.");
     }
@@ -346,8 +597,21 @@ export async function reativar(req: AuthenticatedRequest, res: Response) {
     const renovaEm = addMonths(now, months);
 
     const out = await (prisma as any).assinatura.upsert({
-      where: { usuarioId_plano: { usuarioId, plano: planoNorm } },
+      where: {
+        usuarioId_plano_contextoKey:
+          {
+            usuarioId,
+
+            plano:
+              planoNorm,
+
+            contextoKey:
+              contextoAssinatura
+                .contextoKey,
+          },
+      },
       update: {
+        ...contextoAssinatura,
         ativo: true,
         canceledAt: null,
         bloqueadoEm: null,
@@ -360,6 +624,7 @@ export async function reativar(req: AuthenticatedRequest, res: Response) {
       } as any,
       create: {
         usuarioId,
+        ...contextoAssinatura,
         plano: planoNorm,
         periodicidade: per,
         startsAt: now,

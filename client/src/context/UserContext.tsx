@@ -6,11 +6,17 @@ import React, {
   useState,
 } from "react";
 import axios from "axios";
-import Storage from "../utils/storage.js";
 import { API } from "../config.js";
 import {
+  applyActiveContextSession,
   applyAuthSession,
+  clearAuthSession,
+  type ActiveContextSession,
+  readAuthSessionSnapshot,
 } from "../utils/authSession.js";
+import socket, {
+  syncSocketContext,
+} from "../services/socket.js";
 
 export interface User {
   id: string | number;
@@ -29,6 +35,28 @@ export interface Score {
   responsibility: number;
 }
 
+export type AppPermission =
+  | "CRIAR_TREINO"
+  | "GERENCIAR_TURMA"
+  | "GERENCIAR_ORGANIZACAO"
+  | "CRIAR_EVENTO"
+  | "CRIAR_AULA_AO_VIVO"
+  | "PUBLICAR_METODOLOGIA"
+  | "VER_ADMIN";
+
+export type PermissionMap =
+  Record<AppPermission, boolean>;
+
+const EMPTY_PERMISSIONS: PermissionMap = {
+  CRIAR_TREINO: false,
+  GERENCIAR_TURMA: false,
+  GERENCIAR_ORGANIZACAO: false,
+  CRIAR_EVENTO: false,
+  PUBLICAR_METODOLOGIA: false,
+  VER_ADMIN: false,
+  CRIAR_AULA_AO_VIVO: false,
+};
+
 export interface UserContextType {
   user: User | null;
   score: Score | null;
@@ -45,6 +73,33 @@ export interface UserContextType {
   setIsLoading?: React.Dispatch<
     React.SetStateAction<boolean>
   >;
+  permissions: PermissionMap;
+  permissionsLoading: boolean;
+  can: (
+    permission: AppPermission
+  ) => boolean;
+  refreshPermissions:
+    () => Promise<void>;
+  activeContext:
+    ActiveContextSession | null;
+  activeTipoUsuario:
+    string | null;
+  activeTipoUsuarioId:
+    string | null;
+  activeOrganizationId:
+    string | null;
+  isOrganizationContext:
+    boolean;
+  contexts:
+    ActiveContextSession[];
+  contextsLoading:
+    boolean;
+  refreshActiveContexts:
+    () => Promise<void>;
+  switchActiveContext:
+    (
+      contextKey: string
+    ) => Promise<void>;
 }
 
 export const UserContext =
@@ -52,34 +107,28 @@ export const UserContext =
     undefined
   );
 
-function readStoredSessionUser(): User | null {
-  if (typeof window === "undefined") {
+function readStoredSessionUser():
+  User | null {
+  const session =
+    readAuthSessionSnapshot();
+
+  if (
+    !session.token ||
+    !session.usuarioId
+  ) {
     return null;
   }
-
-  const token =
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    "";
-
-  const usuarioId =
-    localStorage.getItem("usuarioId") ||
-    sessionStorage.getItem("usuarioId") ||
-    "";
-
-  if (!token || !usuarioId) {
-    return null;
-  }
-
-  const username =
-    localStorage.getItem("nomeUsuario") ||
-    sessionStorage.getItem("nomeUsuario") ||
-    "";
 
   return {
-    id: usuarioId,
-    name: username || "Usuário FootEra",
-    username,
+    id:
+      session.usuarioId,
+
+    name:
+      session.nomeUsuario ||
+      "Usuário FootEra",
+
+    username:
+      session.nomeUsuario,
   };
 }
 
@@ -99,6 +148,117 @@ export function UserProvider({
   const [isLoading, setIsLoading] =
     useState(false);
 
+  const [
+    permissions,
+    setPermissions,
+  ] = useState<PermissionMap>({
+    ...EMPTY_PERMISSIONS,
+  });
+
+  const [
+    activeContext,
+    setActiveContext,
+  ] =
+    useState<
+      ActiveContextSession |
+      null
+    >(
+      () =>
+        readAuthSessionSnapshot()
+          .activeContext
+    );
+
+  const [
+    contexts,
+    setContexts,
+  ] =
+    useState<
+      ActiveContextSession[]
+    >([]);
+
+  const [
+    contextsLoading,
+    setContextsLoading,
+  ] =
+    useState(false);
+
+  const [
+    permissionsLoading,
+    setPermissionsLoading,
+  ] = useState(false);
+
+
+  const refreshPermissions =
+    useCallback(
+      async () => {
+        const token =
+          readAuthSessionSnapshot()
+            .token;
+
+        if (!token) {
+          setPermissions({
+            ...EMPTY_PERMISSIONS,
+          });
+
+          setPermissionsLoading(
+            false
+          );
+
+          return;
+        }
+
+        try {
+          setPermissionsLoading(
+            true
+          );
+
+          const response =
+            await axios.get(
+              `${API.BASE_URL}/api/permissoes/me`,
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          setPermissions({
+            ...EMPTY_PERMISSIONS,
+            ...(response.data
+              ?.permissions ?? {}),
+          });
+        } catch (error) {
+          console.error(
+            "[UserContext] Erro ao carregar permissões:",
+            error
+          );
+
+          setPermissions({
+            ...EMPTY_PERMISSIONS,
+          });
+        } finally {
+          setPermissionsLoading(
+            false
+          );
+        }
+      },
+      []
+    );
+
+
+  const can =
+    useCallback(
+      (
+        permission:
+          AppPermission
+      ) =>
+        permissions[
+          permission
+        ] === true,
+      [permissions]
+    );
+
   const syncSession =
     useCallback(() => {
       setUser(
@@ -106,12 +266,200 @@ export function UserProvider({
       );
     }, []);
 
+  const refreshActiveContexts =
+    useCallback(
+      async () => {
+        const token =
+          readAuthSessionSnapshot()
+            .token;
+
+        if (!token) {
+          setActiveContext(
+            null
+          );
+
+          setContexts([]);
+
+          setContextsLoading(
+            false
+          );
+
+          return;
+        }
+
+        try {
+          setContextsLoading(
+            true
+          );
+
+          const {
+            data,
+          } =
+            await axios.get(
+              `${API.BASE_URL}/api/usuarios/me/contextos`,
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          const items =
+            Array.isArray(
+              data?.contexts
+            )
+              ? data.contexts
+              : [];
+
+          const active =
+            data?.activeContext ??
+            null;
+
+          setContexts(
+            items
+          );
+
+          setActiveContext(
+            active
+          );
+
+          if (active) {
+            applyActiveContextSession(
+              active,
+              {
+                notify:
+                  false,
+              }
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[UserContext] Erro ao carregar contextos:",
+            error
+          );
+
+          setActiveContext(
+            null
+          );
+
+          setContexts([]);
+        } finally {
+          setContextsLoading(
+            false
+          );
+        }
+      },
+      []
+    );
+
+  const switchActiveContext =
+    useCallback(
+      async (
+        contextKey:
+          string
+      ) => {
+        const token =
+          readAuthSessionSnapshot()
+            .token;
+
+        if (!token) {
+          throw new Error(
+            "Usuário não autenticado."
+          );
+        }
+
+        const {
+          data,
+        } =
+          await axios.patch(
+            `${API.BASE_URL}/api/usuarios/me/contexto-ativo`,
+            {
+              contextKey,
+            },
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        const active =
+          data?.activeContext ??
+          null;
+
+        if (!active) {
+          throw new Error(
+            "O servidor não retornou o contexto ativo."
+          );
+        }
+
+        setActiveContext(
+          active
+        );
+
+        applyActiveContextSession(
+          active,
+          {
+            notify:
+              false,
+          }
+        );
+
+        /*
+        * O backend já persistiu
+        * o novo contexto.
+        *
+        * Agora pedimos ao socket
+        * para atualizar suas salas
+        * ctx:/org: sem reconectar.
+        */
+        syncSocketContext();
+
+        await Promise.all([
+          refreshPermissions(),
+          refreshActiveContexts(),
+        ]);
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "footera:auth-changed",
+            {
+              detail: {
+                authenticated:
+                  true,
+
+                contextChanged:
+                  true,
+              },
+            }
+          )
+        );
+      },
+      [
+        refreshPermissions,
+        refreshActiveContexts,
+      ]
+    );
+
   useEffect(() => {
     syncSession();
 
-    const onAuthChanged = () => {
-      syncSession();
-    };
+    void Promise.all([
+      refreshPermissions(),
+      refreshActiveContexts(),
+    ]);
+
+    const onAuthChanged =
+      () => {
+        syncSession();
+
+        void Promise.all([
+          refreshPermissions(),
+          refreshActiveContexts(),
+        ]);
+      };
 
     window.addEventListener(
       "footera:auth-changed",
@@ -124,7 +472,70 @@ export function UserProvider({
         onAuthChanged
       );
     };
-  }, [syncSession]);
+  }, [
+    syncSession,
+    refreshPermissions,
+    refreshActiveContexts,
+  ]);
+
+  useEffect(() => {
+    const onContextSynced =
+      (
+        payload?: {
+          activeContextKey?:
+            string;
+
+          activeContextKind?:
+            "PERSONAL" |
+            "ORGANIZATION";
+
+          organizationId?:
+            string | null;
+        }
+      ) => {
+        const nextContextKey =
+          String(
+            payload
+              ?.activeContextKey ??
+            ""
+          ).trim();
+
+        if (!nextContextKey) {
+          return;
+        }
+
+        /*
+        * O servidor já alterou o
+        * ActiveContext da conta.
+        *
+        * Esta aba apenas atualiza
+        * seu estado React/storage
+        * a partir do backend.
+        */
+        syncSession();
+
+        void Promise.all([
+          refreshPermissions(),
+          refreshActiveContexts(),
+        ]);
+      };
+
+    socket.on(
+      "context:synced",
+      onContextSynced
+    );
+
+    return () => {
+      socket.off(
+        "context:synced",
+        onContextSynced
+      );
+    };
+  }, [
+    syncSession,
+    refreshPermissions,
+    refreshActiveContexts,
+  ]);
 
   const login = async (
     username: string,
@@ -149,6 +560,10 @@ export function UserProvider({
       );
 
       syncSession();
+      await Promise.all([
+        refreshPermissions(),
+        refreshActiveContexts(),
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -156,9 +571,24 @@ export function UserProvider({
 
   const logout =
     useCallback(() => {
-      Storage.clearAuth();
+      clearAuthSession();
+      setActiveContext(
+        null
+      );
+
+      setContexts([]);
+      setContextsLoading(
+        false
+      );
       setUser(null);
       setScore(null);
+      setPermissions({
+        ...EMPTY_PERMISSIONS,
+      });
+
+      setPermissionsLoading(
+        false
+      );
 
       if (
         typeof window !==
@@ -177,6 +607,26 @@ export function UserProvider({
       }
     }, []);
 
+  const activeTipoUsuario =
+    activeContext
+      ?.tipoUsuario ??
+    null;
+
+  const activeTipoUsuarioId =
+    activeContext
+      ?.tipoUsuarioId ??
+    null;
+
+  const activeOrganizationId =
+    activeContext
+      ?.organizationId ??
+    null;
+
+  const isOrganizationContext =
+    activeContext
+      ?.kind ===
+    "ORGANIZATION";
+
   return (
     <UserContext.Provider
       value={{
@@ -188,6 +638,19 @@ export function UserProvider({
         logout,
         setUser,
         setIsLoading,
+        activeContext,
+        contexts,
+        contextsLoading,
+        refreshActiveContexts,
+        switchActiveContext,
+        permissions,
+        permissionsLoading,
+        can,
+        refreshPermissions,
+        activeTipoUsuario,
+        activeTipoUsuarioId,
+        activeOrganizationId,
+        isOrganizationContext,
       }}
     >
       {children}

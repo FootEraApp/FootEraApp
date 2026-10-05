@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useContext} from "react";
 import axios from "axios";
 import {
   X,
@@ -25,6 +25,9 @@ import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
 import ConviteQrModal from "../share/ConviteQrModal.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type TurmaMin = {
   id: string;
@@ -116,63 +119,96 @@ export default function TurmasManager({
     sessionStorage.getItem("token") ??
     "";
 
-  function readAnyKey(key: string): string | null {
-    const v = localStorage.getItem(key) || sessionStorage.getItem(key);
-    return v && v.trim().length ? v : null;
-  }
-
-  function safeJsonParse<T = any>(v: string | null): T | null {
-    if (!v) return null;
-    try { return JSON.parse(v) as T; } catch { return null; }
-  }
-
-  function readUserObj(): any | null {
-    return (
-      safeJsonParse(localStorage.getItem("user")) ??
-      safeJsonParse(sessionStorage.getItem("user")) ??
-      safeJsonParse(localStorage.getItem("usuario")) ??
-      safeJsonParse(sessionStorage.getItem("usuario")) ??
-      null
-    );
-  }
-
   const token = getToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  const professorAlvoId = String(professorId ?? "").trim();
-  const userObj = readUserObj();
-  const meuProfessorId =
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const podeGerenciarTurmasPorPapel =
+    authContext?.can(
+      "GERENCIAR_TURMA"
+    ) ?? false;
+  const professorAlvoId =
     String(
-      (Storage as any)?.professor?.id ||
-        (Storage as any)?.user?.professorId ||
-        (Storage as any)?.usuario?.professorId ||
-        (Storage as any)?.user?.tipoUsuarioId ||
-        (Storage as any)?.usuario?.tipoUsuarioId ||
-        userObj?.professor?.id ||
-        userObj?.professorId ||
-        userObj?.tipoUsuarioId ||
-        userObj?.usuario?.professorId ||
-        userObj?.usuario?.tipoUsuarioId ||
-        readAnyKey("professorId") ||
-        readAnyKey("tipoUsuarioId") ||
+      professorId ?? ""
+    ).trim();
+
+  const activeTipoUsuario =
+    String(
+      authContext
+        ?.activeTipoUsuario ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const activeTipoUsuarioId =
+    String(
+      authContext
+        ?.activeTipoUsuarioId ??
         ""
     ).trim();
 
-  const tipoUsuarioLogado = String(
-    (Storage as any)?.user?.tipoUsuario ||
-      (Storage as any)?.usuario?.tipoUsuario ||
-      userObj?.tipoUsuario ||
-      userObj?.usuario?.tipoUsuario ||
-      userObj?.user?.tipoUsuario ||
-      userObj?.role ||
-      userObj?.tipo ||
-      readAnyKey("tipoUsuario") ||
-      readAnyKey("usuarioTipoRaw") ||
-      readAnyKey("role") ||
-      readAnyKey("userType") ||
-      ""
-  )
-    .toLowerCase()
-    .trim();
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
+  const meuProfessorId =
+    activeTipoUsuario ===
+      "professor"
+      ? activeTipoUsuarioId
+      : "";
+
+  const tipoUsuarioLogado =
+    activeTipoUsuario;
+
+  const activeLegacyOrganizationId =
+    String(
+      (activeContext as any)
+        ?.legacyOrganizationId ??
+        ""
+    ).trim();
+
+  const activeOrganizationType =
+    String(
+      (activeContext as any)
+        ?.organizationType ??
+        ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const ownerDoContexto:
+    Owner | undefined =
+    activeLegacyOrganizationId
+      ? {
+          tipo:
+            activeOrganizationType ===
+            "ESCOLA"
+              ? "Escolinha"
+              : "Clube",
+
+          id:
+            activeLegacyOrganizationId,
+        }
+      : undefined;
+
+  const isAdmin =
+    authContext?.can(
+      "VER_ADMIN"
+    ) ?? false;
+
+  const ownerEfetivo:
+    Owner | undefined =
+    ownerDoContexto ??
+    (
+      isAdmin
+        ? owner
+        : undefined
+    );
 
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -251,6 +287,11 @@ export default function TurmasManager({
 
   const podeGerenciarTurma =
     useMemo(() => {
+      if (
+        !podeGerenciarTurmasPorPapel
+      ) {
+        return false;
+      }
       if (!turmaSelecionada) {
         return false;
       }
@@ -274,11 +315,13 @@ export default function TurmasManager({
       }
 
       if (
-        owner?.id &&
+        ownerEfetivo?.id &&
         turmaSelecionada.ownerId
       ) {
         return (
-          String(owner.id).trim() ===
+          String(
+            ownerEfetivo.id
+          ).trim() ===
           String(
             turmaSelecionada.ownerId
           ).trim()
@@ -288,8 +331,9 @@ export default function TurmasManager({
       return false;
     }, [
       turmaSelecionada,
-      owner?.id,
+      ownerEfetivo?.id,
       meuProfessorId,
+      podeGerenciarTurmasPorPapel,
     ]);
 
   const podeExcluirTurma = podeGerenciarTurma; 
@@ -384,19 +428,24 @@ export default function TurmasManager({
 
 const carregarAtletasVinculados =
   async (): Promise<AtletaMin[]> => {
-    const vinculo = owner
-      ? owner.tipo === "Clube"
-        ? "clube"
-        : "escolinha"
-      : "professor";
+    const vinculo =
+      ownerEfetivo
+        ? ownerEfetivo.tipo ===
+          "Clube"
+          ? "clube"
+          : "escolinha"
+        : "professor";
 
-    const entidadeId = owner?.id
-      ? String(owner.id)
-      : String(
-          professorAlvoId ||
-            meuProfessorId ||
-            ""
-        ).trim();
+    const entidadeId =
+      ownerEfetivo?.id
+        ? String(
+            ownerEfetivo.id
+          )
+        : String(
+            professorAlvoId ||
+              meuProfessorId ||
+              ""
+          ).trim();
 
     if (!entidadeId) {
       setAlunos([]);
@@ -471,7 +520,7 @@ const carregarAtletasVinculados =
     (async () => {
       setLoading(true);
       try {
-        if (!owner) {
+        if (!ownerEfetivo) {
           setProfs([]);
 
           await carregarAtletasVinculados();
@@ -499,11 +548,11 @@ const carregarAtletasVinculados =
           return;
         }
 
-        const orgId = owner.id;
+        const orgId = ownerEfetivo.id;
         const resP = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
           headers,
           params: {
-            vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
+            vinculo: ownerEfetivo.tipo === "Clube" ? "clube" : "escolinha",
             id: orgId,
             limit: 200,
           },
@@ -515,9 +564,9 @@ const carregarAtletasVinculados =
           const resAlt = await axios.get(`${API.BASE_URL}/api/professores`, {
             headers,
             params: {
-              organizacaoId: owner.id,
-              clubeId: owner.id,
-              tipoUsuarioId: owner.id,
+              organizacaoId: ownerEfetivo.id,
+              clubeId: ownerEfetivo.id,
+              tipoUsuarioId: ownerEfetivo.id,
             },
           });
           lp = (resAlt.data?.professores || resAlt.data?.items || resAlt.data || []) as any[];
@@ -532,7 +581,7 @@ const carregarAtletasVinculados =
 
         await carregarAtletasVinculados();
 
-        const lista = await carregarTurmas(owner, filtroProf);
+        const lista = await carregarTurmas(ownerEfetivo, filtroProf);
         const tid = String(initialTurmaId ?? "").trim();
 
         let alvoId: string | undefined;
@@ -555,13 +604,13 @@ const carregarAtletasVinculados =
     })();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, owner?.id, initialTurmaId]);
+  }, [open, ownerEfetivo?.id, initialTurmaId]);
 
   useEffect(() => {
     if (!open) return;
-    void carregarTurmas(owner, filtroProf); 
+    void carregarTurmas(ownerEfetivo, filtroProf); 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, owner?.id, filtroProf]);
+  }, [open, ownerEfetivo?.id, filtroProf]);
 
   useEffect(() => {
     if (abaDireita === "agenda") setLeftCollapsed(true);
@@ -883,7 +932,7 @@ const carregarAtletasVinculados =
 
   const onFiltrarProf = async (prof: string) => {
     setFiltroProf(prof);
-    await carregarTurmas(owner, prof);
+    await carregarTurmas(ownerEfetivo, prof);
   };
 
   const abrirTurma = async (
@@ -898,7 +947,7 @@ const carregarAtletasVinculados =
       );
 
     if (
-      owner &&
+      ownerEfetivo &&
       !turmaPertenceAoOwner(turma) &&
       !professorLogadoParticipaDaTurma(
         turma
@@ -1055,8 +1104,8 @@ const carregarAtletasVinculados =
 
       toast.success("Dados da turma atualizados!");
 
-      if (owner) {
-        const lista = await carregarTurmas(owner, filtroProf);
+      if (ownerEfetivo) {
+        const lista = await carregarTurmas(ownerEfetivo, filtroProf);
         const turmaAtualizada = lista.find((t) => t.id === selecionada);
         if (turmaAtualizada) await abrirTurma(selecionada, turmaAtualizada);
       } else {
@@ -1130,7 +1179,7 @@ const carregarAtletasVinculados =
         )
       );
 
-      const lista = await carregarTurmas(owner, filtroProf);
+      const lista = await carregarTurmas(ownerEfetivo, filtroProf);
 
       await carregarAtletasVinculados();
       const turmaAtualizada = lista.find((t) => String(t.id) === String(selecionada));
@@ -1399,13 +1448,13 @@ const carregarAtletasVinculados =
   const criarTurma = async () => {
     if (!novoNome.trim()) return toast.error("Dê um nome para a turma");
 
-    const professoresDaNovaTurma = owner
+    const professoresDaNovaTurma = ownerEfetivo
       ? novoProfessores
       : meuProfessorId
         ? [meuProfessorId]
         : [];
 
-    if (!owner && professoresDaNovaTurma.length === 0) {
+    if (!ownerEfetivo && professoresDaNovaTurma.length === 0) {
       return toast.error("Não foi possível identificar o professor logado.");
     }
 
@@ -1425,9 +1474,9 @@ const carregarAtletasVinculados =
             : null,
       };
 
-      if (owner) {
-        payload.ownerTipo = owner.tipo;
-        payload.ownerId = owner.id;
+      if (ownerEfetivo) {
+        payload.ownerTipo = ownerEfetivo.tipo;
+        payload.ownerId = ownerEfetivo.id;
       }
 
       const res = await axios.post(`${API.BASE_URL}/api/turmas`, payload, { headers });
@@ -1446,7 +1495,7 @@ const carregarAtletasVinculados =
       setNovoCategorias([]);
       setNovoVagas("");
 
-      const lista = await carregarTurmas(owner, filtroProf);
+      const lista = await carregarTurmas(ownerEfetivo, filtroProf);
       setSelecionada(novaId);
 
       const turmaNova = lista.find((t) => t.id === novaId);
@@ -1582,7 +1631,10 @@ const carregarAtletasVinculados =
   const turmaPertenceAoOwner = (
     turma?: TurmaMin
   ) => {
-    if (!turma || !owner?.id) {
+    if (
+      !turma ||
+      !ownerEfetivo?.id
+    ) {
       return false;
     }
 
@@ -1590,14 +1642,19 @@ const carregarAtletasVinculados =
       String(
         turma.ownerId ?? ""
       ).trim() ===
-      String(owner.id).trim()
+      String(
+        ownerEfetivo.id
+      ).trim()
     );
   };
 
   const turmaEhExternaParaUsuario = (
     turma?: TurmaMin
   ) => {
-    if (!owner?.id || !turma) {
+    if (
+      !ownerEfetivo?.id ||
+      !turma
+    ) {
       return false;
     }
 
@@ -1636,8 +1693,8 @@ const carregarAtletasVinculados =
           <div className="text-sm font-semibold text-zinc-900">
             {estaNoModoProfessorLogado
               ? "Professor · Gerenciar turmas"
-              : owner
-              ? `${owner.tipo} · Gerenciar turmas`
+              : ownerEfetivo
+              ? `${ownerEfetivo.tipo} · Gerenciar turmas`
               : "Gerenciar turmas"}
           </div>
           <button onClick={fecharModal} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-50">
@@ -1814,7 +1871,8 @@ const carregarAtletasVinculados =
                 )}
               </div>
 
-              {owner || tipoUsuarioLogado === "professor" || meuProfessorId ? (
+              {podeGerenciarTurmasPorPapel &&
+                (ownerEfetivo || meuProfessorId) ? (
                 <div className="rounded-xl border border-zinc-200 bg-white p-3">
                   <div className="mb-2 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                     <Plus className="h-4 w-4" /> Criar nova turma
@@ -1881,7 +1939,7 @@ const carregarAtletasVinculados =
                     </div>
                   </div>
 
-                  {owner ? (
+                  {ownerEfetivo ? (
                     <>
                       <select
                         multiple
@@ -2160,32 +2218,43 @@ const carregarAtletasVinculados =
                             </button>
                           ) : null}
 
-                          <button
-                            onClick={salvarMembros}
-                            disabled={salvando}
-                            className="
-                              inline-flex
-                              min-h-11
-                              w-full
-                              items-center
-                              justify-center
-                              gap-2
-                              rounded-xl
-                              bg-emerald-600
-                              px-3
-                              py-2.5
-                              text-sm
-                              font-medium
-                              text-white
-                              hover:bg-emerald-700
-                              disabled:opacity-70
-                              whitespace-nowrap
-                              lg:w-auto
-                            "
-                          >
-                            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            Salvar alterações
-                          </button>
+                          {podeGerenciarTurma ? (
+                            <button
+                              onClick={
+                                salvarMembros
+                              }
+                              disabled={
+                                salvando
+                              }
+                              className="
+                                inline-flex
+                                min-h-11
+                                w-full
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-xl
+                                bg-emerald-600
+                                px-3
+                                py-2.5
+                                text-sm
+                                font-medium
+                                text-white
+                                hover:bg-emerald-700
+                                disabled:opacity-70
+                                whitespace-nowrap
+                                lg:w-auto
+                              "
+                            >
+                              {salvando ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Save className="h-4 w-4" />
+                              )}
+
+                              Salvar alterações
+                            </button>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -2463,18 +2532,27 @@ const carregarAtletasVinculados =
                               title={turmas.find((t) => t.id === selecionada)?.nome ?? "Turma"}
                               groupByTreinoPerDay
                               turmaId={selecionada}
-                              fetchAgendados={async ({ monthISO }) => {
-                                const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
-                                  headers,
-                                  params: {
-                                    turmaId: selecionada,
-                                    month: monthISO,
-                                    ownerTipo: owner?.tipo ?? "",
-                                    ownerId: owner?.id ?? "",
-                                  },
-                                });
+                              fetchAgendados={async ({
+                                monthISO,
+                              }) => {
+                                const r =
+                                  await axios.get(
+                                    `${API.BASE_URL}/api/treinos/agendados`,
+                                    {
+                                      headers,
 
-                                const data = r.data;
+                                      params: {
+                                        turmaId:
+                                          selecionada,
+
+                                        month:
+                                          monthISO,
+                                      },
+                                    }
+                                  );
+
+                                const data =
+                                  r.data;
                                 const arr =
                                   (Array.isArray(data?.items) && data.items) ||
                                   (Array.isArray(data?.agendados) && data.agendados) ||
@@ -2492,41 +2570,27 @@ const carregarAtletasVinculados =
                                 return { ...data, items: withTurma };
                               }}
                               fetchProgramados={async () => {
-                                if (!owner) {
-                                  const userId =
-                                    (Storage as any).user?.id ??
-                                    (Storage as any).usuario?.id ??
-                                    (Storage as any).userId ??
-                                    localStorage.getItem("userId") ??
-                                    "";
-
-                                  const res = await axios.get(
-                                    `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`,
+                                const res =
+                                  await axios.get(
+                                    `${API.BASE_URL}/api/treinosprogramados`,
                                     {
                                       headers,
+
                                       params: {
-                                        vinculo: "professor",
-                                        id: userId,
-                                        debug: "1",
+                                        onlyMine:
+                                          "true",
+
+                                        incluirColabs:
+                                          "1",
+
+                                        order:
+                                          "desc",
+
+                                        limit:
+                                          200,
                                       },
                                     }
                                   );
-
-                                  return res.data;
-                                }
-
-                                const orgId = owner.id;
-                                const res = await axios.get(
-                                  `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`,
-                                  {
-                                    headers,
-                                    params: {
-                                      vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-                                      id: orgId,
-                                      debug: "1",
-                                    },
-                                  }
-                                );
 
                                 return res.data;
                               }}

@@ -38,19 +38,10 @@ export default function PaginaConvocarEvento() {
   const [ev, setEv] = useState<Evento | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const backHref = useMemo(() => {
-    if (returnToQuery) return returnToQuery;
-
-    const saved =
-      typeof window !== "undefined"
-        ? sessionStorage.getItem("convocar:returnTo")
-        : null;
-    if (saved) return saved;
-
-    return Storage.tipoUsuarioId
-      ? `/eventos/clubes/${Storage.tipoUsuarioId}`
-      : "/treinos";
-  }, [returnToQuery]);
+  const backHref =
+    eventoId
+      ? `/evento/${encodeURIComponent(eventoId)}`
+      : "/eventos";
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -86,12 +77,10 @@ export default function PaginaConvocarEvento() {
       permitirReservas
       onSalvar={async ({ turmaId, nome, formacao, escala, reservasIds }) => {
         const token = Storage.token;
-        const tipoUsuarioId = Storage.tipoUsuarioId;
-        const tipoUsuario = String(Storage.tipoSalvo || "").toLowerCase();
 
-        if (!token) throw new Error("Sem token.");
-        if (!tipoUsuarioId || !tipoUsuario) throw new Error("Sem tipoUsuarioId/tipoUsuario.");
-
+        if (!token) {
+          throw new Error("Sem token.");
+        }
         await axios.put(
           `${API.BASE_URL}/api/eventos/${eventoId}/convocacao`,
           {
@@ -100,8 +89,6 @@ export default function PaginaConvocarEvento() {
             formacao,
             escala,
             reservasIds,
-            tipoUsuario,
-            tipoUsuarioId,
             metaEvento: {
               titulo: ev.titulo,
               tipo: ev.tipo,

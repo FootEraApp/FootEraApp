@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../../config.js";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import TrainingProgress from "../profile/TrainingProgress.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
@@ -129,9 +129,25 @@ export default function PerfilAtleta({
     (async () => {
       setLoading(true);
       try {
-        const [{ data: meOuOutro }] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
-        ]);
+        const [
+          {
+            data:
+              meOuOutro,
+          },
+        ] =
+          await Promise.all([
+            axios.get(
+              `${API.BASE_URL}/api/perfil/${basePerfil}`,
+              {
+                headers,
+
+                params: {
+                  papel:
+                    "Atleta",
+                },
+              }
+            ),
+          ]);
 
         if (!alive) return;
 

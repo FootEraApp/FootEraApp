@@ -1,6 +1,6 @@
 // client/src/pages/learning/create.tsx
 import { toast } from "@/lib/toast";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useContext } from "react";
 import { useLocation } from "wouter";
 import {
   ChevronDown,
@@ -39,6 +39,9 @@ import LearningHeader from "../../components/learning/LearningHeader.js";
 import LearningTypeChooser from "../../components/learning/LearningTypeChooser.js";
 import { API } from "@/config.js";
 import CoverImage from "../../components/shared/CoverImage.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type AreaOption =
   | "TECNICO"
@@ -115,22 +118,6 @@ type LocalEstrutura = LearningEstruturaInput & {
   itens: LocalItem[];
 };
 type DestinoMetodologia = "LEARNING" | "AVULSA";
-type LearningDraft = {
-  step: 1 | 2;
-  tipoMetodologia: LearningMetodoTipo | null;
-  estruturaTipo: LearningEstruturaTipo | null;
-  titulo: string;
-  descricao: string;
-  publicoAlvo: PublicoOption;
-  area: AreaOption;
-  geraCertificado: boolean;
-  geraBadge: boolean;
-  capaUrl: string;
-  capaPreviewUrl: string | null;
-  estruturas: LocalEstrutura[];
-  destinoMetodologia: DestinoMetodologia;
-  precoAssinaturaMensal: string;
-};
 
 const LEARNING_DRAFT_KEY = "learning_create_draft_v1";
 const DURACOES = [2, 4, 6, 8];
@@ -543,6 +530,20 @@ export default function LearningCreatePage() {
     itemLocalId: string;
   } | null>(null);
 
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const podePublicarMetodologia =
+    authContext?.can(
+      "PUBLICAR_METODOLOGIA"
+    ) ?? false;
+
+  const permissionsLoading =
+    authContext?.permissionsLoading ??
+    true;
+    
   const [destinoMetodologia, setDestinoMetodologia] = useState<DestinoMetodologia>("LEARNING");
   const [precoAssinaturaMensal, setPrecoAssinaturaMensal] = useState("");
   const [buscaConvidadoPorItem, setBuscaConvidadoPorItem] = useState<Record<string, string>>({});
@@ -633,7 +634,7 @@ export default function LearningCreatePage() {
             localId: uid("convidado"),
             usuarioId: String(usuario.id),
             nome: String(usuario.nome || usuario.nomeDeUsuario || ""),
-            descricao: String(usuario.tipo || "Convidado FootEra"),
+            descricao: "Convidado Footera",
           },
         ],
       },
@@ -953,7 +954,7 @@ export default function LearningCreatePage() {
                                   localId: String(c.id || uid("convidado")),
                                   usuarioId: c.usuarioId ? String(c.usuarioId) : "",
                                   nome: String(c.nome || c.usuario?.nome || ""),
-                                  descricao: String(c.descricao || (c.usuario ? "Convidado FootEra" : "")),
+                                  descricao:"Convidado FootEra",
                                 }))
                               : it.aulaAoVivo?.convidadoNome
                                 ? [
@@ -987,37 +988,36 @@ export default function LearningCreatePage() {
   }, [editMetodologiaId, navigate]);
 
   useEffect(() => {
-    let ativo = true;
+    if (
+      permissionsLoading
+    ) {
+      setValidandoPermissaoCriacao(
+        true
+      );
 
-    (async () => {
-      try {
-        setValidandoPermissaoCriacao(true);
+      return;
+    }
 
-        const params = new URLSearchParams(window.location.search);
-        const idDaUrl = params.get("id");
+    setValidandoPermissaoCriacao(
+      false
+    );
 
-        const res = await listMinhasMetodologiasCriadas();
-        const podeCriar = !!res?.permissaoCriacao?.podeCriar;
+    setPodeCriarMetodologia(
+      podePublicarMetodologia
+    );
 
-        if (!ativo) return;
-
-        setPodeCriarMetodologia(idDaUrl ? true : podeCriar);
-
-        if (!podeCriar && !idDaUrl) {
-          navigate("/learning");
-        }
-      } catch (e) {
-        if (!ativo) return;
-        navigate("/learning");
-      } finally {
-        if (ativo) setValidandoPermissaoCriacao(false);
-      }
-    })();
-
-    return () => {
-      ativo = false;
-    };
-  }, [navigate]);
+    if (
+      !podePublicarMetodologia
+    ) {
+      navigate(
+        "/learning"
+      );
+    }
+  }, [
+    permissionsLoading,
+    podePublicarMetodologia,
+    navigate,
+  ]);
 
   function escolherTipo(tipo: LearningMetodoTipo, estrutura: LearningEstruturaTipo) {
     setTipoMetodologia(tipo);

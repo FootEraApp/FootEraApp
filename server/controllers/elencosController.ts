@@ -3,64 +3,154 @@ import { PosicaoCampo } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
-async function buscarDonoLogado(
+type ElencoOwner = {
+  tipo:
+    | "professor"
+    | "clube"
+    | "escolinha";
+
+  ownerId: string;
+
+  where:
+    | { professorId: string }
+    | { clubeId: string }
+    | { escolinhaId: string };
+
+  data:
+    | { professorId: string }
+    | { clubeId: string }
+    | { escolinhaId: string };
+};
+
+async function getElencoOwner(
   req: AuthenticatedRequest
-) {
-  const userId = req.userId;
+): Promise<ElencoOwner | null> {
+  const usuarioId = String(
+    req.userId ??
+      req.user?.id ??
+      ""
+  ).trim();
 
-  if (!userId) {
+  if (!usuarioId) {
     return null;
   }
 
-  const [clube, escolinha, professor] =
-    await Promise.all([
-      prisma.clube.findFirst({
-        where: {
-          usuarioId: userId,
-        },
-        select: {
-          id: true,
-        },
-      }),
+  const contexto =
+    req.authUser?.activeContext ??
+    await getActiveContext(usuarioId);
 
-      prisma.escolinha.findFirst({
-        where: {
-          usuarioId: userId,
-        },
-        select: {
-          id: true,
-        },
-      }),
+  if (!contexto) {
+    return null;
+  }
 
-      prisma.professor.findFirst({
-        where: {
-          usuarioId: userId,
-        },
-        select: {
-          id: true,
-        },
-      }),
-    ]);
+  if (contexto.kind === "PERSONAL") {
+    const papel = String(
+      contexto.role ??
+        contexto.tipoUsuario ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
 
-  return {
-    userId,
-    clubeId: clube?.id ?? null,
-    escolinhaId:
-      escolinha?.id ?? null,
-    professorId:
-      professor?.id ?? null,
-  };
+    const profileId = String(
+      contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        ""
+    ).trim();
+
+    if (!profileId) {
+      return null;
+    }
+
+    if (papel === "professor") {
+      return {
+        tipo: "professor",
+        ownerId: profileId,
+
+        where: {
+          professorId: profileId,
+        },
+
+        data: {
+          professorId: profileId,
+        },
+      };
+    }
+
+    return null;
+  }
+
+  if (contexto.kind === "ORGANIZATION") {
+    const organizationType = String(
+      contexto.organizationType ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const legacyOrganizationId = String(
+      contexto.legacyOrganizationId ??
+        ""
+    ).trim();
+
+    if (!legacyOrganizationId) {
+      return null;
+    }
+
+    if (organizationType === "clube") {
+      return {
+        tipo: "clube",
+        ownerId: legacyOrganizationId,
+
+        where: {
+          clubeId:
+            legacyOrganizationId,
+        },
+
+        data: {
+          clubeId:
+            legacyOrganizationId,
+        },
+      };
+    }
+
+    if (
+      organizationType === "escolinha" ||
+      organizationType === "escola"
+    ) {
+      return {
+        tipo: "escolinha",
+        ownerId:
+          legacyOrganizationId,
+
+        where: {
+          escolinhaId:
+            legacyOrganizationId,
+        },
+
+        data: {
+          escolinhaId:
+            legacyOrganizationId,
+        },
+      };
+    }
+  }
+
+  return null;
 }
 
 async function podeGerenciarTurma(
   req: AuthenticatedRequest,
   turmaId: string
 ) {
-  const dono =
-    await buscarDonoLogado(req);
+  const owner =
+    await getElencoOwner(req);
 
-  if (!dono) {
+  if (!owner) {
     return false;
   }
 
@@ -87,36 +177,39 @@ async function podeGerenciarTurma(
     return false;
   }
 
-  return (
-    turma.clubeId === dono.clubeId ||
-    turma.escolinhaId ===
-      dono.escolinhaId ||
-    turma.professores.some(
+  if (owner.tipo === "clube") {
+    return (
+      turma.clubeId ===
+      owner.ownerId
+    );
+  }
+
+  if (owner.tipo === "escolinha") {
+    return (
+      turma.escolinhaId ===
+      owner.ownerId
+    );
+  }
+
+  if (owner.tipo === "professor") {
+    return turma.professores.some(
       (item) =>
         item.professorId ===
-        dono.professorId
-    )
-  );
+        owner.ownerId
+    );
+  }
+
+  return false;
 }
 
 async function montarRespostaElencos(
-  donoId: string,
+  owner: ElencoOwner,
   turmaId?: string
 ) {
   const where: Prisma.ElencoWhereInput = {
     ativo: true,
 
-    OR: [
-      {
-        clubeId: donoId,
-      },
-      {
-        escolinhaId: donoId,
-      },
-      {
-        professorId: donoId,
-      },
-    ],
+    ...owner.where,
 
     ...(turmaId
       ? {
@@ -147,83 +240,113 @@ async function montarRespostaElencos(
   return elencos;
 }
 
-export async function listarElencosMinha(req: AuthenticatedRequest, res: Response) {
+export async function listarElencosMinha(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const userId = req.userId;
-    const turmaId = req.query.turmaId ? String(req.query.turmaId) : undefined;
-    if (!userId) return res.status(401).json({ error: "Não autenticado" });
+    const turmaId =
+      req.query.turmaId
+        ? String(req.query.turmaId)
+        : undefined;
 
-    const [clube, escolinha, professor] = await Promise.all([
-      prisma.clube.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-      prisma.escolinha.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-      prisma.professor.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-    ]);
+    const owner =
+      await getElencoOwner(req);
 
-    const donoId = clube?.id || escolinha?.id || professor?.id;
-    if (!donoId) return res.json([]);
+    if (!owner) {
+      return res.json([]);
+    }
 
     if (turmaId) {
-      const turma = await prisma.turma.findUnique({
-        where: { id: turmaId },
-        select: {
-          id: true,
-          clubeId: true,
-          escolinhaId: true,
-          professores: { select: { professorId: true } },
-        },
-      });
-      if (!turma) return res.status(404).json({ error: "Turma não encontrada" });
+      const autorizado =
+        await podeGerenciarTurma(
+          req,
+          turmaId
+        );
 
-      const ligado =
-        turma.clubeId === donoId ||
-        turma.escolinhaId === donoId ||
-        turma.professores.some((p) => p.professorId === donoId);
-
-      if (!ligado) return res.status(403).json({ error: "Sem permissão nesta turma" });
-      }
-        const data = await montarRespostaElencos(donoId, turmaId);
-        return res.json(data);
-      } catch (e) {
-        console.error("[listarElencosMinha] erro:", e);
-        return res.status(500).json({ error: "Erro ao buscar elencos." });
+      if (!autorizado) {
+        return res.status(403).json({
+          error:
+            "Sem permissão nesta turma",
+        });
       }
     }
 
-    export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
-      try {
-        const userId = req.userId;
-        const turmaId = String(req.query.turmaId || "");
-        if (!userId) return res.status(401).json({ error: "Não autenticado" });
-        if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
+    const data =
+      await montarRespostaElencos(
+        owner,
+        turmaId
+      );
 
-        const [clube, escolinha, professor] = await Promise.all([
-          prisma.clube.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-          prisma.escolinha.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-          prisma.professor.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-        ]);
-        const donoId = clube?.id || escolinha?.id || professor?.id || null;
+    return res.json(data);
+  } catch (e) {
+    console.error(
+      "[listarElencosMinha] erro:",
+      e
+    );
 
-        const turma = await prisma.turma.findUnique({
-          where: { id: turmaId },
+    return res.status(500).json({
+      error:
+        "Erro ao buscar elencos.",
+    });
+  }
+}
+
+export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
+   try {
+     const turmaId =
+        String(
+          req.query.turmaId || ""
+        ).trim();
+
+      if (!turmaId) {
+        return res.status(400).json({
+          error:
+            "turmaId obrigatório",
+        });
+      }
+
+      const owner =
+        await getElencoOwner(req);
+
+      if (!owner) {
+        return res.status(403).json({
+          error:
+            "O contexto ativo não pode acessar esta turma.",
+        });
+      }
+
+      const autorizado =
+        await podeGerenciarTurma(
+          req,
+          turmaId
+        );
+
+      if (!autorizado) {
+        return res.status(403).json({
+          error:
+            "Sem permissão nesta turma",
+        });
+      }
+
+      const turma =
+        await prisma.turma.findUnique({
+          where: {
+            id: turmaId,
+          },
+
           select: {
             id: true,
             nome: true,
-            clubeId: true,
-            escolinhaId: true,
-            professores: { select: { professorId: true } },
           },
         });
-        if (!turma) return res.status(404).json({ error: "Turma não encontrada" });
 
-    const ligado =
-      !!donoId &&
-      (turma.clubeId === donoId ||
-        turma.escolinhaId === donoId ||
-        turma.professores.some((p) => p.professorId === donoId));
-
-    if (!ligado) {
-      return res.status(403).json({ error: "Sem permissão nesta turma" });
-    }
+      if (!turma) {
+        return res.status(404).json({
+          error:
+            "Turma não encontrada",
+        });
+      }
 
     const elencoId = String(
       req.query.elencoId || ""
@@ -234,6 +357,8 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
         where: {
           turmaId,
           ativo: true,
+
+          ...owner.where,
 
           ...(elencoId
             ? {
@@ -821,41 +946,20 @@ export async function criarElenco(
   try {
     const {
       nome,
-      professorId,
-      clubeId,
-      escolinhaId,
       escala,
       turmaId,
       formacao,
-      tipoUsuario,
-      tipoUsuarioId,
       reservasIds,
     } = req.body;
 
-    const tipo = String(
-      tipoUsuario ?? ""
-    ).toLowerCase();
+    const owner =
+      await getElencoOwner(req);
 
-    const donoId =
-      typeof tipoUsuarioId === "string" &&
-      tipoUsuarioId.trim()
-        ? tipoUsuarioId.trim()
-        : null;
-
-    const owner: {
-      professorId?: string | null;
-      clubeId?: string | null;
-      escolinhaId?: string | null;
-    } = {};
-
-    if (donoId) {
-      if (tipo === "professor") {
-        owner.professorId = donoId;
-      } else if (tipo === "clube") {
-        owner.clubeId = donoId;
-      } else if (tipo === "escolinha") {
-        owner.escolinhaId = donoId;
-      }
+    if (!owner) {
+      return res.status(403).json({
+        error:
+          "O contexto ativo não pode criar elencos.",
+      });
     }
 
     if (!turmaId) {
@@ -906,22 +1010,7 @@ export async function criarElenco(
       await prisma.elenco.create({
         data: {
           nome,
-
-          professorId:
-            professorId ??
-            owner.professorId ??
-            null,
-
-          clubeId:
-            clubeId ??
-            owner.clubeId ??
-            null,
-
-          escolinhaId:
-            escolinhaId ??
-            owner.escolinhaId ??
-            null,
-
+          ...owner.data,
           atletasIds:
             atletasIdsFinal,
 
@@ -965,41 +1054,20 @@ export async function atualizarElenco(
 
     const {
       nome,
-      professorId,
-      clubeId,
-      escolinhaId,
       escala,
       turmaId,
       formacao,
-      tipoUsuario,
-      tipoUsuarioId,
       reservasIds,
     } = req.body;
 
-    const tipo = String(
-      tipoUsuario ?? ""
-    ).toLowerCase();
+    const owner =
+      await getElencoOwner(req);
 
-    const donoId =
-      typeof tipoUsuarioId === "string" &&
-      tipoUsuarioId.trim()
-        ? tipoUsuarioId.trim()
-        : null;
-
-    const owner: {
-      professorId?: string | null;
-      clubeId?: string | null;
-      escolinhaId?: string | null;
-    } = {};
-
-    if (donoId) {
-      if (tipo === "professor") {
-        owner.professorId = donoId;
-      } else if (tipo === "clube") {
-        owner.clubeId = donoId;
-      } else if (tipo === "escolinha") {
-        owner.escolinhaId = donoId;
-      }
+    if (!owner) {
+      return res.status(403).json({
+        error:
+          "O contexto ativo não pode alterar elencos.",
+      });
     }
 
     if (!turmaId) {
@@ -1050,8 +1118,12 @@ export async function atualizarElenco(
       await prisma.elenco.findFirst({
         where: {
           id,
-          turmaId: String(turmaId),
+          turmaId:
+            String(turmaId),
+
           ativo: true,
+
+          ...owner.where,
         },
 
         select: {
@@ -1074,36 +1146,16 @@ export async function atualizarElenco(
 
         data: {
           nome,
-
-          professorId:
-            professorId ??
-            owner.professorId ??
-            null,
-
-          clubeId:
-            clubeId ??
-            owner.clubeId ??
-            null,
-
-          escolinhaId:
-            escolinhaId ??
-            owner.escolinhaId ??
-            null,
-
           atletasIds:
             atletasIdsFinal,
-
           escala: {
             ...escalaLimpa,
             __reservasIds:
               reservasValidas,
           },
-
           formacao:
             formacao ?? null,
-
           maxJogadores: 11,
-
           turmaId:
             String(turmaId),
         },
@@ -1272,48 +1324,13 @@ export async function excluirElenco(
       });
     }
 
-    const [
-      clube,
-      escolinha,
-      professor,
-    ] = await Promise.all([
-      prisma.clube.findFirst({
-        where: {
-          usuarioId: userId,
-        },
-        select: {
-          id: true,
-        },
-      }),
+    const owner =
+  await getElencoOwner(req);
 
-      prisma.escolinha.findFirst({
-        where: {
-          usuarioId: userId,
-        },
-        select: {
-          id: true,
-        },
-      }),
-
-      prisma.professor.findFirst({
-        where: {
-          usuarioId: userId,
-        },
-        select: {
-          id: true,
-        },
-      }),
-    ]);
-
-    const donoId =
-      clube?.id ||
-      escolinha?.id ||
-      professor?.id;
-
-    if (!donoId) {
+if (!owner) {
       return res.status(403).json({
         error:
-          "Não foi possível identificar o responsável.",
+          "O contexto ativo não pode excluir elencos.",
       });
     }
 
@@ -1322,18 +1339,7 @@ export async function excluirElenco(
         where: {
           id: elencoId,
           ativo: true,
-
-          OR: [
-            {
-              clubeId: donoId,
-            },
-            {
-              escolinhaId: donoId,
-            },
-            {
-              professorId: donoId,
-            },
-          ],
+          ...owner.where,
         },
 
         select: {

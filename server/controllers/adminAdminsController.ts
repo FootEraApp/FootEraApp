@@ -1,31 +1,119 @@
 import type { Request, Response } from "express";
-import { TipoUsuario, Nivel } from "@prisma/client";
+import { TipoUsuario, Nivel, StatusUsuarioPapel } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma.js";
 
+export async function getMe(
+  req: Request,
+  res: Response
+) {
+  const usuarioId =
+    String(
+      (req as any).userId ??
+        (req as any).user?.id ??
+        (req as any).authUser?.id ??
+        ""
+    ).trim();
 
-export async function getMe(req: Request, res: Response) {
-  const me = (req as any).me ?? null;
-  if (!me) return res.status(401).json({ error: "Não autenticado" });
+  if (!usuarioId) {
+    return res.status(401).json({
+      error:
+        "Não autenticado",
+    });
+  }
 
-  const adminNivel = me.administrador?.nivel ?? null;
-  const adminCargo = me.administrador?.cargo ?? null;
+  const me =
+    await prisma.usuario.findUnique({
+      where: {
+        id:
+          usuarioId,
+      },
 
-  const isByCargo = ["owner", "superadmin"].includes(
-    String(adminCargo ?? "").toLowerCase()
-  );
+      include: {
+        administrador:
+          true,
+      },
+    });
+
+  if (
+    !me ||
+    !me.administrador
+  ) {
+    return res.status(403).json({
+      error:
+        "Acesso restrito a administradores.",
+    });
+  }
+
+  const adminNivel =
+    me.administrador
+      .nivel ??
+    null;
+
+  const adminCargo =
+    me.administrador
+      .cargo ??
+    null;
+
+  const cargo =
+    String(
+      adminCargo ?? ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /\s+/g,
+        " "
+      );
+
+  const nivel =
+    String(
+      adminNivel ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const isByCargo =
+    cargo === "owner" ||
+    cargo === "superadmin" ||
+    cargo === "super admin";
+
+  const isByNivel =
+    nivel ===
+    "performance";
+
   const isByEnv =
-    !!process.env.SUPERADMIN_EMAIL &&
-    me.email?.toLowerCase() === process.env.SUPERADMIN_EMAIL.toLowerCase();
+    Boolean(
+      process.env
+        .SUPERADMIN_EMAIL
+    ) &&
+    me.email
+      ?.toLowerCase() ===
+      process.env
+        .SUPERADMIN_EMAIL!
+        .toLowerCase();
 
-  const canManageAdmins = me.tipo === TipoUsuario.Admin && (isByCargo || isByEnv);
+  const canManageAdmins =
+    isByCargo ||
+    isByNivel ||
+    isByEnv;
 
   return res.json({
-    id: me.id,
-    email: me.email,
-    tipo: me.tipo,
-    adminNivel, 
+    id:
+      me.id,
+
+    nome:
+      me.nome,
+
+    email:
+      me.email,
+
+    tipo:
+      "Admin",
+
+    adminNivel,
     adminCargo,
+
     canManageAdmins,
   });
 }
@@ -54,23 +142,81 @@ export async function createAdmin(req: Request, res: Response) {
   };
   const nivelFinal: Nivel = nivelMap[String(nivel)] ?? Nivel.Base;
 
-  const created = await prisma.usuario.create({
-    data: {
-      email,
-      senhaHash: hash,
-      nome: nomeFinal,
-      nomeDeUsuario,
-      tipo: TipoUsuario.Admin,
-      verified: true,
-      administrador: {
-        create: {
-          cargo: cargo ?? "admin",
-          nivel: nivelFinal,
-        },
-      },
-    },
-    include: { administrador: true },
-  });
+  const created =
+    await prisma.$transaction(
+      async (tx) => {
+        const usuario =
+          await tx.usuario.create({
+            data: {
+              email,
+              senhaHash:
+                hash,
+              nome:
+                nomeFinal,
+              nomeDeUsuario,
+              tipo:
+                TipoUsuario.Admin,
+              verified:
+                true,
+
+              administrador: {
+                create: {
+                  cargo:
+                    cargo ??
+                    "admin",
+
+                  nivel:
+                    nivelFinal,
+                },
+              },
+            },
+
+            include: {
+              administrador:
+                true,
+            },
+          });
+
+        await tx.usuarioPapel.upsert({
+          where: {
+            usuarioId_papel: {
+              usuarioId:
+                usuario.id,
+
+              papel:
+                TipoUsuario.Admin,
+            },
+          },
+
+          update: {
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            desativadoEm:
+              null,
+          },
+
+          create: {
+            usuarioId:
+              usuario.id,
+
+            papel:
+              TipoUsuario.Admin,
+
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+          },
+        });
+
+        return usuario;
+      }
+    );
 
   return res.status(201).json({
     id: created.id,
@@ -80,38 +226,160 @@ export async function createAdmin(req: Request, res: Response) {
   });
 }
 
-export async function deleteAdmin(req: Request, res: Response) {
-  const { id } = req.params;
-  const me = (req as any).me;
-  if (!id) return res.status(400).json({ error: "ID é obrigatório." });
+export async function deleteAdmin(
+  req: Request,
+  res: Response
+) {
+  const { id } =
+    req.params;
 
-  if (String(me.id) === String(id)) {
-    return res.status(400).json({ error: "Você não pode deletar sua própria conta." });
+  const me =
+    (req as any).me;
+
+  if (!id) {
+    return res.status(400).json({
+      error:
+        "ID é obrigatório.",
+    });
   }
 
-  const target = await prisma.usuario.findUnique({
-    where: { id },
-    include: { administrador: true },
-  });
-  if (!target || target.tipo !== TipoUsuario.Admin) {
-    return res.status(404).json({ error: "Admin não encontrado." });
+  if (
+    String(me?.id) ===
+    String(id)
+  ) {
+    return res.status(400).json({
+      error:
+        "Você não pode remover seu próprio acesso administrativo.",
+    });
   }
+
+  const target =
+    await prisma.usuario.findUnique({
+      where: {
+        id,
+      },
+
+      include: {
+        administrador:
+          true,
+      },
+    });
+
+  if (
+    !target ||
+    !target.administrador
+  ) {
+    return res.status(404).json({
+      error:
+        "Admin não encontrado.",
+    });
+  }
+
+  const cargo =
+    String(
+      target.administrador
+        ?.cargo ??
+        ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /\s+/g,
+        " "
+      );
+
+  const nivel =
+    String(
+      target.administrador
+        ?.nivel ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
 
   const targetIsSuper =
-    ["owner", "superadmin"].includes(String(target.administrador?.cargo ?? "").toLowerCase()) ||
-    (!!process.env.SUPERADMIN_EMAIL &&
-      target.email?.toLowerCase() === process.env.SUPERADMIN_EMAIL.toLowerCase());
+    cargo === "owner" ||
+    cargo === "superadmin" ||
+    cargo === "super admin" ||
+    nivel === "performance" ||
+    (
+      Boolean(
+        process.env
+          .SUPERADMIN_EMAIL
+      ) &&
+      target.email
+        ?.toLowerCase() ===
+        process.env
+          .SUPERADMIN_EMAIL!
+          .toLowerCase()
+    );
+
   if (targetIsSuper) {
-    return res.status(403).json({ error: "Não é permitido deletar o super admin." });
+    return res.status(403).json({
+      error:
+        "Não é permitido remover o super admin.",
+    });
   }
 
-  const countAdmins = await prisma.usuario.count({ where: { tipo: TipoUsuario.Admin } });
-  if (countAdmins <= 1) {
-    return res.status(400).json({ error: "Não é possível remover o último administrador." });
+  const countAdmins =
+    await prisma.administrador.count();
+
+  if (
+    countAdmins <= 1
+  ) {
+    return res.status(400).json({
+      error:
+        "Não é possível remover o último administrador.",
+    });
   }
 
-  await prisma.administrador.deleteMany({ where: { usuarioId: id } });
-  await prisma.usuario.delete({ where: { id } });
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.administrador.delete({
+        where: {
+          usuarioId:
+            id,
+        },
+      });
 
-  return res.json({ ok: true });
+      await tx.usuarioPapel.updateMany({
+        where: {
+          usuarioId:
+            id,
+
+          papel:
+            TipoUsuario.Admin,
+        },
+
+        data: {
+          status:
+            StatusUsuarioPapel.INATIVO,
+
+          desativadoEm:
+            new Date(),
+        },
+      });
+
+      await tx.usuario.update({
+        where: {
+          id,
+        },
+
+        data: {
+          tokenVersion: {
+            increment:
+              1,
+          },
+        },
+      });
+    }
+  );
+
+  return res.json({
+    ok:
+      true,
+
+    message:
+      "Acesso administrativo removido. A conta do usuário foi preservada.",
+  });
 }

@@ -1,9 +1,12 @@
-import React from "react";
 import { toast } from "@/lib/toast";
+import React, {useContext} from "react";
 import { Crown, BadgeCheck, X } from "lucide-react";
 import { Link } from "wouter";
 import { http } from "../../services/http.js";
 import { FLAGS, MESSAGES } from "../../config.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type AssinaturaLite = {
   id: string;
@@ -39,6 +42,15 @@ export default function SubscriptionBanner({
   useSession = false,
 }: Props) {
   const store = getStore(useSession);
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContextKey =
+    userContext?.activeContext
+      ?.key ??
+    null;
 
   const [open, setOpen] = React.useState<boolean>(defaultOpen);
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -74,7 +86,9 @@ export default function SubscriptionBanner({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [
+    activeContextKey,
+  ]);
 
   const onClose = () => {
     setOpen(false);

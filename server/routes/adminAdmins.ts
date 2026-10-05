@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
-import { requireAdmin, requireSuperAdmin } from "../middlewares/adminGuard.js";
 import { getMe, createAdmin, deleteAdmin } from "../controllers/adminAdminsController.js";
+import {
+  requireAdmin,
+} from "../middlewares/guards.js";
+import {
+  requireSuperAdmin,
+} from "../middlewares/adminGuard.js";
 
 const router = Router();
 

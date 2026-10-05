@@ -25,9 +25,14 @@ model Usuario {
   foto String?
   tipo TipoUsuario
 
-  papeis                    UsuarioPapel[]
-  convitesCriados           Convite[]           @relation("ConviteCriador")
-  convitesRecebidos         Convite[]           @relation("ConviteDestinatario")
+  papeis                UsuarioPapel[]
+  membrosOrganizacao    MembroOrganizacao[]
+  contextoOrganizacaoId String?
+  contextoOrganizacao   Organizacao?        @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
+
+  organizacoesSeguidas      OrganizacaoSeguidor[]
+  convitesCriados           Convite[]             @relation("ConviteCriador")
+  convitesRecebidos         Convite[]             @relation("ConviteDestinatario")
   convitesUsados            ConviteUso[]
   cidade                    String?
   estado                    String?
@@ -41,23 +46,23 @@ model Usuario {
   responsavelTelefone       String?
   configuracoesPrivacidade  Json?
   configuracoesNotificacoes Json?
-  dataCriacao               DateTime            @default(now())
+  dataCriacao               DateTime              @default(now())
   codigo                    String?
-  verified                  Boolean             @default(false)
-  destaque                  Boolean             @default(false)
+  verified                  Boolean               @default(false)
+  destaque                  Boolean               @default(false)
   deletedAt                 DateTime?
   deleteScheduledAt         DateTime?
   lastSeenAt                DateTime?
   lastLoginAt               DateTime?
   lastLogoutAt              DateTime?
-  parceiro                  Boolean             @default(false)
+  parceiro                  Boolean               @default(false)
   parceiroInfo              Parceiro?
   EmailVerification         EmailVerification[]
   assinatura                Assinatura[]
   administrador             Administrador?
-  tokenVersion              Int                 @default(0)
+  tokenVersion              Int                   @default(0)
   senhaAtualizadaEm         DateTime?
-  status                    AccountStatus       @default(ATIVO)
+  status                    AccountStatus         @default(ATIVO)
   blockedAt                 DateTime?
   blockedReason             String?
   reactivatedAt             DateTime?
@@ -141,6 +146,7 @@ model Usuario {
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
+  @@index([contextoOrganizacaoId])
 }
 
 model UsuarioPapel {
@@ -218,31 +224,42 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                     String           @id @default(uuid())
-  usuarioId              String
-  plano                  String
-  periodicidade          Periodicidade
-  startsAt               DateTime
-  renovaEm               DateTime
-  canceledAt             DateTime?
-  ativo                  Boolean          @default(true)
-  lembreteEnviado        Boolean          @default(false)
-  usuario                Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?          @unique
-  status                 AssinaturaStatus @default(TRIAL)
-  trialStartsAt          DateTime?
-  trialEndsAt            DateTime?
+  id                           String           @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  contextoKey                  String           @default("legacy")
+  plano                        String
+  periodicidade                Periodicidade
+  startsAt                     DateTime
+  renovaEm                     DateTime
+  canceledAt                   DateTime?
+  ativo                        Boolean          @default(true)
+  lembreteEnviado              Boolean          @default(false)
+  usuario                      Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId       String?          @unique
+  status                       AssinaturaStatus @default(TRIAL)
+  trialStartsAt                DateTime?
+  trialEndsAt                  DateTime?
 
   metodoPreferido           MetodoPagamento?
   metodoPreferidoDefinidoEm DateTime?
 
   bloqueadoEm DateTime?
 
-  @@unique([usuarioId, plano])
+  @@unique([usuarioId, plano, contextoKey])
   @@index([startsAt])
   @@index([canceledAt])
   @@index([status])
   @@index([trialEndsAt])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Professor {
@@ -353,6 +370,68 @@ model OrganizacaoGestor {
   @@index([professorId])
   @@index([tipo, ownerId])
   @@index([ativo])
+}
+
+model Organizacao {
+  id        String          @id @default(uuid())
+  tipo      TipoOrganizacao
+  nome      String
+  ativo     Boolean         @default(true)
+  legacyKey String?         @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  membros                  MembroOrganizacao[]
+  usuariosComContextoAtivo Usuario[]           @relation("ContextoOrganizacaoAtivo")
+
+  seguidores          OrganizacaoSeguidor[]
+  postagens           Postagem[]
+  eventos             Evento[]
+  turmas              Turma[]
+  relacoesTreinamento RelacaoTreinamento[]
+
+  clube     Clube?
+  escolinha Escolinha?
+  marca     Marca?
+  federacao Federacao?
+
+  @@index([tipo, ativo])
+  @@index([nome])
+}
+
+model MembroOrganizacao {
+  id            String                  @id @default(uuid())
+  organizacaoId String
+  usuarioId     String
+  funcao        FuncaoMembroOrganizacao
+  permissoes    Json?
+  ativo         Boolean                 @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, usuarioId])
+  @@index([usuarioId, ativo])
+  @@index([organizacaoId, funcao, ativo])
+}
+
+model OrganizacaoSeguidor {
+  id            String @id @default(uuid())
+  organizacaoId String
+  usuarioId     String
+
+  criadoEm DateTime @default(now())
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, usuarioId])
+  @@index([usuarioId])
+  @@index([organizacaoId])
 }
 
 model Convite {
@@ -1182,6 +1261,12 @@ model AulaAoVivo {
   metodologiaId      String?
   metodologia        Metodologia?          @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
 
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+
   estruturaId String?
   estrutura   MetodologiaEstrutura? @relation(fields: [estruturaId], references: [id], onDelete: Cascade)
 
@@ -1215,6 +1300,11 @@ model AulaAoVivo {
   @@index([metodologiaAvulsaId])
   @@index([estruturaAvulsaId])
   @@index([ivsRecordingId])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model AulaAoVivoAcesso {
@@ -1337,20 +1427,22 @@ model Seguidor {
 }
 
 model RelacaoTreinamento {
-  id            String     @id @default(uuid())
+  id            String       @id @default(uuid())
   professorId   String?
   atletaId      String?
   escolinhaId   String?
   clubeId       String?
   organizacaoId String?
-  ativo         Boolean    @default(true)
-  criadoEm      DateTime   @default(now())
-  atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
-  clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
-  professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+  ativo         Boolean      @default(true)
+  criadoEm      DateTime     @default(now())
+  atleta        Atleta?      @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?       @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha?   @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor?   @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
   encerradoEm   DateTime?
 
+  @@index([organizacaoId])
   @@index([atletaId])
   @@index([professorId])
   @@index([clubeId])
@@ -1400,8 +1492,10 @@ model Postagem {
   escolinhaId       String?
   compartilhamentos Int?                 @default(0)
   repostOfId        String?
+  organizacaoId     String?
   repostOf          Postagem?            @relation("Reposts", fields: [repostOfId], references: [id])
   repostedBy        Postagem[]           @relation("Reposts")
+  organizacao       Organizacao?         @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
   reposts           Int                  @default(0)
   oculto            Boolean              @default(false)
   reportedCount     Int                  @default(0)
@@ -1415,6 +1509,7 @@ model Postagem {
   usuario           Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, conteudo, repostOfId])
+  @@index([organizacaoId])
   @@index([visibilidade, dataCriacao])
   @@index([repostOfId])
 }
@@ -1452,24 +1547,27 @@ model Midia {
 }
 
 model Escolinha {
-  id                     String                   @id @default(uuid())
-  usuarioId              String?                  @unique
-  nome                   String                   @unique
-  cnpj                   String?                  @unique
-  telefone1              String?
-  telefone2              String?
-  email                  String?                  @unique
-  siteOficial            String?
-  sede                   String?
-  logradouro             String?
-  numero                 String?
-  complemento            String?
-  bairro                 String?
-  cidade                 String?
-  estado                 String?
-  pais                   String?
-  cep                    String?
-  logo                   String?
+  id            String       @id @default(uuid())
+  usuarioId     String?      @unique
+  nome          String       @unique
+  cnpj          String?      @unique
+  telefone1     String?
+  telefone2     String?
+  email         String?      @unique
+  siteOficial   String?
+  sede          String?
+  logradouro    String?
+  numero        String?
+  complemento   String?
+  bairro        String?
+  cidade        String?
+  estado        String?
+  pais          String?
+  cep           String?
+  logo          String?
+  organizacaoId String?      @unique
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+
   dataCriacao            DateTime                 @default(now())
   atletas                Atleta[]
   observacoes            AtletaObservado[]        @relation("ObservacaoEscolinha")
@@ -1535,6 +1633,8 @@ model Clube {
   descricao   String?
   responsavel String?
 
+  organizacaoId          String?                  @unique
+  organizacao            Organizacao?             @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
   categorias             Categoria[]
   atletas                Atleta[]
   observacoes            AtletaObservado[]        @relation("ObservacaoClube")
@@ -2116,6 +2216,7 @@ model Evento {
   id               String       @id @default(uuid())
   clubeId          String?
   escolinhaId      String?
+  organizacaoId    String?
   titulo           String
   tipo             EventoTipo   @default(PENEIRA)
   descricao        String?
@@ -2141,12 +2242,15 @@ model Evento {
   federacao   Federacao? @relation(fields: [federacaoId], references: [id])
 
   marcaId          String?
+  organizacao      Organizacao?       @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
   marca            Marca?             @relation(fields: [marcaId], references: [id])
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   inscricoes       InscricaoEvento[]
   EventoConvocacao EventoConvocacao[]
   EventoConvocado  EventoConvocado[]
+
+  @@index([organizacaoId])
 }
 
 model InscricaoEvento {
@@ -2410,6 +2514,9 @@ model Turma {
   membros     TurmaUsuario[]
   convites    Convite[]
 
+  organizacaoId String?
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   Elenco            Elenco[]
@@ -2417,6 +2524,8 @@ model Turma {
   EventoConvocacao  EventoConvocacao[]
   EventoConvocado   EventoConvocado[]
   TreinoAgendado    TreinoAgendado[]
+
+  @@index([organizacaoId])
 }
 
 model TurmaProfessor {
@@ -2611,22 +2720,27 @@ model TreinoRotinaAtribuicao {
 }
 
 model Pagamento {
-  id            String          @id @default(uuid())
-  usuarioId     String
-  plano         String
-  periodicidade Periodicidade
-  metodo        MetodoPagamento
-  status        PagamentoStatus @default(PENDENTE)
-  valor         Decimal         @db.Decimal(10, 2)
-  moeda         String          @default("BRL")
-  cupomId       String?
-  provider      String?
-  providerRef   String?
-  criadoEm      DateTime        @default(now())
-  pagoEm        DateTime?
-  canceladoEm   DateTime?
-  reembolsadoEm DateTime?
-  updatedAt     DateTime        @updatedAt
+  id                           String          @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  plano                        String
+  periodicidade                Periodicidade
+  metodo                       MetodoPagamento
+  status                       PagamentoStatus @default(PENDENTE)
+  valor                        Decimal         @db.Decimal(10, 2)
+  moeda                        String          @default("BRL")
+  cupomId                      String?
+  provider                     String?
+  providerRef                  String?
+  criadoEm                     DateTime        @default(now())
+  pagoEm                       DateTime?
+  canceladoEm                  DateTime?
+  reembolsadoEm                DateTime?
+  updatedAt                    DateTime        @updatedAt
 
   pagadorNome     String?
   pagadorEmail    String?
@@ -2651,6 +2765,11 @@ model Pagamento {
   @@index([usuarioId, criadoEm])
   @@index([status])
   @@index([status, criadoEm])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Cupom {
@@ -3092,9 +3211,11 @@ model LearningProfile {
 }
 
 model Federacao {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid())
+  usuarioId     String       @unique
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacaoId String?      @unique
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
   nome        String
   cnpj        String?
@@ -3120,9 +3241,11 @@ model Federacao {
 }
 
 model Marca {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid())
+  usuarioId     String       @unique
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacaoId String?      @unique
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
   nome        String
   cnpj        String?
@@ -3622,6 +3745,20 @@ enum MetodologiaArea {
 enum OrganizacaoTipo {
   CLUBE
   ESCOLINHA
+}
+
+enum TipoOrganizacao {
+  CLUBE
+  ESCOLA
+  MARCA
+  FEDERACAO
+}
+
+enum FuncaoMembroOrganizacao {
+  PROPRIETARIO
+  ADMINISTRADOR
+  PROFESSOR
+  MEMBRO
 }
 
 enum ConviteTipo {

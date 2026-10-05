@@ -15,8 +15,124 @@ import {
 import {
   criarNotificacaoEEnviarPush,
 } from "./notificacoesController.js";
-
+import {
+  getActiveContext,
+  listarActiveContexts,
+  type ActiveContext,
+} from "../services/activeContext.js";
 type AuthedReq = Request & { userId?: string };
+
+type AutorPostagemResolvido = {
+  contexto: ActiveContext;
+  organizacaoId: string | null;
+};
+
+async function resolverAutorPostagem(
+  usuarioId: string,
+  authorContextKeyRaw?: unknown
+): Promise<AutorPostagemResolvido> {
+  const authorContextKey =
+    String(
+      authorContextKeyRaw ?? ""
+    ).trim();
+
+  /*
+   * Compatibilidade com telas antigas,
+   * como pontuacoesPerfil.tsx.
+   *
+   * Se não vier authorContextKey,
+   * usamos o contexto global ativo.
+   */
+  if (!authorContextKey) {
+    const contexto =
+      await getActiveContext(
+        usuarioId
+      );
+
+    if (!contexto) {
+      const erro: any =
+        new Error(
+          "Nenhum contexto ativo disponível para publicação."
+        );
+
+      erro.status = 403;
+      erro.code =
+        "POST_AUTHOR_CONTEXT_NOT_FOUND";
+
+      throw erro;
+    }
+
+    return {
+      contexto,
+
+      organizacaoId:
+        contexto.kind ===
+        "ORGANIZATION"
+          ? contexto.organizationId ??
+            null
+          : null,
+    };
+  }
+
+  const contextos =
+    await listarActiveContexts(
+      usuarioId
+    );
+
+  const contexto =
+    contextos.find(
+      (item) =>
+        item.key ===
+        authorContextKey
+    );
+
+  if (!contexto) {
+    const erro: any =
+      new Error(
+        "Você não pode publicar usando esse perfil ou organização."
+      );
+
+    erro.status = 403;
+    erro.code =
+      "POST_AUTHOR_CONTEXT_FORBIDDEN";
+
+    throw erro;
+  }
+
+  if (
+    contexto.kind ===
+    "ORGANIZATION"
+  ) {
+    const organizacaoId =
+      String(
+        contexto.organizationId ??
+          ""
+      ).trim();
+
+    if (!organizacaoId) {
+      const erro: any =
+        new Error(
+          "O contexto da organização não possui uma organização válida."
+        );
+
+      erro.status = 409;
+      erro.code =
+        "POST_AUTHOR_ORGANIZATION_INVALID";
+
+      throw erro;
+    }
+
+    return {
+      contexto,
+      organizacaoId,
+    };
+  }
+
+  return {
+    contexto,
+    organizacaoId: null,
+  };
+}
 
 export const postarConteudo = async (req: AuthedReq, res: Response) => {
   try {
@@ -65,10 +181,20 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
 
     const tipoDetectado = finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
 
+    const autorResolvido =
+      await resolverAutorPostagem(
+        req.userId!,
+        body?.authorContextKey
+      );
+
+    const organizacaoId =
+      autorResolvido.organizacaoId;
+
     const post = await prisma.postagem.create({
       data: {
         usuarioId: req.userId!,
         conteudo: descricao || "",
+        organizacaoId,
         tipoMidia: tipoDetectado as any,
         imagemUrl: finalImagemUrl,
         videoUrl: finalVideoUrl,
@@ -76,9 +202,36 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
         compartilhamentos: 0,
       },
       include: {
-        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            foto: true,
+            tipo: true,
+          },
+        },
+
+        organizacao: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true,
+          },
+        },
+
         curtidas: true,
-        comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+
+        comentarios: {
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                foto: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -176,8 +329,16 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
       select: {
         id: true,
         usuarioId: true,
+        organizacaoId: true,
         visibilidade: true,
         oculto: true,
+
+        organizacao: {
+          select: {
+            id: true,
+            nome: true,
+          },
+        },
       },
     });
 
@@ -207,10 +368,21 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   });
 
   if (
-    post.usuarioId !==
-    req.userId
+    String(post.usuarioId) !==
+    String(req.userId)
   ) {
     try {
+      const nomeOrganizacao =
+        String(
+          post.organizacao?.nome ??
+          ""
+        ).trim();
+
+      const mensagem =
+        nomeOrganizacao
+          ? `A publicação da ${nomeOrganizacao} recebeu um novo comentário.`
+          : "Sua publicação recebeu um novo comentário.";
+
       await criarNotificacaoEEnviarPush({
         usuarioId:
           post.usuarioId,
@@ -224,8 +396,7 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
         titulo:
           "Novo comentário",
 
-        mensagem:
-          "Sua publicação recebeu um novo comentário.",
+        mensagem,
 
         link:
           `/post/${encodeURIComponent(
@@ -320,6 +491,14 @@ export const buscarPostagemPorId =
                 tipo: true,
                 verified: true,
                 destaque: true,
+              },
+            },
+
+            organizacao: {
+              select: {
+                id: true,
+                nome: true,
+                tipo: true,
               },
             },
 

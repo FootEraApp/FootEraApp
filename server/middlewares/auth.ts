@@ -1,7 +1,7 @@
 // server/middlewares/auth.ts
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
-import { Prisma, PrismaClient, TipoUsuario } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { resolveUserContext } from "../services/planResolver.js";
 import type { PlanoName, UserPayload } from "../services/planResolver.js"
 
@@ -17,39 +17,6 @@ export type AuthenticatedRequest = Request & {
   userId?: string;
   authUser?: UserPayload;
 };
-
-function toTipoUsuario(s: string): TipoUsuario {
-  switch (s.toLowerCase()) {
-    case "admin":
-      return TipoUsuario.Admin;
-
-    case "professor":
-      return TipoUsuario.Professor;
-
-    case "clube":
-      return TipoUsuario.Clube;
-
-    case "escola":
-    case "escolinha":
-      return TipoUsuario.Escolinha;
-
-    case "olheiro":
-      return TipoUsuario.Olheiro;
-
-    case "learning":
-      return TipoUsuario.Learning;
-
-    case "federacao":
-      return TipoUsuario.Federacao;
-
-    case "marca":
-      return TipoUsuario.Marca;
-
-    case "atleta":
-    default:
-      return TipoUsuario.Atleta;
-  }
-}
 
 type DbUser = Prisma.UsuarioGetPayload<{
   select: {
@@ -218,153 +185,55 @@ const parceiro = Boolean(dbUser?.parceiro);
   reqAuthed.userId = userId;
 
   try {
-      const ctx = await resolveUserContext(userId);
-
-      let tipoUsuarioIdFinal = ctx.tipoUsuarioId ?? null;
-
-      if (!tipoUsuarioIdFinal) {
-        const tipoCtx = String(ctx.tipo || "").toLowerCase();
-
-        if (tipoCtx === "olheiro") {
-          const olheiro = await prisma.olheiro.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = olheiro?.id ?? null;
-        }
-
-        if (tipoCtx === "clube") {
-          const clube = await prisma.clube.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = clube?.id ?? null;
-        }
-
-        if (
-          tipoCtx === "escolinha" ||
-          tipoCtx === "escola"
-        ) {
-          const escolinha = await prisma.escolinha.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = escolinha?.id ?? null;
-        }
-
-        if (tipoCtx === "professor") {
-          const professor = await prisma.professor.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = professor?.id ?? null;
-        }
-
-        if (tipoCtx === "atleta") {
-          const atleta = await prisma.atleta.findUnique({
-            where: { usuarioId: userId },
-            select: { id: true },
-          });
-          tipoUsuarioIdFinal = atleta?.id ?? null;
-        }
-
-        if (
-          tipoCtx === "learning"
-        ) {
-          const learning =
-            await prisma.learningProfile.findUnique({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-
-          tipoUsuarioIdFinal =
-            learning?.id ?? null;
-        }
-
-        if (
-          tipoCtx === "federacao"
-        ) {
-          const federacao =
-            await prisma.federacao.findUnique({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-
-          tipoUsuarioIdFinal =
-            federacao?.id ?? null;
-        }
-
-        if (
-          tipoCtx === "marca"
-        ) {
-          const marca =
-            await prisma.marca.findUnique({
-              where: {
-                usuarioId: userId,
-              },
-              select: {
-                id: true,
-              },
-            });
-
-          tipoUsuarioIdFinal =
-            marca?.id ?? null;
-        }
-      }
-
-      const user: UserPayload = {
-        id: userId,
-        tipo: ctx.tipo,
-        tipoUsuarioId: tipoUsuarioIdFinal,
-        plano: ((ctx.plano as PlanoName) ?? "FREE") as PlanoName,
-        isAdmin: !!ctx.isAdmin,
-        parceiro,
-      };
-
-    reqAuthed.authUser = user;
-    (reqAuthed as any).user = user;
-  } catch (e: any) {
-    console.error("[AUTH] resolveUserContext failed em", req.originalUrl, "->", e);
-
-    const tipoRaw = String(payload.tipo || "").toLowerCase();
-    const tiposConhecidos = new Set([
-      "admin",
-      "professor",
-      "clube",
-      "escola",
-      "escolinha",
-      "olheiro",
-      "learning",
-      "federacao",
-      "marca",
-      "atleta",
-    ]);
-
-    const tipo =
-      tiposConhecidos.has(tipoRaw)
-        ? (toTipoUsuario(tipoRaw) as any)
-        : (TipoUsuario.Atleta as any);
+    const ctx =
+      await resolveUserContext(
+        userId
+      );
 
     const user: UserPayload = {
-      id: userId,
-      tipo,
-      tipoUsuarioId: null,
-      plano: "FREE" as PlanoName,
-      isAdmin: tipoRaw === "admin",
+      id:
+        userId,
+
+      tipo:
+        ctx.tipo,
+
+      tipoUsuarioId:
+        ctx.tipoUsuarioId ??
+        null,
+
+      activeContext:
+        ctx.activeContext ??
+        null,
+
+      plano:
+        ((ctx.plano as PlanoName) ??
+          "FREE") as PlanoName,
+
+      isAdmin:
+        !!ctx.isAdmin,
+
       parceiro,
     };
 
+    reqAuthed.authUser =
+      user;
 
-    reqAuthed.authUser = user;
-    (reqAuthed as any).user = user;
+    (reqAuthed as any).user =
+      user;
+  } catch (e: any) {
+    console.error(
+      "[AUTH] resolveUserContext failed em",
+      req.originalUrl,
+      "->",
+      e
+    );
+
+    return res.status(500).json({
+      message:
+        "Não foi possível resolver o contexto ativo do usuário.",
+      code:
+        "ACTIVE_CONTEXT_RESOLUTION_FAILED",
+    });
   }
 
   try {

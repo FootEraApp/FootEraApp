@@ -2,6 +2,10 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "../prisma.js";
+import {
+  StatusUsuarioPapel,
+  TipoUsuario,
+} from "@prisma/client";
 
 const SECRET = process.env.JWT_SECRET || "footera_secret"
 
@@ -11,7 +15,9 @@ export const adminDashboard = async (
 ) => {
   try {
     const [
-      porTipo,
+      usuariosBase,
+      registrosPapel,
+      administradores,
       totalUsuarios,
       totalVerificados,
       totalNaoVerificados,
@@ -23,11 +29,25 @@ export const adminDashboard = async (
       treinos,
       desafios,
     ] = await Promise.all([
-      prisma.usuario.groupBy({
-        by: ["tipo"],
+      prisma.usuario.findMany({
+        select: {
+          id: true,
+          tipo: true,
+        },
+      }),
 
-        _count: {
-          _all: true,
+      prisma.usuarioPapel.findMany({
+        select: {
+          usuarioId: true,
+          papel: true,
+          status: true,
+        },
+      }),
+
+      prisma.administrador.findMany({
+        select: {
+          usuarioId:
+            true,
         },
       }),
 
@@ -57,64 +77,205 @@ export const adminDashboard = async (
       prisma.desafioOficial.findMany(),
     ]);
 
-    const mapaPorTipo =
-      Object.fromEntries(
-        porTipo.map((registro) => [
-          String(
-            registro.tipo || ""
-          ),
-          registro._count._all,
-        ])
-      ) as Record<string, number>;
+    const papeisPorUsuario =
+      new Map<
+        string,
+        Set<TipoUsuario>
+      >();
+
+    for (
+      const usuario of
+        usuariosBase
+    ) {
+      papeisPorUsuario.set(
+        usuario.id,
+        new Set()
+      );
+    }
+
+    const usuariosComRegistroPapel =
+      new Set(
+        registrosPapel.map(
+          (registro) =>
+            registro.usuarioId
+        )
+      );
+
+    for (
+      const registro of
+      registrosPapel
+    ) {
+      if (
+        registro.status !==
+        StatusUsuarioPapel.ATIVO
+      ) {
+        continue;
+      }
+
+      const papel =
+        registro.papel ===
+        TipoUsuario.Escola
+          ? TipoUsuario.Escolinha
+          : registro.papel;
+
+      const set =
+        papeisPorUsuario.get(
+          registro.usuarioId
+        ) ??
+        new Set<TipoUsuario>();
+
+      set.add(papel);
+
+      papeisPorUsuario.set(
+        registro.usuarioId,
+        set
+      );
+    }
+
+    for (
+      const usuario of
+        usuariosBase
+    ) {
+      if (
+        usuariosComRegistroPapel.has(
+          usuario.id
+        )
+      ) {
+        continue;
+      }
+
+      const papel =
+        usuario.tipo ===
+        TipoUsuario.Escola
+          ? TipoUsuario.Escolinha
+          : usuario.tipo;
+
+      if (
+        papel === TipoUsuario.Admin
+      ) {
+        continue;
+      }
+
+      papeisPorUsuario
+        .get(usuario.id)
+        ?.add(papel);
+    }
+
+    for (
+      const admin of
+        administradores
+    ) {
+      const set =
+        papeisPorUsuario.get(
+          admin.usuarioId
+        ) ??
+        new Set<TipoUsuario>();
+
+      set.add(
+        TipoUsuario.Admin
+      );
+
+      papeisPorUsuario.set(
+        admin.usuarioId,
+        set
+      );
+    }
+
+    function contarPapel(
+      papel: TipoUsuario
+    ) {
+      let total = 0;
+
+      for (
+        const papeis of
+          papeisPorUsuario.values()
+      ) {
+        if (
+          papeis.has(papel)
+        ) {
+          total++;
+        }
+      }
+
+      return total;
+    }
 
     const totalAtletas =
-      mapaPorTipo.Atleta ?? 0;
+      contarPapel(
+        TipoUsuario.Atleta
+      );
 
     const totalClubes =
-      mapaPorTipo.Clube ?? 0;
+      contarPapel(
+        TipoUsuario.Clube
+      );
 
     const totalEscolinhas =
-      mapaPorTipo.Escolinha ?? 0;
+      contarPapel(
+        TipoUsuario.Escolinha
+      );
 
     const totalAdministradores =
-      mapaPorTipo.Admin ?? 0;
+      contarPapel(
+        TipoUsuario.Admin
+      );
 
     const totalProfessores =
-      mapaPorTipo.Professor ?? 0;
+      contarPapel(
+        TipoUsuario.Professor
+      );
 
     const totalOlheiros =
-      mapaPorTipo.Olheiro ?? 0;
+      contarPapel(
+        TipoUsuario.Olheiro
+      );
 
     const totalLearning =
-      mapaPorTipo.Learning ?? 0;
+      contarPapel(
+        TipoUsuario.Learning
+      );
 
     const totalMarcas =
-      mapaPorTipo.Marca ?? 0;
+      contarPapel(
+        TipoUsuario.Marca
+      );
 
     const totalFederacoes =
-      mapaPorTipo.Federacao ?? 0;
-
-    const totalTiposConhecidos =
-      totalAtletas +
-      totalClubes +
-      totalEscolinhas +
-      totalAdministradores +
-      totalProfessores +
-      totalOlheiros +
-      totalLearning +
-      totalMarcas +
-      totalFederacoes;
-
-    const totalOutros =
-      Math.max(
-        0,
-        totalUsuarios -
-          totalTiposConhecidos
+      contarPapel(
+        TipoUsuario.Federacao
       );
+
+    const totalCreators =
+      contarPapel(
+        TipoUsuario.Creator
+      );
+
+    /*
+    * "Outros" agora significa:
+    * contas sem nenhum papel
+    * reconhecido.
+    *
+    * Não podemos mais subtrair os
+    * totais, porque uma mesma conta
+    * pode aparecer em vários papéis.
+    */
+    let totalOutros =
+      0;
+
+    for (
+      const papeis of
+        papeisPorUsuario.values()
+    ) {
+      if (
+        papeis.size === 0
+      ) {
+        totalOutros++;
+      }
+    }
 
     return res.json({
       totalUsuarios,
-
+      totalCreators,
       totalAtletas,
       totalClubes,
       totalEscolinhas,
@@ -160,7 +321,16 @@ export async function loginAdmin(req: Request, res: Response) {
   }
 
   try {
-    const usuario = await prisma.usuario.findUnique({ where: { email } });
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          email,
+        },
+
+        include: {
+          administrador: true,
+        },
+      });
 
     if (!usuario) {
       return res.status(401).json({ message: "Email incorreto." });
@@ -171,23 +341,45 @@ export async function loginAdmin(req: Request, res: Response) {
       return res.status(401).json({ message: "Senha incorretos." });
     }
 
-    if (usuario.tipo !== "Admin") {
-      return res.status(403).json({ message: "Você não é um administrador." });
+    if (!usuario.administrador) {
+      return res.status(403).json({
+        message:
+          "Você não é um administrador.",
+      });
     }
 
     const token = jwt.sign(
-    {
-      id: usuario.id,
-      tipo: "Admin",
-      tipoUsuario: "Admin",
-      role: "admin",
-      isAdmin: true,
-      email: usuario.email,
-      nome: usuario.nome,
-    },
-    SECRET,
-    { expiresIn: "10h" }
-  );
+      {
+        id:
+          usuario.id,
+
+        tipo:
+          "Admin",
+
+        tipoUsuario:
+          "Admin",
+
+        role:
+          "admin",
+
+        isAdmin:
+          true,
+
+        email:
+          usuario.email,
+
+        nome:
+          usuario.nome,
+
+        tokenVersion:
+          usuario.tokenVersion ?? 0,
+      },
+      SECRET,
+      {
+        expiresIn:
+          "10h",
+      }
+    );
 
     return res.json({
       message: "Login como administrador realizado com sucesso.",
@@ -195,7 +387,7 @@ export async function loginAdmin(req: Request, res: Response) {
         id: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
-        tipo: usuario.tipo,
+        tipo: "Admin",
       },
       token,
     });

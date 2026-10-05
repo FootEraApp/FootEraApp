@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
-import { OrigemFormador } from "@prisma/client";
+import { FuncaoMembroOrganizacao, OrigemFormador } from "@prisma/client";
 import { resolveAtletaId, resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
 import { prisma } from "../prisma.js";
-
+import {
+  obterOrganizacaoIdPorLegado,
+  sincronizarMembroOrganizacaoLegada,
+} from "../services/organizacoes.js";
 
 const SOLIDARIEDADE_PCT = 0.05;
 function ensureNumber(n: any, fallback = 0) {
@@ -67,6 +70,17 @@ export const formadoresController = {
       const atletaRealId = await resolveAtletaId(atletaId);
       if (!atletaRealId) return res.status(400).json({ message: "Atleta não encontrado." });
 
+      const atletaUsuario =
+        await prisma.atleta.findUnique({
+          where: {
+            id: atletaRealId,
+          },
+
+          select: {
+            usuarioId: true,
+          },
+        });
+
       const origemEnum: OrigemFormador =
         origem === "escolinha" ? "Escolinha" :
         origem === "clube"     ? "Clube"     :
@@ -92,6 +106,28 @@ export const formadoresController = {
           await tx.atleta.update({ where: { id: atletaRealId }, data: { clubeId: entidadeId } });
         } else {
           await tx.atleta.update({ where: { id: atletaRealId }, data: { escolinhaId: entidadeId } });
+        }
+
+        if (
+          atletaUsuario?.usuarioId
+        ) {
+          await sincronizarMembroOrganizacaoLegada({
+            tx,
+
+            tipo:
+              origemEnum === "Clube"
+                ? "CLUBE"
+                : "ESCOLINHA",
+
+            ownerId:
+              entidadeId,
+
+            usuarioId:
+              atletaUsuario.usuarioId,
+
+            funcao:
+              FuncaoMembroOrganizacao.MEMBRO,
+          });
         }
         return vinculo;
       });
@@ -163,6 +199,12 @@ export const formadoresController = {
           });
 
           if (paraClubeId) {
+            const organizacaoId =
+              await obterOrganizacaoIdPorLegado({
+                tipo: "CLUBE",
+                ownerId: paraClubeId,
+                tx,
+              });
             await tx.atleta.update({
               where: { id: atletaId },
               data: { clubeId: paraClubeId },
@@ -171,12 +213,36 @@ export const formadoresController = {
             await tx.relacaoTreinamento.deleteMany({
               where: { atletaId, clubeId: { not: paraClubeId } },
             });
-            const existe = await tx.relacaoTreinamento.findFirst({
-              where: { atletaId, clubeId: paraClubeId },
-            });
-            if (!existe) {
+            const existe =
+              await tx.relacaoTreinamento.findFirst({
+                where: {
+                  atletaId,
+                  clubeId:
+                    paraClubeId,
+                },
+              });
+
+            if (existe) {
+              await tx.relacaoTreinamento.update({
+                where: {
+                  id:
+                    existe.id,
+                },
+
+                data: {
+                  organizacaoId,
+                },
+              });
+            } else {
               await tx.relacaoTreinamento.create({
-                data: { atletaId, clubeId: paraClubeId },
+                data: {
+                  atletaId,
+
+                  clubeId:
+                    paraClubeId,
+
+                  organizacaoId,
+                },
               });
             }
           }

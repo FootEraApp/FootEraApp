@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import { toast } from "@/lib/toast";
 import { useLocation, Link } from "wouter";
 import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
@@ -12,9 +12,12 @@ import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
-import BottomNav from "@/components/layout/BottomNav.js";
+import BottomNav from "../components/layout/BottomNav.js";
 import { ModalAdicionarMembrosGrupo } from "../components/mensagens/ModalAdicionarMembrosGrupo.js";
 import SharedAvatar from "../components/shared/Avatar.js";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -26,13 +29,52 @@ interface Usuario {
 
 interface Mensagem {
   id: string;
+
   deId: string;
   paraId: string;
+
   conteudo: string;
-  tipo: "NORMAL" | "POST" | "DESAFIO" | "USUARIO" | "CARD";
+
+  tipo:
+    | "NORMAL"
+    | "POST"
+    | "DESAFIO"
+    | "USUARIO"
+    | "CARD";
+
   criadaEm: string;
+
   clientMsgId?: string;
   pending?: boolean;
+
+  contextoRemetente?: {
+    key: string;
+
+    kind:
+      | "PERSONAL"
+      | "ORGANIZATION";
+
+    tipoUsuario:
+      string;
+
+    role?:
+      string | null;
+
+    profileId?:
+      string | null;
+
+    organizationId?:
+      string | null;
+
+    organizationType?:
+      string | null;
+
+    organizationRole?:
+      string | null;
+
+    legacyOrganizationId?:
+      string | null;
+  } | null;
 }
 
 interface Grupo {
@@ -65,6 +107,35 @@ interface MensagemGrupo {
   desafioEmGrupoId?: string | null;
   clientMsgId?: string;
   pending?: boolean;
+  contextoRemetente?: {
+    key:
+      string;
+
+    kind:
+      | "PERSONAL"
+      | "ORGANIZATION";
+
+    tipoUsuario:
+      string;
+
+    role?:
+      string | null;
+
+    profileId?:
+      string | null;
+
+    organizationId?:
+      string | null;
+
+    organizationType?:
+      string | null;
+
+    organizationRole?:
+      string | null;
+
+    legacyOrganizationId?:
+      string | null;
+  } | null;
 }
 
 interface Postagem {
@@ -73,6 +144,11 @@ interface Postagem {
   imagemUrl?: string;
   videoUrl?: string;
   usuario: Usuario;
+  organizacao?: {
+    id: string;
+    nome: string;
+    tipo?: string | null;
+  } | null;
 }
 
 interface Desafio {
@@ -107,15 +183,57 @@ type GrupoDetalhe = {
 
 export default function PaginaMensagens() {
   const [, navigate] = useLocation();
+
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    userContext
+      ?.activeContext ??
+    null;
+
+  const activeTipoUsuario =
+    String(
+      userContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const isAtleta =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    activeTipoUsuario ===
+      "atleta" &&
+    Boolean(
+      userContext
+        ?.activeTipoUsuarioId
+    );
+
+  const temSeletorContexto =
+    Boolean(
+      userContext?.isLoggedIn
+    ) &&
+    (
+      userContext?.contexts
+        ?.length ?? 0
+    ) > 1;
+    
   const [showSidebar, setShowSidebar] = useState(false);
-  const usuarioId: string | null = Storage.usuarioId;
+  const usuarioId:
+    string | null =
+    userContext?.user?.id
+      ? String(
+          userContext.user.id
+        )
+      : Storage.usuarioId;
   const token: string = Storage.token || "";
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
-  const [isAtleta, setIsAtleta] = useState(
-    String(Storage?.tipoSalvo ?? "").toLowerCase() === "atleta"
-  );
   const [searchTerm, setSearchTerm] = useState("");
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
@@ -211,23 +329,6 @@ export default function PaginaMensagens() {
     if (!token) return;
     fetchUnreadByUser();
   }, [token]);
-
-  useEffect(() => {
-    if (!Storage.token) return;
-    const tipo = (Storage.tipoSalvo || "").toLowerCase();
-    setIsAtleta(tipo === "atleta");
-  }, []);
-
-  useEffect(() => {
-    const tipo = String(Storage?.tipoSalvo ?? "").toLowerCase();
-    if (tipo !== "atleta" || !Storage.token) return;
-
-    fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
-      headers: { Authorization: `Bearer ${Storage.token}` },
-    })
-      .then(r => setIsAtleta(r.ok)) 
-      .catch(() => setIsAtleta(true));
-  }, []);
 
   function selecionarAlvo(novo: ChatTarget) {
     setAlvo(novo);
@@ -854,159 +955,439 @@ export default function PaginaMensagens() {
   useEffect(() => {
     socket.connect();
 
-    socket.on("connect", () => {
-      if (usuarioId) socket.emit("join", usuarioId);
-      const cur = alvoRef.current;
-      if (cur?.tipo === "grupo") socket.emit("joinGroup", cur.grupo.id);
-    });
+    const onConnect = () => {
+      if (usuarioId) {
+        socket.emit(
+          "join",
+          usuarioId
+        );
+      }
 
-    socket.on("novaMensagem", (mensagem: Mensagem) => {
-      const current = alvoRef.current;
+      const cur =
+        alvoRef.current;
 
-      if (mensagem.paraId === usuarioId) {
-        const abertoComEsse = current?.tipo === "usuario" && current.usuario.id === mensagem.deId;
+      if (
+        cur?.tipo ===
+        "grupo"
+      ) {
+        socket.emit(
+          "joinGroup",
+          cur.grupo.id
+        );
+      }
+    };
+
+    const onNovaMensagem = (
+      mensagem: Mensagem
+    ) => {
+      const current =
+        alvoRef.current;
+
+      if (
+        mensagem.paraId ===
+        usuarioId
+      ) {
+        const abertoComEsse =
+          current?.tipo ===
+            "usuario" &&
+          current.usuario.id ===
+            mensagem.deId;
 
         if (!abertoComEsse) {
-          setUnreadByUser(prev => ({
-            ...prev,
-            [mensagem.deId]: (prev[mensagem.deId] || 0) + 1,
-          }));
+          setUnreadByUser(
+            (prev) => ({
+              ...prev,
+
+              [mensagem.deId]:
+                (
+                  prev[
+                    mensagem.deId
+                  ] || 0
+                ) + 1,
+            })
+          );
         } else {
-          markReadFromUser(mensagem.deId);
+          markReadFromUser(
+            mensagem.deId
+          );
         }
       }
 
-      const otherId = mensagem.deId === usuarioId ? mensagem.paraId : mensagem.deId;
-      setLastMsgAtByUser(prev => ({
-        ...prev,
-        [otherId]: new Date(mensagem.criadaEm).getTime(),
-      }));
+      const otherId =
+        mensagem.deId ===
+        usuarioId
+          ? mensagem.paraId
+          : mensagem.deId;
 
-      setLastMsgByUser(prev => ({
-        ...prev,
-        [otherId]: formatPreviewFromMsg({ tipo: mensagem.tipo, conteudo: mensagem.conteudo })
-      }));
+      setLastMsgAtByUser(
+        (prev) => ({
+          ...prev,
 
-      if (String(mensagem.tipo).toUpperCase() === "USUARIO") {
-        const idCompartilhado = String(mensagem.conteudo || "");
-        ensureUsuarioNome(idCompartilhado).then((nome) => {
+          [otherId]:
+            new Date(
+              mensagem.criadaEm
+            ).getTime(),
+        })
+      );
+
+      setLastMsgByUser(
+        (prev) => ({
+          ...prev,
+
+          [otherId]:
+            formatPreviewFromMsg({
+              tipo:
+                mensagem.tipo,
+
+              conteudo:
+                mensagem.conteudo,
+            }),
+        })
+      );
+
+      if (
+        String(
+          mensagem.tipo
+        ).toUpperCase() ===
+        "USUARIO"
+      ) {
+        const idCompartilhado =
+          String(
+            mensagem.conteudo ||
+              ""
+          );
+
+        ensureUsuarioNome(
+          idCompartilhado
+        ).then((nome) => {
           if (nome) {
-            setLastMsgByUser(p => ({
-              ...p,
-              [otherId]: `👤 Perfil: ${nome}`
-            }));
+            setLastMsgByUser(
+              (prev) => ({
+                ...prev,
+
+                [otherId]:
+                  `👤 Perfil: ${nome}`,
+              })
+            );
           }
         });
       }
 
-      if (current?.tipo !== "usuario") return;
-      const curId = current.usuario.id;
+      if (
+        current?.tipo !==
+        "usuario"
+      ) {
+        return;
+      }
+
+      const curId =
+        current.usuario.id;
+
       const relevante =
-        (mensagem.deId === curId && mensagem.paraId === usuarioId) ||
-        (mensagem.deId === usuarioId && mensagem.paraId === curId);
-      if (!relevante) return;
-
-      const replaced = reconcilePrivadaByClientId(mensagem);
-      if (!replaced) {
-        setMensagensPrivadas(prev => {
-          const exists =
-            prev.some(m => m.id === mensagem.id) ||
-            (!!mensagem.clientMsgId && prev.some(m => m.clientMsgId === mensagem.clientMsgId));
-          if (exists) return prev;
-          return [...prev, { ...mensagem, pending: false }];
-        });
-      }
-    });
-
-    socket.on("novaMensagemGrupo", (mensagem: MensagemGrupo) => {
-
-      setLastMsgByGroup(prev => ({
-        ...prev,
-        [mensagem.grupoId]: formatPreviewFromMsg({
-          tipo: mensagem.tipo,
-          conteudo: mensagem.conteudo,
-        }),
-      }));
-
-      const current = alvoRef.current;
-      if (!(current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id)) return;
-
-      setLastMsgAtByGroup(prev => ({
-        ...prev,
-        [mensagem.grupoId]: new Date(mensagem.criadaEm).getTime(),
-      }));
-
-      setLastMsgByGroup((prev) => ({
-        ...prev,
-        [mensagem.grupoId]: formatPreviewFromMsg({
-          tipo: mensagem.tipo,
-          conteudo: mensagem.conteudo,
-        }),
-      }));
-
-      const replaced = reconcileGrupoByClientId(mensagem);
-      if (!replaced) {
-        setMensagensGrupo(prev => {
-          const exists =
-            prev.some(m => m.id === mensagem.id) ||
-            (!!mensagem.clientMsgId && prev.some(m => m.clientMsgId === mensagem.clientMsgId));
-          if (exists) return prev;
-          return [...prev, { ...mensagem, pending: false }];
-        });
-      }
-    });
-
-    socket.on("mensagemDeletada", ({ id }: { id: string }) => {
-      setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
-      setMensagensGrupo(prev => prev.filter(m => m.id !== id));
-    });
-
-    socket.on("grupoCriado", (novoGrupo: Grupo) => {
-      if (!novoGrupo?.id) return;
-
-      setGrupos((prev) => {
-        const grupoJaExiste = prev.some(
-          (grupo) => grupo.id === novoGrupo.id
+        (
+          mensagem.deId ===
+            curId &&
+          mensagem.paraId ===
+            usuarioId
+        ) ||
+        (
+          mensagem.deId ===
+            usuarioId &&
+          mensagem.paraId ===
+            curId
         );
 
-        if (grupoJaExiste) {
-          return prev.map((grupo) =>
-            grupo.id === novoGrupo.id
-              ? { ...grupo, ...novoGrupo }
-              : grupo
-          );
+      if (!relevante) {
+        return;
+      }
+
+      const replaced =
+        reconcilePrivadaByClientId(
+          mensagem
+        );
+
+      if (!replaced) {
+        setMensagensPrivadas(
+          (prev) => {
+            const exists =
+              prev.some(
+                (m) =>
+                  m.id ===
+                  mensagem.id
+              ) ||
+              (
+                !!mensagem.clientMsgId &&
+                prev.some(
+                  (m) =>
+                    m.clientMsgId ===
+                    mensagem.clientMsgId
+                )
+              );
+
+            if (exists) {
+              return prev;
+            }
+
+            return [
+              ...prev,
+              {
+                ...mensagem,
+                pending: false,
+              },
+            ];
+          }
+        );
+      }
+    };
+
+    const onNovaMensagemGrupo = (
+      mensagem: MensagemGrupo
+    ) => {
+      setLastMsgByGroup(
+        (prev) => ({
+          ...prev,
+
+          [mensagem.grupoId]:
+            formatPreviewFromMsg({
+              tipo:
+                mensagem.tipo,
+
+              conteudo:
+                mensagem.conteudo,
+            }),
+        })
+      );
+
+      const current =
+        alvoRef.current;
+
+      if (
+        !(
+          current?.tipo ===
+            "grupo" &&
+          mensagem.grupoId ===
+            current.grupo.id
+        )
+      ) {
+        return;
+      }
+
+      setLastMsgAtByGroup(
+        (prev) => ({
+          ...prev,
+
+          [mensagem.grupoId]:
+            new Date(
+              mensagem.criadaEm
+            ).getTime(),
+        })
+      );
+
+      setLastMsgByGroup(
+        (prev) => ({
+          ...prev,
+
+          [mensagem.grupoId]:
+            formatPreviewFromMsg({
+              tipo:
+                mensagem.tipo,
+
+              conteudo:
+                mensagem.conteudo,
+            }),
+        })
+      );
+
+      const replaced =
+        reconcileGrupoByClientId(
+          mensagem
+        );
+
+      if (!replaced) {
+        setMensagensGrupo(
+          (prev) => {
+            const exists =
+              prev.some(
+                (m) =>
+                  m.id ===
+                  mensagem.id
+              ) ||
+              (
+                !!mensagem.clientMsgId &&
+                prev.some(
+                  (m) =>
+                    m.clientMsgId ===
+                    mensagem.clientMsgId
+                )
+              );
+
+            if (exists) {
+              return prev;
+            }
+
+            return [
+              ...prev,
+              {
+                ...mensagem,
+                pending: false,
+              },
+            ];
+          }
+        );
+      }
+    };
+
+    const onMensagemDeletada = ({
+      id,
+    }: {
+      id: string;
+    }) => {
+      setMensagensPrivadas(
+        (prev) =>
+          prev.filter(
+            (m) =>
+              m.id !== id
+          )
+      );
+
+      setMensagensGrupo(
+        (prev) =>
+          prev.filter(
+            (m) =>
+              m.id !== id
+          )
+      );
+    };
+
+    const onGrupoCriado = (
+      novoGrupo: Grupo
+    ) => {
+      if (!novoGrupo?.id) {
+        return;
+      }
+
+      setGrupos(
+        (prev) => {
+          const grupoJaExiste =
+            prev.some(
+              (grupo) =>
+                grupo.id ===
+                novoGrupo.id
+            );
+
+          if (
+            grupoJaExiste
+          ) {
+            return prev.map(
+              (grupo) =>
+                grupo.id ===
+                novoGrupo.id
+                  ? {
+                      ...grupo,
+                      ...novoGrupo,
+                    }
+                  : grupo
+            );
+          }
+
+          return [
+            novoGrupo,
+            ...prev,
+          ];
         }
+      );
 
-        return [novoGrupo, ...prev];
-      });
+      setLastMsgByGroup(
+        (prev) => ({
+          ...prev,
+          [novoGrupo.id]:
+            "",
+        })
+      );
 
-      setLastMsgByGroup((prev) => ({
-        ...prev,
-        [novoGrupo.id]: "",
-      }));
+      setLastMsgAtByGroup(
+        (prev) => ({
+          ...prev,
+          [novoGrupo.id]:
+            Date.now(),
+        })
+      );
+    };
 
-      setLastMsgAtByGroup((prev) => ({
-        ...prev,
-        [novoGrupo.id]: Date.now(),
-      }));
-    });
+    const onGrupoRemovido = ({
+      grupoId,
+    }: {
+      grupoId: string;
+    }) => {
+      removerGrupoDaInterface(
+        grupoId
+      );
+    };
+
+    socket.on(
+      "connect",
+      onConnect
+    );
+
+    socket.on(
+      "novaMensagem",
+      onNovaMensagem
+    );
+
+    socket.on(
+      "novaMensagemGrupo",
+      onNovaMensagemGrupo
+    );
+
+    socket.on(
+      "mensagemDeletada",
+      onMensagemDeletada
+    );
+
+    socket.on(
+      "grupoCriado",
+      onGrupoCriado
+    );
 
     socket.on(
       "grupoRemovido",
-      ({ grupoId }: { grupoId: string }) => {
-        removerGrupoDaInterface(grupoId);
-      }
+      onGrupoRemovido
     );
 
     return () => {
-      socket.off("connect");
-      socket.off("novaMensagem");
-      socket.off("novaMensagemGrupo");
-      socket.off("mensagemDeletada");
-      socket.off("grupoCriado");
-      socket.off("grupoRemovido");
+      socket.off(
+        "connect",
+        onConnect
+      );
+
+      socket.off(
+        "novaMensagem",
+        onNovaMensagem
+      );
+
+      socket.off(
+        "novaMensagemGrupo",
+        onNovaMensagemGrupo
+      );
+
+      socket.off(
+        "mensagemDeletada",
+        onMensagemDeletada
+      );
+
+      socket.off(
+        "grupoCriado",
+        onGrupoCriado
+      );
+
+      socket.off(
+        "grupoRemovido",
+        onGrupoRemovido
+      );
     };
-  }, [usuarioId]);
+  }, [
+    usuarioId,
+  ]);
 
   useEffect(() => {
     if (!token) return;
@@ -1091,18 +1472,31 @@ export default function PaginaMensagens() {
           ? await contatosRes.json()
           : [];
 
-        const recentes = loadRecentUsers();
+        const fromConversas:
+          Usuario[] =
+          conv.conversas.map(
+            (c) => ({
+              id:
+                c.id,
 
-        const fromConversas: Usuario[] = conv.conversas.map((c) => ({
-          id: c.id,
-          nome: c.nome,
-          foto: c.foto,
-        }));
+              nome:
+                c.nome,
 
-        let base = mergeUnique(
-          mergeUnique(recentes, fromConversas),
-          contatosRelacionados
-        );
+              foto:
+                c.foto,
+            })
+          );
+
+        /*
+        * Conversas pertencem à conta inteira.
+        * Contatos sem conversa dependem
+        * do contexto ativo.
+        */
+        let base =
+          mergeUnique(
+            fromConversas,
+            contatosRelacionados
+          );
 
         if (base.length === 0 && usuarioId) {
           base = [
@@ -1134,7 +1528,7 @@ export default function PaginaMensagens() {
         console.error("Erro ao carregar sidebar:", e);
       }
     })();
-  }, [token]);
+  }, [token, activeContext?.key]);
 
   const carregarPostPorId = async (postId: string) => {
     if (postsCache[postId]) return;
@@ -2298,14 +2692,39 @@ function stripConvocacaoTag(text: string) {
         const post = postsCache[msg.conteudo];
         if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
 
+        const autorNome =
+          post.organizacao?.nome ||
+          post.usuario?.nome ||
+          "Usuário";
+
+        const autorFoto =
+          post.organizacao
+            ? null
+            : post.usuario?.foto;
+
         const img = post.imagemUrl ? publicImgUrl(post.imagemUrl) : null;
         const video = !img && post.videoUrl ? publicImgUrl(post.videoUrl) : null;
 
         return Shell(
           <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
             <div className="flex items-center gap-2 mb-2">
-              <Avatar src={post.usuario.foto} name={post.usuario.nome} className="w-8 h-8" />
-              <span className="text-sm font-semibold">{post.usuario.nome}</span>
+              <Avatar
+                src={autorFoto}
+                name={autorNome}
+                className="w-8 h-8"
+              />
+
+              <div>
+                <span className="text-sm font-semibold">
+                  {autorNome}
+                </span>
+
+                {post.organizacao && (
+                  <div className="text-[10px] font-semibold text-green-700">
+                    Organização
+                  </div>
+                )}
+              </div>
             </div>
             {img && <img src={img} className="w-60 max-h-48 object-cover rounded mb-2" />}
             {video && (
@@ -2614,7 +3033,20 @@ function stripConvocacaoTag(text: string) {
           </div>
           </div>
 
-          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100 mb-10">
+          <div
+            className={`
+              sticky
+              ${
+                temSeletorContexto
+                  ? "bottom-[94px]"
+                  : "bottom-[47px]"
+              }
+              z-40
+              bg-white
+              border-t
+              border-green-100
+            `}
+          >
             <div className="mx-auto w-full sm:max-w-3xl px-3 sm:px-4 py-3 flex items-center gap-2">
               <input
                 className="flex-1 bg-white border border-green-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-700"

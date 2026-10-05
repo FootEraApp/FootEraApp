@@ -1,6 +1,7 @@
 import {
   useEffect,
   useState,
+  useContext,
 } from "react";
 import {
   useLocation,
@@ -14,7 +15,7 @@ import {
   Eye,
   Bell,
 } from "lucide-react";
-import Storage from "../../../../server/utils/storage.js";
+import Storage from "../../utils/storage.js";
 import {
   API,
 } from "../../config.js";
@@ -22,6 +23,9 @@ import socket from "../../services/socket.js";
 import {
   useAuthGate,
 } from "../../context/AuthGateContext.js";
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type ActiveKey =
   | "feed"
@@ -48,44 +52,39 @@ export default function BottomNav({
     requireAuth,
   } = useAuthGate();
 
-  /*
-   * Faz o BottomNav renderizar novamente quando
-   * o usuário entra/sai sem recarregar a página
-   * (por exemplo, Google pelo Auth Gate).
-   */
-  const [
-    authVersion,
-    setAuthVersion,
-  ] = useState(0);
-
-  useEffect(() => {
-    const onAuthChanged = () => {
-      setAuthVersion(
-        (v) => v + 1
-      );
-    };
-
-    window.addEventListener(
-      "footera:auth-changed",
-      onAuthChanged
+  const userContext =
+    useContext(
+      UserContext
     );
 
-    return () => {
-      window.removeEventListener(
-        "footera:auth-changed",
-        onAuthChanged
-      );
-    };
-  }, []);
+  const activeContext =
+    userContext
+      ?.activeContext ??
+    null;
+
+  const contexts =
+    userContext
+      ?.contexts ??
+    [];
+
+  const contextsLoading =
+    userContext
+      ?.contextsLoading ??
+    false;
+
+  const switchActiveContext =
+    userContext
+      ?.switchActiveContext;
+
+  const [
+    switchingContext,
+    setSwitchingContext,
+  ] =
+    useState(false);
 
   const tipoUsuario =
-    (Storage as any).tipoUsuario ??
-    localStorage.getItem(
-      "tipoUsuario"
-    ) ??
-    sessionStorage.getItem(
-      "tipoUsuario"
-    ) ??
+    activeContext
+      ?.tipoUsuario ??
     "";
 
   const isOlheiro =
@@ -222,7 +221,9 @@ export default function BottomNav({
         onSocketBadge
       );
     };
-  }, [authVersion]);
+  }, [
+    userContext?.isLoggedIn,
+  ]);
 
   const baseItem =
     "inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors";
@@ -253,8 +254,93 @@ export default function BottomNav({
     }
   };
 
+  const mostrarSeletorContexto =
+    Boolean(
+      userContext
+        ?.isLoggedIn
+    ) &&
+    contexts.length > 1;
+
   return (
-    <nav
+    <>
+      {mostrarSeletorContexto && (
+        <div className="fixed bottom-12 left-0 right-0 z-50 border-t border-zinc-200 bg-white px-3 py-2 shadow-lg">
+          <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
+            <span className="shrink-0 text-[11px] font-medium text-zinc-500">
+              Usando FootEra como
+            </span>
+
+            <select
+              value={
+                activeContext
+                  ?.key ?? ""
+              }
+              disabled={
+                contextsLoading ||
+                switchingContext
+              }
+              onChange={async (
+                event
+              ) => {
+                const contextKey =
+                  event.target
+                    .value;
+
+                if (
+                  !contextKey ||
+                  !switchActiveContext ||
+                  contextKey ===
+                    activeContext?.key
+                ) {
+                  return;
+                }
+
+                try {
+                  setSwitchingContext(
+                    true
+                  );
+
+                  await switchActiveContext(
+                    contextKey
+                  );
+
+                } catch (
+                  error
+                ) {
+                  console.error(
+                    "[BottomNav] Erro ao trocar contexto:",
+                    error
+                  );
+                } finally {
+                  setSwitchingContext(
+                    false
+                  );
+                }
+              }}
+              className="min-w-0 max-w-[230px] rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-900 outline-none"
+            >
+              {contexts.map(
+                (contexto) => (
+                  <option
+                    key={
+                      contexto.key
+                    }
+                    value={
+                      contexto.key
+                    }
+                  >
+                    {
+                      contexto.label
+                    }
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+        </div>
+      )}
+
+      <nav
       className={`fixed bottom-0 left-0 right-0 z-50 bg-green-900 text-white px-6 py-2 flex justify-around items-center shadow-md ${className}`}
     >
       {/* Feed é público */}
@@ -435,5 +521,6 @@ export default function BottomNav({
         />
       </button>
     </nav>
+    </>
   );
 }

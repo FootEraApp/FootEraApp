@@ -1,24 +1,143 @@
-import { Request, Response } from "express";
+import type {
+  Request,
+  Response,
+} from "express";
+
 import { prisma } from "../prisma.js";
 import { getIO } from "../socket.js";
-import { AuthenticatedRequest } from "../middlewares/auth.js";
 
+import type {
+  AuthenticatedRequest,
+} from "../middlewares/auth.js";
 
-type UserCtx = {
-  id: string;
-  tipo: "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
-  tipoUsuarioId?: string | null;
-  isAdmin?: boolean;
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+
+type EventoOwner = {
+  ownerTipo:
+    | "Professor"
+    | "Clube"
+    | "Escolinha";
+
+  ownerId: string;
 };
 
-function ensureUser(req: Request): UserCtx {
-  const u: any = (req as AuthenticatedRequest).user || {};
-  return {
-    id: String(u.id || ""),
-    tipo: u.tipo || "Professor",
-    tipoUsuarioId: u.tipoUsuarioId || null,
-    isAdmin: !!u.isAdmin,
-  };
+async function getEventoOwner(
+  req: AuthenticatedRequest
+): Promise<EventoOwner | null> {
+  const usuarioId = String(
+    req.userId ??
+      req.user?.id ??
+      ""
+  ).trim();
+
+  if (!usuarioId) {
+    return null;
+  }
+
+  const contexto =
+    req.authUser?.activeContext ??
+    await getActiveContext(usuarioId);
+
+  if (!contexto) {
+    return null;
+  }
+
+  if (contexto.kind === "PERSONAL") {
+    const papel = String(
+      contexto.role ??
+        contexto.tipoUsuario ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const profileId = String(
+      contexto.profileId ??
+        contexto.tipoUsuarioId ??
+        ""
+    ).trim();
+
+    if (
+      papel === "professor" &&
+      profileId
+    ) {
+      return {
+        ownerTipo: "Professor",
+        ownerId: profileId,
+      };
+    }
+
+    return null;
+  }
+
+  if (contexto.kind === "ORGANIZATION") {
+    const organizationType =
+      String(
+        contexto.organizationType ??
+          ""
+      )
+        .trim()
+        .toLowerCase();
+
+    const legacyOrganizationId =
+      String(
+        contexto.legacyOrganizationId ??
+          ""
+      ).trim();
+
+    if (!legacyOrganizationId) {
+      return null;
+    }
+
+    if (organizationType === "clube") {
+      return {
+        ownerTipo: "Clube",
+        ownerId:
+          legacyOrganizationId,
+      };
+    }
+
+    if (
+      organizationType === "escolinha" ||
+      organizationType === "escola"
+    ) {
+      return {
+        ownerTipo: "Escolinha",
+        ownerId:
+          legacyOrganizationId,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function podeEditarEvento(
+  req: AuthenticatedRequest,
+  evento: {
+    ownerTipo: string;
+    ownerId: string;
+  }
+) {
+  if (req.user?.isAdmin) {
+    return true;
+  }
+
+  const owner =
+    await getEventoOwner(req);
+
+  if (!owner) {
+    return false;
+  }
+
+  return (
+    evento.ownerTipo ===
+      owner.ownerTipo &&
+    evento.ownerId ===
+      owner.ownerId
+  );
 }
 
 function gerarChaveamento(participantes: string[]) {
@@ -46,21 +165,20 @@ function gerarChaveamento(participantes: string[]) {
   return rounds;
 }
 
-function podeEditarEvento(user: UserCtx, ev: any) {
-  if (user.isAdmin) return true;
-  if (ev.ownerTipo === "Professor" && user.tipo === "Professor" && user.tipoUsuarioId === ev.ownerId) return true;
-  if (ev.ownerTipo === "Escolinha" && (user.tipo === "Escolinha" || user.tipo === "Professor")) {
-    return true;
-  }
-  if (ev.ownerTipo === "Clube" && (user.tipo === "Clube" || user.tipo === "Professor")) {
-    return true;
-  }
-  return false;
-}
-
-export const criarEvento = async (req: Request, res: Response) => {
+export const criarEvento = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
-    const user = ensureUser(req);
+    const owner =
+      await getEventoOwner(req);
+
+    if (!owner) {
+      return res.status(403).json({
+        message:
+          "O contexto ativo não pode criar jogos de elenco.",
+      });
+    }
     const { titulo, tipo, participantes } = req.body as { titulo: string; tipo: "MATA_MATA"; participantes: string[] };
 
     if (!Array.isArray(participantes) || participantes.length < 2) {
@@ -75,8 +193,8 @@ export const criarEvento = async (req: Request, res: Response) => {
         tipo: "MATA_MATA",
         status: "EM_ANDAMENTO", 
         participantes,
-        ownerTipo: user.tipo,
-        ownerId: user.tipoUsuarioId || user.id,
+        ownerTipo: owner.ownerTipo,
+        ownerId: owner.ownerId,
       },
     });
 
@@ -139,15 +257,14 @@ export const obterEvento = async (req: Request, res: Response) => {
   }
 };
 
-export const reSeedEvento = async (req: Request, res: Response) => {
+export const reSeedEvento = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const user = ensureUser(req);
     const { id } = req.params;
     const { participantes } = req.body as { participantes: string[] };
 
     const evento = await prisma.eventoElenco.findUnique({ where: { id } });
     if (!evento) return res.status(404).json({ message: "Evento não encontrado" });
-    if (!podeEditarEvento(user, evento)) return res.status(403).json({ message: "Sem permissão" });
+    if (!( await podeEditarEvento(req, evento))) return res.status(403).json({ message: "Sem permissão" });
 
     const started = await prisma.partidaElenco.count({ where: { eventoId: id, status: { in: ["EM_ANDAMENTO", "ENCERRADO"] } } });
     if (started > 0) return res.status(400).json({ message: "Não é possível reseedar após partidas iniciadas." });
@@ -202,13 +319,48 @@ export const reSeedEvento = async (req: Request, res: Response) => {
   }
 };
 
-export const atualizarPartida = async (req: Request, res: Response) => {
+export const atualizarPartida = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const { id } = req.params;
     const { op, team, delta } = req.body as { op: string; team?: "A" | "B"; delta?: number };
 
     let partida = await prisma.partidaElenco.findUnique({ where: { id } });
     if (!partida) return res.status(404).json({ message: "Partida não encontrada" });
+
+    const evento =
+      await prisma.eventoElenco.findUnique({
+        where: {
+          id: partida.eventoId,
+        },
+
+        select: {
+          ownerTipo: true,
+          ownerId: true,
+        },
+      });
+
+    if (!evento) {
+      return res.status(404).json({
+        message:
+          "Evento não encontrado",
+      });
+    }
+
+    const autorizado =
+      await podeEditarEvento(
+        req,
+        evento
+      );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        message:
+          "Sem permissão para alterar esta partida",
+      });
+    }
 
     if (op === "start") {
       if (partida.status !== "PENDENTE") return res.status(400).json({ message: "Partida já iniciada/encerrada" });

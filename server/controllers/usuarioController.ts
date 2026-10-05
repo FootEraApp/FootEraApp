@@ -1,7 +1,9 @@
 // server/controllers/usuarioController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
-import { AssinaturaStatus } from "@prisma/client";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
 export async function getPresenca(req: any, res: any) {
   const { id } = req.params;
@@ -194,28 +196,70 @@ export const getUsuarioAssinatura = async (req: Request, res: Response) => {
         .json({ error: "Sem permissão para consultar este usuário" });
     }
 
-    const assinatura = await prisma.assinatura.findFirst({
-      where: { usuarioId: id },
-      orderBy: [
-        { ativo: "desc" },
-        { renovaEm: "desc" },
-        { startsAt: "desc" },
-      ],
-      select: {
-        id: true,
-        usuarioId: true,
-        plano: true,
-        periodicidade: true,
-        startsAt: true,
-        renovaEm: true,
-        canceledAt: true,
-        ativo: true,
-        status: true,
-        trialStartsAt: true,
-        trialEndsAt: true,
-        bloqueadoEm: true,
-      },
-    });
+    const contexto =
+      await getActiveContext(
+        id
+      );
+
+    if (!contexto) {
+      return res.json({
+        hasAssinatura: false,
+        isPro: false,
+        reason:
+          "NO_ACTIVE_CONTEXT",
+        assinatura: null,
+      });
+    }
+
+    const assinatura =
+      await prisma.assinatura.findFirst({
+        where: {
+          usuarioId:
+            id,
+
+          contextoKey:
+            contexto.key,
+        },
+
+        orderBy: [
+          { ativo: "desc" },
+          { renovaEm: "desc" },
+          { startsAt: "desc" },
+        ],
+
+        select: {
+          id: true,
+          usuarioId: true,
+          plano: true,
+          periodicidade: true,
+          startsAt: true,
+          renovaEm: true,
+          canceledAt: true,
+          ativo: true,
+          status: true,
+          trialStartsAt: true,
+          trialEndsAt: true,
+          bloqueadoEm: true,
+
+          contextoKey:
+            true,
+
+          contextoKind:
+            true,
+
+          contextoTipo:
+            true,
+
+          contextoPerfilId:
+            true,
+
+          contextoOrganizacaoId:
+            true,
+
+          contextoLegacyOrganizationId:
+            true,
+        },
+      });
 
     if (!assinatura) {
       return res.json({

@@ -1,48 +1,129 @@
-import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.js";
-import { prisma } from "../prisma.js";
+import {
+  Router,
+} from "express";
+import {
+  authenticateToken,
+} from "../middlewares/auth.js";
+import {
+  canPermission,
+  getPermissionSnapshot,
+} from "../services/permissions.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
-const router = Router();
-router.use(authenticateToken);
+const router =
+  Router();
 
-router.get("/metodologias/criar", async (req: any, res) => {
-  const userId = req.user?.id;
-  const tipo = String(req.user?.tipo || "").toLowerCase();
-  const ORGANIZACOES_PRO = "ORGANIZACOES_PRO";
-  const PROFESSOR_PRO = "PROFESSOR_PRO";
+router.use(
+  authenticateToken,
+);
 
-  if (!userId) return res.status(401).json({ canCreate: false });
-  if (!["professor", "clube", "escolinha"].includes(tipo)) {
-    return res.json({ canCreate: false });
-  }
 
-  let isParceiro = false;
-  if (tipo === "professor") {
-    const prof = await prisma.usuario.findFirst({
-      where: { id: userId },
-      select: { parceiro: true },
-    });
-    isParceiro = Boolean(prof?.parceiro);
-    if (isParceiro) return res.json({ canCreate: true });
-  }
+function getUserId(
+  req: any,
+) {
+  return String(
+    req.userId ??
+      req.user?.id ??
+      req.authUser?.id ??
+      "",
+  ).trim();
+}
 
-  const agora = new Date();
-  const assinatura = await prisma.assinatura.findFirst({
-    where: {
-      usuarioId: userId,
-      status: "ATIVA",
-      trialEndsAt: { gt: agora }, 
-    },
-    select: { id: true },
-  }).catch(() => null);
 
-  const produtoId = String((assinatura as any)?.produtoId || "").toUpperCase();
+router.get(
+  "/me",
+  async (req: any, res) => {
+    try {
+      const userId =
+        getUserId(req);
 
-  if (tipo === "clube" || tipo === "escolinha") {
-    return res.json({ canCreate: produtoId === ORGANIZACOES_PRO });
-  }
+      if (!userId) {
+        return res
+          .status(401)
+          .json({
+            error:
+              "Não autenticado.",
+          });
+      }
 
-  return res.json({ canCreate: produtoId === PROFESSOR_PRO });
-});
+      const [
+        permissions,
+        activeContext,
+      ] =
+        await Promise.all([
+          getPermissionSnapshot(
+            userId
+          ),
+
+          getActiveContext(
+            userId
+          ),
+        ]);
+
+      return res.json({
+        permissions,
+        activeContext
+      });
+    } catch (error) {
+      console.error(
+        "[permissoes/me]",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Não foi possível carregar as permissões.",
+        });
+    }
+  },
+);
+
+
+router.get(
+  "/metodologias/criar",
+  async (req: any, res) => {
+    try {
+      const userId =
+        getUserId(req);
+
+      if (!userId) {
+        return res
+          .status(401)
+          .json({
+            canCreate:
+              false,
+          });
+      }
+
+      const canCreate =
+        await canPermission(
+          userId,
+          "PUBLICAR_METODOLOGIA",
+        );
+
+      return res.json({
+        canCreate,
+        permission:
+          "PUBLICAR_METODOLOGIA",
+      });
+    } catch (error) {
+      console.error(
+        "[permissoes/metodologias/criar]",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          canCreate:
+            false,
+        });
+    }
+  },
+);
 
 export default router;

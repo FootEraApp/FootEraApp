@@ -5,8 +5,13 @@ import {
   ConviteTipo,
   OrganizacaoTipo,
   Prisma,
+  FuncaoMembroOrganizacao,
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
+import {
+  sincronizarMembroOrganizacaoLegada,
+  obterOrganizacaoIdPorLegado
+} from "../services/organizacoes.js";
 
 type PermissaoOrganizacao = "professores" | "atletasTurmas";
 type StatusPublico = "ATIVO" | "EXPIRADO" | "CANCELADO" | "USADO";
@@ -791,6 +796,21 @@ async function reativarRelacaoTreinamento(
     escolinhaId: data.escolinhaId ?? null,
   };
 
+  const organizacaoId =
+    data.clubeId
+      ? await obterOrganizacaoIdPorLegado({
+          tipo: "CLUBE",
+          ownerId: data.clubeId,
+          tx,
+        })
+      : data.escolinhaId
+        ? await obterOrganizacaoIdPorLegado({
+            tipo: "ESCOLINHA",
+            ownerId: data.escolinhaId,
+            tx,
+          })
+        : null;
+
   const existente = await tx.relacaoTreinamento.findFirst({
     where: shape,
     select: { id: true },
@@ -802,6 +822,7 @@ async function reativarRelacaoTreinamento(
       data: {
         ativo: true,
         encerradoEm: null,
+        organizacaoId,
       },
     });
     return;
@@ -810,6 +831,7 @@ async function reativarRelacaoTreinamento(
   await tx.relacaoTreinamento.create({
     data: {
       ...shape,
+      organizacaoId,
       ativo: true,
       encerradoEm: null,
     },
@@ -902,6 +924,21 @@ async function vincularAtletaOrganizacao(
       });
     }
 
+    await sincronizarMembroOrganizacaoLegada({
+      tx,
+
+      tipo:
+        "CLUBE",
+
+      ownerId:
+        clube.id,
+
+      usuarioId,
+
+      funcao:
+        FuncaoMembroOrganizacao.MEMBRO,
+    });
+
     return atleta;
   }
 
@@ -947,6 +984,21 @@ async function vincularAtletaOrganizacao(
       },
     });
   }
+
+  await sincronizarMembroOrganizacaoLegada({
+    tx,
+
+    tipo:
+      "ESCOLINHA",
+
+    ownerId:
+      escolinha.id,
+
+    usuarioId,
+
+    funcao:
+      FuncaoMembroOrganizacao.MEMBRO,
+  });
 
   return atleta;
 }
@@ -1008,6 +1060,21 @@ async function vincularProfessorOrganizacao(
       data: { clubeId: clube.id },
     });
 
+    await sincronizarMembroOrganizacaoLegada({
+      tx,
+
+      tipo:
+        "CLUBE",
+
+      ownerId:
+        clube.id,
+
+      usuarioId,
+
+      funcao:
+        FuncaoMembroOrganizacao.PROFESSOR,
+    });
+
     return professor;
   }
 
@@ -1035,6 +1102,21 @@ async function vincularProfessorOrganizacao(
   await tx.professor.update({
     where: { id: professor.id },
     data: { escolinhaId: escolinha.id },
+  });
+
+  await sincronizarMembroOrganizacaoLegada({
+    tx,
+
+    tipo:
+      "ESCOLINHA",
+
+    ownerId:
+      escolinha.id,
+
+    usuarioId,
+
+    funcao:
+      FuncaoMembroOrganizacao.PROFESSOR,
   });
 
   return professor;

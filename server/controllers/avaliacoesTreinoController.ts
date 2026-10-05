@@ -1,8 +1,11 @@
 import { Response } from "express";
-import { TipoUsuario, AvaliacaoAutorTipo } from "@prisma/client";
+import { AvaliacaoAutorTipo } from "@prisma/client";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
 
 const schema = z.object({
   treinoAgendadoId: z.string().min(1),
@@ -23,59 +26,128 @@ export async function criarAvaliacaoTreino(req: AuthenticatedRequest, res: Respo
 
     const body = schema.parse(req.body);
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { id: true, tipo: true },
-    });
-    if (!usuario) return res.status(401).json({ error: "Usuário não encontrado." });
+    const contexto =
+      req.authUser?.activeContext ??
+      await getActiveContext(
+        usuarioId
+      );
 
-    let autorTipo: AvaliacaoAutorTipo;
-    let autorId: string;
-
-    if (usuario.tipo === TipoUsuario.Atleta) {
-      const atleta = await prisma.atleta.findUnique({
-        where: { usuarioId: usuario.id },
-        select: { id: true },
+    if (!contexto) {
+      return res.status(403).json({
+        error:
+          "Nenhum contexto ativo foi encontrado.",
       });
-      if (!atleta) {
-        return res.status(403).json({ error: "Atleta não encontrado." });
+    }
+
+    let autorTipo:
+      AvaliacaoAutorTipo;
+
+    let autorId:
+      string;
+
+    if (
+      contexto.kind ===
+      "PERSONAL"
+    ) {
+      const papel =
+        String(
+          contexto.role ??
+          contexto.tipoUsuario ??
+          ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const profileId =
+        String(
+          contexto.profileId ??
+          contexto.tipoUsuarioId ??
+          ""
+        ).trim();
+
+      if (!profileId) {
+        return res.status(403).json({
+          error:
+            "O perfil ativo não possui identificação válida.",
+        });
       }
 
-      autorTipo = AvaliacaoAutorTipo.Atleta;
-      autorId = atleta.id;
+      if (papel === "atleta") {
+        autorTipo =
+          AvaliacaoAutorTipo.Atleta;
 
-    } else if (usuario.tipo === TipoUsuario.Professor) {
-      const prof = await prisma.professor.findUnique({
-        where: { usuarioId: usuario.id },
-        select: { id: true },
-      });
-      if (!prof) return res.status(403).json({ error: "Professor não encontrado." });
+        autorId =
+          profileId;
+      } else if (
+        papel === "professor"
+      ) {
+        autorTipo =
+          AvaliacaoAutorTipo.Professor;
 
-      autorTipo = AvaliacaoAutorTipo.Professor;
-      autorId = prof.id;
+        autorId =
+          profileId;
+      } else {
+        return res.status(403).json({
+          error:
+            "O perfil ativo não pode avaliar treino.",
+        });
+      }
+    } else if (
+      contexto.kind ===
+      "ORGANIZATION"
+    ) {
+      const organizacaoTipo =
+        String(
+          contexto.organizationType ??
+          ""
+        )
+          .trim()
+          .toLowerCase();
 
-    } else if (usuario.tipo === TipoUsuario.Clube) {
-      const clube = await prisma.clube.findUnique({
-        where: { usuarioId: usuario.id },
-        select: { id: true },
-      });
-      if (!clube) return res.status(403).json({ error: "Clube não encontrado." });
+      const organizacaoPerfilId =
+        String(
+          contexto.legacyOrganizationId ??
+          ""
+        ).trim();
 
-      autorTipo = AvaliacaoAutorTipo.Clube;
-      autorId = clube.id;
+      if (!organizacaoPerfilId) {
+        return res.status(403).json({
+          error:
+            "A organização ativa não possui identificação válida.",
+        });
+      }
 
-    } else if (usuario.tipo === TipoUsuario.Escolinha) {
-      const escola = await prisma.escolinha.findFirst({
-        where: { usuarioId: usuario.id },
-        select: { id: true },
-      });
-      if (!escola) return res.status(403).json({ error: "Escolinha não encontrada." });
+      if (
+        organizacaoTipo ===
+          "clube"
+      ) {
+        autorTipo =
+          AvaliacaoAutorTipo.Clube;
 
-      autorTipo = AvaliacaoAutorTipo.Escolinha;
-      autorId = escola.id;
+        autorId =
+          organizacaoPerfilId;
+      } else if (
+        organizacaoTipo ===
+          "escolinha" ||
+        organizacaoTipo ===
+          "escola"
+      ) {
+        autorTipo =
+          AvaliacaoAutorTipo.Escolinha;
 
+        autorId =
+          organizacaoPerfilId;
+      } else {
+        return res.status(403).json({
+          error:
+            "A organização ativa não pode avaliar treino.",
+        });
+      }
     } else {
-      return res.status(403).json({ error: "Tipo de usuário não pode avaliar treino." });
+      return res.status(403).json({
+        error:
+          "O contexto ativo não pode avaliar treino.",
+      });
     }
 
     const treinoAgendado = await prisma.treinoAgendado.findUnique({
@@ -84,15 +156,16 @@ export async function criarAvaliacaoTreino(req: AuthenticatedRequest, res: Respo
     });
     if (!treinoAgendado) return res.status(404).json({ error: "Treino agendado não encontrado." });
 
-    if (usuario.tipo === TipoUsuario.Atleta) {
-      const atletaDoUsuario = await prisma.atleta.findUnique({
-        where: { usuarioId: usuario.id },
-        select: { id: true },
+    if (
+      autorTipo ===
+        AvaliacaoAutorTipo.Atleta &&
+      autorId !==
+        treinoAgendado.atletaId
+    ) {
+      return res.status(403).json({
+        error:
+          "Você só pode avaliar seus próprios treinos.",
       });
-
-      if (!atletaDoUsuario || atletaDoUsuario.id !== treinoAgendado.atletaId) {
-        return res.status(403).json({ error: "Você só pode avaliar seus próprios treinos." });
-      }
     }
 
     const createData: any = {
@@ -100,7 +173,7 @@ export async function criarAvaliacaoTreino(req: AuthenticatedRequest, res: Respo
       treinoAgendadoId: treinoAgendado.id,
       autorTipo,
       autorId,
-      autorUsuarioId: usuario.id,
+      autorUsuarioId: usuarioId,
       nota: body.nota,
       concluiu: body.concluiu,
       sentimento: body.sentimento ?? null,

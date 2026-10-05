@@ -1,6 +1,15 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { sendError } from "../utils/httpError.js";
+import {
+  TipoUsuario,
+} from "@prisma/client";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  hasRole,
+} from "../services/roles.js";
 
 type SideInfo = {
   atletaId: string | null;
@@ -9,36 +18,144 @@ type SideInfo = {
   escolinhaId: string | null;
 };
 
-async function getSide(usuarioId: string): Promise<SideInfo | null> {
-  if (!usuarioId) return null;
+type PapelVinculo =
+  | "Atleta"
+  | "Professor"
+  | "Clube"
+  | "Escolinha";
 
-  const [atleta, professor, clube, escolinha] = await Promise.all([
-    prisma.atleta.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    }),
-    prisma.professor.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    }),
-    prisma.clube.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    }),
-    prisma.escolinha.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    }),
-  ]);
+function normalizarPapelVinculo(
+  valor: unknown
+): PapelVinculo | null {
+  const raw =
+    String(valor ?? "")
+      .trim()
+      .toLowerCase();
 
-  if (!atleta && !professor && !clube && !escolinha) return null;
+  if (raw === "atleta") {
+    return "Atleta";
+  }
 
-  return {
-    atletaId: atleta?.id ?? null,
-    professorId: professor?.id ?? null,
-    clubeId: clube?.id ?? null,
-    escolinhaId: escolinha?.id ?? null,
+  if (raw === "professor") {
+    return "Professor";
+  }
+
+  if (raw === "clube") {
+    return "Clube";
+  }
+
+  if (
+    raw === "escola" ||
+    raw === "escolinha"
+  ) {
+    return "Escolinha";
+  }
+
+  return null;
+}
+
+function enumPapelVinculo(
+  papel: PapelVinculo
+): TipoUsuario {
+  switch (papel) {
+    case "Atleta":
+      return TipoUsuario.Atleta;
+
+    case "Professor":
+      return TipoUsuario.Professor;
+
+    case "Clube":
+      return TipoUsuario.Clube;
+
+    case "Escolinha":
+      return TipoUsuario.Escolinha;
+  }
+}
+
+async function getSide(
+  usuarioId: string,
+  papel: PapelVinculo
+): Promise<SideInfo | null> {
+  const possui =
+    await hasRole(
+      usuarioId,
+      enumPapelVinculo(
+        papel
+      )
+    );
+
+  if (!possui) {
+    return null;
+  }
+
+  const result: SideInfo = {
+    atletaId: null,
+    professorId: null,
+    clubeId: null,
+    escolinhaId: null,
   };
+
+  if (papel === "Atleta") {
+    const row =
+      await prisma.atleta.findUnique({
+        where: {
+          usuarioId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    result.atletaId =
+      row?.id ?? null;
+  }
+
+  if (papel === "Professor") {
+    const row =
+      await prisma.professor.findUnique({
+        where: {
+          usuarioId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    result.professorId =
+      row?.id ?? null;
+  }
+
+  if (papel === "Clube") {
+    const row =
+      await prisma.clube.findUnique({
+        where: {
+          usuarioId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    result.clubeId =
+      row?.id ?? null;
+  }
+
+  if (papel === "Escolinha") {
+    const row =
+      await prisma.escolinha.findUnique({
+        where: {
+          usuarioId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    result.escolinhaId =
+      row?.id ?? null;
+  }
+
+  return result;
 }
 
 export const treinarJuntosController = {
@@ -70,9 +187,45 @@ export const treinarJuntosController = {
         });
       }
 
+      const contextoViewer =
+        await getActiveContext(
+          String(viewerUsuarioId)
+        );
+
+      const viewerPapel =
+        normalizarPapelVinculo(
+          contextoViewer?.tipoUsuario
+        );
+
+      const alvoPapel =
+        normalizarPapelVinculo(
+          req.query.alvoPapel
+        );
+
+      if (!viewerPapel) {
+        return res.status(400).json({
+          message:
+            "O contexto ativo não permite vínculo de treino.",
+        });
+      }
+
+      if (!alvoPapel) {
+        return res.status(400).json({
+          message:
+            "alvoPapel é obrigatório.",
+        });
+      }
+
       const [viewerSide, perfilSide] = await Promise.all([
-        getSide(String(viewerUsuarioId)),
-        getSide(perfilUsuarioId),
+        getSide(
+          String(viewerUsuarioId),
+          viewerPapel
+        ),
+
+        getSide(
+          perfilUsuarioId,
+          alvoPapel
+        ),
       ]);
 
       if (!viewerSide || !perfilSide) {

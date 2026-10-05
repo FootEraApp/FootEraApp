@@ -1,5 +1,5 @@
 // client/src/components/profile/TrainingProgress
-import { useMemo, useEffect, useState} from 'react';
+import { useContext, useMemo, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format as formatDateFns, startOfDay } from "date-fns";
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +15,9 @@ import { Link, useLocation} from 'wouter';
 import { API, APP } from '../../config.js';
 import { publicImgUrl } from "@/utils/publicUrl.js";
 import Storage from '../../../../server/utils/storage.js';
+import {
+  UserContext,
+} from "../../context/UserContext.js";
 
 type Training = {
   id: string;
@@ -212,10 +215,45 @@ function computeFromHistorico(wire?: any) {
 }
 
 export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
+  const authContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    authContext
+      ?.activeContext ??
+    null;
+
+  const activeAtletaId =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    String(
+      authContext
+        ?.activeTipoUsuario ??
+      ""
+    )
+      .trim()
+      .toLowerCase() ===
+      "atleta"
+      ? String(
+          authContext
+            ?.activeTipoUsuarioId ??
+          ""
+        ).trim()
+      : "";
   const qc = useQueryClient();
   const token = Storage.token || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  const targetUserId = userId ?? (Storage.usuarioId as string) ?? "";
+  const targetUserId =
+    userId ??
+    (
+      authContext?.user?.id
+        ? String(
+            authContext.user.id
+          )
+        : ""
+    );
   const debugLoggedIds = useState(() => new Set<string>())[0];
 
   const [, setLocation] = useLocation();
@@ -382,12 +420,19 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     return chooseHardest(conquistasEarned, 4);
   }, [conquistasEarned]);
 
-  const atletaId = String(resolvedTipoUsuarioId ?? "").trim();
+  const atletaId = String(
+    resolvedTipoUsuarioId ||
+    activeAtletaId ||
+    "",
+  ).trim();
+
   const trainingsHref =
     targetUserId && String(targetUserId) !== String(Storage.usuarioId || "")
       ? `/trainings?usuarioId=${encodeURIComponent(targetUserId)}`
       : "/trainings";
+
   const base = `${API.BASE_URL}/api/treinos/agendados`;
+  
   const url = `${base}?atletaId=${encodeURIComponent(atletaId)}&apenasFuturos=1&apenasComSubmissao=0`;
 
   const { data: treinosAgendados = [], isLoading: isLoadingTreinos } =

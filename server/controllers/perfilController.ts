@@ -5,6 +5,9 @@ import {
   PosicaoCampo,
   MetodologiaAssinaturaStatus,
   PagamentoStatus,
+  StatusUsuarioPapel,
+  TipoUsuario,
+  TipoOrganizacao,
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
@@ -23,6 +26,18 @@ import {
   categoriaAtletaPorIdade,
   sincronizarCategoriaAtleta,
 } from "../utils/categoriaAtleta.js";
+import {
+  garantirOrganizacaoLegada,
+  sincronizarProfessorProprio,
+} from "../services/organizacoes.js";
+import {
+  getActiveContext,
+  definirActiveContext,
+} from "../services/activeContext.js";
+import {
+  getProfileIdForRole,
+  hasRole,
+} from "../services/roles.js";
 
 type AtividadeUI = {
   id: string;
@@ -121,8 +136,25 @@ function normalizarCategorias(input: any): Categoria[] {
     .filter(Boolean) as Categoria[];
 }
 
-function isAdminFromReq(req: any) {
-  const t = String(req?.user?.tipo ?? req?.authUser?.tipo ?? "").toLowerCase();
+function isAdminFromReq(
+  req: any
+) {
+  if (
+    req?.authUser
+      ?.isAdmin === true ||
+    req?.user
+      ?.isAdmin === true
+  ) {
+    return true;
+  }
+
+  const t =
+    String(
+      req?.authUser?.tipo ??
+      req?.user?.tipo ??
+      ""
+    ).toLowerCase();
+
   return t === "admin";
 }
 
@@ -600,6 +632,47 @@ async function resolveByUsuarioOrEntity(opts: {
   return null;
 }
 
+async function resolverIdOrganizacaoAtivaMe(
+  req:
+    AuthenticatedRequest,
+
+  organizationType:
+    TipoOrganizacao,
+): Promise<string | null> {
+  const usuarioId =
+    String(
+      req.userId ??
+      ""
+    ).trim();
+
+  if (!usuarioId) {
+    return null;
+  }
+
+  const contexto =
+    req.authUser
+      ?.activeContext ??
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (
+    contexto?.kind !==
+      "ORGANIZATION" ||
+    contexto
+      .organizationType !==
+      organizationType
+  ) {
+    return null;
+  }
+
+  return (
+    contexto
+      .legacyOrganizationId ??
+    null
+  );
+}
+
 async function countAtletasPorEntidade(opts: {
   escolinhaId?: string;
   clubeId?: string;
@@ -630,29 +703,160 @@ async function countAtletasPorEntidade(opts: {
   return idsUnicos.size;
 }
 
-export const getPerfilUsuarioMe = async (
-  req: AuthenticatedRequest,
-  res: Response,
-) => {
-  const id = req.userId;
+export const getPerfilUsuarioMe =
+  async (
+    req:
+      AuthenticatedRequest,
 
-  if (!id) {
-    return res.status(401).json({
-      error: "Sem autenticação",
-    });
-  }
+    res:
+      Response,
+  ) => {
+    const id =
+      String(
+        req.userId ??
+        ""
+      ).trim();
 
-  await sincronizarCategoriaAtleta(id).catch((error) => {
-    console.warn("[perfil/me] falha ao sincronizar idade/categoria:", error);
-  });
+    if (!id) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Sem autenticação",
+        });
+    }
 
-  (req as any).params = {
-    ...(req as any).params,
-    id,
+    try {
+      const activeContext =
+        req.authUser
+          ?.activeContext ??
+        await getActiveContext(
+          id
+        );
+
+      if (!activeContext) {
+        return res
+          .status(409)
+          .json({
+            code:
+              "ACTIVE_CONTEXT_MISSING",
+
+            error:
+              "Não foi possível resolver o contexto ativo.",
+          });
+      }
+
+      /*
+       * Quando o contexto ativo é
+       * organizacional, /perfil/me
+       * representa a organização.
+       */
+      if (
+        activeContext.kind ===
+        "ORGANIZATION"
+      ) {
+        (
+          req as any
+        ).params = {
+          ...(req as any)
+            .params,
+
+          id:
+            "me",
+        };
+
+        switch (
+          activeContext
+            .organizationType
+        ) {
+          case TipoOrganizacao.CLUBE:
+            return getPerfilClube(
+              req,
+              res
+            );
+
+          case TipoOrganizacao.ESCOLA:
+            return getPerfilEscola(
+              req,
+              res
+            );
+
+          case TipoOrganizacao.MARCA:
+            return getPerfilMarca(
+              req,
+              res
+            );
+
+          case TipoOrganizacao.FEDERACAO:
+            return getPerfilFederacao(
+              req,
+              res
+            );
+
+          default:
+            return res
+              .status(409)
+              .json({
+                code:
+                  "INVALID_ORGANIZATION_CONTEXT",
+
+                error:
+                  "O tipo da organização ativa é inválido.",
+              });
+        }
+      }
+
+      /*
+       * Só sincroniza categoria quando
+       * o perfil ativo é realmente
+       * Atleta.
+       */
+      if (
+        activeContext
+          .tipoUsuario ===
+        TipoUsuario.Atleta
+      ) {
+        await sincronizarCategoriaAtleta(
+          id
+        ).catch(
+          (
+            error
+          ) => {
+            console.warn(
+              "[perfil/me] falha ao sincronizar idade/categoria:",
+              error
+            );
+          }
+        );
+      }
+
+      (
+        req as any
+      ).params = {
+        ...(req as any)
+          .params,
+
+        id,
+      };
+
+      return getPerfilUsuario(
+        req as any,
+        res
+      );
+    } catch (error) {
+      console.error(
+        "[perfil/me] erro:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            "Não foi possível carregar o perfil ativo.",
+        });
+    }
   };
-
-  return getPerfilUsuario(req as any, res);
-};
 
 export const getPontuacaoMe = async (
   req: AuthenticatedRequest,
@@ -2769,28 +2973,62 @@ export const atualizarPerfil = async (
 
         await prisma.professor.upsert({
           where: { usuarioId: id },
+
           create: {
             usuarioId: id,
-            nome: tipo.nome || usuario.nome || usuarioAtual.nome || "Professor",
-            cref: tipo.cref || null,
-            areaFormacao: tipo.areaFormacao || null,
-            escola: tipo.escola || null,
+            nome:
+              tipo.nome ||
+              usuario.nome ||
+              usuarioAtual.nome ||
+              "Professor",
+
+            cref:
+              tipo.cref || null,
+
+            areaFormacao:
+              tipo.areaFormacao || null,
+
+            escola:
+              tipo.escola || null,
+
             qualificacoes,
             certificacoes,
-            fotoUrl: fotoFinal,
-            dataNascimento: dataNascimentoFinal,
+
+            fotoUrl:
+              fotoFinal,
+
+            dataNascimento:
+              dataNascimentoFinal,
           },
+
           update: {
-            nome: tipo.nome,
-            cref: tipo.cref,
-            areaFormacao: tipo.areaFormacao,
-            escola: tipo.escola,
+            nome:
+              tipo.nome,
+
+            cref:
+              tipo.cref,
+
+            areaFormacao:
+              tipo.areaFormacao,
+
+            escola:
+              tipo.escola,
+
             qualificacoes,
             certificacoes,
-            fotoUrl: fotoFinal,
-            dataNascimento: dataNascimentoFinal,
+
+            fotoUrl:
+              fotoFinal,
+
+            dataNascimento:
+              dataNascimentoFinal,
           },
         });
+
+        await sincronizarProfessorProprio({
+          usuarioId: id,
+        });
+
         break;
       }
 
@@ -2839,6 +3077,11 @@ export const atualizarPerfil = async (
               : undefined,
           },
         });
+
+        await sincronizarProfessorProprio({
+          usuarioId: id,
+        });
+
         break;
       }
 
@@ -2920,6 +3163,11 @@ export const atualizarPerfil = async (
               : undefined,
           },
         });
+
+        await sincronizarProfessorProprio({
+          usuarioId: id,
+        });
+
         break;
       }
 
@@ -3465,9 +3713,44 @@ export async function getPerfilProfessor(
   }
 }
 
-export async function getPerfilClube(req: Request, res: Response) {
+export async function getPerfilClube(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const { id } = req.params;
+    let id =
+      String(
+        req.params?.id ??
+        ""
+      ).trim();
+
+    if (
+      !id ||
+      id.toLowerCase() ===
+        "me"
+    ) {
+      const idOrganizacao =
+        await resolverIdOrganizacaoAtivaMe(
+          req,
+          TipoOrganizacao.CLUBE
+        );
+
+      id =
+        idOrganizacao ??
+        String(
+          req.userId ??
+          ""
+        ).trim();
+    }
+
+    if (!id) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Sem autenticação",
+        });
+    }
 
     const clube = await resolveByUsuarioOrEntity({
       entity: "clube",
@@ -3601,9 +3884,41 @@ export async function getPerfilClube(req: Request, res: Response) {
   }
 }
 
-export async function getPerfilEscola(req: Request, res: Response) {
+export async function getPerfilEscola(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    let id =
+      String(
+        req.params?.id ??
+        ""
+      ).trim();
+
+    if (
+      !id ||
+      id.toLowerCase() ===
+        "me"
+    ) {
+      const idOrganizacao =
+        await resolverIdOrganizacaoAtivaMe(
+          req,
+          TipoOrganizacao.ESCOLA
+        );
+
+      id =
+        idOrganizacao ??
+        String(
+          req.userId ??
+          ""
+        ).trim();
+    }
+
+    if (!id) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Sem autenticação",
+        });
+    }
 
     const escola = await resolveByUsuarioOrEntity({
       entity: "escolinha",
@@ -3915,9 +4230,41 @@ export const getUltimasSubmissoesDesafioVideosMe = async (
   return getUltimasSubmissoesDesafioVideos(req as any, res);
 };
 
-export const getPerfilFederacao = async (req: Request, res: Response) => {
+export const getPerfilFederacao = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const id = String(req.params.id || "").trim();
+    let id =
+      String(
+        req.params?.id ??
+        ""
+      ).trim();
+
+    if (
+      !id ||
+      id.toLowerCase() ===
+        "me"
+    ) {
+      const idOrganizacao =
+        await resolverIdOrganizacaoAtivaMe(
+          req,
+          TipoOrganizacao.FEDERACAO
+        );
+
+      id =
+        idOrganizacao ??
+        String(
+          req.userId ??
+          ""
+        ).trim();
+    }
+
+    if (!id) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Sem autenticação",
+        });
+    }
 
     const federacao = await resolveByUsuarioOrEntity({
       entity: "federacao",
@@ -4019,9 +4366,41 @@ export const getPerfilFederacao = async (req: Request, res: Response) => {
   }
 };
 
-export const getPerfilMarca = async (req: Request, res: Response) => {
+export const getPerfilMarca = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const id = String(req.params.id || "").trim();
+    let id =
+      String(
+        req.params?.id ??
+        ""
+      ).trim();
+
+    if (
+      !id ||
+      id.toLowerCase() ===
+        "me"
+    ) {
+      const idOrganizacao =
+        await resolverIdOrganizacaoAtivaMe(
+          req,
+          TipoOrganizacao.MARCA
+        );
+
+      id =
+        idOrganizacao ??
+        String(
+          req.userId ??
+          ""
+        ).trim();
+    }
+
+    if (!id) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Sem autenticação",
+        });
+    }
 
     const marca = await resolveByUsuarioOrEntity({
       entity: "marca",
@@ -4352,7 +4731,6 @@ export const upgradeLearningProfile = async (
         nome: true,
         email: true,
         nomeDeUsuario: true,
-        tipo: true,
       },
     });
 
@@ -4362,9 +4740,39 @@ export const upgradeLearningProfile = async (
       });
     }
 
-    if (usuario.tipo !== "Learning") {
-      return res.status(400).json({
-        message: "Apenas contas Learning podem mudar o tipo por este fluxo.",
+    const possuiLearning =
+      await hasRole(
+        usuarioId,
+        TipoUsuario.Learning,
+      );
+
+    if (!possuiLearning) {
+      return res.status(403).json({
+        code: "LEARNING_ROLE_REQUIRED",
+        message:
+          "Esta conta não possui um perfil Learning ativo.",
+      });
+    }
+
+    const contextoAtual =
+      req.authUser?.activeContext ??
+      await getActiveContext(
+        usuarioId
+      );
+
+    if (
+      !contextoAtual ||
+      contextoAtual.kind !==
+        "PERSONAL" ||
+      contextoAtual.tipoUsuario !==
+        TipoUsuario.Learning
+    ) {
+      return res.status(403).json({
+        code:
+          "LEARNING_CONTEXT_REQUIRED",
+
+        message:
+          "Selecione seu perfil Learning para adicionar outro perfil.",
       });
     }
 
@@ -4373,13 +4781,26 @@ export const upgradeLearningProfile = async (
       .toUpperCase();
 
     const mapaTipos = {
-      ATLETA: "Atleta",
-      PROFESSOR: "Professor",
-      OLHEIRO: "Olheiro",
-      CLUBE: "Clube",
-      ESCOLINHA: "Escolinha",
-      FEDERACAO: "Federacao",
-      MARCA: "Marca",
+      ATLETA:
+        TipoUsuario.Atleta,
+
+      PROFESSOR:
+        TipoUsuario.Professor,
+
+      OLHEIRO:
+        TipoUsuario.Olheiro,
+
+      CLUBE:
+        TipoUsuario.Clube,
+
+      ESCOLINHA:
+        TipoUsuario.Escolinha,
+
+      FEDERACAO:
+        TipoUsuario.Federacao,
+
+      MARCA:
+        TipoUsuario.Marca,
     } as const;
 
     type NovoTipo = keyof typeof mapaTipos;
@@ -4391,8 +4812,23 @@ export const upgradeLearningProfile = async (
     }
 
     const tipoValidado = novoTipo as NovoTipo;
-
     const tipoUsuarioFinal = mapaTipos[tipoValidado];
+
+    const perfilDestinoExistente =
+      await getProfileIdForRole(
+        usuarioId,
+        tipoUsuarioFinal,
+      );
+
+    if (perfilDestinoExistente) {
+      return res.status(409).json({
+        code:
+          "PROFILE_ROLE_ALREADY_EXISTS",
+
+        message:
+          "Você já possui este perfil.",
+      });
+    }
 
     if (tipoValidado === "PROFESSOR" || tipoValidado === "OLHEIRO") {
       const nascimento = parseDataNascimentoObrigatoria(
@@ -4484,69 +4920,68 @@ export const upgradeLearningProfile = async (
       });
     }
 
-    const tipoUsuarioId = await prisma.$transaction(async (tx) => {
+    const resultadoUpgrade =
+      await prisma.$transaction(
+        async (tx) => {
+
+      const agora =
+        new Date();
+
+      const ativarPapelPessoal =
+        async (
+          papel: TipoUsuario
+        ) => {
+          await tx.usuarioPapel.upsert({
+            where: {
+              usuarioId_papel: {
+                usuarioId,
+                papel,
+              },
+            },
+
+            update: {
+              status:
+                StatusUsuarioPapel.ATIVO,
+
+              ativadoEm:
+                agora,
+
+              desativadoEm:
+                null,
+
+              perfilCompletoEm:
+                agora,
+            },
+
+            create: {
+              usuarioId,
+              papel,
+
+              status:
+                StatusUsuarioPapel.ATIVO,
+
+              ativadoEm:
+                agora,
+
+              perfilCompletoEm:
+                agora,
+            },
+          });
+        };
+
       await tx.usuario.update({
         where: {
           id: usuarioId,
         },
 
         data: {
-          tipo: tipoUsuarioFinal as any,
+          nome:
+            nomeFinal,
 
-          nome: nomeFinal,
-
-          nomeDeUsuario: nomeDeUsuarioFinal,
+          nomeDeUsuario:
+            nomeDeUsuarioFinal,
         },
       });
-
-      const planosPermitidosNoNovoTipo = new Set(
-        planosPrincipaisPermitidosPorTipo(tipoUsuarioFinal),
-      );
-
-      const planosIncompativeis = PLANOS_PRINCIPAIS_BILLING.filter(
-        (plano) => !planosPermitidosNoNovoTipo.has(plano),
-      );
-
-      if (planosIncompativeis.length > 0) {
-        const agora = new Date();
-
-        await tx.assinatura.updateMany({
-          where: {
-            usuarioId,
-
-            plano: {
-              in: planosIncompativeis,
-            },
-
-            ativo: true,
-          },
-
-          data: {
-            ativo: false,
-            status: "BLOQUEADA",
-            canceledAt: agora,
-            bloqueadoEm: agora,
-          } as any,
-        });
-
-        await tx.pagamento.updateMany({
-          where: {
-            usuarioId,
-
-            plano: {
-              in: planosIncompativeis,
-            },
-
-            status: PagamentoStatus.PENDENTE,
-          },
-
-          data: {
-            status: PagamentoStatus.CANCELADO,
-
-            canceladoEm: agora,
-          },
-        });
-      }
 
       switch (tipoValidado) {
         case "ATLETA": {
@@ -4572,7 +5007,17 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return atleta.id;
+          await ativarPapelPessoal(
+            TipoUsuario.Atleta
+          );
+
+          return {
+            tipoUsuarioId:
+              atleta.id,
+
+            organizacaoId:
+              null,
+          };
         }
 
         case "PROFESSOR": {
@@ -4580,25 +5025,54 @@ export const upgradeLearningProfile = async (
             req.body.dataNascimento,
           );
 
-          const professor = await tx.professor.create({
-            data: {
-              usuarioId,
+          const professor =
+            await tx.professor.create({
+              data: {
+                usuarioId,
 
-              nome: nomeFinal,
+                nome:
+                  nomeFinal,
 
-              email: usuario.email,
+                email:
+                  usuario.email,
 
-              dataNascimento: nascimento.dataNascimento,
+                dataNascimento:
+                  nascimento.dataNascimento,
 
-              areaFormacao: req.body.areaFormacao || null,
+                areaFormacao:
+                  req.body.areaFormacao ||
+                  null,
 
-              cref: req.body.cref || null,
+                cref:
+                  req.body.cref ||
+                  null,
 
-              statusCref: req.body.statusCref || null,
-            } as any,
+                statusCref:
+                  req.body.statusCref ||
+                  null,
+              } as any,
+            });
+
+          await ativarPapelPessoal(
+            TipoUsuario.Professor
+          );
+
+          // NOVO:
+          // se esta mesma conta já possuir
+          // Clube ou Escolinha, cria os pivôs
+          // ProfessorClube / ProfessorEscolinha.
+          await sincronizarProfessorProprio({
+            usuarioId,
+            tx,
           });
 
-          return professor.id;
+          return {
+            tipoUsuarioId:
+              professor.id,
+
+            organizacaoId:
+              null,
+          };
         }
 
         case "OLHEIRO": {
@@ -4628,7 +5102,17 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return olheiro.id;
+          await ativarPapelPessoal(
+            TipoUsuario.Olheiro
+          );
+
+          return {
+            tipoUsuarioId:
+              olheiro.id,
+
+            organizacaoId:
+              null,
+          };
         }
 
         case "CLUBE": {
@@ -4648,7 +5132,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return clube.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "CLUBE",
+
+              ownerId:
+                clube.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              clube.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         case "ESCOLINHA": {
@@ -4668,7 +5184,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return escolinha.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "ESCOLINHA",
+
+              ownerId:
+                escolinha.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              escolinha.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         case "FEDERACAO": {
@@ -4688,7 +5236,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return federacao.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "FEDERACAO",
+
+              ownerId:
+                federacao.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              federacao.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         case "MARCA": {
@@ -4708,7 +5288,39 @@ export const upgradeLearningProfile = async (
             } as any,
           });
 
-          return marca.id;
+          const organizacao =
+            await garantirOrganizacaoLegada({
+              tipo:
+                "MARCA",
+
+              ownerId:
+                marca.id,
+
+              proprietarioUsuarioId:
+                usuarioId,
+
+              tx,
+            });
+
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+
+            data: {
+              contextoOrganizacaoId:
+                organizacao.id,
+            },
+          });
+
+          return {
+            tipoUsuarioId:
+              marca.id,
+
+            organizacaoId:
+              organizacao.id,
+          };
         }
 
         default: {
@@ -4717,16 +5329,47 @@ export const upgradeLearningProfile = async (
       }
     });
 
+    const activeContext =
+      resultadoUpgrade
+        .organizacaoId
+        ? await getActiveContext(
+            usuarioId
+          )
+        : await definirActiveContext(
+            usuarioId,
+            `personal:${tipoUsuarioFinal}`
+          );
+
+    if (!activeContext) {
+      throw new Error(
+        "Não foi possível resolver o contexto ativo após a atualização do perfil."
+      );
+    }
+
     return res.json({
       ok: true,
-      message: "Tipo de perfil atualizado com sucesso.",
-      tipo: tipoValidado,
-      tipoUsuarioId,
+      message:
+        "Novo perfil adicionado com sucesso.",
+      tipo:
+        activeContext
+          .tipoUsuario,
+      tipoUsuarioId:
+        activeContext
+          .tipoUsuarioId ??
+        resultadoUpgrade
+          .tipoUsuarioId,
+      activeContext,
       usuario: {
-        id: usuarioId,
-        nome: nomeFinal,
-        nomeDeUsuario: nomeDeUsuarioFinal,
-        tipo: tipoUsuarioFinal,
+        id:
+          usuarioId,
+        nome:
+          nomeFinal,
+        nomeDeUsuario:
+          nomeDeUsuarioFinal,
+        tipo:
+          activeContext
+            .tipoUsuario,
+        activeContext,
       },
     });
   } catch (error: any) {

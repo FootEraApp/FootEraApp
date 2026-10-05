@@ -17,9 +17,12 @@ const AUTH_STORAGE_KEYS = [
   "token",
   "usuarioId",
   "tipoUsuario",
+  "usuarioTipoRaw",
   "tipoUsuarioId",
   "nomeUsuario",
   "nomeDeUsuario",
+  "plano",
+  "activeContext",
 ];
 
 const Storage = {

@@ -3,7 +3,7 @@ import { prisma } from "../prisma.js";
 import { touchFairUse } from "server/lib/usage.js";
 import { aplicarCorteEscolinha, getRangeFromQuery } from "../utils/analyticsWindow.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
-
+import { garantirOrganizacaoLegada } from "../services/organizacoes.js";
 
 export async function relatorioRetencaoEscolinha(req: Request, res: Response) {
   try {
@@ -93,7 +93,27 @@ export const getEscolinhaById = async (req: Request, res: Response) => {
 
 export const createEscolinha = async (req: Request, res: Response) => {
   try {
-    const novaEscolinha = await prisma.escolinha.create({ data: req.body });
+    const novaEscolinha =
+      await prisma.$transaction(
+        async (tx) => {
+          const criada =
+            await tx.escolinha.create({
+              data: req.body,
+            });
+
+          await garantirOrganizacaoLegada({
+            tipo: "ESCOLINHA",
+            ownerId: criada.id,
+
+            proprietarioUsuarioId:
+              criada.usuarioId,
+
+            tx,
+          });
+
+          return criada;
+        }
+      );
     res.status(201).json(novaEscolinha);
   } catch (error) {
     console.error("Erro ao criar escolinha:", error);

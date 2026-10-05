@@ -12,6 +12,8 @@ import { X } from "lucide-react";
 import GoogleButton from "../components/auth/GoogleButton.js";
 import { API } from "../config.js";
 import {
+  clearAuthSession,
+  readAuthSessionSnapshot,
   applyAuthSession,
   consumirRetornoAuth,
   salvarRetornoAuth,
@@ -20,9 +22,7 @@ import {
   limparFluxoAuthPendente,
   type PendingAuthAction,
 } from "../utils/authSession.js";
-import {
-  syncSocketAuth,
-} from "../services/socket.js";
+import { read } from "fs";
 
 type AuthGateOptions = {
   title?: string;
@@ -40,40 +40,6 @@ type AuthGateContextValue = {
 
 const AuthGateContext =
   createContext<AuthGateContextValue | null>(null);
-
-const AUTH_KEYS = [
-  "token",
-  "usuarioId",
-  "nomeUsuario",
-  "tipoUsuario",
-  "usuarioTipoRaw",
-  "tipoUsuarioId",
-  "plano",
-] as const;
-
-function readAuthState() {
-  const token =
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    "";
-
-  const usuarioId =
-    localStorage.getItem("usuarioId") ||
-    sessionStorage.getItem("usuarioId") ||
-    "";
-
-  return {
-    token: token.trim(),
-    usuarioId: usuarioId.trim(),
-  };
-}
-
-function clearStoredAuth() {
-  for (const key of AUTH_KEYS) {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  }
-}
 
 function currentReturnTo() {
   return (
@@ -143,7 +109,7 @@ export function AuthGateProvider({
   const requireAuth = useCallback(
     (options: AuthGateOptions = {}) => {
       const { token, usuarioId } =
-        readAuthState();
+        readAuthSessionSnapshot();
 
       if (token && usuarioId) {
         return true;
@@ -191,19 +157,7 @@ export function AuthGateProvider({
         return false;
       }
 
-      clearStoredAuth();
-      syncSocketAuth(null);
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("footera:auth-changed", {
-            detail: {
-              authenticated: false,
-            },
-          })
-        );
-      }
-
+      clearAuthSession();
       openAuthGate(options);
       return true;
     },

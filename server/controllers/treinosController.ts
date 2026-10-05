@@ -10,6 +10,8 @@ import {
   Nivel,
   Prisma,
   NotificacaoTipo,
+  TipoOrganizacao,
+  TipoUsuario,
 } from "@prisma/client";
 import { z } from "zod";
 import { getIO } from "../socket.js";
@@ -39,6 +41,12 @@ import { recalcularEstatisticaExercicios } from "server/services/estatisticasExe
 import { prisma } from "../prisma.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  canPermission,
+} from "../services/permissions.js";
 
 type Request = ExpressRequest;
 type Response = ExpressResponse;
@@ -339,16 +347,28 @@ export async function agendarTreinoPessoal(
       .json({ message: "Não foi possível identificar o usuário." });
   }
 
-  const atleta = await prisma.atleta.findUnique({
-    where: { usuarioId },
-    select: { id: true },
-  });
+  const escopo =
+    await resolverEscopoTreino(
+      req
+    );
 
-  if (!atleta) {
-    return res.status(400).json({ message: "Usuário não é atleta." });
+  if (
+    !escopo ||
+    escopo.tipo !==
+      "atleta" ||
+    !escopo.atletaId
+  ) {
+    return res.status(403).json({
+      code:
+        "ACTIVE_CONTEXT_MISMATCH",
+
+      message:
+        "Use seu perfil de Atleta para fazer um agendamento pessoal.",
+    });
   }
 
-  const atletaId = atleta.id;
+  const atletaId =
+   escopo.atletaId;
 
   const { titulo, dataTreino, descricao } = req.body as {
     titulo: string;
@@ -398,6 +418,33 @@ export async function agendarTreinoLote(
     });
   }
 
+  const escopo =
+    await resolverEscopoTreino(
+      req
+    );
+
+  if (
+    !escopo ||
+    ![
+      "professor",
+      "clube",
+      "escolinha",
+      "admin",
+    ].includes(
+      String(
+        escopo.tipo
+      )
+    )
+  ) {
+    return res.status(403).json({
+      code:
+        "ACTIVE_CONTEXT_MISMATCH",
+
+      message:
+        "O contexto ativo não pode fazer agendamento em lote.",
+    });
+  }
+
   const { treinoProgramadoId, atletasIds, dataTreino } = req.body as {
     treinoProgramadoId: string;
     atletasIds: string[];
@@ -428,20 +475,6 @@ export async function agendarTreinoLote(
       .status(404)
       .json({ message: "Treino programado não encontrado." });
 
-  const resolved = req.userId ? await resolveEntidade(req.userId) : null;
-  if (!resolved) {
-    return res.status(403).json({ message: "Sem permissão." });
-  }
-  if (
-    resolved.tipo !== "escolinha" &&
-    resolved.tipo !== "clube" &&
-    resolved.tipo !== "professor"
-  ) {
-    return res.status(403).json({
-      message: "Apenas professor/clube/escolinha podem agendar em lote.",
-    });
-  }
-
   const tpFull = await prisma.treinoProgramado.findUnique({
     where: { id: treinoProgramadoId },
     select: {
@@ -454,6 +487,7 @@ export async function agendarTreinoLote(
       professores: { select: { professorId: true } },
     },
   });
+
   if (!tpFull)
     return res
       .status(404)
@@ -461,50 +495,43 @@ export async function agendarTreinoLote(
 
   let permitido = false;
 
-  if (resolved.tipo === "professor") {
+  if (escopo.isAdmin) {
+    permitido = true;
+  }
+
+  if (
+    escopo.tipo ===
+      "professor" &&
+    escopo.professorId
+  ) {
     permitido =
-      tpFull.professorId === resolved.id ||
-      tpFull.professores.some((p) => p.professorId === resolved.id);
-
-    if (!permitido && tpFull.escolinhaId) {
-      const escolinhaDoProfessor = await getEscolinhaIdDoProfessor(resolved.id);
-      if (escolinhaDoProfessor && tpFull.escolinhaId === escolinhaDoProfessor) {
-        permitido = true;
-      }
-    }
-
-    if (!permitido && tpFull.clubeId) {
-      const clubeDoProfessor = await getClubeIdDoProfessor(resolved.id);
-      if (clubeDoProfessor && tpFull.clubeId === clubeDoProfessor) {
-        permitido = true;
-      }
-    }
+      tpFull.professorId ===
+        escopo.professorId ||
+      tpFull.professores.some(
+        (p) =>
+          p.professorId ===
+          escopo.professorId
+      );
   }
 
-  if (resolved.tipo === "clube") {
-    permitido = tpFull.clubeId === resolved.id;
-
-    if (!permitido) {
-      const profIds = await getProfessorIdsDoClube(resolved.id);
-      if (profIds.length) {
-        permitido =
-          (tpFull.professorId ? profIds.includes(tpFull.professorId) : false) ||
-          tpFull.professores.some((p) => profIds.includes(p.professorId));
-      }
-    }
+  if (
+    escopo.tipo ===
+      "clube" &&
+    escopo.clubeId
+  ) {
+    permitido =
+      tpFull.clubeId ===
+      escopo.clubeId;
   }
 
-  if (resolved.tipo === "escolinha") {
-    if (tpFull.escolinhaId === resolved.id) permitido = true;
-
-    if (!permitido) {
-      const profIds = await getProfessorIdsDaEscolinha(resolved.id);
-      if (profIds.length) {
-        permitido =
-          (tpFull.professorId ? profIds.includes(tpFull.professorId) : false) ||
-          tpFull.professores.some((p) => profIds.includes(p.professorId));
-      }
-    }
+  if (
+    escopo.tipo ===
+      "escolinha" &&
+    escopo.escolinhaId
+  ) {
+    permitido =
+      tpFull.escolinhaId ===
+      escopo.escolinhaId;
   }
 
   if (!permitido) {
@@ -514,22 +541,180 @@ export async function agendarTreinoLote(
     });
   }
 
-  if (resolved.tipo === "escolinha") {
-    const allowed = await prisma.atleta.findMany({
-      where: { id: { in: atletasIds }, escolinhaId: resolved.id },
-      select: { id: true },
-    });
-    const okSet = new Set(allowed.map((a) => a.id));
-    const invalidos = atletasIds.filter((id) => !okSet.has(id));
-    if (invalidos.length) {
+  if (
+    !escopo.isAdmin
+  ) {
+    const atletasPermitidos =
+      new Set<string>();
+
+    if (
+      escopo.tipo ===
+        "professor" &&
+      escopo.professorId
+    ) {
+      const relacoes =
+        await prisma
+          .relacaoTreinamento
+          .findMany({
+            where: {
+              professorId:
+                escopo.professorId,
+
+              atletaId: {
+                in:
+                  atletasIds,
+              },
+
+              ativo:
+                true,
+
+              encerradoEm:
+                null,
+            },
+
+            select: {
+              atletaId:
+                true,
+            },
+          });
+
+      for (
+        const relacao of relacoes
+      ) {
+        if (
+          relacao.atletaId
+        ) {
+          atletasPermitidos.add(
+            relacao.atletaId
+          );
+        }
+      }
+    }
+
+    if (
+      escopo.tipo ===
+        "clube" &&
+      escopo.clubeId
+    ) {
+      const atletas =
+        await prisma.atleta.findMany({
+          where: {
+            id: {
+              in:
+                atletasIds,
+            },
+
+            OR: [
+              {
+                clubeId:
+                  escopo.clubeId,
+              },
+
+              {
+                relacoesTreinamento: {
+                  some: {
+                    clubeId:
+                      escopo.clubeId,
+
+                    ativo:
+                      true,
+
+                    encerradoEm:
+                      null,
+                  },
+                },
+              },
+            ],
+          },
+
+          select: {
+            id: true,
+          },
+        });
+
+      for (
+        const atleta of atletas
+      ) {
+        atletasPermitidos.add(
+          atleta.id
+        );
+      }
+    }
+
+    if (
+      escopo.tipo ===
+        "escolinha" &&
+      escopo.escolinhaId
+    ) {
+      const atletas =
+        await prisma.atleta.findMany({
+          where: {
+            id: {
+              in:
+                atletasIds,
+            },
+
+            OR: [
+              {
+                escolinhaId:
+                  escopo.escolinhaId,
+              },
+
+              {
+                relacoesTreinamento: {
+                  some: {
+                    escolinhaId:
+                      escopo.escolinhaId,
+
+                    ativo:
+                      true,
+
+                    encerradoEm:
+                      null,
+                  },
+                },
+              },
+            ],
+          },
+
+          select: {
+            id: true,
+          },
+        });
+
+      for (
+        const atleta of atletas
+      ) {
+        atletasPermitidos.add(
+          atleta.id
+        );
+      }
+    }
+
+    const invalidos =
+      atletasIds.filter(
+        (id) =>
+          !atletasPermitidos.has(
+            id
+          )
+      );
+
+    if (
+      invalidos.length
+    ) {
       return res.status(403).json({
-        message: "Um ou mais atletas não pertencem à sua escolinha.",
+        code:
+          "ATHLETE_OUTSIDE_ACTIVE_CONTEXT",
+
+        message:
+          "Um ou mais atletas não pertencem ao contexto ativo.",
+
         invalidos,
       });
     }
   }
 
-  await prisma.$transaction(
+  const criados = await prisma.$transaction(
     atletasIds.map((atletaId) =>
       prisma.treinoAgendado.create({
         data: {
@@ -556,6 +741,26 @@ export async function agendarTreinoLote(
     },
     update: {},
   });
+  
+  const deUsuarioId = String(req.userId || user.id || "");
+
+  if (deUsuarioId) {
+    const criadosComAtleta = criados.filter(
+      (treino): treino is (typeof criados)[number] & { atletaId: string } =>
+        typeof treino.atletaId === "string" && treino.atletaId.trim().length > 0
+    );
+
+    await Promise.allSettled(
+      criadosComAtleta.map((treino) =>
+        notificarNovoTreino(
+          deUsuarioId,
+          treino.atletaId,
+          treino.id,
+          treino.titulo || tp.nome || "Treino"
+        )
+      )
+    );
+  }
 
   return res.status(201).json({ ok: true });
 }
@@ -682,14 +887,40 @@ export async function listarSessoesTreino(req: Request, res: Response) {
   }
 }
 
-export async function getCalendarioTreinos(req: Request, res: Response) {
+export async function getCalendarioTreinos(
+  req: Request,
+  res: Response
+) {
   try {
-    const usuarioId = (req as AuthenticatedRequest).userId;
-    const { start, end } = req.query;
+    const authReq =
+      req as
+        AuthenticatedRequest;
 
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuário não autenticado" });
+    const escopo =
+      await resolverEscopoTreino(
+        authReq
+      );
+
+    if (
+      !escopo ||
+      escopo.tipo !==
+        "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Use seu perfil de Atleta para consultar o calendário de treinos.",
+      });
     }
+
+    const {
+      start,
+      end
+    } =
+      req.query;
 
     if (!start || !end) {
       return res
@@ -704,20 +935,9 @@ export async function getCalendarioTreinos(req: Request, res: Response) {
       return res.status(400).json({ error: "Datas 'start'/'end' inválidas" });
     }
 
-    const atleta = await prisma.atleta.findUnique({
-      where: { usuarioId },
-      select: { id: true },
-    });
-
-    if (!atleta) {
-      return res
-        .status(404)
-        .json({ error: "Atleta não encontrado para este usuário" });
-    }
-
     const treinos = await prisma.treinoAgendado.findMany({
       where: {
-        atletaId: atleta.id,
+        atletaId: escopo.atletaId,
         dataTreino: { gte: startDate, lt: endDate },
       },
       include: {
@@ -779,18 +999,28 @@ async function notificarNovoTreino(
     },
   });
 
-  const io = getIO();
+  const io =
+    getIO();
+
   if (io) {
-    io.to(atleta.usuarioId).emit("novaMensagem", { ...saved, pending: false });
-    io.to(`u:${atleta.usuarioId}`).emit("novaMensagem", {
+    const payload = {
       ...saved,
       pending: false,
-    });
-    io.to(deUsuarioId).emit("novaMensagem", { ...saved, pending: false });
-    io.to(`u:${deUsuarioId}`).emit("novaMensagem", {
-      ...saved,
-      pending: false,
-    });
+    };
+
+    io.to(
+      `u:${atleta.usuarioId}`
+    ).emit(
+      "novaMensagem",
+      payload
+    );
+
+    io.to(
+      `u:${deUsuarioId}`
+    ).emit(
+      "novaMensagem",
+      payload
+    );
   }
 
   try {
@@ -807,18 +1037,32 @@ async function notificarNovoTreino(
   }
 }
 
-function syncAgendaAtleta(usuarioId: string, atletaId?: string) {
-  const io = getIO();
-  if (!io || !usuarioId) return;
+function syncAgendaAtleta(
+  usuarioId: string,
+  atletaId?: string
+) {
+  const io =
+    getIO();
 
-  io.to(`u:${usuarioId}`).emit("agenda:sync", {
-    usuarioId,
-    atletaId: atletaId ?? null,
-  });
-  io.to(usuarioId).emit("agenda:sync", {
-    usuarioId,
-    atletaId: atletaId ?? null,
-  });
+  if (
+    !io ||
+    !usuarioId
+  ) {
+    return;
+  }
+
+  io.to(
+    `u:${usuarioId}`
+  ).emit(
+    "agenda:sync",
+    {
+      usuarioId,
+
+      atletaId:
+        atletaId ??
+        null,
+    }
+  );
 }
 
 function syncTreinoProgramado(treinoProgramadoId: string) {
@@ -826,6 +1070,266 @@ function syncTreinoProgramado(treinoProgramadoId: string) {
   if (!io || !treinoProgramadoId) return;
 
   io.to("treinos:programados").emit("treinos:sync", { treinoProgramadoId });
+}
+
+type EscopoTreino = {
+  usuarioId:
+    string;
+
+  isAdmin:
+    boolean;
+
+  tipo:
+    | "atleta"
+    | "professor"
+    | "clube"
+    | "escolinha"
+    | "admin"
+    | null;
+
+  id:
+    string | null;
+
+  professorId:
+    string | null;
+
+  clubeId:
+    string | null;
+
+  escolinhaId:
+    string | null;
+
+  atletaId:
+    string | null;
+};
+
+async function resolverEscopoTreino(
+  req: AuthenticatedRequest
+): Promise<EscopoTreino | null> {
+  const usuarioId =
+    String(
+      req.userId ??
+      req.usuarioId ??
+      req.user?.id ??
+      ""
+    ).trim();
+
+  if (!usuarioId) {
+    return null;
+  }
+
+  const isAdmin =
+    await canPermission(
+      usuarioId,
+      "VER_ADMIN"
+    );
+
+  if (isAdmin) {
+    return {
+      usuarioId,
+      isAdmin: true,
+
+      tipo:
+        "admin",
+
+      id:
+        usuarioId,
+
+      professorId:
+        null,
+
+      clubeId:
+        null,
+
+      escolinhaId:
+        null,
+
+      atletaId:
+        null,
+    };
+  }
+
+  const contexto =
+    await getActiveContext(
+      usuarioId
+    );
+
+  if (!contexto) {
+    return null;
+  }
+
+  /*
+   * Contexto de organização.
+   *
+   * Clube FootEra — Proprietário
+   * Clube FootEra — Professor
+   * Escolinha X — Professor
+   */
+  if (
+    contexto.kind ===
+      "ORGANIZATION" &&
+    contexto
+      .legacyOrganizationId
+  ) {
+    const legacyId =
+      String(
+        contexto
+          .legacyOrganizationId
+      );
+
+    if (
+      contexto.organizationType ===
+      TipoOrganizacao.CLUBE
+    ) {
+      return {
+        usuarioId,
+        isAdmin: false,
+
+        tipo:
+          "clube",
+
+        id:
+          legacyId,
+
+        professorId:
+          contexto.tipoUsuario ===
+            TipoUsuario.Professor
+            ? contexto.tipoUsuarioId ??
+              null
+            : null,
+
+        clubeId:
+          legacyId,
+
+        escolinhaId:
+          null,
+
+        atletaId:
+          null,
+      };
+    }
+
+    if (
+      contexto.organizationType ===
+      TipoOrganizacao.ESCOLA
+    ) {
+      return {
+        usuarioId,
+        isAdmin: false,
+
+        tipo:
+          "escolinha",
+
+        id:
+          legacyId,
+
+        professorId:
+          contexto.tipoUsuario ===
+            TipoUsuario.Professor
+            ? contexto.tipoUsuarioId ??
+              null
+            : null,
+
+        clubeId:
+          null,
+
+        escolinhaId:
+          legacyId,
+
+        atletaId:
+          null,
+      };
+    }
+  }
+
+  /*
+   * Contexto pessoal.
+   */
+  if (
+    contexto.kind ===
+    "PERSONAL"
+  ) {
+    if (
+      contexto.tipoUsuario ===
+        TipoUsuario.Atleta &&
+      contexto.tipoUsuarioId
+    ) {
+      return {
+        usuarioId,
+        isAdmin: false,
+
+        tipo:
+          "atleta",
+
+        id:
+          contexto.tipoUsuarioId,
+
+        atletaId:
+          contexto.tipoUsuarioId,
+
+        professorId:
+          null,
+
+        clubeId:
+          null,
+
+        escolinhaId:
+          null,
+      };
+    }
+
+    if (
+      contexto.tipoUsuario ===
+        TipoUsuario.Professor &&
+      contexto.tipoUsuarioId
+    ) {
+      return {
+        usuarioId,
+        isAdmin: false,
+
+        tipo:
+          "professor",
+
+        id:
+          contexto.tipoUsuarioId,
+
+        professorId:
+          contexto.tipoUsuarioId,
+
+        clubeId:
+          null,
+
+        escolinhaId:
+          null,
+
+        atletaId:
+          null,
+      };
+    }
+  }
+
+  return {
+    usuarioId,
+    isAdmin: false,
+
+    tipo:
+      null,
+
+    id:
+      null,
+
+    professorId:
+      null,
+
+    clubeId:
+      null,
+
+    escolinhaId:
+      null,
+
+    atletaId:
+      null,
+  };
 }
 
 async function resolveEntidade(
@@ -952,93 +1456,131 @@ async function getClubeIdDoProfessor(
   return link?.clubeId ?? null;
 }
 
-async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
-  if (!req.userId) return null;
+async function buildTreinosWhereByLogin(
+  req: AuthenticatedRequest
+) {
+  const escopo =
+    await resolverEscopoTreino(
+      req
+    );
 
-  const resolved = await resolveEntidade(req.userId);
-  const or: any[] = [
-    {
-      criadorUsuarioId: {
-        not: null,
-      },
-    },
-  ];
-
-  if (resolved?.tipo === "professor") {
-    const pid = resolved.id;
-
-    or.push({ professorId: pid });
-    or.push({ professores: { some: { professorId: pid } } });
-
-    const cid = await getClubeIdDoProfessor(pid);
-    if (cid) or.push({ clubeId: cid });
-
-    const eid = await getEscolinhaIdDoProfessor(pid);
-    if (eid) or.push({ escolinhaId: eid });
-
-    return { OR: or };
+  if (!escopo) {
+    return null;
   }
 
-  if (resolved?.tipo === "clube") {
-    const cid = resolved.id;
-
-    or.push({ clubeId: cid });
-
-    const profIds = await getProfessorIdsDoClube(cid);
-    if (profIds.length) {
-      or.push({ professorId: { in: profIds } });
-      or.push({ professores: { some: { professorId: { in: profIds } } } });
-    }
-
-    return { OR: or };
+  if (
+    escopo.isAdmin
+  ) {
+    return {};
   }
 
-  if (resolved?.tipo === "escolinha") {
-    const eid = resolved.id;
+  /*
+   * Professor pessoal:
+   * somente treinos próprios ou
+   * onde é colaborador.
+   */
+  if (
+    escopo.tipo ===
+      "professor" &&
+    escopo.professorId
+  ) {
+    return {
+      OR: [
+        {
+          professorId:
+            escopo.professorId,
+        },
 
-    or.push({ escolinhaId: eid });
-
-    const profIds = await getProfessorIdsDaEscolinha(eid);
-    if (profIds.length) {
-      or.push({ professorId: { in: profIds } });
-      or.push({ professores: { some: { professorId: { in: profIds } } } });
-    }
-
-    return { OR: or };
+        {
+          professores: {
+            some: {
+              professorId:
+                escopo.professorId,
+            },
+          },
+        },
+      ],
+    };
   }
 
-  const u = await prisma.usuario.findUnique({
-    where: { id: req.userId },
-    select: { tipo: true },
-  });
+  /*
+   * Clube ativo.
+   *
+   * Não mistura automaticamente
+   * outros Clubes em que o Professor
+   * dessa conta trabalha.
+   */
+  if (
+    escopo.tipo ===
+      "clube" &&
+    escopo.clubeId
+  ) {
+    return {
+      clubeId:
+        escopo.clubeId,
+    };
+  }
 
-  if (!u) return null;
+  if (
+    escopo.tipo ===
+      "escolinha" &&
+    escopo.escolinhaId
+  ) {
+    return {
+      escolinhaId:
+        escopo.escolinhaId,
+    };
+  }
 
-  const tipoStr = String(u.tipo ?? "").toLowerCase();
+  /*
+   * Atleta:
+   * continua podendo visualizar
+   * treinos disponíveis por seus
+   * vínculos atuais.
+   */
+  if (
+    escopo.tipo ===
+      "atleta"
+  ) {
+    const ctx =
+      await idsInstituicoesAtuais(
+        prisma,
+        escopo.usuarioId
+      );
 
-  if (tipoStr === "atleta") {
-    const ctx = await idsInstituicoesAtuais(prisma, req.userId);
+    const or:
+      Prisma.TreinoProgramadoWhereInput[] =
+      [];
 
-    if (ctx.clubes.length) {
+    if (
+      ctx.clubes.length
+    ) {
       or.push({
         clubeId: {
-          in: ctx.clubes,
+          in:
+            ctx.clubes,
         },
       });
     }
 
-    if (ctx.escolinhas.length) {
+    if (
+      ctx.escolinhas.length
+    ) {
       or.push({
         escolinhaId: {
-          in: ctx.escolinhas,
+          in:
+            ctx.escolinhas,
         },
       });
     }
 
-    if (ctx.professores.length) {
+    if (
+      ctx.professores.length
+    ) {
       or.push({
         professorId: {
-          in: ctx.professores,
+          in:
+            ctx.professores,
         },
       });
 
@@ -1046,40 +1588,31 @@ async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
         professores: {
           some: {
             professorId: {
-              in: ctx.professores,
+              in:
+                ctx.professores,
             },
           },
         },
       });
     }
 
-    return {
-      OR: or,
-    };
+    return or.length
+      ? {
+          OR:
+            or,
+        }
+      : {
+          id: {
+            in: [],
+          },
+        };
   }
 
-  if (tipoStr === "admin") {
-    return {};
-  }
-
-  return null;
-}
-
-function pushCriadoresUniq(
-  arr: Array<{
-    tipo: "Professor" | "Clube" | "Escolinha";
-    id: string;
-    nome: string;
-  }>,
-  item:
-    | { tipo: "Professor" | "Clube" | "Escolinha"; id: string; nome: string }
-    | null
-    | undefined,
-) {
-  if (!item?.id) return;
-  const key = `${item.tipo}:${item.id}`;
-  if (arr.some((x) => `${x.tipo}:${x.id}` === key)) return;
-  arr.push(item);
+  return {
+    id: {
+      in: [],
+    },
+  };
 }
 
 export async function treinosDisponiveis(
@@ -1377,21 +1910,34 @@ export async function salvarTreinoNaBiblioteca(
   res: Response,
 ) {
   try {
-    const user = req.user as any;
-    const usuarioId = req.userId!;
+    const user =
+      req.user as any;
 
-    const tipoStr = String(user?.tipo ?? user?.tipoUsuario ?? "").toLowerCase();
+    const usuarioId =
+      req.userId!;
 
-    let atletaId: string | undefined =
-      tipoStr === "atleta" ? user.tipoUsuarioId : undefined;
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
 
-    if (!atletaId) {
-      const atleta = await prisma.atleta.findFirst({
-        where: { usuarioId },
-        select: { id: true },
+    if (
+      !escopo ||
+      escopo.tipo !==
+        "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "Use seu perfil de Atleta para salvar este treino na biblioteca.",
       });
-      atletaId = atleta?.id;
     }
+
+    const atletaId =
+      escopo.atletaId;
 
     if (!atletaId) {
       return res
@@ -1862,6 +2408,18 @@ export async function obterTreinoProgramadoPorId(
 
 export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
   try {
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (!escopo) {
+      return res.status(401).json({
+        message:
+          "Usuário não autenticado.",
+      });
+    }
+
     const {
       titulo,
       dataTreino,
@@ -1953,31 +2511,66 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         return res.status(401).json({ message: "Usuário não autenticado" });
       }
 
-      const resolved = await resolveEntidade(req.userId);
-      if (!resolved) {
-        return res
-          .status(403)
-          .json({ message: "Sem permissão para agendar para esta turma." });
-      }
+      const turmaOwnerOr:
+        Prisma.TurmaWhereInput[] =
+        [];
 
-      const tipoUser =
-        resolved.tipo ??
-        String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
-
-      const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
-
-      if (resolved.tipo === "professor") {
+      if (
+        escopo.tipo ===
+          "professor" &&
+        escopo.professorId
+      ) {
         turmaOwnerOr.push({
-          professores: { some: { professorId: resolved.id } },
+          professores: {
+            some: {
+              professorId:
+                escopo.professorId,
+            },
+          },
         });
       }
 
-      if (resolved.tipo === "clube") {
-        turmaOwnerOr.push({ clubeId: resolved.id });
+      if (
+        escopo.tipo ===
+          "clube" &&
+        escopo.clubeId
+      ) {
+        turmaOwnerOr.push({
+          clubeId:
+            escopo.clubeId,
+        });
       }
 
-      if (resolved.tipo === "escolinha") {
-        turmaOwnerOr.push({ escolinhaId: resolved.id });
+      if (
+        escopo.tipo ===
+          "escolinha" &&
+        escopo.escolinhaId
+      ) {
+        turmaOwnerOr.push({
+          escolinhaId:
+            escopo.escolinhaId,
+        });
+      }
+
+      if (
+        escopo.isAdmin
+      ) {
+        turmaOwnerOr.push({
+          id:
+            turmaId,
+        });
+      }
+
+      if (
+        !turmaOwnerOr.length
+      ) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          message:
+            "O contexto ativo não pode agendar treino para esta turma.",
+        });
       }
 
       const turmaOk = await prisma.turma.findFirst({
@@ -2060,7 +2653,8 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
               dataOriginal: quandoBase,
               status: TreinoAgendadoStatus.AGENDADO,
               criadoPorProfessorId:
-                tipoUser === "professor" ? resolved.id : null,
+                escopo.professorId ??
+                null,
             },
           }),
         ),
@@ -2089,188 +2683,455 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const resolvedMe = req.userId ? await resolveEntidade(req.userId) : null;
+    const resolvedMe =
+      escopo;
     const tipoUser =
-      resolvedMe?.tipo ??
-      String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
-
-    // Uma mesma conta pode ter os papéis Professor e Atleta. Nesse caso, o
-    // professor pode agendar para o próprio perfil de atleta um treino que
-    // pertence ao papel atualmente ativo, sem precisar criar vínculo consigo.
+      escopo.tipo;
     const ehProprioAtleta = Boolean(
       req.userId && atleta.usuarioId && atleta.usuarioId === req.userId,
     );
 
-    const treinoPertenceAoPapelAtivo = Boolean(
-      resolvedMe &&
-        ((resolvedMe.tipo === "professor" &&
-          (tp.professorId === resolvedMe.id ||
-            tp.criadorProfessorId === resolvedMe.id ||
+    const treinoPertenceAoPapelAtivo =
+      Boolean(
+        (
+          resolvedMe.tipo ===
+            "professor" &&
+          resolvedMe.professorId &&
+          (
+            tp.professorId ===
+              resolvedMe.professorId ||
+            tp.criadorProfessorId ===
+              resolvedMe.professorId ||
             tp.professores.some(
-              ({ professorId }) => professorId === resolvedMe.id,
-            ))) ||
-          (resolvedMe.tipo === "clube" && tp.clubeId === resolvedMe.id) ||
-          (resolvedMe.tipo === "escolinha" &&
-            tp.escolinhaId === resolvedMe.id)),
-    );
+              ({
+                professorId,
+              }) =>
+                professorId ===
+                resolvedMe.professorId
+            )
+          )
+        ) ||
+        (
+          resolvedMe.tipo ===
+            "clube" &&
+          tp.clubeId ===
+            resolvedMe.clubeId
+        ) ||
+        (
+          resolvedMe.tipo ===
+            "escolinha" &&
+          tp.escolinhaId ===
+            resolvedMe.escolinhaId
+        )
+      );
 
     const podeAgendarParaSiMesmo =
       ehProprioAtleta && treinoPertenceAoPapelAtivo;
 
     if (
-      ["professor", "clube", "escolinha"].includes(tipoUser) &&
+      [
+        "professor",
+        "clube",
+        "escolinha",
+      ].includes(
+        String(tipoUser)
+      ) &&
       !podeAgendarParaSiMesmo
     ) {
-      const resolved = req.userId ? await resolveEntidade(req.userId) : null;
+      let temVinc =
+        false;
 
-      if (resolved) {
-        let temVinc = false;
+      /*
+      * Professor pessoal.
+      */
+      if (
+        escopo.tipo ===
+          "professor" &&
+        escopo.professorId
+      ) {
+        temVinc =
+          Boolean(
+            await prisma
+              .relacaoTreinamento
+              .findFirst({
+                where: {
+                  atletaId,
 
-        if (resolved.tipo === "professor") {
-          temVinc = !!(await prisma.relacaoTreinamento.findFirst({
-            where: {
-              atletaId,
-              professorId: resolved.id,
-              NOT: { ativo: false },
-            },
-            select: { id: true },
-          }));
-        }
+                  professorId:
+                    escopo.professorId,
 
-        if (resolved.tipo === "clube") {
-          temVinc = !!(await prisma.atleta.findFirst({
-            where: {
-              id: atletaId,
-              OR: [
-                { clubeId: resolved.id },
-                {
-                  relacoesTreinamento: {
-                    some: {
-                      clubeId: resolved.id,
-                      NOT: { ativo: false },
+                  ativo:
+                    true,
+
+                  encerradoEm:
+                    null,
+                },
+
+                select: {
+                  id: true,
+                },
+              })
+          );
+      }
+
+      /*
+      * Clube ativo.
+      */
+      if (
+        escopo.tipo ===
+          "clube" &&
+        escopo.clubeId
+      ) {
+        temVinc =
+          Boolean(
+            await prisma.atleta.findFirst({
+              where: {
+                id:
+                  atletaId,
+
+                OR: [
+                  {
+                    clubeId:
+                      escopo.clubeId,
+                  },
+
+                  {
+                    relacoesTreinamento: {
+                      some: {
+                        clubeId:
+                          escopo.clubeId,
+
+                        ativo:
+                          true,
+
+                        encerradoEm:
+                          null,
+                      },
                     },
                   },
-                },
-              ],
-            },
-            select: { id: true },
-          }));
-        }
+                ],
+              },
 
-        if (resolved.tipo === "escolinha") {
-          temVinc = !!(await prisma.atleta.findFirst({
-            where: {
-              id: atletaId,
-              OR: [
-                { escolinhaId: resolved.id },
-                {
-                  relacoesTreinamento: {
-                    some: {
-                      escolinhaId: resolved.id,
-                      NOT: { ativo: false },
+              select: {
+                id: true,
+              },
+            })
+          );
+      }
+
+      /*
+      * Escolinha ativa.
+      */
+      if (
+        escopo.tipo ===
+          "escolinha" &&
+        escopo.escolinhaId
+      ) {
+        temVinc =
+          Boolean(
+            await prisma.atleta.findFirst({
+              where: {
+                id:
+                  atletaId,
+
+                OR: [
+                  {
+                    escolinhaId:
+                      escopo.escolinhaId,
+                  },
+
+                  {
+                    relacoesTreinamento: {
+                      some: {
+                        escolinhaId:
+                          escopo.escolinhaId,
+
+                        ativo:
+                          true,
+
+                        encerradoEm:
+                          null,
+                      },
                     },
                   },
-                },
-              ],
-            },
-            select: { id: true },
-          }));
-        }
+                ],
+              },
 
-        const ehObservado = await prisma.atletaObservado.findFirst({
+              select: {
+                id: true,
+              },
+            })
+          );
+      }
+
+      /*
+      * Observação também precisa
+      * pertencer ao contexto atual.
+      */
+      let ehObservado =
+        false;
+
+      if (
+        escopo.professorId
+      ) {
+        ehObservado =
+          Boolean(
+            await prisma
+              .atletaObservado
+              .findFirst({
+                where: {
+                  atletaId,
+
+                  professorId:
+                    escopo.professorId,
+                },
+
+                select: {
+                  id: true,
+                },
+              })
+          );
+      }
+
+      if (
+        escopo.clubeId
+      ) {
+        ehObservado =
+          Boolean(
+            await prisma
+              .atletaObservado
+              .findFirst({
+                where: {
+                  atletaId,
+
+                  clubeId:
+                    escopo.clubeId,
+                },
+
+                select: {
+                  id: true,
+                },
+              })
+          );
+      }
+
+      if (
+        escopo.escolinhaId
+      ) {
+        ehObservado =
+          Boolean(
+            await prisma
+              .atletaObservado
+              .findFirst({
+                where: {
+                  atletaId,
+
+                  escolinhaId:
+                    escopo.escolinhaId,
+                },
+
+                select: {
+                  id: true,
+                },
+              })
+          );
+      }
+
+      const atletaAtual =
+        await prisma.atleta.findUnique({
           where: {
-            atletaId,
-            ...(resolved.tipo === "professor"
-              ? { professorId: resolved.id }
-              : resolved.tipo === "clube"
-                ? { clubeId: resolved.id }
-                : { escolinhaId: resolved.id }),
+            id:
+              atletaId,
           },
-          select: { id: true },
+
+          select: {
+            clubeId:
+              true,
+
+            escolinhaId:
+              true,
+          },
         });
 
-        const vinculoDireto =
-          (resolved.tipo === "clube" &&
-            (
-              await prisma.atleta.findUnique({
-                where: { id: atletaId },
-                select: { clubeId: true },
-              })
-            )?.clubeId === resolved.id) ||
-          (resolved.tipo === "escolinha" &&
-            (
-              await prisma.atleta.findUnique({
-                where: { id: atletaId },
-                select: { escolinhaId: true },
-              })
-            )?.escolinhaId === resolved.id);
+      const vinculoDireto =
+        Boolean(
+          escopo.clubeId &&
+          atletaAtual?.clubeId ===
+            escopo.clubeId
+        ) ||
+        Boolean(
+          escopo.escolinhaId &&
+          atletaAtual?.escolinhaId ===
+            escopo.escolinhaId
+        );
 
-        if (!temVinc && !ehObservado && !vinculoDireto) {
-          if (turmaId) {
-            const membro = await prisma.turmaUsuario.findFirst({
-              where: { turmaId, usuarioId: atleta.usuarioId ?? "__none__" },
-              select: { id: true },
-            });
+      if (
+        !temVinc &&
+        !ehObservado &&
+        !vinculoDireto
+      ) {
+        /*
+        * Se veio uma turma específica,
+        * atleta precisa ser membro dela
+        * E a turma precisa pertencer
+        * ao contexto ativo.
+        */
+        if (turmaId) {
+          const membro =
+            await prisma
+              .turmaUsuario
+              .findFirst({
+                where: {
+                  turmaId,
 
-            const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
-            if (resolved.tipo === "professor") {
-              turmaOwnerOr.push({
-                professores: { some: { professorId: resolved.id } },
+                  usuarioId:
+                    atleta.usuarioId ??
+                    "__none__",
+                },
+
+                select: {
+                  id: true,
+                },
               });
-            }
-            if (resolved.tipo === "clube")
-              turmaOwnerOr.push({ clubeId: resolved.id });
-            if (resolved.tipo === "escolinha")
-              turmaOwnerOr.push({ escolinhaId: resolved.id });
 
-            const turmaOk = await prisma.turma.findFirst({
-              where: {
-                id: turmaId,
-                ...(turmaOwnerOr.length ? { OR: turmaOwnerOr } : {}),
+          const turmaOwnerOr:
+            Prisma.TurmaWhereInput[] =
+            [];
+
+          if (
+            escopo.professorId
+          ) {
+            turmaOwnerOr.push({
+              professores: {
+                some: {
+                  professorId:
+                    escopo.professorId,
+                },
               },
-              select: { id: true },
-            });
-
-            if (!membro || !turmaOk) {
-              return res.status(403).json({
-                message:
-                  "Você não tem permissão para agendar para esta turma/atleta.",
-              });
-            }
-          } else if (elencoId) {
-            const membro = await prisma.atletaElenco.findFirst({
-              where: { elencoId, atletaId },
-              select: { id: true },
-            });
-
-            const elencoOwnerOr: Prisma.ElencoWhereInput[] = [];
-            if (resolved.tipo === "professor")
-              elencoOwnerOr.push({ professorId: resolved.id });
-            if (resolved.tipo === "clube")
-              elencoOwnerOr.push({ clubeId: resolved.id });
-            if (resolved.tipo === "escolinha")
-              elencoOwnerOr.push({ escolinhaId: resolved.id });
-
-            const elencoOk = await prisma.elenco.findFirst({
-              where: {
-                id: elencoId,
-                ...(elencoOwnerOr.length ? { OR: elencoOwnerOr } : {}),
-              },
-              select: { id: true },
-            });
-
-            if (!membro || !elencoOk) {
-              return res.status(403).json({
-                message:
-                  "Você não tem permissão para agendar para este elenco/atleta.",
-              });
-            }
-          } else {
-            return res.status(403).json({
-              message:
-                "Você não possui vínculo nem observação com este atleta.",
             });
           }
+
+          if (
+            escopo.clubeId
+          ) {
+            turmaOwnerOr.push({
+              clubeId:
+                escopo.clubeId,
+            });
+          }
+
+          if (
+            escopo.escolinhaId
+          ) {
+            turmaOwnerOr.push({
+              escolinhaId:
+                escopo.escolinhaId,
+            });
+          }
+
+          const turmaOk =
+            turmaOwnerOr.length
+              ? await prisma.turma.findFirst({
+                  where: {
+                    id:
+                      turmaId,
+
+                    OR:
+                      turmaOwnerOr,
+                  },
+
+                  select: {
+                    id: true,
+                  },
+                })
+              : null;
+
+          if (
+            !membro ||
+            !turmaOk
+          ) {
+            return res.status(403).json({
+              message:
+                "Você não tem permissão para agendar para esta turma/atleta.",
+            });
+          }
+        } else if (elencoId) {
+          const membro =
+            await prisma
+              .atletaElenco
+              .findFirst({
+                where: {
+                  elencoId,
+                  atletaId,
+                },
+
+                select: {
+                  id: true,
+                },
+              });
+
+          const elencoOwnerOr:
+            Prisma.ElencoWhereInput[] =
+            [];
+
+          if (
+            escopo.professorId
+          ) {
+            elencoOwnerOr.push({
+              professorId:
+                escopo.professorId,
+            });
+          }
+
+          if (
+            escopo.clubeId
+          ) {
+            elencoOwnerOr.push({
+              clubeId:
+                escopo.clubeId,
+            });
+          }
+
+          if (
+            escopo.escolinhaId
+          ) {
+            elencoOwnerOr.push({
+              escolinhaId:
+                escopo.escolinhaId,
+            });
+          }
+
+          const elencoOk =
+            elencoOwnerOr.length
+              ? await prisma.elenco.findFirst({
+                  where: {
+                    id:
+                      elencoId,
+
+                    OR:
+                      elencoOwnerOr,
+                  },
+
+                  select: {
+                    id: true,
+                  },
+                })
+              : null;
+
+          if (
+            !membro ||
+            !elencoOk
+          ) {
+            return res.status(403).json({
+              message:
+                "Você não tem permissão para agendar para este elenco/atleta.",
+            });
+          }
+        } else {
+          return res.status(403).json({
+            message:
+              "Você não possui vínculo nem observação com este atleta no contexto ativo.",
+          });
         }
       }
     }
@@ -2306,7 +3167,8 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         dataOriginal: quandoBase,
         status: TreinoAgendadoStatus.AGENDADO,
         criadoPorProfessorId:
-          tipoUser === "professor" ? (resolvedMe?.id ?? null) : null,
+          escopo.professorId ??
+          null,
       },
     });
 
@@ -2349,6 +3211,26 @@ export const excluirTreinoAgendado = async (
   try {
     const { id } = req.params;
 
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (
+      !escopo ||
+      escopo.tipo !==
+        "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Use seu perfil de Atleta para excluir este treino.",
+      });
+    }
+
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
       include: { atleta: { select: { usuarioId: true } } },
@@ -2356,7 +3238,12 @@ export const excluirTreinoAgendado = async (
 
     if (!ag) return res.status(200).json({ message: "Já não existe." });
 
-    if (ag.atleta?.usuarioId !== req.userId) {
+    if (
+      ag.atletaId !==
+        escopo.atletaId ||
+      ag.atleta?.usuarioId !==
+        req.userId
+    ) { 
       return res
         .status(403)
         .json({ error: "Sem permissão para excluir este treino." });
@@ -2574,11 +3461,6 @@ export async function getTreinosAgendados(
 
     const turmaId =
       typeof req.query.turmaId === "string" ? req.query.turmaId.trim() : "";
-    const ownerTipoRaw =
-      typeof req.query.ownerTipo === "string" ? req.query.ownerTipo.trim() : "";
-    const ownerId =
-      typeof req.query.ownerId === "string" ? req.query.ownerId.trim() : "";
-    const ownerTipo = ownerTipoRaw.toLowerCase();
     const monthRaw =
       typeof req.query.month === "string" ? req.query.month.trim() : "";
 
@@ -2602,32 +3484,79 @@ export async function getTreinosAgendados(
     const agora = new Date();
 
     if (turmaId) {
-      const resolved = await resolveEntidade(req.userId);
-      if (!resolved) {
-        return res.status(403).json({ error: "Sem permissão" });
-      }
+      const escopo =
+        await resolverEscopoTreino(
+          req
+        );
 
-      const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
-
-      if (resolved.tipo === "professor") {
-        turmaOwnerOr.push({
-          professores: { some: { professorId: resolved.id } },
+      if (!escopo) {
+        return res.status(403).json({
+          error:
+            "Sem permissão",
         });
       }
-      if (resolved.tipo === "clube") {
-        turmaOwnerOr.push({ clubeId: resolved.id });
-      }
-      if (resolved.tipo === "escolinha") {
-        turmaOwnerOr.push({ escolinhaId: resolved.id });
+
+      const turmaOwnerOr:
+        Prisma.TurmaWhereInput[] =
+        [];
+
+      if (
+        escopo.tipo ===
+          "professor" &&
+        escopo.professorId
+      ) {
+        turmaOwnerOr.push({
+          professores: {
+            some: {
+              professorId:
+                escopo.professorId,
+            },
+          },
+        });
       }
 
-      if (resolved.tipo === "professor" && ownerId && ownerTipo) {
-        if (ownerTipo === "clube") {
-          turmaOwnerOr.push({ clubeId: ownerId });
-        }
-        if (ownerTipo === "escolinha") {
-          turmaOwnerOr.push({ escolinhaId: ownerId });
-        }
+      if (
+        escopo.tipo ===
+          "clube" &&
+        escopo.clubeId
+      ) {
+        turmaOwnerOr.push({
+          clubeId:
+            escopo.clubeId,
+        });
+      }
+
+      if (
+        escopo.tipo ===
+          "escolinha" &&
+        escopo.escolinhaId
+      ) {
+        turmaOwnerOr.push({
+          escolinhaId:
+            escopo.escolinhaId,
+        });
+      }
+
+      if (
+        escopo.isAdmin
+      ) {
+        turmaOwnerOr.push({
+          id:
+            turmaId,
+        });
+      }
+
+      if (
+        !escopo.isAdmin &&
+        !turmaOwnerOr.length
+      ) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          error:
+            "O contexto ativo não possui acesso a esta turma.",
+        });
       }
 
       const turmaOk = await prisma.turma.findFirst({
@@ -3046,6 +3975,26 @@ export async function getTreinosAgendados(
 export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
   try {
     const usuarioId = req.userId!;
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (
+      !escopo ||
+      escopo.tipo !==
+        "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Use seu perfil de Atleta para concluir este treino.",
+      });
+    }
+
     const treinoAgendadoId = String(
       (req.body?.treinoAgendadoId ?? req.params?.id) || "",
     );
@@ -3070,6 +4019,19 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       return res
         .status(400)
         .json({ error: "treinoAgendadoId e atletaId são obrigatórios" });
+    }
+
+    if (
+      atletaId !==
+      escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "Este treino não pertence ao Atleta ativo.",
+      });
     }
 
     const agendado = await prisma.treinoAgendado.findUnique({
@@ -3308,9 +4270,12 @@ export async function getExercicios(req: AuthenticatedRequest, res: Response) {
         nome: true,
         objetivo: true,
         nivel: true,
-        faixaEtaria: true,
-        videoDemonstrativoUrl: true,
-        criadoPorId: true,
+        faixaEtaria:
+          true,
+        videoDemonstrativoUrl:
+          true,
+        criadoPorId:
+          true,
         series: true,
         repeticoes: true,
         duracao: true,
@@ -3318,12 +4283,18 @@ export async function getExercicios(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    const out = deduplicarExerciciosPorNome(
-      exercicios.map((e) => ({
-        ...e,
-        origem: "catalogo" as const,
-      })),
-    );
+    const out =
+      deduplicarExerciciosPorNome(
+        exercicios.map((e) => ({
+          ...e,
+
+          videoPosterUrl:
+            null,
+
+          origem:
+            "catalogo" as const,
+        })),
+      );
 
     return res.json(out);
   } catch (err) {
@@ -3505,51 +4476,177 @@ export async function listarSubmissoesParaValidacao(
   res: Response,
 ) {
   try {
-    const tipoUsuarioId = String(
-      (req.query.tipoUsuarioId ?? "") as string,
-    ).trim();
-    const status = String(
-      (req.query.status ?? "pendente") as string,
-    ).toLowerCase();
+    const status =
+      String(
+        (
+          req.query.status ??
+          "pendente"
+        ) as string
+      )
+        .trim()
+        .toLowerCase();
 
-    const resolved = await resolveEntidade(tipoUsuarioId || req.userId!);
-    if (!resolved)
-      return res.json({ items: [], total: 0, limit: 0, offset: 0 });
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
 
-    const atletaIds = new Set<string>();
-    const whereRel =
-      resolved.tipo === "professor"
-        ? { professorId: resolved.id }
-        : resolved.tipo === "clube"
-          ? { clubeId: resolved.id }
-          : { escolinhaId: resolved.id };
+    if (
+      !escopo ||
+      ![
+        "professor",
+        "clube",
+        "escolinha",
+        "admin",
+      ].includes(
+        String(
+          escopo.tipo
+        )
+      )
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
 
-    const rels = await prisma.relacaoTreinamento.findMany({
-      where: { ...whereRel, atletaId: { not: null } },
-      select: { atletaId: true },
-    });
-    rels.forEach((r) => r.atletaId && atletaIds.add(r.atletaId));
-
-    if (resolved.tipo === "clube") {
-      const diretos = await prisma.atleta.findMany({
-        where: { clubeId: resolved.id },
-        select: { id: true },
+        message:
+          "O contexto ativo não pode validar submissões de treino.",
       });
-      diretos.forEach((a) => atletaIds.add(a.id));
-    }
-    if (resolved.tipo === "escolinha") {
-      const diretos = await prisma.atleta.findMany({
-        where: { escolinhaId: resolved.id },
-        select: { id: true },
-      });
-      diretos.forEach((a) => atletaIds.add(a.id));
     }
 
-    if (atletaIds.size === 0) {
-      return res.json({ items: [], total: 0, limit: 0, offset: 0 });
+    const atletaIds =
+      new Set<string>();
+    const whereRel:
+      Prisma.RelacaoTreinamentoWhereInput =
+      escopo.tipo ===
+        "professor" &&
+      escopo.professorId
+        ? {
+            professorId:
+              escopo.professorId,
+          }
+        : escopo.tipo ===
+            "clube" &&
+          escopo.clubeId
+          ? {
+              clubeId:
+                escopo.clubeId,
+            }
+          : escopo.tipo ===
+              "escolinha" &&
+            escopo.escolinhaId
+            ? {
+                escolinhaId:
+                  escopo.escolinhaId,
+              }
+            : {};
+
+    if (!escopo.isAdmin) {
+      const rels =
+        await prisma
+          .relacaoTreinamento
+          .findMany({
+            where: {
+              ...whereRel,
+
+              atletaId: {
+                not:
+                  null,
+              },
+            },
+
+            select: {
+              atletaId:
+                true,
+            },
+          });
+
+      rels.forEach(
+        (r) =>
+          r.atletaId &&
+          atletaIds.add(
+            r.atletaId
+          )
+      );
+
+      if (
+        escopo.tipo ===
+          "clube" &&
+        escopo.clubeId
+      ) {
+        const diretos =
+          await prisma
+            .atleta
+            .findMany({
+              where: {
+                clubeId:
+                  escopo.clubeId,
+              },
+
+              select: {
+                id:
+                  true,
+              },
+            });
+
+        diretos.forEach(
+          (a) =>
+            atletaIds.add(
+              a.id
+            )
+        );
+      }
+
+      if (
+        escopo.tipo ===
+          "escolinha" &&
+        escopo.escolinhaId
+      ) {
+        const diretos =
+          await prisma
+            .atleta
+            .findMany({
+              where: {
+                escolinhaId:
+                  escopo.escolinhaId,
+              },
+
+              select: {
+                id:
+                  true,
+              },
+            });
+
+        diretos.forEach(
+          (a) =>
+            atletaIds.add(
+              a.id
+            )
+        );
+      }
+
+      if (
+        atletaIds.size === 0
+      ) {
+        return res.json({
+          items: [],
+          total: 0,
+          limit: 0,
+          offset: 0,
+        });
+      }
     }
 
-    const where: any = { atletaId: { in: Array.from(atletaIds) } };
+    const where: any =
+      escopo.isAdmin
+        ? {}
+        : {
+            atletaId: {
+              in:
+                Array.from(
+                  atletaIds
+                ),
+            },
+          };
     switch (status) {
       case "pendente":
         where.OR = [
@@ -3784,6 +4881,71 @@ export async function atualizarAgendamento(
   if (dt && Number.isNaN(dt.getTime())) {
     return res.status(400).json({ message: "dataTreino inválida" });
   }
+
+  const escopo =
+    await resolverEscopoTreino(
+      req
+    );
+
+  if (
+    !escopo ||
+    escopo.tipo !==
+      "atleta" ||
+    !escopo.atletaId
+  ) {
+    return res.status(403).json({
+      code:
+        "ACTIVE_CONTEXT_MISMATCH",
+
+      message:
+        "Use seu perfil de Atleta para remarcar este treino.",
+    });
+  }
+
+  const existente =
+    await prisma
+      .treinoAgendado
+      .findUnique({
+        where: {
+          id,
+        },
+
+        select: {
+          id: true,
+          atletaId: true,
+
+          atleta: {
+            select: {
+              usuarioId:
+                true,
+            },
+          },
+        },
+      });
+
+  if (!existente) {
+    return res.status(404).json({
+      message:
+        "Treino agendado não encontrado.",
+    });
+  }
+
+  if (
+    existente.atletaId !==
+      escopo.atletaId ||
+    existente.atleta
+      ?.usuarioId !==
+      req.userId
+  ) {
+    return res.status(403).json({
+      code:
+        "ACTIVE_CONTEXT_MISMATCH",
+
+      message:
+        "Este treino não pertence ao Atleta ativo.",
+    });
+  }
+
   const row = await prisma.treinoAgendado.update({
     where: { id },
     data: { dataTreino: dt },
@@ -3922,11 +5084,37 @@ export const atletasVinculados = async (
   res: Response,
 ) => {
   try {
-    let tipoUsuarioId =
-      (typeof req.query.tipoUsuarioId === "string" &&
-        req.query.tipoUsuarioId.trim()) ||
-      (typeof req.query.professorId === "string" &&
-        req.query.professorId.trim()) ||
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (
+      !escopo ||
+      ![
+        "professor",
+        "clube",
+        "escolinha",
+        "admin",
+      ].includes(
+        String(
+          escopo.tipo
+        )
+      )
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        error:
+          "O contexto ativo não pode listar atletas vinculados.",
+      });
+    }
+
+    const tipoUsuarioId =
+      escopo.professorId ??
+      escopo.clubeId ??
+      escopo.escolinhaId ??
       "";
 
     const turmaId =
@@ -3940,98 +5128,94 @@ export const atletasVinculados = async (
       return res.json([]);
     }
 
-    const [prof, clube, escola] = await Promise.all([
-      prisma.professor.findFirst({
-        where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
-        select: { id: true },
-      }),
-      prisma.clube.findFirst({
-        where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
-        select: { id: true },
-      }),
-      prisma.escolinha.findFirst({
-        where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
-        select: { id: true },
-      }),
-    ]);
+    const whereBase:
+      Prisma.AtletaWhereInput =
+      {
+        OR: [],
+      };
 
-    const professorIdResolved = prof?.id ?? null;
-    const clubeIdResolved = clube?.id ?? null;
-    const escolinhaIdResolved = escola?.id ?? null;
-    const anyId = tipoUsuarioId;
-    const whereBase: Prisma.AtletaWhereInput = {
-      OR: [
-        ...(professorIdResolved
-          ? [
-              {
-                relacoesTreinamento: {
-                  some: {
-                    professorId: professorIdResolved,
-                    NOT: { ativo: false },
-                  },
-                },
-              },
-            ]
-          : [
-              {
-                relacoesTreinamento: {
-                  some: {
-                    professorId: anyId,
-                    NOT: { ativo: false },
-                  },
-                },
-              },
-            ]),
+    if (
+      escopo.tipo ===
+        "professor" &&
+      escopo.professorId
+    ) {
+      (
+        whereBase.OR as
+        Prisma.AtletaWhereInput[]
+      ).push({
+        relacoesTreinamento: {
+          some: {
+            professorId:
+              escopo.professorId,
 
-        ...(clubeIdResolved
-          ? [
-              {
-                relacoesTreinamento: {
-                  some: {
-                    clubeId: clubeIdResolved,
-                    NOT: { ativo: false },
-                  },
-                },
-              },
-              { clubeId: clubeIdResolved },
-            ]
-          : [
-              {
-                relacoesTreinamento: {
-                  some: {
-                    clubeId: anyId,
-                    NOT: { ativo: false },
-                  },
-                },
-              },
-              { clubeId: anyId },
-            ]),
+            NOT: {
+              ativo:
+                false,
+            },
+          },
+        },
+      });
+    }
 
-        ...(escolinhaIdResolved
-          ? [
-              {
-                relacoesTreinamento: {
-                  some: {
-                    escolinhaId: escolinhaIdResolved,
-                    NOT: { ativo: false },
-                  },
-                },
+    if (
+      escopo.tipo ===
+        "clube" &&
+      escopo.clubeId
+    ) {
+      (
+        whereBase.OR as
+        Prisma.AtletaWhereInput[]
+      ).push(
+        {
+          relacoesTreinamento: {
+            some: {
+              clubeId:
+                escopo.clubeId,
+
+              NOT: {
+                ativo:
+                  false,
               },
-              { escolinhaId: escolinhaIdResolved },
-            ]
-          : [
-              {
-                relacoesTreinamento: {
-                  some: {
-                    escolinhaId: anyId,
-                    NOT: { ativo: false },
-                  },
-                },
+            },
+          },
+        },
+
+        {
+          clubeId:
+            escopo.clubeId,
+        }
+      );
+    }
+
+    if (
+      escopo.tipo ===
+        "escolinha" &&
+      escopo.escolinhaId
+    ) {
+      (
+        whereBase.OR as
+        Prisma.AtletaWhereInput[]
+      ).push(
+        {
+          relacoesTreinamento: {
+            some: {
+              escolinhaId:
+                escopo.escolinhaId,
+
+              NOT: {
+                ativo:
+                  false,
               },
-              { escolinhaId: anyId },
-            ]),
-      ],
-    };
+            },
+          },
+        },
+
+        {
+          escolinhaId:
+            escopo.escolinhaId,
+        }
+      );
+    }
 
     if (turmaId) {
       const membros = await prisma.turmaUsuario.findMany({
@@ -4276,9 +5460,34 @@ export async function criarTreinoProgramado(
       sessaoTreinoId,
     } = bodyValidado;
 
-    const tokenUser = (req as any).user as
-      | { tipo?: string; tipoUsuarioId?: string }
-      | undefined;
+    const tokenUser =
+      (req as any).user as
+        | {
+            id?: string;
+
+            tipo?: string;
+
+            tipoUsuarioId?:
+              string;
+
+            activeContext?: {
+              kind?:
+                string;
+
+              tipoUsuarioId?:
+                string | null;
+
+              organizationType?:
+                string | null;
+
+              organizationRole?:
+                string | null;
+
+              legacyOrganizationId?:
+                string | null;
+            };
+          }
+        | undefined;
 
     const tipoNormHeaderBody = String(
       tokenUser?.tipo || (req.headers["x-tipo"] as string) || tipoUsuario || "",
@@ -4286,14 +5495,104 @@ export async function criarTreinoProgramado(
       .toLowerCase()
       .trim();
 
-    const tipoNorm = (tipoStr || tipoNormHeaderBody).toLowerCase().trim();
+    const activeContext =
+      tokenUser
+        ?.activeContext ??
+      null;
 
-    const tipoUsuarioIdFinal = String(
-      tokenUser?.tipoUsuarioId ||
-        (req.headers["x-tipousuarioid"] as string) ||
-        tipoUsuarioId ||
-        "",
-    ).trim();
+    const contextoOrganizacao =
+      activeContext?.kind ===
+      "ORGANIZATION";
+
+    let tipoNorm =
+      (tipoStr ||
+        tipoNormHeaderBody)
+        .toLowerCase()
+        .trim();
+
+    let tipoUsuarioIdFinal =
+      String(
+        tokenUser
+          ?.tipoUsuarioId ||
+          (
+            req.headers[
+              "x-tipousuarioid"
+            ] as string
+          ) ||
+          tipoUsuarioId ||
+          ""
+      ).trim();
+
+    let professorCriadorContextoId =
+      "";
+
+    if (
+      contextoOrganizacao
+    ) {
+      const organizationType =
+        String(
+          activeContext
+            ?.organizationType ??
+          ""
+        ).toUpperCase();
+
+      const legacyOrganizationId =
+        String(
+          activeContext
+            ?.legacyOrganizationId ??
+          ""
+        ).trim();
+
+      if (
+        !legacyOrganizationId
+      ) {
+        return res.status(409).json({
+          code:
+            "ORGANIZATION_LEGACY_ID_MISSING",
+
+          message:
+            "A organização ativa ainda não possui vínculo com o perfil legado.",
+        });
+      }
+
+      if (
+        organizationType ===
+        "CLUBE"
+      ) {
+        tipoNorm =
+          "clube";
+      } else if (
+        organizationType ===
+        "ESCOLA"
+      ) {
+        tipoNorm =
+          "escolinha";
+      } else {
+        return res.status(403).json({
+          code:
+            "CONTEXT_CANNOT_CREATE_TRAINING",
+
+          message:
+            "Este contexto não pode criar treinos.",
+        });
+      }
+
+      tipoUsuarioIdFinal =
+        legacyOrganizationId;
+
+      if (
+        activeContext
+          ?.organizationRole ===
+        "PROFESSOR"
+      ) {
+        professorCriadorContextoId =
+          String(
+            activeContext
+              ?.tipoUsuarioId ??
+            ""
+          ).trim();
+      }
+    }
 
     const nivelEnum = nivel as Nivel;
     const usuarioIdToken =
@@ -4309,7 +5608,7 @@ export async function criarTreinoProgramado(
 
     const usuarioEhParceiro = Boolean(usuarioDb?.parceiro);
     const bypassLimitesTreinoParceiro =
-      tipoStr === "professor" && usuarioEhParceiro;
+      tipoNorm === "professor" && usuarioEhParceiro;
     const parceiroSolicitado = Boolean(parceiro);
 
     if (parceiroSolicitado && !usuarioEhParceiro) {
@@ -4364,7 +5663,7 @@ export async function criarTreinoProgramado(
       : null;
 
     if (
-      tipoStr === "professor" &&
+      tipoNorm === "professor" &&
       !bypassLimitesTreinoParceiro &&
       !can(userCtx, FEAT.TREINOS_ILIMITADOS)
     ) {
@@ -4394,7 +5693,7 @@ export async function criarTreinoProgramado(
     }
 
     if (
-      tipoStr === "professor" &&
+      tipoNorm === "professor" &&
       !bypassLimitesTreinoParceiro &&
       !can(userCtx, FEAT.ROTINAS_ILIMITADAS)
     ) {
@@ -4529,7 +5828,16 @@ export async function criarTreinoProgramado(
     }
 
     const professorCriadorId =
-      tipoStr === "professor" ? (professorIdToConnect ?? "") : "";
+      professorCriadorContextoId ||
+      (
+        tipoNorm === "professor"
+          ? (
+              professorIdToConnect ??
+              ""
+            )
+          : ""
+      );
+
     const colaboradoresEntradaRaw =
       body.colaboradoresProfessorIds ??
       body.professoresIds ??
@@ -6292,10 +7600,6 @@ export async function validarSubmissaoTreino(
       aprovado: boolean;
       pontos?: number;
     };
-    const tipoUsuarioId = String(
-      (req.query.tipoUsuarioId ?? "") as string,
-    ).trim();
-
     const sub = await prisma.submissaoTreino.findUnique({
       where: { id },
       include: {
@@ -6325,20 +7629,84 @@ export async function validarSubmissaoTreino(
 
     const wasApprovedBefore = sub.aprovado === true;
 
-    const resolved = await resolveEntidade(tipoUsuarioId || req.userId!);
-    if (!resolved) return res.status(403).json({ message: "Sem permissão" });
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
 
-    const vinculo = await prisma.relacaoTreinamento.findFirst({
-      where: {
-        atletaId: sub.atletaId,
-        ...(resolved.tipo === "professor"
-          ? { professorId: resolved.id }
-          : resolved.tipo === "clube"
-            ? { clubeId: resolved.id }
-            : { escolinhaId: resolved.id }),
-      },
-      select: { id: true },
-    });
+    if (
+      !escopo ||
+      ![
+        "professor",
+        "clube",
+        "escolinha",
+        "admin",
+      ].includes(
+        String(
+          escopo.tipo
+        )
+      )
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "O contexto ativo não pode validar esta submissão.",
+      });
+    }
+
+    let vinculo:
+      { id: string } |
+      null =
+      null;
+
+    if (
+      !escopo.isAdmin
+    ) {
+      const whereVinculo:
+        Prisma.RelacaoTreinamentoWhereInput =
+        escopo.tipo ===
+          "professor" &&
+        escopo.professorId
+          ? {
+              atletaId:
+                sub.atletaId,
+
+              professorId:
+                escopo.professorId,
+            }
+          : escopo.tipo ===
+              "clube" &&
+            escopo.clubeId
+            ? {
+                atletaId:
+                  sub.atletaId,
+
+                clubeId:
+                  escopo.clubeId,
+              }
+            : {
+                atletaId:
+                  sub.atletaId,
+
+                escolinhaId:
+                  escopo.escolinhaId!,
+              };
+
+      vinculo =
+        await prisma
+          .relacaoTreinamento
+          .findFirst({
+            where:
+              whereVinculo,
+
+            select: {
+              id:
+                true,
+            },
+          });
+    }
 
     const tp = sub.treinoAgendado?.treinoProgramado;
 
@@ -6354,16 +7722,42 @@ export async function validarSubmissaoTreino(
     }
 
     const donoTreino =
-      !!tp &&
-      (resolved.tipo === "professor"
-        ? tp.professorId === resolved.id ||
-          (tp.professores?.some(
-            (p: { professorId: string }) => p.professorId === resolved.id,
-          ) ??
-            false)
-        : resolved.tipo === "clube"
-          ? tp.clubeId === resolved.id
-          : tp.escolinhaId === resolved.id);
+      escopo.isAdmin ||
+      Boolean(
+        tp &&
+        (
+          (
+            escopo.tipo ===
+              "professor" &&
+            escopo.professorId &&
+            (
+              tp.professorId ===
+                escopo.professorId ||
+              tp.professores
+                ?.some(
+                  (p) =>
+                    p.professorId ===
+                    escopo.professorId
+                )
+            )
+          ) ||
+          (
+            escopo.tipo ===
+              "clube" &&
+            escopo.clubeId &&
+            tp.clubeId ===
+              escopo.clubeId
+          ) ||
+          (
+            escopo.tipo ===
+              "escolinha" &&
+            escopo.escolinhaId &&
+            tp.escolinhaId ===
+              escopo.escolinhaId
+          )
+        )
+      );
+
     if (!vinculo && !donoTreino) {
       return res.status(403).json({
         message: "Você não possui vínculo/direito para validar esta submissão.",
@@ -6544,7 +7938,22 @@ export async function validarSubmissaoTreino(
           ? Number(pontos)
           : null,
         pontosFinais,
-        validadorEntidade: resolved,
+        validadorEntidade: {
+          tipo:
+            escopo.tipo,
+
+          professorId:
+            escopo.professorId,
+
+          clubeId:
+            escopo.clubeId,
+
+          escolinhaId:
+            escopo.escolinhaId,
+
+          isAdmin:
+            escopo.isAdmin,
+        },
       },
     });
 
@@ -6565,32 +7974,28 @@ export async function listarMinhasSubmissoesTreino(
   res: Response,
 ) {
   try {
-    const qAtletaId = String(
-      (req.query.atletaId ?? req.query.tipoUsuarioId ?? "") as string,
-    ).trim();
-    const qUsuarioId = String((req.query.usuarioId ?? "") as string).trim();
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
 
-    let atletaId = qAtletaId;
+    if (
+      !escopo ||
+      escopo.tipo !==
+        "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
 
-    if (!atletaId && qUsuarioId) {
-      const atleta = await prisma.atleta.findFirst({
-        where: { usuarioId: qUsuarioId },
-        select: { id: true },
+        message:
+          "Use seu perfil de Atleta para consultar suas submissões.",
       });
-      atletaId = atleta?.id ?? "";
     }
 
-    if (!atletaId && req.userId) {
-      const u = await prisma.usuario.findUnique({
-        where: { id: req.userId },
-        include: { atleta: true },
-      });
-      atletaId = u?.atleta?.id ?? "";
-    }
-
-    if (!atletaId) {
-      return res.json([]);
-    }
+    const atletaId =
+      escopo.atletaId;
 
     const subs = await prisma.submissaoTreino.findMany({
       where: {
@@ -6777,16 +8182,49 @@ export async function agendarRotinaMensal(
       });
     }
 
-    const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
-    if (!user.plano) {
-      user.plano = "FREE";
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (
+      !escopo ||
+      ![
+        "professor",
+        "clube",
+        "escolinha",
+        "admin",
+      ].includes(
+        String(
+          escopo.tipo
+        )
+      )
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "O contexto ativo não pode agendar rotina mensal.",
+      });
     }
 
-    if (!["professor", "clube", "escolinha"].includes(tipoStr)) {
+    const podeCriarTreino =
+      await canPermission(
+        escopo.usuarioId,
+        "CRIAR_TREINO"
+      );
+
+    if (
+      !escopo.isAdmin &&
+      !podeCriarTreino
+    ) {
       return res.status(403).json({
-        code: "FORBIDDEN",
+        code:
+          "PERMISSION_DENIED",
+
         message:
-          "Apenas professor, clube ou escolinha podem agendar rotina mensal.",
+          "O contexto ativo não possui permissão para agendar treinos.",
       });
     }
 
@@ -6821,7 +8259,43 @@ export async function agendarRotinaMensal(
         .json({ message: "Treino programado não encontrado." });
     }
 
-    const resolved = await resolveEntidade(req.userId!);
+    if (
+      !escopo.isAdmin
+    ) {
+      const treinoPermitido =
+        (
+          escopo.tipo ===
+            "professor" &&
+          escopo.professorId &&
+          tp.professorId ===
+            escopo.professorId
+        ) ||
+        (
+          escopo.tipo ===
+            "clube" &&
+          escopo.clubeId &&
+          tp.clubeId ===
+            escopo.clubeId
+        ) ||
+        (
+          escopo.tipo ===
+            "escolinha" &&
+          escopo.escolinhaId &&
+          tp.escolinhaId ===
+            escopo.escolinhaId
+        );
+
+      if (!treinoPermitido) {
+        return res.status(403).json({
+          code:
+            "ACTIVE_CONTEXT_MISMATCH",
+
+          message:
+            "Este treino não pertence ao contexto ativo.",
+        });
+      }
+    }
+
     const turmaIdsClean = Array.isArray(turmaIds)
       ? turmaIds
           .map(String)
@@ -6831,26 +8305,63 @@ export async function agendarRotinaMensal(
 
     const atletasFromTurmas = turmaIdsClean.length
       ? await (async () => {
-          const resolvedMe = resolved;
-          const tipoUser = resolvedMe?.tipo;
 
-          const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
-          if (tipoUser === "professor" && resolvedMe?.id) {
+         const turmaOwnerOr:
+            Prisma.TurmaWhereInput[] =
+            [];
+
+          if (
+            escopo.tipo ===
+              "professor" &&
+            escopo.professorId
+          ) {
             turmaOwnerOr.push({
-              professores: { some: { professorId: resolvedMe.id } },
+              professores: {
+                some: {
+                  professorId:
+                    escopo.professorId,
+                },
+              },
             });
           }
-          if (tipoUser === "clube" && resolvedMe?.id) {
-            turmaOwnerOr.push({ clubeId: resolvedMe.id });
+
+          if (
+            escopo.tipo ===
+              "clube" &&
+            escopo.clubeId
+          ) {
+            turmaOwnerOr.push({
+              clubeId:
+                escopo.clubeId,
+            });
           }
-          if (tipoUser === "escolinha" && resolvedMe?.id) {
-            turmaOwnerOr.push({ escolinhaId: resolvedMe.id });
+
+          if (
+            escopo.tipo ===
+              "escolinha" &&
+            escopo.escolinhaId
+          ) {
+            turmaOwnerOr.push({
+              escolinhaId:
+                escopo.escolinhaId,
+            });
           }
 
           const turmasOk = await prisma.turma.findMany({
             where: {
-              id: { in: turmaIdsClean },
-              ...(turmaOwnerOr.length ? { OR: turmaOwnerOr } : {}),
+              id: {
+                in:
+                  turmaIdsClean,
+              },
+
+              ...(
+                escopo.isAdmin
+                  ? {}
+                  : {
+                      OR:
+                        turmaOwnerOr,
+                    }
+              ),
             },
             select: { id: true },
           });
@@ -6922,20 +8433,76 @@ export async function agendarRotinaMensal(
         })
       : [];
 
-    const observados: { id: string }[] =
-      incluirObservados && resolved
-        ? await prisma.atletaObservado
+    let observados:
+      { id: string }[] =
+      [];
+
+    if (
+      incluirObservados &&
+      !escopo.isAdmin
+    ) {
+      let whereObservado:
+        Prisma.AtletaObservadoWhereInput |
+        null =
+        null;
+
+      if (
+        escopo.tipo ===
+          "professor" &&
+        escopo.professorId
+      ) {
+        whereObservado = {
+          professorId:
+            escopo.professorId,
+        };
+      }
+
+      if (
+        escopo.tipo ===
+          "clube" &&
+        escopo.clubeId
+      ) {
+        whereObservado = {
+          clubeId:
+            escopo.clubeId,
+        };
+      }
+
+      if (
+        escopo.tipo ===
+          "escolinha" &&
+        escopo.escolinhaId
+      ) {
+        whereObservado = {
+          escolinhaId:
+            escopo.escolinhaId,
+        };
+      }
+
+      if (whereObservado) {
+        observados =
+          await prisma
+            .atletaObservado
             .findMany({
               where:
-                resolved.tipo === "professor"
-                  ? { professorId: resolved.id }
-                  : resolved.tipo === "clube"
-                    ? { clubeId: resolved.id }
-                    : { escolinhaId: resolved.id },
-              select: { atletaId: true },
+                whereObservado,
+
+              select: {
+                atletaId:
+                  true,
+              },
             })
-            .then((r) => r.map((x) => ({ id: x.atletaId })))
-        : [];
+            .then(
+              (rows) =>
+                rows.map(
+                  (x) => ({
+                    id:
+                      x.atletaId,
+                  })
+                )
+            );
+      }
+    }
 
     const atletaIdsDiretosFinal = Array.from(
       new Set(
@@ -6968,7 +8535,12 @@ export async function agendarRotinaMensal(
       limit: number;
     } | null = null;
 
-    if (resolved?.tipo === "escolinha" && elencosIds.length) {
+    if (
+      escopo.tipo ===
+        "escolinha" &&
+      escopo.escolinhaId &&
+      elencosIds.length
+    ) {
       const agora = new Date();
       const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
       const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
@@ -6976,7 +8548,7 @@ export async function agendarRotinaMensal(
       const agMes = await prisma.treinoAgendado.count({
         where: {
           atletaId: { in: atletaIdsFinal },
-          treinoProgramado: { escolinhaId: resolved.id },
+          treinoProgramado: { escolinhaId: escopo.escolinhaId },
           dataTreino: { gte: inicioMes, lt: fimMes },
         },
       });
@@ -7018,12 +8590,10 @@ export async function agendarRotinaMensal(
       if (!okUso) return;
     }
 
-    const resolvedMe = req.userId ? await resolveEntidade(req.userId) : null;
-    const tipoUser =
-      resolvedMe?.tipo ??
-      String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
     const criadoPorProfessorId =
-      tipoUser === "professor" ? (resolvedMe?.id ?? null) : null;
+      escopo.professorId ??
+      null;
+
     const toCreate: Array<Prisma.TreinoAgendadoCreateManyInput> = [];
 
     for (const dt of datasParsed) {
@@ -7173,17 +8743,25 @@ export async function iniciarTreinoAgendado(
   try {
     const { id } = req.params;
     const usuarioId = req.userId!;
-    const tipo = String(
-      req.user?.tipo ?? req.user?.tipoUsuario ?? "",
-    ).toLowerCase();
-    const atletaId = req.user?.tipoUsuarioId
-      ? String(req.user.tipoUsuarioId)
-      : null;
+    
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { tipo: true },
-    });
+    if (
+      !escopo ||
+      escopo.tipo !== "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "Use seu perfil de Atleta para iniciar este treino.",
+      });
+    }
 
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
@@ -7196,22 +8774,20 @@ export async function iniciarTreinoAgendado(
         .json({ message: "Treino agendado não encontrado." });
     }
 
-    const podeIniciarComoNaoAtleta =
-      ["professor", "clube", "escolinha", "admin"].includes(tipo) ||
-      String(usuario?.tipo || "").toLowerCase() === "admin";
+    if (
+      !ag.atletaId ||
+      ag.atletaId !==
+        escopo.atletaId ||
+      ag.atleta?.usuarioId !==
+        usuarioId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
 
-    if (ag.atletaId) {
-      if (ag.atletaId !== atletaId || ag.atleta?.usuarioId !== usuarioId) {
-        return res
-          .status(403)
-          .json({ message: "Não autorizado para iniciar este treino." });
-      }
-    } else {
-      if (!podeIniciarComoNaoAtleta) {
-        return res
-          .status(403)
-          .json({ message: "Não autorizado para iniciar este treino." });
-      }
+        message:
+          "Este treino não pertence ao Atleta ativo.",
+      });
     }
 
     const now = new Date();
@@ -7273,17 +8849,25 @@ export async function finalizarTreinoAgendado(
   try {
     const { id } = req.params;
     const usuarioId = req.userId!;
-    const tipo = String(
-      req.user?.tipo ?? req.user?.tipoUsuario ?? "",
-    ).toLowerCase();
-    const atletaId = req.user?.tipoUsuarioId
-      ? String(req.user.tipoUsuarioId)
-      : null;
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { tipo: true },
-    });
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (
+      !escopo ||
+      escopo.tipo !== "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "Use seu perfil de Atleta para finalizar este treino.",
+      });
+    }
 
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
@@ -7308,32 +8892,29 @@ export async function finalizarTreinoAgendado(
         .json({ message: "Treino agendado não encontrado." });
     }
 
-    const podeFinalizarComoNaoAtleta =
-      ["professor", "clube", "escolinha", "admin"].includes(tipo) ||
-      String(usuario?.tipo || "").toLowerCase() === "admin";
+    if (
+      !ag.atletaId ||
+      ag.atletaId !==
+        escopo.atletaId ||
+      ag.atleta?.usuarioId !==
+        usuarioId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
 
-    if (ag.atletaId) {
-      if (ag.atletaId !== atletaId || ag.atleta?.usuarioId !== usuarioId) {
-        return res.status(403).json({ message: "Não autorizado." });
-      }
-    } else {
-      if (!podeFinalizarComoNaoAtleta) {
-        return res.status(403).json({ message: "Não autorizado." });
-      }
+        message:
+          "Este treino não pertence ao Atleta ativo.",
+      });
     }
 
     const { metodologiaId } = req.body as {
       metodologiaId?: string | null;
     };
 
-    const tipoUsuario = String(
-      req.user?.tipo ?? req.user?.tipoUsuario ?? "",
-    ).toLowerCase();
-    const ehAdmin =
-      tipoUsuario === "admin" ||
-      String(usuario?.tipo || "").toLowerCase() === "admin";
-
-    if (!ehAdmin && req.user?.plano !== "PRO") {
+    if (
+      req.user?.plano !== "PRO"
+    ) {
       const ok = await requireUsage(req as any, res, "treinos_semana");
       if (!ok) return;
     }
@@ -7654,9 +9235,6 @@ export async function listarExerciciosPersonalizados(
 
     const itens = await prisma.exercicioPersonalizado.findMany({
       where: {
-        criadorUsuarioId: {
-          not: userId,
-        },
       },
       orderBy: [{ atualizadoEm: "desc" }, { nome: "asc" }],
       take: 500,
@@ -8318,6 +9896,29 @@ export async function iniciarTreinoPublico(
   try {
     const usuarioId = getUserId(req);
 
+    const escopo =
+      await resolverEscopoTreino(
+        req
+      );
+
+    if (
+      !escopo ||
+      escopo.tipo !==
+        "atleta" ||
+      !escopo.atletaId
+    ) {
+      return res.status(403).json({
+        code:
+          "ACTIVE_CONTEXT_MISMATCH",
+
+        message:
+          "Use seu perfil de Atleta para iniciar este treino.",
+      });
+    }
+
+    const atletaId =
+      escopo.atletaId;
+
     if (!usuarioId) {
       return res.status(401).json({
         code: "AUTH_REQUIRED",
@@ -8333,27 +9934,21 @@ export async function iniciarTreinoPublico(
       });
     }
 
-    const [atleta, treinoProgramado] = await Promise.all([
-      prisma.atleta.findUnique({
-        where: {
-          usuarioId,
-        },
-        select: {
-          id: true,
-        },
-      }),
+    const treinoProgramado =
+      await prisma
+        .treinoProgramado
+        .findUnique({
+          where: {
+            id:
+              treinoProgramadoId,
+          },
 
-      prisma.treinoProgramado.findUnique({
-        where: {
-          id: treinoProgramadoId,
-        },
-        select: {
-          id: true,
-          nome: true,
-          metodologia: true,
-        },
-      }),
-    ]);
+          select: {
+            id: true,
+            nome: true,
+            metodologia: true,
+          },
+        });
 
     if (!treinoProgramado) {
       return res.status(404).json({
@@ -8361,8 +9956,6 @@ export async function iniciarTreinoPublico(
       });
     }
 
-    // Não permitir burlar conteúdo de Learning/metodologia
-    // usando diretamente o link público do treino.
     if (treinoProgramado.metodologia) {
       return res.status(403).json({
         code: "LEARNING_REQUIRED",
@@ -8371,10 +9964,7 @@ export async function iniciarTreinoPublico(
       });
     }
 
-    // Não usamos req.user.tipo aqui de propósito.
-    // Um usuário pode ter vários papéis e estar usando
-    // Professor, por exemplo, mas também possuir perfil Atleta.
-    if (!atleta?.id) {
+    if (!atletaId) {
       return res.status(403).json({
         code: "ATLETA_REQUIRED",
         message:
@@ -8390,7 +9980,7 @@ export async function iniciarTreinoPublico(
     // reutiliza em vez de duplicar.
     let agendado = await prisma.treinoAgendado.findFirst({
       where: {
-        atletaId: atleta.id,
+        atletaId,
         treinoProgramadoId,
 
         status: {
@@ -8427,7 +10017,7 @@ export async function iniciarTreinoPublico(
         data: {
           titulo: treinoProgramado.nome || "Treino",
 
-          atletaId: atleta.id,
+          atletaId,
 
           treinoProgramadoId,
 
@@ -8487,7 +10077,7 @@ export async function iniciarTreinoPublico(
       }),
     ]);
 
-    syncAgendaAtleta(usuarioId, atleta.id);
+    syncAgendaAtleta(usuarioId, atletaId);
 
     syncTreinoProgramado(treinoProgramadoId);
 

@@ -2,12 +2,50 @@ import {
   syncSocketAuth,
 } from "../services/socket.js";
 
+export type ActiveContextSession = {
+  key: string;
+
+  kind:
+    | "PERSONAL"
+    | "ORGANIZATION";
+
+  label: string;
+
+  tipoUsuario:
+    string;
+
+  tipoUsuarioId?:
+    string | null;
+
+  role?:
+    string | null;
+
+  profileId?:
+    string | null;
+
+  organizationId?:
+    string | null;
+
+  organizationType?:
+    string | null;
+
+  organizationRole?:
+    string | null;
+
+  legacyOrganizationId?:
+    string | null;
+
+  organizationPermissions?:
+    unknown;
+};
+
 export type AuthSessionResponse = {
   usuario?: {
     id?: string;
     nomeDeUsuario?: string;
     tipo?: string;
     plano?: string;
+    activeContext?: ActiveContextSession | null;
   };
   id?: string;
   nomeDeUsuario?: string;
@@ -20,6 +58,23 @@ export type AuthSessionResponse = {
   clube?: { id?: string };
   escolinha?: { id?: string };
   atleta?: { id?: string };
+  learningProfile?: {
+    id?: string;
+  };
+  activeContext?: ActiveContextSession | null;
+  isAdmin?: boolean;
+  federacao?: {
+    id?: string;
+  };
+  marca?: {
+    id?: string;
+  };
+  creator?: {
+    id?: string;
+  };
+  administrador?: {
+    id?: string;
+  };
 };
 
 export type PendingAuthAction =
@@ -69,6 +124,7 @@ const SESSION_KEYS = [
   "usuarioTipoRaw",
   "tipoUsuarioId",
   "plano",
+  "activeContext",
 ] as const;
 
 const MAP_TIPO: Record<string, string> = {
@@ -84,6 +140,220 @@ const MAP_TIPO: Record<string, string> = {
   marca: "marca",
   creator: "creator",
 };
+
+function getSessionStore():
+  Storage {
+  if (
+    localStorage.getItem(
+      "token"
+    )
+  ) {
+    return localStorage;
+  }
+
+  return sessionStorage;
+}
+
+export type AuthSessionSnapshot = {
+  token: string;
+  usuarioId: string;
+  nomeUsuario: string;
+  plano: string;
+  activeContext:
+    ActiveContextSession | null;
+};
+
+export function readAuthSessionSnapshot():
+  AuthSessionSnapshot {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return {
+      token: "",
+      usuarioId: "",
+      nomeUsuario: "",
+      plano: "FREE",
+      activeContext:
+        null,
+    };
+  }
+
+  const tokenLocal =
+    localStorage.getItem(
+      "token"
+    );
+
+  const store =
+    tokenLocal
+      ? localStorage
+      : sessionStorage;
+
+  const token =
+    String(
+      store.getItem(
+        "token"
+      ) ?? ""
+    ).trim();
+
+  const usuarioId =
+    String(
+      store.getItem(
+        "usuarioId"
+      ) ?? ""
+    ).trim();
+
+  const nomeUsuario =
+    String(
+      store.getItem(
+        "nomeUsuario"
+      ) ?? ""
+    ).trim();
+
+  const plano =
+    String(
+      store.getItem(
+        "plano"
+      ) ?? "FREE"
+    ).trim();
+
+  let activeContext:
+    ActiveContextSession |
+    null =
+    null;
+
+  const rawContext =
+    store.getItem(
+      "activeContext"
+    );
+
+  if (rawContext) {
+    try {
+      activeContext =
+        JSON.parse(
+          rawContext
+        );
+    } catch {
+      activeContext =
+        null;
+    }
+  }
+
+  return {
+    token,
+    usuarioId,
+    nomeUsuario,
+    plano,
+    activeContext,
+  };
+}
+
+function writeActiveContext(
+  store: Storage,
+  activeContext:
+    ActiveContextSession,
+) {
+  const rawTipo =
+    String(
+      activeContext
+        .tipoUsuario ||
+      ""
+    ).toLowerCase();
+
+  store.setItem(
+    "activeContext",
+    JSON.stringify(
+      activeContext
+    )
+  );
+
+  store.setItem(
+    "tipoUsuario",
+    MAP_TIPO[
+      rawTipo
+    ] ??
+      rawTipo ??
+      "atleta"
+  );
+
+  store.setItem(
+    "usuarioTipoRaw",
+    rawTipo
+  );
+
+  if (
+    activeContext
+      .tipoUsuarioId
+  ) {
+    store.setItem(
+      "tipoUsuarioId",
+      String(
+        activeContext
+          .tipoUsuarioId
+      )
+    );
+  } else {
+    store.removeItem(
+      "tipoUsuarioId"
+    );
+  }
+}
+
+
+export function applyActiveContextSession(
+  activeContext:
+    ActiveContextSession,
+
+  opts: {
+    notify?: boolean;
+  } = {},
+) {
+  const store =
+    getSessionStore();
+
+  for (
+    const key of [
+      "activeContext",
+      "tipoUsuario",
+      "usuarioTipoRaw",
+      "tipoUsuarioId",
+    ]
+  ) {
+    localStorage.removeItem(
+      key
+    );
+
+    sessionStorage.removeItem(
+      key
+    );
+  }
+
+  writeActiveContext(
+    store,
+    activeContext
+  );
+
+  if (
+    opts.notify !== false &&
+    typeof window !==
+      "undefined"
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        "footera:auth-changed",
+        {
+          detail: {
+            authenticated:
+              true,
+
+            contextChanged:
+              true,
+          },
+        }
+      )
+    );
+  }
+}
 
 export function applyAuthSession(
   data: AuthSessionResponse,
@@ -110,21 +380,73 @@ export function applyAuthSession(
   if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
 
   const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-  const isAdmin = rawTipo === "admin";
+  const isAdmin =
+    data.isAdmin ===
+      true ||
+    rawTipo ===
+      "admin";
 
   store.setItem("tipoUsuario", isAdmin ? "admin" : MAP_TIPO[rawTipo] ?? "atleta");
   store.setItem("usuarioTipoRaw", rawTipo);
 
+  const tipoAtivo =
+    MAP_TIPO[rawTipo] ??
+    rawTipo;
+
+  const idsPorTipo:
+    Record<
+      string,
+      string | number | null | undefined
+    > = {
+      atleta:
+        data?.atleta?.id,
+
+      professor:
+        data?.professor?.id,
+
+      clube:
+        data?.clube?.id,
+
+      escolinha:
+        data?.escolinha?.id,
+
+      olheiro:
+        data?.olheiro?.id,
+
+      learning:
+        data?.learningProfile?.id,
+
+      federacao:
+        data?.federacao?.id,
+
+      marca:
+        data?.marca?.id,
+
+      creator:
+        data?.creator?.id,
+
+      admin:
+        data?.administrador?.id,
+    };
+
   const tipoUsuarioId =
-    data.tipoUsuarioId ||
-    data?.olheiro?.id ||
-    data?.professor?.id ||
-    data?.clube?.id ||
-    data?.escolinha?.id ||
-    data?.atleta?.id ||
+    data.tipoUsuarioId ??
+    idsPorTipo[tipoAtivo] ??
     null;
 
   if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+
+  const activeContext =
+    usuario.activeContext ??
+    data.activeContext ??
+    null;
+
+  if (activeContext) {
+    writeActiveContext(
+      store,
+      activeContext
+    );
+  }
 
   const plano = String(usuario.plano ?? data.plano ?? "FREE");
   store.setItem("plano", plano);
