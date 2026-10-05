@@ -26,42 +26,22 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
 
-const ENABLE_EVENTOS_TAB = false; 
+const ENABLE_EVENTOS_TAB = false;
 
 type UsuarioBasic = {
   id: string;
   nome: string;
-  nomeDeUsuario?:
-    | string
-    | null;
-  email?:
-    | string
-    | null;
-  verified?:
-    | boolean
-    | null;
-  destaque?:
-    | boolean
-    | null;
-  foto?:
-    | string
-    | null;
-  cidade?:
-    | string
-    | null;
-  estado?:
-    | string
-    | null;
-  dataCriacao?:
-    | string
-    | null;
+  nomeDeUsuario?: string | null;
+  email?: string | null;
+  verified?: boolean | null;
+  destaque?: boolean | null;
+  foto?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  dataCriacao?: string | null;
   assinatura?: {
-    status?:
-      | string
-      | null;
-    plano?:
-      | string
-      | null;
+    status?: string | null;
+    plano?: string | null;
   } | null;
 };
 
@@ -192,13 +172,24 @@ type RankItem = {
   usuario: { id: string; nome: string; foto?: string | null };
 };
 
-type AbaExplorar = "atletas" | "escolas" | "clubes" | "profissionais" | "outros" | "eventos";
+type AbaExplorar =
+  "atletas" | "escolas" | "clubes" | "profissionais" | "outros" | "eventos";
 
-type AbaOrdenavel =
-  Exclude<
-    AbaExplorar,
-    "eventos"
-  >;
+type PapelPerfilExplorar =
+  | "Atleta"
+  | "Professor"
+  | "Clube"
+  | "Escolinha"
+  | "Olheiro"
+  | "Learning"
+  | "Federacao"
+  | "Marca";
+
+function criarHrefPerfil(usuarioId: string, papel: PapelPerfilExplorar) {
+  return `/perfil/${encodeURIComponent(usuarioId)}?papel=${encodeURIComponent(papel)}`;
+}
+
+type AbaOrdenavel = Exclude<AbaExplorar, "eventos">;
 
 type OrdenacaoExplorar =
   | "nome_asc"
@@ -208,29 +199,19 @@ type OrdenacaoExplorar =
   | "pontuacao_desc"
   | "pontuacao_asc";
 
-type OrdenacaoPorAba =
-  Record<
-    AbaOrdenavel,
-    OrdenacaoExplorar
-  >;
+type OrdenacaoPorAba = Record<AbaOrdenavel, OrdenacaoExplorar>;
 
-const ORDENACAO_INICIAL: OrdenacaoPorAba =
-  {
-    atletas:
-      "nome_asc",
+const ORDENACAO_INICIAL: OrdenacaoPorAba = {
+  atletas: "nome_asc",
 
-    escolas:
-      "nome_asc",
+  escolas: "nome_asc",
 
-    clubes:
-      "nome_asc",
+  clubes: "nome_asc",
 
-    profissionais:
-      "nome_asc",
+  profissionais: "nome_asc",
 
-    outros:
-      "nome_asc",
-  };
+  outros: "nome_asc",
+};
 
 type EventoItem = {
   id: string;
@@ -272,7 +253,17 @@ const CAT_LABEL: Record<string, string> = {
   Sub16: "Sub-16",
   Livre: "Livre",
 };
-const CATEGORIAS = ["Sub3", "Sub5", "Sub7", "Sub9", "Sub11", "Sub13", "Sub15", "Sub16", "Livre"];
+const CATEGORIAS = [
+  "Sub3",
+  "Sub5",
+  "Sub7",
+  "Sub9",
+  "Sub11",
+  "Sub13",
+  "Sub15",
+  "Sub16",
+  "Livre",
+];
 
 const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   if (idade == null) return null;
@@ -373,19 +364,23 @@ function Pill({
     rose: "bg-rose-50 text-rose-700 border-rose-200",
   }[tone];
   return (
-    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border ${map} ${className}`}>
+    <span
+      className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border ${map} ${className}`}
+    >
       {children}
     </span>
   );
 }
 
 const stripDiacritics = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 const normText = (s?: string | null) =>
-  stripDiacritics(String(s ?? "").trim().toLowerCase());
+  stripDiacritics(
+    String(s ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 
 function isItemPro(x: any): boolean {
   if (x?.isPro === true) return true;
@@ -402,9 +397,9 @@ function isItemPro(x: any): boolean {
 function isItemDestaque(x: any): boolean {
   return Boolean(
     x?.destaque === true ||
-      x?.perfilDestaque === true ||
-      x?.usuario?.destaque === true ||
-      x?.usuario?.perfilDestaque === true
+    x?.perfilDestaque === true ||
+    x?.usuario?.destaque === true ||
+    x?.usuario?.perfilDestaque === true,
   );
 }
 
@@ -421,46 +416,32 @@ function ProfileStatusBadges({
   align = "center",
 }: {
   item: any;
-  align?:
-    | "center"
-    | "start";
+  align?: "center" | "start";
 }) {
-  const verificado =
-    shouldShowVerified(item);
+  const verificado = shouldShowVerified(item);
 
-  const destaque =
-    isItemDestaque(item);
+  const destaque = isItemDestaque(item);
 
-  if (
-    !verificado &&
-    !destaque
-  ) {
+  if (!verificado && !destaque) {
     return null;
   }
 
   return (
     <div
       className={`mt-1 flex flex-wrap gap-1 ${
-        align === "start"
-          ? "justify-start"
-          : "justify-center"
+        align === "start" ? "justify-start" : "justify-center"
       }`}
     >
       {verificado && (
         <Pill tone="emerald">
           <CheckCircle2 className="h-3.5 w-3.5" />
-
           Verificado
         </Pill>
       )}
 
       {destaque && (
         <Pill tone="amber">
-          <Star
-            className="h-3.5 w-3.5"
-            fill="currentColor"
-          />
-
+          <Star className="h-3.5 w-3.5" fill="currentColor" />
           Destaque
         </Pill>
       )}
@@ -468,50 +449,28 @@ function ProfileStatusBadges({
   );
 }
 
-function prioridadePerfil(
-  item: any
-) {
-  if (
-    isItemDestaque(item)
-  ) {
+function prioridadePerfil(item: any) {
+  if (isItemDestaque(item)) {
     return 0;
   }
-  if (
-    isItemPro(item)
-  ) {
+  if (isItemPro(item)) {
     return 1;
   }
 
   return 2;
 }
 
-function compararNomeExplorar(
-  nomeA: string,
-  nomeB: string
-) {
-  return String(
-    nomeA || ""
-  ).localeCompare(
-    String(
-      nomeB || ""
-    ),
-    "pt-BR",
-    {
-      sensitivity:
-        "base",
+function compararNomeExplorar(nomeA: string, nomeB: string) {
+  return String(nomeA || "").localeCompare(String(nomeB || ""), "pt-BR", {
+    sensitivity: "base",
 
-      numeric:
-        true,
-    }
-  );
+    numeric: true,
+  });
 }
 
-function obterTimestampCriacao(
-  item: any
-) {
+function obterTimestampCriacao(item: any) {
   const valor =
-    item?.usuario
-      ?.dataCriacao ??
+    item?.usuario?.dataCriacao ??
     item?.dataCriacao ??
     item?.criadoEm ??
     item?.createdAt ??
@@ -521,208 +480,101 @@ function obterTimestampCriacao(
     return null;
   }
 
-  const timestamp =
-    new Date(
-      valor
-    ).getTime();
+  const timestamp = new Date(valor).getTime();
 
-  return Number.isFinite(
-    timestamp
-  )
-    ? timestamp
-    : null;
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function ordenarExplorar<T>(
   itens: T[],
-  ordenacao:
-    OrdenacaoExplorar,
-  getNome:
-    (item: T) => string,
-  getPontuacao?:
-    (
-      item: T
-    ) =>
-      number
-      | null
-      | undefined
+  ordenacao: OrdenacaoExplorar,
+  getNome: (item: T) => string,
+  getPontuacao?: (item: T) => number | null | undefined,
 ) {
-  return [...itens].sort(
-    (itemA, itemB) => {
+  return [...itens].sort((itemA, itemB) => {
+    const prioridadeA = prioridadePerfil(itemA);
 
-      const prioridadeA =
-        prioridadePerfil(
-          itemA
-        );
+    const prioridadeB = prioridadePerfil(itemB);
 
-      const prioridadeB =
-        prioridadePerfil(
-          itemB
-        );
+    if (prioridadeA !== prioridadeB) {
+      return prioridadeA - prioridadeB;
+    }
 
-      if (
-        prioridadeA !==
-        prioridadeB
-      ) {
-        return (
-          prioridadeA -
-          prioridadeB
-        );
-      }
+    const nomeA = getNome(itemA);
 
-      const nomeA =
-        getNome(
-          itemA
-        );
+    const nomeB = getNome(itemB);
 
-      const nomeB =
-        getNome(
-          itemB
-        );
+    const comparacaoNome = compararNomeExplorar(nomeA, nomeB);
 
-      const comparacaoNome =
-        compararNomeExplorar(
-          nomeA,
-          nomeB
-        );
+    if (ordenacao === "nome_asc") {
+      return comparacaoNome;
+    }
 
-      if (
-        ordenacao ===
-        "nome_asc"
-      ) {
+    if (ordenacao === "nome_desc") {
+      return -comparacaoNome;
+    }
+
+    if (ordenacao === "recentes" || ordenacao === "antigos") {
+      const dataA = obterTimestampCriacao(itemA);
+
+      const dataB = obterTimestampCriacao(itemB);
+
+      if (dataA === null && dataB === null) {
         return comparacaoNome;
       }
 
-      if (
-        ordenacao ===
-        "nome_desc"
-      ) {
-        return -comparacaoNome;
+      if (dataA === null) {
+        return 1;
       }
 
-      if (
-        ordenacao ===
-          "recentes" ||
-        ordenacao ===
-          "antigos"
-      ) {
-        const dataA =
-          obterTimestampCriacao(
-            itemA
-          );
-
-        const dataB =
-          obterTimestampCriacao(
-            itemB
-          );
-
-        if (
-          dataA === null &&
-          dataB === null
-        ) {
-          return comparacaoNome;
-        }
-
-        if (
-          dataA === null
-        ) {
-          return 1;
-        }
-
-        if (
-          dataB === null
-        ) {
-          return -1;
-        }
-
-        const comparacaoData =
-          ordenacao ===
-          "recentes"
-            ? dataB - dataA
-            : dataA - dataB;
-
-        return (
-          comparacaoData ||
-          comparacaoNome
-        );
+      if (dataB === null) {
+        return -1;
       }
 
-      if (
-        ordenacao ===
-          "pontuacao_desc" ||
-        ordenacao ===
-          "pontuacao_asc"
-      ) {
-        const valorA =
-          getPontuacao?.(
-            itemA
-          );
+      const comparacaoData =
+        ordenacao === "recentes" ? dataB - dataA : dataA - dataB;
 
-        const valorB =
-          getPontuacao?.(
-            itemB
-          );
-
-        const numeroA =
-          valorA != null &&
-          Number.isFinite(
-            Number(valorA)
-          )
-            ? Number(
-                valorA
-              )
-            : null;
-
-        const numeroB =
-          valorB != null &&
-          Number.isFinite(
-            Number(valorB)
-          )
-            ? Number(
-                valorB
-              )
-            : null;
-
-        if (
-          numeroA === null &&
-          numeroB === null
-        ) {
-          return comparacaoNome;
-        }
-
-        if (
-          numeroA === null
-        ) {
-          return 1;
-        }
-
-        if (
-          numeroB === null
-        ) {
-          return -1;
-        }
-
-        const comparacaoPontuacao =
-          ordenacao ===
-          "pontuacao_desc"
-            ? numeroB -
-              numeroA
-            : numeroA -
-              numeroB;
-
-        return (
-          comparacaoPontuacao ||
-          comparacaoNome
-        );
-      }
-
-      return comparacaoNome;
+      return comparacaoData || comparacaoNome;
     }
-  );
+
+    if (ordenacao === "pontuacao_desc" || ordenacao === "pontuacao_asc") {
+      const valorA = getPontuacao?.(itemA);
+
+      const valorB = getPontuacao?.(itemB);
+
+      const numeroA =
+        valorA != null && Number.isFinite(Number(valorA))
+          ? Number(valorA)
+          : null;
+
+      const numeroB =
+        valorB != null && Number.isFinite(Number(valorB))
+          ? Number(valorB)
+          : null;
+
+      if (numeroA === null && numeroB === null) {
+        return comparacaoNome;
+      }
+
+      if (numeroA === null) {
+        return 1;
+      }
+
+      if (numeroB === null) {
+        return -1;
+      }
+
+      const comparacaoPontuacao =
+        ordenacao === "pontuacao_desc" ? numeroB - numeroA : numeroA - numeroB;
+
+      return comparacaoPontuacao || comparacaoNome;
+    }
+
+    return comparacaoNome;
+  });
 }
 
-const normKey = (s?: string | null) =>
-  normText(s).replace(/[^a-z0-9]/g, "");
+const normKey = (s?: string | null) => normText(s).replace(/[^a-z0-9]/g, "");
 
 const includesText = (base?: string | null, term?: string | null) => {
   const b = normText(base);
@@ -759,45 +611,26 @@ function Tab({
 function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<AbaExplorar>("atletas");
-  const [
-    ordenacaoPorAba,
-    setOrdenacaoPorAba,
-  ] = useState<OrdenacaoPorAba>(
-    ORDENACAO_INICIAL
-  );
-  const {
-    requireAuth,
-  } = useAuthGate();
+  const [ordenacaoPorAba, setOrdenacaoPorAba] =
+    useState<OrdenacaoPorAba>(ORDENACAO_INICIAL);
+  const { requireAuth } = useAuthGate();
 
-  const abaOrdenavel:
-    AbaOrdenavel | null =
-    aba === "eventos"
-      ? null
-      : aba;
+  const abaOrdenavel: AbaOrdenavel | null = aba === "eventos" ? null : aba;
 
-  const ordenacaoAtual =
-    abaOrdenavel
-      ? ordenacaoPorAba[
-          abaOrdenavel
-        ]
-      : "nome_asc";
+  const ordenacaoAtual = abaOrdenavel
+    ? ordenacaoPorAba[abaOrdenavel]
+    : "nome_asc";
 
-  function alterarOrdenacao(
-    valor:
-      OrdenacaoExplorar
-  ) {
+  function alterarOrdenacao(valor: OrdenacaoExplorar) {
     if (!abaOrdenavel) {
       return;
     }
 
-    setOrdenacaoPorAba(
-      (anterior) => ({
-        ...anterior,
+    setOrdenacaoPorAba((anterior) => ({
+      ...anterior,
 
-        [abaOrdenavel]:
-          valor,
-      })
-    );
+      [abaOrdenavel]: valor,
+    }));
   }
   const [dados, setDados] = useState<DadosExplorar>({
     atletas: [],
@@ -805,15 +638,23 @@ function Explorar() {
     olheiros: [],
     clubes: [],
     escolas: [],
-    eventos: [], 
+    eventos: [],
     federacoes: [],
     learning: [],
     marcas: [],
   });
 
   const [showFilters, setShowFilters] = useState(false);
-  const [filtros, setFiltros] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
-  const [draft, setDraft] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
+  const [filtros, setFiltros] = useState<Filtros>({
+    independente: null,
+    pontuacaoMin: null,
+    pontuacaoMax: null,
+  });
+  const [draft, setDraft] = useState<Filtros>({
+    independente: null,
+    pontuacaoMin: null,
+    pontuacaoMax: null,
+  });
   const [filtrosProf, setFiltrosProf] = useState<FiltrosProfissionais>({
     papel: "Ambos",
     vinculo: "Qualquer",
@@ -823,7 +664,9 @@ function Explorar() {
     vinculo: "Qualquer",
   });
 
-  const [filtrosOrgs, setFiltrosOrgs] = useState<FiltrosOrgs>({ temSite: null });
+  const [filtrosOrgs, setFiltrosOrgs] = useState<FiltrosOrgs>({
+    temSite: null,
+  });
   const [draftOrgs, setDraftOrgs] = useState<FiltrosOrgs>({ temSite: null });
   const [filtrosOutros, setFiltrosOutros] = useState<FiltrosOutros>({
     tipo: "Todos",
@@ -843,7 +686,9 @@ function Explorar() {
     setDraftOutros((prev) => ({ ...prev, ...patch }));
   };
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
-  const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
+  const [topPorCategoria, setTopPorCategoria] = useState<
+    Record<string, RankItem[]>
+  >({});
   const [carregandoDados, setCarregandoDados] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -856,7 +701,7 @@ function Explorar() {
   const [selectedEvento, setSelectedEvento] = useState<EventoItem | null>(null);
   const [showEventoModal, setShowEventoModal] = useState(false);
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
-  const [erroEvento, setErroEvento] = useState<string | null>(null)
+  const [erroEvento, setErroEvento] = useState<string | null>(null);
   const [pontosCache, setPontosCache] = useState<Record<string, number>>({});
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
   const [favoritosPerfilIds, setFavoritosPerfilIds] = useState<string[]>([]);
@@ -897,7 +742,9 @@ function Explorar() {
     return performance + disciplina + responsabilidade;
   }
 
-  async function fetchPontuacaoTotalCorreta(usuarioId: string): Promise<number | null> {
+  async function fetchPontuacaoTotalCorreta(
+    usuarioId: string,
+  ): Promise<number | null> {
     const id = String(usuarioId || "").trim();
     if (!id) return null;
     if (typeof pontosCache[id] === "number") return pontosCache[id];
@@ -906,9 +753,12 @@ function Explorar() {
     if (!token) return null;
 
     try {
-      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(id)}/pontuacao`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const r = await fetch(
+        `${API.BASE_URL}/api/perfil/${encodeURIComponent(id)}/pontuacao`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
       if (!r.ok) return null;
 
@@ -941,13 +791,16 @@ function Explorar() {
         const ids = Array.isArray(data)
           ? data.map(String)
           : Array.isArray(data?.ids)
-          ? data.ids.map(String)
-          : Array.isArray(data?.items)
-          ? data.items
-              .map((item: any) => item?.favoritoUsuarioId || item?.usuarioId || item?.id)
-              .filter(Boolean)
-              .map(String)
-          : [];
+            ? data.ids.map(String)
+            : Array.isArray(data?.items)
+              ? data.items
+                  .map(
+                    (item: any) =>
+                      item?.favoritoUsuarioId || item?.usuarioId || item?.id,
+                  )
+                  .filter(Boolean)
+                  .map(String)
+              : [];
 
         if (alive) setFavoritosPerfilIds(Array.from(new Set(ids)));
       } catch (e) {
@@ -975,20 +828,20 @@ function Explorar() {
 
     const token = Storage?.token || "";
 
-    axios.get(`${API.BASE_URL}/api/eventos`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-    .then(res => {
-      setDados(prev => ({
-        ...prev,
-        eventos: res.data || [],
-      }));
-    })
-    .catch(err => {
-      console.error("❌ Erro ao buscar eventos", err);
-      setDados(prev => ({ ...prev, eventos: [] }));
-    });
-
+    axios
+      .get(`${API.BASE_URL}/api/eventos`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      .then((res) => {
+        setDados((prev) => ({
+          ...prev,
+          eventos: res.data || [],
+        }));
+      })
+      .catch((err) => {
+        console.error("❌ Erro ao buscar eventos", err);
+        setDados((prev) => ({ ...prev, eventos: [] }));
+      });
   }, [aba]);
 
   const filtrosKey = JSON.stringify(filtros);
@@ -1006,7 +859,7 @@ function Explorar() {
           role: "Olheiro" as const,
         })),
       ].filter((x) => x?.usuario?.id),
-    [dados.professores, dados.olheiros]
+    [dados.professores, dados.olheiros],
   );
 
   function getAtletaMeta(a: AtletaItem) {
@@ -1016,14 +869,8 @@ function Explorar() {
       (a as any)?.posicaoCampo ??
       (a as any)?.posicaoPrincipal ??
       "";
-    const cidade =
-      (a as any)?.cidade ??
-      (a as any)?.usuario?.cidade ??
-      "";
-    const estado =
-      (a as any)?.estado ??
-      (a as any)?.usuario?.estado ??
-      "";
+    const cidade = (a as any)?.cidade ?? (a as any)?.usuario?.cidade ?? "";
+    const estado = (a as any)?.estado ?? (a as any)?.usuario?.estado ?? "";
     const independenteRaw =
       (a as any)?.independente ??
       ((a as any)?.vinculado != null ? !(a as any).vinculado : null);
@@ -1045,8 +892,8 @@ function Explorar() {
       typeof pontuacaoRaw === "number"
         ? pontuacaoRaw
         : pontuacaoRaw != null && !Number.isNaN(Number(pontuacaoRaw))
-        ? Number(pontuacaoRaw)
-        : null;
+          ? Number(pontuacaoRaw)
+          : null;
     const pontuacao =
       uidLocal && typeof pontosCache[uidLocal] === "number"
         ? pontosCache[uidLocal]
@@ -1057,7 +904,15 @@ function Explorar() {
       mapIdadeParaCategoria((a as any)?.idade) ||
       "";
 
-    return { nome, posicao, cidade, estado, independente, pontuacao, categoria };
+    return {
+      nome,
+      posicao,
+      cidade,
+      estado,
+      independente,
+      pontuacao,
+      categoria,
+    };
   }
 
   const atletasFiltrados = useMemo(() => {
@@ -1087,18 +942,23 @@ function Explorar() {
       if (f.cidade && !includesText(m.cidade, f.cidade)) return false;
 
       if (f.independente !== null && f.independente !== undefined) {
-        if (m.independente == null || m.independente !== f.independente) return false;
+        if (m.independente == null || m.independente !== f.independente)
+          return false;
       }
 
       if (typeof f.pontuacaoMin === "number") {
-        if (typeof m.pontuacao !== "number" || m.pontuacao < f.pontuacaoMin) return false;
+        if (typeof m.pontuacao !== "number" || m.pontuacao < f.pontuacaoMin)
+          return false;
       }
       if (typeof f.pontuacaoMax === "number") {
-        if (typeof m.pontuacao !== "number" || m.pontuacao > f.pontuacaoMax) return false;
+        if (typeof m.pontuacao !== "number" || m.pontuacao > f.pontuacaoMax)
+          return false;
       }
 
       if (q) {
-        const bag = normText([m.nome, m.posicao, m.cidade, m.estado, m.categoria].join(" "));
+        const bag = normText(
+          [m.nome, m.posicao, m.cidade, m.estado, m.categoria].join(" "),
+        );
         if (!bag.includes(q)) return false;
       }
 
@@ -1107,20 +967,21 @@ function Explorar() {
 
     return ordenarExplorar(
       base,
-      ordenacaoPorAba
-        .atletas,
+      ordenacaoPorAba.atletas,
 
-      (atleta) =>
-        atleta.usuario
-          ?.nome ??
-        "",
+      (atleta) => atleta.usuario?.nome ?? "",
 
-      (atleta) =>
-        getAtletaMeta(
-          atleta
-        ).pontuacao
+      (atleta) => getAtletaMeta(atleta).pontuacao,
     );
-  }, [dados.atletas, filtrosKey, busca, pontosCache, mostrarFavoritos, favoritosPerfilIds, ordenacaoPorAba.atletas]);
+  }, [
+    dados.atletas,
+    filtrosKey,
+    busca,
+    pontosCache,
+    mostrarFavoritos,
+    favoritosPerfilIds,
+    ordenacaoPorAba.atletas,
+  ]);
 
   const eventosFiltrados = useMemo(() => {
     const q = (busca || "").toLowerCase();
@@ -1129,9 +990,7 @@ function Explorar() {
       if (!q) return true;
 
       const organizadorNome =
-        ev.clube?.nome ||
-        (ev as any).escolinha?.nome ||
-        "";
+        ev.clube?.nome || (ev as any).escolinha?.nome || "";
 
       const campos = [
         ev.titulo,
@@ -1166,7 +1025,9 @@ function Explorar() {
       }
 
       if (q) {
-        const bag = normText([e.nome, e.cidade, e.estado, e.siteOficial].join(" "));
+        const bag = normText(
+          [e.nome, e.cidade, e.estado, e.siteOficial].join(" "),
+        );
         if (!bag.includes(q)) return false;
       }
 
@@ -1176,23 +1037,24 @@ function Explorar() {
     return ordenarExplorar(
       base,
 
-      ordenacaoPorAba
-        .escolas,
+      ordenacaoPorAba.escolas,
 
-      (escola) =>
-        escola.nome ??
-        escola.usuario
-          ?.nome ??
-        ""
+      (escola) => escola.nome ?? escola.usuario?.nome ?? "",
     );
-  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs), mostrarFavoritos, favoritosPerfilIds, ordenacaoPorAba.escolas]);
+  }, [
+    dados.escolas,
+    busca,
+    JSON.stringify(filtrosOrgs),
+    mostrarFavoritos,
+    favoritosPerfilIds,
+    ordenacaoPorAba.escolas,
+  ]);
 
   const clubesFiltrados = useMemo(() => {
     const q = normText(busca);
     const f = filtrosOrgs;
 
     const base = (dados.clubes || []).filter((c) => {
-
       if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromClube(c))) {
         return false;
       }
@@ -1205,32 +1067,34 @@ function Explorar() {
         if (!bag.includes(q)) return false;
       }
 
-      return true; 
+      return true;
     });
 
     return ordenarExplorar(
       base,
 
-      ordenacaoPorAba
-        .clubes,
+      ordenacaoPorAba.clubes,
 
-      (clube) =>
-        clube.nome ??
-        clube.usuario
-          ?.nome ??
-        ""
+      (clube) => clube.nome ?? clube.usuario?.nome ?? "",
     );
-  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs), favoritosPerfilIds, mostrarFavoritos, ordenacaoPorAba.clubes]);
+  }, [
+    dados.clubes,
+    busca,
+    JSON.stringify(filtrosOrgs),
+    favoritosPerfilIds,
+    mostrarFavoritos,
+    ordenacaoPorAba.clubes,
+  ]);
 
   const profissionaisFiltrados = useMemo(() => {
     const q = normText(busca);
     const f = filtrosProf;
 
     const base = (profissionais || []).filter((p: any) => {
-
-      const uid = p.role === "Olheiro"
-        ? getUserIdFromOlheiro(p)
-        : getUserIdFromProfessor(p);
+      const uid =
+        p.role === "Olheiro"
+          ? getUserIdFromOlheiro(p)
+          : getUserIdFromProfessor(p);
 
       if (mostrarFavoritos && !isPerfilFavorito(uid)) {
         return false;
@@ -1249,7 +1113,9 @@ function Explorar() {
       if (f.cidade && !includesText(m.cidade, f.cidade)) return false;
 
       if (q) {
-        const bag = normText([p.usuario?.nome, m.role, m.cidade, m.estado].join(" "));
+        const bag = normText(
+          [p.usuario?.nome, m.role, m.cidade, m.estado].join(" "),
+        );
         if (!bag.includes(q)) return false;
       }
 
@@ -1259,15 +1125,18 @@ function Explorar() {
     return ordenarExplorar(
       base,
 
-      ordenacaoPorAba
-        .profissionais,
+      ordenacaoPorAba.profissionais,
 
-      (profissional) =>
-        profissional.usuario
-          ?.nome ??
-        ""
+      (profissional) => profissional.usuario?.nome ?? "",
     );
-  }, [profissionais, busca, JSON.stringify(filtrosProf), mostrarFavoritos, favoritosPerfilIds, ordenacaoPorAba.profissionais]);
+  }, [
+    profissionais,
+    busca,
+    JSON.stringify(filtrosProf),
+    mostrarFavoritos,
+    favoritosPerfilIds,
+    ordenacaoPorAba.profissionais,
+  ]);
 
   const outrosFiltrados = useMemo(() => {
     const todos = [
@@ -1280,16 +1149,12 @@ function Explorar() {
     const q = normText(busca);
 
     const filtrados = todos.filter((item) => {
-
       if (mostrarFavoritos && !isPerfilFavorito(getUserIdFromOutro(item))) {
         return false;
       }
 
       const nome =
-        item.nome ??
-        item.usuario?.nome ??
-        item.usuario?.nomeDeUsuario ??
-        "";
+        item.nome ?? item.usuario?.nome ?? item.usuario?.nomeDeUsuario ?? "";
 
       const cidade = item.cidade ?? item.usuario?.cidade ?? "";
       const estado = item.estado ?? item.usuario?.estado ?? "";
@@ -1318,16 +1183,10 @@ function Explorar() {
     return ordenarExplorar(
       filtrados,
 
-      ordenacaoPorAba
-        .outros,
+      ordenacaoPorAba.outros,
 
       (item) =>
-        item.nome ??
-        item.usuario
-          ?.nome ??
-        item.usuario
-          ?.nomeDeUsuario ??
-        ""
+        item.nome ?? item.usuario?.nome ?? item.usuario?.nomeDeUsuario ?? "",
     );
   }, [
     dados.learning,
@@ -1337,99 +1196,90 @@ function Explorar() {
     JSON.stringify(filtrosOutros),
     mostrarFavoritos,
     favoritosPerfilIds,
-    ordenacaoPorAba.outros
+    ordenacaoPorAba.outros,
   ]);
 
-  useEffect(() => setShowCountAtletas(BATCH), [
-    busca,
-    filtrosKey,
-    dados.atletas.length,
-    mostrarFavoritos,
-    favoritosPerfilIds.length,
-  ]);
+  useEffect(
+    () => setShowCountAtletas(BATCH),
+    [
+      busca,
+      filtrosKey,
+      dados.atletas.length,
+      mostrarFavoritos,
+      favoritosPerfilIds.length,
+    ],
+  );
 
-  useEffect(() => setShowCountEscolas(BATCH), [
-    busca,
-    escolasFiltradas.length,
-    mostrarFavoritos,
-    favoritosPerfilIds.length,
-  ]);
+  useEffect(
+    () => setShowCountEscolas(BATCH),
+    [
+      busca,
+      escolasFiltradas.length,
+      mostrarFavoritos,
+      favoritosPerfilIds.length,
+    ],
+  );
 
-  useEffect(() => setShowCountClubes(BATCH), [
-    busca,
-    clubesFiltrados.length,
-    mostrarFavoritos,
-    favoritosPerfilIds.length,
-  ]);
+  useEffect(
+    () => setShowCountClubes(BATCH),
+    [
+      busca,
+      clubesFiltrados.length,
+      mostrarFavoritos,
+      favoritosPerfilIds.length,
+    ],
+  );
 
-  useEffect(() => setShowCountProfs(BATCH), [
-    busca,
-    profissionaisFiltrados.length,
-    mostrarFavoritos,
-    favoritosPerfilIds.length,
-  ]);
+  useEffect(
+    () => setShowCountProfs(BATCH),
+    [
+      busca,
+      profissionaisFiltrados.length,
+      mostrarFavoritos,
+      favoritosPerfilIds.length,
+    ],
+  );
 
-  useEffect(() => setShowCountOutros(BATCH), [
-    busca,
-    outrosFiltrados.length,
-    JSON.stringify(filtrosOutros),
-    mostrarFavoritos,
-    favoritosPerfilIds.length,
-  ]);
+  useEffect(
+    () => setShowCountOutros(BATCH),
+    [
+      busca,
+      outrosFiltrados.length,
+      JSON.stringify(filtrosOutros),
+      mostrarFavoritos,
+      favoritosPerfilIds.length,
+    ],
+  );
 
   useEffect(() => {
-    if (
-      aba === "atletas"
-    ) {
-      setShowCountAtletas(
-        BATCH
-      );
+    if (aba === "atletas") {
+      setShowCountAtletas(BATCH);
 
       return;
     }
 
-    if (
-      aba === "escolas"
-    ) {
-      setShowCountEscolas(
-        BATCH
-      );
+    if (aba === "escolas") {
+      setShowCountEscolas(BATCH);
 
       return;
     }
 
-    if (
-      aba === "clubes"
-    ) {
-      setShowCountClubes(
-        BATCH
-      );
+    if (aba === "clubes") {
+      setShowCountClubes(BATCH);
 
       return;
     }
 
-    if (
-      aba ===
-      "profissionais"
-    ) {
-      setShowCountProfs(
-        BATCH
-      );
+    if (aba === "profissionais") {
+      setShowCountProfs(BATCH);
 
       return;
     }
 
-    if (
-      aba === "outros"
-    ) {
-      setShowCountOutros(
-        BATCH
-      );
+    if (aba === "outros") {
+      setShowCountOutros(BATCH);
     }
-  }, [
-    aba,
-    ordenacaoAtual,
-  ]);
+  }, [aba, ordenacaoAtual]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -1441,18 +1291,28 @@ function Explorar() {
         if (!entry.isIntersecting) return;
 
         if (aba === "atletas") {
-          setShowCountAtletas((c) => Math.min(c + BATCH, atletasFiltrados.length));
+          setShowCountAtletas((c) =>
+            Math.min(c + BATCH, atletasFiltrados.length),
+          );
         } else if (aba === "escolas") {
-          setShowCountEscolas((c) => Math.min(c + BATCH, escolasFiltradas.length));
+          setShowCountEscolas((c) =>
+            Math.min(c + BATCH, escolasFiltradas.length),
+          );
         } else if (aba === "clubes") {
-          setShowCountClubes((c) => Math.min(c + BATCH, clubesFiltrados.length));
+          setShowCountClubes((c) =>
+            Math.min(c + BATCH, clubesFiltrados.length),
+          );
         } else if (aba === "profissionais") {
-          setShowCountProfs((c) => Math.min(c + BATCH, profissionaisFiltrados.length));
+          setShowCountProfs((c) =>
+            Math.min(c + BATCH, profissionaisFiltrados.length),
+          );
         } else if (aba === "outros") {
-          setShowCountOutros((c) => Math.min(c + BATCH, outrosFiltrados.length));
+          setShowCountOutros((c) =>
+            Math.min(c + BATCH, outrosFiltrados.length),
+          );
         }
       },
-      { root: null, rootMargin: "400px", threshold: 0 }
+      { root: null, rootMargin: "400px", threshold: 0 },
     );
 
     io.observe(el);
@@ -1474,18 +1334,29 @@ function Explorar() {
   ]);
 
   const loggedUserId = useMemo(
-    () => (Storage?.usuarioId ?? (typeof window !== "undefined" ? Storage.usuarioId : "") ?? "") as string,
-    []
+    () =>
+      (Storage?.usuarioId ??
+        (typeof window !== "undefined" ? Storage.usuarioId : "") ??
+        "") as string,
+    [],
   );
 
   const filtrarEu = useMemo(
     () =>
-      <T extends { usuario?: { id?: string }; usuarioId?: string; id?: string }>(arr: T[]) =>
+      <
+        T extends {
+          usuario?: { id?: string };
+          usuarioId?: string;
+          id?: string;
+        },
+      >(
+        arr: T[],
+      ) =>
         arr.filter((x) => {
           const uid = (x.usuario?.id ?? x.usuarioId ?? x.id ?? "") as string;
           return uid !== loggedUserId;
         }),
-    [loggedUserId]
+    [loggedUserId],
   );
 
   useEffect(() => {
@@ -1496,7 +1367,11 @@ function Explorar() {
       })
       .then(({ data }) => {
         setTopGeral(Array.isArray(data?.geral) ? data.geral : []);
-        setTopPorCategoria(typeof data?.porCategoria === "object" && data?.porCategoria ? data.porCategoria : {});
+        setTopPorCategoria(
+          typeof data?.porCategoria === "object" && data?.porCategoria
+            ? data.porCategoria
+            : {},
+        );
       })
       .catch(() => {
         setTopGeral([]);
@@ -1515,7 +1390,9 @@ function Explorar() {
       .map((a) => getUserIdFromAtleta(a))
       .filter(Boolean);
 
-    const missing = visibles.filter((id) => typeof pontosCache[id] !== "number");
+    const missing = visibles.filter(
+      (id) => typeof pontosCache[id] !== "number",
+    );
     if (missing.length === 0) return;
 
     let cancelled = false;
@@ -1525,7 +1402,9 @@ function Explorar() {
       for (let i = 0; i < missing.length; i += CHUNK) {
         if (cancelled) return;
         const slice = missing.slice(i, i + CHUNK);
-        await Promise.allSettled(slice.map((id) => fetchPontuacaoTotalCorreta(id)));
+        await Promise.allSettled(
+          slice.map((id) => fetchPontuacaoTotalCorreta(id)),
+        );
       }
     })();
 
@@ -1535,7 +1414,8 @@ function Explorar() {
   }, [aba, atletasFiltrados, showCountAtletas, pontosCache]);
 
   useEffect(() => {
-    const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
+    const token =
+      Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
     const params: any = { q: busca, excludeUsuarioId: loggedUserId };
 
     setCarregandoDados(true);
@@ -1558,7 +1438,7 @@ function Explorar() {
               cidade: c.cidade ?? c.usuario?.cidade ?? null,
               estado: c.estado ?? c.usuario?.estado ?? null,
               usuario: c.usuario ?? undefined,
-            }))
+            })),
           ),
           escolas: filtrarEu<EscolaItem>(
             (data.escolas || []).map((e: any) => ({
@@ -1569,7 +1449,7 @@ function Explorar() {
               cidade: e.cidade ?? e.usuario?.cidade ?? null,
               estado: e.estado ?? e.usuario?.estado ?? null,
               usuario: e.usuario ?? undefined,
-            }))
+            })),
           ),
           eventos: (data.eventos || []) as EventoItem[],
           federacoes: filtrarEu<OutroItem>(
@@ -1582,7 +1462,7 @@ function Explorar() {
               cidade: f.cidade ?? f.usuario?.cidade ?? null,
               estado: f.estado ?? f.usuario?.estado ?? null,
               usuario: f.usuario ?? undefined,
-            }))
+            })),
           ),
 
           marcas: filtrarEu<OutroItem>(
@@ -1595,7 +1475,7 @@ function Explorar() {
               cidade: m.cidade ?? m.usuario?.cidade ?? null,
               estado: m.estado ?? m.usuario?.estado ?? null,
               usuario: m.usuario ?? undefined,
-            }))
+            })),
           ),
 
           learning: filtrarEu<OutroItem>(
@@ -1608,12 +1488,22 @@ function Explorar() {
               cidade: l.usuario?.cidade ?? null,
               estado: l.usuario?.estado ?? null,
               usuario: l.usuario ?? undefined,
-            }))
+            })),
           ),
         });
       })
       .catch(() => {
-        setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [], eventos: [], federacoes: [], marcas: [], learning: [] });
+        setDados({
+          atletas: [],
+          professores: [],
+          olheiros: [],
+          clubes: [],
+          escolas: [],
+          eventos: [],
+          federacoes: [],
+          marcas: [],
+          learning: [],
+        });
       })
       .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrarEu]);
@@ -1678,7 +1568,7 @@ function Explorar() {
 
   const hasMoreEscolas = showCountEscolas < escolasFiltradas.length;
   const hasMoreClubes = showCountClubes < clubesFiltrados.length;
-  
+
   const activeFiltersCount = useMemo(() => {
     if (aba === "atletas") {
       return (
@@ -1686,7 +1576,9 @@ function Explorar() {
         (filtros.posicoes && filtros.posicoes.length ? 1 : 0) +
         (filtros.estado ? 1 : 0) +
         (filtros.cidade ? 1 : 0) +
-        (filtros.independente !== null && filtros.independente !== undefined ? 1 : 0) +
+        (filtros.independente !== null && filtros.independente !== undefined
+          ? 1
+          : 0) +
         (typeof filtros.pontuacaoMin === "number" ? 1 : 0) +
         (typeof filtros.pontuacaoMax === "number" ? 1 : 0)
       );
@@ -1705,7 +1597,9 @@ function Explorar() {
       return (
         (filtrosOrgs.estado ? 1 : 0) +
         (filtrosOrgs.cidade ? 1 : 0) +
-        (filtrosOrgs.temSite !== null && filtrosOrgs.temSite !== undefined ? 1 : 0)
+        (filtrosOrgs.temSite !== null && filtrosOrgs.temSite !== undefined
+          ? 1
+          : 0)
       );
     }
 
@@ -1724,24 +1618,27 @@ function Explorar() {
     return 0;
   }, [aba, filtros, filtrosProf, filtrosOrgs, filtrosOutros]);
 
-  const rawLogoOrg = selectedEvento?.clube?.logo || (selectedEvento as any)?.escolinha?.logo || null;
+  const rawLogoOrg =
+    selectedEvento?.clube?.logo ||
+    (selectedEvento as any)?.escolinha?.logo ||
+    null;
 
   const favoritosNaAbaAtual = useMemo(() => {
     if (aba === "atletas") {
       return (dados.atletas || []).filter((a) =>
-        isPerfilFavorito(getUserIdFromAtleta(a))
+        isPerfilFavorito(getUserIdFromAtleta(a)),
       ).length;
     }
 
     if (aba === "escolas") {
       return (dados.escolas || []).filter((e) =>
-        isPerfilFavorito(getUserIdFromEscola(e))
+        isPerfilFavorito(getUserIdFromEscola(e)),
       ).length;
     }
 
     if (aba === "clubes") {
       return (dados.clubes || []).filter((c) =>
-        isPerfilFavorito(getUserIdFromClube(c))
+        isPerfilFavorito(getUserIdFromClube(c)),
       ).length;
     }
 
@@ -1763,7 +1660,8 @@ function Explorar() {
         ...(dados.federacoes || []),
       ];
 
-      return todos.filter((item) => isPerfilFavorito(getUserIdFromOutro(item))).length;
+      return todos.filter((item) => isPerfilFavorito(getUserIdFromOutro(item)))
+        .length;
     }
 
     return 0;
@@ -1781,8 +1679,6 @@ function Explorar() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
-
-
       <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         <div className="flex gap-2 items-center">
           <div className="flex-1 relative">
@@ -1811,10 +1707,7 @@ function Explorar() {
                 : "Mostrar somente perfis favoritos"
             }
           >
-            <Star
-              size={16}
-              fill={mostrarFavoritos ? "currentColor" : "none"}
-            />
+            <Star size={16} fill={mostrarFavoritos ? "currentColor" : "none"} />
 
             <span className="hidden sm:inline">
               {mostrarFavoritos ? "Favoritos" : "Favoritos"}
@@ -1861,13 +1754,28 @@ function Explorar() {
         <div className="mt-3 sm:mt-4">
           <div className="-mx-4 px-4 sm:hidden">
             <div className="flex gap-2 overflow-x-auto pb-1">
-              <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />} className="min-w-[110px]">
+              <Tab
+                active={aba === "atletas"}
+                onClick={() => setAba("atletas")}
+                icon={<Trophy className="h-4 w-4" />}
+                className="min-w-[110px]"
+              >
                 Atletas
               </Tab>
-              <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />} className="min-w-[110px]">
+              <Tab
+                active={aba === "escolas"}
+                onClick={() => setAba("escolas")}
+                icon={<School className="h-4 w-4" />}
+                className="min-w-[110px]"
+              >
                 Escolas
               </Tab>
-              <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />} className="min-w-[110px]">
+              <Tab
+                active={aba === "clubes"}
+                onClick={() => setAba("clubes")}
+                icon={<Building2 className="h-4 w-4" />}
+                className="min-w-[110px]"
+              >
                 Clubes
               </Tab>
               <Tab
@@ -1882,7 +1790,7 @@ function Explorar() {
                 active={aba === "outros"}
                 onClick={() => setAba("outros")}
                 icon={<Users className="w-4 h-4" />}
-                className="min-w-[100px]" 
+                className="min-w-[100px]"
               >
                 Outros
               </Tab>
@@ -1896,7 +1804,6 @@ function Explorar() {
                   Eventos
                 </Tab>
               )}
-
             </div>
           </div>
 
@@ -1905,64 +1812,82 @@ function Explorar() {
               ENABLE_EVENTOS_TAB ? "sm:grid-cols-6" : "sm:grid-cols-5"
             }`}
           >
-            <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
+            <Tab
+              active={aba === "atletas"}
+              onClick={() => setAba("atletas")}
+              icon={<Trophy className="h-4 w-4" />}
+            >
               Atletas
             </Tab>
 
-            <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />}>
+            <Tab
+              active={aba === "escolas"}
+              onClick={() => setAba("escolas")}
+              icon={<School className="h-4 w-4" />}
+            >
               Escolas
             </Tab>
 
-            <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />}>
+            <Tab
+              active={aba === "clubes"}
+              onClick={() => setAba("clubes")}
+              icon={<Building2 className="h-4 w-4" />}
+            >
               Clubes
             </Tab>
 
-            <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
+            <Tab
+              active={aba === "profissionais"}
+              onClick={() => setAba("profissionais")}
+              icon={<User className="h-4 w-4" />}
+            >
               Profissionais
             </Tab>
 
-            <Tab active={aba === "outros"} onClick={() => setAba("outros")} icon={<Users className="h-4 w-4" />}>
+            <Tab
+              active={aba === "outros"}
+              onClick={() => setAba("outros")}
+              icon={<Users className="h-4 w-4" />}
+            >
               Outros
             </Tab>
 
             {ENABLE_EVENTOS_TAB && (
-              <Tab active={aba === "eventos"} onClick={() => setAba("eventos")} icon={<CalendarClock className="h-4 w-4" />}>
+              <Tab
+                active={aba === "eventos"}
+                onClick={() => setAba("eventos")}
+                icon={<CalendarClock className="h-4 w-4" />}
+              >
                 Eventos
               </Tab>
             )}
           </div>
-            {abaOrdenavel && (
-              <div className="mt-3 flex justify-end">
-                <label
-                  className="
+          {abaOrdenavel && (
+            <div className="mt-3 flex justify-end">
+              <label
+                className="
                     flex w-full
                     items-center gap-2
                     sm:w-auto
                   "
-                >
-                  <span
-                    className="
+              >
+                <span
+                  className="
                       hidden text-sm
                       font-medium
                       text-green-900/80
                       sm:inline
                     "
-                  >
-                    Ordenar:
-                  </span>
+                >
+                  Ordenar:
+                </span>
 
-                  <select
-                    value={
-                      ordenacaoAtual
-                    }
-                    onChange={(evento) =>
-                      alterarOrdenacao(
-                        evento.target
-                          .value as
-                          OrdenacaoExplorar
-                      )
-                    }
-                    className="
+                <select
+                  value={ordenacaoAtual}
+                  onChange={(evento) =>
+                    alterarOrdenacao(evento.target.value as OrdenacaoExplorar)
+                  }
+                  className="
                       w-full rounded-xl
                       border border-green-200
                       bg-white px-3 py-2
@@ -1973,44 +1898,43 @@ function Explorar() {
                       sm:w-auto
                       sm:min-w-[250px]
                     "
-                  >
-                    <option value="nome_asc">
-                      Destaques primeiro • Nome A-Z
-                    </option>
+                >
+                  <option value="nome_asc">
+                    Destaques primeiro • Nome A-Z
+                  </option>
 
-                    <option value="nome_desc">
-                      Destaques primeiro • Nome Z-A
-                    </option>
+                  <option value="nome_desc">
+                    Destaques primeiro • Nome Z-A
+                  </option>
 
-                    <option value="recentes">
-                      Destaques primeiro • Mais recentes
-                    </option>
+                  <option value="recentes">
+                    Destaques primeiro • Mais recentes
+                  </option>
 
-                    <option value="antigos">
-                      Destaques primeiro • Mais antigos
-                    </option>
+                  <option value="antigos">
+                    Destaques primeiro • Mais antigos
+                  </option>
 
-                    {aba ===
-                      "atletas" && (
-                      <>
-                        <option value="pontuacao_desc">
-                          Destaques primeiro • Maior pontuação
-                        </option>
+                  {aba === "atletas" && (
+                    <>
+                      <option value="pontuacao_desc">
+                        Destaques primeiro • Maior pontuação
+                      </option>
 
-                        <option value="pontuacao_asc">
-                          Destaques primeiro • Menor pontuação
-                        </option>
-                      </>
-                    )}
-                  </select>
-                </label>
-              </div>
-            )}
+                      <option value="pontuacao_asc">
+                        Destaques primeiro • Menor pontuação
+                      </option>
+                    </>
+                  )}
+                </select>
+              </label>
+            </div>
+          )}
         </div>
-       </div>
+      </div>
 
       {showFilters && (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40">
           <div
             className="absolute inset-0"
             onClick={() => setShowFilters(false)}
@@ -2043,7 +1967,9 @@ function Explorar() {
                     <select
                       className="w-full border rounded-lg px-3 py-2 text-sm"
                       value={draft.categoria ?? ""}
-                      onChange={(e) => updateDraft({ categoria: e.target.value || undefined })}
+                      onChange={(e) =>
+                        updateDraft({ categoria: e.target.value || undefined })
+                      }
                     >
                       <option value="">Todas</option>
                       {CATEGORIAS.map((cat) => (
@@ -2066,7 +1992,8 @@ function Explorar() {
                         const v = e.target.value;
                         if (!v) return;
                         const atuais = draft.posicoes || [];
-                        if (!atuais.includes(v)) updateDraft({ posicoes: [...atuais, v] });
+                        if (!atuais.includes(v))
+                          updateDraft({ posicoes: [...atuais, v] });
                         e.target.value = "";
                       }}
                     >
@@ -2085,7 +2012,11 @@ function Explorar() {
                             key={pos}
                             type="button"
                             onClick={() =>
-                              updateDraft({ posicoes: (draft.posicoes || []).filter((p) => p !== pos) })
+                              updateDraft({
+                                posicoes: (draft.posicoes || []).filter(
+                                  (p) => p !== pos,
+                                ),
+                              })
                             }
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] bg-emerald-50 border-emerald-200 text-emerald-800"
                           >
@@ -2107,7 +2038,9 @@ function Explorar() {
                         className="w-full border rounded-lg px-3 py-2 text-sm"
                         placeholder="Ex: SP, RJ..."
                         value={draft.estado ?? ""}
-                        onChange={(e) => updateDraft({ estado: e.target.value || undefined })}
+                        onChange={(e) =>
+                          updateDraft({ estado: e.target.value || undefined })
+                        }
                       />
                     </div>
                     <div>
@@ -2119,7 +2052,9 @@ function Explorar() {
                         className="w-full border rounded-lg px-3 py-2 text-sm"
                         placeholder="Ex: São Paulo"
                         value={draft.cidade ?? ""}
-                        onChange={(e) => updateDraft({ cidade: e.target.value || undefined })}
+                        onChange={(e) =>
+                          updateDraft({ cidade: e.target.value || undefined })
+                        }
                       />
                     </div>
                   </div>
@@ -2133,7 +2068,8 @@ function Explorar() {
                         type="button"
                         onClick={() => updateDraft({ independente: null })}
                         className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
-                          draft.independente === null || draft.independente === undefined
+                          draft.independente === null ||
+                          draft.independente === undefined
                             ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
                             : "bg-white hover:bg-gray-50"
                         }`}
@@ -2171,26 +2107,38 @@ function Explorar() {
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <span className="block text-[11px] text-gray-600 mb-1">Mínima</span>
+                        <span className="block text-[11px] text-gray-600 mb-1">
+                          Mínima
+                        </span>
                         <input
                           type="number"
                           min={0}
                           className="w-full border rounded-lg px-3 py-2 text-sm"
                           value={draft.pontuacaoMin ?? ""}
                           onChange={(e) =>
-                            updateDraft({ pontuacaoMin: e.target.value ? Number(e.target.value) : null })
+                            updateDraft({
+                              pontuacaoMin: e.target.value
+                                ? Number(e.target.value)
+                                : null,
+                            })
                           }
                         />
                       </div>
                       <div>
-                        <span className="block text-[11px] text-gray-600 mb-1">Máxima</span>
+                        <span className="block text-[11px] text-gray-600 mb-1">
+                          Máxima
+                        </span>
                         <input
                           type="number"
                           min={0}
                           className="w-full border rounded-lg px-3 py-2 text-sm"
                           value={draft.pontuacaoMax ?? ""}
                           onChange={(e) =>
-                            updateDraft({ pontuacaoMax: e.target.value ? Number(e.target.value) : null })
+                            updateDraft({
+                              pontuacaoMax: e.target.value
+                                ? Number(e.target.value)
+                                : null,
+                            })
                           }
                         />
                       </div>
@@ -2209,7 +2157,10 @@ function Explorar() {
                       className="w-full border rounded-lg px-3 py-2 text-sm"
                       value={draftProf.papel ?? "Ambos"}
                       onChange={(e) =>
-                        setDraftProf((p) => ({ ...p, papel: e.target.value as any }))
+                        setDraftProf((p) => ({
+                          ...p,
+                          papel: e.target.value as any,
+                        }))
                       }
                     >
                       <option value="Ambos">Todos</option>
@@ -2226,7 +2177,10 @@ function Explorar() {
                       className="w-full border rounded-lg px-3 py-2 text-sm"
                       value={draftProf.vinculo ?? "Qualquer"}
                       onChange={(e) =>
-                        setDraftProf((p) => ({ ...p, vinculo: e.target.value as any }))
+                        setDraftProf((p) => ({
+                          ...p,
+                          vinculo: e.target.value as any,
+                        }))
                       }
                     >
                       <option value="Qualquer">Qualquer</option>
@@ -2246,7 +2200,10 @@ function Explorar() {
                         placeholder="Ex: SP"
                         value={draftProf.estado ?? ""}
                         onChange={(e) =>
-                          setDraftProf((p) => ({ ...p, estado: e.target.value || undefined }))
+                          setDraftProf((p) => ({
+                            ...p,
+                            estado: e.target.value || undefined,
+                          }))
                         }
                       />
                     </div>
@@ -2260,15 +2217,18 @@ function Explorar() {
                         placeholder="Ex: São Paulo"
                         value={draftProf.cidade ?? ""}
                         onChange={(e) =>
-                          setDraftProf((p) => ({ ...p, cidade: e.target.value || undefined }))
+                          setDraftProf((p) => ({
+                            ...p,
+                            cidade: e.target.value || undefined,
+                          }))
                         }
                       />
                     </div>
                   </div>
 
                   <div className="text-[11px] text-gray-600">
-                    * O filtro “vínculo” só funciona se o backend enviar clubeId/escolinhaId.
-                    Se não enviar, deixe em “Qualquer”.
+                    * O filtro “vínculo” só funciona se o backend enviar
+                    clubeId/escolinhaId. Se não enviar, deixe em “Qualquer”.
                   </div>
                 </>
               )}
@@ -2286,7 +2246,10 @@ function Explorar() {
                         placeholder="Ex: SP"
                         value={draftOrgs.estado ?? ""}
                         onChange={(e) =>
-                          setDraftOrgs((p) => ({ ...p, estado: e.target.value || undefined }))
+                          setDraftOrgs((p) => ({
+                            ...p,
+                            estado: e.target.value || undefined,
+                          }))
                         }
                       />
                     </div>
@@ -2300,7 +2263,10 @@ function Explorar() {
                         placeholder="Ex: São Paulo"
                         value={draftOrgs.cidade ?? ""}
                         onChange={(e) =>
-                          setDraftOrgs((p) => ({ ...p, cidade: e.target.value || undefined }))
+                          setDraftOrgs((p) => ({
+                            ...p,
+                            cidade: e.target.value || undefined,
+                          }))
                         }
                       />
                     </div>
@@ -2314,11 +2280,12 @@ function Explorar() {
                       <select
                         className="w-full border rounded-lg px-3 py-2 text-sm"
                         value={
-                          draftOrgs.temSite === null || draftOrgs.temSite === undefined
+                          draftOrgs.temSite === null ||
+                          draftOrgs.temSite === undefined
                             ? ""
                             : draftOrgs.temSite
-                            ? "sim"
-                            : "nao"
+                              ? "sim"
+                              : "nao"
                         }
                         onChange={(e) => {
                           const v = e.target.value;
@@ -2429,7 +2396,10 @@ function Explorar() {
             {carregandoDados && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-xl p-3 shadow-sm animate-pulse">
+                  <div
+                    key={i}
+                    className="bg-white rounded-xl p-3 shadow-sm animate-pulse"
+                  >
                     <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full bg-gray-200" />
                     <div className="h-3 bg-gray-200 rounded mt-3" />
                     <div className="h-3 bg-gray-200 rounded mt-2 w-2/3" />
@@ -2448,7 +2418,10 @@ function Explorar() {
                     const categoria = meta.categoria;
                     const uid = a?.usuario?.id ?? a?.usuarioId ?? a.id;
                     return (
-                      <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
+                      <Link
+                        href={criarHrefPerfil(uid, "Atleta")}
+                        key={`${a.id}-${uid}`}
+                      >
                         <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                           <div className="relative">
                             <Avatar
@@ -2461,16 +2434,13 @@ function Explorar() {
                                 PRO
                               </span>
                             )}
-
                           </div>
 
                           <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
                             {nome}
                           </p>
 
-                          <ProfileStatusBadges
-                            item={a}
-                          />
+                          <ProfileStatusBadges item={a} />
 
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {categoria && (
@@ -2486,13 +2456,16 @@ function Explorar() {
 
                             {(meta.cidade || meta.estado) && (
                               <Pill tone="gray">
-                                <MapPin className="h-3.5 w-3.5" /> {meta.cidade ?? ""} {meta.estado ? `, ${meta.estado}` : ""}
+                                <MapPin className="h-3.5 w-3.5" />{" "}
+                                {meta.cidade ?? ""}{" "}
+                                {meta.estado ? `, ${meta.estado}` : ""}
                               </Pill>
                             )}
 
                             {typeof meta.pontuacao === "number" && (
                               <Pill tone="amber">
-                                <Heart className="h-3.5 w-3.5" /> {meta.pontuacao}
+                                <Heart className="h-3.5 w-3.5" />{" "}
+                                {meta.pontuacao}
                               </Pill>
                             )}
                           </div>
@@ -2502,23 +2475,32 @@ function Explorar() {
                   })}
                 </div>
 
-                <h2 className="text-base sm:text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
-                  {topGeral.length === 0 ? (
-                    <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
-                  ) : (
+                <h2 className="text-base sm:text-lg font-bold mt-6 mb-2">
+                  Top da semana (geral)
+                </h2>
+                {topGeral.length === 0 ? (
+                  <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
+                ) : (
                   <div className="flex gap-3 overflow-x-auto pb-2 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
                     {topGeral.slice(0, 10).map((r, idx) => {
                       const foto = r.usuario?.foto;
                       return (
-                        <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
+                        <Link
+                          href={criarHrefPerfil(r.usuario.id, "Atleta")}
+                          key={r.atletaId}
+                        >
                           <div className="min-w-[130px] sm:min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
-                            <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
+                            <div className="text-xs font-semibold mb-1">
+                              {idx + 1}º
+                            </div>
                             <Avatar
                               foto={foto}
                               alt={r.usuario.nome}
                               className="w-14 h-14 sm:w-16 sm:h-16 border"
                             />
-                            <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
+                            <div className="mt-2 text-sm text-center line-clamp-2">
+                              {r.usuario.nome}
+                            </div>
                             <div className="text-xs mt-1">❤️ {r.total}</div>
                           </div>
                         </Link>
@@ -2527,7 +2509,9 @@ function Explorar() {
                   </div>
                 )}
 
-                <h3 className="text-base font-bold mt-4 mb-2">Líderes por categoria</h3>
+                <h3 className="text-base font-bold mt-4 mb-2">
+                  Líderes por categoria
+                </h3>
                 <div className="space-y-2 mb-4">
                   {Object.entries(topPorCategoria).map(([cat, lista]) => {
                     const top = (lista as RankItem[])[0];
@@ -2535,17 +2519,26 @@ function Explorar() {
                     const foto = top.usuario?.foto;
                     const rotulo = CAT_LABEL[cat] ?? cat;
                     return (
-                      <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
+                      <Link
+                        href={criarHrefPerfil(top.usuario.id, "Atleta")}
+                        key={`cat-${cat}`}
+                      >
                         <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
-                          <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">{rotulo}</div>
+                          <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">
+                            {rotulo}
+                          </div>
                           <Avatar
                             foto={foto}
                             alt={top.usuario.nome}
                             className="w-9 h-9 sm:w-10 sm:h-10 border"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{top.usuario.nome}</div>
-                            <div className="text-xs text-gray-600">❤️ {top.total}</div>
+                            <div className="text-sm font-medium truncate">
+                              {top.usuario.nome}
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              ❤️ {top.total}
+                            </div>
                           </div>
                         </div>
                       </Link>
@@ -2559,11 +2552,16 @@ function Explorar() {
 
         {aba === "escolas" && (
           <>
-            <h2 className="text-base sm:text-lg font-bold my-4">Escolas de Futebol</h2>
+            <h2 className="text-base sm:text-lg font-bold my-4">
+              Escolas de Futebol
+            </h2>
             <div className="space-y-3">
               {escolasFiltradas.slice(0, showCountEscolas).map((e) => {
                 const rawLogo = e.logo;
-                const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
+                const uid = getUserIdFromEscola(e);
+                const href = uid
+                  ? criarHrefPerfil(uid, "Escolinha")
+                  : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
@@ -2580,7 +2578,6 @@ function Explorar() {
                           PRO
                         </span>
                       )}
-
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -2596,10 +2593,7 @@ function Explorar() {
                         {e.siteOficial || "Site indisponível"}
                       </p>
 
-                      <ProfileStatusBadges
-                        item={e}
-                        align="start"
-                      />
+                      <ProfileStatusBadges item={e} align="start" />
                     </div>
                   </div>
                 );
@@ -2616,7 +2610,11 @@ function Explorar() {
             <div className="mt-3 flex flex-col items-center">
               {hasMoreEscolas && (
                 <button
-                  onClick={() => setShowCountEscolas((c) => Math.min(c + BATCH, escolasFiltradas.length))}
+                  onClick={() =>
+                    setShowCountEscolas((c) =>
+                      Math.min(c + BATCH, escolasFiltradas.length),
+                    )
+                  }
                   className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
@@ -2643,7 +2641,8 @@ function Explorar() {
             <div className="space-y-3">
               {clubesFiltrados.slice(0, showCountClubes).map((c) => {
                 const rawLogo = c.logo;
-                const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
+                const uid = getUserIdFromClube(c);
+                const href = uid ? criarHrefPerfil(uid, "Clube") : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
                     <div className="relative shrink-0">
@@ -2660,7 +2659,6 @@ function Explorar() {
                           PRO
                         </span>
                       )}
-
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -2671,12 +2669,11 @@ function Explorar() {
                         {c.estado ? `, ${c.estado}` : ""}
                       </p>
 
-                      <p className="text-xs text-gray-600">Clube Profissional</p>
+                      <p className="text-xs text-gray-600">
+                        Clube Profissional
+                      </p>
 
-                      <ProfileStatusBadges
-                        item={c}
-                        align="start"
-                      />
+                      <ProfileStatusBadges item={c} align="start" />
                     </div>
                   </div>
                 );
@@ -2693,7 +2690,11 @@ function Explorar() {
             <div className="mt-3 flex flex-col items-center">
               {hasMoreClubes && (
                 <button
-                  onClick={() => setShowCountClubes((c) => Math.min(c + BATCH, clubesFiltrados.length))}
+                  onClick={() =>
+                    setShowCountClubes((c) =>
+                      Math.min(c + BATCH, clubesFiltrados.length),
+                    )
+                  }
                   className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
@@ -2716,13 +2717,15 @@ function Explorar() {
 
         {aba === "profissionais" && (
           <>
-            <h2 className="text-base sm:text-lg font-bold my-4">Professores e Olheiros</h2>
+            <h2 className="text-base sm:text-lg font-bold my-4">
+              Professores e Olheiros
+            </h2>
             {profissionaisFiltrados.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {profissionaisFiltrados.slice(0, showCountProfs).map((p) => {
                   const rawFoto = p.foto ?? p.usuario?.foto;
                   const uid = p.usuario.id;
-                  const href = p.role === "Olheiro" ? `/perfil-olheiro/${uid}` : `/perfil/${uid}`;
+                  const href = criarHrefPerfil(uid, p.role);
 
                   return (
                     <Link href={href} key={`${p.role}-${p.id}`}>
@@ -2738,16 +2741,13 @@ function Explorar() {
                               PRO
                             </span>
                           )}
-
                         </div>
 
                         <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
                           {p.usuario.nome}
                         </p>
 
-                        <ProfileStatusBadges
-                          item={p}
-                        />
+                        <ProfileStatusBadges item={p} />
 
                         {(() => {
                           const cidade = p.usuario?.cidade ?? "";
@@ -2765,11 +2765,7 @@ function Explorar() {
                         })()}
 
                         <Pill
-                          tone={
-                            p.role === "Professor"
-                              ? "sky"
-                              : "rose"
-                          }
+                          tone={p.role === "Professor" ? "sky" : "rose"}
                           className="mt-1"
                         >
                           {p.role}
@@ -2786,7 +2782,6 @@ function Explorar() {
                   : "Nenhum profissional encontrado."}
               </p>
             )}
-
           </>
         )}
 
@@ -2815,18 +2810,21 @@ function Explorar() {
                     item.tipoOutro === "Federacao"
                       ? "Federação"
                       : item.tipoOutro === "Marca"
-                      ? "Marca"
-                      : "Learning";
+                        ? "Marca"
+                        : "Learning";
 
                   const pillTone =
                     item.tipoOutro === "Learning"
                       ? "sky"
                       : item.tipoOutro === "Marca"
-                      ? "amber"
-                      : "emerald";
+                        ? "amber"
+                        : "emerald";
 
                   return (
-                    <Link href={`/perfil/${uid}`} key={`${item.tipoOutro}-${item.id}`}>
+                    <Link
+                      href={criarHrefPerfil(uid, item.tipoOutro)}
+                      key={`${item.tipoOutro}-${item.id}`}
+                    >
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <div className="relative">
                           <Avatar
@@ -2846,9 +2844,7 @@ function Explorar() {
                           {nome}
                         </p>
 
-                        <ProfileStatusBadges
-                          item={item}
-                        />
+                        <ProfileStatusBadges item={item} />
 
                         {(cidade || estado) && (
                           <p className="mt-1 text-xs text-gray-600 flex items-center gap-1 text-center">
@@ -2878,7 +2874,7 @@ function Explorar() {
                 <button
                   onClick={() =>
                     setShowCountOutros((c) =>
-                      Math.min(c + BATCH, outrosFiltrados.length)
+                      Math.min(c + BATCH, outrosFiltrados.length),
                     )
                   }
                   className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
@@ -2894,16 +2890,23 @@ function Explorar() {
 
         {ENABLE_EVENTOS_TAB && aba === "eventos" && (
           <>
-            <h2 className="text-base sm:text-lg font-bold my-4">Eventos e Peneiras</h2>
+            <h2 className="text-base sm:text-lg font-bold my-4">
+              Eventos e Peneiras
+            </h2>
 
             {eventosFiltrados.length === 0 && !carregandoDados && (
-              <p className="text-sm text-gray-600">Nenhum evento encontrado no momento.</p>
+              <p className="text-sm text-gray-600">
+                Nenhum evento encontrado no momento.
+              </p>
             )}
 
             {carregandoDados && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-xl p-4 shadow-sm animate-pulse">
+                  <div
+                    key={i}
+                    className="bg-white rounded-xl p-4 shadow-sm animate-pulse"
+                  >
                     <div className="h-4 bg-gray-200 rounded w-2/3" />
                     <div className="h-3 bg-gray-200 rounded w-1/3 mt-2" />
                     <div className="h-3 bg-gray-200 rounded w-1/2 mt-4" />
@@ -2921,7 +2924,6 @@ function Explorar() {
                       ? `${ev.local ? ev.local + " • " : ""}${ev.cidade ?? ""}${ev.estado ? ` - ${ev.estado}` : ""}`
                       : "Local a definir";
 
-                      
                   return (
                     <button
                       key={ev.id}
@@ -2935,15 +2937,23 @@ function Explorar() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm sm:text-base line-clamp-2">{ev.titulo}</h3>
-                            {(ev.clube || (ev as any).escolinha) && (
-                              <p className="text-xs text-gray-600">
-                                Organizado por {ev.clube?.nome || (ev as any).escolinha?.nome}
-                              </p>
-                            )}
-                          <p className="mt-1 text-xs text-gray-600">{dataLabel}</p>
+                          <h3 className="font-semibold text-sm sm:text-base line-clamp-2">
+                            {ev.titulo}
+                          </h3>
+                          {(ev.clube || (ev as any).escolinha) && (
+                            <p className="text-xs text-gray-600">
+                              Organizado por{" "}
+                              {ev.clube?.nome || (ev as any).escolinha?.nome}
+                            </p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-600">
+                            {dataLabel}
+                          </p>
                         </div>
-                        <Pill tone={ev.tipo === "PENEIRA" ? "amber" : "emerald"} className="shrink-0">
+                        <Pill
+                          tone={ev.tipo === "PENEIRA" ? "amber" : "emerald"}
+                          className="shrink-0"
+                        >
                           {ev.tipo === "PENEIRA" ? "Peneira" : "Evento"}
                         </Pill>
                       </div>
@@ -2986,12 +2996,14 @@ function Explorar() {
             )}
           </>
         )}
-
       </div>
 
       {showEventoModal && selectedEvento && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40">
-          <div className="absolute inset-0" onClick={() => setShowEventoModal(false)} />
+          <div
+            className="absolute inset-0"
+            onClick={() => setShowEventoModal(false)}
+          />
 
           <div
             className="relative z-50 w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-lg p-4 sm:p-5 max-h-[80vh] overflow-y-auto"
@@ -3003,7 +3015,11 @@ function Explorar() {
                   {selectedEvento.titulo}
                 </h2>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  <Pill tone={selectedEvento.tipo === "PENEIRA" ? "amber" : "emerald"}>
+                  <Pill
+                    tone={
+                      selectedEvento.tipo === "PENEIRA" ? "amber" : "emerald"
+                    }
+                  >
                     {selectedEvento.tipo === "PENEIRA" ? "Peneira" : "Evento"}
                   </Pill>
                   <Pill tone="gray">
@@ -3011,7 +3027,9 @@ function Explorar() {
                   </Pill>
                   {selectedEvento.status !== "ABERTO" && (
                     <Pill tone="rose">
-                      {selectedEvento.status === "ENCERRADO" ? "Encerrado" : "Cancelado"}
+                      {selectedEvento.status === "ENCERRADO"
+                        ? "Encerrado"
+                        : "Cancelado"}
                     </Pill>
                   )}
                 </div>
@@ -3038,31 +3056,41 @@ function Explorar() {
                 <div className="text-xs text-gray-700">
                   <div className="font-semibold">
                     Organizado por{" "}
-                    {selectedEvento.clube?.nome || (selectedEvento as any).escolinha?.nome}
+                    {selectedEvento.clube?.nome ||
+                      (selectedEvento as any).escolinha?.nome}
                   </div>
                 </div>
               </div>
             )}
 
-
             <div className="space-y-3 text-sm text-gray-800">
               {selectedEvento.descricao && (
-                <p className="whitespace-pre-line">{selectedEvento.descricao}</p>
+                <p className="whitespace-pre-line">
+                  {selectedEvento.descricao}
+                </p>
               )}
 
               <div className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 mt-0.5 text-green-800" />
                 <div>
                   <div>{selectedEvento.local || "Local a definir"}</div>
-                  {(selectedEvento.cidade || selectedEvento.estado || selectedEvento.pais) && (
+                  {(selectedEvento.cidade ||
+                    selectedEvento.estado ||
+                    selectedEvento.pais) && (
                     <div className="text-xs text-gray-600">
-                      {[selectedEvento.cidade, selectedEvento.estado, selectedEvento.pais]
+                      {[
+                        selectedEvento.cidade,
+                        selectedEvento.estado,
+                        selectedEvento.pais,
+                      ]
                         .filter(Boolean)
                         .join(" • ")}
                     </div>
                   )}
                   {selectedEvento.endereco && (
-                    <div className="text-xs text-gray-600 mt-0.5">{selectedEvento.endereco}</div>
+                    <div className="text-xs text-gray-600 mt-0.5">
+                      {selectedEvento.endereco}
+                    </div>
                   )}
                 </div>
               </div>
@@ -3082,16 +3110,19 @@ function Explorar() {
                 </div>
               )}
 
-              {selectedEvento.requisitos && selectedEvento.requisitos.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold mb-1">Requisitos:</div>
-                  <ul className="list-disc list-inside text-xs text-gray-700 space-y-0.5">
-                    {selectedEvento.requisitos.map((req, i) => (
-                      <li key={i}>{req}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {selectedEvento.requisitos &&
+                selectedEvento.requisitos.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold mb-1">
+                      Requisitos:
+                    </div>
+                    <ul className="list-disc list-inside text-xs text-gray-700 space-y-0.5">
+                      {selectedEvento.requisitos.map((req, i) => (
+                        <li key={i}>{req}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
               {erroEvento && (
                 <div className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-md px-3 py-2">
@@ -3133,8 +3164,7 @@ function Explorar() {
                     return;
                   }
 
-                  const token =
-                    Storage?.token || "";
+                  const token = Storage?.token || "";
 
                   try {
                     setInscrevendoEvento(true);
@@ -3145,7 +3175,7 @@ function Explorar() {
                       {},
                       {
                         headers: { Authorization: `Bearer ${token}` },
-                      }
+                      },
                     );
 
                     setSelectedEvento((prev) =>
@@ -3155,7 +3185,7 @@ function Explorar() {
                             inscrito: true,
                             totalInscritos: (prev.totalInscritos ?? 0) + 1,
                           }
-                        : prev
+                        : prev,
                     );
                     setDados((prev) => ({
                       ...prev,
@@ -3166,7 +3196,7 @@ function Explorar() {
                               inscrito: true,
                               totalInscritos: (ev.totalInscritos ?? 0) + 1,
                             }
-                          : ev
+                          : ev,
                       ),
                     }));
                   } catch (err: any) {
@@ -3188,10 +3218,10 @@ function Explorar() {
                 {selectedEvento.inscrito
                   ? "Você já está inscrito"
                   : selectedEvento.status !== "ABERTO"
-                  ? "Inscrições encerradas"
-                  : inscrevendoEvento
-                  ? "Inscrevendo..."
-                  : "Inscrever-se"}
+                    ? "Inscrições encerradas"
+                    : inscrevendoEvento
+                      ? "Inscrevendo..."
+                      : "Inscrever-se"}
               </button>
             </div>
           </div>
@@ -3199,7 +3229,6 @@ function Explorar() {
       )}
 
       <BottomNav active="explorar" />
-
     </div>
   );
 }

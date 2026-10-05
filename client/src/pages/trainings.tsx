@@ -1,3 +1,4 @@
+// client/src/pages/training
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -9,13 +10,14 @@ import { API } from "../config.js";
 import { Card, CardContent } from "../components/ui/card.js";
 import { Badge } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
-import { Link  } from "wouter";
+import { Link, useLocation } from "wouter";
 
 type TipoTreino = "Tecnico" | "Físico" | "Tatico" | "Mental" | null;
 type TpExercicio = { exercicio: { nome: string }; repeticoes: string };
 
 type TreinoProgramado = {
   id: string;
+  programadoId?: string | null;
   nome: string;
   descricao?: string | null;
   tipoTreino?: TipoTreino;
@@ -53,6 +55,13 @@ const pontuacaoRanges = [
 ];
 
 export default function TrainingsPage() {
+  const [route] = useLocation();
+  const perfilUsuarioId = useMemo(
+    () => new URLSearchParams(window.location.search).get("usuarioId")?.trim() ?? "",
+    [route]
+  );
+  const visitandoOutroAtleta =
+    Boolean(perfilUsuarioId) && perfilUsuarioId !== String(Storage.usuarioId ?? "");
   const [q, setQ] = useState("");
   const [selCats, setSelCats] = useState<string[]>([]);
   const [selTipos, setSelTipos] = useState<string[]>([]);
@@ -64,20 +73,131 @@ export default function TrainingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
+  const [nomeAtleta, setNomeAtleta] = useState("");
+  const [erro, setErro] = useState("");
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [salvos, setSalvos] = useState<string[]>([]);
+  const [aviso, setAviso] = useState("");
+  const [mesInicial, setMesInicial] = useState(format(new Date(), "yyyy-MM"));
   const SEM_PROF_LABEL = "Sem professor";
 
   useEffect(() => {
+    const controller = new AbortController();
     const token = Storage.token;
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-    fetch(`${API.BASE_URL}/api/treinos/programados`, { headers })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = await r.json();
-        setTreinos(Array.isArray(data) ? data : []);
-      })
-      .catch((e) => console.error("Falha ao carregar treinos:", e))
-      .finally(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    setTreinos([]);
+    setNomeAtleta("");
+    setErro("");
+    setAviso("");
+    setSalvos([]);
+
+    async function carregar() {
+      try {
+        if (!visitandoOutroAtleta) {
+          const r = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+            headers,
+            signal: controller.signal,
+          });
+          if (!r.ok) throw new Error("Não foi possível carregar os treinos.");
+          const data = await r.json();
+          if (!controller.signal.aborted) setTreinos(Array.isArray(data) ? data : []);
+          return;
+        }
+
+        // A consulta do perfil valida se o visitante tem acesso e fornece o ID do atleta.
+        const perfilResponse = await fetch(
+          `${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilUsuarioId)}?papel=Atleta`,
+          { headers, signal: controller.signal }
+        );
+        if (!perfilResponse.ok) throw new Error("Não foi possível acessar os treinos deste atleta.");
+        const perfil = await perfilResponse.json();
+        const atletaId = String(perfil?.dadosEspecificos?.atletaId ?? "").trim();
+        if (perfil?.tipo !== "Atleta" || !atletaId) {
+          throw new Error("Este usuário não possui um perfil de atleta disponível.");
+        }
+
+        const agendadosResponse = await fetch(
+          `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(atletaId)}&month=${encodeURIComponent(mesInicial)}`,
+          { headers, signal: controller.signal }
+        );
+        if (!agendadosResponse.ok) throw new Error("Não foi possível carregar os treinos deste atleta.");
+        const agendados = await agendadosResponse.json();
+        const unicos = new Map<string, TreinoProgramado>();
+
+        for (const item of Array.isArray(agendados) ? agendados : []) {
+          const programado = item?.treinoProgramado ?? null;
+          const programadoId = String(item?.treinoProgramadoId ?? programado?.id ?? "").trim();
+          const id = programadoId || String(item?.id ?? "").trim();
+          if (!id || unicos.has(id)) continue;
+
+          unicos.set(id, {
+            ...programado,
+            id,
+            programadoId: programadoId || null,
+            nome: programado?.nome ?? item?.titulo ?? "Treino",
+            descricao: programado?.descricao ?? null,
+            tipoTreino: programado?.tipoTreino ?? null,
+            duracao: programado?.duracao ?? item?.duracaoMinutos ?? null,
+            pontuacao: programado?.pontuacao ?? null,
+            dataAgendada: item?.dataTreino ?? null,
+            createdAt: programado?.createdAt ?? null,
+            categoria: Array.isArray(programado?.categoria) ? programado.categoria : [],
+            exercicios: Array.isArray(programado?.exercicios) ? programado.exercicios : [],
+            professor: programado?.Professor ?? programado?.professores?.[0]?.professor ?? null,
+            clube: programado?.clube ?? null,
+            escolinha: programado?.escolinha ?? null,
+          });
+        }
+
+        if (!controller.signal.aborted) {
+          setNomeAtleta(perfil?.dadosEspecificos?.nome ?? perfil?.usuario?.nome ?? "Atleta");
+          setTreinos([...unicos.values()]);
+        }
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        console.error("Falha ao carregar treinos:", e);
+        setErro(e instanceof Error ? e.message : "Não foi possível carregar os treinos.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void carregar();
+    return () => controller.abort();
+  }, [perfilUsuarioId, visitandoOutroAtleta, mesInicial]);
+
+  async function salvarNaBiblioteca(treino: TreinoProgramado) {
+    const treinoProgramadoId = treino.programadoId;
+    if (!treinoProgramadoId || salvandoId) return;
+
+    const token = Storage.token;
+    if (!token) {
+      setAviso("Entre na FootEra para salvar este treino.");
+      return;
+    }
+
+    setSalvandoId(treinoProgramadoId);
+    setAviso("");
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ treinoProgramadoId }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.message || "Não foi possível salvar o treino.");
+      setSalvos((ids) => [...ids, treinoProgramadoId]);
+      setAviso(`Treino “${treino.nome}” salvo na sua biblioteca.`);
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : "Não foi possível salvar o treino.");
+    } finally {
+      setSalvandoId(null);
+    }
+  }
 
   const allCategorias = useMemo(
     () => sorted(uniq(treinos.flatMap(t => t.categoria ?? []))),
@@ -180,7 +300,7 @@ export default function TrainingsPage() {
   return (
     <div className="min-h-screen bg-transparent">
       <Link
-                            href="/perfil"
+                            href={visitandoOutroAtleta ? `/perfil/${encodeURIComponent(perfilUsuarioId)}?papel=Atleta` : "/perfil"}
                             aria-label="Voltar para perfil"
                             className="inline-flex h-10 w-10 items-center justify-center
                               rounded-full border border-green-800 bg-white text-green-900
@@ -189,8 +309,23 @@ export default function TrainingsPage() {
                             >
                             <ArrowLeft className="h-5 w-5" />
                           </Link>
-     <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">Todos os Treinos</header>
+     <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">
+       {visitandoOutroAtleta ? `Treinos de ${nomeAtleta || "Atleta"}` : "Todos os Treinos"}
+     </header>
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
+        {erro && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-700">{erro}</p>}
+        {aviso && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{aviso}</p>}
+        {visitandoOutroAtleta && (
+          <label className="flex items-center gap-2 text-sm text-green-900">
+            Ver treinos deste mês e do seguinte
+            <input
+              type="month"
+              value={mesInicial}
+              onChange={(e) => e.target.value && setMesInicial(e.target.value)}
+              className="rounded-lg border border-green-200 bg-white px-2 py-1"
+            />
+          </label>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-800" />
@@ -326,7 +461,9 @@ export default function TrainingsPage() {
         </div>
 
         {list.length === 0 ? (
-          <div className="text-center text-green-800 py-10">Nenhum treino encontrado.</div>
+          <div className="text-center text-green-800 py-10">
+            {erro ? "" : visitandoOutroAtleta ? "Nenhum treino agendado encontrado para este atleta." : "Nenhum treino encontrado."}
+          </div>
         ) : (
           <>
             <div className="text-sm text-green-900/70">{list.length} treino(s) encontrado(s)</div>
@@ -392,7 +529,7 @@ export default function TrainingsPage() {
                         {prazo && (
                           <span className="inline-flex items-center gap-1">
                             <CalendarClock className="h-3.5 w-3.5" />
-                            Prazo: {format(prazo, "dd/MM/yyyy", { locale: ptBR })}
+                            {visitandoOutroAtleta ? "Agendado para" : "Prazo"}: {format(prazo, "dd/MM/yyyy", { locale: ptBR })}
                           </span>
                         )}
                         {criado && (
@@ -424,11 +561,22 @@ export default function TrainingsPage() {
                       )}
 
                       <div className="flex items-center justify-end gap-2 pt-1">
-                        <Button
-                          onClick={() => (window.location.href = `/treinos/novo`)}
-                        >
-                          Agendar
-                        </Button>
+                        {visitandoOutroAtleta ? (
+                          t.programadoId ? (
+                            <Button
+                              disabled={salvandoId === t.programadoId || salvos.includes(t.programadoId)}
+                              onClick={() => void salvarNaBiblioteca(t)}
+                            >
+                              {salvos.includes(t.programadoId) ? "Salvo" : salvandoId === t.programadoId ? "Salvando..." : "Salvar na minha biblioteca"}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-500">Treino pessoal sem modelo para copiar</span>
+                          )
+                        ) : (
+                          <Button onClick={() => (window.location.href = `/treinos/novo`)}>
+                            Agendar
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
