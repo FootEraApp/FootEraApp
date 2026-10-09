@@ -111,6 +111,19 @@ function categoriaHabilitadaPorPreferencia(
       },
   prefs: any
 ) {
+  
+  const tipo =
+    typeof params === "string"
+      ? params.toUpperCase()
+      : String(params?.tipo ?? "").toUpperCase();
+
+  if (
+    tipo === "RESPONSAVEL_SOLICITACAO" ||
+    tipo === "RESPONSAVEL_VINCULO"
+  ) {
+    return true;
+  }
+
   const texto =
     typeof params === "string" || params == null
       ? String(params || "").toLowerCase()
@@ -268,7 +281,7 @@ export async function criarNotificacaoEEnviarPush(params: {
   usuarioId: string;
   titulo: string;
   mensagem: string;
-  tipo?: string | null;
+  tipo?: NotificacaoTipo | null;
   link?: string | null;
   actorId?: string | null;
 }) {
@@ -277,32 +290,52 @@ export async function criarNotificacaoEEnviarPush(params: {
       usuarioId: params.usuarioId,
       titulo: params.titulo,
       mensagem: params.mensagem,
-      tipo: params.tipo || "NOTIFICACAO",
-      link: params.link || "/notificacoes",
-      actorId: params.actorId || null,
+      tipo: params.tipo ?? NotificacaoTipo.GENERICA,
+      link: params.link ?? "/notificacoes",
+      actorId: params.actorId ?? null,
       lida: false,
-    } as any,
+    },
   });
 
-  await recomputeAndEmitBadge(params.usuarioId);
+  try {
+    await recomputeAndEmitBadge(params.usuarioId);
+  } catch (error) {
+    console.warn(
+      "[Notificacoes] Falha ao atualizar badge:",
+      error
+    );
+  }
 
-  await enviarPushParaUsuario({
-    usuarioId: params.usuarioId,
-    titulo: params.titulo,
-    mensagem: params.mensagem,
-    tipo: params.tipo,
-    link: params.link,
-    notificacaoId: not.id,
-  });
+  const resultados = await Promise.allSettled([
+    enviarPushParaUsuario({
+      usuarioId: params.usuarioId,
+      titulo: params.titulo,
+      mensagem: params.mensagem,
+      tipo: params.tipo,
+      link: params.link,
+      notificacaoId: not.id,
+    }),
 
-  await enviarPushNativoParaUsuario({
-    usuarioId: params.usuarioId,
-    titulo: params.titulo,
-    mensagem: params.mensagem,
-    tipo: params.tipo,
-    link: params.link,
-    notificacaoId: not.id,
-  });
+    enviarPushNativoParaUsuario({
+      usuarioId: params.usuarioId,
+      titulo: params.titulo,
+      mensagem: params.mensagem,
+      tipo: params.tipo,
+      link: params.link,
+      notificacaoId: not.id,
+    }),
+  ]);
+
+  for (const [index, resultado] of resultados.entries()) {
+    if (resultado.status === "rejected") {
+      console.warn(
+        index === 0
+          ? "[Notificacoes] Falha no push web:"
+          : "[Notificacoes] Falha no FCM:",
+        resultado.reason
+      );
+    }
+  }
 
   return not;
 }

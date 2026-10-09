@@ -451,6 +451,18 @@ function VideoModal({
   );
 }
 
+function normalizarNivelExibido(valor: string): string {
+  const normalizado = valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (normalizado === "avancado") return "Avançado";
+  if (normalizado === "performance") return "Performance";
+  return "Base";
+}
+
 export default function CriarOuEditarTreino() {
   const [step, setStep] = useState<1 | 2>(1);
   const [id, setId] = useState<string | null>(null);
@@ -531,10 +543,76 @@ export default function CriarOuEditarTreino() {
     setVideoSrc("");
     setVideoTitle("");
   };
-
+    
   const pts = useMemo(() => {
-    return Math.max(0, linhas.filter((l) => l.exercicioId || l.isCustom).length * 3);
-  }, [linhas]);
+    const normalizar = (valor: unknown): string =>
+      String(valor ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+
+    const pontosNivel: Record<string, number> = {
+      base: 0,
+      avancado: 10,
+      performance: 20,
+    };
+
+    const pontosTipo: Record<string, number> = {
+      tecnico: 5,
+      fisico: 6,
+      tatico: 8,
+      mental: 5,
+    };
+
+    const pontosExercicio: Record<string, number> = {
+      base: 4,
+      avancado: 6,
+      performance: 8,
+    };
+
+    const nivel = normalizar(nivelTreino);
+    const tipo = normalizar(tipoTreino);
+
+    const pontosDoNivel = pontosNivel[nivel] ?? 0;
+    const pontosDoTipo = pontosTipo[tipo] ?? 0;
+
+    const pontosDaDuracao =
+      Number.isFinite(duracaoMin) && duracaoMin > 0
+        ? Math.floor(duracaoMin / 15)
+        : 0;
+
+    const exerciciosValidos = linhas.filter(
+      (linha) =>
+        Boolean(linha.exercicioId) ||
+        Boolean(linha.exercicioPersonalizadoId) ||
+        Boolean(linha.exercicioTemporarioId) ||
+        (linha.isCustom &&
+          Boolean(String(linha.customTitulo ?? "").trim()))
+    );
+
+    const pontosDosExercicios = exerciciosValidos.reduce(
+      (total, exercicio) => {
+        const nivelExercicio =
+          normalizar(exercicio.nivel) || nivel;
+
+        return (
+          total +
+          (pontosExercicio[nivelExercicio] ??
+            pontosExercicio[nivel] ??
+            4)
+        );
+      },
+      0
+    );
+
+    return (
+      pontosDoNivel +
+      pontosDoTipo +
+      pontosDaDuracao +
+      pontosDosExercicios
+    );
+  }, [linhas, nivelTreino, tipoTreino, duracaoMin]);
 
   useEffect(() => {
     const token = getToken();
@@ -1935,12 +2013,11 @@ export default function CriarOuEditarTreino() {
                     const tituloExibido =
                       l.customTitulo || l.titulo || ex?.nome || "";
                     
-                    const descricaoExibida =
-                      l.isCustom
-                        ? (l.customDesc ?? l.descricao ?? ex?.descricao ?? ex?.objetivo ?? "")
-                        : (l.descricao ?? ex?.descricao ?? ex?.objetivo ?? "");
                     const nivelExibido =
-                      String(l.nivel || ex?.nivel || "").trim();
+                      String(l.nivel || ex?.nivel || nivelTreino || "Base").trim();
+
+                    const nivelExibidoFormatado =
+                      normalizarNivelExibido(nivelExibido);
                     const videoExibido =
                       l.customVideoPreviewUrl ||
                       normalizeUrl(l.videoPosterUrl) ||
@@ -2042,35 +2119,26 @@ export default function CriarOuEditarTreino() {
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                {l.isCustom ? (
-                                  isPersonalizadoExistente ? (
-                                    <div className="text-lg font-extrabold text-gray-900">
-                                      {l.customTitulo || "Exercício personalizado"}
-                                    </div>
-                                  ) : (
+                              <div className="min-w-0 flex-1">                                
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  {l.isCustom && !isPersonalizadoExistente ? (
                                     <input
-                                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:border-green-600"
+                                      className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900"
                                       placeholder="Nome do exercício personalizado"
                                       value={l.customTitulo || ""}
                                       onChange={(e) =>
                                         atualizarLinha(idx, { customTitulo: e.target.value })
                                       }
                                     />
-                                  )
-                                ) : (
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-lg font-extrabold text-gray-900">
+                                  ) : (
+                                    <div className="min-w-0 text-lg font-extrabold text-gray-900">
                                       {tituloExibido}
                                     </div>
-
-                                    {nivelExibido && (
-                                      <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
-                                        {nivelExibido}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
+                                  )}
+                                  <span className="shrink-0 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-bold text-green-800">
+                                    {nivelExibidoFormatado}
+                                  </span>
+                                </div>
 
                                 {l.isCustom && !isPersonalizadoExistente && (
                                   <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -2106,8 +2174,8 @@ export default function CriarOuEditarTreino() {
                               </button>
                             </div>
 
-                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                              <div className="md:col-span-2 flex gap-2 mb-1">
+                            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              <div className="col-span-2 sm:col-span-3 flex flex-wrap gap-2 mb-1">
                                 <button
                                   type="button"
                                   onClick={() => atualizarLinha(idx, { tipoExecucao: "repeticao", duracao: "" })}
@@ -2178,7 +2246,7 @@ export default function CriarOuEditarTreino() {
                                 </div>
                               )}
 
-                              <div className={l.tipoExecucao === "duracao" ? "md:col-span-2" : ""}>
+                              <div className="col-span-2 sm:col-span-1">
                                 <label className="block text-xs font-semibold text-gray-700">Descanso (opcional)</label>
                                 <input
                                   className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
@@ -2188,7 +2256,7 @@ export default function CriarOuEditarTreino() {
                                 />
                               </div>
 
-                              <div className="md:col-span-2">
+                              <div className="col-span-2 sm:col-span-3">
                                 <label className="block text-xs font-semibold text-gray-700">Descrição (opcional)</label>
                                 <textarea
                                   className="mt-1 min-h-[92px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-green-600"
@@ -2266,9 +2334,9 @@ export default function CriarOuEditarTreino() {
                 </button>
               </div>
 
-              <div className="mb-4 flex w-full flex-col gap-3">
+              <div className="mb-3 grid w-full grid-cols-3 gap-2">
                 <input
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-green-700"
+                  className="col-span-3 min-w-0 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-700"
                   placeholder={
                     abaExercicios === "meus"
                       ? "Buscar meus exercícios..."
@@ -2370,8 +2438,10 @@ export default function CriarOuEditarTreino() {
                               </h4>
 
                               {ex.nivel ? (
-                                <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">
-                                  {ex.nivel}
+                                <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-800">
+                                  {normalizarNivelExibido(
+                                    String(ex.nivel || nivelTreino)
+                                  )}
                                 </span>
                               ) : null}
                             </div>
@@ -2479,8 +2549,10 @@ export default function CriarOuEditarTreino() {
                                         </div>
 
                                         {nivel && (
-                                          <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-800">
-                                            {nivel}
+                                          <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-800">
+                                            {normalizarNivelExibido(
+                                              String(ex.nivel || nivelTreino)
+                                            )}
                                           </span>
                                         )}
                                       </div>
@@ -2580,8 +2652,10 @@ export default function CriarOuEditarTreino() {
                                 </h4>
 
                                 {ex.nivel ? (
-                                  <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">
-                                    {ex.nivel}
+                                  <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-800">
+                                    {normalizarNivelExibido(
+                                      String(ex.nivel || nivelTreino)
+                                    )}
                                   </span>
                                 ) : null}
                               </div>

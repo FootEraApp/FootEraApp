@@ -6,6 +6,8 @@ import {
   StatusCref,
   NotificacaoTipo,
   StatusUsuarioPapel,
+  StatusResponsavelAtleta,
+  AuthProvider,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -747,36 +749,121 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       idadeCalcInicial !== null &&
       idadeCalcInicial < 12;
 
-    const responsavelNomeFinal = String(responsavel?.nome ?? "").trim();
+    const responsavelModo =
+      String(
+        responsavel?.modo ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
 
-    const responsavelEmailFinal = String(responsavel?.email ?? "")
-      .trim()
-      .toLowerCase();
+    const responsavelNomeFinal =
+      String(
+        responsavel?.nome ??
+        ""
+      ).trim();
+
+    const responsavelEmailFinal =
+      String(
+        responsavel?.email ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
 
     const responsavelTelefoneFinal =
-      String(responsavel?.telefone ?? "").trim() || null;
+      String(
+        responsavel?.telefone ??
+        ""
+      ).trim() ||
+      null;
+
+    const responsavelSenhaFinal =
+      String(
+        responsavel?.senha ??
+        ""
+      );
 
     if (precisaResponsavel) {
-      if (!responsavelNomeFinal) {
-        return res.status(400).json({
-          error: "Informe o nome do responsável legal.",
-        });
+      if (
+        responsavelModo !==
+          "existente" &&
+        responsavelModo !==
+          "novo"
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Escolha como o responsável será vinculado.",
+          });
       }
 
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(responsavelEmailFinal)) {
-        return res.status(400).json({
-          error: "Informe um e-mail válido do responsável legal.",
-        });
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
+          responsavelEmailFinal
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe um e-mail válido do responsável.",
+          });
+      }
+
+      if (
+        !responsavelSenhaFinal
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe a senha do responsável.",
+          });
+      }
+
+      if (
+        responsavelModo ===
+        "novo"
+      ) {
+        if (
+          !responsavelNomeFinal
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "Informe o nome do responsável.",
+            });
+        }
+
+        if (
+          !/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(
+            responsavelSenhaFinal
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "A senha do responsável deve ter pelo menos 8 caracteres, uma letra e um número.",
+            });
+        }
       }
 
       if (
         responsavelTelefoneFinal &&
-        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(responsavelTelefoneFinal)
+        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(
+          responsavelTelefoneFinal
+        )
       ) {
-        return res.status(400).json({
-          error:
-            "Informe um telefone válido do responsável legal ou deixe em branco.",
-        });
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe um telefone válido do responsável ou deixe em branco.",
+          });
       }
     }
 
@@ -826,6 +913,232 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     }
 
     const senhaHash = await bcrypt.hash(String(senha), 10);
+
+    let responsavelUsuarioId:
+      string | null =
+      null;
+
+    if (precisaResponsavel) {
+      if (
+        responsavelModo ===
+        "existente"
+      ) {
+        const usuarioResponsavel =
+          await prisma.usuario.findFirst({
+            where: {
+              email: {
+                equals:
+                  responsavelEmailFinal,
+
+                mode:
+                  "insensitive",
+              },
+            },
+
+            select: {
+              id: true,
+              senhaHash: true,
+              localLoginEnabled:
+                true,
+              deletedAt: true,
+              blockedAt: true,
+            },
+          });
+
+        if (
+          !usuarioResponsavel ||
+          usuarioResponsavel
+            .deletedAt ||
+          usuarioResponsavel
+            .blockedAt
+        ) {
+          return res
+            .status(401)
+            .json({
+              error:
+                "Conta do responsável não encontrada ou indisponível.",
+            });
+        }
+
+        if (
+          !usuarioResponsavel
+            .localLoginEnabled ||
+          !usuarioResponsavel
+            .senhaHash
+        ) {
+          return res
+            .status(409)
+            .json({
+              code:
+                "RESPONSAVEL_GOOGLE_ONLY",
+
+              error:
+                "Esta conta do responsável não possui login por senha. Entre com Google nessa conta ou defina uma senha primeiro.",
+            });
+        }
+
+        const senhaValida =
+          await bcrypt.compare(
+            responsavelSenhaFinal,
+            usuarioResponsavel
+              .senhaHash
+          );
+
+        if (!senhaValida) {
+          return res
+            .status(401)
+            .json({
+              error:
+                "E-mail ou senha do responsável inválidos.",
+            });
+        }
+
+        responsavelUsuarioId =
+          usuarioResponsavel.id;
+
+        await prisma.usuarioPapel.upsert({
+          where: {
+            usuarioId_papel: {
+              usuarioId:
+                usuarioResponsavel.id,
+
+              papel:
+                TipoUsuario.Responsavel,
+            },
+          },
+
+          update: {
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            desativadoEm:
+              null,
+
+            perfilCompletoEm:
+              new Date(),
+          },
+
+          create: {
+            usuarioId:
+              usuarioResponsavel.id,
+
+            papel:
+              TipoUsuario.Responsavel,
+
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            perfilCompletoEm:
+              new Date(),
+          },
+        });
+      }
+
+      if (
+        responsavelModo ===
+        "novo"
+      ) {
+        const existente =
+          await prisma.usuario.findFirst({
+            where: {
+              email: {
+                equals:
+                  responsavelEmailFinal,
+
+                mode:
+                  "insensitive",
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        if (existente) {
+          return res
+            .status(409)
+            .json({
+              code:
+                "RESPONSAVEL_EMAIL_ALREADY_EXISTS",
+
+              error:
+                "Já existe uma conta FootEra com este e-mail. Use a opção 'Já tenho uma conta FootEra'.",
+            });
+        }
+
+        const usernameResponsavel =
+          await gerarUsernameDisponivel(
+            responsavelNomeFinal ||
+              responsavelEmailFinal
+                .split("@")[0]
+          );
+
+        const senhaResponsavelHash =
+          await bcrypt.hash(
+            responsavelSenhaFinal,
+            10
+          );
+
+        const novoResponsavel =
+          await prisma.usuario.create({
+            data: {
+              nome:
+                responsavelNomeFinal,
+
+              email:
+                responsavelEmailFinal,
+
+              nomeDeUsuario:
+                usernameResponsavel,
+
+              senhaHash:
+                senhaResponsavelHash,
+
+              tipo:
+                TipoUsuario.Responsavel,
+
+              localLoginEnabled:
+                true,
+
+              authProvider:
+                AuthProvider.LOCAL,
+
+              responsavelTelefone:
+                responsavelTelefoneFinal,
+
+              papeis: {
+                create: {
+                  papel:
+                    TipoUsuario.Responsavel,
+
+                  status:
+                    StatusUsuarioPapel.ATIVO,
+
+                  ativadoEm:
+                    new Date(),
+
+                  perfilCompletoEm:
+                    new Date(),
+                },
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        responsavelUsuarioId =
+          novoResponsavel.id;
+      }
+    }
 
     const usuario = await prisma.usuario.create({
       data: {
@@ -896,6 +1209,106 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             id: true,
           },
         });
+
+        if (
+          precisaResponsavel &&
+          responsavelUsuarioId
+        ) {
+          await prisma.responsavelAtleta.upsert({
+            where: {
+              responsavelUsuarioId_atletaId:
+                {
+                  responsavelUsuarioId,
+
+                  atletaId:
+                    atleta.id,
+                },
+            },
+
+            update: {
+              status:
+                StatusResponsavelAtleta.ATIVO,
+
+              principal:
+                true,
+
+              podeEditarPerfil:
+                true,
+
+              podeGerenciarPrivacidade:
+                true,
+
+              podeGerenciarTreinos:
+                true,
+
+              podeGerenciarConteudo:
+                true,
+
+              confirmadoEm:
+                new Date(),
+
+              revogadoEm:
+                null,
+            },
+
+            create: {
+              responsavelUsuarioId,
+
+              atletaId:
+                atleta.id,
+
+              status:
+                StatusResponsavelAtleta.ATIVO,
+
+              principal:
+                true,
+
+              podeEditarPerfil:
+                true,
+
+              podeGerenciarPrivacidade:
+                true,
+
+              podeGerenciarTreinos:
+                true,
+
+              podeGerenciarConteudo:
+                true,
+
+              confirmadoEm:
+                new Date(),
+
+              parentesco:
+                "Responsável legal",
+            },
+          });
+
+          await prisma.usuario.update({
+            where: {
+              id:
+                usuario.id,
+            },
+
+            data: {
+              configuracoesPrivacidade: {
+                perfilVisivel:
+                  false,
+
+                visibilidadePerfil:
+                  "PRIVADO",
+
+                permitirMensagens:
+                  false,
+
+                mostrarEmail:
+                  false,
+
+                mostrarOnline:
+                  false,
+              },
+            },
+          });
+        }
 
         if (
           tipo === "ATLETA" &&

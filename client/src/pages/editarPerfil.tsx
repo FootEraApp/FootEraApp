@@ -28,7 +28,8 @@ type TipoRender =
   | "federacao"
   | "marca"
   | "learning"
-  | "creator";
+  | "creator"
+  | "responsavel";
 
 type PapelApi =
   | "Atleta"
@@ -39,7 +40,8 @@ type PapelApi =
   | "Federacao"
   | "Marca"
   | "Learning"
-  | "Creator";
+  | "Creator"
+  | "Responsavel";
 
 type StatusPapel = "PENDENTE" | "ATIVO" | "INATIVO";
 
@@ -111,6 +113,16 @@ const PERFIS_DISPONIVEIS: PerfilDisponivel[] = [
     papel: "Creator",
     titulo: "Creator",
     descricao: "Conteúdos, metodologias e experiências autorais.",
+  },
+  {
+    tipo:
+      "responsavel",
+    papel:
+      "Responsavel",
+    titulo:
+      "Responsável",
+    descricao:
+      "Gerencie os perfis dos atletas menores sob sua responsabilidade.",
   },
 ];
 
@@ -201,13 +213,45 @@ const POSICOES: Array<{ value: PosicaoCampo; label: string }> = [
 ];
 
 const EditarPerfil = () => {
-  const usuarioId = Storage.usuarioId;
-  const tipoUsuarioOriginal = Storage.tipoSalvo;
-  const token = Storage.token;
+  const queryParams =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const modoGerenciado =
+    queryParams.get(
+      "gerenciado"
+    ) === "1";
+
+  const usuarioIdGerenciado =
+    String(
+      queryParams.get(
+        "usuarioId"
+      ) ?? ""
+    ).trim();
+
+  const usuarioId =
+    modoGerenciado &&
+    usuarioIdGerenciado
+      ? usuarioIdGerenciado
+      : Storage.usuarioId;
+
+  const tipoUsuarioOriginal =
+    modoGerenciado
+      ? "Atleta"
+      : Storage.tipoSalvo;
+
+  const token =
+    Storage.token;
 
   const [dadosUsuario, setDadosUsuario] = useState<any>(null);
   const [dadosTipo, setDadosTipo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [
+    contaSupervisionada,
+    setContaSupervisionada,
+  ] =
+    useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
   const [tipoEmUso, setTipoEmUso] = useState<TipoRender | null>(() =>
@@ -307,9 +351,24 @@ const EditarPerfil = () => {
 
     const fetchDados = async () => {
       try {
-        const res = await axios.get(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res =
+          await axios.get(
+            `${API.BASE_URL}/api/perfil/${usuarioId}`,
+            {
+              params:
+                modoGerenciado
+                  ? {
+                      papel:
+                        "Atleta",
+                    }
+                  : undefined,
+
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
 
         if (!res?.data?.usuario) {
           setErro("Perfil não encontrado ou resposta inválida do servidor.");
@@ -517,10 +576,32 @@ const EditarPerfil = () => {
     };
 
     fetchDados();
-  }, [usuarioId, token]);
+  }, [usuarioId, token, modoGerenciado]);
 
   useEffect(() => {
     if (!usuarioId || !token) return;
+
+    if (modoGerenciado) {
+      setPapeisUsuario([
+        {
+          papel:
+            "Atleta",
+
+          status:
+            "ATIVO",
+        },
+      ]);
+
+      setTipoRender(
+        "atleta"
+      );
+
+      setTipoEmUso(
+        "atleta"
+      );
+
+      return;
+    }
 
     let cancelado = false;
 
@@ -593,7 +674,7 @@ const EditarPerfil = () => {
     return () => {
       cancelado = true;
     };
-  }, [usuarioId, token]);
+  }, [usuarioId, token, modoGerenciado]);
 
   useEffect(() => {
     if (!tipoRender || !dadosTipo) return;
@@ -765,6 +846,73 @@ const EditarPerfil = () => {
     };
   }, [API?.BASE_URL, token]);
 
+  useEffect(() => {
+    if (
+      !token ||
+      modoGerenciado ||
+      tipoEmUso !==
+        "atleta"
+    ) {
+      setContaSupervisionada(
+        false
+      );
+
+      return;
+    }
+
+    let cancelado =
+      false;
+
+    async function carregarSupervisao() {
+      try {
+        const resposta =
+          await axios.get(
+            `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        if (cancelado) {
+          return;
+        }
+
+        setContaSupervisionada(
+          Boolean(
+            resposta.data
+              ?.supervisao
+              ?.supervisionado
+          )
+        );
+      } catch {
+        if (!cancelado) {
+          /*
+          * Em caso de falha não alteramos
+          * dados no frontend, mas o backend
+          * continuará sendo a autoridade.
+          */
+          setContaSupervisionada(
+            false
+          );
+        }
+      }
+    }
+
+    carregarSupervisao();
+
+    return () => {
+      cancelado =
+        true;
+    };
+  }, [
+    token,
+    modoGerenciado,
+    tipoEmUso,
+  ]);
+
   if (loading) {
     return (
       <div className="text-center text-gray-600 mt-10">
@@ -805,7 +953,26 @@ const EditarPerfil = () => {
     papelSelecionado?.status === "PENDENTE";
 
   const selecionarPerfil = async (perfil: PerfilDisponivel) => {
+    if (modoGerenciado) {
+      return;
+    }
     setTipoRender(perfil.tipo);
+
+    if (
+      perfil.tipo ===
+      "responsavel"
+    ) {
+      setDadosTipo({});
+
+      setDadosPorPapel(
+        (prev) => ({
+          ...prev,
+          responsavel: {},
+        })
+      );
+
+      return;
+    }
 
     const registro = papeisUsuario.find((item) => item.papel === perfil.papel);
 
@@ -971,7 +1138,12 @@ const EditarPerfil = () => {
       toast.success(`Agora você está usando o perfil de ${perfil.titulo}.`);
 
       window.setTimeout(() => {
-        window.location.href = "/perfil";
+        const destino =
+          tipoAtivo === "creator"
+            ? `/creator/profile?id=${encodeURIComponent(String(usuarioId))}`
+            : "/perfil";
+
+        window.location.href = destino;
       }, 350);
     } catch (error: any) {
       console.error("[EditarPerfil] Erro ao trocar papel ativo", error);
@@ -1882,6 +2054,10 @@ const EditarPerfil = () => {
 
   const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
 
+  const bloqueiaIdentidadeSensivel =
+    modoGerenciado ||
+    contaSupervisionada;
+
   return (
     <div
       className="mx-auto max-w-4xl px-4 pt-3 sm:px-6 sm:pt-6"
@@ -1900,13 +2076,21 @@ const EditarPerfil = () => {
         </Link>
 
         <div>
-          <h1 className="text-xl font-bold text-gray-950">Editar perfis</h1>
+          <h1 className="text-xl font-bold text-gray-950">
+            {modoGerenciado
+              ? "Editar perfil do atleta"
+              : "Editar perfis"}
+          </h1>
+
           <p className="text-sm text-gray-500">
-            Atualize seu perfil atual ou ative uma nova forma de usar a FootEra.
+            {modoGerenciado
+              ? "Você está editando um atleta sob sua responsabilidade."
+              : "Atualize seu perfil atual ou ative uma nova forma de usar a FootEra."}
           </p>
         </div>
       </header>
 
+      {!modoGerenciado && (
       <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -2024,6 +2208,7 @@ const EditarPerfil = () => {
           })}
         </div>
       </section>
+      )}
 
       {perfilLiberado ? (
         <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
@@ -2110,11 +2295,26 @@ const EditarPerfil = () => {
                 </label>
                 <input
                   name="nomeDeUsuario"
+                  disabled={
+                    bloqueiaIdentidadeSensivel
+                  }
                   value={dadosUsuario.nomeDeUsuario || ""}
                   onChange={handleChange}
-                  className="w-full border px-3 py-2 rounded"
+                  className="w-full border px-3 py-2 rounded disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                   placeholder="ex: joao.olheiro"
                 />
+                {modoGerenciado && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    O nome de usuário pertence à conta do atleta e não pode ser alterado pelo responsável.
+                  </p>
+                )}
+
+                {!modoGerenciado &&
+                  contaSupervisionada && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Enquanto sua conta for supervisionada, dados de identidade e acesso não podem ser alterados diretamente.
+                  </p>
+                )}
                 <p className="text-xs text-gray-500 mt-1">
                   Use apenas letras, números, pontos e underline.
                 </p>
@@ -2124,6 +2324,9 @@ const EditarPerfil = () => {
                 <label className="block text-sm font-medium">Email</label>
                 <input
                   name="email"
+                  disabled={
+                    bloqueiaIdentidadeSensivel
+                  }
                   value={dadosUsuario.email || ""}
                   onChange={handleChange}
                   className="w-full border px-3 py-2 rounded"
@@ -2138,6 +2341,9 @@ const EditarPerfil = () => {
                   <input
                     type="date"
                     name="dataNascimento"
+                    disabled={
+                      bloqueiaIdentidadeSensivel
+                    }
                     min="1900-01-01"
                     max={new Date().toISOString().slice(0, 10)}
                     value={normalizarDataNascimentoParaInput(
@@ -2171,6 +2377,9 @@ const EditarPerfil = () => {
                   <label className="block text-sm font-medium">CPF</label>
                   <input
                     name="cpf"
+                    disabled={
+                      bloqueiaIdentidadeSensivel
+                    }
                     value={dadosUsuario.cpf || ""}
                     onChange={(e) => {
                       const digits = onlyDigits(e.target.value).slice(0, 11);
@@ -2190,6 +2399,9 @@ const EditarPerfil = () => {
                   <label className="block text-sm font-medium">CEP</label>
                   <input
                     name="cep"
+                    disabled={
+                      contaSupervisionada
+                    }
                     value={String(dadosUsuario.cep || "").replace(
                       /^(\d{5})(\d)/,
                       "$1-$2",
@@ -2201,7 +2413,7 @@ const EditarPerfil = () => {
                         cep: digits,
                       }));
                     }}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-3 py-2 rounded disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                     placeholder="Ex: 29102-999"
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -2215,9 +2427,12 @@ const EditarPerfil = () => {
                   <label className="block text-sm font-medium">País </label>
                   <input
                     name="pais"
+                    disabled={
+                      contaSupervisionada
+                    }
                     value={dadosUsuario.pais || ""}
                     onChange={handleChange}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-3 py-2 rounded disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                     placeholder="Brasil"
                   />
                 </div>
@@ -2228,9 +2443,12 @@ const EditarPerfil = () => {
                   </label>
                   <input
                     name="estado"
+                    disabled={
+                      contaSupervisionada
+                    }
                     value={dadosUsuario.estado || ""}
                     onChange={handleChange}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-3 py-2 rounded disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                     placeholder="ES"
                   />
                 </div>
@@ -2239,9 +2457,12 @@ const EditarPerfil = () => {
                   <label className="block text-sm font-medium">Cidade </label>
                   <input
                     name="cidade"
+                    disabled={
+                      contaSupervisionada
+                    }
                     value={dadosUsuario.cidade || ""}
                     onChange={handleChange}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-3 py-2 rounded disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                     placeholder="Vila Velha"
                   />
                 </div>
@@ -2253,9 +2474,12 @@ const EditarPerfil = () => {
                 </label>
                 <input
                   name="logradouro"
+                  disabled={
+                    contaSupervisionada
+                  }
                   value={dadosUsuario.logradouro || ""}
                   onChange={handleChange}
-                  className="w-full border px-3 py-2 rounded"
+                  className="w-full border px-3 py-2 rounded disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                   placeholder="Rua, avenida, etc."
                 />
               </div>
@@ -2443,7 +2667,11 @@ const EditarPerfil = () => {
                       },
                     );
 
-                    if (papelSelecionado?.status === "PENDENTE") {
+                    if (
+                      !modoGerenciado &&
+                      papelSelecionado?.status ===
+                        "PENDENTE"
+                    ) {
                       await axios.patch(
                         `${API.BASE_URL}/api/usuarios/me/papeis/${encodeURIComponent(
                           perfilSelecionado.papel,
@@ -2524,12 +2752,23 @@ const EditarPerfil = () => {
                         ? "Perfil atualizado e solicitação de colaboração enviada!"
                         : "Perfil atualizado com sucesso!",
                     );
-                    Storage.nomeDeUsuario =
-                      usernameFinal || Storage.nomeDeUsuario;
-                    const returnTo = new URLSearchParams(
-                      window.location.search,
-                    ).get("returnTo");
-                    window.location.href = returnTo || "/perfil";
+                    if (!modoGerenciado) {
+                      Storage.nomeDeUsuario =
+                        usernameFinal ||
+                        Storage.nomeDeUsuario;
+                    }
+                    const returnTo =
+                      new URLSearchParams(
+                        window.location.search
+                      ).get("returnTo");
+
+                    const destinoPadrao =
+                      tipoRender === "creator"
+                        ? `/creator/profile?id=${encodeURIComponent(String(usuarioId))}`
+                        : "/perfil";
+
+                    window.location.href =
+                      returnTo || destinoPadrao;
                   } catch (err: any) {
                     console.error("[EditarPerfil] Erro ao salvar:", err);
                     const msg =

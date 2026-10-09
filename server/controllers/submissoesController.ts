@@ -228,8 +228,6 @@ export async function criarSubmissaoTreinoUpload(
         duracaoMinutos: duracaoMinutosFinal,
         duracaoSegundos: tempoSegNum,
         aprovado: true,
-        pontosCreditados: pontosConsiderados,
-        pontuacaoSnapshot: pontosConsiderados,
         repeticoes: repeticoesNum,
         ...(midia ? { midias: { create: [midia] } } : {}),
         tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
@@ -269,8 +267,14 @@ export async function criarSubmissaoTreinoUpload(
             ? `Treino ${ag.treinoProgramado.tipoTreino}`
             : "Treino",
           titulo: ag.treinoProgramado.nome || "Treino concluído",
-          imagemUrl: ag.treinoProgramado.imagemUrl || assetUrl || null,
-          link: `/submissao?treinoAgendadoId=${treinoAgendadoId}`,
+          imagemUrl: ag.treinoProgramado.imagemUrl || assetUrl || null,  
+          link: ag.treinoProgramadoId
+            ? `/treinos/unico?programadoId=${encodeURIComponent(
+                ag.treinoProgramadoId
+              )}`
+            : `/submissao?treinoAgendadoId=${encodeURIComponent(
+                treinoAgendadoId
+              )}`,
           createdAt: new Date(),
         },
       });
@@ -722,8 +726,6 @@ export async function criarSubmissaoTreinoSessaoUpload(
           update: {
             observacao,
             aprovado: true,
-            pontosCreditados: pontosConsiderados,
-            pontuacaoSnapshot: pontosConsiderados,
             duracaoSegundos: tempoRealSeg ?? undefined,
             duracaoMinutos: minutosReais ?? undefined,
             repeticoes: repeticoesNum,

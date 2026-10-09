@@ -1,4 +1,3 @@
-// client/src/pages/learning/index.tsx
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation} from "wouter";
@@ -440,9 +439,9 @@ function EventoAoVivoExploreCard({
           : "Preço não definido");
 
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
-        <div className="h-44 md:h-full min-h-[170px] overflow-hidden rounded-xl bg-emerald-950">
+    <div className="rounded-2xl border bg-white p-3 sm:p-4 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-3">
+        <div className="h-36 md:h-full min-h-[140px] overflow-hidden rounded-xl bg-emerald-950">
           <CoverImage
             src={imagem}
             alt={aula.titulo}
@@ -588,7 +587,6 @@ function EventoAoVivoExploreCard({
               <Share2 className="h-4 w-4" />
               Compartilhar
             </button>
-
           </div>
         </div>
       </div>
@@ -796,7 +794,7 @@ export default function LearningPage() {
 
           return;
         }
-        
+
         const promises = [
           listMetodologiasVisiveis(),
 
@@ -1218,7 +1216,7 @@ export default function LearningPage() {
 
   return (
     <div className="min-h-screen bg-[#f7f7f4] pb-20">
-      <div className="max-w-6xl mx-auto px-4 pt-5">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3">
         <LearningHeader
             title="Learning"
             subtitle={
@@ -1304,8 +1302,8 @@ export default function LearningPage() {
         ) : null}
 
         {!loading && tab === "explorar" ? (
-          <div className="space-y-4">
-            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-5">
+          <div className="space-y-3">
+            <div className="rounded-2xl border bg-white p-3 sm:p-4 shadow-sm space-y-3">
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
@@ -1328,12 +1326,12 @@ export default function LearningPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   <input
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
                     placeholder="Buscar metodologia por nome, descrição ou área"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                    className="col-span-3 min-w-0 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
                   />
 
                   <select
@@ -1343,9 +1341,9 @@ export default function LearningPage() {
                         e.target.value as "TODOS" | "AMBOS" | "PROFISSIONAIS" | "ATLETAS"
                       )
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Todos os públicos</option>
+                    <option value="TODOS">Público</option>
                     <option value="AMBOS">Ambos</option>
                     <option value="PROFISSIONAIS">Profissionais</option>
                     <option value="ATLETAS">Atletas</option>
@@ -1356,9 +1354,9 @@ export default function LearningPage() {
                     onChange={(e) =>
                       setFiltroEstrutura(e.target.value as "TODOS" | "TRILHA" | "MODULO")
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Todos os formatos</option>
+                    <option value="TODOS">Formatos</option>
                     <option value="TRILHA">Com trilhas</option>
                     <option value="MODULO">Com módulos</option>
                   </select>
@@ -1368,9 +1366,9 @@ export default function LearningPage() {
                     onChange={(e) =>
                       setFiltroCertificado(e.target.value as "TODOS" | "COM" | "SEM")
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Com ou sem certificado</option>
+                    <option value="TODOS">Certificado</option>
                     <option value="COM">Com certificado</option>
                     <option value="SEM">Sem certificado</option>
                   </select>
@@ -1380,9 +1378,9 @@ export default function LearningPage() {
                     onChange={(e) =>
                       setFiltroBadge(e.target.value as "TODOS" | "COM" | "SEM")
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Com ou sem badge</option>
+                    <option value="TODOS">Badge</option>
                     <option value="COM">Com badge</option>
                     <option value="SEM">Sem badge</option>
                   </select>
@@ -1394,9 +1392,9 @@ export default function LearningPage() {
                         e.target.value as "TODOS" | "VIDEO" | "TREINO" | "MATERIAL"
                       )
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Todos os materiais</option>
+                    <option value="TODOS">Materiais</option>
                     <option value="VIDEO">Com vídeos/aulas</option>
                     <option value="TREINO">Com treinos</option>
                     <option value="MATERIAL">Com materiais</option>
@@ -1407,18 +1405,18 @@ export default function LearningPage() {
                     onChange={(e) =>
                       setFiltroOrigem(e.target.value as "TODOS" | "LEARNING" | "AVULSA")
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white md:col-span-2"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Todas as metodologias</option>
+                    <option value="TODOS">Origem</option>
                     <option value="LEARNING">Só Learning</option>
                     <option value="AVULSA">Só Avulsas</option>
                   </select>
 
-                  <div className="md:col-span-2 flex flex-wrap gap-2">
+                  <div className="col-span-3 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setFiltroFavoritosMetodologias("TODOS")}
-                      className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                      className={`rounded-lg border px-3 py-1.5 text-xs sm:text-sm font-bold ${
                         filtroFavoritosMetodologias === "TODOS"
                           ? "bg-[#216c43] text-white border-[#216c43]"
                           : "bg-white text-slate-700 border-slate-300"
@@ -1430,7 +1428,7 @@ export default function LearningPage() {
                     <button
                       type="button"
                       onClick={() => setFiltroFavoritosMetodologias("FAVORITOS")}
-                      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold ${
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs sm:text-sm font-bold ${
                         filtroFavoritosMetodologias === "FAVORITOS"
                           ? "bg-amber-50 text-amber-700 border-amber-300"
                           : "bg-white text-slate-700 border-slate-300"
@@ -1453,28 +1451,28 @@ export default function LearningPage() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-5">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
+              <div className="border-t border-slate-200 pt-3">                                
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <h2 className="text-base font-extrabold text-[#193b2e]">
                       Eventos
                     </h2>
+
                     <p className="text-sm text-slate-500">
                       Filtre aulas ao vivo únicas, eventos de metodologia e eventos premium.
                     </p>
                   </div>
 
-                  <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                  <span className="inline-flex shrink-0 whitespace-nowrap items-center justify-center rounded-full border bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
                     {totalEventosFiltrado} {pluralEvento(totalEventosFiltrado)}
                   </span>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     value={buscaEvento}
                     onChange={(e) => setBuscaEvento(e.target.value)}
                     placeholder="Buscar evento, criador ou metodologia"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+                    className="col-span-2 min-w-0 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
                   />
 
                   <select
@@ -1489,9 +1487,9 @@ export default function LearningPage() {
                           | "GRATUITO"
                       )
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Todos os eventos ao vivo</option>
+                    <option value="TODOS">Tipo de evento</option>
                     <option value="GRATUITO">Eventos gratuitos</option>
                     <option value="EVENTO_AVULSO">Só evento único</option>
                     <option value="LEARNING">Só eventos de metodologia Learning</option>
@@ -1505,19 +1503,19 @@ export default function LearningPage() {
                         e.target.value as "TODOS" | "AGENDADA" | "AO_VIVO" | "FINALIZADA"
                       )
                     }
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs sm:text-sm"
                   >
-                    <option value="TODOS">Todos os status</option>
+                    <option value="TODOS">Status</option>
                     <option value="AGENDADA">Agendados</option>
                     <option value="AO_VIVO">Ao vivo agora</option>
                     <option value="FINALIZADA">Finalizados / replay</option>
                   </select>
 
-                  <div className="md:col-span-3 flex flex-wrap gap-2">
+                  <div className="col-span-2 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setFiltroFavoritosEventos("TODOS")}
-                      className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                      className={`rounded-lg border px-3 py-1.5 text-xs sm:text-sm font-bold ${
                         filtroFavoritosEventos === "TODOS"
                           ? "bg-[#216c43] text-white border-[#216c43]"
                           : "bg-white text-slate-700 border-slate-300"
@@ -1529,7 +1527,7 @@ export default function LearningPage() {
                     <button
                       type="button"
                       onClick={() => setFiltroFavoritosEventos("FAVORITOS")}
-                      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold ${
+                      className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-bold ${
                         filtroFavoritosEventos === "FAVORITOS"
                           ? "bg-amber-50 text-amber-700 border-amber-300"
                           : "bg-white text-slate-700 border-slate-300"
@@ -1544,8 +1542,8 @@ export default function LearningPage() {
             </div>
 
             {explorarFiltrado.length || eventosAoVivoFiltrados.length ? (
-              <div className="space-y-6">
-                <div className="space-y-4">
+              <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-base font-bold text-[#193b2e]">
@@ -1609,7 +1607,7 @@ export default function LearningPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-base font-bold text-[#193b2e]">Learning</div>
 
-                      <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                      <span className="inline-flex shrink-0 whitespace-nowrap items-center justify-center rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
                         {totalLearningFiltrado} {pluralMetodologia(totalLearningFiltrado)}
                       </span>
                     </div>
@@ -1685,7 +1683,7 @@ export default function LearningPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-base font-bold text-[#193b2e]">Avulsas</div>
 
-                      <span className="rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
+                      <span className="inline-flex shrink-0 whitespace-nowrap items-center justify-center rounded-full border bg-white px-3 py-1 text-xs font-bold text-slate-600">
                         {totalAvulsasFiltrado} {pluralMetodologia(totalAvulsasFiltrado)}
                       </span>
                     </div>
@@ -1977,6 +1975,7 @@ export default function LearningPage() {
                                   >
                                     <Share2 className="h-4 w-4" />
                                   </button>
+
                                   <button
                                     type="button"
                                     onClick={() => navigate(`/learning/live-studio?aulaId=${aula.id}`)}
@@ -2072,7 +2071,7 @@ export default function LearningPage() {
                                       fill={isFavorito("METODOLOGIA", item.id) ? "currentColor" : "none"}
                                     />
                                   </button>
-                                  
+
                                   {botaoCompartilharMetodologia(
                                     item,
                                     false

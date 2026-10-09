@@ -8,6 +8,7 @@ import {
   StatusUsuarioPapel,
   TipoUsuario,
   TipoOrganizacao,
+  StatusResponsavelAtleta
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
@@ -46,6 +47,8 @@ type AtividadeUI = {
   createdAt: string;
   imagemUrl?: string | null;
   link?: string | null;
+  treinoProgramadoId?: string | null;
+  treinoAgendadoId?: string | null;
 };
 
 const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
@@ -1113,6 +1116,48 @@ export const getAtividadesRecentes = async (
     const itensGrupo = parts.map(mapGrupoToAtividade);
 
     type AtividadeComTs = AtividadeUI & { ts: number };
+    
+    const idsAgendamentosLegados = [
+      ...new Set(
+        atividadesDbSemTreinosOrfaos
+          .map((atividade) => {
+            const link = String(atividade.link ?? "");
+
+            if (!link.startsWith("/submissao?")) {
+              return "";
+            }
+
+            return (
+              new URLSearchParams(link.split("?")[1] ?? "")
+                .get("treinoAgendadoId") ?? ""
+            );
+          })
+          .filter(Boolean)
+      ),
+    ];
+
+    const agendamentosLegados =
+      idsAgendamentosLegados.length > 0
+        ? await prisma.treinoAgendado.findMany({
+            where: {
+              id: {
+                in: idsAgendamentosLegados,
+              },
+              atletaId: atleta.id,
+            },
+            select: {
+              id: true,
+              treinoProgramadoId: true,
+            },
+          })
+        : [];
+
+    const programadoPorAgendamento = new Map(
+      agendamentosLegados.map((agendamento) => [
+        agendamento.id,
+        agendamento.treinoProgramadoId,
+      ])
+    );
 
     const itensRaw: AtividadeComTs[] = [
       ...atividadesDbSemTreinosOrfaos.map(
@@ -1122,7 +1167,28 @@ export const getAtividadesRecentes = async (
           titulo: a.titulo ?? "Atividade",
           createdAt: a.createdAt.toISOString(),
           imagemUrl: a.imagemUrl ?? null,
-          link: a.link ?? null,
+          link: (() => {
+            const linkOriginal = String(a.link ?? "");
+
+            if (!linkOriginal.startsWith("/submissao?")) {
+              return a.link ?? null;
+            }
+
+            const treinoAgendadoId =
+              new URLSearchParams(
+                linkOriginal.split("?")[1] ?? ""
+              ).get("treinoAgendadoId");
+
+            const programadoId = treinoAgendadoId
+              ? programadoPorAgendamento.get(treinoAgendadoId)
+              : null;
+
+            return programadoId
+              ? `/treinos/unico?programadoId=${encodeURIComponent(
+                  programadoId
+                )}`
+              : a.link ?? null;
+          })(),
           ts: +a.createdAt,
         }),
       ),
@@ -1148,14 +1214,27 @@ export const getAtividadesRecentes = async (
         const isLivre = snapshot.includes("livre");
 
         const dt = s.criadoEm ?? new Date();
+        const programadoId =
+          s.treinoAgendado?.treinoProgramadoId ??
+          s.treinoAgendado?.treinoProgramado?.id ??
+          null;
+
+        const link = programadoId
+          ? `/treinos/unico?programadoId=${encodeURIComponent(
+              programadoId
+            )}`
+          : "/trainings";
 
         return {
           id: `t-${s.id}`,
           tipo: isLivre ? "Treino Livre" : "Treino",
           titulo,
           createdAt: new Date(dt).toISOString(),
-          imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
-          link: "/treinos",
+          imagemUrl:
+            s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
+          treinoProgramadoId: programadoId,
+          treinoAgendadoId: s.treinoAgendadoId ?? null,
+          link,
           ts: +new Date(dt),
         };
       }),
@@ -1832,6 +1911,147 @@ export const atualizarPosicaoAtletaMe = async (
   }
 };
 
+export const atualizarPosicaoAtletaGerenciado =
+  async (
+    req: AuthenticatedRequest,
+    res: Response,
+  ) => {
+    const responsavelUsuarioId =
+      String(
+        req.userId ?? ""
+      ).trim();
+
+    const atletaId =
+      String(
+        req.params.atletaId ??
+        ""
+      ).trim();
+
+    if (!responsavelUsuarioId) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Não autenticado.",
+        });
+    }
+
+    if (!atletaId) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "atletaId é obrigatório.",
+        });
+    }
+
+    const contexto =
+      await getActiveContext(
+        responsavelUsuarioId
+      );
+
+    if (
+      contexto?.kind !==
+        "PERSONAL" ||
+      contexto.tipoUsuario !==
+        TipoUsuario.Responsavel
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "RESPONSAVEL_CONTEXT_REQUIRED",
+
+          error:
+            "Use o perfil de Responsável para alterar a posição do atleta.",
+        });
+    }
+
+    const vinculo =
+      await prisma.responsavelAtleta.findUnique({
+        where: {
+          responsavelUsuarioId_atletaId:
+            {
+              responsavelUsuarioId,
+
+              atletaId,
+            },
+        },
+      });
+
+    if (
+      !vinculo ||
+      vinculo.status !==
+        "ATIVO" ||
+      vinculo
+        .podeEditarPerfil !==
+        true
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "ATLETA_ACCESS_DENIED",
+
+          error:
+            "Você não possui permissão para editar este atleta.",
+        });
+    }
+
+    const posicao =
+      String(
+        req.body?.posicao ??
+        ""
+      ).trim();
+
+    if (
+      !Object
+        .values(PosicaoCampo)
+        .includes(
+          posicao as PosicaoCampo
+        )
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Posição inválida.",
+        });
+    }
+
+    const atleta =
+      await prisma.atleta.update({
+        where: {
+          id:
+            atletaId,
+        },
+
+        data: {
+          posicao:
+            posicao as PosicaoCampo,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+          posicao: true,
+        },
+      });
+
+    return res.json({
+      ok: true,
+
+      atletaId:
+        atleta.id,
+
+      usuarioId:
+        atleta.usuarioId,
+
+      posicao:
+        atleta.posicao,
+    });
+  };
+  
 export const getPerfilUsuario = async (req: Request, res: Response) => {
   try {
     const idRecebido = String(req.params.id || "").trim();
@@ -1896,6 +2116,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       marca: "Marca",
       learning: "Learning",
       creator: "Creator",
+      responsavel: "Responsavel",
     } as const;
 
     type PapelPerfil = (typeof papeisPermitidos)[keyof typeof papeisPermitidos];
@@ -2312,6 +2533,34 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       }
     }
 
+    if (
+      !tipoPerfil &&
+      deveCarregarPerfil(
+        "Responsavel"
+      )
+    ) {
+      dadosEspecificos = {
+        nome:
+          usuario.nome ??
+          null,
+
+        foto:
+          usuario.foto ??
+          null,
+
+        cidade:
+          usuario.cidade ??
+          null,
+
+        estado:
+          usuario.estado ??
+          null,
+      };
+
+      tipoPerfil =
+        "Responsavel";
+    }
+
     // Um papel PENDENTE ainda não possui sua tabela específica. Retornamos o
     // papel solicitado com formulário vazio para que o proprietário o configure.
     if (tipoSolicitado && !tipoPerfil) {
@@ -2537,15 +2786,103 @@ export const atualizarPerfil = async (
   res: Response,
 ) => {
   const { id } = req.params;
-  const userIdFromToken = req.userId;
 
-  if (!userIdFromToken || id !== userIdFromToken) {
+  const userIdFromToken =
+    req.userId;
+
+  if (!userIdFromToken) {
     return res
-      .status(403)
-      .json({ error: "Você só pode editar o seu próprio perfil." });
+      .status(401)
+      .json({
+        error:
+          "Usuário não autenticado.",
+      });
   }
 
-  let { usuario, tipo, tipoUsuario } = req.body;
+  const editandoProprioPerfil =
+    id === userIdFromToken;
+
+  let vinculoGerenciado:
+    | {
+        id: string;
+        atletaId: string;
+      }
+    | null = null;
+
+  if (!editandoProprioPerfil) {
+    const activeContext =
+      await getActiveContext(
+        userIdFromToken
+      );
+
+    const usandoResponsavel =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      activeContext.tipoUsuario ===
+        TipoUsuario.Responsavel;
+
+    if (!usandoResponsavel) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "RESPONSAVEL_CONTEXT_REQUIRED",
+
+          error:
+            "Selecione seu perfil de Responsável para editar este atleta.",
+        });
+    }
+
+    vinculoGerenciado =
+      await prisma
+        .responsavelAtleta
+        .findFirst({
+          where: {
+            responsavelUsuarioId:
+              userIdFromToken,
+
+            status:
+              StatusResponsavelAtleta.ATIVO,
+
+            podeEditarPerfil:
+              true,
+
+            atleta: {
+              usuarioId:
+                id,
+            },
+          },
+
+          select: {
+            id: true,
+
+            atletaId:
+              true,
+          },
+        });
+
+    if (!vinculoGerenciado) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "PROFILE_EDIT_NOT_ALLOWED",
+
+          error:
+            "Você não possui permissão para editar o perfil deste atleta.",
+        });
+    }
+  }
+
+  const edicaoGerenciada =
+    !editandoProprioPerfil;
+
+  let {
+    usuario,
+    tipo,
+    tipoUsuario,
+  } =
+    req.body;
 
   try {
     if (typeof usuario === "string") {
@@ -2578,12 +2915,51 @@ export const atualizarPerfil = async (
     const usuarioAtual = await prisma.usuario.findUnique({
       where: { id },
       select: {
-        foto: true,
-        nome: true,
-        nomeDeUsuario: true,
-        email: true,
-        dataNascimento: true,
-        tipo: true,
+        foto:
+          true,
+
+        nome:
+          true,
+
+        nomeDeUsuario:
+          true,
+
+        email:
+          true,
+
+        dataNascimento:
+          true,
+
+        tipo:
+          true,
+
+        cpf:
+          true,
+
+        cep:
+          true,
+
+        cidade:
+          true,
+
+        estado:
+          true,
+
+        pais:
+          true,
+
+        logradouro:
+          true,
+
+        atleta: {
+          select: {
+            id:
+              true,
+
+            idade:
+              true,
+          },
+        },
       },
     });
 
@@ -2591,6 +2967,109 @@ export const atualizarPerfil = async (
       return res.status(404).json({
         error: "Usuário não encontrado.",
       });
+    }
+
+    const idadeAtualAtleta =
+      usuarioAtual
+        .dataNascimento
+        ? calcularIdadePorDataNascimento(
+            usuarioAtual
+              .dataNascimento
+          )
+        : usuarioAtual
+            .atleta
+            ?.idade ??
+          null;
+
+    const atletaMenor12EditandoProprioPerfil =
+      editandoProprioPerfil &&
+      Boolean(
+        usuarioAtual.atleta
+      ) &&
+      idadeAtualAtleta !==
+        null &&
+      idadeAtualAtleta <
+        12;
+
+    if (
+      atletaMenor12EditandoProprioPerfil
+    ) {
+      usuario = {
+        ...usuario,
+
+        /*
+        * Menor de 12 não pode alterar
+        * sozinho dados de identidade,
+        * contato ou endereço.
+        */
+        email:
+          usuarioAtual.email,
+
+        nomeDeUsuario:
+          usuarioAtual
+            .nomeDeUsuario,
+
+        dataNascimento:
+          usuarioAtual
+            .dataNascimento
+            ? usuarioAtual
+                .dataNascimento
+                .toISOString()
+                .slice(
+                  0,
+                  10
+                )
+            : null,
+
+        cpf:
+          usuarioAtual.cpf,
+
+        cep:
+          usuarioAtual.cep,
+
+        cidade:
+          usuarioAtual
+            .cidade,
+
+        estado:
+          usuarioAtual
+            .estado,
+
+        pais:
+          usuarioAtual.pais,
+
+        logradouro:
+          usuarioAtual
+            .logradouro,
+      };
+    }
+
+    if (edicaoGerenciada) {
+      usuario = {
+        ...usuario,
+
+        /*
+        * O responsável pode editar
+        * o perfil do atleta, mas não
+        * as credenciais/identidade
+        * sensíveis da conta.
+        */
+        email:
+          usuarioAtual.email,
+
+        nomeDeUsuario:
+          usuarioAtual.nomeDeUsuario,
+
+        dataNascimento:
+          usuarioAtual.dataNascimento
+            ? usuarioAtual.dataNascimento
+                .toISOString()
+                .slice(0, 10)
+            : null,
+
+        cpf:
+          usuarioAtual.cpf,
+      };
     }
 
     const file = req.file as any;
@@ -2651,6 +3130,21 @@ export const atualizarPerfil = async (
     const tipoKey = String(tipoUsuario).toLowerCase();
 
     const tipoNorm = tipoKey === "escolinha" ? "escola" : tipoKey;
+
+    if (
+      edicaoGerenciada &&
+      tipoNorm !== "atleta"
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "MANAGED_EDIT_ATHLETE_ONLY",
+
+          error:
+            "O responsável só pode editar o perfil de Atleta vinculado.",
+        });
+    }
 
     const papelPorTipo: Record<string, string> = {
       atleta: "Atleta",

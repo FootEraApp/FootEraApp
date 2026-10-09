@@ -61,7 +61,13 @@ async function main() {
         titulo:
           anyAg.treinoProgramado?.nome ?? anyAg.titulo ?? "Treino concluído",
         imagemUrl: anyAg.treinoProgramado?.imagemUrl ?? null,
-        link: `/submissao?treinoAgendadoId=${anyAg.id}`,
+        link: anyAg.treinoProgramadoId
+          ? `/treinos/unico?programadoId=${encodeURIComponent(
+              anyAg.treinoProgramadoId
+            )}`
+          : `/submissao?treinoAgendadoId=${encodeURIComponent(
+              anyAg.id
+            )}`,
         createdAt: anyAg.finishedAt ?? new Date(),
       },
     });

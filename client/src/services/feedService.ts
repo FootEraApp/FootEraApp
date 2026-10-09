@@ -29,6 +29,9 @@ export type PostagemComUsuario = {
   id: string;
   conteudo: string;
   dataCriacao: string;
+  autorContextoKey?: string | null;
+  usuarioId?: string;
+  organizacaoId?: string | null;
   usuario: {
     id: string;
     nome: string;
@@ -42,6 +45,7 @@ export type PostagemComUsuario = {
     id: string;
     nome: string;
     tipo?: string | null;
+    logo?: string | null;
   } | null;
   imagemUrl?: string | null;
   videoUrl?: string | null;

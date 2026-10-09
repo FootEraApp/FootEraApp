@@ -804,20 +804,46 @@ export async function explorar(req: Request, res: Response) {
           },
         },
       },
-      where: {
-        usuario: {
-          tipo: "Marca" as any,
-        },
-        ...(termo
+      where:
+        termo
           ? {
               OR: [
-                { nome: { contains: termo, mode: "insensitive" } },
-                { usuario: { nome: { contains: termo, mode: "insensitive" } } },
-                { usuario: { nomeDeUsuario: { contains: termo, mode: "insensitive" } } },
+                {
+                  nome: {
+                    contains:
+                      termo,
+
+                    mode:
+                      "insensitive",
+                  },
+                },
+
+                {
+                  usuario: {
+                    nome: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+                },
+
+                {
+                  usuario: {
+                    nomeDeUsuario: {
+                      contains:
+                        termo,
+
+                      mode:
+                        "insensitive",
+                    },
+                  },
+                },
               ],
             }
-          : {}),
-      },
+          : {},
       orderBy: { nome: "asc" },
       take: 100,
     });
@@ -1142,6 +1168,106 @@ export async function explorar(req: Request, res: Response) {
       };
     });
 
+    const responsaveisRaw =
+      await prisma.usuarioPapel.findMany({
+        where: {
+          papel:
+            TipoUsuario.Responsavel,
+
+          status:
+            StatusUsuarioPapel.ATIVO,
+
+          usuario: {
+            deletedAt:
+              null,
+
+            ...(termo
+              ? {
+                  OR: [
+                    {
+                      nome: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+
+                    {
+                      nomeDeUsuario: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+                  ],
+                }
+              : {}),
+          },
+        },
+
+        select: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario:
+                true,
+              foto: true,
+              cidade: true,
+              estado: true,
+              verified: true,
+              destaque: true,
+              dataCriacao: true,
+            },
+          },
+        },
+
+        take: 100,
+      });
+
+    const responsaveis =
+      responsaveisRaw
+        .map(
+          (registro) => {
+            const usuario =
+              registro.usuario;
+
+            if (!usuario) {
+              return null;
+            }
+
+            return {
+              id:
+                usuario.id,
+
+              usuarioId:
+                usuario.id,
+
+              nome:
+                usuario.nome,
+
+              foto:
+                usuario.foto,
+
+              cidade:
+                usuario.cidade,
+
+              estado:
+                usuario.estado,
+
+              tipoOutro:
+                "Responsavel",
+
+              usuario,
+            };
+          }
+        )
+        .filter(Boolean);
+
     const agora = new Date();
     const whereEvento: any = {
       status: "ABERTO",
@@ -1188,6 +1314,7 @@ export async function explorar(req: Request, res: Response) {
       federacoesAtivas,
       marcasAtivas,
       learningAtivos,
+      responsaveisAtivos,
     ] = await Promise.all([
       filtrarPorPapelAtivo(
         atletas,
@@ -1252,6 +1379,14 @@ export async function explorar(req: Request, res: Response) {
           x.usuarioId ??
           x.usuario?.id
       ),
+
+      filtrarPorPapelAtivo(
+        responsaveis as any[],
+        TipoUsuario.Responsavel,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
     ]);
 
     const [
@@ -1263,6 +1398,7 @@ export async function explorar(req: Request, res: Response) {
       federacoesVisiveis,
       marcasVisiveis,
       learningVisiveis,
+      responsaveisVisiveis,
     ] = await Promise.all([
       filtrarPerfisVisiveis(
         userIdLogado,
@@ -1285,9 +1421,7 @@ export async function explorar(req: Request, res: Response) {
       filtrarPerfisVisiveis(
         userIdLogado,
         professoresAtivos,
-        (x: any) =>
-          x.usuarioId ??
-          x.usuario?.id
+        (x: any) => x.usuarioId ?? x.usuario?.id
       ),
 
       filtrarPerfisVisiveis(
@@ -1312,6 +1446,14 @@ export async function explorar(req: Request, res: Response) {
         userIdLogado,
         learningAtivos,
         (x: any) => x.usuarioId ?? x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        responsaveisAtivos,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
       ),
     ]);
 
@@ -1377,6 +1519,18 @@ export async function explorar(req: Request, res: Response) {
           l?.usuario?.nome ??
           ""
       ).map(sanitizarItemExplorar),
+
+      responsaveis:
+        ordenarDestaquesProNome(
+          responsaveisVisiveis,
+
+          (r: any) =>
+            r?.usuario?.nome ??
+            r?.nome ??
+            ""
+        ).map(
+          sanitizarItemExplorar
+        ),
     });
   } catch (error) {
     console.error("Erro em /api/explorar:", error);
@@ -1389,10 +1543,9 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
   try {
     const termo = q ? String(q).trim() : "";
-
     const userIdLogado = (req as any).userId || null;
 
-    const [atletas, clubes, escolas, professores, olheiros, federacoes, marcas, learning] = await Promise.all([
+    const [atletas, clubes, escolas, professores, olheiros, federacoes, marcas, learning, responsaveis] = await Promise.all([
       prisma.atleta.findMany({
         where: termo
           ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
@@ -1548,7 +1701,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         },
         take: 50,
       }),
-      prisma.marca.findMany({
+            prisma.marca.findMany({
         where: termo
           ? {
               OR: [
@@ -1654,6 +1807,64 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         orderBy: { criadoEm: "desc" },
         take: 50,
       }),
+      prisma.usuarioPapel.findMany({
+        where: {
+          papel:
+            TipoUsuario.Responsavel,
+
+          status:
+            StatusUsuarioPapel.ATIVO,
+
+          usuario: {
+            deletedAt:
+              null,
+
+            ...(termo
+              ? {
+                  OR: [
+                    {
+                      nome: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+
+                    {
+                      nomeDeUsuario: {
+                        contains:
+                          termo,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+                  ],
+                }
+              : {}),
+          },
+        },
+
+        select: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              nomeDeUsuario:
+                true,
+              foto: true,
+              cidade: true,
+              estado: true,
+              verified: true,
+              destaque: true,
+            },
+          },
+        },
+
+        take: 50,
+      }),
     ]);
 
     const atletasNormalizados = atletas.map((a: any) => ({
@@ -1665,6 +1876,126 @@ export const buscarExplorar = async (req: Request, res: Response) => {
         0,
     }));
 
+    const responsaveisNormalizados =
+      responsaveis
+        .map(
+          (registro: any) => ({
+            id:
+              registro
+                .usuario.id,
+
+            usuarioId:
+              registro
+                .usuario.id,
+
+            nome:
+              registro
+                .usuario.nome,
+
+            foto:
+              registro
+                .usuario.foto,
+
+            cidade:
+              registro
+                .usuario.cidade,
+
+            estado:
+              registro
+                .usuario.estado,
+
+            tipoOutro:
+              "Responsavel",
+
+            usuario:
+              registro.usuario,
+          })
+        );
+        
+    const [
+      atletasAtivos,
+      clubesAtivos,
+      escolasAtivas,
+      professoresAtivos,
+      olheirosAtivos,
+      federacoesAtivas,
+      marcasAtivas,
+      learningAtivos,
+      responsaveisAtivos,
+    ] = await Promise.all([
+      filtrarPorPapelAtivo(
+        atletasNormalizados,
+        TipoUsuario.Atleta,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        clubes,
+        TipoUsuario.Clube,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        escolas,
+        TipoUsuario.Escolinha,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        professores,
+        TipoUsuario.Professor,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        olheiros,
+        TipoUsuario.Olheiro,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        federacoes,
+        TipoUsuario.Federacao,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        marcas,
+        TipoUsuario.Marca,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        learning,
+        TipoUsuario.Learning,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPorPapelAtivo(
+        responsaveisNormalizados,
+        TipoUsuario.Responsavel,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+    ]);
+
     const [
       atletasVisiveis,
       clubesVisiveis,
@@ -1674,10 +2005,11 @@ export const buscarExplorar = async (req: Request, res: Response) => {
       federacoesVisiveis,
       marcasVisiveis,
       learningVisiveis,
+      responsaveisVisiveis,
     ] = await Promise.all([
       filtrarPerfisVisiveis(
         userIdLogado,
-        atletasNormalizados,
+        atletasAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1685,7 +2017,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        clubes,
+        clubesAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1693,7 +2025,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        escolas,
+        escolasAtivas,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1701,7 +2033,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        professores,
+        professoresAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1709,7 +2041,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        olheiros,
+        olheirosAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1717,7 +2049,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        federacoes,
+        federacoesAtivas,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1725,7 +2057,7 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        marcas,
+        marcasAtivas,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1733,7 +2065,15 @@ export const buscarExplorar = async (req: Request, res: Response) => {
 
       filtrarPerfisVisiveis(
         userIdLogado,
-        learning,
+        learningAtivos,
+        (x: any) =>
+          x.usuarioId ??
+          x.usuario?.id
+      ),
+
+      filtrarPerfisVisiveis(
+        userIdLogado,
+        responsaveisAtivos,
         (x: any) =>
           x.usuarioId ??
           x.usuario?.id
@@ -1800,6 +2140,18 @@ export const buscarExplorar = async (req: Request, res: Response) => {
           l?.usuario?.nome ??
           ""
       ).map(sanitizarItemExplorar),
+
+      responsaveis:
+        ordenarDestaquesProNome(
+          responsaveisVisiveis,
+
+          (r: any) =>
+            r?.usuario?.nome ??
+            r?.nome ??
+            ""
+        ).map(
+          sanitizarItemExplorar
+        ),
     });
   } catch (error) {
     console.error("Erro em /api/explorar/buscar:", error);

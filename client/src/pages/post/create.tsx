@@ -170,20 +170,8 @@ export default function PaginaPostagem() {
 
   const authorOptions =
     useMemo(() => {
-      /*
-      * Publicação pessoal pertence ao
-      * Usuario, não ao papel.
-      *
-      * Portanto, mesmo que Pedro tenha:
-      * - Atleta
-      * - Professor
-      * - Creator
-      *
-      * mostramos apenas:
-      * Pedro
-      */
-      const personal =
-        contexts.find(
+      const personals =
+        contexts.filter(
           (item) =>
             item.kind ===
             "PERSONAL"
@@ -204,13 +192,38 @@ export default function PaginaPostagem() {
           | "ORGANIZATION";
       }> = [];
 
-      if (personal) {
+      for (
+        const personal of
+          personals
+      ) {
+        const papel =
+          String(
+            personal.key
+              .replace(
+                /^personal:/i,
+                ""
+              )
+          ).trim();
+
+        const nomeDeUsuario =
+          String(
+            userContext?.user
+              ?.username ??
+            usuarioNome ??
+            ""
+          )
+            .trim()
+            .replace(
+              /^@/,
+              ""
+            );
+
         options.push({
           key:
             personal.key,
 
           label:
-            usuarioNome,
+            `${nomeDeUsuario || "perfil"} — ${papel}`,
 
           kind:
             "PERSONAL",
@@ -221,15 +234,6 @@ export default function PaginaPostagem() {
         const organization of
           organizations
       ) {
-        /*
-        * O backend devolve algo como:
-        *
-        * FootEra FC — Proprietário
-        *
-        * No seletor queremos apenas:
-        *
-        * FootEra FC
-        */
         const label =
           String(
             organization.label ??
@@ -255,6 +259,7 @@ export default function PaginaPostagem() {
     }, [
       contexts,
       usuarioNome,
+      userContext?.user,
     ]);
 
   useEffect(() => {
@@ -280,32 +285,12 @@ export default function PaginaPostagem() {
       return;
     }
 
-    /*
-    * Por padrão mantemos o comportamento
-    * atual:
-    *
-    * se o contexto global puder publicar,
-    * ele começa selecionado.
-    */
     const activeOption =
       activeContext
         ? authorOptions.find(
-            (item) => {
-              if (
-                activeContext.kind ===
-                "ORGANIZATION"
-              ) {
-                return (
-                  item.key ===
-                  activeContext.key
-                );
-              }
-
-              return (
-                item.kind ===
-                "PERSONAL"
-              );
-            }
+            (item) =>
+              item.key ===
+              activeContext.key
           )
         : null;
 
@@ -573,56 +558,57 @@ export default function PaginaPostagem() {
         {previewMidia}
 
         <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="font-semibold text-gray-900">
-              Publicar como
-            </div>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Escolha se esta publicação será sua
-              ou de uma organização que você representa.
-            </p>
-
-            <select
-              value={authorContextKey}
-              disabled={
-                contextsLoading ||
-                authorOptions.length === 0 ||
-                carregando
-              }
-              onChange={(e) =>
-                setAuthorContextKey(
-                  e.target.value
-                )
-              }
-              className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-            >
-              {contextsLoading ? (
-                <option value="">
-                  Carregando perfis...
-                </option>
-              ) : authorOptions.length ===
-                0 ? (
-                <option value="">
-                  Nenhum perfil disponível
-                </option>
-              ) : (
-                authorOptions.map(
-                  (item) => (
-                    <option
-                      key={item.key}
-                      value={item.key}
-                    >
-                      {item.kind ===
-                      "ORGANIZATION"
-                        ? `🏟️ ${item.label}`
-                        : `👤 ${item.label}`}
-                    </option>
-                  )
-                )
-              )}
-            </select>
+          <div className="font-semibold text-gray-900">
+            Publicar como
           </div>
+
+          <p className="mt-1 text-xs text-gray-500">
+            Escolha se esta publicação será sua
+            ou de uma organização que você representa.
+          </p>
+
+          <select
+            value={authorContextKey}
+            disabled={
+              contextsLoading ||
+              authorOptions.length === 0 ||
+              carregando
+            }
+            onChange={(e) =>
+              setAuthorContextKey(
+                e.target.value
+              )
+            }
+            className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+          >
+            {contextsLoading ? (
+              <option value="">
+                Carregando perfis...
+              </option>
+            ) : authorOptions.length ===
+              0 ? (
+              <option value="">
+                Nenhum perfil disponível
+              </option>
+            ) : (
+              authorOptions.map(
+                (item) => (
+                  <option
+                    key={item.key}
+                    value={item.key}
+                  >
+                    {item.kind ===
+                    "ORGANIZATION"
+                      ? `🏟️ ${item.label}`
+                      : `👤 ${item.label}`}
+                  </option>
+                )
+              )
+            )}
+          </select>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
           <div className="font-semibold text-gray-900">
             Quem pode ver esta publicação?
           </div>
@@ -661,10 +647,7 @@ export default function PaginaPostagem() {
           {visibilidade ===
             "PUBLICO" && (
             <p className="mt-2 text-xs text-emerald-700">
-              Esta publicação poderá ser
-              visualizada também por pessoas
-              que ainda não possuem conta na
-              FootEra.
+              Esta publicação poderá ser visualizada também por pessoas que ainda não possuem conta na FootEra.
             </p>
           )}
         </div>

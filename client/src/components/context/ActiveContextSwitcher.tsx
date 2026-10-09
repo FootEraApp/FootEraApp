@@ -75,6 +75,21 @@ export default function ActiveContextSwitcher() {
               await switchActiveContext(
                 key
               );
+              const contextoSelecionado = contexts.find(
+                (item) => item.key === key
+              );
+
+              const ehCreator =
+                contextoSelecionado?.kind === "PERSONAL" &&
+                String(contextoSelecionado.tipoUsuario ?? "")
+                  .toLowerCase() === "creator";
+
+              if (ehCreator && context.user?.id) {
+                window.location.href =
+                  `/creator/profile?id=${encodeURIComponent(
+                    String(context.user.id)
+                  )}`;
+              }
             } catch (
               error
             ) {

@@ -3,8 +3,14 @@ import { prisma } from "../prisma.js";
 import { sanitizeText, basicModerationFails, normalizeIncomingMediaUrl, MOD, isAllowedMime } from "../utils/moderation.js";
 import { getIO } from "../socket.js"
 import {
-  VisibilidadePostagem, NotificacaoTipo
+  VisibilidadePostagem,
+  NotificacaoTipo,
+  TipoUsuario,
+  StatusResponsavelAtleta,
 } from "@prisma/client";
+import {
+  audit,
+} from "../services/audit.js";
 import {
   normalizarVisibilidadePostagem,
   podeVisualizarPostagem,
@@ -445,29 +451,255 @@ export const editarPostagemPost = async (req: AuthedReq, res: Response) => {
   return res.json({ message: "Postagem atualizada com sucesso." });
 };
 
-export const deletarPost = async (req: AuthedReq, res: Response) => {
-  try {
-    if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
-    const { id } = req.params;
+async function responsavelPodeGerenciarPostagem(
+  responsavelUsuarioId: string,
+  postUsuarioId: string
+) {
+  const contexto =
+    await getActiveContext(
+      responsavelUsuarioId
+    );
 
-    const post = await prisma.postagem.findUnique({ where: { id } });
-    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
-    if (post.usuarioId !== req.userId) {
-      return res.status(403).json({ message: "Você não pode apagar esta postagem." });
-    }
-
-    await prisma.$transaction([
-      prisma.comentario.deleteMany({ where: { postagemId: id } }),
-      prisma.curtida.deleteMany({ where: { postagemId: id } }),
-      prisma.postagem.delete({ where: { id } }),
-    ]);
-
-    return res.status(204).send();
-  } catch (e) {
-    console.error("Erro ao deletar post:", e);
-    return res.status(500).json({ message: "Erro ao apagar postagem." });
+  if (
+    contexto?.kind !==
+      "PERSONAL" ||
+    contexto.tipoUsuario !==
+      TipoUsuario.Responsavel
+  ) {
+    return null;
   }
-};
+
+  const vinculo =
+    await prisma
+      .responsavelAtleta
+      .findFirst({
+        where: {
+          responsavelUsuarioId,
+
+          status:
+            StatusResponsavelAtleta.ATIVO,
+
+          podeGerenciarConteudo:
+            true,
+
+          atleta: {
+            is: {
+              usuarioId:
+                postUsuarioId,
+            },
+          },
+        },
+
+        select: {
+          id: true,
+          atletaId: true,
+          responsavelUsuarioId:
+            true,
+        },
+      });
+
+  return vinculo;
+}
+
+export const deletarPost =
+  async (
+    req: AuthedReq,
+    res: Response
+  ) => {
+    try {
+      if (!req.userId) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Não autenticado.",
+          });
+      }
+
+      const { id } =
+        req.params;
+
+      const post =
+        await prisma
+          .postagem
+          .findUnique({
+            where: {
+              id,
+            },
+
+            select: {
+              id: true,
+              usuarioId: true,
+              organizacaoId: true,
+              conteudo: true,
+            },
+          });
+
+      if (!post) {
+        return res
+          .status(404)
+          .json({
+            message:
+              "Postagem não encontrada.",
+          });
+      }
+
+      /*
+       * Caso normal:
+       * o próprio autor está apagando.
+       */
+      const proprioAutor =
+        post.usuarioId ===
+        req.userId;
+
+      let vinculoResponsavel:
+        Awaited<
+          ReturnType<
+            typeof responsavelPodeGerenciarPostagem
+          >
+        > =
+        null;
+
+      /*
+       * Se não é o autor,
+       * verificamos se é responsável.
+       */
+      if (!proprioAutor) {
+        /*
+         * Post publicado em nome de
+         * organização não pode ser
+         * removido pelo responsável
+         * da criança.
+         *
+         * Mesmo que a criança tenha sido
+         * o executor da publicação.
+         */
+        if (
+          post.organizacaoId
+        ) {
+          return res
+            .status(403)
+            .json({
+              code:
+                "RESPONSAVEL_CANNOT_DELETE_ORGANIZATION_POST",
+
+              message:
+                "O responsável não pode apagar uma publicação feita em nome de uma organização.",
+            });
+        }
+
+        vinculoResponsavel =
+          await responsavelPodeGerenciarPostagem(
+            req.userId,
+            post.usuarioId
+          );
+
+        if (
+          !vinculoResponsavel
+        ) {
+          return res
+            .status(403)
+            .json({
+              code:
+                "POST_DELETE_FORBIDDEN",
+
+              message:
+                "Você não pode apagar esta postagem.",
+            });
+        }
+      }
+
+      await prisma
+        .$transaction([
+          prisma.comentario
+            .deleteMany({
+              where: {
+                postagemId:
+                  id,
+              },
+            }),
+
+          prisma.curtida
+            .deleteMany({
+              where: {
+                postagemId:
+                  id,
+              },
+            }),
+
+          prisma.postagem
+            .delete({
+              where: {
+                id,
+              },
+            }),
+        ]);
+
+      /*
+       * Auditoria extra quando o post
+       * foi removido pelo responsável.
+       */
+      if (
+        vinculoResponsavel
+      ) {
+        try {
+          await audit(
+            req as any,
+            {
+              acao:
+                "POST_REMOVIDO_POR_RESPONSAVEL",
+
+              entidade:
+                "Postagem",
+
+              entidadeId:
+                id,
+
+              descricao:
+                "Responsável removeu uma postagem do atleta supervisionado.",
+
+              meta: {
+                atletaId:
+                  vinculoResponsavel
+                    .atletaId,
+
+                atletaUsuarioId:
+                  post.usuarioId,
+
+                responsavelUsuarioId:
+                  req.userId,
+
+                responsavelAtletaId:
+                  vinculoResponsavel
+                    .id,
+              },
+            }
+          );
+        } catch (auditError) {
+          console.warn(
+            "[deletarPost] falha ao registrar auditoria:",
+            auditError
+          );
+        }
+      }
+
+      return res
+        .status(204)
+        .send();
+    } catch (e) {
+      console.error(
+        "Erro ao deletar post:",
+        e
+      );
+
+      return res
+        .status(500)
+        .json({
+          message:
+            "Erro ao apagar postagem.",
+        });
+    }
+  };
 
 export const buscarPostagemPorId =
   async (

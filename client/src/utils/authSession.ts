@@ -139,6 +139,7 @@ const MAP_TIPO: Record<string, string> = {
   federacao: "federacao",
   marca: "marca",
   creator: "creator",
+  responsavel: "responsavel",
 };
 
 function getSessionStore():
@@ -299,6 +300,19 @@ function writeActiveContext(
   }
 }
 
+export function clearActiveContextSession() {
+  const keys = [
+    "activeContext",
+    "tipoUsuario",
+    "usuarioTipoRaw",
+    "tipoUsuarioId",
+  ];
+
+  for (const key of keys) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+}
 
 export function applyActiveContextSession(
   activeContext:

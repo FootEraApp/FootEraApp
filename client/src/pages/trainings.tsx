@@ -1,5 +1,5 @@
 // client/src/pages/training
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useContext } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -11,9 +11,22 @@ import { Card, CardContent } from "../components/ui/card.js";
 import { Badge } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
 import { Link, useLocation } from "wouter";
+import { UserContext } from "../context/UserContext.js";
 
 type TipoTreino = "Tecnico" | "Físico" | "Tatico" | "Mental" | null;
-type TpExercicio = { exercicio: { nome: string }; repeticoes: string };
+type TpExercicio = {
+  id?: string;
+  nome?: string | null;
+  exercicio?: { nome?: string | null } | null;
+  exercicioPersonalizado?: {
+    nome?: string | null;
+  } | null;
+  exercicioTemporario?: {
+    nome?: string | null;
+  } | null;
+  series?: number | null;
+  repeticoes?: string | null;
+};
 
 type TreinoProgramado = {
   id: string;
@@ -30,6 +43,11 @@ type TreinoProgramado = {
   professor?: { nome: string } | null;
   clube?: { nome: string } | null;
   escolinha?: { nome: string } | null;
+  criadores?: {
+    tipo: string;
+    id: string;
+    nome: string;
+  }[];
 };
 
 const tipoIcon = (tipo?: TipoTreino) => {
@@ -54,8 +72,75 @@ const pontuacaoRanges = [
   { label: "21+ pontos", min: 21, max: Infinity },
 ];
 
+function nomeDoExercicio(
+  item: TpExercicio
+): string {
+  return (
+    item.nome?.trim() ||
+    item.exercicio?.nome?.trim() ||
+    item.exercicioPersonalizado?.nome?.trim() ||
+    item.exercicioTemporario?.nome?.trim() ||
+    "Exercício sem nome"
+  );
+}
+
+function nomesCriadores(
+  treino: TreinoProgramado
+): string[] {
+  const nomes = (
+    Array.isArray(treino.criadores)
+      ? treino.criadores
+      : []
+  )
+    .map((c) => String(c.nome ?? "").trim())
+    .filter(Boolean);
+
+  return sorted(uniq(nomes));
+}
+
 export default function TrainingsPage() {
   const [route] = useLocation();
+  
+  const userContext = useContext(UserContext);
+
+  const papelAtivo =
+    userContext?.activeContext?.kind === "PERSONAL"
+      ? String(userContext.activeTipoUsuario ?? "").toLowerCase()
+      : "";
+
+  const ehAtleta = papelAtivo === "atleta";
+  const ehResponsavel = papelAtivo === "responsavel";
+
+  type AtletaGerenciavel = {
+    id: string;
+    atletaId: string;
+    nome: string;
+  };
+
+  const [atletasGerenciaveis, setAtletasGerenciaveis] =
+    useState<AtletaGerenciavel[]>([]);
+
+  const [atletaIdSelecionado, setAtletaIdSelecionado] =
+    useState("");
+
+  const atletaGerenciado = atletasGerenciaveis.find(
+    (item) => item.atletaId === atletaIdSelecionado
+  );
+
+  const nomeAtletaSelecionado =
+    atletaGerenciado?.nome ?? "o atleta selecionado";
+
+  const podeOperarTreinos =
+    ehAtleta ||
+    (ehResponsavel && Boolean(atletaGerenciado));
+  
+  const urlTreinosProgramados =
+    ehResponsavel && atletaIdSelecionado
+      ? `${API.BASE_URL}/api/treinos/programados?atletaId=${encodeURIComponent(
+          atletaIdSelecionado
+        )}`
+      : `${API.BASE_URL}/api/treinos/programados`;
+
   const perfilUsuarioId = useMemo(
     () => new URLSearchParams(window.location.search).get("usuarioId")?.trim() ?? "",
     [route]
@@ -66,10 +151,11 @@ export default function TrainingsPage() {
   const [selCats, setSelCats] = useState<string[]>([]);
   const [selTipos, setSelTipos] = useState<string[]>([]);
   const [selExs, setSelExs] = useState<string[]>([]);
-  const [selProfs, setSelProfs] = useState<string[]>([]);
+  const [selCriadores, setSelCriadores] =
+  useState<string[]>([]);
   const [selDur, setSelDur] = useState<number[]>([]);
   const [selPontuacao, setSelPontuacao] = useState<string[]>([]);
-  const [open, setOpen] = useState<null | "cats" | "tipos" | "exs" | "profs" | "dur" | "pontuacao">(null);
+  const [open, setOpen] = useState<null | "cats" | "tipos" | "exs" | "criadores" | "dur" | "pontuacao">(null);
 
   const [loading, setLoading] = useState(true);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
@@ -77,11 +163,105 @@ export default function TrainingsPage() {
   const [erro, setErro] = useState("");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [salvos, setSalvos] = useState<string[]>([]);
+  
+  const [somenteSalvos, setSomenteSalvos] = useState(false);
+  const [carregandoSalvos, setCarregandoSalvos] = useState(false);
+  const [bibliotecaCarregada, setBibliotecaCarregada] = useState(false);
+  const [removendoId, setRemovendoId] = useState<string | null>(null);
+
   const [aviso, setAviso] = useState("");
   const [mesInicial, setMesInicial] = useState(format(new Date(), "yyyy-MM"));
   const SEM_PROF_LABEL = "Sem professor";
+  
+  useEffect(() => {
+    if (!ehResponsavel) {
+      setAtletasGerenciaveis([]);
+      setAtletaIdSelecionado("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function carregarAtletasGerenciaveis() {
+      try {
+        const token =
+          Storage.token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token");
+
+        if (!token) return;
+
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/responsaveis/me/atletas`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        if (!resposta.ok) {
+          throw new Error("Não foi possível carregar os atletas.");
+        }
+
+        const dados = await resposta.json();
+
+        const atletas = (
+          Array.isArray(dados?.items) ? dados.items : []
+        )
+          .filter(
+            (item: any) =>
+              item.status === "ATIVO" &&
+              (
+                item.principal === true ||
+                item.podeGerenciarTreinos === true
+              )
+          )
+          .map((item: any) => ({
+            id: String(item.atleta?.usuarioId ?? ""),
+            atletaId: String(item.atletaId ?? ""),
+            nome: String(
+              item.atleta?.nome ??
+              item.atleta?.nomeDeUsuario ??
+              "Atleta"
+            ),
+          }))
+          .filter((item: AtletaGerenciavel) => Boolean(item.atletaId));
+
+        if (!controller.signal.aborted) {
+          setAtletasGerenciaveis(atletas);
+
+          setAtletaIdSelecionado((anterior) =>
+            atletas.some(
+              (item: AtletaGerenciavel) =>
+                item.atletaId === anterior
+            )
+              ? anterior
+              : atletas[0]?.atletaId ?? ""
+          );
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[Trainings] Erro ao carregar atletas:", error);
+          setAtletasGerenciaveis([]);
+          setAtletaIdSelecionado("");
+        }
+      }
+    }
+
+    void carregarAtletasGerenciaveis();
+
+    return () => controller.abort();
+  }, [ehResponsavel, userContext?.activeContext?.key]);
 
   useEffect(() => {
+    if (ehResponsavel && !atletaIdSelecionado) {
+      setTreinos([]);
+      setLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     const token = Storage.token;
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -90,12 +270,11 @@ export default function TrainingsPage() {
     setNomeAtleta("");
     setErro("");
     setAviso("");
-    setSalvos([]);
 
     async function carregar() {
       try {
         if (!visitandoOutroAtleta) {
-          const r = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+          const r = await fetch(urlTreinosProgramados, {
             headers,
             signal: controller.signal,
           });
@@ -117,42 +296,37 @@ export default function TrainingsPage() {
           throw new Error("Este usuário não possui um perfil de atleta disponível.");
         }
 
-        const agendadosResponse = await fetch(
-          `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(atletaId)}&month=${encodeURIComponent(mesInicial)}`,
-          { headers, signal: controller.signal }
+        const treinosResponse = await fetch(
+          urlTreinosProgramados,
+          {
+            headers,
+            signal: controller.signal,
+          }
         );
-        if (!agendadosResponse.ok) throw new Error("Não foi possível carregar os treinos deste atleta.");
-        const agendados = await agendadosResponse.json();
-        const unicos = new Map<string, TreinoProgramado>();
 
-        for (const item of Array.isArray(agendados) ? agendados : []) {
-          const programado = item?.treinoProgramado ?? null;
-          const programadoId = String(item?.treinoProgramadoId ?? programado?.id ?? "").trim();
-          const id = programadoId || String(item?.id ?? "").trim();
-          if (!id || unicos.has(id)) continue;
+        const treinosDisponiveis = await treinosResponse
+          .json()
+          .catch(() => null);
 
-          unicos.set(id, {
-            ...programado,
-            id,
-            programadoId: programadoId || null,
-            nome: programado?.nome ?? item?.titulo ?? "Treino",
-            descricao: programado?.descricao ?? null,
-            tipoTreino: programado?.tipoTreino ?? null,
-            duracao: programado?.duracao ?? item?.duracaoMinutos ?? null,
-            pontuacao: programado?.pontuacao ?? null,
-            dataAgendada: item?.dataTreino ?? null,
-            createdAt: programado?.createdAt ?? null,
-            categoria: Array.isArray(programado?.categoria) ? programado.categoria : [],
-            exercicios: Array.isArray(programado?.exercicios) ? programado.exercicios : [],
-            professor: programado?.Professor ?? programado?.professores?.[0]?.professor ?? null,
-            clube: programado?.clube ?? null,
-            escolinha: programado?.escolinha ?? null,
-          });
+        if (!treinosResponse.ok) {
+          throw new Error(
+            treinosDisponiveis?.message ||
+              "Não foi possível carregar os treinos disponíveis."
+          );
         }
 
         if (!controller.signal.aborted) {
-          setNomeAtleta(perfil?.dadosEspecificos?.nome ?? perfil?.usuario?.nome ?? "Atleta");
-          setTreinos([...unicos.values()]);
+          setNomeAtleta(
+            perfil?.dadosEspecificos?.nome ??
+            perfil?.usuario?.nome ??
+            "Atleta"
+          );
+
+          setTreinos(
+            Array.isArray(treinosDisponiveis)
+              ? treinosDisponiveis
+              : []
+          );
         }
       } catch (e) {
         if (controller.signal.aborted) return;
@@ -165,10 +339,98 @@ export default function TrainingsPage() {
 
     void carregar();
     return () => controller.abort();
-  }, [perfilUsuarioId, visitandoOutroAtleta, mesInicial]);
+  }, [
+    perfilUsuarioId,
+    visitandoOutroAtleta,
+    mesInicial,
+    ehResponsavel,
+    atletaIdSelecionado,
+  ]);
+  
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setSalvos([]);
+    setBibliotecaCarregada(false);
+
+    if (!podeOperarTreinos) {
+      setCarregandoSalvos(false);
+      return () => controller.abort();
+    }
+
+    async function carregarBiblioteca() {
+      setCarregandoSalvos(true);
+
+      try {
+        const token =
+          Storage.token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token");
+
+        if (!token) return;
+
+        const query =
+          ehResponsavel && atletaIdSelecionado
+            ? `?atletaId=${encodeURIComponent(atletaIdSelecionado)}`
+            : "";
+
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/treinos/biblioteca${query}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        const dados = await resposta.json().catch(() => null);
+
+        if (!resposta.ok) {
+          throw new Error(
+            dados?.message ||
+            "Não foi possível consultar a biblioteca."
+          );
+        }
+
+      const ids: string[] = (
+        Array.isArray(dados?.items) ? dados.items : []
+      )
+        .map((item: any): string =>
+          String(item.treinoProgramadoId ?? "").trim()
+        )
+        .filter((id: string) => id.length > 0);
+
+      if (!controller.signal.aborted) {
+        setSalvos(Array.from(new Set<string>(ids)));
+        setBibliotecaCarregada(true);
+      }
+
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[Trainings] Biblioteca:", error);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setCarregandoSalvos(false);
+        }
+      }
+    }
+
+    void carregarBiblioteca();
+
+    return () => controller.abort();
+  }, [
+    podeOperarTreinos,
+    ehResponsavel,
+    atletaIdSelecionado,
+    userContext?.activeContext?.key,
+  ]);
 
   async function salvarNaBiblioteca(treino: TreinoProgramado) {
-    const treinoProgramadoId = treino.programadoId;
+    const treinoProgramadoId = String(
+      treino.programadoId || treino.id || ""
+    ).trim();
     if (!treinoProgramadoId || salvandoId) return;
 
     const token = Storage.token;
@@ -176,7 +438,12 @@ export default function TrainingsPage() {
       setAviso("Entre na FootEra para salvar este treino.");
       return;
     }
-
+    if (!podeOperarTreinos) {
+      setAviso(
+        "Selecione um perfil de Atleta ou um atleta sob sua responsabilidade."
+      );
+      return;
+    }
     setSalvandoId(treinoProgramadoId);
     setAviso("");
     try {
@@ -186,16 +453,102 @@ export default function TrainingsPage() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ treinoProgramadoId }),
+        body: JSON.stringify({
+          treinoProgramadoId,
+          ...(ehResponsavel && atletaIdSelecionado
+            ? { atletaId: atletaIdSelecionado }
+            : {}),
+        }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.message || "Não foi possível salvar o treino.");
+      if (!r.ok) {
+        if (r.status === 409) {
+          setSalvos((ids) =>
+            [...new Set([...ids, treinoProgramadoId])]
+          );
+          setAviso("Este treino já está salvo na biblioteca.");
+          return;
+        }
+
+        throw new Error(
+          data?.message || "Não foi possível salvar o treino."
+        );
+      }
       setSalvos((ids) => [...ids, treinoProgramadoId]);
-      setAviso(`Treino “${treino.nome}” salvo na sua biblioteca.`);
+      setAviso(
+        ehResponsavel
+          ? `Treino “${treino.nome}” salvo na biblioteca de ${nomeAtletaSelecionado}.`
+          : `Treino “${treino.nome}” salvo na sua biblioteca.`
+      );
     } catch (e) {
       setAviso(e instanceof Error ? e.message : "Não foi possível salvar o treino.");
     } finally {
       setSalvandoId(null);
+    }
+  }
+  
+  async function removerDaBiblioteca(treino: TreinoProgramado) {
+    const treinoProgramadoId = String(
+      treino.programadoId || treino.id || ""
+    ).trim();
+
+    if (!treinoProgramadoId || !podeOperarTreinos || removendoId) {
+      return;
+    }
+
+    setRemovendoId(treinoProgramadoId);
+    setAviso("");
+
+    try {
+      const token =
+        Storage.token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token");
+
+      if (!token) throw new Error("Entre na FootEra.");
+
+      const query =
+        ehResponsavel && atletaIdSelecionado
+          ? `?atletaId=${encodeURIComponent(atletaIdSelecionado)}`
+          : "";
+
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/treinos/biblioteca/${encodeURIComponent(
+          treinoProgramadoId
+        )}${query}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const dados = await resposta.json().catch(() => null);
+
+      if (!resposta.ok) {
+        throw new Error(
+          dados?.message || "Não foi possível remover o treino."
+        );
+      }
+
+      setSalvos((ids) =>
+        ids.filter((id) => id !== treinoProgramadoId)
+      );
+
+      setAviso(
+        ehResponsavel
+          ? `Treino removido da biblioteca de ${nomeAtletaSelecionado}.`
+          : "Treino removido da sua biblioteca."
+      );
+    } catch (error) {
+      setAviso(
+        error instanceof Error
+          ? error.message
+          : "Erro ao remover o treino."
+      );
+    } finally {
+      setRemovendoId(null);
     }
   }
 
@@ -203,21 +556,21 @@ export default function TrainingsPage() {
     () => sorted(uniq(treinos.flatMap(t => t.categoria ?? []))),
     [treinos]
   );
-  const allTipos = useMemo(
-    () => sorted(uniq(treinos.map(t => t.tipoTreino ?? "").filter(Boolean) as string[])),
-    [treinos]
-  );
   const allExercicios = useMemo(
-    () => sorted(uniq(treinos.flatMap(t => (t.exercicios ?? []).map(e => e.exercicio?.nome ?? "")).filter(Boolean))),
+    () => sorted(uniq(treinos.flatMap(t => (t.exercicios ?? []).map(e => nomeDoExercicio(e) ?? "")).filter(Boolean))),
     [treinos]
   );
-  const allProfessores = useMemo(() => {
-    const names = sorted(
-      uniq(treinos.map(t => t.professor?.nome ?? "").filter(Boolean))
-    );
-    const hasSemProf = treinos.some(t => !t.professor?.nome);
-    return hasSemProf ? [SEM_PROF_LABEL, ...names] : names;
-  }, [treinos]);
+  const allCriadores = useMemo(
+    () =>
+      sorted(
+        uniq(
+          treinos.flatMap((treino) =>
+            nomesCriadores(treino)
+          )
+        )
+      ),
+    [treinos]
+  );
 
     const allDuracoes = useMemo(
       () => sortedNum(uniq(treinos.map(t => t.duracao ?? 0).filter((n) => typeof n === "number" && n > 0))),
@@ -228,17 +581,27 @@ export default function TrainingsPage() {
     const term = q.trim().toLowerCase();
 
     return treinos.filter((t) => {
+      const treinoId = String(t.programadoId || t.id || "");
+
+      if (somenteSalvos && !salvos.includes(treinoId)) {
+        return false;
+      }
       if (selCats.length && !(t.categoria ?? []).some(c => selCats.includes(c))) return false;
       if (selTipos.length && !selTipos.includes(String(t.tipoTreino ?? ""))) return false;
       if (selExs.length) {
-        const nomes = (t.exercicios ?? []).map(e => e.exercicio?.nome ?? "");
+        const nomes = (t.exercicios ?? []).map(e => nomeDoExercicio(e) ?? "");
         if (!nomes.some(n => selExs.includes(n))) return false;
       }
-      if (selProfs.length) {
-        const nome = t.professor?.nome ?? "";
-        const matchSemProf = !nome && selProfs.includes(SEM_PROF_LABEL);
-        const matchByName  =  !!nome && selProfs.includes(nome);
-        if (!matchSemProf && !matchByName) return false;
+      if (selCriadores.length) {
+        const nomes = nomesCriadores(t);
+
+        if (
+          !nomes.some((nome) =>
+            selCriadores.includes(nome)
+          )
+        ) {
+          return false;
+        }
       }
       if (selDur.length && !selDur.includes(Number(t.duracao ?? 0))) return false;
 
@@ -258,25 +621,35 @@ export default function TrainingsPage() {
         t.tipoTreino ?? "",
         String(t.duracao ?? ""),
         String(t.pontuacao ?? ""),
-        t.professor?.nome ?? "",
-        t.clube?.nome ?? "",
-        t.escolinha?.nome ?? "",
+        ...nomesCriadores(t),
         ...(t.categoria ?? []),
-        ...(t.exercicios?.map(e => e.exercicio?.nome ?? "") ?? []),
+        ...(t.exercicios?.map(e => nomeDoExercicio(e) ?? "") ?? []),
       ].join(" ").toLowerCase();
 
       return alvo.includes(term);
     });
-  }, [treinos, q, selCats, selTipos, selExs, selProfs, selDur, selPontuacao]);
+  }, [
+    treinos,
+    q,
+    selCats,
+    selTipos,
+    selExs,
+    selCriadores,
+    selDur,
+    selPontuacao,
+    somenteSalvos,
+    salvos,
+  ]);
 
   const clearAll = () => {
     setQ("");
     setSelCats([]);
     setSelTipos([]);
     setSelExs([]);
-    setSelProfs([]);
+    setSelCriadores([]);
     setSelDur([]);
     setSelPontuacao([]);
+    setSomenteSalvos(false);
   };
 
   const toggle = <T,>(value: T, arr: T[], setArr: (v: T[]) => void) => {
@@ -298,7 +671,7 @@ export default function TrainingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent">
+    <div className="min-h-screen w-full min-w-0 bg-transparent">
       <Link
                             href={visitandoOutroAtleta ? `/perfil/${encodeURIComponent(perfilUsuarioId)}?papel=Atleta` : "/perfil"}
                             aria-label="Voltar para perfil"
@@ -308,11 +681,43 @@ export default function TrainingsPage() {
                               focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
                             >
                             <ArrowLeft className="h-5 w-5" />
-                          </Link>
-     <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">
-       {visitandoOutroAtleta ? `Treinos de ${nomeAtleta || "Atleta"}` : "Todos os Treinos"}
-     </header>
-      <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
+      </Link>
+      <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">
+        {visitandoOutroAtleta ? `Treinos de ${nomeAtleta || "Atleta"}` : "Todos os Treinos"}
+      </header>
+      <div className="mx-auto w-full min-w-0 max-w-5xl space-y-3 px-3 py-4 sm:px-4">
+      {ehResponsavel && (
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+          <label
+            htmlFor="atleta-gerenciado-trainings"
+            className="mb-2 block text-sm font-semibold text-green-900"
+          >
+            Salvar ou agendar treinos para
+          </label>
+
+          <select
+            id="atleta-gerenciado-trainings"
+            value={atletaIdSelecionado}
+            onChange={(event) => {
+              setAtletaIdSelecionado(event.target.value);
+              setAviso("");
+            }}
+            className="w-full rounded-xl border border-green-200 bg-white px-4 py-3 text-green-950"
+          >
+            {atletasGerenciaveis.length === 0 && (
+              <option value="">
+                Nenhum atleta com permissão de treinos
+              </option>
+            )}
+
+            {atletasGerenciaveis.map((atleta) => (
+              <option key={atleta.atletaId} value={atleta.atletaId}>
+                {atleta.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
         {erro && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-700">{erro}</p>}
         {aviso && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{aviso}</p>}
         {visitandoOutroAtleta && (
@@ -326,7 +731,7 @@ export default function TrainingsPage() {
             />
           </label>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex w-full min-w-0 flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-800" />
             <input
@@ -338,13 +743,30 @@ export default function TrainingsPage() {
           </div>
 
           <Button variant="outline" onClick={clearAll}>Todos</Button>
+          
+          {podeOperarTreinos && (
+            <Button
+              variant={somenteSalvos ? "default" : "outline"}
+              disabled={!bibliotecaCarregada || carregandoSalvos}
+              onClick={() => setSomenteSalvos((valor) => !valor)}
+            >
+              {somenteSalvos
+                ? "✓ Somente salvos"
+                : "Somente treinos salvos"}
+            </Button>
+          )}
 
-          <details className="relative" open={open === "cats"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "cats" : null)}>
+          <details className="static min-w-0" open={open === "cats"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "cats" : null)}>
             <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
               Categorias <ChevronDown className="h-4 w-4" />
             </summary>
-            <div className="absolute z-10 mt-2 w-64 bg-white border rounded-lg p-2 shadow">
-              <div className="max-h-64 overflow-auto space-y-1">
+            <div className="absolute inset-x-0 top-full z-50 mt-2 w-full min-w-0 max-w-full rounded-lg border bg-white p-3 shadow-lg">
+              <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto overflow-x-hidden break-words">
+                {allCategorias.length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    Nenhuma categoria disponível.
+                  </p>
+                )}
                 {allCategorias.map((c) => (
                   <label key={c} className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={selCats.includes(c)} onChange={() => toggle(c, selCats, setSelCats)} />
@@ -359,11 +781,11 @@ export default function TrainingsPage() {
             </div>
           </details>
 
-          <details className="relative" open={open === "tipos"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "tipos" : null)}>
+          <details className="static min-w-0" open={open === "tipos"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "tipos" : null)}>
             <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
               TipoTreino <ChevronDown className="h-4 w-4" />
             </summary>
-            <div className="absolute z-10 mt-2 w-56 bg-white border rounded-lg p-2 shadow">
+            <div className="absolute inset-x-0 top-full z-50 mt-2 w-full min-w-0 max-w-full rounded-lg border bg-white p-3 shadow-lg">
               <div className="space-y-1">
                 {["Físico", "Tecnico", "Tatico", "Mental"].map((t) => (
                   <label key={t} className="flex items-center gap-2 text-sm">
@@ -379,16 +801,35 @@ export default function TrainingsPage() {
             </div>
           </details>
 
-          <details className="relative" open={open === "exs"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "exs" : null)}>
+          <details
+            className="static min-w-0"
+            open={open === "exs"}
+            onToggle={(e) =>
+              setOpen(
+                (e.target as HTMLDetailsElement).open ? "exs" : null
+              )
+            }
+          >
             <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
               Exercícios <ChevronDown className="h-4 w-4" />
             </summary>
-            <div className="absolute z-10 mt-2 w-72 bg-white border rounded-lg p-2 shadow">
-              <div className="max-h-64 overflow-auto space-y-1">
+            <div className="absolute inset-x-0 top-full z-50 mt-2 w-full min-w-0 max-w-full rounded-lg border bg-white p-3 shadow-lg">
+              <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto overflow-x-hidden break-words">
                 {allExercicios.map((n) => (
-                  <label key={n} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={selExs.includes(n)} onChange={() => toggle(n, selExs, setSelExs)} />
-                    {n}
+                  <label
+                    key={n}
+                    className="flex min-w-0 items-start gap-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selExs.includes(n)}
+                      onChange={() => toggle(n, selExs, setSelExs)}
+                      className="mt-1 shrink-0"
+                    />
+
+                    <span className="min-w-0 flex-1 break-words">
+                      {n}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -398,33 +839,76 @@ export default function TrainingsPage() {
               </div>
             </div>
           </details>
-
-          <details className="relative" open={open === "profs"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "profs" : null)}>
+                    
+          <details
+            className="static min-w-0"
+            open={open === "criadores"}
+            onToggle={(event) =>
+              setOpen(
+                (event.target as HTMLDetailsElement).open
+                  ? "criadores"
+                  : null
+              )
+            }
+          >
             <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
-              Professores <ChevronDown className="h-4 w-4" />
+              Criadores
+              <ChevronDown className="h-4 w-4" />
             </summary>
-            <div className="absolute z-10 mt-2 w-64 bg-white border rounded-lg p-2 shadow">
-              <div className="max-h-64 overflow-auto space-y-1">
-                {allProfessores.map((p) => (
-                  <label key={p} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={selProfs.includes(p)} onChange={() => toggle(p, selProfs, setSelProfs)} />
-                    {p}
-                  </label>
-                ))}
+
+            <div className="absolute inset-x-0 top-full z-50 mt-2 w-full min-w-0 max-w-full rounded-lg border bg-white p-3 shadow-lg">
+              <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto overflow-x-hidden break-words">
+                {allCriadores.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Nenhum criador identificado.
+                  </p>
+                ) : (
+                  allCriadores.map((nome) => (
+                    <label
+                      key={nome}
+                      className="flex min-w-0 items-start gap-2 text-sm cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selCriadores.includes(nome)}
+                        onChange={() =>
+                          toggle(
+                            nome,
+                            selCriadores,
+                            setSelCriadores
+                          )
+                        }
+                      />
+                      <span className="min-w-0 flex-1 break-words">
+                        {nome}
+                      </span>
+                    </label>
+                  ))
+                )}
               </div>
-              <div className="flex justify-end gap-2 mt-2">
-                <Button size="sm" variant="ghost" onClick={() => setSelProfs([])}>Limpar</Button>
-                <Button size="sm" onClick={() => setOpen(null)}>Aplicar</Button>
+
+              <div className="flex justify-end gap-2 mt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelCriadores([])}
+                >
+                  Limpar
+                </Button>
+
+                <Button size="sm" onClick={() => setOpen(null)}>
+                  Aplicar
+                </Button>
               </div>
             </div>
           </details>
 
-          <details className="relative" open={open === "dur"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "dur" : null)}>
+          <details className="static min-w-0" open={open === "dur"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "dur" : null)}>
             <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
               Duração <ChevronDown className="h-4 w-4" />
             </summary>
-            <div className="absolute z-10 mt-2 w-52 bg-white border rounded-lg p-2 shadow">
-              <div className="max-h-64 overflow-auto space-y-1">
+            <div className="absolute inset-x-0 top-full z-50 mt-2 w-full min-w-0 max-w-full rounded-lg border bg-white p-3 shadow-lg">
+              <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto overflow-x-hidden break-words">
                 {allDuracoes.map((d) => (
                   <label key={d} className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={selDur.includes(d)} onChange={() => toggle(d, selDur, setSelDur)} />
@@ -439,22 +923,53 @@ export default function TrainingsPage() {
             </div>
           </details>
 
-          <details className="relative" open={open === "pontuacao"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "pontuacao" : null)}>
+          <details
+            className="static min-w-0"
+            open={open === "pontuacao"}
+            onToggle={(e) =>
+              setOpen(
+                (e.target as HTMLDetailsElement).open
+                  ? "pontuacao"
+                  : null
+              )
+            }
+          >
             <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
-              Pontuação <ChevronDown className="h-4 w-4" />
+              Pontuação
+              <ChevronDown className="h-4 w-4" />
             </summary>
-            <div className="absolute z-10 mt-2 w-60 bg-white border rounded-lg p-2 shadow">
-              <div className="max-h-64 overflow-auto space-y-1">
+
+            <div className="absolute inset-x-0 top-full z-50 mt-2 w-full min-w-0 max-w-full rounded-lg border bg-white p-3 shadow-lg">
+              <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto overflow-x-hidden break-words">
                 {pontuacaoRanges.map((r) => (
-                  <label key={r.label} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={selPontuacao.includes(r.label)} onChange={() => toggle(r.label, selPontuacao, setSelPontuacao)} />
+                  <label
+                    key={r.label}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selPontuacao.includes(r.label)}
+                      onChange={() =>
+                        toggle(r.label, selPontuacao, setSelPontuacao)
+                      }
+                    />
                     {r.label}
                   </label>
                 ))}
               </div>
+
               <div className="flex justify-end gap-2 mt-2">
-                <Button size="sm" variant="ghost" onClick={() => setSelPontuacao([])}>Limpar</Button>
-                <Button size="sm" onClick={() => setOpen(null)}>Aplicar</Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelPontuacao([])}
+                >
+                  Limpar
+                </Button>
+
+                <Button size="sm" onClick={() => setOpen(null)}>
+                  Aplicar
+                </Button>
               </div>
             </div>
           </details>
@@ -462,23 +977,31 @@ export default function TrainingsPage() {
 
         {list.length === 0 ? (
           <div className="text-center text-green-800 py-10">
-            {erro ? "" : visitandoOutroAtleta ? "Nenhum treino agendado encontrado para este atleta." : "Nenhum treino encontrado."}
+            {erro
+              ? ""
+              : "Nenhum treino disponível foi encontrado."}
           </div>
         ) : (
           <>
             <div className="text-sm text-green-900/70">{list.length} treino(s) encontrado(s)</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               {list.map((t) => {
                 const prazo  = t.dataAgendada ? new Date(t.dataAgendada) : null;
                 const criado = t.createdAt ? new Date(t.createdAt) : null;
+                const criadoresDoTreino = nomesCriadores(t);
 
                 return (
-                  <Card key={t.id} className="bg-white">
+                  <Card key={t.id} className="min-w-0 max-w-full bg-white">
                     <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {tipoIcon(t.tipoTreino)}
-                          <h3 className="font-semibold">{t.nome}</h3>
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-start gap-2">
+                          <span className="mt-1 shrink-0">
+                            {tipoIcon(t.tipoTreino)}
+                          </span>
+
+                          <h3 className="min-w-0 break-words font-semibold">
+                            {t.nome}
+                          </h3>
                         </div>
                         {typeof t.pontuacao === "number" && (
                           <Badge className="bg-amber-100 text-amber-700 border-amber-200">
@@ -505,23 +1028,13 @@ export default function TrainingsPage() {
                             {t.tipoTreino}
                           </span>
                         ) : null}
-
-                        {t.professor?.nome && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
-                            Prof.: {t.professor.nome}
-                          </span>
-                        )}
-
-                        {t.clube?.nome && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
-                            Clube: {t.clube.nome}
-                          </span>
-                        )}
-
-                        {t.escolinha?.nome && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
-                            Escolinha: {t.escolinha.nome}
-                          </span>
+                        {criadoresDoTreino.length > 0 && (
+                          <div className="w-full text-sm text-green-950">
+                            <span className="font-semibold">
+                              Criado por:
+                            </span>{" "}
+                            {criadoresDoTreino.join(", ")}
+                          </div>
                         )}
                       </div>
 
@@ -550,32 +1063,65 @@ export default function TrainingsPage() {
                       {!!(t.exercicios?.length) && (
                         <div className="space-y-1">
                           <div className="text-sm font-medium">Exercícios</div>
-                          <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
+                          <ul className="list-inside list-disc space-y-0.5 break-words text-sm text-gray-700">
                             {t.exercicios!.map((e, idx) => (
                               <li key={idx}>
-                                {e.exercicio?.nome ?? "Exercício"} {e.repeticoes ? `— ${e.repeticoes}` : ""}
+                                {nomeDoExercicio(e)} {e.repeticoes ? `— ${e.repeticoes}` : ""}
                               </li>
                             ))}
                           </ul>
                         </div>
                       )}
-
-                      <div className="flex items-center justify-end gap-2 pt-1">
-                        {visitandoOutroAtleta ? (
-                          t.programadoId ? (
+                      
+                      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                        {podeOperarTreinos && (
+                          <>                       
                             <Button
-                              disabled={salvandoId === t.programadoId || salvos.includes(t.programadoId)}
-                              onClick={() => void salvarNaBiblioteca(t)}
+                              variant="outline"
+                              disabled={
+                                carregandoSalvos ||
+                                !bibliotecaCarregada ||
+                                salvandoId === (t.programadoId || t.id) ||
+                                removendoId === (t.programadoId || t.id)
+                              }
+                              onClick={() =>
+                                salvos.includes(t.programadoId || t.id)
+                                  ? void removerDaBiblioteca(t)
+                                  : void salvarNaBiblioteca(t)
+                              }
                             >
-                              {salvos.includes(t.programadoId) ? "Salvo" : salvandoId === t.programadoId ? "Salvando..." : "Salvar na minha biblioteca"}
+                              {removendoId === (t.programadoId || t.id)
+                                ? "Removendo..."
+                                : salvandoId === (t.programadoId || t.id)
+                                  ? "Salvando..."
+                                  : salvos.includes(t.programadoId || t.id)
+                                    ? "Remover dos salvos"
+                                    : "Salvar treino"}
                             </Button>
-                          ) : (
-                            <span className="text-xs text-gray-500">Treino pessoal sem modelo para copiar</span>
-                          )
-                        ) : (
-                          <Button onClick={() => (window.location.href = `/treinos/novo`)}>
-                            Agendar
-                          </Button>
+
+                            <Button
+                              onClick={() => {
+                                const treinoProgramadoId = String(
+                                  t.programadoId || t.id || ""
+                                ).trim();
+
+                                const params = new URLSearchParams();
+
+                                if (ehResponsavel && atletaIdSelecionado) {
+                                  params.set("atletaId", atletaIdSelecionado);
+                                }
+
+                                if (treinoProgramadoId) {
+                                  params.set("treinoProgramadoId", treinoProgramadoId);
+                                }
+
+                                window.location.href =
+                                  `/treinos/novo?${params.toString()}`;
+                              }}
+                            >
+                              Agendar treino
+                            </Button>
+                          </>
                         )}
                       </div>
                     </CardContent>

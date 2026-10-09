@@ -142,6 +142,57 @@ function RequireCreator({
   return <>{children}</>;
 }
 
+function PerfilComFallbackCreator() {
+  const context = useContext(UserContext);
+
+  if (!context || context.contextsLoading) {
+    return <RouteLoading />;
+  }
+
+  const ehCreator =
+    context.activeContext?.kind === "PERSONAL" &&
+    String(context.activeTipoUsuario ?? "")
+      .toLowerCase() === "creator";
+
+  if (ehCreator) {
+    const usuarioId = String(context.user?.id ?? "").trim();
+
+    const destino = usuarioId
+      ? `/creator/profile?id=${encodeURIComponent(usuarioId)}`
+      : "";
+
+    return (
+      <div className="min-h-screen bg-[#f7f7f4] flex items-center justify-center p-5">
+        <div className="w-full max-w-md rounded-2xl border bg-white p-6 text-center shadow-sm">
+          <h1 className="text-xl font-bold text-green-950">
+            Perfil Creator
+          </h1>
+
+          <p className="mt-3 text-sm text-slate-600">
+            Você está utilizando a FootEra como Creator.
+            Seu perfil fica em uma página específica.
+          </p>
+
+          {destino ? (
+            <a
+              href={destino}
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-green-800 px-4 py-3 font-semibold text-white hover:bg-green-900"
+            >
+              Ir para meu perfil Creator
+            </a>
+          ) : (
+            <p className="mt-4 text-sm text-red-600">
+              Não foi possível identificar seu usuário.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return <PaginaPerfil />;
+}
+
 export function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoading />}>
@@ -378,7 +429,11 @@ export function AppRoutes() {
         </Route>
 
         <Route path="/perfil/:id"><PaginaPerfilUnico /></Route>
-        <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
+        <Route path="/perfil">
+          <Private>
+            <PerfilComFallbackCreator />
+          </Private>
+        </Route>
         <Route path="/post/:id"><PaginaPostUnico /></Route>
         <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
         

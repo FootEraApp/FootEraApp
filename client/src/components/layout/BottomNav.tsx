@@ -303,7 +303,29 @@ export default function BottomNav({
                   await switchActiveContext(
                     contextKey
                   );
+                  
+                  const contextoSelecionado = contexts.find(
+                    (item) => item.key === contextKey
+                  );
 
+                  const ehCreatorSelecionado =
+                    contextoSelecionado?.kind === "PERSONAL" &&
+                    String(contextoSelecionado.tipoUsuario ?? "")
+                      .toLowerCase() === "creator";
+
+                  if (ehCreatorSelecionado) {
+                    const usuarioId = String(
+                      userContext?.user?.id ??
+                      Storage.usuarioId ??
+                      ""
+                    ).trim();
+
+                    if (usuarioId) {
+                      window.location.assign(
+                        `/creator/profile?id=${encodeURIComponent(usuarioId)}`
+                      );
+                    }
+                  }
                 } catch (
                   error
                 ) {
@@ -500,12 +522,26 @@ export default function BottomNav({
 
       <button
         type="button"
-        onClick={() =>
+        onClick={() => {
+          const ehCreator =
+            activeContext?.kind === "PERSONAL" &&
+            String(activeContext.tipoUsuario ?? "")
+              .toLowerCase() === "creator";
+
+          const usuarioId = String(
+            userContext?.user?.id ?? Storage.usuarioId ?? ""
+          ).trim();
+
+          const destino =
+            ehCreator && usuarioId
+              ? `/creator/profile?id=${encodeURIComponent(usuarioId)}`
+              : "/perfil";
+
           irPrivado(
-            "/perfil",
+            destino,
             "Entre na FootEra para acessar seu perfil."
-          )
-        }
+          );
+        }}
         className={`${baseItem} ${
           active ===
           "perfil"

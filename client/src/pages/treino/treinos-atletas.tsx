@@ -624,7 +624,20 @@ function getCriadorLabel(t: TreinoAgendado): string | null {
   return nome;
 }
 
-export default function TreinosAtletas() {
+export default function TreinosAtletas({
+  atletaGerenciadoId,
+  atletaGerenciadoUsuarioId,
+  atletaGerenciadoNome,
+}: {
+  atletaGerenciadoId?:
+    string | null;
+
+  atletaGerenciadoUsuarioId?:
+    string | null;
+
+  atletaGerenciadoNome?:
+    string | null;
+}) {
   const [location, navigate] = useLocation();
 
   const authContext =
@@ -646,7 +659,7 @@ export default function TreinosAtletas() {
       .trim()
       .toLowerCase();
 
-  const atletaAtivo =
+  const ehAtletaProprio =
     activeContext?.kind ===
       "PERSONAL" &&
     activeTipoUsuario ===
@@ -655,7 +668,33 @@ export default function TreinosAtletas() {
       authContext
         ?.activeTipoUsuarioId
     );
+
+  const ehResponsavelGerenciando =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    activeTipoUsuario ===
+      "responsavel" &&
+    Boolean(
+      atletaGerenciadoId
+    );
+
+  const atletaAtivo =
+    ehAtletaProprio ||
+    ehResponsavelGerenciando;
   
+  const atletaGerenciadoQuery =
+    atletaGerenciadoId
+      ? `&atletaId=${encodeURIComponent(
+          atletaGerenciadoId
+        )}`
+      : "";
+
+  const atletaGerenciadoQueryInicio =
+    atletaGerenciadoId
+      ? `?atletaId=${encodeURIComponent(
+          atletaGerenciadoId
+        )}`
+      : "";
   const {
     requireAuth,
   } = useAuthGate();
@@ -1167,15 +1206,23 @@ function navegarPeloMenu(rota: string) {
           return;
         }
 
-        const response = await fetch(
-          `${API.BASE_URL}/api/perfil/me/posicao-atual`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+        const urlPosicao =
+          atletaGerenciadoUsuarioId
+            ? `${API.BASE_URL}/api/perfil/${encodeURIComponent(
+                atletaGerenciadoUsuarioId
+              )}/posicao-atual`
+            : `${API.BASE_URL}/api/perfil/me/posicao-atual`;
+
+        const response =
+          await fetch(
+            urlPosicao,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
 
         const data =
           await response
@@ -1221,23 +1268,34 @@ function navegarPeloMenu(rota: string) {
         true
       );
 
-      const response =
-        await fetch(
-          `${API.BASE_URL}/api/perfil/me/posicao`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-            body:
-              JSON.stringify({
-                posicao,
-              }),
-          }
-        );
+      const urlPosicao =
+      atletaGerenciadoId
+        ? `${API.BASE_URL}/api/perfil/atletas/${encodeURIComponent(
+            atletaGerenciadoId
+          )}/posicao`
+        : `${API.BASE_URL}/api/perfil/me/posicao`;
+
+    const response =
+      await fetch(
+        urlPosicao,
+        {
+          method:
+            "PATCH",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              posicao,
+            }),
+        }
+      );
 
       const data =
         await response
@@ -1376,6 +1434,15 @@ function navegarPeloMenu(rota: string) {
       qs.set("from", from.toISOString());
       qs.set("to", to.toISOString());
 
+      if (
+        atletaGerenciadoId
+      ) {
+        qs.set(
+          "atletaId",
+          atletaGerenciadoId
+        );
+      }
+
       const r = await fetch(`${API.BASE_URL}/api/eventos/minha-agenda?${qs.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1419,10 +1486,12 @@ function navegarPeloMenu(rota: string) {
       const monthProximo = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, "0")}`;
 
       const [resAtual, resProximo] = await Promise.all([
-        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}`, {
+        fetch(
+          `${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}${atletaGerenciadoQuery}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthProximo}`, {
+        fetch(
+          `${API.BASE_URL}/api/treinos/agendados?month=${monthProximo}${atletaGerenciadoQuery}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -1731,6 +1800,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }, [
     atletaAtivo,
     activeContext?.key,
+    atletaGerenciadoId,
   ]);
 
   useEffect(() => {
@@ -1763,6 +1833,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }, [
     atletaAtivo,
     activeContext?.key,
+    atletaGerenciadoId,
   ]);
 
   useEffect(() => {
@@ -2080,7 +2151,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   ) {
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2107,7 +2178,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
         await fetch(
           `${API.BASE_URL}/api/treinos/agendados/${encodeURIComponent(
             id
-          )}/iniciar`,
+          )}/iniciar${atletaGerenciadoQueryInicio}`,
           {
             method: "POST",
 
@@ -2223,7 +2294,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   async function finalizarEEnviar(treino: TreinoAgendado) {
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2242,7 +2313,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
       if (!token) return;
 
       const r = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados/${treino.id}/complete`,
+        `${API.BASE_URL}/api/treinos/agendados/${treino.id}/complete${atletaGerenciadoQueryInicio}`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -2282,7 +2353,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2332,7 +2403,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
     try {
       const token = getToken();
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${t.id}`, {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${t.id}${atletaGerenciadoQueryInicio}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2363,7 +2434,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   async function removerTreinoAgendado(id: string) {
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2373,7 +2444,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
     try {
       const token = getToken();
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${id}`, {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${id}${atletaGerenciadoQueryInicio}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -3356,7 +3427,15 @@ return (
             <nav className="flex-1 space-y-2 overflow-y-auto p-4">
               <button
                 type="button"
-                onClick={() => navegarPeloMenu("/treinos/novo")}
+                onClick={() =>
+                  navegarPeloMenu(
+                    atletaGerenciadoId
+                      ? `/treinos/novo?atletaId=${encodeURIComponent(
+                          atletaGerenciadoId
+                        )}`
+                      : "/treinos/novo"
+                  )
+                }
                 className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-800">
@@ -3376,7 +3455,15 @@ return (
 
               <button
                 type="button"
-                onClick={() => navegarPeloMenu("/treinos/livre/novo")}
+                onClick={() =>
+                  navegarPeloMenu(
+                    atletaGerenciadoId
+                      ? `/treinos/livre/novo?atletaId=${encodeURIComponent(
+                          atletaGerenciadoId
+                        )}`
+                      : "/treinos/livre/novo"
+                  )
+                }
                 className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
@@ -3395,8 +3482,16 @@ return (
               </button>
 
               <button
-                type="button"
-                onClick={() => navegarPeloMenu("/treinos/livre/historico")}
+                type="button"              
+                onClick={() =>
+                  navegarPeloMenu(
+                    atletaGerenciadoId
+                      ? `/treinos/livre/historico?atletaId=${encodeURIComponent(
+                          atletaGerenciadoId
+                        )}`
+                      : "/treinos/livre/historico"
+                  )
+                }
                 className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">

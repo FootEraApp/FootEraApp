@@ -26,6 +26,7 @@ model Usuario {
   tipo TipoUsuario
 
   papeis                    UsuarioPapel[]
+  atletasSobResponsabilidade ResponsavelAtleta[] @relation("ResponsavelAtletaResponsavel")
   membrosOrganizacao        MembroOrganizacao[]
   contextoOrganizacaoId     String?
   contextoOrganizacao       Organizacao?          @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
@@ -168,6 +169,40 @@ model UsuarioPapel {
   @@index([papel, status])
 }
 
+model ResponsavelAtleta {
+  id String @id @default(uuid())
+
+  responsavelUsuarioId String
+  atletaId             String
+
+  status              StatusResponsavelAtleta @default(ATIVO)
+  origemSolicitacao   OrigemSolicitacaoResponsavel?
+  
+  principal                Boolean @default(false)
+  podeEditarPerfil         Boolean @default(true)
+  podeGerenciarPrivacidade Boolean @default(true)
+  podeGerenciarTreinos     Boolean @default(true)
+  podeGerenciarConteudo    Boolean @default(true)
+  permitirPerfilPublico    Boolean @default(false)
+  permitirMensagensDiretas Boolean @default(false)
+  permitirMostrarEmail     Boolean @default(false)
+
+  parentesco String?
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  confirmadoEm DateTime?
+  revogadoEm   DateTime?
+
+  responsavel Usuario @relation("ResponsavelAtletaResponsavel", fields: [responsavelUsuarioId], references: [id], onDelete: Cascade)
+
+  atleta Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  @@unique([responsavelUsuarioId, atletaId])
+  @@index([responsavelUsuarioId, status])
+  @@index([atletaId, status])
+}
+
 model PerfilPontuacaoVisualizacao {
   id                   String   @id @default(uuid())
   viewerUsuarioId      String
@@ -223,27 +258,40 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                     String           @id @default(uuid())
-  usuarioId              String
-  plano                  String
-  periodicidade          Periodicidade
-  startsAt               DateTime
-  renovaEm               DateTime
-  canceledAt             DateTime?
-  ativo                  Boolean          @default(true)
-  lembreteEnviado        Boolean          @default(false)
-  usuario                Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?          @unique
-  status                 AssinaturaStatus @default(TRIAL)
-  trialStartsAt          DateTime?
-  trialEndsAt            DateTime?
+  id                           String           @id @default(uuid())
+  usuarioId                    String
 
-  metodoPreferido           MetodoPagamento?
-  metodoPreferidoDefinidoEm DateTime?
+  contextoKey                  String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
 
-  bloqueadoEm DateTime?
+  plano                        String
+  periodicidade                Periodicidade
+  startsAt                     DateTime
+  renovaEm                     DateTime
+  canceledAt                   DateTime?
+  ativo                        Boolean          @default(true)
+  lembreteEnviado              Boolean          @default(false)
+  providerSubscriptionId       String?          @unique
+  bloqueadoEm                  DateTime?
+  metodoPreferido              MetodoPagamento?
+  metodoPreferidoDefinidoEm    DateTime?
+  status                       AssinaturaStatus @default(TRIAL)
+  trialEndsAt                  DateTime?
+  trialStartsAt                DateTime?
 
-  @@unique([usuarioId, plano])
+  usuario Usuario @relation( fields: [usuarioId], references: [id], onDelete: Cascade )
+
+  @@unique([usuarioId, plano, contextoKey])
+  @@index([contextoKey])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
   @@index([startsAt])
   @@index([canceledAt])
   @@index([status])
@@ -575,6 +623,7 @@ model Atleta {
   clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  responsaveis                  ResponsavelAtleta[]
   AtletaElenco                  AtletaElenco[]
   observadores                  AtletaObservado[]          @relation("ObservacaoAtleta")
   EstatisticaAtleta             EstatisticaAtleta?
@@ -1239,6 +1288,11 @@ model AulaAoVivo {
 
   totalMensagens     Int @default(0)
   totalParticipantes Int @default(0)
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
 
   criadorUsuarioId   String?
   criadorUsuario     Usuario?              @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
@@ -1283,6 +1337,11 @@ model AulaAoVivo {
   @@index([metodologiaAvulsaId])
   @@index([estruturaAvulsaId])
   @@index([ivsRecordingId])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model AulaAoVivoAcesso {
@@ -1465,6 +1524,7 @@ model Postagem {
   dataCriacao       DateTime             @default(now())
   visibilidade      VisibilidadePostagem @default(LOGADO)
   usuarioId         String
+  autorContextoKey  String?
   atletaId          String?
   clubeId           String?
   escolinhaId       String?
@@ -1490,6 +1550,7 @@ model Postagem {
   @@index([organizacaoId])
   @@index([visibilidade, dataCriacao])
   @@index([repostOfId])
+  @@index([autorContextoKey])
 }
 
 model Midia {
@@ -2700,6 +2761,11 @@ model TreinoRotinaAtribuicao {
 model Pagamento {
   id            String          @id @default(uuid())
   usuarioId     String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
   plano         String
   periodicidade Periodicidade
   metodo        MetodoPagamento
@@ -2738,6 +2804,11 @@ model Pagamento {
   @@index([usuarioId, criadoEm])
   @@index([status])
   @@index([status, criadoEm])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model Cupom {
@@ -3313,6 +3384,18 @@ model PushDeviceToken {
   @@index([usuarioId])
 }
 
+enum StatusResponsavelAtleta {
+  PENDENTE
+  ATIVO
+  REVOGADO
+}
+
+enum OrigemSolicitacaoResponsavel {
+  ATLETA
+  RESPONSAVEL
+  CADASTRO_MENOR
+}
+
 enum StatusUsuarioPapel {
   PENDENTE
   ATIVO
@@ -3500,6 +3583,7 @@ enum TipoUsuario {
   Federacao
   Marca
   Creator
+  Responsavel
 }
 
 enum TipoMidia {
@@ -3555,6 +3639,8 @@ enum NotificacaoTipo {
   INDICACAO_RESPONDIDA
   COLABORACAO_OLHEIRO
   COLABORACAO_RESPONDIDA
+  RESPONSAVEL_SOLICITACAO
+  RESPONSAVEL_VINCULO
 }
 
 enum TipoMembro {

@@ -285,30 +285,6 @@ export default function PaginaLogin() {
   useEffect(() => {
     if (isE2E) return;
 
-    const token =
-      Storage.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token");
-    if (!token) return;
-
-    const tipo = (
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario") ||
-      ""
-    ).toLowerCase();
-
-    navigate(
-      tipo === "admin"
-        ? "/admin"
-        : consumirRetornoAuth(
-            "/perfil"
-          )
-    );
-  }, []);
-
-  useEffect(() => {
-    if (isE2E) return;
-
     (async () => {
       try {
         const r = await axios.get(`${API.BASE_URL}/api/status/maintenance`, {

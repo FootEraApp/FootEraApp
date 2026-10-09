@@ -72,6 +72,7 @@ function permissoesDoPapel(
 
     case TipoUsuario.Atleta:
     case TipoUsuario.Learning:
+    case TipoUsuario.Responsavel:
     default:
       return [];
   }
