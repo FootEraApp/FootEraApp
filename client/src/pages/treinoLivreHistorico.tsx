@@ -65,25 +65,69 @@ function openMediaFullscreen(url: string) {
 
 export default function TreinosLivresHistorico() {
   const [itens, setItens] = useState<TL[]>([]);
-
+  const atletaIdDaUrl = new URLSearchParams(
+    window.location.search
+  ).get("atletaId");
+    
   useEffect(() => {
-    (async () => {
-      const token = (Storage as any).token ?? localStorage.getItem("token");
-      const atletaId =
-        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
-      if (!token || !atletaId) return;
+    let cancelado = false;
 
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos-livres?atletaId=${encodeURIComponent(
-          atletaId
-        )}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
+    async function carregarHistorico() {
+      const token =
+        (Storage as any).token ??
+        localStorage.getItem("token") ??
+        sessionStorage.getItem("token");
+
+      if (!token) {
+        toast.error("Sessão expirada.");
+        return;
+      }
+
+      try {
+        const query = atletaIdDaUrl
+          ? `?atletaId=${encodeURIComponent(atletaIdDaUrl)}`
+          : "";
+
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/treinos-livres${query}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const dados = await resposta.json().catch(() => null);
+
+        if (!resposta.ok) {
+          throw new Error(
+            dados?.message ||
+            "Não foi possível carregar o histórico."
+          );
         }
-      );
-      if (r.ok) setItens(await r.json());
-    })();
-  }, []);
+
+        if (!cancelado) {
+          setItens(Array.isArray(dados) ? dados : []);
+        }
+      } catch (error) {
+        if (!cancelado) {
+          setItens([]);
+
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Erro ao consultar treinos livres."
+          );
+        }
+      }
+    }
+
+    void carregarHistorico();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [atletaIdDaUrl]);
 
   async function handleDelete(id: string) {
     if (
@@ -183,15 +227,17 @@ export default function TreinosLivresHistorico() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDelete(t.id)}
-                  className="ml-2 text-red-600 hover:text-red-800"
-                  aria-label="Apagar treino livre"
-                  title="Apagar treino livre"
-                >
+                {!atletaIdDaUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(t.id)}
+                    className="ml-2 text-red-600 hover:text-red-800"
+                    aria-label="Apagar treino livre"
+                    title="Apagar treino livre"
+                  >
                   <Trash2 className="w-5 h-5" />
                 </button>
+                )}
               </li>
             );
           })}

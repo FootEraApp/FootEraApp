@@ -8,7 +8,12 @@ import {
   Prisma,
   VisibilidadePostagem,
   NotificacaoTipo,
+  TipoUsuario,
+  StatusResponsavelAtleta,
 } from "@prisma/client";
+import {
+  audit,
+} from "../services/audit.js";
 import {
   getPostVisibilityWhere,
   normalizarVisibilidadePostagem,
@@ -170,6 +175,46 @@ const postagemIncludeBase = {
       id: true,
       nome: true,
       tipo: true,
+
+      clube: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
+
+      escolinha: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
+
+      marca: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
+
+      federacao: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
     },
   },
   curtidas: { select: { usuarioId: true } },
@@ -180,6 +225,122 @@ const postagemIncludeBase = {
     },
   },
 };
+
+function obterLogoOrganizacao(
+  organizacao: any
+) {
+  if (!organizacao) {
+    return null;
+  }
+
+  return (
+    organizacao.clube?.logo ??
+    organizacao.escolinha?.logo ??
+    organizacao.marca?.logo ??
+    organizacao.federacao?.logo ??
+    null
+  );
+}
+
+function normalizarOrganizacaoPost(
+  post: any
+): any {
+  if (!post) {
+    return post;
+  }
+
+  let perfilUsuarioId:
+    string | null =
+    null;
+
+  let perfilPapel:
+    string | null =
+    null;
+
+  if (
+    post.organizacao
+      ?.clube
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .clube.usuarioId ??
+      null;
+
+    perfilPapel =
+      "Clube";
+  } else if (
+    post.organizacao
+      ?.escolinha
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .escolinha
+        .usuarioId ??
+      null;
+
+    perfilPapel =
+      "Escolinha";
+  } else if (
+    post.organizacao
+      ?.marca
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .marca.usuarioId ??
+      null;
+
+    perfilPapel =
+      "Marca";
+  } else if (
+    post.organizacao
+      ?.federacao
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .federacao
+        .usuarioId ??
+      null;
+
+    perfilPapel =
+      "Federacao";
+  }
+
+  const organizacao =
+    post.organizacao
+      ? {
+          id:
+            post.organizacao.id,
+
+          nome:
+            post.organizacao.nome,
+
+          tipo:
+            post.organizacao.tipo,
+
+          logo:
+            obterLogoOrganizacao(
+              post.organizacao
+            ),
+
+          perfilUsuarioId,
+
+          perfilPapel,
+        }
+      : null;
+
+  return {
+    ...post,
+
+    organizacao,
+
+    repostOf:
+      post.repostOf
+        ? normalizarOrganizacaoPost(
+            post.repostOf
+          )
+        : null,
+  };
+}
 
 async function carregarCadeiaRepost(post: any): Promise<any> {
   if (!post?.repostOfId) return post;
@@ -475,9 +636,17 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
       },
     });
 
-    const postagens = ordenarPostsDestaquePrimeiro(
-      await carregarCadeiasDosPosts(postagensBase)
-    );
+    const postagensComCadeia =
+      await carregarCadeiasDosPosts(
+        postagensBase
+      );
+
+    const postagens =
+      ordenarPostsDestaquePrimeiro(
+        postagensComCadeia.map(
+          normalizarOrganizacaoPost
+        )
+      );
 
     const items = userId
       ? postagens
@@ -546,8 +715,10 @@ export async function getPostById(req: Request, res: Response) {
     }
 
     const post =
-      await carregarCadeiaRepost(
-        postBase
+      normalizarOrganizacaoPost(
+        await carregarCadeiaRepost(
+          postBase
+        )
       );
 
     if (!viewerId) {
@@ -811,11 +982,15 @@ export const postar: RequestHandler = async (req, res) => {
     const organizacaoId =
       autorResolvido.organizacaoId;
 
+    const autorContextoKey =
+      autorResolvido.contexto.key;
+
     const postagem = await prisma.postagem.create({
       data: {
         conteudo: texto,
         usuarioId,
         organizacaoId,
+        autorContextoKey,
         dataCriacao: new Date(),
         tipoMidia,
         imagemUrl,
@@ -836,8 +1011,13 @@ export const postar: RequestHandler = async (req, res) => {
         },
       });
     
+    const postNormalizado =
+      normalizarOrganizacaoPost(
+        postForEmit
+      );
+
     await emitirNovoPost(
-      postForEmit,
+      postNormalizado,
       usuarioId,
       visibilidade
     );
@@ -882,68 +1062,345 @@ export const postar: RequestHandler = async (req, res) => {
   }
 };
 
-export const deletarPostagem: RequestHandler = async (req, res) => {
-  const { id } = req.params;
-  const usuarioId = req.userId;
+async function responsavelPodeGerenciarPostagem(
+  responsavelUsuarioId: string,
+  atletaUsuarioId: string
+) {
+  const contexto =
+    await getActiveContext(
+      responsavelUsuarioId
+    );
+
+  if (
+    contexto?.kind !==
+      "PERSONAL" ||
+    contexto.tipoUsuario !==
+      TipoUsuario.Responsavel
+  ) {
+    return null;
+  }
+
+  const vinculo =
+    await prisma
+      .responsavelAtleta
+      .findFirst({
+        where: {
+          responsavelUsuarioId,
+
+          status:
+            StatusResponsavelAtleta.ATIVO,
+
+          podeGerenciarConteudo:
+            true,
+
+          atleta: {
+            is: {
+              usuarioId:
+                atletaUsuarioId,
+            },
+          },
+        },
+
+        select: {
+          id: true,
+          atletaId: true,
+
+          responsavelUsuarioId:
+            true,
+        },
+      });
+
+  return vinculo;
+}
+
+export const deletarPostagem:
+  RequestHandler =
+async (req, res) => {
+  const { id } =
+    req.params;
+
+  const usuarioId =
+    req.userId;
 
   if (!usuarioId) {
-    return res.status(401).json({ mensagem: "Usuário não autenticado." });
+    return res
+      .status(401)
+      .json({
+        mensagem:
+          "Usuário não autenticado.",
+      });
   }
 
   try {
-    const post = await prisma.postagem.findUnique({
-      where: { id },
-      select: { 
-        id: true, 
-        usuarioId: true, 
-        repostOfId: true,
-        imagemUrl: true,   
-        videoUrl: true     
-      },
-    });
+    const post =
+      await prisma
+        .postagem
+        .findUnique({
+          where: {
+            id,
+          },
+
+          select: {
+            id: true,
+            usuarioId: true,
+            organizacaoId: true,
+            repostOfId: true,
+            imagemUrl: true,
+            videoUrl: true,
+          },
+        });
 
     if (!post) {
-      return res.status(404).json({ mensagem: "Postagem não encontrada." });
-    }
-
-    if (post.usuarioId !== usuarioId) {
-      return res.status(403).json({ mensagem: "Não autorizado." });
-    }
-
-    if (post.imagemUrl && post.imagemUrl.includes("amazonaws.com")) {
-      await deleteFromS3(post.imagemUrl);
-    }
-    if (post.videoUrl && post.videoUrl.includes("amazonaws.com")) {
-      await deleteFromS3(post.videoUrl);
-    }
-
-    if (post.repostOfId) {
-      let rootId = post.repostOfId;
-      let cursor = await prisma.postagem.findUnique({
-        where: { id: rootId },
-        select: { repostOfId: true },
-      });
-
-      while (cursor?.repostOfId) {
-        rootId = cursor.repostOfId;
-        cursor = await prisma.postagem.findUnique({
-          where: { id: cursor.repostOfId },
-          select: { repostOfId: true },
+      return res
+        .status(404)
+        .json({
+          mensagem:
+            "Postagem não encontrada.",
         });
+    }
+
+    const proprioAutor =
+      String(
+        post.usuarioId
+      ) ===
+      String(
+        usuarioId
+      );
+
+    let vinculoResponsavel:
+      Awaited<
+        ReturnType<
+          typeof responsavelPodeGerenciarPostagem
+        >
+      > =
+      null;
+
+    /*
+     * Se não é o próprio autor,
+     * verificamos se é o responsável
+     * daquele atleta.
+     */
+    if (!proprioAutor) {
+      /*
+       * Uma postagem feita em nome
+       * de organização pertence
+       * publicamente à organização.
+       *
+       * O responsável não deve poder
+       * apagar essa publicação apenas
+       * porque a criança foi o executor.
+       */
+      if (
+        post.organizacaoId
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "RESPONSAVEL_CANNOT_DELETE_ORGANIZATION_POST",
+
+            mensagem:
+              "O responsável não pode apagar uma publicação feita em nome de uma organização.",
+          });
       }
 
-      await prisma.postagem.update({
-        where: { id: rootId },
-        data: { reposts: { decrement: 1 } },
-      }).catch(() => {});
+      vinculoResponsavel =
+        await responsavelPodeGerenciarPostagem(
+          usuarioId,
+          post.usuarioId
+        );
+
+      if (
+        !vinculoResponsavel
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "POST_DELETE_FORBIDDEN",
+
+            mensagem:
+              "Você não está autorizado a apagar esta postagem.",
+          });
+      }
     }
 
-    await prisma.postagem.delete({ where: { id } });
+    /*
+     * Mídias pertencentes ao post.
+     */
+    if (
+      post.imagemUrl &&
+      post.imagemUrl.includes(
+        "amazonaws.com"
+      )
+    ) {
+      await deleteFromS3(
+        post.imagemUrl
+      );
+    }
 
-    return res.json({ mensagem: "Postagem e arquivos excluídos com sucesso." });
+    if (
+      post.videoUrl &&
+      post.videoUrl.includes(
+        "amazonaws.com"
+      )
+    ) {
+      await deleteFromS3(
+        post.videoUrl
+      );
+    }
+
+    /*
+     * Se for repost,
+     * reduz contador do post raiz.
+     */
+    if (
+      post.repostOfId
+    ) {
+      let rootId =
+        post.repostOfId;
+
+      let cursor =
+        await prisma
+          .postagem
+          .findUnique({
+            where: {
+              id:
+                rootId,
+            },
+
+            select: {
+              repostOfId:
+                true,
+            },
+          });
+
+      while (
+        cursor?.repostOfId
+      ) {
+        rootId =
+          cursor
+            .repostOfId;
+
+        cursor =
+          await prisma
+            .postagem
+            .findUnique({
+              where: {
+                id:
+                  cursor
+                    .repostOfId,
+              },
+
+              select: {
+                repostOfId:
+                  true,
+              },
+            });
+      }
+
+      await prisma
+        .postagem
+        .update({
+          where: {
+            id:
+              rootId,
+          },
+
+          data: {
+            reposts: {
+              decrement:
+                1,
+            },
+          },
+        })
+        .catch(
+          () => {}
+        );
+    }
+
+    await prisma
+      .postagem
+      .delete({
+        where: {
+          id,
+        },
+      });
+
+    /*
+     * Registramos separadamente
+     * quando a exclusão foi feita
+     * pelo responsável.
+     */
+    if (
+      vinculoResponsavel
+    ) {
+      try {
+        await audit(
+          req as any,
+          {
+            acao:
+              "POST_REMOVIDO_POR_RESPONSAVEL",
+
+            entidade:
+              "Postagem",
+
+            entidadeId:
+              id,
+
+            descricao:
+              "Responsável removeu uma postagem do atleta supervisionado.",
+
+            meta: {
+              atletaId:
+                vinculoResponsavel
+                  .atletaId,
+
+              atletaUsuarioId:
+                post.usuarioId,
+
+              responsavelUsuarioId:
+                usuarioId,
+
+              responsavelAtletaId:
+                vinculoResponsavel
+                  .id,
+            },
+          }
+        );
+      } catch (
+        auditError
+      ) {
+        /*
+         * O post já foi removido.
+         * Falha na auditoria não deve
+         * transformar a exclusão em 500.
+         */
+        console.warn(
+          "[deletarPostagem] erro ao registrar auditoria:",
+          auditError
+        );
+      }
+    }
+
+    return res.json({
+      mensagem:
+        vinculoResponsavel
+          ? "Postagem removida pelo responsável."
+          : "Postagem e arquivos excluídos com sucesso.",
+    });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ mensagem: "Erro ao excluir postagem." });
+    console.error(
+      "Erro ao excluir postagem:",
+      err
+    );
+
+    return res
+      .status(500)
+      .json({
+        mensagem:
+          "Erro ao excluir postagem.",
+      });
   }
 };
 
@@ -1106,6 +1563,9 @@ export async function repostPost(req: Request, res: Response) {
     const organizacaoRepostId =
       autorRepost.organizacaoId;
 
+    const autorRepostContextoKey =
+      autorRepost.contexto.key;
+
     const novoBase =
       await prisma.postagem.create({
         data: {
@@ -1114,6 +1574,9 @@ export async function repostPost(req: Request, res: Response) {
 
           organizacaoId:
             organizacaoRepostId,
+
+          autorContextoKey:
+            autorRepostContextoKey,
 
           conteudo:
             conteudoRepost,
@@ -1130,7 +1593,12 @@ export async function repostPost(req: Request, res: Response) {
         },
       });
 
-    const novo = await carregarCadeiaRepost(novoBase);
+    const novo =
+      normalizarOrganizacaoPost(
+        await carregarCadeiaRepost(
+          novoBase
+        )
+      );
 
     await prisma.postagem.update({
       where: { id: rootId },

@@ -5,6 +5,9 @@ import bcrypt from "bcryptjs";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
 import { APP } from "server/config.js";
 import { AuthProvider } from "@prisma/client";
+import {
+  obterSupervisaoMenor,
+} from "../services/supervisaoMenor.js";
 
 export async function forgotPassword(req: Request, res: Response) {
   const { email } = req.body as { email?: string };
@@ -65,18 +68,48 @@ export async function resetPassword(req: Request, res: Response) {
       return res.status(400).json({ message: "Token inválido ou expirado." });
     }
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: uid },
-      select: {
-        id: true,
-        authProvider: true,
-      },
-    });
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          id:
+            uid,
+        },
+
+        select: {
+          id:
+            true,
+
+          authProvider:
+            true,
+
+          tokenVersion:
+            true,
+        },
+      });
 
     if (!usuario) {
       return res.status(404).json({
         message: "Usuário não encontrado.",
       });
+    }
+
+    const supervisao =
+      await obterSupervisaoMenor(
+        usuario.id
+      );
+
+    if (
+      supervisao.supervisionado
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "GUARDIAN_APPROVAL_REQUIRED_FOR_PASSWORD_RESET",
+
+          message:
+            "A redefinição de senha desta conta precisa ser confirmada pelo responsável.",
+        });
     }
 
     const senhaHash = await bcrypt.hash(senha, 10);
@@ -86,13 +119,26 @@ export async function resetPassword(req: Request, res: Response) {
         where: { id: uid },
         data: {
           senhaHash,
-          localLoginEnabled: true,
+
+          localLoginEnabled:
+            true,
 
           authProvider:
             usuario.authProvider ===
             AuthProvider.GOOGLE
               ? AuthProvider.LOCAL_GOOGLE
               : usuario.authProvider,
+
+          tokenVersion: {
+            increment:
+              1,
+          },
+
+          lastLogoutAt:
+            new Date(),
+
+          lastSeenAt:
+            new Date(),
         },
       }),
       prisma.passwordReset.update({ where: { id: pr.id }, data: { usedAt: new Date() } }),

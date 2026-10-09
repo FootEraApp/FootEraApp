@@ -119,6 +119,26 @@ const toDate = (v?: string | null) => (v ? new Date(v) : null);
     
 const dayKey = (d: Date) => formatDateFns(d, "yyyy-MM-dd");
 
+
+function formatarDataAtividade(
+  valor: string | Date | null | undefined
+): string {
+  if (!valor) return "Sem data";
+
+  const data = new Date(valor);
+
+  if (Number.isNaN(data.getTime())) {
+    return "Sem data";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(data);
+}
+
 function safeDateFromWire(v?: string | null): Date | null {
   if (!v) return null;
   if (typeof v === "string") {
@@ -264,72 +284,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
 
   const fecharResumo = () => setResumoModal(null);
 
-  function abrirTreinoAtividade(a: any) {
-    const tipoAtividade = String(
-      a?.tipo ??
-        a?.categoria ??
-        a?.kind ??
-        ""
-    )
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(
-        /[\u0300-\u036f]/g,
-        ""
-      );
-
-    const atividadeId = String(
-      a?.id ?? ""
-    ).trim();
-
-    const isTreinoLivre =
-      tipoAtividade.includes(
-        "treino livre"
-      ) ||
-      atividadeId.startsWith("tl-");
-
-    if (isTreinoLivre) {
-      setLocation(
-        "/treinos/livre/historico"
-      );
-      return;
-    }
-
-    const treinoAgendadoId =
-      String(
-        a?.treinoAgendadoId ??
-          a?.treinoAgendado?.id ??
-          ""
-      ).trim();
-
-    if (treinoAgendadoId) {
-      const encontrado =
-        (treinosAgendados || []).find(
-          (t) =>
-            String(t?.id) ===
-            String(treinoAgendadoId)
-        );
-
-      if (encontrado) {
-        setResumoModal({
-          treinoAgendadoId,
-          treino: encontrado,
-        });
-        return;
-      }
-
-      setLocation(
-        `/submissao?treinoAgendadoId=${encodeURIComponent(
-          treinoAgendadoId
-        )}`
-      );
-
-      return;
-    }
-    setLocation("/trainings");
-  }
-
   const { data: perfil } = useQuery<any>({
     queryKey: ["perfil-basico", targetUserId],
     enabled: Boolean(token && targetUserId && !tipoUsuarioId),
@@ -424,6 +378,16 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     activeAtletaId ||
     "",
   ).trim();
+  
+  const usuarioLogadoId = String(
+    authContext?.user?.id ??
+    Storage.usuarioId ??
+    ""
+  ).trim();
+
+  const ehProprioPerfil =
+    Boolean(usuarioLogadoId) &&
+    String(targetUserId) === usuarioLogadoId;
 
   const trainingsHref =
     targetUserId && String(targetUserId) !== String(Storage.usuarioId || "")
@@ -433,6 +397,111 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   const base = `${API.BASE_URL}/api/treinos/agendados`;
   
   const url = `${base}?atletaId=${encodeURIComponent(atletaId)}&apenasFuturos=1&apenasComSubmissao=0`;
+
+  function abrirTreinoAtividade(a: any) {
+    const tipoAtividade = String(
+      a?.tipo ??
+        a?.categoria ??
+        a?.kind ??
+        ""
+    )
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      );
+
+    const atividadeId = String(
+      a?.id ?? ""
+    ).trim();
+
+    const isTreinoLivre =
+      tipoAtividade.includes(
+        "treino livre"
+      ) ||
+      atividadeId.startsWith("tl-");
+
+    if (isTreinoLivre) {
+      const ehAtletaAtivo =
+        activeContext?.kind === "PERSONAL" &&
+        String(
+          authContext?.activeTipoUsuario ?? ""
+        ).toLowerCase() === "atleta";
+
+      if (ehProprioPerfil && ehAtletaAtivo) {
+        setLocation("/treinos/livre/historico");
+        return;
+      }
+
+      // Um responsável poderá consultar o histórico
+      // pelo fluxo privado de gerenciamento de atletas.
+      // Visualizar um perfil público não concede essa permissão.
+      return;
+    }
+
+    const linkAtividade = String(a?.link ?? "").trim();
+    
+    if (
+      linkAtividade.startsWith("/treinos/unico?programadoId=") ||
+      /^\/treino\/[a-zA-Z0-9-]+(?:\?.*)?$/.test(linkAtividade)
+    ) {
+      setLocation(linkAtividade);
+      return;
+    }
+    
+    const treinoProgramadoId = String(
+      a?.treinoProgramadoId ??
+      a?.programadoId ??
+      a?.treinoProgramado?.id ??
+      a?.treinoAgendado?.treinoProgramadoId ??
+      ""
+    ).trim();
+
+    if (treinoProgramadoId) {
+      setLocation(
+        `/treinos/unico?programadoId=${encodeURIComponent(
+          treinoProgramadoId
+        )}`
+      );
+      return;
+    }
+
+    const treinoAgendadoId =
+      String(
+        a?.treinoAgendadoId ??
+          a?.treinoAgendado?.id ??
+          ""
+      ).trim();
+
+    if (treinoAgendadoId) {
+      const encontrado =
+        (treinosAgendados || []).find(
+          (t) =>
+            String(t?.id) ===
+            String(treinoAgendadoId)
+        );
+
+      if (encontrado) {
+        setResumoModal({
+          treinoAgendadoId,
+          treino: encontrado,
+        });
+        return;
+      }
+
+      setLocation(
+        `/submissao?treinoAgendadoId=${encodeURIComponent(
+          treinoAgendadoId
+        )}`
+      );
+
+      return;
+    }
+
+    setLocation(trainingsHref);
+  }
 
   const { data: treinosAgendados = [], isLoading: isLoadingTreinos } =
     useQuery<Training[]>({
@@ -942,10 +1011,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                         a?.data ??
                         null;
 
-                      const dataAtividade = safeDateFromWire(
-                        typeof dataWire === "string" || dataWire instanceof Date ? String(dataWire) : null
-                      );
-
                       const isTreino = /treino/i.test(String(label));
 
                       return (
@@ -953,7 +1018,8 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                           key={String(a?.id ?? idx)}
                           type="button"
                           className="
-                            h-[180px]
+                            h-[190px] sm:h-[180px]
+                            min-w-0
                             rounded-xl
                             overflow-hidden
                             border
@@ -975,44 +1041,28 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                               setLocation("/trainings");
                             }
                           }}
-                        >
-                          <div className="relative h-24 w-full shrink-0 overflow-hidden">
+                        >                     
+                        
+                          <div className="h-20 w-full shrink-0 overflow-hidden sm:h-24">
                             <img
                               src={img}
                               alt={titulo}
-                              className="
-                                block
-                                w-full
-                                h-full
-                                object-cover
-                              "
+                              className="block h-full w-full object-cover"
                               onError={(e) => {
-                                (
-                                  e.currentTarget as HTMLImageElement
-                                ).src = AVATAR_FALLBACK;
+                                (e.currentTarget as HTMLImageElement).src =
+                                  AVATAR_FALLBACK;
                               }}
                             />
-
-                            <div
-                              className="
-                                absolute
-                                bottom-2
-                                left-2
-                                text-[10px]
-                                bg-black/60
-                                text-white
-                                px-2
-                                py-1
-                                rounded-full
-                                max-w-[calc(100%-16px)]
-                                truncate
-                              "
-                            >
-                              {String(label)}
-                            </div>
                           </div>
 
                           <div className="flex flex-1 min-h-0 flex-col p-2">
+                            
+                            <div className="mb-1 min-w-0">
+                              <span className="inline-block max-w-full truncate rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-800">
+                                {String(label)}
+                              </span>
+                            </div>
+
                             <div
                               className="
                                 text-[11px]
@@ -1039,13 +1089,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                               <Calendar className="h-3 w-3 shrink-0" />
 
                               <span>
-                                {dataAtividade
-                                  ? formatDateFns(
-                                      dataAtividade,
-                                      "dd/MM/yyyy",
-                                      { locale: ptBR }
-                                    )
-                                  : "Sem data"}
+                                {formatarDataAtividade(dataWire)}
                               </span>
                             </div>
                           </div>

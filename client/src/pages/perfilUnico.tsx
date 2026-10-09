@@ -20,6 +20,7 @@ import { clearAuthSession, salvarRetornoAuth } from "../utils/authSession.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
 import { PUBLIC_PATHS } from "../utils/publicRoutes.js";
 import PublicShareModal from "../components/share/PublicShareModal.js";
+import PerfilResponsavelPublico from "../components/perfil/PerfilResponsavelPublico.js";
 
 type TipoPerfil =
   | "Atleta"
@@ -31,16 +32,31 @@ type TipoPerfil =
   | "Escola"
   | "Federacao"
   | "Marca"
-  | "Learning";
+  | "Learning"
+  | "Responsavel";
 
 interface PerfilMinimo {
   tipo: TipoPerfil | null;
   usuario: {
     id: string;
-    nome?: string | null;
-    nomeDeUsuario?: string | null;
-    foto?: string | null;
-    verified?: boolean;
+
+    nome?:
+      string | null;
+
+    nomeDeUsuario?:
+      string | null;
+
+    foto?:
+      string | null;
+
+    verified?:
+      boolean;
+
+    cidade?:
+      string | null;
+
+    estado?:
+      string | null;
   } | null;
   dadosEspecificos?: Record<string, any>;
   pontuacaoTotal?: number;
@@ -406,9 +422,15 @@ export default function PerfilUnico() {
       .join(" • ");
 
     const tituloInformacoes =
-      String(tipo).toLowerCase() === "atleta"
+      String(tipo)
+        .toLowerCase() ===
+        "atleta"
         ? "Informações do Atleta"
-        : `Informações do ${tipo}`;
+        : String(tipo)
+            .toLowerCase() ===
+            "responsavel"
+          ? "Informações do Responsável"
+          : `Informações do ${tipo}`;
 
     const slugPerfil = String(perfilData.usuario?.nomeDeUsuario || usuarioId)
       .replace(/^@/, "")
@@ -766,6 +788,34 @@ export default function PerfilUnico() {
       )}
 
       {tipoNormalizado === "learning" && <PerfilLearning idDaUrl={usuarioId} />}
+
+      {tipoNormalizado ===
+        "responsavel" &&
+        perfilData?.usuario && (
+          <>
+            <PerfilResponsavelPublico
+              usuarioId={
+                usuarioId
+              }
+              usuario={
+                perfilData.usuario
+              }
+              dadosEspecificos={
+                perfilData
+                  .dadosEspecificos ??
+                null
+              }
+            />
+
+            <div className="mx-auto mt-4 w-full max-w-3xl px-4">
+              <ProfilePostsSection
+                usuarioId={
+                  usuarioId
+                }
+              />
+            </div>
+          </>
+        )}
 
       <div className="h-16" aria-hidden="true" />
 

@@ -143,7 +143,7 @@ import creatorRoutes from "./routes/creator.js";
 import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
 import learningEventosRoutes from "./routes/learningEventos.js";
 import { setupSocket } from "./socket.js";
-
+import responsaveisRoutes from "./routes/responsaveis.js";
 import usuarioPapelRoutes from "./routes/usuarioPapel.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -347,7 +347,11 @@ app.use(
   usuarioPapelRoutes,
   usuarioRoutes,
 );
-
+app.use(
+  "/api/responsaveis",
+  authenticateToken,
+  responsaveisRoutes
+);
 app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
 app.use(
   "/api/convites",

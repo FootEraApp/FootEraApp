@@ -18,6 +18,50 @@ type VisibilidadePerfil =
   | "NAO_LISTADO"
   | "PRIVADO";
 
+type SupervisaoPrivacidade = {
+  supervisionado:
+    boolean;
+
+  permitirPerfilPublico:
+    boolean;
+
+  permitirMensagensDiretas:
+    boolean;
+
+  permitirMostrarEmail:
+    boolean;
+};
+
+type ResponsavelDoAtleta = {
+  id: string;
+
+  status:
+    | "PENDENTE"
+    | "ATIVO"
+    | "REVOGADO";
+
+  principal:
+    boolean;
+
+  parentesco?:
+    string | null;
+
+  origemSolicitacao?:
+    string | null;
+
+  responsavel: {
+    id: string;
+
+    nome: string;
+
+    nomeDeUsuario?:
+      string | null;
+
+    foto?:
+      string | null;
+  };
+};
+
 const TUTORIAL_ENABLED = FLAGS.TUTORIAL_ENABLED;
 
 export default function ConfiguracoesPerfil() {
@@ -86,6 +130,55 @@ export default function ConfiguracoesPerfil() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleSuccess, setGoogleSuccess] = useState<string | null>(null);
+  const [
+    supervisao,
+    setSupervisao,
+  ] =
+    useState<SupervisaoPrivacidade | null>(
+      null
+    );
+
+  const [
+    meusResponsaveis,
+    setMeusResponsaveis,
+  ] =
+    useState<
+      ResponsavelDoAtleta[]
+    >([]);
+
+  const [
+    responsaveisLoading,
+    setResponsaveisLoading,
+  ] =
+    useState(false);
+
+  const [
+    podeDesvincularResponsaveis,
+    setPodeDesvincularResponsaveis,
+  ] =
+    useState(false);
+
+  const [
+    idadeAtleta,
+    setIdadeAtleta,
+  ] =
+    useState<
+      number | null
+    >(null);
+
+  const [
+    showResponsaveisModal,
+    setShowResponsaveisModal,
+  ] =
+    useState(false);
+
+  const [
+    desvinculandoResponsavelId,
+    setDesvinculandoResponsavelId,
+  ] =
+    useState<
+      string | null
+    >(null);
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
@@ -160,6 +253,17 @@ export default function ConfiguracoesPerfil() {
       return;
     }
   }, []);
+
+  useEffect(() => {
+    if (
+      tipoNorm !==
+      "atleta"
+    ) {
+      return;
+    }
+
+    carregarMeusResponsaveis();
+  }, [tipoNorm]);
 
     async function apiTrocarSenha() {
       setSegErr(null);
@@ -240,6 +344,167 @@ export default function ConfiguracoesPerfil() {
     }
   }
 
+  async function carregarMeusResponsaveis() {
+    if (
+      tipoNorm !==
+      "atleta"
+    ) {
+      setMeusResponsaveis(
+        []
+      );
+
+      setPodeDesvincularResponsaveis(
+        false
+      );
+
+      setIdadeAtleta(
+        null
+      );
+
+      return;
+    }
+
+    try {
+      setResponsaveisLoading(
+        true
+      );
+
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/atleta/me/responsaveis`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${getToken()}`,
+            },
+          }
+        );
+
+      const data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+          "Não foi possível carregar seus responsáveis."
+        );
+      }
+
+      setMeusResponsaveis(
+        Array.isArray(
+          data?.items
+        )
+          ? data.items
+          : []
+      );
+
+      setPodeDesvincularResponsaveis(
+        Boolean(
+          data?.podeDesvincularResponsaveis
+        )
+      );
+
+      setIdadeAtleta(
+        typeof data?.idade ===
+        "number"
+          ? data.idade
+          : null
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        "[ConfiguracoesPerfil] responsáveis:",
+        error
+      );
+
+      setMeusResponsaveis(
+        []
+      );
+    } finally {
+      setResponsaveisLoading(
+        false
+      );
+    }
+  }
+
+  async function desvincularResponsavel(
+  item: ResponsavelDoAtleta
+) {
+  if (
+    !podeDesvincularResponsaveis
+  ) {
+    toast.error(
+      "Enquanto sua conta for supervisionada, você não pode remover um responsável ativo."
+    );
+
+    return;
+  }
+
+  const confirmar =
+    window.confirm(
+      `Deseja remover ${item.responsavel.nome} dos seus responsáveis?`
+    );
+
+  if (!confirmar) {
+    return;
+  }
+
+  try {
+    setDesvinculandoResponsavelId(
+      item.id
+    );
+
+    const resposta =
+      await fetch(
+        `${API.BASE_URL}/api/responsaveis/atleta/me/responsaveis/${encodeURIComponent(
+          item.id
+        )}`,
+        {
+          method:
+            "DELETE",
+
+          headers: {
+            Authorization:
+              `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+    const data =
+      await resposta
+        .json()
+        .catch(() => ({}));
+
+    if (!resposta.ok) {
+      throw new Error(
+        data?.message ||
+        "Não foi possível remover o responsável."
+      );
+    }
+
+    toast.success(
+      data?.message ||
+      "Responsável desvinculado."
+    );
+
+    await carregarMeusResponsaveis();
+      } catch (
+        error: any
+      ) {
+        toast.error(
+          error?.message ||
+          "Não foi possível remover o responsável."
+        );
+      } finally {
+        setDesvinculandoResponsavelId(
+          null
+        );
+      }
+    }
+
   async function carregarPrivacidade() {
     const resp = await fetch(
       `${API.REST}/configuracoes-perfil/privacidade`,
@@ -261,6 +526,11 @@ export default function ConfiguracoesPerfil() {
           "Não foi possível carregar as configurações de privacidade."
       );
     }
+
+    setSupervisao(
+      data?.supervisao ??
+      null
+    );
 
     const proximaVisibilidade =
       (data?.visibilidadePerfil ??
@@ -873,6 +1143,45 @@ export default function ConfiguracoesPerfil() {
           </button>
         </div>
 
+        {tipoNorm ===
+          "atleta" && (
+          <div className="flex justify-between py-2 items-start border-b">
+            <div>
+              <p className="font-semibold">
+                🛡️ Meus responsáveis
+              </p>
+
+              <p className="text-sm text-gray-600">
+                Consulte os responsáveis vinculados à sua conta.
+              </p>
+
+              {idadeAtleta !==
+                null && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {idadeAtleta <
+                  12
+                    ? "Sua conta ainda é supervisionada."
+                    : "Você já pode administrar seus vínculos de responsável."}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setShowResponsaveisModal(
+                  true
+                );
+
+                await carregarMeusResponsaveis();
+              }}
+              className="text-green-800 font-semibold"
+            >
+              Gerenciar
+            </button>
+          </div>
+        )}
+
         <div className="flex justify-between py-2 items-start">
           <div>
             <p className="font-semibold">💲 Assinaturas</p>
@@ -996,7 +1305,8 @@ export default function ConfiguracoesPerfil() {
       <div className="mx-4 mb-4 rounded-xl shadow bg-white border border-red-200 p-4">
         <h3 className="text-red-700 font-bold text-lg">Excluir conta</h3>
         <p className="text-sm text-red-700 mt-1">
-          Esta ação é <strong>irreversível</strong>. Todos os seus dados e conteúdos serão removidos.
+          Sua conta será movida para a lixeira e poderá ser restaurada por até 30 dias.
+          Após esse prazo, a exclusão definitiva será processada.
         </p>
 
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -1019,7 +1329,7 @@ export default function ConfiguracoesPerfil() {
             <h3 className="text-lg font-semibold text-red-600">Excluir conta</h3>
 
             <p className="text-sm text-gray-700 mt-2">
-              Para confirmar a exclusão permanente, digite exatamente{" "}
+              Para mover sua conta para a lixeira, digite exatamente{" "}
               <span className="font-semibold text-gray-900">"{REQUIRED_PHRASE}"</span> no campo abaixo
               e clique em <span className="font-semibold">Excluir</span>. Mas caso for necessario você tem 30 dias para restaurar a conta.
             </p>
@@ -1222,6 +1532,18 @@ export default function ConfiguracoesPerfil() {
               <p className="mt-1 pb-4 text-sm text-gray-600">
                 Ajuste quem pode ver seu perfil e como as pessoas podem interagir com você.
               </p>
+              {supervisao?.supervisionado && (
+                <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <div className="font-semibold text-blue-900">
+                    🛡️ Conta supervisionada
+                  </div>
+
+                  <p className="mt-1 text-xs leading-relaxed text-blue-800">
+                    Algumas configurações precisam estar liberadas pelo seu responsável.
+                    Você sempre pode escolher opções mais privadas.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
@@ -1246,13 +1568,21 @@ export default function ConfiguracoesPerfil() {
                   <div className="mt-3 space-y-2">
                     <button
                       type="button"
-                      disabled={privacidadeSaving}
+                      disabled={
+                        privacidadeSaving ||
+                        (
+                          supervisao
+                            ?.supervisionado &&
+                          !supervisao
+                            .permitirPerfilPublico
+                        )
+                      }
                       onClick={() =>
                         setVisibilidadePerfil(
                           "PUBLICO"
                         )
                       }
-                      className={`w-full rounded-xl border p-3 text-left transition ${
+                      className={`disabled:cursor-not-allowed disabled:opacity-50 w-full rounded-xl border p-3 text-left transition ${
                         visibilidadePerfil ===
                         "PUBLICO"
                           ? "border-green-700 bg-green-50 shadow-sm"
@@ -1284,6 +1614,12 @@ export default function ConfiguracoesPerfil() {
                             mesmo sem conta. Ele também pode aparecer no
                             Explorar.
                           </div>
+                          {supervisao?.supervisionado &&
+                            !supervisao.permitirPerfilPublico && (
+                              <div className="mt-2 font-semibold text-amber-700">
+                                🔒 Seu responsável precisa liberar esta opção.
+                              </div>
+                            )}
                         </div>
                       </div>
                     </button>
@@ -1384,8 +1720,34 @@ export default function ConfiguracoesPerfil() {
 
                   <Switch
                     checked={mensagens}
+                    disabled={
+                      privacidadeSaving ||
+                      (
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMensagensDiretas &&
+                        !mensagens
+                      )
+                    }
                     onCheckedChange={(v) => {
-                      if (privacidadeSaving) {
+                      if (
+                        privacidadeSaving
+                      ) {
+                        return;
+                      }
+
+                      if (
+                        v === true &&
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMensagensDiretas
+                      ) {
+                        toast.error(
+                          "Seu responsável precisa liberar mensagens diretas."
+                        );
+
                         return;
                       }
 
@@ -1424,8 +1786,34 @@ export default function ConfiguracoesPerfil() {
 
                   <Switch
                     checked={mostrarEmail}
+                    disabled={
+                      privacidadeSaving ||
+                      (
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMostrarEmail &&
+                        !mostrarEmail
+                      )
+                    }
                     onCheckedChange={(v) => {
-                      if (privacidadeSaving) {
+                      if (
+                        privacidadeSaving
+                      ) {
+                        return;
+                      }
+
+                      if (
+                        v === true &&
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMostrarEmail
+                      ) {
+                        toast.error(
+                          "Seu responsável precisa liberar a exibição do e-mail."
+                        );
+
                         return;
                       }
 
@@ -1710,6 +2098,161 @@ export default function ConfiguracoesPerfil() {
                 </div>
               </div>
             </div>        
+          </div>
+        </div>
+      )}
+
+      {showResponsaveisModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-lg">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Meus responsáveis
+              </h3>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowResponsaveisModal(
+                    false
+                  )
+                }
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {idadeAtleta !==
+              null &&
+              idadeAtleta <
+                12 && (
+              <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                <p className="font-semibold text-blue-900">
+                  🛡️ Conta supervisionada
+                </p>
+
+                <p className="mt-1 text-xs leading-relaxed text-blue-800">
+                  Como você ainda tem menos de 12 anos, os responsáveis ativos não podem ser removidos por esta conta.
+                </p>
+              </div>
+            )}
+
+            {idadeAtleta !==
+              null &&
+              idadeAtleta >=
+                12 && (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3">
+                <p className="font-semibold text-green-900">
+                  Conta com autonomia
+                </p>
+
+                <p className="mt-1 text-xs leading-relaxed text-green-800">
+                  Você já pode remover qualquer vínculo de responsável, inclusive o responsável principal.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              {responsaveisLoading ? (
+                <div className="py-6 text-center text-sm text-gray-500">
+                  Carregando...
+                </div>
+              ) : meusResponsaveis.length ===
+                0 ? (
+                <div className="rounded-xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                  Nenhum responsável vinculado.
+                </div>
+              ) : (
+                meusResponsaveis.map(
+                  (item) => (
+                    <div
+                      key={
+                        item.id
+                      }
+                      className="rounded-xl border border-gray-200 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={
+                            item
+                              .responsavel
+                              .foto ||
+                            "/assets/usuarios/default-user.png"
+                          }
+                          alt={
+                            item
+                              .responsavel
+                              .nome
+                          }
+                          className="h-11 w-11 rounded-full border object-cover"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-gray-900">
+                            {
+                              item
+                                .responsavel
+                                .nome
+                            }
+                          </p>
+
+                          {item
+                            .responsavel
+                            .nomeDeUsuario && (
+                            <p className="text-xs text-gray-500">
+                              @
+                              {
+                                item
+                                  .responsavel
+                                  .nomeDeUsuario
+                              }
+                            </p>
+                          )}
+
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {item.principal && (
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">
+                                Principal
+                              </span>
+                            )}
+
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                              {
+                                item.status
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {item.status ===
+                        "ATIVO" &&
+                        podeDesvincularResponsaveis && (
+                        <button
+                          type="button"
+                          disabled={
+                            desvinculandoResponsavelId ===
+                            item.id
+                          }
+                          onClick={() =>
+                            desvincularResponsavel(
+                              item
+                            )
+                          }
+                          className="mt-3 w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+                        >
+                          {desvinculandoResponsavelId ===
+                          item.id
+                            ? "Removendo..."
+                            : "Remover responsável"}
+                        </button>
+                      )}
+                    </div>
+                  )
+                )
+              )}
+            </div>
           </div>
         </div>
       )}

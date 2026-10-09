@@ -49,7 +49,6 @@ export async function calcularPontuacaoPorUsuarioId(usuarioId: string): Promise<
     const p =
       s?.pontosCreditados ??
       s?.pontuacaoSnapshot ??
-      s?.treinoAgendado?.treinoProgramado?.pontuacao ??
       0;
     return acc + (Number(p) || 0);
   }, 0);
@@ -71,7 +70,6 @@ export async function calcularPontuacaoPorUsuarioId(usuarioId: string): Promise<
     const pts =
       s?.pontosCreditados ??
       s?.pontuacaoSnapshot ??
-      s?.treinoAgendado?.treinoProgramado?.pontuacao ??
       0;
 
     return {

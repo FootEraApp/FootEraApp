@@ -108,6 +108,14 @@ export function sanitizePublicPost(
     dataCriacao:
       post.dataCriacao ?? null,
 
+    autorContextoKey:
+      post.autorContextoKey ?? null,
+
+    usuarioId:
+      post.usuarioId ??
+      post.usuario?.id ??
+      null,
+
     compartilhamentos:
       numberOrZero(
         post.compartilhamentos
@@ -137,6 +145,20 @@ export function sanitizePublicPost(
             tipo:
               post.organizacao
                 .tipo ?? null,
+
+            logo:
+              post.organizacao
+                .logo ?? null,
+
+            perfilUsuarioId:
+              post.organizacao
+                .perfilUsuarioId ??
+              null,
+
+            perfilPapel:
+              post.organizacao
+                .perfilPapel ??
+              null,
           }
         : null,
 

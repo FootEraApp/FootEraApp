@@ -1,5 +1,5 @@
 //client/src/pages/perfil
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
 import Storage from "../utils/storage.js";
@@ -12,7 +12,7 @@ import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import PerfilLearning from "@/components/perfil/PerfilLearning.js";
 import PerfilMarca from "@/components/perfil/PerfilMarca.js";
 import PerfilFederacao from "@/components/perfil/PerfilFederacao.js";
-
+import PerfilResponsavel from "../components/perfil/PerfilResponsavel.js";
 import { clearAuthSession } from "../utils/authSession.js";
 import HealthBanner from "../components/legal/HealthBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
@@ -32,7 +32,8 @@ type TipoPerfil =
   | "Olheiro"
   | "Learning"
   | "Federacao"
-  | "Marca";
+  | "Marca"
+  | "Responsavel";
 
 interface PerfilMinimo {
   tipo: TipoPerfil;
@@ -108,6 +109,9 @@ function tipoPerfilDoActiveContext(
   switch (papel) {
     case "atleta":
       return "Atleta";
+    
+    case "responsavel":
+      return "Responsavel";
 
     case "professor":
       return "Professor";
@@ -158,6 +162,32 @@ export default function ProfilePage() {
     userContext
       ?.activeContext ??
     null;
+  
+  const papelSolicitado = (() => {
+    const papel = new URLSearchParams(
+      window.location.search
+    ).get("papel")?.toLowerCase();
+
+    if (papel === "atleta") {
+      return "Atleta" as const;
+    }
+
+    if (papel === "responsavel") {
+      return "Responsavel" as const;
+    }
+
+    return null;
+  })();
+
+  const [erroTrocaPapel, setErroTrocaPapel] =
+    useState<string | null>(null);
+
+  const [atualizandoPapel, setAtualizandoPapel] =
+    useState(false);
+
+  const tentouCarregarContextos = useRef(false);
+  const [consultaContextosConcluida, setConsultaContextosConcluida] =
+    useState(false);
 
   const loggedUsuarioId =
     String(
@@ -170,6 +200,97 @@ export default function ProfilePage() {
   const token = Storage.token;
 
   const isOwnProfile = !idDaUrl || idDaUrl === loggedUsuarioId;
+  
+  useEffect(() => {
+    if (!papelSolicitado || !isOwnProfile || !userContext) {
+      return;
+    }
+
+    const papelAtual = String(
+      userContext.activeContext?.tipoUsuario ?? ""
+    ).toLowerCase();
+
+    const contextoCorreto =
+      userContext.activeContext?.kind === "PERSONAL" &&
+      papelAtual === papelSolicitado.toLowerCase();
+
+    if (contextoCorreto) {
+      setErroTrocaPapel(null);
+      setAtualizandoPapel(false);
+      return;
+    }
+
+    if (
+      userContext.contextsLoading ||
+      atualizandoPapel ||
+      erroTrocaPapel
+    ) {
+      return;
+    }
+
+    if (
+      userContext.contexts.length === 0 &&
+      !consultaContextosConcluida
+    ) {
+      if (!tentouCarregarContextos.current) {
+        tentouCarregarContextos.current = true;
+
+        void userContext.refreshActiveContexts()
+          .finally(() => {
+            setConsultaContextosConcluida(true);
+          });
+      }
+
+      return;
+    }
+
+    const destino = userContext.contexts.find(
+      (contexto) =>
+        contexto.kind === "PERSONAL" &&
+        String(
+          contexto.tipoUsuario ?? ""
+        ).toLowerCase() === papelSolicitado.toLowerCase()
+    );
+
+    if (!destino) {
+      setErroTrocaPapel(
+        `O perfil de ${papelSolicitado} não está disponível nesta conta.`
+      );
+      return;
+    }
+
+    setAtualizandoPapel(true);
+
+    void userContext
+      .switchActiveContext(destino.key)
+      .then(() => {
+        setErroTrocaPapel(null);
+      })
+      .catch((error) => {
+        console.error(
+          "[Perfil] Falha ao trocar contexto:",
+          error
+        );
+
+        setErroTrocaPapel(
+          "Não foi possível selecionar o perfil solicitado."
+        );
+      })
+      .finally(() => {
+        setAtualizandoPapel(false);
+      });
+  }, [
+    papelSolicitado,
+    isOwnProfile,
+    userContext?.activeContext?.key,
+    userContext?.contexts,
+    userContext?.contextsLoading,
+    userContext?.refreshActiveContexts,
+    userContext?.switchActiveContext,
+    atualizandoPapel,
+    erroTrocaPapel,
+  ]);
+
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
   const tipoContextoAtivo =
     isOwnProfile
@@ -209,7 +330,14 @@ export default function ProfilePage() {
         tipoRender || ""
       ).toLowerCase();
 
-    if (tipoNorm === "atleta" || tipoNorm === "learning") {
+    if (
+      tipoNorm ===
+        "atleta" ||
+      tipoNorm ===
+        "learning" ||
+      tipoNorm ===
+        "responsavel"
+    ) {
       setHasCreator(false);
       return;
     }
@@ -241,6 +369,33 @@ export default function ProfilePage() {
 
     (async () => {
       setLoading(true);
+      const ehResponsavel =
+        isOwnProfile &&
+        activeContext?.kind ===
+          "PERSONAL" &&
+        String(
+          activeContext
+            ?.tipoUsuario ??
+            activeContext?.role ??
+            ""
+        )
+          .trim()
+          .toLowerCase() ===
+          "responsavel";
+
+      if (ehResponsavel) {
+        setTipo(
+          "Responsavel"
+        );
+
+        setUsuarioId(
+          loggedUsuarioId
+        );
+
+        setLoading(false);
+
+        return;
+      }
       try {
         const { data } = await http.get<PerfilMinimo>(`/api/perfil/${basePerfil}`);
         if (cancelled) return;
@@ -295,6 +450,47 @@ export default function ProfilePage() {
     isOwnProfile,
     activeContext?.key,
   ]);
+    
+  const aguardandoPapel =
+    Boolean(papelSolicitado) &&
+    isOwnProfile &&
+    (
+      activeContext?.kind !== "PERSONAL" ||
+      String(
+        activeContext?.tipoUsuario ?? ""
+      ).toLowerCase() !==
+        papelSolicitado?.toLowerCase()
+    );
+
+  if (erroTrocaPapel) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-red-700 font-semibold">
+          {erroTrocaPapel}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            setErroTrocaPapel(null);
+            tentouCarregarContextos.current = false;
+            navigate("/perfil");
+          }}
+          className="rounded-xl bg-green-800 px-5 py-3 text-white"
+        >
+          Abrir meu perfil atual
+        </button>
+      </div>
+    );
+  }
+
+  if (aguardandoPapel) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-green-800">
+        Preparando perfil...
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -481,6 +677,15 @@ export default function ProfilePage() {
           }
           idDaUrl={
             idDaUrl
+          }
+        />
+      )}
+
+      {tipoRender ===
+        "Responsavel" && (
+        <PerfilResponsavel
+          key={
+            activeProfileKey
           }
         />
       )}

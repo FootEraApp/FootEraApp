@@ -13,6 +13,7 @@ import {
   clearAuthSession,
   type ActiveContextSession,
   readAuthSessionSnapshot,
+  clearActiveContextSession,
 } from "../utils/authSession.js";
 import socket, {
   syncSocketContext,
@@ -285,15 +286,11 @@ export function UserProvider({
             .token;
 
         if (!token) {
-          setActiveContext(
-            null
-          );
+          clearActiveContextSession();
 
+          setActiveContext(null);
           setContexts([]);
-
-          setContextsLoading(
-            false
-          );
+          setContextsLoading(false);
 
           return;
         }
@@ -334,16 +331,15 @@ export function UserProvider({
           setActiveContext(
             active
           );
+          
+        if (active) {
+          applyActiveContextSession(active, {
+            notify: false,
+          });
+        } else {
+          clearActiveContextSession();
+        }
 
-          if (active) {
-            applyActiveContextSession(
-              active,
-              {
-                notify:
-                  false,
-              }
-            );
-          }
         } catch (error) {
           console.error(
             "[UserContext] Erro ao carregar contextos:",
@@ -443,6 +439,7 @@ export function UserProvider({
       [
         refreshPermissions,
         refreshActiveContexts,
+        syncSession,
       ]
     );
 

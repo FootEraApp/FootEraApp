@@ -29,10 +29,18 @@ type TipoPerfil =
   | "Federacao"
   | "Marca";
 
+type ModoResponsavel =
+  | "existente"
+  | "novo"
+  | null;
+
 type Responsavel = {
   nome: string;
   email: string;
   telefone?: string;
+
+  senha: string;
+  confirmarSenha: string;
 };
 
 const mapTipo = {
@@ -397,11 +405,25 @@ export default function Cadastro() {
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
-  const [responsavel, setResponsavel] = useState<Responsavel>({
-    nome: "",
-    email: "",
-    telefone: "",
-  });
+  const [
+    modoResponsavel,
+    setModoResponsavel,
+  ] =
+    useState<ModoResponsavel>(
+      null
+    );
+
+  const [
+    responsavel,
+    setResponsavel,
+  ] =
+    useState<Responsavel>({
+      nome: "",
+      email: "",
+      telefone: "",
+      senha: "",
+      confirmarSenha: "",
+    });
   const [aceitaTermos, setAceitaTermos] = useState(false);
 
   const [emailDisp, setEmailDisp] = useState<null | boolean>(null);
@@ -417,6 +439,24 @@ export default function Cadastro() {
   const idade = useMemo(() => calcIdade(dataNascimento), [dataNascimento]);
   const precisaResponsavel =
     tipoPerfil === "Atleta" && idade !== null && idade < 12;
+
+  useEffect(() => {
+    if (!precisaResponsavel) {
+      setModoResponsavel(
+        null
+      );
+
+      setResponsavel({
+        nome: "",
+        email: "",
+        telefone: "",
+        senha: "",
+        confirmarSenha: "",
+      });
+    }
+  }, [
+    precisaResponsavel,
+  ]);
 
   const emailValido = EMAIL_RE.test(email.trim());
   const usernameLimpo = nomeDeUsuario.trim().toLowerCase();
@@ -578,24 +618,96 @@ export default function Cadastro() {
     }
 
     if (precisaResponsavel) {
-      if (!responsavel.nome.trim()) {
-        setErro("Informe o nome do responsável.");
-        return false;
-      }
+      if (!modoResponsavel) {
+        setErro(
+          "Escolha como o responsável será vinculado."
+        );
 
-      if (!EMAIL_RE.test(responsavel.email.trim())) {
-        setErro("Informe um e-mail válido do responsável.");
         return false;
       }
 
       if (
-        responsavel.telefone?.trim() &&
-        !PHONE_RE.test(responsavel.telefone.trim())
+        !EMAIL_RE.test(
+          responsavel.email
+            .trim()
+        )
       ) {
         setErro(
-          "Informe um telefone válido do responsável ou deixe em branco.",
+          "Informe um e-mail válido do responsável."
         );
+
         return false;
+      }
+
+      if (
+        modoResponsavel ===
+        "existente"
+      ) {
+        if (
+          !responsavel.senha
+            .trim()
+        ) {
+          setErro(
+            "Informe a senha da conta FootEra do responsável."
+          );
+
+          return false;
+        }
+      }
+
+      if (
+        modoResponsavel ===
+        "novo"
+      ) {
+        if (
+          !responsavel.nome
+            .trim()
+        ) {
+          setErro(
+            "Informe o nome do responsável."
+          );
+
+          return false;
+        }
+
+        if (
+          !PASS_RE.test(
+            responsavel.senha
+          )
+        ) {
+          setErro(
+            "A senha do responsável deve ter pelo menos 8 caracteres, uma letra e um número."
+          );
+
+          return false;
+        }
+
+        if (
+          responsavel
+            .confirmarSenha !==
+          responsavel.senha
+        ) {
+          setErro(
+            "As senhas do responsável não coincidem."
+          );
+
+          return false;
+        }
+
+        if (
+          responsavel.telefone
+            ?.trim() &&
+          !PHONE_RE.test(
+            responsavel.telefone
+              .trim()
+          )
+        ) {
+          setErro(
+            "Informe um telefone válido do responsável ou deixe em branco."
+          );
+
+          return false;
+        }
       }
     }
 
@@ -652,9 +764,25 @@ export default function Cadastro() {
         ...(precisaResponsavel
           ? {
               responsavel: {
-                nome: responsavel.nome.trim(),
-                email: responsavel.email.trim().toLowerCase(),
-                telefone: responsavel.telefone?.trim() || undefined,
+                modo:
+                  modoResponsavel,
+
+                nome:
+                  responsavel.nome
+                    .trim(),
+
+                email:
+                  responsavel.email
+                    .trim()
+                    .toLowerCase(),
+
+                telefone:
+                  responsavel.telefone
+                    ?.trim() ||
+                  undefined,
+
+                senha:
+                  responsavel.senha,
               },
             }
           : {}),
@@ -1135,45 +1263,200 @@ export default function Cadastro() {
               {precisaResponsavel && (
                 <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <h4 className="font-semibold text-green-950">
-                    Responsável legal
+                    Este atleta precisa de um responsável
                   </h4>
-                  <p className="mb-4 mt-1 text-xs text-gray-500">
-                    Obrigatório para atletas menores de 12 anos.
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    Atletas menores de 12 anos precisam ter um responsável vinculado à conta.
                   </p>
 
-                  <div className="space-y-3">
-                    <MinimalInput
-                      label="Nome do responsável*"
-                      icon="👤"
-                      value={responsavel.nome}
-                      onChange={(valor) =>
-                        setResponsavel((atual) => ({ ...atual, nome: valor }))
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setModoResponsavel(
+                          "existente"
+                        )
                       }
-                    />
+                      className={[
+                        "rounded-xl border p-4 text-left transition",
+                        modoResponsavel ===
+                        "existente"
+                          ? "border-green-800 bg-green-50"
+                          : "border-gray-300 bg-white hover:border-green-300",
+                      ].join(" ")}
+                    >
+                      <strong className="block text-sm text-green-950">
+                        Já tenho uma conta FootEra
+                      </strong>
 
-                    <MinimalInput
-                      label="E-mail do responsável*"
-                      icon="✉️"
-                      type="email"
-                      value={responsavel.email}
-                      onChange={(valor) =>
-                        setResponsavel((atual) => ({ ...atual, email: valor }))
-                      }
-                    />
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Entre com a conta do responsável e vincule este atleta.
+                      </span>
+                    </button>
 
-                    <MinimalInput
-                      label="Telefone do responsável — opcional"
-                      icon="📱"
-                      value={responsavel.telefone || ""}
-                      placeholder="(00) 00000-0000"
-                      onChange={(valor) =>
-                        setResponsavel((atual) => ({
-                          ...atual,
-                          telefone: valor,
-                        }))
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setModoResponsavel(
+                          "novo"
+                        )
                       }
-                    />
+                      className={[
+                        "rounded-xl border p-4 text-left transition",
+                        modoResponsavel ===
+                        "novo"
+                          ? "border-green-800 bg-green-50"
+                          : "border-gray-300 bg-white hover:border-green-300",
+                      ].join(" ")}
+                    >
+                      <strong className="block text-sm text-green-950">
+                        Criar conta de responsável
+                      </strong>
+
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Crie uma conta FootEra para quem administrará este atleta.
+                      </span>
+                    </button>
                   </div>
+
+                  {modoResponsavel ===
+                    "existente" && (
+                    <div className="mt-4 space-y-3">
+                      <MinimalInput
+                        label="E-mail da conta FootEra*"
+                        icon="✉️"
+                        type="email"
+                        value={
+                          responsavel.email
+                        }
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              email:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+
+                      <MinimalInput
+                        label="Senha da conta FootEra*"
+                        icon="🔒"
+                        type="password"
+                        value={
+                          responsavel.senha
+                        }
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              senha:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {modoResponsavel ===
+                    "novo" && (
+                    <div className="mt-4 space-y-3">
+                      <MinimalInput
+                        label="Nome do responsável*"
+                        icon="👤"
+                        value={
+                          responsavel.nome
+                        }
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              nome:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+
+                      <MinimalInput
+                        label="E-mail do responsável*"
+                        icon="✉️"
+                        type="email"
+                        value={
+                          responsavel.email
+                        }
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              email:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+
+                      <MinimalInput
+                        label="Senha do responsável*"
+                        icon="🔒"
+                        type="password"
+                        value={
+                          responsavel.senha
+                        }
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              senha:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+
+                      <MinimalInput
+                        label="Confirmar senha do responsável*"
+                        icon="🔒"
+                        type="password"
+                        value={
+                          responsavel
+                            .confirmarSenha
+                        }
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              confirmarSenha:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+
+                      <MinimalInput
+                        label="Telefone do responsável — opcional"
+                        icon="📱"
+                        value={
+                          responsavel
+                            .telefone ||
+                          ""
+                        }
+                        placeholder="(00) 00000-0000"
+                        onChange={(valor) =>
+                          setResponsavel(
+                            (atual) => ({
+                              ...atual,
+                              telefone:
+                                valor,
+                            })
+                          )
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </section>

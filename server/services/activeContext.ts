@@ -96,6 +96,7 @@ function ehPapelPessoalSelecionavel(
     canonico === TipoUsuario.Olheiro ||
     canonico === TipoUsuario.Creator ||
     canonico === TipoUsuario.Learning ||
+    canonico === TipoUsuario.Responsavel ||
     canonico === TipoUsuario.Admin
   );
 }
@@ -169,6 +170,9 @@ function labelPapel(
 
     case TipoUsuario.Learning:
       return "Learning";
+
+    case TipoUsuario.Responsavel:
+      return "Responsável";
 
     case TipoUsuario.Admin:
       return "Administrador";

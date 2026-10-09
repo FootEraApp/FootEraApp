@@ -206,6 +206,10 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
+  const [
+    podeGerenciarConteudoDoPerfil,
+    setPodeGerenciarConteudoDoPerfil,
+  ] = useState(false);
   const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
   const [repostandoId, setRepostandoId] = useState<string | null>(null);
   const [curtindoId, setCurtindoId] = useState<string | null>(null);
@@ -231,6 +235,111 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
     "";
+
+  async function verificarPermissaoResponsavel() {
+    const alvoUsuarioId =
+      String(
+        usuarioId || ""
+      ).trim();
+
+    const meuUsuarioId =
+      String(
+        Storage.usuarioId ||
+        localStorage.getItem(
+          "usuarioId"
+        ) ||
+        sessionStorage.getItem(
+          "usuarioId"
+        ) ||
+        ""
+      ).trim();
+
+    /*
+    * No próprio perfil não precisamos
+    * verificar vínculo de responsável.
+    */
+    if (
+      !token ||
+      !alvoUsuarioId ||
+      alvoUsuarioId ===
+        meuUsuarioId
+    ) {
+      setPodeGerenciarConteudoDoPerfil(
+        false
+      );
+
+      return;
+    }
+
+    try {
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/me/atletas`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      if (!resposta.ok) {
+        setPodeGerenciarConteudoDoPerfil(
+          false
+        );
+
+        return;
+      }
+
+      const data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      const itens =
+        Array.isArray(
+          data?.items
+        )
+          ? data.items
+          : [];
+
+      const vinculo =
+        itens.find(
+          (item: any) =>
+            item?.status ===
+              "ATIVO" &&
+            String(
+              item?.atleta
+                ?.usuarioId ??
+                ""
+            ) ===
+              alvoUsuarioId &&
+            item
+              ?.podeGerenciarConteudo !==
+              false
+        );
+
+      setPodeGerenciarConteudoDoPerfil(
+        Boolean(vinculo)
+      );
+    } catch (error) {
+      console.error(
+        "[ProfilePostsSection] erro ao verificar supervisão:",
+        error
+      );
+
+      setPodeGerenciarConteudoDoPerfil(
+        false
+      );
+    }
+  }
+
+  useEffect(() => {
+    void verificarPermissaoResponsavel();
+  }, [
+    usuarioId,
+    token,
+  ]);
 
   async function handleApagarComentario(comentarioId: string, postId: string) {
     if (
@@ -507,7 +616,26 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
 
     if (!tokenAtual) return;
 
-    const ok = confirm("Tem certeza que deseja apagar esta postagem?");
+    const apagandoComoResponsavel =
+      podeGerenciarConteudoDoPerfil &&
+      String(usuarioId).trim() !==
+        String(
+          Storage.usuarioId ||
+          localStorage.getItem(
+            "usuarioId"
+          ) ||
+          sessionStorage.getItem(
+            "usuarioId"
+          ) ||
+          ""
+        ).trim();
+
+    const ok =
+      confirm(
+        apagandoComoResponsavel
+          ? "Tem certeza que deseja remover esta postagem do atleta supervisionado?"
+          : "Tem certeza que deseja apagar esta postagem?"
+      );
     if (!ok) return;
 
     try {
@@ -645,7 +773,37 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                 ""
             ).trim();
 
-            const canDelete = Boolean(token) && isMyProfile && (dono === me || reposterId === me);
+            const postEhDaCrianca =
+              dono ===
+              String(
+                usuarioId ||
+                ""
+              ).trim();
+
+            const postEhOrganizacao =
+              Boolean(
+                (post as any)
+                  ?.organizacao?.id ??
+                (post as any)
+                  ?.organizacaoId
+              );
+
+            const canDelete =
+              Boolean(token) &&
+              (
+                (
+                  isMyProfile &&
+                  (
+                    dono === me ||
+                    reposterId === me
+                  )
+                ) ||
+                (
+                  podeGerenciarConteudoDoPerfil &&
+                  postEhDaCrianca &&
+                  !postEhOrganizacao
+                )
+              );
             const parsed = parseAchievement(post.conteudo || "");
             const isAchievement = !!parsed;
             const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;

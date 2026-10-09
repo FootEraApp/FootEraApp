@@ -113,6 +113,66 @@ export default function PaginaNotificacoes() {
     userContext
       ?.activeContext ??
     null;
+  
+  const abrirPerfilDoPapel = async (
+    papel: "Atleta" | "Responsavel",
+    destino = "/perfil"
+  ): Promise<boolean> => {
+    const papelNormalizado = papel.toLowerCase();
+
+    const contextoAtual = userContext?.activeContext;
+
+    const jaEstaNoPapel =
+      contextoAtual?.kind === "PERSONAL" &&
+      String(
+        contextoAtual.tipoUsuario ?? ""
+      ).toLowerCase() === papelNormalizado;
+
+    if (jaEstaNoPapel) {
+      setLocation(destino);
+      return true;
+    }
+
+    const contextoDestino = userContext?.contexts.find(
+      (contexto) =>
+        contexto.kind === "PERSONAL" &&
+        String(
+          contexto.tipoUsuario ?? ""
+        ).toLowerCase() === papelNormalizado
+    );
+
+    if (!contextoDestino) {
+      toast.error(
+        `Você não possui um perfil de ${papel} disponível.`
+      );
+      return false;
+    }
+
+    if (!userContext) {
+      toast.error("Não foi possível carregar os contextos.");
+      return false;
+    }
+
+    try {
+      await userContext.switchActiveContext(
+        contextoDestino.key
+      );
+
+      setLocation(destino);
+      return true;
+    } catch (error) {
+      console.error(
+        "[Notificacoes] Erro ao trocar o papel ativo:",
+        error
+      );
+
+      toast.error(
+        `Não foi possível acessar o perfil de ${papel}.`
+      );
+
+      return false;
+    }
+  };
 
   const activeOrganizationType =
     String(
@@ -408,7 +468,7 @@ export default function PaginaNotificacoes() {
         setLoadingNotificacoes(false);
       }
     })();
-  }, []);
+  }, [activeContext?.key]);
 
   useEffect(() => {
     const naoLidas = (notificacoes || []).filter((n) => n.lida === false).length;
@@ -1024,6 +1084,40 @@ export default function PaginaNotificacoes() {
                 : n.link;
 
             const tipoNotificacao = String(n.tipo || "").toUpperCase();
+            const isResponsavelNotif =
+              tipoNotificacao === "RESPONSAVEL_SOLICITACAO" ||
+              tipoNotificacao === "RESPONSAVEL_VINCULO";
+            
+            const papelDestino =
+              (() => {
+                if (!isResponsavelNotif) {
+                  return null;
+                }
+
+                try {
+                  const url = new URL(
+                    String(linkResolvido ?? ""),
+                    window.location.origin
+                  );
+
+                  const papel = String(
+                    url.searchParams.get("papel") ?? ""
+                  ).toLowerCase();
+
+                  if (papel === "responsavel") {
+                    return "Responsavel" as const;
+                  }
+
+                  if (papel === "atleta") {
+                    return "Atleta" as const;
+                  }
+
+                  return null;
+                } catch {
+                  return null;
+                }
+              })();
+
             const linkStr = String(linkResolvido || "");
             const tituloStr = String(n.titulo || "").toLowerCase();
             const mensagemStr = String(n.mensagem || "").toLowerCase();
@@ -1067,8 +1161,10 @@ export default function PaginaNotificacoes() {
               mensagemStr.includes("aula ao vivo");
 
             const textoAcao =
-              isBillingWarning ||
-              isBillingBlocked
+              isResponsavelNotif
+                ? "Gerenciar responsáveis:"
+                : isBillingWarning ||
+                  isBillingBlocked
                 ? "Abrir pagamentos:"
                 : isTreinoNotif
                 ? "Visualizar treino:"
@@ -1087,8 +1183,12 @@ export default function PaginaNotificacoes() {
                 : "Abrir:";
 
             const textoBotao =
-              isBillingWarning ||
-              isBillingBlocked
+              isResponsavelNotif
+                ? papelDestino === "Atleta"
+                  ? "Ver meus responsáveis"
+                  : "Gerenciar responsáveis"
+                : isBillingWarning ||
+                  isBillingBlocked
                 ? "Abrir pagamentos"
                 : isTreinoNotif
                 ? "Abrir treino"
@@ -1417,7 +1517,24 @@ export default function PaginaNotificacoes() {
 
                         <Link
                           href={linkResolvido}
-                          onClick={() => marcarComoLida(n.id)}
+                          onClick={async (event) => {
+                            if (isResponsavelNotif && papelDestino) {
+                              event.preventDefault();
+
+                              const abriu = await abrirPerfilDoPapel(
+                                papelDestino,
+                                String(linkResolvido || "/perfil")
+                              );
+
+                              if (abriu) {
+                                await marcarComoLida(n.id);
+                              }
+
+                              return;
+                            }
+
+                            void marcarComoLida(n.id);
+                          }}
                           className="inline-flex mt-2 items-center justify-center rounded-lg bg-green-800
                             text-white text-sm px-4 py-2 hover:bg-green-900"
                         >

@@ -41,6 +41,9 @@ function normalizarPapel(valor: unknown): TipoUsuario | null {
       return TipoUsuario.Marca;
     case "creator":
       return TipoUsuario.Creator;
+    case "responsavel":
+    case "responsável":
+      return TipoUsuario.Responsavel;
     default:
       return null;
   }
@@ -165,6 +168,18 @@ async function perfilEspecificoExiste(
         }),
       );
 
+    case TipoUsuario.Responsavel:
+      return Boolean(
+        await prisma.usuario.findUnique({
+          where: {
+            id: usuarioId,
+          },
+          select: {
+            id: true,
+          },
+        })
+      );
+
     default:
       return false;
   }
@@ -265,6 +280,9 @@ async function obterPerfilEspecificoId(
           })
         )?.id ?? null
       );
+
+    case TipoUsuario.Responsavel:
+      return usuarioId;
 
     default:
       return null;

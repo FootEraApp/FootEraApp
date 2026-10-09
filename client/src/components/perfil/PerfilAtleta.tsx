@@ -6,6 +6,7 @@ import Storage from "../../utils/storage.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import TrainingProgress from "../profile/TrainingProgress.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import ResponsaveisAtleta from "../perfil/ResponsaveisAtleta.js";
 import { Link } from "wouter";
 import { Trophy, Pencil } from "lucide-react";
 
@@ -59,8 +60,21 @@ export default function PerfilAtleta({
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
   const [certificados, setCertificados] = useState<CertificadoResumo[] | null>(null);
 
-  type AbaTopo = "perfil" | "conquistas" | "postagens";
-  const [aba, setAba] = useState<AbaTopo>("perfil");
+  type AbaTopo = "perfil" | "conquistas" | "postagens" | "responsaveis";
+  const [aba, setAba] = useState<AbaTopo>(() =>
+    new URLSearchParams(window.location.search).get("aba") === "responsaveis"
+      ? "responsaveis" : "perfil"
+  );
+  useEffect(() => {
+    const atualizarAba = () => {
+      if (new URLSearchParams(window.location.search).get("aba") === "responsaveis") {
+        setAba("responsaveis");
+      }
+    };
+    window.addEventListener("popstate", atualizarAba);
+    atualizarAba();
+    return () => window.removeEventListener("popstate", atualizarAba);
+  }, []);
 
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -276,11 +290,12 @@ export default function PerfilAtleta({
               </div>
           )}
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-4 gap-2">
            {[
             { key: "perfil", label: "Perfil" },
             { key: "conquistas", label: "Conquistas"},
             { key: "postagens", label: "Postagens" },
+             ...(isOwnProfile ? [{ key: "responsaveis", label: "Responsáveis" }] : []),
            ].map((t) => (
             <button
              key={t.key}
@@ -424,6 +439,8 @@ export default function PerfilAtleta({
                 </section>
               </div>
             )}
+
+           {isOwnProfile && aba === "responsaveis" && <ResponsaveisAtleta />}
 
            {aba === "postagens" && (
              <section className="mt-4">

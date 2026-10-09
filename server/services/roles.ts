@@ -11,6 +11,7 @@ export const PAPEIS_PESSOAIS = [
   TipoUsuario.Olheiro,
   TipoUsuario.Creator,
   TipoUsuario.Learning,
+  TipoUsuario.Responsavel,
 ] as const;
 
 export const PAPEIS_ORGANIZACAO = [
@@ -71,6 +72,9 @@ export function normalizarPapel(
 
     case "admin":
       return TipoUsuario.Admin;
+
+    case "responsavel":
+      return TipoUsuario.Responsavel;
 
     default:
       return null;
@@ -352,6 +356,9 @@ export async function getProfileIdForRole(
           },
         })
       )?.id ?? null;
+
+    case TipoUsuario.Responsavel:
+      return usuarioId;
 
     default:
       return null;

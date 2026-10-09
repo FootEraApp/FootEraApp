@@ -25,7 +25,8 @@ type AtletaAtivo = {
 };
 
 async function resolverAtletaAtivo(
-  req: Request
+  req: Request,
+  atletaIdSolicitado?: string
 ): Promise<AtletaAtivo | null> {
   const usuarioId =
     String(
@@ -43,6 +44,36 @@ async function resolverAtletaAtivo(
     await getActiveContext(
       usuarioId
     );
+  
+  if (
+    contexto?.kind === "PERSONAL" &&
+    contexto.tipoUsuario === TipoUsuario.Responsavel &&
+    atletaIdSolicitado
+  ) {
+    const vinculo = await prisma.responsavelAtleta.findFirst({
+      where: {
+        atletaId: atletaIdSolicitado,
+        responsavelUsuarioId: usuarioId,
+        status: "ATIVO",
+        OR: [
+          { principal: true },
+          { podeGerenciarTreinos: true },
+        ],
+      },
+      select: {
+        atletaId: true,
+      },
+    });
+
+    if (!vinculo) {
+      return null;
+    }
+
+    return {
+      usuarioId,
+      atletaId: vinculo.atletaId,
+    };
+  }
 
   /*
    * Treino livre é uma ação
@@ -80,10 +111,16 @@ export const treinosLivresController = {
     res: Response
   ) {
     try {
-      const atletaAtivo =
-        await resolverAtletaAtivo(
-          req
-        );
+      
+      const atletaIdSolicitado =
+        typeof req.query.atletaId === "string"
+          ? req.query.atletaId.trim()
+          : undefined;
+
+      const atletaAtivo = await resolverAtletaAtivo(
+        req,
+        atletaIdSolicitado
+      );
 
       if (!atletaAtivo) {
         return res.status(403).json({
@@ -91,7 +128,7 @@ export const treinosLivresController = {
             "ACTIVE_CONTEXT_MISMATCH",
 
           message:
-            "Use seu perfil de Atleta para acessar seus treinos livres.",
+            "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade com permissão para gerenciar treinos.",
         });
       }
 
@@ -262,10 +299,12 @@ export const treinosLivresController = {
     res: Response
   ) {
     try {
-      const atletaAtivo =
-        await resolverAtletaAtivo(
-          req
-        );
+      const atletaAtivo = await resolverAtletaAtivo(
+        req,
+        typeof req.body?.atletaId === "string"
+          ? req.body.atletaId.trim()
+          : undefined
+      );
 
       if (!atletaAtivo) {
         return res.status(403).json({
@@ -320,21 +359,19 @@ export const treinosLivresController = {
         });
       }
 
-      /*
-       * Defesa extra:
-       * o perfil do contexto precisa
-       * realmente pertencer à conta.
-       */
-      if (
-        atletaExiste.usuarioId !==
+      const contextoAtual = await getActiveContext(
         atletaAtivo.usuarioId
+      );
+
+      if (
+        contextoAtual?.kind === "PERSONAL" &&
+        contextoAtual.tipoUsuario === TipoUsuario.Atleta &&
+        atletaExiste.usuarioId !== atletaAtivo.usuarioId
       ) {
         return res.status(403).json({
-          code:
-            "ACTIVE_CONTEXT_MISMATCH",
-
+          code: "ACTIVE_CONTEXT_MISMATCH",
           message:
-            "O Atleta ativo não pertence ao usuário autenticado.",
+            "O atleta ativo não pertence à conta autenticada.",
         });
       }
 
@@ -364,6 +401,14 @@ export const treinosLivresController = {
         return res.status(400).json({
           message:
             "Data inválida.",
+        });
+      }
+      
+      if (dataTreino.getTime() > Date.now()) {
+        return res.status(400).json({
+          code: "FUTURE_TRAINING_DATE",
+          message:
+            "A data do treino livre não pode estar no futuro.",
         });
       }
 

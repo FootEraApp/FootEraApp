@@ -1,5 +1,5 @@
 import { toast } from "@/lib/toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
@@ -8,6 +8,100 @@ import { Link } from "wouter";
 
 export default function TreinoLivreNovo() {
   const [, navigate] = useLocation();
+  
+  const atletaIdDaUrl = new URLSearchParams(
+    window.location.search
+  ).get("atletaId");
+
+  const [atletaSelecionado, setAtletaSelecionado] =
+    useState<{
+      id: string;
+      nome: string;
+    } | null>(null);
+
+  const [verificandoAtleta, setVerificandoAtleta] =
+    useState(Boolean(atletaIdDaUrl));
+
+  useEffect(() => {
+    if (!atletaIdDaUrl) {
+      setAtletaSelecionado(null);
+      setVerificandoAtleta(false);
+      return;
+    }
+
+    let cancelado = false;
+
+    async function consultarAtleta() {
+      setVerificandoAtleta(true);
+      setAtletaSelecionado(null);
+
+      try {
+        const token =
+          Storage.token ??
+          localStorage.getItem("token") ??
+          sessionStorage.getItem("token");
+
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/responsaveis/me/atletas`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!resposta.ok) {
+          throw new Error("Não foi possível consultar os atletas.");
+        }
+
+        const dados = await resposta.json();
+
+        const vinculo = (
+          Array.isArray(dados?.items) ? dados.items : []
+        ).find(
+          (item: any) =>
+            item.atletaId === atletaIdDaUrl &&
+            item.status === "ATIVO" &&
+            (
+              item.principal === true ||
+              item.podeGerenciarTreinos === true
+            )
+        );
+
+        if (!vinculo) {
+          throw new Error(
+            "Você não possui permissão para registrar treinos deste atleta."
+          );
+        }
+
+        if (!cancelado) {
+          setAtletaSelecionado({
+            id: vinculo.atletaId,
+            nome: vinculo.atleta.nome,
+          });
+        }
+      } catch (error) {
+        if (!cancelado) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível identificar o atleta."
+          );
+        }
+      } finally {
+        if (!cancelado) {
+          setVerificandoAtleta(false);
+        }
+      }
+    }
+
+    void consultarAtleta();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [atletaIdDaUrl]);
+
   const [descricao, setDescricao] = useState("");
   const [data, setData] = useState("");
   const [duracaoMin, setDuracaoMin] = useState<number>(30);
@@ -17,9 +111,32 @@ export default function TreinoLivreNovo() {
 
   async function salvar() {
     const token = (Storage as any).token ?? localStorage.getItem("token");
-    const atletaId =
-      (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
-    if (!token || !atletaId) return toast.error("Sessão expirada.");
+    
+  if (verificandoAtleta) {
+    return toast.error("Aguarde a identificação do atleta.");
+  }
+
+  if (atletaIdDaUrl && !atletaSelecionado) {
+    return toast.error(
+      "Não foi possível confirmar sua permissão para este atleta."
+    );
+  }
+
+  const atletaId = atletaIdDaUrl
+    ? atletaSelecionado?.id
+    : (
+        (Storage as any).tipoUsuarioId ??
+        localStorage.getItem("tipoUsuarioId") ??
+        sessionStorage.getItem("tipoUsuarioId")
+      );
+
+    if (!token) {
+      return toast.error("Sessão expirada.");
+    }
+
+    if (!atletaId) {
+      return toast.error("Atleta não identificado.");
+    }
 
     if (!descricao.trim()) {
       return toast.error("Descreva rapidamente o treino (ex.: Corrida 5km).");
@@ -53,7 +170,11 @@ export default function TreinoLivreNovo() {
       }
 
       toast.success("Treino livre registrado!");
-      navigate("/treinos/livre/historico");
+      navigate(
+        atletaIdDaUrl
+          ? `/treinos/livre/historico?atletaId=${encodeURIComponent(atletaIdDaUrl)}`
+          : "/treinos/livre/historico"
+      );
     } catch (e) {
       console.error(e);
       toast.error("Erro inesperado.");
@@ -73,6 +194,18 @@ export default function TreinoLivreNovo() {
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
+      
+      {atletaSelecionado && (
+        <div className="mb-5 rounded-2xl border border-green-200 bg-green-50 p-4">
+          <p className="text-xs font-semibold uppercase text-green-800">
+            Registrando treino livre para
+          </p>
+
+          <p className="mt-2 text-lg font-bold text-green-950">
+            {atletaSelecionado.nome}
+          </p>
+        </div>
+      )}
 
       <h2 className="text-lg font-bold mb-4 mt-4">Registrar Treino Livre</h2>
 

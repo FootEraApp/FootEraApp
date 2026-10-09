@@ -1373,11 +1373,19 @@ function mapEventoToAgendaItem(ev: any) {
 
 export async function minhaAgenda(req: any, res: Response) {
   try {
-    const { alvoId, from, to } = req.query as {
-      alvoId?: string;
-      from?: string;
-      to?: string;
-    };
+    const {
+      alvoId,
+      atletaId:
+        atletaIdQuery,
+      from,
+      to,
+    } =
+      req.query as {
+        alvoId?: string;
+        atletaId?: string;
+        from?: string;
+        to?: string;
+      };
 
     const agora = new Date();
     const fromDate = parseDate(from) || agora;
@@ -1386,6 +1394,11 @@ export async function minhaAgenda(req: any, res: Response) {
     const usuarioId =
       String(
         req.user?.id || ""
+      ).trim();
+
+    const atletaIdSolicitado =
+      String(
+        atletaIdQuery ?? ""
       ).trim();
 
     const activeContext =
@@ -1431,68 +1444,275 @@ export async function minhaAgenda(req: any, res: Response) {
     }
 
     if (alvoId) {
-  const clube =
-    await prisma.clube.findUnique({
-      where: {
-        id:
-          String(alvoId),
-      },
+      const clube =
+        await prisma.clube.findUnique({
+          where: {
+            id:
+              String(alvoId),
+          },
 
-      select: {
-        id: true,
-      },
-    });
+          select: {
+            id: true,
+          },
+        });
 
-  if (clube) {
-      where.clubeId =
-        clube.id;
-    }
-  } else if (
-    activeContext?.kind ===
-      "ORGANIZATION" &&
-    legacyOrganizationId
-  ) {
+      if (clube) {
+          where.clubeId =
+            clube.id;
+        }
+      } else if (
+        activeContext?.kind ===
+          "ORGANIZATION" &&
+        legacyOrganizationId
+      ) {
+        if (
+          organizationType ===
+          "CLUBE"
+        ) {
+          where.clubeId =
+            legacyOrganizationId;
+        }
+
+        if (
+          organizationType ===
+          "ESCOLA"
+        ) {
+          where.escolinhaId =
+            legacyOrganizationId;
+        }
+
+        if (
+          organizationType ===
+          "FEDERACAO"
+        ) {
+          where.federacaoId =
+            legacyOrganizationId;
+        }
+
+        if (
+          organizationType ===
+          "MARCA"
+        ) {
+          where.marcaId =
+            legacyOrganizationId;
+        }
+      } else if (
+        activeContext?.kind ===
+          "PERSONAL" &&
+        tipoContexto ===
+          "creator" &&
+        usuarioId
+      ) {
+        where.creatorUsuarioId =
+          usuarioId;
+      }
+
     if (
-      organizationType ===
-      "CLUBE"
+      activeContext?.kind ===
+        "PERSONAL" &&
+      tipoContexto ===
+        "responsavel" &&
+      usuarioId &&
+      atletaIdSolicitado
     ) {
-      where.clubeId =
-        legacyOrganizationId;
-    }
+      const vinculo =
+        await prisma.responsavelAtleta.findUnique({
+          where: {
+            responsavelUsuarioId_atletaId:
+              {
+                responsavelUsuarioId:
+                  usuarioId,
 
-    if (
-      organizationType ===
-      "ESCOLA"
-    ) {
-      where.escolinhaId =
-        legacyOrganizationId;
-    }
+                atletaId:
+                  atletaIdSolicitado,
+              },
+          },
 
-    if (
-      organizationType ===
-      "FEDERACAO"
-    ) {
-      where.federacaoId =
-        legacyOrganizationId;
-    }
+          include: {
+            atleta: {
+              select: {
+                id: true,
+                usuarioId: true,
+              },
+            },
+          },
+        });
 
-    if (
-      organizationType ===
-      "MARCA"
-    ) {
-      where.marcaId =
-        legacyOrganizationId;
+      if (
+        !vinculo ||
+        vinculo.status !==
+          "ATIVO"
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "ATLETA_ACCESS_DENIED",
+
+            error:
+              "Você não possui acesso à agenda deste atleta.",
+          });
+      }
+
+      const atletaId =
+        vinculo.atleta.id;
+
+      const atletaUsuarioId =
+        vinculo.atleta
+          .usuarioId;
+
+      const eventoWhereAtleta: any = {
+        status:
+          EventoStatus.ABERTO,
+
+        dataEvento: {
+          gte:
+            fromDate,
+        },
+      };
+
+      if (toDate) {
+        eventoWhereAtleta
+          .dataEvento.lte =
+          toDate;
+      }
+
+      const [
+        convocacoes,
+        inscricoes,
+      ] =
+        await Promise.all([
+          prisma.eventoConvocado.findMany({
+            where: {
+              atletaId,
+
+              evento:
+                eventoWhereAtleta,
+            },
+
+            include: {
+              evento: {
+                select: {
+                  id: true,
+                  tipo: true,
+                  titulo: true,
+                  dataEvento:
+                    true,
+                },
+              },
+            },
+          }),
+
+          prisma.inscricaoEvento.findMany({
+            where: {
+              usuarioId:
+                atletaUsuarioId,
+
+              status: {
+                not:
+                  "CANCELADA",
+              },
+
+              evento:
+                eventoWhereAtleta,
+            },
+
+            include: {
+              evento: {
+                select: {
+                  id: true,
+                  tipo: true,
+                  titulo: true,
+                  dataEvento:
+                    true,
+                },
+              },
+            },
+          }),
+        ]);
+
+      const mapa =
+        new Map<
+          string,
+          {
+            id: string;
+            tipo: any;
+            titulo: string;
+            inicio: Date;
+            fim: null;
+          }
+        >();
+
+      for (
+        const item of
+          convocacoes
+      ) {
+        mapa.set(
+          item.evento.id,
+          {
+            id:
+              item.evento.id,
+
+            tipo:
+              item.evento.tipo ??
+              "EVENTO",
+
+            titulo:
+              item.evento
+                .titulo,
+
+            inicio:
+              item.evento
+                .dataEvento,
+
+            fim:
+              null,
+          }
+        );
+      }
+
+      for (
+        const item of
+          inscricoes
+      ) {
+        mapa.set(
+          item.evento.id,
+          {
+            id:
+              item.evento.id,
+
+            tipo:
+              item.evento.tipo ??
+              "EVENTO",
+
+            titulo:
+              item.evento
+                .titulo,
+
+            inicio:
+              item.evento
+                .dataEvento,
+
+            fim:
+              null,
+          }
+        );
+      }
+
+      return res.json(
+        Array.from(
+          mapa.values()
+        ).sort(
+          (a, b) =>
+            new Date(
+              a.inicio
+            ).getTime() -
+            new Date(
+              b.inicio
+            ).getTime()
+        )
+      );
     }
-  } else if (
-    activeContext?.kind ===
-      "PERSONAL" &&
-    tipoContexto ===
-      "creator" &&
-    usuarioId
-  ) {
-    where.creatorUsuarioId =
-      usuarioId;
-  }
 
     if (
       activeContext?.kind ===

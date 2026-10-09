@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, type ComponentPropsWithoutRef } from 
 import { useLocation } from "wouter";
 import axios from "axios";
 import { API } from "../config.js";
-import Storage from "../../../server/utils/storage.js";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import GoogleButton from "../components/auth/GoogleButton";
 import { Capacitor } from "@capacitor/core";
@@ -318,30 +317,6 @@ export default function PaginaLogin() {
         setRecoverLoading(false);
       }
     }
-
-  useEffect(() => {
-    if (isE2E) return;
-
-    const token =
-      Storage.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token");
-    if (!token) return;
-
-    const tipo = (
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario") ||
-      ""
-    ).toLowerCase();
-
-    navigate(
-      tipo === "admin"
-        ? "/admin"
-        : consumirRetornoAuth(
-            "/perfil"
-          )
-    );
-  }, []);
 
   useEffect(() => {
     if (isE2E) return;

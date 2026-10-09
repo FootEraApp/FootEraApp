@@ -86,6 +86,68 @@ function extrairConquista(
   };
 }
 
+function papelDoContexto(
+  contextoKey?: string | null
+) {
+  const key =
+    String(
+      contextoKey ?? ""
+    ).trim();
+
+  if (
+    !key.startsWith(
+      "personal:"
+    )
+  ) {
+    return null;
+  }
+
+  return (
+    key.slice(
+      "personal:".length
+    ) || null
+  );
+}
+
+function getAutorHref(
+  post:
+    | PostagemComUsuario
+    | null
+    | undefined
+) {
+  if (!post) {
+    return "#";
+  }
+
+  if (post.organizacao?.id) {
+    return `/organizacao/${encodeURIComponent(
+      post.organizacao.id
+    )}`;
+  }
+
+  const usuarioId =
+    post.usuario?.id ??
+    post.usuarioId ??
+    "";
+
+  const papel =
+    papelDoContexto(
+      post.autorContextoKey
+    ) ??
+    post.usuario?.tipo ??
+    null;
+
+  return papel
+    ? `/perfil/${encodeURIComponent(
+        usuarioId
+      )}?papel=${encodeURIComponent(
+        papel
+      )}`
+    : `/perfil/${encodeURIComponent(
+        usuarioId
+      )}`;
+}
+
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
   const [post, setPost] = useState<PostagemComUsuario | null>(null);
@@ -732,7 +794,7 @@ function PostUnico(): JSX.Element {
         <div className="flex items-center gap-3 px-5 pt-5">
           {linkAutor ? (
             <Link
-              href={linkAutor}
+              href={getAutorHref(post)}
               className="shrink-0"
             >
               <img
@@ -766,7 +828,7 @@ function PostUnico(): JSX.Element {
           <div className="min-w-0 flex-1">
             {linkAutor ? (
               <Link
-                href={linkAutor}
+                href={getAutorHref(post)}
                 className="
                   block
                   truncate

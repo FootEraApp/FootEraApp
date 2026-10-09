@@ -1,8 +1,18 @@
 // server/controllers/usuarioController
-import { Request, Response } from "express";
-import { prisma } from "../prisma.js";
+import {
+  Request,
+  Response,
+} from "express";
+import {
+  TipoUsuario,
+  StatusResponsavelAtleta,
+} from "@prisma/client";
+import {
+  prisma,
+} from "../prisma.js";
 import {
   getActiveContext,
+  listarActiveContexts,
 } from "../services/activeContext.js";
 
 export async function getPresenca(req: any, res: any) {
@@ -165,154 +175,423 @@ export const getUsuarioParceiro = async (req: Request, res: Response) => {
   }
 };
 
-export const getUsuarioAssinatura = async (req: Request, res: Response) => {
-  const { id } = req.params;
+export const getUsuarioAssinatura =
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    const { id } =
+      req.params;
 
-  try {
-    const authUserId =
-      (req as any).user?.id ||
-      (req as any).userId ||
-      (req as any).usuarioId ||
-      null;
+    try {
+      const authUserId =
+        (req as any).user?.id ||
+        (req as any).userId ||
+        (req as any).usuarioId ||
+        null;
 
-    const authUserTipo =
-      (req as any).user?.tipo ||
-      (req as any).tipo ||
-      null;
+      const authUserTipo =
+        (req as any).user?.tipo ||
+        (req as any).tipo ||
+        null;
 
-    const isAdmin =
-      authUserTipo === "Admin" ||
-      authUserTipo === "ADMIN" ||
-      authUserTipo === "administrador" ||
-      authUserTipo === "ADMINISTRADOR";
+      const isAdmin =
+        authUserTipo ===
+          "Admin" ||
+        authUserTipo ===
+          "ADMIN" ||
+        authUserTipo ===
+          "administrador" ||
+        authUserTipo ===
+          "ADMINISTRADOR";
 
-    if (!authUserId) {
-      return res.status(401).json({ error: "Não autenticado" });
-    }
+      if (!authUserId) {
+        return res
+          .status(401)
+          .json({
+            error:
+              "Não autenticado",
+          });
+      }
 
-    if (authUserId !== id && !isAdmin) {
-      return res
-        .status(403)
-        .json({ error: "Sem permissão para consultar este usuário" });
-    }
+      const atletaIdQuery =
+        String(
+          req.query
+            ?.atletaId ??
+          ""
+        ).trim();
 
-    const contexto =
-      await getActiveContext(
-        id
-      );
+      let usuarioAlvoId =
+        String(id);
 
-    if (!contexto) {
+      let contexto:
+        Awaited<
+          ReturnType<
+            typeof getActiveContext
+          >
+        > =
+        null;
+
+      let consultaComoResponsavel =
+        false;
+
+      /*
+       * RESPONSÁVEL CONSULTANDO
+       * A ASSINATURA DO ATLETA.
+       */
+      if (atletaIdQuery) {
+        const contextoResponsavel =
+          await getActiveContext(
+            String(
+              authUserId
+            )
+          );
+
+        if (
+          contextoResponsavel
+            ?.kind !==
+            "PERSONAL" ||
+          contextoResponsavel
+            .tipoUsuario !==
+            TipoUsuario
+              .Responsavel
+        ) {
+          return res
+            .status(403)
+            .json({
+              code:
+                "RESPONSAVEL_CONTEXT_REQUIRED",
+
+              error:
+                "Use o perfil de Responsável para consultar este atleta.",
+            });
+        }
+
+        const vinculo =
+          await prisma
+            .responsavelAtleta
+            .findUnique({
+              where: {
+                responsavelUsuarioId_atletaId:
+                  {
+                    responsavelUsuarioId:
+                      String(
+                        authUserId
+                      ),
+
+                    atletaId:
+                      atletaIdQuery,
+                  },
+              },
+
+              include: {
+                atleta: {
+                  select: {
+                    id: true,
+
+                    usuarioId:
+                      true,
+                  },
+                },
+              },
+            });
+
+        if (
+          !vinculo ||
+          vinculo.status !==
+            StatusResponsavelAtleta
+              .ATIVO ||
+          vinculo
+            .podeGerenciarTreinos !==
+            true
+        ) {
+          return res
+            .status(403)
+            .json({
+              code:
+                "ATLETA_ACCESS_DENIED",
+
+              error:
+                "Você não possui permissão para consultar este atleta.",
+            });
+        }
+
+        usuarioAlvoId =
+          vinculo.atleta
+            .usuarioId;
+
+        /*
+         * Não usamos o contexto
+         * atualmente selecionado pela
+         * criança.
+         *
+         * Queremos especificamente a
+         * assinatura do papel Atleta.
+         */
+        const contextosAtleta =
+          await listarActiveContexts(
+            usuarioAlvoId
+          );
+
+        contexto =
+          contextosAtleta.find(
+            (item) =>
+              item.kind ===
+                "PERSONAL" &&
+              item.tipoUsuario ===
+                TipoUsuario.Atleta
+          ) ??
+          null;
+
+        consultaComoResponsavel =
+          true;
+      } else {
+        /*
+         * FLUXO NORMAL:
+         * usuário consulta a própria
+         * assinatura ou Admin consulta.
+         */
+        if (
+          authUserId !== id &&
+          !isAdmin
+        ) {
+          return res
+            .status(403)
+            .json({
+              error:
+                "Sem permissão para consultar este usuário",
+            });
+        }
+
+        contexto =
+          await getActiveContext(
+            id
+          );
+      }
+
+      if (!contexto) {
+        return res.json({
+          hasAssinatura:
+            false,
+
+          isPro:
+            false,
+
+          reason:
+            "NO_ACTIVE_CONTEXT",
+
+          assinatura:
+            null,
+        });
+      }
+
+      const assinatura =
+        await prisma
+          .assinatura
+          .findFirst({
+            where: {
+              usuarioId:
+                usuarioAlvoId,
+
+              contextoKey:
+                contexto.key,
+            },
+
+            orderBy: [
+              {
+                ativo:
+                  "desc",
+              },
+
+              {
+                renovaEm:
+                  "desc",
+              },
+
+              {
+                startsAt:
+                  "desc",
+              },
+            ],
+
+            select: {
+              id: true,
+              usuarioId: true,
+              plano: true,
+              periodicidade:
+                true,
+              startsAt: true,
+              renovaEm: true,
+              canceledAt: true,
+              ativo: true,
+              status: true,
+
+              trialStartsAt:
+                true,
+
+              trialEndsAt:
+                true,
+
+              bloqueadoEm:
+                true,
+
+              contextoKey:
+                true,
+
+              contextoKind:
+                true,
+
+              contextoTipo:
+                true,
+
+              contextoPerfilId:
+                true,
+
+              contextoOrganizacaoId:
+                true,
+
+              contextoLegacyOrganizationId:
+                true,
+            },
+          });
+
+      if (!assinatura) {
+        return res.json({
+          hasAssinatura:
+            false,
+
+          isPro:
+            false,
+
+          reason:
+            "NO_SUBSCRIPTION",
+
+          assinatura:
+            null,
+        });
+      }
+
+      const now =
+        new Date();
+
+      if (
+        assinatura.bloqueadoEm
+      ) {
+        return res.json({
+          hasAssinatura:
+            true,
+
+          isPro:
+            false,
+
+          reason:
+            "BLOCKED",
+
+          assinatura:
+            consultaComoResponsavel
+              ? null
+              : assinatura,
+        });
+      }
+
+      if (
+        !assinatura.ativo
+      ) {
+        return res.json({
+          hasAssinatura:
+            true,
+
+          isPro:
+            false,
+
+          reason:
+            "INACTIVE",
+
+          assinatura:
+            consultaComoResponsavel
+              ? null
+              : assinatura,
+        });
+      }
+
+      const renovaEmOk =
+        Boolean(
+          assinatura.renovaEm &&
+          new Date(
+            assinatura
+              .renovaEm
+          ) > now
+        );
+
+      const trialOk =
+        assinatura.status ===
+          "TRIAL" &&
+        Boolean(
+          (
+            assinatura
+              .trialEndsAt &&
+            new Date(
+              assinatura
+                .trialEndsAt
+            ) > now
+          ) ||
+          (
+            !assinatura
+              .trialEndsAt &&
+            renovaEmOk
+          )
+        );
+
+      const ativaOk =
+        assinatura.status ===
+          "ATIVA" &&
+        renovaEmOk;
+
+      const isPro =
+        Boolean(
+          ativaOk ||
+          trialOk
+        );
+
       return res.json({
-        hasAssinatura: false,
-        isPro: false,
+        hasAssinatura:
+          true,
+
+        isPro,
+
         reason:
-          "NO_ACTIVE_CONTEXT",
-        assinatura: null,
+          isPro
+            ? "OK"
+            : "EXPIRED_OR_NOT_ACTIVE",
+
+        /*
+         * Evitamos devolver dados
+         * financeiros completos da
+         * criança quando a consulta
+         * é feita pelo responsável.
+         *
+         * Para esta tela precisamos
+         * apenas de isPro.
+         */
+        assinatura:
+          consultaComoResponsavel
+            ? null
+            : assinatura,
       });
-    }
-
-    const assinatura =
-      await prisma.assinatura.findFirst({
-        where: {
-          usuarioId:
-            id,
-
-          contextoKey:
-            contexto.key,
-        },
-
-        orderBy: [
-          { ativo: "desc" },
-          { renovaEm: "desc" },
-          { startsAt: "desc" },
-        ],
-
-        select: {
-          id: true,
-          usuarioId: true,
-          plano: true,
-          periodicidade: true,
-          startsAt: true,
-          renovaEm: true,
-          canceledAt: true,
-          ativo: true,
-          status: true,
-          trialStartsAt: true,
-          trialEndsAt: true,
-          bloqueadoEm: true,
-
-          contextoKey:
-            true,
-
-          contextoKind:
-            true,
-
-          contextoTipo:
-            true,
-
-          contextoPerfilId:
-            true,
-
-          contextoOrganizacaoId:
-            true,
-
-          contextoLegacyOrganizationId:
-            true,
-        },
-      });
-
-    if (!assinatura) {
-      return res.json({
-        hasAssinatura: false,
-        isPro: false,
-        reason: "NO_SUBSCRIPTION",
-        assinatura: null,
-      });
-    }
-
-    const now = new Date();
-
-    if (assinatura.bloqueadoEm) {
-      return res.json({
-        hasAssinatura: true,
-        isPro: false,
-        reason: "BLOCKED",
-        assinatura,
-      });
-    }
-
-    if (!assinatura.ativo) {
-      return res.json({
-        hasAssinatura: true,
-        isPro: false,
-        reason: "INACTIVE",
-        assinatura,
-      });
-    }
-
-    const renovaEmOk = assinatura.renovaEm && new Date(assinatura.renovaEm) > now;
-
-    const trialOk =
-      assinatura.status === "TRIAL" &&
-      (
-        (assinatura.trialEndsAt && new Date(assinatura.trialEndsAt) > now)
-        || (!assinatura.trialEndsAt && renovaEmOk)
+    } catch (error) {
+      console.error(
+        "Erro ao buscar assinatura do usuário:",
+        error
       );
 
-    const ativaOk = assinatura.status === "ATIVA" && renovaEmOk;
-    const isPro = Boolean(ativaOk || trialOk);
-
-    return res.json({
-      hasAssinatura: true,
-      isPro,
-      reason: isPro ? "OK" : "EXPIRED_OR_NOT_ACTIVE",
-      assinatura,
-    });
-  } catch (error) {
-    console.error("Erro ao buscar assinatura do usuário:", error);
-    return res.status(500).json({ error: "Erro interno do servidor" });
-  }
-};
+      return res
+        .status(500)
+        .json({
+          error:
+            "Erro interno do servidor",
+        });
+    }
+  };
 
 export const buscarUsuarios = async (req: Request, res: Response) => {
   try {

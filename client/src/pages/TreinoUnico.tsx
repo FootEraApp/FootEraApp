@@ -1,5 +1,5 @@
 // client/src/pages/TreinoUnico
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
   CalendarClock,
@@ -19,7 +19,7 @@ import {
 import { API } from "../config.js";
 import AcoesTreino from "../components/treinos/acoestreino.js";
 import { toast } from "@/lib/toast";
-
+import { UserContext } from "../context/UserContext.js";
 import {
   useAuthGate,
 } from "../context/AuthGateContext.js";
@@ -200,6 +200,40 @@ function Stars({ value }: { value: number }) {
 
 export default function TreinoUnico() {
   const { get } = useQuery();
+  
+  const userContext = useContext(UserContext);
+
+  const papelAtivo =
+    userContext?.activeContext?.kind === "PERSONAL"
+      ? String(userContext.activeTipoUsuario ?? "").toLowerCase()
+      : "";
+
+  const ehAtleta = papelAtivo === "atleta";
+  const ehResponsavel = papelAtivo === "responsavel";
+
+  type AtletaDestino = {
+    atletaId: string;
+    nome: string;
+  };
+
+  const [atletasDestino, setAtletasDestino] =
+    useState<AtletaDestino[]>([]);
+
+  const [atletaIdSelecionado, setAtletaIdSelecionado] =
+    useState("");
+
+  const [treinoSalvo, setTreinoSalvo] = useState(false);
+  const [consultandoSalvo, setConsultandoSalvo] = useState(true);
+  const [alterandoSalvo, setAlterandoSalvo] = useState(false);
+
+  const podeGerenciarBiblioteca =
+    ehAtleta ||
+    (
+      ehResponsavel &&
+      atletasDestino.some(
+        (item) => item.atletaId === atletaIdSelecionado
+      )
+    );
 
   const {
     requireAuth,
@@ -224,7 +258,7 @@ export default function TreinoUnico() {
 
   const programadoId =
     get("programadoId");
-
+  
   const [
     matchPublico,
     paramsPublico,
@@ -241,6 +275,86 @@ export default function TreinoUnico() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [treino, setTreino] = useState<TreinoUnicoPayload | null>(null);
+
+  const treinoProgramadoIdAtual = String(
+    programadoId ||
+    treino?.treinoProgramadoId ||
+    treinoPublicoId ||
+    ""
+  ).trim();
+
+  useEffect(() => {
+    if (!ehResponsavel) {
+      setAtletasDestino([]);
+      setAtletaIdSelecionado("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function carregarAtletas() {
+      try {
+        const tokenAtual = getTokenAtual();
+        if (!tokenAtual) return;
+
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/responsaveis/me/atletas`,
+          {
+            headers: {
+              Authorization: `Bearer ${tokenAtual}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        if (!resposta.ok) {
+          throw new Error("Erro ao carregar atletas vinculados.");
+        }
+
+        const dados = await resposta.json();
+
+        const atletas: AtletaDestino[] = (
+          Array.isArray(dados?.items) ? dados.items : []
+        )
+          .filter(
+            (item: any) =>
+              item.status === "ATIVO" &&
+              (
+                item.principal === true ||
+                item.podeGerenciarTreinos === true
+              )
+          )
+          .map((item: any) => ({
+            atletaId: String(item.atletaId ?? ""),
+            nome: String(
+              item.atleta?.nome ??
+              item.atleta?.nomeDeUsuario ??
+              "Atleta"
+            ),
+          }))
+          .filter((item: AtletaDestino) => item.atletaId);
+
+        if (!controller.signal.aborted) {
+          setAtletasDestino(atletas);
+          setAtletaIdSelecionado((anterior) =>
+            atletas.some((a) => a.atletaId === anterior)
+              ? anterior
+              : atletas[0]?.atletaId ?? ""
+          );
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[TreinoUnico] Atletas:", error);
+          setAtletasDestino([]);
+          setAtletaIdSelecionado("");
+        }
+      }
+    }
+
+    void carregarAtletas();
+
+    return () => controller.abort();
+  }, [ehResponsavel, userContext?.activeContext?.key]);
 
   useEffect(() => {
     const fetchTreino = async () => {
@@ -322,6 +436,177 @@ export default function TreinoUnico() {
     }
     fetchTreino();
   }, [agendadoId, programadoId, treinoPublicoId, token]);
+  
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setTreinoSalvo(false);
+    setConsultandoSalvo(true);
+
+    if (!podeGerenciarBiblioteca || !treinoProgramadoIdAtual) {
+      setConsultandoSalvo(false);
+      return () => controller.abort();
+    }
+
+    async function consultarBiblioteca() {
+      try {
+        const tokenAtual = getTokenAtual();
+        if (!tokenAtual) return;
+
+        const query =
+          ehResponsavel && atletaIdSelecionado
+            ? `?atletaId=${encodeURIComponent(atletaIdSelecionado)}`
+            : "";
+
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/treinos/biblioteca${query}`,
+          {
+            headers: {
+              Authorization: `Bearer ${tokenAtual}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        const dados = await resposta.json().catch(() => null);
+
+        if (!resposta.ok) {
+          throw new Error(
+            dados?.message || "Não foi possível consultar a biblioteca."
+          );
+        }
+
+        const existe = (Array.isArray(dados?.items) ? dados.items : [])
+          .some(
+            (item: any) =>
+              String(item.treinoProgramadoId) ===
+              treinoProgramadoIdAtual
+          );
+
+        if (!controller.signal.aborted) {
+          setTreinoSalvo(existe);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[TreinoUnico] Biblioteca:", error);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setConsultandoSalvo(false);
+        }
+      }
+    }
+
+    void consultarBiblioteca();
+
+    return () => controller.abort();
+  }, [
+    podeGerenciarBiblioteca,
+    treinoProgramadoIdAtual,
+    ehResponsavel,
+    atletaIdSelecionado,
+    userContext?.activeContext?.key,
+  ]);
+    
+  async function alternarTreinoSalvo() {
+    if (
+      !podeGerenciarBiblioteca ||
+      !treinoProgramadoIdAtual ||
+      alterandoSalvo
+    ) {
+      return;
+    }
+
+    const tokenAtual = getTokenAtual();
+
+    if (!tokenAtual) {
+      toast.error("Entre na FootEra para salvar treinos.");
+      return;
+    }
+
+    const estavaSalvo = treinoSalvo;
+    setAlterandoSalvo(true);
+
+    try {
+      const query =
+        ehResponsavel && atletaIdSelecionado
+          ? `?atletaId=${encodeURIComponent(atletaIdSelecionado)}`
+          : "";
+
+      const resposta = await fetch(
+        estavaSalvo
+          ? `${API.BASE_URL}/api/treinos/biblioteca/${encodeURIComponent(
+              treinoProgramadoIdAtual
+            )}${query}`
+          : `${API.BASE_URL}/api/treinos/biblioteca`,
+        {
+          method: estavaSalvo ? "DELETE" : "POST",
+          headers: {
+            Authorization: `Bearer ${tokenAtual}`,
+            ...(!estavaSalvo
+              ? { "Content-Type": "application/json" }
+              : {}),
+          },
+          ...(!estavaSalvo
+            ? {
+                body: JSON.stringify({
+                  treinoProgramadoId: treinoProgramadoIdAtual,
+                  ...(ehResponsavel && atletaIdSelecionado
+                    ? { atletaId: atletaIdSelecionado }
+                    : {}),
+                }),
+              }
+            : {}),
+        }
+      );
+
+      const dados = await resposta.json().catch(() => null);
+
+      if (!resposta.ok) {
+        if (!estavaSalvo && resposta.status === 409) {
+          setTreinoSalvo(true);
+          toast.success("Este treino já está salvo na biblioteca.");
+          return;
+        }
+
+        throw new Error(
+          dados?.message || "Não foi possível alterar a biblioteca."
+        );
+      }
+
+      setTreinoSalvo(!estavaSalvo);
+
+      toast.success(
+        estavaSalvo
+          ? "Treino removido da biblioteca."
+          : "Treino salvo na biblioteca."
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar a biblioteca."
+      );
+    } finally {
+      setAlterandoSalvo(false);
+    }
+  }
+
+  function agendarTreinoSelecionado() {
+    if (!podeGerenciarBiblioteca || !treinoProgramadoIdAtual) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+
+    params.set("treinoProgramadoId", treinoProgramadoIdAtual);
+
+    if (ehResponsavel && atletaIdSelecionado) {
+      params.set("atletaId", atletaIdSelecionado);
+    }
+
+    window.location.href = `/treinos/novo?${params.toString()}`;
+  }
 
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
@@ -655,6 +940,17 @@ export default function TreinoUnico() {
                 {typeof treino.duracao === "number" ? `${treino.duracao} min` : "-"}
               </span>
             </div>
+            
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-green-700" />
+
+              <span>
+                <strong>Pontuação do treino:</strong>{" "}
+                {typeof treino.pontuacao === "number"
+                  ? `+${treino.pontuacao} pts`
+                  : "Não definida"}
+              </span>
+            </div>
 
             {treino.prazoEnvio && (
               <div className="flex items-center gap-2 md:col-span-2">
@@ -915,6 +1211,70 @@ export default function TreinoUnico() {
             </p>
           )}
         </section>
+        
+        {ehResponsavel && (
+          <section className="rounded-2xl border bg-white p-4 sm:p-6">
+            <label
+              htmlFor="treino-unico-atleta-destino"
+              className="mb-2 block font-semibold text-green-900"
+            >
+              Salvar ou agendar treino para
+            </label>
+
+            <select
+              id="treino-unico-atleta-destino"
+              value={atletaIdSelecionado}
+              onChange={(event) =>
+                setAtletaIdSelecionado(event.target.value)
+              }
+              className="w-full rounded-lg border px-3 py-3"
+            >
+              {atletasDestino.length === 0 && (
+                <option value="">
+                  Nenhum atleta com permissão para gerenciar treinos
+                </option>
+              )}
+
+              {atletasDestino.map((atleta) => (
+                <option
+                  key={atleta.atletaId}
+                  value={atleta.atletaId}
+                >
+                  {atleta.nome}
+                </option>
+              ))}
+            </select>
+          </section>
+        )}
+
+        {podeGerenciarBiblioteca &&
+          Boolean(treinoProgramadoIdAtual) &&
+          !treino.conteudoProtegido && (
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => void alternarTreinoSalvo()}
+                disabled={consultandoSalvo || alterandoSalvo}
+                className="rounded-lg border border-green-700 px-5 py-3 font-semibold text-green-900 disabled:opacity-50"
+              >
+                {alterandoSalvo
+                  ? "Atualizando..."
+                  : consultandoSalvo
+                    ? "Verificando biblioteca..."
+                    : treinoSalvo
+                      ? "Remover dos salvos"
+                      : "Salvar treino"}
+              </button>
+
+              <button
+                type="button"
+                onClick={agendarTreinoSelecionado}
+                className="rounded-lg bg-green-800 px-5 py-3 font-semibold text-white hover:bg-green-900"
+              >
+                Agendar treino
+              </button>
+            </div>
+          )}
 
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <button

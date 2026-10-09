@@ -109,9 +109,9 @@ export default function LearningCard({
   const creatorType = getCreatorType(item);
 
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
-        <div className="h-48 md:h-full min-h-[180px] max-h-[260px] rounded-2xl overflow-hidden border bg-slate-100">
+    <div className="rounded-2xl border bg-white p-3 sm:p-4 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-3">
+        <div className="h-36 md:h-full min-h-[140px] max-h-[220px] rounded-xl overflow-hidden border bg-slate-100">
           <CoverImage
             src={capa}
             alt={item?.titulo || "Metodologia"}
@@ -227,7 +227,7 @@ export default function LearningCard({
             </span>
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {actionLabel ? (
               <Link
                 href={href}

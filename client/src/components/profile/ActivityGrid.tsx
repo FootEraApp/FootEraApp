@@ -163,39 +163,49 @@ export default function ActivityGrid({
             return (
               <button
                 key={card.id}
-                className="rounded-lg overflow-hidden shadow relative group bg-black"
+                className="flex min-w-0 flex-col overflow-hidden rounded-lg border bg-white text-left shadow-sm transition hover:shadow-md"
                 onClick={() => {
                   if (isVideo && card.video) setSel(card.video);
                 }}
                 type="button"
               >
-              <img
-                src={thumb}
-                alt={card.nome}
-                className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK;
-                }}
-              />
-
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[11px] text-white px-2 py-1 flex justify-between items-center">
-                  <span className="truncate max-w-[70%]">{card.nome}</span>
-                  <span className="ml-1 font-semibold">
-                    {card.tipo === "Vídeo"
-                      ? "Vídeo"
-                      : card.tipo || "Atividade"}
-                  </span>
-                </div>
+              
+              <div className="relative h-20 w-full shrink-0 overflow-hidden sm:h-24">
+                <img
+                  src={thumb}
+                  alt={card.nome}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = AVATAR_FALLBACK;
+                  }}
+                />
 
                 {isVideo && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow">
-                      <svg viewBox="0 0 24 24" className="w-6 h-6">
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-6 w-6"
+                      >
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="flex min-w-0 flex-col gap-1 p-2">
+                <span className="w-fit max-w-full truncate rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-800">
+                  {card.tipo === "Vídeo"
+                    ? "Vídeo"
+                    : card.tipo || "Atividade"}
+                </span>
+
+                <span className="line-clamp-2 break-words text-[11px] font-semibold leading-tight text-green-950">
+                  {card.nome}
+                </span>
+              </div>
+
               </button>
             );
           })}

@@ -12,9 +12,25 @@ export async function purgeDeletedAccounts() {
     take: 200, 
   });
 
+  let removidos = 0;
+
   for (const u of users) {
-    await prisma.usuario.delete({ where: { id: u.id } });
+    try {
+      await prisma.usuario.delete({
+        where: {
+          id:
+            u.id,
+        },
+      });
+
+      removidos++;
+    } catch (error) {
+      console.error(
+        `[purgeDeletedAccounts] Não foi possível remover usuário ${u.id}:`,
+        error
+      );
+    }
   }
 
-  return users.length;
+  return removidos;
 }
